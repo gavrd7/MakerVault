@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from "react";
 import Hls from "hls.js";
 import { apiFetch } from "../api";
-import { startFrameLoop, cameraRequest, cameraHlsUrl } from "./cameraPlayback";
+import { startFrameLoop, cameraRequest, cameraHlsUrl, shouldFallbackToNativeHls } from "./cameraPlayback";
 
 const LABELS = { snapshot: "Live images", mjpeg: "MJPEG live images", creality_webrtc: "Creality WebRTC · experimental" };
 
@@ -151,12 +151,14 @@ export function CameraPlayback({ camera, url, compact = false }) {
   const [attempt, setAttempt] = useState(0);
   const [playbackBlocked, setPlaybackBlocked] = useState(false);
   const [playbackDiagnostic, setPlaybackDiagnostic] = useState("");
+  const nativeRecovery = useRef(false);
 
   useEffect(() => {
     let cancelled = false;
     let objectUrl = "";
     let stopFrames;
     let hls;
+    nativeRecovery.current = false;
     const controller = new AbortController();
     setImage(""); setError(""); setStatus("Connecting…"); setPlaybackBlocked(false); setPlaybackDiagnostic("");
 
@@ -237,7 +239,24 @@ export function CameraPlayback({ camera, url, compact = false }) {
           const detail = String(data.details || "unknown").slice(0, 96);
           const code = Number(data.response?.code);
           const status = Number.isInteger(code) && code >= 100 && code <= 599 ? " · HTTP " + code : "";
-          setPlaybackDiagnostic("HLS: " + type + " / " + detail + status);
+          const diagnostic = "HLS: " + type + " / " + detail + status;
+          if (!nativeRecovery.current && shouldFallbackToNativeHls(data, Boolean(target.canPlayType("application/vnd.apple.mpegurl")))) {
+            // Safari can invalidate the MediaSource managed by hls.js when a
+            // preview is detached. Release its attachment before switching to
+            // the browser's native HLS pipeline; do not change the relay URL.
+            nativeRecovery.current = true;
+            setPlaybackDiagnostic(diagnostic + " · trying native HLS");
+            setStatus("Recovering video with native HLS…");
+            hls?.destroy();
+            hls = null;
+            target.pause();
+            target.removeAttribute("src");
+            target.load();
+            target.src = source;
+            attemptAutoplay(target);
+            return;
+          }
+          setPlaybackDiagnostic(diagnostic);
           failed("Camera video playback failed. Select Reconnect to retry.");
         });
         hls.loadSource(source);
@@ -300,9 +319,15 @@ export function CameraPlayback({ camera, url, compact = false }) {
         ? <video ref={video} style={{ transform }} autoPlay muted playsInline controls={!compact}
             onError={event => {
               const code = Number(event.currentTarget.error?.code || 0);
-              if (code) setPlaybackDiagnostic(previous => previous || "Video element error " + code + " (1=aborted, 2=network, 3=decode, 4=unsupported)");
+              if (code) {
+                setPlaybackDiagnostic(previous => (nativeRecovery.current ? "Native HLS video element error " + code + " after mediaSourceRequiresReset" : previous || "Video element error " + code + " (1=aborted, 2=network, 3=decode, 4=unsupported)"));
+                if (nativeRecovery.current) {
+                  setError("Native HLS recovery failed. Select Reconnect to retry.");
+                  setStatus("Disconnected · select Reconnect to retry");
+                }
+              }
             }}
-            onPlaying={() => { setPlaybackBlocked(false); setError(""); setStatus("Live video · relayed through MakerVault"); }} />
+            onPlaying={() => { setPlaybackBlocked(false); setError(""); setPlaybackDiagnostic(nativeRecovery.current ? "Recovered using native HLS" : ""); setStatus("Live video · relayed through MakerVault"); }} />
         : image
           ? <img src={image} alt={camera.name + " live camera view"} style={{ transform }} />
           : <span role="status">{status}</span>}
