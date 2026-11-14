@@ -1,5 +1,8 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import fs from "node:fs";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { startFrameLoop, cameraHlsUrl } from "../src/components/cameraPlayback.js";
 
 test("closing frame viewer aborts in-flight fetch and ignores late frame", async () => {
@@ -60,4 +63,23 @@ test('preview chooses most recently configured enabled camera across integration
   assert.deepEqual(defaultCamera(rows), { connectionId: 'newer', camera: { id: 'b' } });
   assert.equal(rows[0].id, 'older');
   assert.equal(defaultCamera([]), null);
+});
+
+
+test("video autoplay rejection keeps the stream attached and exposes native play", () => {
+  const source = fs.readFileSync(path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../src/components/PrinterCamera.jsx"), "utf8");
+  const gesture = source.slice(source.indexOf("const needsGesture ="), source.indexOf("const failed ="));
+  assert.match(gesture, /setPlaybackBlocked\(true\)/);
+  assert.doesNotMatch(gesture, /removeAttribute|\.load\(\)|failed\(/);
+  assert.match(source, /target\.play\(\)\.catch\(needsGesture\)/);
+  assert.doesNotMatch(source, /Playback was blocked\. Use the video play control or reconnect/);
+  assert.match(source, /autoPlay muted playsInline controls onPlaying/);
+  assert.match(source, /camera\.mode !== "creality_webrtc" && <button[^\n]*cameraFullscreen/);
+});
+test("native Safari HLS is preferred and relay retries are bounded", () => {
+  const source = fs.readFileSync(path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../src/components/PrinterCamera.jsx"), "utf8");
+  assert.ok(source.indexOf('target.canPlayType("application/vnd.apple.mpegurl")') < source.indexOf("Hls.isSupported()"));
+  assert.match(source, /data\.type === Hls\.ErrorTypes\.NETWORK_ERROR && relayRetries\.current < 2/);
+  assert.match(source, /clearTimeout\(retryTimer\)/);
+  assert.match(source, /relayRetries\.current = 0; setPlaybackBlocked\(false\)/);
 });
