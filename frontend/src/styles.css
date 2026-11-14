@@ -6967,3 +6967,13 @@ a:focus-visible,
     overflow-y:auto;
   }
 }
+
+
+/* A disabled modelling action must still explain itself visually. */
+.slicerPlateEditingToolbar .slicerToolTooltip > button:disabled {
+  opacity:.61;
+  cursor:not-allowed;
+}
+.slicerPlateEditingToolbar .slicerToolTooltip > button:disabled .slicerUiIcon {
+  opacity:.9;
+}
