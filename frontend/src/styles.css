@@ -7474,3 +7474,38 @@ a:focus-visible,
   background:#111c29;
   color:#e5ebf5;
 }
+
+
+/* The overview is an operational glance; administrative badges belong in
+   Manage printer and Live monitor rather than alongside every printer name. */
+.printingPrinterCompactCard .printingPrinterCompactDetails {
+  justify-content:center;
+  gap:7px;
+}
+.printingPrinterCompactCard .printingPrinterCompactActions {
+  margin-top:5px;
+}
+.printingPrinterMetadata {
+  display:flex;
+  flex-direction:column;
+  gap:9px;
+  min-width:0;
+  margin:0 0 16px;
+  padding:12px 14px;
+  border:1px solid #2b3b4f;
+  border-radius:11px;
+  background:#101a26;
+}
+.printingPrinterMetadata>strong {
+  font-size:13px;
+}
+.printingPrinterMetadata .printingBadges {
+  display:flex;
+  flex-wrap:wrap;
+  gap:6px;
+  align-items:center;
+}
+.printingPrinterMetadata .badge {
+  white-space:normal;
+  overflow-wrap:anywhere;
+}
