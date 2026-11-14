@@ -157,6 +157,35 @@ class SliceJobApiTests(TestCase):
         self.assertEqual(self.client.post("/api/printing/slicer/projects/import/",
             {"file":SimpleUploadedFile("saved.3mf",package)}).status_code,403)
 
+    def test_import_project_restores_v2_painted_regions_from_3mf_sidecar(self):
+        from django.core.files.uploadedfile import SimpleUploadedFile
+        from core.slicer_plate_3mf import build_makervault_project_3mf
+        from core.slicer_approval import fixture_stl
+        source_id = str(uuid.uuid4())
+        paint = {"version": 2, "signature": "1:abcdef01",
+                 "palette": [{"color": "#ff0000", "label": "Red"}],
+                 "regions": [{"slot": 0, "patches": [
+                     {"face": 0, "polygon": [[0, 0, 0], [2, 0, 0], [0, 2, 0]]}
+                 ]}]}
+        item = {"instance_id": str(uuid.uuid4()), "asset_id": source_id,
+                "x_mm": 0, "y_mm": 0, "z_mm": 0, "rotation_deg": 0,
+                "scale_percent": 100, "color": "#aabbcc", "colour_paint": paint}
+        plates = [{"id": "plate-1", "name": "Painted", "objects": [item]}]
+        archive = build_makervault_project_3mf(
+            [("Painted", [(item, fixture_stl())])], bed_width=220, bed_depth=220,
+            metadata={"format": "makervault-project-v1", "plates": plates,
+                      "active_plate_id": "plate-1"})
+        self.client.force_login(self.owner)
+        response = self.client.post("/api/printing/slicer/projects/import/",
+            {"file": SimpleUploadedFile("painted.3mf", archive,
+                                       content_type="model/3mf")})
+        self.assertEqual(response.status_code, 201, response.content)
+        restored = response.json()["plates"][0]["objects"][0]["colour_paint"]
+        self.assertEqual(restored["version"], 2)
+        self.assertEqual(restored["regions"][0]["patches"][0]["polygon"],
+                         [[0.0, 0.0, 0.0], [2.0, 0.0, 0.0], [0.0, 2.0, 0.0]])
+        self.assertEqual(restored["palette"][0]["color"], "#ff0000")
+
     def test_gcode_library_preference_is_explicit_and_private(self):
         self.client.force_login(self.owner)
         response = self.post()
