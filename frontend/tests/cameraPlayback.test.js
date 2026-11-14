@@ -70,7 +70,8 @@ test("video autoplay rejection keeps the stream attached and exposes native play
   const source = fs.readFileSync(path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../src/components/PrinterCamera.jsx"), "utf8");
   const gesture = source.slice(source.indexOf("const needsGesture ="), source.indexOf("const failed ="));
   assert.match(gesture, /setPlaybackBlocked\(true\)/);
-  assert.doesNotMatch(gesture, /removeAttribute|\.load\(\)|failed\(/);
+  assert.doesNotMatch(gesture, /removeAttribute|\.load\(\)/);
+  assert.match(gesture, /if \(!isAutoplayBlocked\(reason\)\) \{/);
   assert.match(source, /target\.play\(\)\.catch\(needsGesture\)/);
   assert.doesNotMatch(source, /Playback was blocked\. Use the video play control or reconnect/);
   assert.match(source, /autoPlay muted playsInline controls onPlaying/);
