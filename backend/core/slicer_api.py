@@ -538,7 +538,8 @@ def import_project_3mf(request):
         stream = io.BytesIO(uploaded.read(32 * 1024 * 1024 + 1))
         with zipfile.ZipFile(stream) as archive:
             infos = archive.infolist()
-            if (len(infos) > 230 or sum(info.file_size for info in infos)
+            if (len(infos) > 480 or len({info.filename for info in infos}) != len(infos)
+                    or sum(info.file_size for info in infos)
                     > 128 * 1024 * 1024 or
                     any(info.flag_bits & 1 for info in infos)):
                 raise ValueError("Project archive exceeds safe limits.")
@@ -551,6 +552,34 @@ def import_project_3mf(request):
             plates = metadata.get("plates")
             if not isinstance(plates, list) or not 1 <= len(plates) <= 8:
                 raise ValueError("Invalid project plate list.")
+            # Hydrate optional v2 painting sidecars before normal draft
+            # validation. A sidecar never changes printable STL geometry.
+            seen_paint_files = set()
+            sidecar_bytes = 0
+            for plate in plates:
+                if not isinstance(plate, dict) or not isinstance(plate.get("objects"), list):
+                    raise ValueError("Invalid project models.")
+                for row in plate["objects"]:
+                    if not isinstance(row, dict):
+                        raise ValueError("Invalid project model.")
+                    filename = row.pop("paint_sidecar", None)
+                    if filename is None:
+                        continue
+                    if ("colour_paint" in row or not isinstance(filename, str) or
+                            not re.fullmatch(r"Metadata/paint/paint-[0-9]{4}\\.json", filename) or
+                            filename in seen_paint_files):
+                        raise ValueError("Invalid project paint sidecar.")
+                    seen_paint_files.add(filename)
+                    info = archive.getinfo(filename)
+                    if not 0 < info.file_size <= 16 * 1024 * 1024:
+                        raise ValueError("Project paint sidecar exceeds safe limits.")
+                    sidecar_bytes += info.file_size
+                    if sidecar_bytes > 64 * 1024 * 1024:
+                        raise ValueError("Project painting regions exceed safe limits.")
+                    value = json.loads(archive.read(info).decode("utf-8"))
+                    if not isinstance(value, dict) or value.get("version") != 2:
+                        raise ValueError("Project sidecar is not v2 painting data.")
+                    row["colour_paint"] = validate_colour_paint(value)
             active_id = metadata.get("active_plate_id")
             ids, source_names, total = set(), set(), 0
             for plate in plates:
