@@ -854,7 +854,7 @@ export default function SlicerPrepareWorkspace({
         </button>)}
       </div>
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:5}}>
-        <small>{paintSelected?.colour_paint ? Object.keys(paintSelected.colour_paint.faces||{}).length : 0} facets</small>
+        <small>{paintSelected?.colour_paint?.version === 2 ? `${paintSelected.colour_paint.regions?.reduce((n,region)=>n+region.patches.length,0)||0} clipped patches` : `${paintSelected?.colour_paint ? Object.keys(paintSelected.colour_paint.faces||{}).length : 0} facets (legacy)`}</small>
         <div className="slicerPaintEditActions">
           <button type="button" title="Erase painted faces" aria-label="Erase painted faces"
             aria-pressed={paintErase} onClick={()=>setPaintErase(true)}
@@ -912,7 +912,7 @@ export default function SlicerPrepareWorkspace({
           </label>
         </div>
       </div>}
-      <small style={{fontSize:11,opacity:.8}}>Left drag: paint · Right drag: move view · Wheel: zoom · Ctrl+Z: undo. Preview only.</small>
+      <small style={{fontSize:11,opacity:.8}}>Left drag: paint · Right drag: move view · Wheel: zoom · Ctrl+Z / Ctrl+Y: undo / redo. Saved v2 regions are preview-only, not native multicolour toolpaths.</small>
       {paintError&&<small role="alert" style={{color:"#fca5a5"}}>{paintError}</small>}
     </section>
   );
