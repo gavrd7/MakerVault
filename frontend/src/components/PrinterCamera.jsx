@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from "react";
 import Hls from "hls.js";
 import { apiFetch } from "../api";
-import { startFrameLoop, cameraRequest, cameraHlsUrl, shouldFallbackToNativeHls, isAutoplayBlocked, videoFrameHealth, videoFrameDiagnostic } from "./cameraPlayback";
+import { startFrameLoop, cameraRequest, cameraHlsUrl } from "./cameraPlayback";
 
 const LABELS = { snapshot: "Live images", mjpeg: "MJPEG live images", creality_webrtc: "Creality WebRTC · experimental" };
 
@@ -149,49 +149,17 @@ export function CameraPlayback({ camera, url, compact = false }) {
   const [status, setStatus] = useState("Connecting…");
   const [error, setError] = useState("");
   const [attempt, setAttempt] = useState(0);
-  const [playbackBlocked, setPlaybackBlocked] = useState(false);
-  const [diagnostic, setDiagnostic] = useState("");
-  const relayRetries = useRef(0);
-  const renderedFrames = useRef(0);
 
   useEffect(() => {
     let cancelled = false;
     let objectUrl = "";
     let stopFrames;
     let hls;
-    let playbackMode = "";
-    let retryTimer;
-    let watchdogTimer;
-    let watchdogMode = "";
-    let diagnosticTimer;
-    let frameCallbackId;
-    let gestureRequired = false;
-    const target = video.current;
     const controller = new AbortController();
-    renderedFrames.current = 0;
-    setImage(""); setError(""); setStatus("Connecting…"); setPlaybackBlocked(false); setDiagnostic("");
-
-    const needsGesture = reason => {
-      if (cancelled || reason?.name === "AbortError") return;
-      if (!isAutoplayBlocked(reason)) {
-        failed("Camera playback failed. Check the relay and select Reconnect.");
-        return;
-      }
-      // Only NotAllowedError means autoplay was blocked. Preserve the stream
-      // for the user's native Play control instead of treating it as offline.
-      gestureRequired = true;
-      clearTimeout(watchdogTimer);
-      watchdogTimer = undefined;
-      watchdogMode = "";
-      setPlaybackBlocked(true);
-      setError("");
-      setStatus("Tap Play on the video to start the camera.");
-    };
+    setImage(""); setError(""); setStatus("Connecting…");
 
     const failed = message => {
       if (cancelled) return;
-      clearTimeout(watchdogTimer);
-      watchdogMode = "";
       setError(message);
       setStatus("Disconnected · select Reconnect to retry");
       if (video.current) {
@@ -200,84 +168,6 @@ export function CameraPlayback({ camera, url, compact = false }) {
         video.current.load();
       }
     };
-
-    // A "playing" event only confirms that the media element has started,
-    // not that Safari decoded or presented a camera frame.
-    const observeFirstFrame = () => {
-      if (!target?.requestVideoFrameCallback) return;
-      if (frameCallbackId != null) target.cancelVideoFrameCallback?.(frameCallbackId);
-      frameCallbackId = target.requestVideoFrameCallback(() => {
-        frameCallbackId = undefined;
-        if (cancelled) return;
-        renderedFrames.current += 1;
-        relayRetries.current = 0;
-        clearTimeout(watchdogTimer);
-        watchdogTimer = undefined;
-        watchdogMode = "";
-        clearInterval(diagnosticTimer);
-        setPlaybackBlocked(false);
-        setError("");
-        setStatus("Live video · relayed through MakerVault");
-        setDiagnostic("");
-      });
-    };
-    const switchToNative = () => {
-      if (cancelled || !target || playbackMode !== "hls") return;
-      playbackMode = "native";
-      clearTimeout(watchdogTimer);
-      watchdogMode = "";
-      hls?.destroy();
-      hls = null;
-      target.pause();
-      target.removeAttribute("src");
-      target.load();
-      renderedFrames.current = 0;
-      target.src = cameraHlsUrl(url);
-      target.load();
-      observeFirstFrame();
-      setError("");
-      setStatus("Trying native Safari video playback…");
-      setDiagnostic("No frames from hls.js; trying native HLS.");
-      scheduleWatchdog();
-      target.play().catch(needsGesture);
-    };
-    const scheduleWatchdog = () => {
-      if (!target || camera.mode !== "creality_webrtc") return;
-      // Repeated Safari playing events must not postpone the deadline indefinitely.
-      if (watchdogMode === playbackMode && watchdogTimer != null) return;
-      clearTimeout(watchdogTimer);
-      watchdogMode = playbackMode;
-      watchdogTimer = setTimeout(() => {
-        watchdogTimer = undefined;
-        if (cancelled || gestureRequired || videoFrameHealth(target, renderedFrames.current).hasFrame) return;
-        if (playbackMode === "hls" && target.canPlayType("application/vnd.apple.mpegurl")) {
-          switchToNative();
-          return;
-        }
-        const health = videoFrameHealth(target, renderedFrames.current);
-        setDiagnostic(videoFrameDiagnostic(health, playbackMode));
-        setStatus("No decoded camera frames · select Reconnect to retry");
-        setError("The video player started but no camera frames were decoded. " + videoFrameDiagnostic(health, playbackMode));
-      }, 12000);
-    };
-    const handlePlaying = () => {
-      gestureRequired = false;
-      if (!videoFrameHealth(target, renderedFrames.current).hasFrame) scheduleWatchdog();
-    };
-    // Keep the compact preview informative even if iOS suppresses an error
-    // or repeatedly reports "playing" without presenting a single frame.
-    // This samples the *local video element* only; it never polls the relay.
-    const updateFrameDiagnostic = () => {
-      if (cancelled || !target || camera.mode !== "creality_webrtc") return;
-      const health = videoFrameHealth(target, renderedFrames.current);
-      if (!health.hasFrame && playbackMode) {
-        setDiagnostic(videoFrameDiagnostic(health, playbackMode));
-      }
-    };
-    if (camera.mode === "creality_webrtc") {
-      diagnosticTimer = setInterval(updateFrameDiagnostic, 3000);
-    }
-    if (camera.mode === "creality_webrtc" && target) target.addEventListener("playing", handlePlaying);
 
     if (camera.mode !== "creality_webrtc") {
       stopFrames = startFrameLoop({
@@ -307,59 +197,30 @@ export function CameraPlayback({ camera, url, compact = false }) {
         },
       });
     } else {
+      const target = video.current;
       const source = cameraHlsUrl(url);
       if (!target) {
         failed("Camera video element is unavailable.");
       } else if (Hls.isSupported()) {
-        playbackMode = "hls";
-        // Keep the previously working playback preference: Safari can expose
-        // both native HLS and MediaSource. Use hls.js when it is supported,
-        // falling back to native HLS on browsers without MediaSource support.
         hls = new Hls({
           enableWorker: true,
           lowLatencyMode: false,
           maxBufferLength: 12,
           backBufferLength: 6,
         });
-        observeFirstFrame();
         hls.on(Hls.Events.MANIFEST_PARSED, () => {
           if (cancelled) return;
-          setStatus("Connected · waiting for video frames");
-          scheduleWatchdog();
-          target.play().catch(needsGesture);
+          setStatus("Connected · waiting for video");
+          target.play().catch(() => failed("Playback was blocked. Use the video play control or reconnect."));
         });
         hls.on(Hls.Events.ERROR, (_event, data) => {
-          if (cancelled || playbackMode !== "hls") return;
-          if (shouldFallbackToNativeHls(data, Boolean(target.canPlayType("application/vnd.apple.mpegurl")))) {
-            // A reset or a black/no-frame watchdog should only switch the
-            // browser's player; leave the printer relay and desktop path alone.
-            switchToNative();
-            return;
-          }
-          if (!data?.fatal) return;
-          if (data.type === Hls.ErrorTypes.NETWORK_ERROR && relayRetries.current < 2) {
-            // A newly started relay can briefly lack a playlist or segments.
-            // Retry a bounded number of times rather than leaving a preview
-            // permanently black after a transient startup failure.
-            relayRetries.current += 1;
-            clearTimeout(watchdogTimer);
-            watchdogTimer = undefined;
-            watchdogMode = "";
-            setStatus("Reconnecting camera relay…");
-            retryTimer = setTimeout(() => setAttempt(value => value + 1), relayRetries.current * 2000);
-          } else {
-            failed("Camera relay disconnected" + (data.details ? " (" + data.details + ")" : "") + ". Check the printer connection, then reconnect.");
-          }
+          if (!cancelled && data?.fatal) failed("Camera relay disconnected. Check the printer connection, then reconnect.");
         });
         hls.loadSource(source);
         hls.attachMedia(target);
       } else if (target.canPlayType("application/vnd.apple.mpegurl")) {
-        playbackMode = "native";
         target.src = source;
-        target.load();
-        observeFirstFrame();
-        scheduleWatchdog();
-        target.play().catch(needsGesture);
+        target.play().catch(() => failed("Playback was blocked. Use the video play control or reconnect."));
       } else {
         failed("This browser cannot play the MakerVault camera relay.");
       }
@@ -369,11 +230,6 @@ export function CameraPlayback({ camera, url, compact = false }) {
       cancelled = true;
       controller.abort();
       stopFrames?.();
-      clearTimeout(retryTimer);
-      clearTimeout(watchdogTimer);
-      clearInterval(diagnosticTimer);
-      target?.removeEventListener("playing", handlePlaying);
-      if (frameCallbackId != null) target?.cancelVideoFrameCallback?.(frameCallbackId);
       hls?.destroy();
       if (video.current) {
         video.current.pause();
@@ -416,14 +272,12 @@ export function CameraPlayback({ camera, url, compact = false }) {
     </div>
     <div className="printerCameraViewport">
       {camera.mode === "creality_webrtc"
-        ? <video ref={video} style={{ transform }} autoPlay muted playsInline controls={!compact} onPlaying={() => { setPlaybackBlocked(false); if (renderedFrames.current === 0) setStatus("Playing · waiting for first video frame"); }} onError={() => { if (video.current?.error) { setPlaybackBlocked(false); setError("Camera stream could not be loaded. Check the camera relay and select Reconnect."); setStatus("Disconnected · select Reconnect to retry"); } }} />
+        ? <video ref={video} style={{ transform }} autoPlay muted playsInline controls={!compact} onPlaying={() => { setError(""); setStatus("Live video · relayed through MakerVault"); }} />
         : image
           ? <img src={image} alt={camera.name + " live camera view"} style={{ transform }} />
           : <span role="status">{status}</span>}
     </div>
-    {camera.mode === "creality_webrtc" && <div className="printerCameraDiagnostic" role="status" style={{ fontSize: "0.75rem", overflowWrap: "anywhere", padding: "0.25rem 0.5rem" }}>{status}{diagnostic ? " · " + diagnostic : ""}</div>}
     {error && <p className="integrationError" role="alert">{error}</p>}
-    {playbackBlocked && !error && <p className="printerCameraGestureHint" role="status">Autoplay was blocked. Tap Play on the video to start the feed.</p>}
     {!compact && <small>{LABELS[camera.mode]}{camera.mode === "creality_webrtc" ? " · Video is relayed through your authenticated MakerVault connection; no camera media port is exposed." : " · Images are relayed securely through your MakerVault session."}</small>}
   </div>;
 }
