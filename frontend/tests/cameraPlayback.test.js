@@ -71,7 +71,7 @@ test("printer camera retains the pre-refactor HLS playback flow in the redesigne
   assert.match(source, /hls\.attachMedia\(target\)/);
   assert.match(source, /hls\.on\(Hls\.Events\.MANIFEST_PARSED/);
   assert.match(source, /autoPlay muted playsInline controls=\{!compact\}/);
-  assert.doesNotMatch(source, /switchToNative|scheduleWatchdog|requestVideoFrameCallback/);
+  assert.doesNotMatch(source, /switchToNative|scheduleWatchdog/);
   assert.match(source, /camera\.mode !== "creality_webrtc" && <button[^\n]*cameraFullscreen/);
 });
 
@@ -112,4 +112,15 @@ test("fatal Safari MediaSource reset releases hls.js before native playback", ()
   assert.match(recovery, /attemptAutoplay\(target\)/);
   assert.ok(recovery.indexOf("hls?.destroy()") < recovery.indexOf("target.src = source"));
   assert.match(source, /Native HLS recovery failed/);
+});
+
+test("camera playback does not report recovered until a video frame is presented", () => {
+  const source = fs.readFileSync(path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../src/components/PrinterCamera.jsx"), "utf8");
+  assert.doesNotMatch(source, /Recovered using native HLS/);
+  assert.match(source, /requestVideoFrameCallback/);
+  assert.match(source, /Video playing · checking decoded frames/);
+  assert.match(source, /No presented video frame confirmed/);
+  assert.match(source, /videoFrameDiagnostic\(health, mode\)/);
+  assert.match(source, /target\.addEventListener\("playing", playingHandler\)/);
+  assert.match(source, /target\.removeEventListener\("playing", playingHandler\)/);
 });
