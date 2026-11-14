@@ -3044,7 +3044,15 @@ export default function SlicerPlateEditor({
     </div>
     <div className="slicerPlateWorkspace">
       <div className="slicerPlateCanvasColumn">
-    {toolbar && <div className="slicerPlateEditingToolbar">{toolbar}</div>}
+    {toolbar && <div className="slicerPlateEditingToolbar">
+      <button type="button" className="slicerMobileToolArrow" aria-label="Scroll editing tools left"
+        onClick={event=>event.currentTarget.parentElement.querySelector(".slicerPrepareTools")
+          ?.scrollBy({left:-260,behavior:"smooth"})}>‹</button>
+      {toolbar}
+      <button type="button" className="slicerMobileToolArrow" aria-label="Scroll editing tools right"
+        onClick={event=>event.currentTarget.parentElement.querySelector(".slicerPrepareTools")
+          ?.scrollBy({left:260,behavior:"smooth"})}>›</button>
+    </div>}
     {paintControls}
     <div className="slicerPlateCameraToolbar" role="toolbar" aria-label="Build-plate camera views">
       <button type="button" onClick={() => setPlateCamera("iso")} title="Isometric build-plate view">Isometric</button>
