@@ -6730,8 +6730,9 @@ a:focus-visible,
   .slicerPrepareWorkspace {padding:7px !important;}
   .slicerPrepareStructure[data-mobile-pane="plate"] {width:100%;}
   .slicerPrepareScene > .slicerPlatePanel {
-    width:100%;
+    width:calc(100% + 12px);
     max-width:none;
+    margin-inline:-6px;
     padding:7px;
   }
   .slicerPrepareScene .slicerPlateWorkspace {margin-top:8px;}
