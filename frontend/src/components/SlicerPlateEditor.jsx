@@ -1977,7 +1977,8 @@ export default function SlicerPlateEditor({
         const centre = mesh.worldToLocal(hit.point.clone()).toArray();
         const normal = hit.face.normal.toArray(); // THREE face normals are mesh-local
         const mode = options.mode === "height" ? "height" :
-          ["brush", "circle"].includes(options.mode) ? "disc" : "facet";
+          ["brush", "circle"].includes(options.mode) ? "disc" :
+          options.mode === "sphere" ? "sphere" : "facet";
         const next = appendPaintRegion(pending.paint, paintMesh, {
           mode,faces,centre,normal,radiusMm:options.radiusMm,
           minHeightMm:options.minHeightMm,maxHeightMm:options.maxHeightMm,
@@ -2065,7 +2066,8 @@ export default function SlicerPlateEditor({
             throw new Error("The selected paint slot is no longer available.");
           painting = { pointerId:event.pointerId, instanceId:item.instance_id,
             slot, palette, paint:item.colour_paint ||
-              {...createPaintRegions(createPaintMesh(hit.object.geometry)),palette},
+              {...createPaintRegions(hit.object.userData.paintMesh ||
+                (hit.object.userData.paintMesh=createPaintMesh(hit.object.geometry))),palette},
             touched:new Set(), initialised:false, changed:false };
           paintHit(hit, painting);
           controls.enabled = false;
