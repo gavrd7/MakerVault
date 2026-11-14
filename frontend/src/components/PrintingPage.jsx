@@ -626,13 +626,12 @@ export default function PrintingPage({ config, projects, searchTarget = null, on
             <div className="printingPrinterCompactDetails">
               <strong>{printer.name}</strong>
               <small>{[printer.manufacturer, printer.model].filter(Boolean).join(" · ")}</small>
-              <div className="printingPrinterCompactActions">
-                {canChangePrinter && <button type="button" className="printingPrinterAction printingPrinterActionLive" onClick={() => setLivePrinter(printer)}>Live monitor</button>}
-                {canChangePrinter && <button type="button" className="printingPrinterAction" onClick={() => setManagePrinter(printer)}>Manage printer</button>}
-              </div>
-
             </div>
           </div>
+          {canChangePrinter && <div className="printingPrinterCompactActions">
+            <button type="button" className="printingPrinterAction printingPrinterActionLive" onClick={() => setLivePrinter(printer)}>Live monitor</button>
+            <button type="button" className="printingPrinterAction" onClick={() => setManagePrinter(printer)}>Manage printer</button>
+          </div>}
           <div className="printingPrinterCompactControls" aria-label={"Live controls for " + printer.name}>
             <PrinterLiveSummary printer={printer} onOpen={() => setLivePrinter(printer)}
               canControl={canChangePrinter} onChanged={load} />
