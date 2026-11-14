@@ -92,3 +92,21 @@ test("fatal HLS errors expose their classification without revealing relay URLs"
   assert.match(source, /onError=\{event =>/);
   assert.doesNotMatch(source, /Camera relay disconnected\. Check the printer connection/);
 });
+
+test("Safari MediaSource reset is eligible for native HLS recovery only when available", async () => {
+  const { shouldFallbackToNativeHls } = await import("../src/components/cameraPlayback.js");
+  assert.equal(shouldFallbackToNativeHls({ details: "mediaSourceRequiresReset" }, true), true);
+  assert.equal(shouldFallbackToNativeHls({ details: "mediaSourceRequiresReset" }, false), false);
+  assert.equal(shouldFallbackToNativeHls({ details: "bufferAppendError" }, true), false);
+});
+
+test("fatal Safari MediaSource reset releases hls.js before native playback", () => {
+  const source = fs.readFileSync(path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../src/components/PrinterCamera.jsx"), "utf8");
+  const recovery = source.slice(source.indexOf("if (!nativeRecovery.current && shouldFallbackToNativeHls"), source.indexOf('setPlaybackDiagnostic(diagnostic);', source.indexOf("if (!nativeRecovery.current && shouldFallbackToNativeHls")));
+  assert.match(recovery, /hls\?\.destroy\(\)/);
+  assert.match(recovery, /hls = null/);
+  assert.match(recovery, /target\.src = source/);
+  assert.match(recovery, /attemptAutoplay\(target\)/);
+  assert.ok(recovery.indexOf("hls?.destroy()") < recovery.indexOf("target.src = source"));
+  assert.match(source, /Native HLS recovery failed/);
+});
