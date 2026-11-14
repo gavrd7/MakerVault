@@ -74,7 +74,7 @@ test("video autoplay rejection keeps the stream attached and exposes native play
   assert.match(gesture, /if \(!isAutoplayBlocked\(reason\)\) \{/);
   assert.match(source, /target\.play\(\)\.catch\(needsGesture\)/);
   assert.doesNotMatch(source, /Playback was blocked\. Use the video play control or reconnect/);
-  assert.match(source, /autoPlay muted playsInline controls onPlaying/);
+  assert.match(source, /autoPlay muted playsInline controls=\{!compact\} onPlaying/);
   assert.match(source, /camera\.mode !== "creality_webrtc" && <button[^\n]*cameraFullscreen/);
 });
 test("hls.js is preferred and Safari MediaSource reset falls back to native HLS", () => {
@@ -90,6 +90,7 @@ test("hls.js is preferred and Safari MediaSource reset falls back to native HLS"
   assert.match(source, /switchToNative\(\)/);
   assert.match(source, /requestVideoFrameCallback/);
   assert.match(source, /videoFrameDiagnostic\(health, playbackMode\)/);
+  assert.match(source, /if \(watchdogMode === playbackMode && watchdogTimer != null\) return/);
 });
 
 test("only MediaSource reset on a browser with native HLS triggers fallback", () => {
