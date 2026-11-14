@@ -105,6 +105,8 @@ export default function PrinterCamera({ printerId, connection, canEdit, activeCa
     {!rows.length && <small>{connection.camera?.reported ? "The printer reports a camera. Configure a source to view it." : "Configure a camera source to view this printer."}</small>}
     {notice && <p role="status">{notice}</p>}
     {error && <p className="integrationError" role="alert">{error}</p>}
+    {captureInfo && <small role="status" style={{ display: "block", padding: "4px 10px", overflowWrap: "anywhere" }}>{captureInfo}</small>}
+    {capturedFrame && <img src={capturedFrame} alt="Captured video frame for camera diagnosis" style={{ display: "block", width: "min(100%, 320px)", margin: "8px auto" }} />}
     {settings && canEdit && <form className="formGrid printerCameraForm" onSubmit={save}>
       <div className="full printerCameraGuidance"><small>{provider?.guidance || "Choose a camera source below, or enter its URL manually."}</small></div>
       {warnings.map(message => <p className="full" role="status" key={message}>{message}</p>)}
@@ -151,6 +153,8 @@ export function CameraPlayback({ camera, url, compact = false }) {
   const [attempt, setAttempt] = useState(0);
   const [playbackBlocked, setPlaybackBlocked] = useState(false);
   const [playbackDiagnostic, setPlaybackDiagnostic] = useState("");
+  const [capturedFrame, setCapturedFrame] = useState("");
+  const [captureInfo, setCaptureInfo] = useState("");
   const nativeRecovery = useRef(false);
   const frameSeen = useRef(false);
 
@@ -207,7 +211,7 @@ export function CameraPlayback({ camera, url, compact = false }) {
       }, 1000);
     };
     const controller = new AbortController();
-    setImage(""); setError(""); setStatus("Connecting…"); setPlaybackBlocked(false); setPlaybackDiagnostic("");
+    setImage(""); setError(""); setStatus("Connecting…"); setPlaybackBlocked(false); setPlaybackDiagnostic(""); setCapturedFrame(""); setCaptureInfo("");
 
     const failed = message => {
       if (cancelled) return;
@@ -361,6 +365,35 @@ export function CameraPlayback({ camera, url, compact = false }) {
     } else setExpanded(true);
   };
 
+  const inspectFrame = () => {
+    const target = video.current;
+    if (!target || !target.videoWidth || !target.videoHeight) {
+      setCaptureInfo("No video dimensions are available to capture.");
+      return;
+    }
+    try {
+      const canvas = document.createElement("canvas");
+      canvas.width = target.videoWidth;
+      canvas.height = target.videoHeight;
+      const context = canvas.getContext("2d", { willReadFrequently: true });
+      if (!context) throw new Error("Canvas unavailable");
+      context.drawImage(target, 0, 0, canvas.width, canvas.height);
+      const pixels = context.getImageData(0, 0, canvas.width, canvas.height).data;
+      let total = 0, bright = 0, samples = 0;
+      for (let i = 0; i < pixels.length; i += 16) {
+        const luma = Math.round(0.2126 * pixels[i] + 0.7152 * pixels[i + 1] + 0.0722 * pixels[i + 2]);
+        total += luma;
+        if (luma > 24) bright++;
+        samples++;
+      }
+      setCapturedFrame(canvas.toDataURL("image/png"));
+      setCaptureInfo(`Captured ${canvas.width}×${canvas.height} video frame · average brightness ${(total / samples).toFixed(1)}/255 · non-dark pixels ${(100 * bright / samples).toFixed(1)}%.`);
+    } catch (err) {
+      setCapturedFrame("");
+      setCaptureInfo(`Video frame capture unavailable (${err?.name || "error"}).`);
+    }
+  };
+
   const fit = Number(camera.rotation || 0) % 180 ? 9 / 16 : 1;
   const transform = `rotate(${camera.rotation || 0}deg) scale(${(camera.flip_horizontal ? -1 : 1) * fit}, ${(camera.flip_vertical ? -1 : 1) * fit})`;
 
@@ -369,6 +402,7 @@ export function CameraPlayback({ camera, url, compact = false }) {
       {!compact && <small role="status">{status}</small>}
       {playbackBlocked && camera.mode === "creality_webrtc" && <button type="button" onClick={() => { const target = video.current; if (!target) return; target.play().then(() => { setPlaybackBlocked(false); setError(""); }).catch(reason => { if (reason?.name !== "NotAllowedError") setError("Video could not start. Select Reconnect."); }); }}>Start video</button>}
       {(!compact || error) && <button type="button" onClick={() => setAttempt(value => value + 1)}>Reconnect</button>}
+      {camera.mode === "creality_webrtc" && <button type="button" onClick={inspectFrame}>Inspect frame</button>
       {camera.mode !== "creality_webrtc" && <button type="button" className="cameraFullscreen" aria-label={expanded ? "Close fullscreen camera" : "Open fullscreen camera"} onClick={fullscreen}>{expanded ? "Close" : "Fullscreen"}</button>}
     </div>
     <div className="printerCameraViewport">
