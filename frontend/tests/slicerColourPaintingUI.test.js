@@ -53,10 +53,28 @@ test("model toolbar keeps permanent action captions alongside distinct pictogram
   const styles=fs.readFileSync(path.resolve(base,"../styles.css"),"utf8");
   assert.match(workspace,/className="slicerToolButtonLabel"/);
   assert.match(workspace,/TOOL_SHORT_LABELS\[tool\.name\] \|\| tool\.name/);
-  for(const label of ["Centre","Arrange","Auto-orient","Lay flat","Hollow","Boolean","Colour paint"])
+  for(const label of ["Centre","Arrange","Auto-orient","Lay on face","Hollow","Boolean","Colour paint"])
     assert.ok(workspace.includes('"'+label+'"')||workspace.includes(">"+label+"<"),label);
   for(const name of ["arrange","orient","face","split","cut","drill","hollow","boolean","measure"])
     assert.match(icons,new RegExp("\\b"+name+": <"));
   assert.match(styles,/\.slicerPrepareTools \.slicerToolButtonLabel/);
   assert.match(styles,/\.slicerPlateEditingToolbar \.slicerToolTooltip/);
+});
+
+test("approved icons are preserved and other tools use Material-style symbols",()=>{
+  const icons=read("SlicerUiIcon.jsx");
+  const workspace=read("SlicerPrepareWorkspace.jsx");
+  const style=fs.readFileSync(path.resolve(base,"../styles.css"),"utf8");
+  for(const name of ["center","orient","face","focus","split","cut","drill","hollow","boolean","measure","paint-support","paint-seam"]){
+    assert.ok(icons.includes('"'+name+'":')||icons.includes("  "+name+":"),name);
+  }
+  assert.match(icons,/materialTools\.has\(name\) \? 2 : 1\.7/);
+  assert.match(workspace,/"Lay on face":"Lay on face"/);
+  assert.doesNotMatch(workspace,/"Lay on face":"Lay flat"/);
+  assert.match(workspace,/index>0&&TOOLS\[index-1\]\.group!==tool\.group/);
+  assert.match(style,/column-gap:4px/);
+  assert.match(style,/margin-inline-start:10px/);
+  assert.match(style,/left:-7px/);
+  assert.match(style,/width:57px/);
+  assert.match(style,/hyphens:none/);
 });
