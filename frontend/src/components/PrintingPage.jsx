@@ -1621,7 +1621,7 @@ function PrinterConnectionsModal({ printer, onClose, onChanged, onAdded, onClaim
     {/* Use the same authenticated camera playback as the printer overview.
         When monitoring is open, the overview preview is suspended so only
         one stream runs for this printer. No camera means no empty placeholder. */}
-    {!addOnly && <PrinterCameraPreview
+    {!addOnly && <PrinterCameraPreview compact={false}
       printer={{ ...printer, live_connections: (data.rows || []).length ? data.rows : (printer.live_connections || []) }}
     />}
 
