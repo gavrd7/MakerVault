@@ -149,6 +149,7 @@ export function CameraPlayback({ camera, url, compact = false }) {
   const [status, setStatus] = useState("Connecting…");
   const [error, setError] = useState("");
   const [attempt, setAttempt] = useState(0);
+  const [playbackBlocked, setPlaybackBlocked] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -156,7 +157,7 @@ export function CameraPlayback({ camera, url, compact = false }) {
     let stopFrames;
     let hls;
     const controller = new AbortController();
-    setImage(""); setError(""); setStatus("Connecting…");
+    setImage(""); setError(""); setStatus("Connecting…"); setPlaybackBlocked(false);
 
     const failed = message => {
       if (cancelled) return;
@@ -167,6 +168,19 @@ export function CameraPlayback({ camera, url, compact = false }) {
         video.current.removeAttribute("src");
         video.current.load();
       }
+    };
+
+    const attemptAutoplay = target => {
+      target.play().catch(reason => {
+        if (cancelled || reason?.name === "AbortError") return;
+        if (reason?.name === "NotAllowedError") {
+          // Do not detach an intact HLS stream on a browser autoplay denial.
+          setPlaybackBlocked(true);
+          setStatus("Tap Start video to allow playback.");
+          return;
+        }
+        failed("Camera playback failed. Select Reconnect to retry.");
+      });
     };
 
     if (camera.mode !== "creality_webrtc") {
@@ -211,7 +225,7 @@ export function CameraPlayback({ camera, url, compact = false }) {
         hls.on(Hls.Events.MANIFEST_PARSED, () => {
           if (cancelled) return;
           setStatus("Connected · waiting for video");
-          target.play().catch(() => failed("Playback was blocked. Use the video play control or reconnect."));
+          attemptAutoplay(target);
         });
         hls.on(Hls.Events.ERROR, (_event, data) => {
           if (!cancelled && data?.fatal) failed("Camera relay disconnected. Check the printer connection, then reconnect.");
@@ -220,7 +234,7 @@ export function CameraPlayback({ camera, url, compact = false }) {
         hls.attachMedia(target);
       } else if (target.canPlayType("application/vnd.apple.mpegurl")) {
         target.src = source;
-        target.play().catch(() => failed("Playback was blocked. Use the video play control or reconnect."));
+        attemptAutoplay(target);
       } else {
         failed("This browser cannot play the MakerVault camera relay.");
       }
@@ -267,17 +281,19 @@ export function CameraPlayback({ camera, url, compact = false }) {
   return <div className={"printerCameraPlayback" + (compact ? " cameraGlance" : "") + (expanded ? " cameraExpanded" : "")} ref={container}>
     <div className="printerCameraToolbar">
       {!compact && <small role="status">{status}</small>}
+      {playbackBlocked && camera.mode === "creality_webrtc" && <button type="button" onClick={() => { const target = video.current; if (!target) return; target.play().then(() => { setPlaybackBlocked(false); setError(""); }).catch(reason => { if (reason?.name !== "NotAllowedError") setError("Video could not start. Select Reconnect."); }); }}>Start video</button>}
       {(!compact || error) && <button type="button" onClick={() => setAttempt(value => value + 1)}>Reconnect</button>}
       {camera.mode !== "creality_webrtc" && <button type="button" className="cameraFullscreen" aria-label={expanded ? "Close fullscreen camera" : "Open fullscreen camera"} onClick={fullscreen}>{expanded ? "Close" : "Fullscreen"}</button>}
     </div>
     <div className="printerCameraViewport">
       {camera.mode === "creality_webrtc"
-        ? <video ref={video} style={{ transform }} autoPlay muted playsInline controls={!compact} onPlaying={() => { setError(""); setStatus("Live video · relayed through MakerVault"); }} />
+        ? <video ref={video} style={{ transform }} autoPlay muted playsInline controls={!compact} onPlaying={() => { setPlaybackBlocked(false); setError(""); setStatus("Live video · relayed through MakerVault"); }} />
         : image
           ? <img src={image} alt={camera.name + " live camera view"} style={{ transform }} />
           : <span role="status">{status}</span>}
     </div>
     {error && <p className="integrationError" role="alert">{error}</p>}
+    {playbackBlocked && <small role="status">Safari requires you to start video playback manually.</small>}
     {!compact && <small>{LABELS[camera.mode]}{camera.mode === "creality_webrtc" ? " · Video is relayed through your authenticated MakerVault connection; no camera media port is exposed." : " · Images are relayed securely through your MakerVault session."}</small>}
   </div>;
 }
