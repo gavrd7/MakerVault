@@ -1624,6 +1624,21 @@ function PrinterConnectionsModal({ printer, onClose, onChanged, onAdded, addOnly
       printer={{ ...printer, live_connections: (data.rows || []).length ? data.rows : (printer.live_connections || []) }}
     />}
 
+    {!addOnly && <section className="printingLiveFilamentPanel" aria-label={"Loaded filament for " + printer.name}>
+      <div className="printingSlotPanelHeader"><strong>Loaded filament</strong>
+        <small>{printer.multi_material_installed ? (printer.installed_multi_material_label || "Multi-material") : "Printer material"}</small>
+      </div>
+      <div className="printingSlotGrid">
+        {(printer.slots || []).filter(slot => slot.is_loaded).map(slot => <div className="printingSlot" key={slot.id}>
+          <span className="printingSwatch" style={slot.color_hex ? {background:slot.color_hex} : undefined} />
+          <div><strong>{slot.product_name || slot.material || "Unknown material"}</strong>
+            <small>{[slot.vendor,slot.material].filter(Boolean).join(" · ")} · {slot.system_label} · unit {slot.unit_index + 1}, slot {slot.slot_index + 1}</small>
+            <small>{slot.spool_code || "Unmatched MakerVault spool"} · {slot.remaining_percent != null ? Math.round(slot.remaining_percent) + "% remaining" : grams(slot.remaining_weight_g)}</small>
+          </div>
+        </div>)}
+        {!(printer.slots || []).some(slot => slot.is_loaded) && <div className="printingEmptyInline">No loaded filament slots discovered.</div>}
+      </div>
+    </section>}
     {!addOnly && <div className="printingIntegrationGrid printerLiveSources">
       {(data.rows || []).map(connection => {
         const snapshot = connection.snapshot || {};
