@@ -7521,8 +7521,9 @@ a:focus-visible,
   }
   .printingPrinterCompactCard .printingPrinterImage {
     flex:0 0 clamp(98px,28vw,118px);
-    width:clamp(98px,28vw,118px);
-    height:auto;
+    width:clamp(98px,28vw,118px) !important;
+    min-width:clamp(98px,28vw,118px) !important;
+    height:auto !important;
     aspect-ratio:4 / 5;
     align-self:center;
     box-sizing:border-box;
