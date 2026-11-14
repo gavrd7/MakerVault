@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from "react";
 import Hls from "hls.js";
 import { apiFetch } from "../api";
-import { startFrameLoop, cameraRequest, cameraHlsUrl, shouldFallbackToNativeHls } from "./cameraPlayback";
+import { startFrameLoop, cameraRequest, cameraHlsUrl, shouldFallbackToNativeHls, isAutoplayBlocked } from "./cameraPlayback";
 
 const LABELS = { snapshot: "Live images", mjpeg: "MJPEG live images", creality_webrtc: "Creality WebRTC · experimental" };
 
@@ -162,10 +162,14 @@ export function CameraPlayback({ camera, url, compact = false }) {
     const controller = new AbortController();
     setImage(""); setError(""); setStatus("Connecting…"); setPlaybackBlocked(false);
 
-    const needsGesture = () => {
-      if (cancelled) return;
-      // Autoplay policy is not a broken feed. Keep the media source attached
-      // so the user can press the video element’s native Play button.
+    const needsGesture = reason => {
+      if (cancelled || reason?.name === "AbortError") return;
+      if (!isAutoplayBlocked(reason)) {
+        failed("Camera playback failed. Check the relay and select Reconnect.");
+        return;
+      }
+      // Only NotAllowedError means autoplay was blocked. Preserve the stream
+      // for the user's native Play control instead of treating it as offline.
       setPlaybackBlocked(true);
       setError("");
       setStatus("Tap Play on the video to start the camera.");
