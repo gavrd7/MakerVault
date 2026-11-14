@@ -38,7 +38,7 @@ const TOOLS = [
 const TOOL_SHORT_LABELS = {
   "Add model":"Add model","Add plate":"Add plate","Duplicate":"Duplicate",
   "Remove":"Delete","Centre selected":"Centre","Auto-arrange":"Arrange",
-  "Auto-orient":"Auto-orient","Lay on face":"Lay flat","Fit selected":"Fit view",
+  "Auto-orient":"Auto-orient","Lay on face":"Lay on face","Fit selected":"Fit model",
   "Mesh boolean":"Boolean","Support painting":"Supports","Seam painting":"Seams",
   "Variable layer height":"Layer height","Colour painting":"Colour paint",
 };
@@ -939,7 +939,7 @@ export default function SlicerPrepareWorkspace({
         <button type="button" disabled={!redoRef.current.length || busy} onClick={redo}
           aria-label="Redo"><SlicerUiIcon name="redo" /><span className="slicerToolButtonLabel">Redo</span></button>
       </span>
-      {TOOLS.map((tool,index) => <div className={"slicerToolTooltip" + (index===0||TOOLS[index-1].group!==tool.group?" slicerToolGroupStart":"") + (((tool.expandable && measureOptionsOpen) || (tool.target === "auto_orient" && autoOrientMenuOpen) || (tool.target === "import" && addModelMenuOpen)) ? " slicerToolOptionsOpen" : "")} key={tool.name}
+      {TOOLS.map((tool,index) => <div className={"slicerToolTooltip" + (index>0&&TOOLS[index-1].group!==tool.group?" slicerToolGroupStart":"") + (((tool.expandable && measureOptionsOpen) || (tool.target === "auto_orient" && autoOrientMenuOpen) || (tool.target === "import" && addModelMenuOpen)) ? " slicerToolOptionsOpen" : "")} key={tool.name}
         onMouseEnter={() => setToolDescriptor(tool.pending ? tool.name + " · Not yet available: " + tool.pending : tool.name)}
         onMouseLeave={() => setToolDescriptor("")}
         onFocus={() => setToolDescriptor(tool.pending ? tool.name + " · Not yet available: " + tool.pending : tool.name)}
