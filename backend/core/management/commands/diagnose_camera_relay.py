@@ -27,6 +27,33 @@ def safe_codec_info(codec):
     return name if name in {"h264", "h265", "hevc", "av1", "vp8", "vp9", "aac", "opus", "pcm", "pcma", "pcmu"} else "other"
 
 
+def safe_nonnegative_integer(value):
+    # Only quantitative counters are allowed; never echo arbitrary upstream fields.
+    return value if type(value) is int and 0 <= value <= 10**15 else 0
+
+
+def safe_medias(medias):
+    result = []
+    if not isinstance(medias, list):
+        return result
+    for media in medias[:12]:
+        if isinstance(media, str):
+            # go2rtc commonly serialises each media as "video, recvonly, H264".
+            tokens = [part.strip().lower() for part in media.split(",")]
+            kind = tokens[0] if tokens and tokens[0] in {"video", "audio"} else "unknown"
+            direction = next((token for token in tokens if token in {"sendonly", "recvonly", "sendrecv", "inactive"}), "unknown")
+            codecs = [safe_codec_info(token) for token in tokens if token in {"h264", "h265", "hevc", "av1", "vp8", "vp9", "aac", "opus", "pcm", "pcma", "pcmu"}]
+            result.append({"kind": kind, "direction": direction, "codecs": codecs})
+        elif isinstance(media, dict):
+            codecs = media.get("codecs") or []
+            result.append({
+                "kind": media.get("kind") if media.get("kind") in {"video", "audio"} else "unknown",
+                "direction": media.get("direction") if media.get("direction") in {"sendonly", "recvonly", "sendrecv", "inactive"} else "unknown",
+                "codecs": [safe_codec_info(codec) for codec in codecs[:12]] if isinstance(codecs, list) else [],
+            })
+    return result
+
+
 def safe_tracks(items):
     if not isinstance(items, list):
         return []
@@ -34,24 +61,25 @@ def safe_tracks(items):
     for item in items[:12]:
         if not isinstance(item, dict):
             continue
-        medias = item.get("medias") or []
-        tracks = []
-        if isinstance(medias, list):
-            for media in medias[:12]:
-                if not isinstance(media, dict):
-                    continue
-                codecs = media.get("codecs") or []
-                tracks.append({
-                    "direction": str(media.get("direction") or "") if media.get("direction") in {"sendonly", "recvonly", "sendrecv", "inactive"} else "unknown",
-                    "kind": str(media.get("kind") or "") if media.get("kind") in {"video", "audio"} else "unknown",
-                    "codecs": [safe_codec_info(codec) for codec in codecs[:12]] if isinstance(codecs, list) else [],
-                })
-        result.append({"tracks": tracks})
+        result.append({
+            "medias": safe_medias(item.get("medias")),
+            "bytes_recv": safe_nonnegative_integer(item.get("bytes_recv")),
+            "bytes_send": safe_nonnegative_integer(item.get("bytes_send")),
+            "receivers": [{
+                "codec": safe_codec_info(track.get("codec")),
+                "bytes": safe_nonnegative_integer(track.get("bytes")),
+                "packets": safe_nonnegative_integer(track.get("packets")),
+            } for track in (item.get("receivers") or [])[:12] if isinstance(track, dict)] if isinstance(item.get("receivers"), list) else [],
+            "senders": [{
+                "codec": safe_codec_info(track.get("codec")),
+                "bytes": safe_nonnegative_integer(track.get("bytes")),
+                "packets": safe_nonnegative_integer(track.get("packets")),
+            } for track in (item.get("senders") or [])[:12] if isinstance(track, dict)] if isinstance(item.get("senders"), list) else [],
+        })
     return result
 
 
 def safe_stream_state(data, name):
-    # go2rtc may return a keyed stream collection or an individual stream.
     if isinstance(data, dict) and name not in data:
         return {"status": "stream not registered in go2rtc"}
     if isinstance(data, dict):
