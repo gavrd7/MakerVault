@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from "react";
 import Hls from "hls.js";
 import { apiFetch } from "../api";
-import { startFrameLoop, cameraRequest, cameraHlsUrl, shouldFallbackToNativeHls, videoFrameHealth, videoFrameDiagnostic } from "./cameraPlayback";
+import { startFrameLoop, cameraRequest, cameraHlsUrl, shouldFallbackToNativeHls, videoFrameHealth, videoFrameDiagnostic, isIOSWebKit } from "./cameraPlayback";
 
 const LABELS = { snapshot: "Live images", mjpeg: "MJPEG live images", creality_webrtc: "Creality WebRTC · experimental" };
 
@@ -264,7 +264,11 @@ export function CameraPlayback({ camera, url, compact = false }) {
       });
     } else {
       const target = video.current;
-      const source = cameraHlsUrl(url);
+      // Use native MPEG-TS HLS on iOS WebKit. go2rtc's fragmented MP4 init
+      // can contain placeholder 128x96 SPS metadata for this Creality source.
+      // Preserve the established fMP4/hls.js path on desktop and Android.
+      const iosWebKit = isIOSWebKit(navigator.userAgent, navigator.platform, navigator.maxTouchPoints);
+      const source = cameraHlsUrl(url) + (iosWebKit ? "?format=ts" : "");
       if (!target) {
         failed("Camera video element is unavailable.");
       } else {
@@ -273,7 +277,11 @@ export function CameraPlayback({ camera, url, compact = false }) {
         // Removed during effect cleanup; retains one watcher per player.
         controller.signal.addEventListener("abort", () => target.removeEventListener("playing", playingHandler), { once: true });
       }
-      if (target && Hls.isSupported()) {
+      if (target && iosWebKit && target.canPlayType("application/vnd.apple.mpegurl")) {
+        setStatus("Connecting using native iOS HLS…");
+        target.src = source;
+        attemptAutoplay(target);
+      } else if (target && Hls.isSupported()) {
         hls = new Hls({
           enableWorker: true,
           lowLatencyMode: false,
