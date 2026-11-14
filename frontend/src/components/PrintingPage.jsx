@@ -184,6 +184,7 @@ export default function PrintingPage({ config, projects, searchTarget = null, on
   const [manageModel, setManageModel] = useState(null);
   const [managePrinter, setManagePrinter] = useState(null);
   const [livePrinter, setLivePrinter] = useState(null);
+  const [addSourcePrinter, setAddSourcePrinter] = useState(null);
   const [cameraSetup, setCameraSetup] = useState(null);
   const [cameraOffer, setCameraOffer] = useState(null);
   const [previewPrinter, setPreviewPrinter] = useState("");
@@ -572,73 +573,46 @@ export default function PrintingPage({ config, projects, searchTarget = null, on
 
     <section className="panel printingSection">
       <div className="panelHead"><div><h3>Printers &amp; loaded filament</h3><p>Filament slots are provider-neutral so CFS, AMS and later systems can use the same model.</p></div></div>
-      <div className="printingCards printingPrinterCards">
-        {(data?.printers || []).map(printer => <article className={"printingCard printingPrinterCard" + (searchTarget?.type === "printers" && searchTarget.id === printer.id ? " searchTargetRow" : "")} id={"printer-search-target-" + printer.id} key={printer.id}>
-          <div className="printingPrinterOverviewTop">
-            <div className="printingPrinterHeader">
+      <div className="printingCards printingPrinterCards printingPrinterCompactList">
+        {(data?.printers || []).map(printer => <article
+          className={"printingCard printingPrinterCard printingPrinterCompactCard" + (searchTarget?.type === "printers" && searchTarget.id === printer.id ? " searchTargetRow" : "")}
+          id={"printer-search-target-" + printer.id} key={printer.id}>
+          <div className="printingPrinterCompactIdentity">
             <div className="printingPrinterImage">
               {(printer.multi_material_installed && printer.catalogue?.image_multi_material) || printer.catalogue?.image
-                ? <img
-                    src={(printer.multi_material_installed && printer.catalogue?.image_multi_material) || printer.catalogue?.image}
-                    alt={printer.catalogue.display_name || printer.model || printer.name}
-                    loading="lazy"
-                  />
+                ? <img src={(printer.multi_material_installed && printer.catalogue?.image_multi_material) || printer.catalogue?.image}
+                    alt={printer.catalogue?.display_name || printer.model || printer.name} loading="lazy" />
                 : <span aria-hidden="true">3D</span>}
             </div>
-            <div className="printingPrinterHeaderMain">
-              <div className="printingCardHead">
-                <div className="printingPrinterIdentity">
-                  <strong>{printer.name}</strong>
-                  <small>{[printer.manufacturer, printer.model, printer.location].filter(Boolean).join(" · ")}</small>
-                </div>
-                <div className="printingPrinterControls">
-                  <div className="printingPrinterStatus" aria-label={"Status for " + printer.name}>
-                    {printer.is_active ? <Badge tone="good">Active</Badge> : <Badge>Inactive</Badge>}
-                    {printer.simplyprint?.external_id && <Badge tone={printer.simplyprint?.online ? "good" : printer.simplyprint?.state === "offline" ? "danger" : "accent"}>SimplyPrint · {printer.simplyprint?.state || (printer.simplyprint?.online ? "online" : "linked")}</Badge>}
-                    {printer.live_status && <Badge tone="good">{printer.live_status.adapter_label} · {printer.live_status.snapshot?.state_label || "Connected"}</Badge>}
-                    {!printer.live_status && printer.live_connections?.length > 0 && <Badge tone={printer.live_connections.some(item => item.status === "error" || item.status === "disconnected") ? "danger" : "neutral"}>{printer.live_connections.length} live source{printer.live_connections.length === 1 ? "" : "s"}</Badge>}
-                    {printer.installed_multi_material_label && <Badge>{printer.installed_multi_material_label}</Badge>}
-                    {printer.multi_material_installed && <Badge>{printer.slots.length} slots</Badge>}
-                  </div>
-                  <div className="printingPrinterActions" aria-label={"Actions for " + printer.name}>
-                    {canChangePrinter && <button className="printingPrinterAction printingPrinterActionLive" type="button" onClick={() => setLivePrinter(printer)}>Live monitor</button>}
-                    {canChangePrinter && <button className="printingPrinterAction" type="button" onClick={() => setManagePrinter(printer)}>Manage printer</button>}
-                    <button className="printingPrinterAction" type="button" onClick={() => onOpenMakerTags("printer", printer.id)}>MakerTags</button>
-                    {canChangePrinter && <button className="printingPrinterAction" type="button" onClick={() => setCameraSetup({ printerId: printer.id })}>Camera setup</button>}
-                  </div>
-                </div>
+            <div className="printingPrinterCompactDetails">
+              <strong>{printer.name}</strong>
+              <small>{[printer.manufacturer, printer.model].filter(Boolean).join(" · ")}</small>
+              <div className="printingPrinterStatus" aria-label={"Status for " + printer.name}>
+                {printer.is_active ? <Badge tone="good">Active</Badge> : <Badge>Inactive</Badge>}
+                {printer.simplyprint?.external_id && <Badge tone={printer.simplyprint?.online ? "good" : "neutral"}>SimplyPrint · {printer.simplyprint?.state || "linked"}</Badge>}
+                {printer.live_status && <Badge tone="good">{printer.live_status.adapter_label} · {printer.live_status.snapshot?.state_label || "Connected"}</Badge>}
+                {!printer.live_status && printer.live_connections?.length > 0 && <Badge tone={printer.live_connections.some(item => item.status === "error" || item.status === "disconnected") ? "danger" : "neutral"}>{printer.live_connections.length} live source{printer.live_connections.length === 1 ? "" : "s"}</Badge>}
+                {printer.installed_multi_material_label && <Badge>{printer.installed_multi_material_label}</Badge>}
+                {printer.multi_material_installed && <Badge>{printer.slots.length} slots</Badge>}
+              </div>
+              <div className="printingPrinterCompactActions">
+                {canChangePrinter && <button type="button" className="printingPrinterAction printingPrinterActionLive" onClick={() => setLivePrinter(printer)}>Live monitor</button>}
+                {canChangePrinter && <button type="button" className="printingPrinterAction" onClick={() => setManagePrinter(printer)}>Manage printer</button>}
               </div>
               {((printer.multi_material_installed && printer.catalogue?.image_multi_material && printer.catalogue?.image_multi_material_source_provider) || printer.catalogue?.image_source_provider) && <small className="printingPrinterImageCredit">
                 Image: {(printer.multi_material_installed && printer.catalogue?.image_multi_material && printer.catalogue?.image_multi_material_source_provider) || printer.catalogue?.image_source_provider}
-                {((printer.multi_material_installed && printer.catalogue?.image_multi_material && printer.catalogue?.image_multi_material_license) || printer.catalogue?.image_license) ? " · " + ((printer.multi_material_installed && printer.catalogue?.image_multi_material && printer.catalogue?.image_multi_material_license) || printer.catalogue?.image_license) : ""}
               </small>}
             </div>
           </div>
-          <div className="printingSlotPanel">
-            <div className="printingSlotPanelHeader">
-              <strong>Loaded filament</strong>
-              <small>{printer.multi_material_installed ? (printer.installed_multi_material_label || "Multi-material") : "Printer material"}</small>
-            </div>
-          <div className="printingSlotGrid">
-            {printer.slots.filter(slot => slot.is_loaded).map(slot => <div className="printingSlot" key={slot.id}>
-              <span className="printingSwatch" style={slot.color_hex ? { background: slot.color_hex } : undefined} />
-              <div>
-                <strong>{slot.product_name || slot.material || "Unknown material"}</strong>
-                <small>{[slot.vendor, slot.material].filter(Boolean).join(" · ")}{slot.vendor || slot.material ? " · " : ""}{slot.system_label} · unit {slot.unit_index + 1}, slot {slot.slot_index + 1}</small>
-                <small>{slot.spool_code || "Unmatched MakerVault spool"} · {slot.remaining_percent != null ? Math.round(slot.remaining_percent) + "% remaining" : grams(slot.remaining_weight_g)}</small>
-                {!slot.spool_id && canAddSpool && <button className="slotInventoryAction" type="button" onClick={() => setClaimSlot({ printer, slot })}>Add to inventory</button>}
-              </div>
-            </div>)}
-            {!printer.slots.some(slot => slot.is_loaded) && (
-              !printer.multi_material_installed
-                ? <div className="printingEmptyInline">No loaded filament slots discovered. No native multi-material add-on is marked as installed.</div>
-                : <div className="printingEmptyInline">No loaded filament slots have been discovered yet.</div>
-            )}
+          <div className="printingPrinterCompactControls" aria-label={"Live controls for " + printer.name}>
+            <PrinterLiveSummary printer={printer} onOpen={() => setLivePrinter(printer)}
+              canControl={canChangePrinter} onChanged={load} />
+            {!printer.live_status && !(printer.live_connections || []).some(item => item.enabled) &&
+              <div className="printingEmptyInline">No live printer source connected. Configure a live source under Manage printer.</div>}
           </div>
+          <div className="printingPrinterCompactCamera" aria-label={"Live camera for " + printer.name}>
+            <PrinterCameraPreview printer={printer} suspended={Boolean(cameraSetup || livePrinter || cameraOffer || addSourcePrinter)} />
           </div>
-          </div>
-          <PrinterLiveSummary printer={printer} onOpen={() => setLivePrinter(printer)} canControl={canChangePrinter} onChanged={load} />
-          <PrinterCameraPreview printer={printer} suspended={Boolean(cameraSetup || livePrinter || cameraOffer)} />
         </article>)}
         {!data?.printers?.length && <div className="projectEmpty"><strong>No printers yet.</strong><span>Add your first printer to begin the 3D printing workspace.</span></div>}
       </div>
@@ -795,6 +769,17 @@ export default function PrintingPage({ config, projects, searchTarget = null, on
         return fresh;
       }}
     />}
+    {addSourcePrinter && <PrinterConnectionsModal
+      printer={addSourcePrinter} addOnly
+      onClose={() => setAddSourcePrinter(null)}
+      onAdded={async connection => {
+        setSourceNotice(`${connection.adapter_label} successfully added for ${addSourcePrinter.name}.`);
+        setCameraOffer({printerId:addSourcePrinter.id,connectionId:connection.id,name:addSourcePrinter.name});
+        setAddSourcePrinter(null);
+        await load();
+      }}
+      onChanged={load}
+    />}
     {cameraOffer && <Modal title="Live source added" subtitle={"Step 2 · Optional camera for " + cameraOffer.name} onClose={() => setCameraOffer(null)}>
       <p>Your live monitor is ready. Would you like to add a camera now? You can also do this later using Camera setup on the printer card.</p>
       <div className="settingsActions"><button type="button" onClick={() => setCameraOffer(null)}>Not now</button><button type="button" className="primary" onClick={() => { setCameraSetup(cameraOffer); setCameraOffer(null); }}>Add camera</button></div>
@@ -806,6 +791,9 @@ export default function PrintingPage({ config, projects, searchTarget = null, on
       models={data?.printer_catalogue_models || []}
       locations={data?.locations || []}
       canDelete={canDeletePrinter}
+      onOpenMakerTags={() => { const id=managePrinter.id;setManagePrinter(null);onOpenMakerTags("printer",id); }}
+      onCameraSetup={() => {const id=managePrinter.id;setManagePrinter(null);setCameraSetup({printerId:id});}}
+      onAddSource={() => {setAddSourcePrinter(managePrinter);setManagePrinter(null);}}
       onClose={() => setManagePrinter(null)}
       onSaved={async () => { setManagePrinter(null); await load(); }}
     />}
@@ -1378,7 +1366,7 @@ function LocationModal({ location = null, onClose, onSaved }) {
   </Modal>;
 }
 
-function PrinterConnectionsModal({ printer, onClose, onChanged, onAdded }) {
+function PrinterConnectionsModal({ printer, onClose, onChanged, onAdded, addOnly = false }) {
   const [gcodeConnection, setGcodeConnection] = useState(null);
   function prepareCrealityMoonrakerSource(connection) {
     let endpoint = "";
@@ -1621,8 +1609,8 @@ function PrinterConnectionsModal({ printer, onClose, onChanged, onAdded }) {
 
 
   return <Modal
-    title={"Live monitoring · " + printer.name}
-    subtitle="Attach one or more provider-neutral status sources to this physical printer. Local connections are preferred and monitoring is read-only by default."
+    title={(addOnly ? "Add live source · " : "Live monitoring · ") + printer.name}
+    subtitle={addOnly ? "Connect a local printer status source. Existing live monitoring is unchanged." : "Monitor live printer status and manage configured sources."}
     onClose={onClose}
     wide
   >
@@ -1632,11 +1620,11 @@ function PrinterConnectionsModal({ printer, onClose, onChanged, onAdded }) {
     {/* Use the same authenticated camera playback as the printer overview.
         When monitoring is open, the overview preview is suspended so only
         one stream runs for this printer. No camera means no empty placeholder. */}
-    <PrinterCameraPreview
+    {!addOnly && <PrinterCameraPreview
       printer={{ ...printer, live_connections: (data.rows || []).length ? data.rows : (printer.live_connections || []) }}
-    />
+    />}
 
-    <div className="printingIntegrationGrid printerLiveSources">
+    {!addOnly && <div className="printingIntegrationGrid printerLiveSources">
       {(data.rows || []).map(connection => {
         const snapshot = connection.snapshot || {};
         const pct = progress(snapshot);
@@ -1715,10 +1703,11 @@ function PrinterConnectionsModal({ printer, onClose, onChanged, onAdded }) {
         </article>;
       })}
       {!data.rows?.length && <div className="printingEmptyInline">No live printer sources are configured yet.</div>}
-    </div>
+    </div>}
 
     {gcodeConnection && <PrinterStartGcodeModal printer={printer} connection={gcodeConnection} canEdit={Boolean(data.can_control)} onConfigureMoonraker={() => prepareCrealityMoonrakerSource(gcodeConnection)} onClose={() => setGcodeConnection(null)} onChanged={async () => { await loadConnections(); await onChanged?.(); }} />}
-    {!!available.length && <form id="printing-live-add-source" className="formGrid printerLiveAddSource" onSubmit={addConnection}>
+    {addOnly && !available.length && <div className="printingEmptyInline">All supported sources are already configured for this printer.</div>}
+    {addOnly && !!available.length && <form id="printing-live-add-source" className="formGrid printerLiveAddSource" onSubmit={addConnection}>
       <div className="full printerLiveAddHeading">
         <strong>Add live source</strong>
         <p>Choose an integration for this printer. Multiple connections can share the same printer record.</p>
@@ -1768,7 +1757,7 @@ function PrinterConnectionsModal({ printer, onClose, onChanged, onAdded }) {
 }
 
 
-function PrinterManageModal({ printer, manufacturers, models, locations, canDelete, onClose, onSaved }) {
+function PrinterManageModal({ printer, manufacturers, models, locations, canDelete, onClose, onSaved, onOpenMakerTags, onCameraSetup, onAddSource }) {
   const initialMaker = printer.manufacturer_id || manufacturers.find(x => x.name === printer.manufacturer)?.id || "";
   const [form, setForm] = useState({
     name: printer.name || "",
@@ -1886,6 +1875,11 @@ function PrinterManageModal({ printer, manufacturers, models, locations, canDele
       <label>Build Y (mm)<input type="number" min="1" step="0.1" value={form.build_volume_y_mm} onChange={e => set("build_volume_y_mm", e.target.value)} /></label>
       <label>Build Z (mm)<input type="number" min="1" step="0.1" value={form.build_volume_z_mm} onChange={e => set("build_volume_z_mm", e.target.value)} /></label>
       <label className="settingsToggle full"><div><strong>Currently in use</strong><small>Inactive printers remain available in historical print records.</small></div><input type="checkbox" checked={form.is_active} onChange={e => set("is_active", e.target.checked)} /></label>
+      <div className="printingPrinterManageSecondary full">
+        <button type="button" onClick={onOpenMakerTags}>MakerTags</button>
+        <button type="button" onClick={onCameraSetup}>Camera setup</button>
+        <button type="button" onClick={onAddSource}>Add live source</button>
+      </div>
       <div className="formActions full">
         {canDelete && <button type="button" className="dangerButton" disabled={busy} onClick={removePrinter}>{deleteArmed ? "Confirm delete printer" : "Delete printer"}</button>}
         {deleteArmed && <button type="button" disabled={busy} onClick={() => setDeleteArmed(false)}>Keep printer</button>}
