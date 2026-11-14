@@ -124,3 +124,20 @@ test("camera playback does not report recovered until a video frame is presented
   assert.match(source, /target\.addEventListener\("playing", playingHandler\)/);
   assert.match(source, /target\.removeEventListener\("playing", playingHandler\)/);
 });
+
+test("camera preview prewarms before scrolling into view and stays mounted afterwards", () => {
+  const source = fs.readFileSync(path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../src/components/PrinterCameras.jsx"), "utf8");
+  assert.match(source, /rootMargin: "1200px 0px"/);
+  assert.match(source, /if \(entries\[0\]\?\.isIntersecting\) setVisible\(true\)/);
+  assert.doesNotMatch(source, /setVisible\(entries\[0\]\?\.isIntersecting \|\| false\)/);
+});
+
+test("camera supports local frame capture to separate rendering failures from black source pixels", () => {
+  const source = fs.readFileSync(path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../src/components/PrinterCamera.jsx"), "utf8");
+  const playback = source.slice(source.indexOf("export function CameraPlayback"));
+  assert.match(playback, /context\.drawImage\(target/);
+  assert.match(playback, /context\.getImageData\(/);
+  assert.match(playback, /onClick=\{inspectFrame\}/);
+  assert.match(playback, /capturedFrame && <img/);
+  assert.match(playback, /average brightness/);
+});
