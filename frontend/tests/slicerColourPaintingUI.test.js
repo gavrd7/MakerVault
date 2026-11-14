@@ -46,3 +46,17 @@ test("painting uses palette icon and four unambiguous options",()=>{
   for(const mode of ["brush","sphere","smart_fill","height"])
     assert.ok(workspace.includes('["'+mode+'","paint-'));
 });
+
+test("model toolbar keeps permanent action captions alongside distinct pictograms",()=>{
+  const workspace=read("SlicerPrepareWorkspace.jsx");
+  const icons=read("SlicerUiIcon.jsx");
+  const styles=fs.readFileSync(path.resolve(base,"../../styles.css"),"utf8");
+  assert.match(workspace,/className="slicerToolButtonLabel"/);
+  assert.match(workspace,/TOOL_SHORT_LABELS\[tool\.name\] \|\| tool\.name/);
+  for(const label of ["Centre","Arrange","Auto-orient","Lay flat","Hollow","Boolean","Colour paint"])
+    assert.ok(workspace.includes('"'+label+'"')||workspace.includes(">"+label+"<"),label);
+  for(const name of ["arrange","orient","face","split","cut","drill","hollow","boolean","measure"])
+    assert.match(icons,new RegExp("\\b"+name+": <"));
+  assert.match(styles,/\.slicerPrepareTools \.slicerToolButtonLabel/);
+  assert.match(styles,/\.slicerPlateEditingToolbar \.slicerToolTooltip/);
+});
