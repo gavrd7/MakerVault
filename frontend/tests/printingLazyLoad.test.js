@@ -60,3 +60,14 @@ test("Manage printer delegates optional setup to dedicated actions",()=>{
   assert.match(source,/addOnly && !!available\.length && <form/);
   assert.match(source,/printingLiveFilamentPanel/);
 });
+
+test("overview cameras are compact while full monitor retains native controls",()=>{
+  const cameras=fs.readFileSync(path.resolve(
+    path.dirname(fileURLToPath(import.meta.url)), "../src/components/PrinterCameras.jsx"
+  ),"utf8");
+  assert.match(cameras,/compact = true/);
+  assert.match(cameras,/compact=\{compact\}/);
+  assert.match(source,/!addOnly && <PrinterCameraPreview compact=\{false\}/);
+  assert.match(source,/className="printingPrinterCompactCamera"/);
+  assert.match(source,/onClaimSlot=\{canAddSpool \? slot =>/);
+});
