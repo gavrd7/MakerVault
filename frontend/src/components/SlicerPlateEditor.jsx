@@ -19,6 +19,7 @@ import { splitDisconnectedMesh } from "./slicerSplitObjects";
 import { createPaintMesh, selectPaintFaces, applyPaint } from "./slicerColourPainting";
 import { paintPreview, paintPreviewDelta } from "./slicerColourPaintPreview";
 import { createPaintRegions, appendPaintRegion } from "./slicerPaintRegions";
+import { clearPaintRegionOverlay } from "./slicerPaintRegionsPreview";
 import { executeSolidOperation } from "./slicerSolidOperations";
 import { PRIMITIVE_TYPES, TEXT_FONTS, createPrimitiveMesh, createPrimitiveStl, createTextStl, createSvgStl } from "./slicerPrimitives";
 import { validateStackPlacement } from "./slicerStacking";
@@ -2539,6 +2540,7 @@ export default function SlicerPlateEditor({
       }
       scene.remove(measurementOverlay);
       for (const mesh of meshes.values()) {
+        clearPaintRegionOverlay(mesh);
         scene.remove(mesh);
         mesh.geometry.dispose();
         mesh.material.dispose();
@@ -2585,6 +2587,7 @@ export default function SlicerPlateEditor({
     for (const [id, mesh] of state.meshes) {
       const currentItem=objects.find(item=>item.instance_id===id);
       if (keep.has(id) && String(mesh.userData.assetId||"")===String(currentItem?.asset_id||"")) continue;
+      clearPaintRegionOverlay(mesh);
       state.scene.remove(mesh);
       mesh.geometry.dispose();
       mesh.material.dispose();
