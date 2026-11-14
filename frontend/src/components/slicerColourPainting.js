@@ -172,7 +172,10 @@ export function selectPaintFaces(mesh, { mode, face, radiusMm = 2, angleDeg = 30
     const unit = unitLength ? normal.map(n=>n/unitLength) : [0,0,1];
     return mesh.centres.flatMap((point, i) => {
       const delta = vector(point, origin);
-      if (mode === "sphere") return dot(delta,delta) <= radius2 ? [i] : [];
+      if (mode === "sphere") {
+        const tri = mesh.triangle?.(i);
+        return (tri ? pointTriangleDistanceSquared(origin,...tri) : dot(delta,delta)) <= radius2 ? [i] : [];
+      }
       // The disc follows the face being painted rather than the printer's XY
       // plane. Avoid colouring hidden/back surfaces across the entire mesh.
       const depth = dot(delta,unit);
