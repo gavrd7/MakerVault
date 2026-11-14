@@ -99,8 +99,16 @@ function liveTemperature(temp) {
   return actual + "° / " + target + "°";
 }
 
+function activePrinterConnection(printer) {
+  return printer.live_status || (printer.live_connections || []).find(item => item.enabled) || null;
+}
+function printerLiveConnected(printer) {
+  const connection=activePrinterConnection(printer);
+  return Boolean(connection && connection.status === "connected" && !connection.stale);
+}
+
 function PrinterLiveSummary({ printer, onOpen, canControl, onChanged }) {
-  const connection = printer.live_status || (printer.live_connections || []).find(item => item.enabled);
+  const connection = activePrinterConnection(printer);
   if (!connection) return null;
   const snapshot = connection.snapshot || {};
   const stateKey = liveStateKey(snapshot, connection);
@@ -109,6 +117,14 @@ function PrinterLiveSummary({ printer, onOpen, canControl, onChanged }) {
   const job = snapshot.job || {};
   const temps = snapshot.temperatures || {};
   const connected = connection.status === "connected" && !connection.stale;
+  // An offline source must not leave stale progress, controls or temperatures
+  // visible as though a print were still running.
+  if (!connected) return <div className="printerLiveSummary printerLiveSummary-error printerLiveOffline">
+    <div className="printerLiveState"><span className="printerLiveStateDot" aria-hidden="true" />
+      <div><strong>{connection.status_label || "Disconnected"}</strong>
+        <small>{connection.adapter_label || "Printer live source"}</small></div>
+    </div>
+  </div>;
 
   return <div className={"printerLiveSummary printerLiveSummary-" + stateKey}>
     <div className="printerLiveSummaryHead">
@@ -120,12 +136,14 @@ function PrinterLiveSummary({ printer, onOpen, canControl, onChanged }) {
         </div>
       </div>
     </div>
-    {showProgress && <div className="printerLiveProgressLine">
-      <div className="printerLiveProgressTrack"><span style={{ width: pct + "%" }} /></div>
-      <strong>{pct.toFixed(pct % 1 ? 1 : 0)}%</strong>
-    </div>}
-    <div className="printerLiveActions">
-      <PrinterJobControls printer={printer} connection={connection} canControl={canControl} onChanged={onChanged} />
+    <div className="printerLiveCommandRow">
+      {showProgress && <div className="printerLiveProgressLine">
+        <div className="printerLiveProgressTrack"><span style={{ width: pct + "%" }} /></div>
+        <strong>{pct.toFixed(pct % 1 ? 1 : 0)}%</strong>
+      </div>}
+      <div className="printerLiveActions">
+        <PrinterJobControls printer={printer} connection={connection} canControl={canControl} onChanged={onChanged} />
+      </div>
     </div>
     <div className="printerLiveFooter">
       <div className="printerLiveQuickStats">
@@ -575,7 +593,7 @@ export default function PrintingPage({ config, projects, searchTarget = null, on
       <div className="panelHead"><div><h3>Printers &amp; live monitoring</h3><p>Compact live status and cameras for each printer. Loaded filament and detailed telemetry are available in Live monitor.</p></div></div>
       <div className="printingCards printingPrinterCards printingPrinterCompactList">
         {(data?.printers || []).map(printer => <article
-          className={"printingCard printingPrinterCard printingPrinterCompactCard" + (searchTarget?.type === "printers" && searchTarget.id === printer.id ? " searchTargetRow" : "")}
+          className={"printingCard printingPrinterCard printingPrinterCompactCard" + (!printerLiveConnected(printer) ? " isOffline" : "") + (searchTarget?.type === "printers" && searchTarget.id === printer.id ? " searchTargetRow" : "")}
           id={"printer-search-target-" + printer.id} key={printer.id}>
           <div className="printingPrinterCompactIdentity">
             <div className="printingPrinterImage">
@@ -599,20 +617,18 @@ export default function PrintingPage({ config, projects, searchTarget = null, on
                 {canChangePrinter && <button type="button" className="printingPrinterAction printingPrinterActionLive" onClick={() => setLivePrinter(printer)}>Live monitor</button>}
                 {canChangePrinter && <button type="button" className="printingPrinterAction" onClick={() => setManagePrinter(printer)}>Manage printer</button>}
               </div>
-              {((printer.multi_material_installed && printer.catalogue?.image_multi_material && printer.catalogue?.image_multi_material_source_provider) || printer.catalogue?.image_source_provider) && <small className="printingPrinterImageCredit">
-                Image: {(printer.multi_material_installed && printer.catalogue?.image_multi_material && printer.catalogue?.image_multi_material_source_provider) || printer.catalogue?.image_source_provider}
-              </small>}
+
             </div>
           </div>
           <div className="printingPrinterCompactControls" aria-label={"Live controls for " + printer.name}>
             <PrinterLiveSummary printer={printer} onOpen={() => setLivePrinter(printer)}
               canControl={canChangePrinter} onChanged={load} />
-            {!printer.live_status && !(printer.live_connections || []).some(item => item.enabled) &&
-              <div className="printingEmptyInline">No live printer source connected. Configure a live source under Manage printer.</div>}
+            {!activePrinterConnection(printer) &&
+              <div className="printingEmptyInline">No live source configured. Set one up under Manage printer.</div>}
           </div>
-          <div className="printingPrinterCompactCamera" aria-label={"Live camera for " + printer.name}>
+          {printerLiveConnected(printer) && <div className="printingPrinterCompactCamera" aria-label={"Live camera for " + printer.name}>
             <PrinterCameraPreview printer={printer} suspended={Boolean(cameraSetup || livePrinter || cameraOffer || addSourcePrinter)} />
-          </div>
+          </div>}
         </article>)}
         {!data?.printers?.length && <div className="projectEmpty"><strong>No printers yet.</strong><span>Add your first printer to begin the 3D printing workspace.</span></div>}
       </div>
