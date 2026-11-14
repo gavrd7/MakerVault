@@ -213,11 +213,10 @@ export function CameraPlayback({ camera, url, compact = false }) {
       const source = cameraHlsUrl(url);
       if (!target) {
         failed("Camera video element is unavailable.");
-      } else if (target.canPlayType("application/vnd.apple.mpegurl")) {
-        // Native HLS handles Safari/iOS media controls and playback policies.
-        target.src = source;
-        target.play().catch(needsGesture);
       } else if (Hls.isSupported()) {
+        // Keep the previously working playback preference: Safari can expose
+        // both native HLS and MediaSource. Use hls.js when it is supported,
+        // falling back to native HLS on browsers without MediaSource support.
         hls = new Hls({
           enableWorker: true,
           lowLatencyMode: false,
@@ -244,6 +243,9 @@ export function CameraPlayback({ camera, url, compact = false }) {
         });
         hls.loadSource(source);
         hls.attachMedia(target);
+      } else if (target.canPlayType("application/vnd.apple.mpegurl")) {
+        target.src = source;
+        target.play().catch(needsGesture);
       } else {
         failed("This browser cannot play the MakerVault camera relay.");
       }
