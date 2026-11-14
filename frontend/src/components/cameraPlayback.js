@@ -77,7 +77,7 @@ export function videoFrameHealth(video, renderedFrames = 0) {
   decoded = Math.max(decoded, Number(video.webkitDecodedFrameCount) || 0);
   const frameCallbackSupported = typeof video.requestVideoFrameCallback === "function";
   return {
-    hasFrame: frameCallbackSupported ? renderedFrames > 0 : decoded > 0 || (width > 0 && height > 0 && readyState >= 2),
+    hasFrame: decoded > 0 || (!frameCallbackSupported && width > 0 && height > 0 && readyState >= 2),
     width, height, readyState, time, buffered, decoded,
   };
 }
