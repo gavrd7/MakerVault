@@ -6522,3 +6522,47 @@ a:focus-visible,
   font-size:.8rem;font-weight:700;color:#e5b26d;pointer-events:none;
 }
 .slicerFlushMatrix td:has(.slicerFlushMixedMarker) .slicerFlushCell{padding-left:15px}
+
+
+/* Persistent action captions make the slicer usable without memorising glyphs.
+   Keep the icon dominant, caption readable and group boundaries intact. */
+.slicerPlateEditingToolbar .slicerToolTooltip,
+.slicerPrepareTools .slicerToolTooltip {
+  flex:0 0 65px;
+  width:65px;
+  min-width:65px;
+  height:58px;
+}
+.slicerPlateEditingToolbar .slicerToolTooltip > button,
+.slicerPrepareTools .slicerToolTooltip > button {
+  width:100%;
+  min-width:0;
+  height:58px;
+  min-height:58px;
+  padding:5px 3px 4px;
+  flex-direction:column;
+  justify-content:center;
+  gap:3px;
+}
+.slicerPrepareTools .slicerToolButtonLabel {
+  display:block;
+  width:100%;
+  max-width:100%;
+  font-size:9px;
+  line-height:1.12;
+  font-weight:600;
+  letter-spacing:.01em;
+  text-align:center;
+  white-space:normal;
+  overflow-wrap:normal;
+  color:inherit;
+}
+.slicerPrepareTools .slicerToolTooltip:has(button:disabled) .slicerToolButtonLabel {
+  opacity:.78;
+}
+@media (max-width:550px) {
+  .slicerPlateEditingToolbar .slicerToolTooltip,
+  .slicerPrepareTools .slicerToolTooltip {
+    flex-basis:62px;width:62px;min-width:62px;height:58px;
+  }
+}
