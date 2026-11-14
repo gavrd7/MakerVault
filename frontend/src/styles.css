@@ -6977,3 +6977,118 @@ a:focus-visible,
 .slicerPlateEditingToolbar .slicerToolTooltip > button:disabled .slicerUiIcon {
   opacity:.9;
 }
+
+
+/* Printer overview: compact cards using the existing MakerVault palette. */
+.printingPrinterCompactList {
+  display:grid;
+  grid-template-columns:repeat(2,minmax(0,1fr));
+  gap:12px;
+}
+.printingPrinterCompactCard {
+  display:grid;
+  grid-template-columns:minmax(110px,1.15fr) minmax(145px,1.25fr) minmax(120px,.95fr);
+  align-items:stretch;
+  gap:10px;
+  min-width:0;
+  padding:12px;
+  container-type:inline-size;
+}
+.printingPrinterCompactCard .printingPrinterCompactIdentity {
+  display:flex;
+  align-items:flex-start;
+  gap:10px;
+  min-width:0;
+}
+.printingPrinterCompactCard .printingPrinterImage {
+  flex:0 0 62px;
+  width:62px;
+  height:82px;
+  margin:0;
+  padding:5px;
+}
+.printingPrinterCompactDetails {
+  display:flex;
+  flex-direction:column;
+  align-items:flex-start;
+  min-width:0;
+  gap:5px;
+}
+.printingPrinterCompactDetails > strong {font-size:15px;}
+.printingPrinterCompactDetails > small {
+  color:#9baec3;
+  overflow-wrap:anywhere;
+}
+.printingPrinterCompactDetails .printingPrinterStatus {
+  display:flex;
+  gap:4px;
+  flex-wrap:wrap;
+  align-items:flex-start;
+  margin:3px 0;
+}
+.printingPrinterCompactActions,
+.printingPrinterManageSecondary {
+  display:flex;
+  flex-wrap:wrap;
+  gap:6px;
+}
+.printingPrinterCompactActions .printingPrinterAction {
+  font-size:12px;
+  min-height:32px;
+  padding:6px 9px;
+}
+.printingPrinterCompactControls {
+  min-width:0;
+  display:flex;
+  flex-direction:column;
+  justify-content:center;
+}
+.printingPrinterCompactCard .printerLiveSummary {
+  margin:0;
+  height:100%;
+  min-width:0;
+  padding:10px;
+}
+.printingPrinterCompactCard .printerLiveQuickStats {flex-basis:100%;}
+.printingPrinterCompactCard .printerLiveFooter .printerLiveOpen {min-height:30px;}
+.printingPrinterCompactCamera {
+  min-width:0;
+  min-height:145px;
+  height:185px;
+  max-height:185px;
+  overflow:hidden;
+  border:1px solid #2b3b4f;
+  border-radius:10px;
+  background:#05090e;
+}
+.printingPrinterCompactCamera > * {
+  width:100%;
+  height:100%;
+  max-height:185px;
+}
+.printingPrinterCompactCamera video,
+.printingPrinterCompactCamera img,
+.printingPrinterCompactCamera canvas {
+  max-height:185px;
+  object-fit:contain;
+}
+.printingPrinterManageSecondary {
+  padding:8px 0;
+  border-top:1px solid #344357;
+}
+@media(max-width:1650px) {
+  .printingPrinterCompactList {grid-template-columns:minmax(0,1fr);}
+}
+@media(max-width:780px) {
+  .printingPrinterCompactCard {
+    grid-template-columns:minmax(0,1fr) minmax(0,1fr);
+  }
+  .printingPrinterCompactCamera {
+    grid-column:1/-1;
+    height:185px;
+  }
+}
+@media(max-width:520px) {
+  .printingPrinterCompactCard {grid-template-columns:minmax(0,1fr);}
+  .printingPrinterCompactCamera {grid-column:auto;}
+}
