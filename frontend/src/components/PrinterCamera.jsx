@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from "react";
 import Hls from "hls.js";
 import { apiFetch } from "../api";
-import { startFrameLoop, cameraRequest, cameraHlsUrl, shouldFallbackToNativeHls } from "./cameraPlayback";
+import { startFrameLoop, cameraRequest, cameraHlsUrl, shouldFallbackToNativeHls, videoFrameHealth, videoFrameDiagnostic } from "./cameraPlayback";
 
 const LABELS = { snapshot: "Live images", mjpeg: "MJPEG live images", creality_webrtc: "Creality WebRTC · experimental" };
 
@@ -152,13 +152,60 @@ export function CameraPlayback({ camera, url, compact = false }) {
   const [playbackBlocked, setPlaybackBlocked] = useState(false);
   const [playbackDiagnostic, setPlaybackDiagnostic] = useState("");
   const nativeRecovery = useRef(false);
+  const frameSeen = useRef(false);
 
   useEffect(() => {
     let cancelled = false;
     let objectUrl = "";
     let stopFrames;
     let hls;
+    let frameWatch;
+    let frameCallbackId;
+    let frameCallbackTarget;
+    let reportedMissingFrames = false;
     nativeRecovery.current = false;
+    frameSeen.current = false;
+    const cancelFrameCallback = () => {
+      if (frameCallbackId != null && frameCallbackTarget?.cancelVideoFrameCallback) {
+        frameCallbackTarget.cancelVideoFrameCallback(frameCallbackId);
+      }
+      frameCallbackId = undefined;
+      frameCallbackTarget = undefined;
+    };
+    const observeVideo = target => {
+      clearInterval(frameWatch);
+      cancelFrameCallback();
+      frameSeen.current = false;
+      reportedMissingFrames = false;
+      const startedAt = Date.now();
+      const mode = nativeRecovery.current ? "native HLS" : "hls.js";
+      if (typeof target.requestVideoFrameCallback === "function") {
+        frameCallbackTarget = target;
+        frameCallbackId = target.requestVideoFrameCallback(() => {
+          if (cancelled) return;
+          frameSeen.current = true;
+          setPlaybackDiagnostic(nativeRecovery.current ? "Native HLS: decoded video frame confirmed" : "");
+          setError("");
+          setStatus("Live video · relayed through MakerVault");
+        });
+      }
+      frameWatch = setInterval(() => {
+        if (cancelled || frameSeen.current) { clearInterval(frameWatch); return; }
+        const health = videoFrameHealth(target);
+        // Frame callback confirms an actual presentation where available.
+        if (typeof target.requestVideoFrameCallback !== "function" && health.hasFrame) {
+          frameSeen.current = true;
+          setPlaybackDiagnostic(nativeRecovery.current ? "Native HLS: decoded frames confirmed" : "");
+          setError("");
+          setStatus("Live video · relayed through MakerVault");
+          clearInterval(frameWatch);
+        } else if (!reportedMissingFrames && Date.now() - startedAt >= 8000 && !playbackBlocked) {
+          reportedMissingFrames = true;
+          setStatus("Video started but no decoded frame confirmed");
+          setPlaybackDiagnostic(videoFrameDiagnostic(health, mode) + " No presented video frame confirmed.");
+        }
+      }, 1000);
+    };
     const controller = new AbortController();
     setImage(""); setError(""); setStatus("Connecting…"); setPlaybackBlocked(false); setPlaybackDiagnostic("");
 
@@ -218,7 +265,13 @@ export function CameraPlayback({ camera, url, compact = false }) {
       const source = cameraHlsUrl(url);
       if (!target) {
         failed("Camera video element is unavailable.");
-      } else if (Hls.isSupported()) {
+      } else {
+        const playingHandler = () => observeVideo(target);
+        target.addEventListener("playing", playingHandler);
+        // Removed during effect cleanup; retains one watcher per player.
+        controller.signal.addEventListener("abort", () => target.removeEventListener("playing", playingHandler), { once: true });
+      }
+      if (target && Hls.isSupported()) {
         hls = new Hls({
           enableWorker: true,
           lowLatencyMode: false,
@@ -247,6 +300,8 @@ export function CameraPlayback({ camera, url, compact = false }) {
             nativeRecovery.current = true;
             setPlaybackDiagnostic(diagnostic + " · trying native HLS");
             setStatus("Recovering video with native HLS…");
+            clearInterval(frameWatch);
+            cancelFrameCallback();
             hls?.destroy();
             hls = null;
             target.pause();
@@ -261,10 +316,10 @@ export function CameraPlayback({ camera, url, compact = false }) {
         });
         hls.loadSource(source);
         hls.attachMedia(target);
-      } else if (target.canPlayType("application/vnd.apple.mpegurl")) {
+      } else if (target?.canPlayType("application/vnd.apple.mpegurl")) {
         target.src = source;
         attemptAutoplay(target);
-      } else {
+      } else if (target) {
         failed("This browser cannot play the MakerVault camera relay.");
       }
     }
@@ -273,6 +328,8 @@ export function CameraPlayback({ camera, url, compact = false }) {
       cancelled = true;
       controller.abort();
       stopFrames?.();
+      clearInterval(frameWatch);
+      cancelFrameCallback();
       hls?.destroy();
       if (video.current) {
         video.current.pause();
@@ -327,7 +384,7 @@ export function CameraPlayback({ camera, url, compact = false }) {
                 }
               }
             }}
-            onPlaying={() => { setPlaybackBlocked(false); setError(""); setPlaybackDiagnostic(nativeRecovery.current ? "Recovered using native HLS" : ""); setStatus("Live video · relayed through MakerVault"); }} />
+            onPlaying={() => { setPlaybackBlocked(false); setError(""); setStatus("Video playing · checking decoded frames…"); }} />
         : image
           ? <img src={image} alt={camera.name + " live camera view"} style={{ transform }} />
           : <span role="status">{status}</span>}
