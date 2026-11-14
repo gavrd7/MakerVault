@@ -2,7 +2,7 @@
  * Candidate face discovery and visibility filtering remain the caller's responsibility.
  * Native slicer export is NOT implemented by this representation.
  */
-import {clipPaintTriangleDisc,clipPaintTriangleHeight} from "./slicerPaintSurfaceGeometry.js";
+import {clipPaintTriangleDisc,clipPaintTriangleHeight,clipPaintPolygon,triangulatePaintPolygon} from "./slicerPaintSurfaceGeometry.js";
 const valid3=p=>Array.isArray(p)&&p.length===3&&p.every(Number.isFinite);
 const guard=(ok,message)=>{if(!ok)throw Error(message);};
 const MAX_REGIONS=4096,MAX_PATCHES=500000,MAX_PER_EDIT=100000;
@@ -35,22 +35,66 @@ export function validatePaintRegions(state,mesh,allowedSlots=null){
   }
   return state;
 }
+/** Subtract one convex paint patch from another in the same triangle plane.
+ * Split only affected polygons, preserving untouched portions and colours.
+ * This also implements a true eraser (rather than drawing base colour on top).
+ */
+function subtractPatch(subject,cutter){
+  if(subject.length<3||cutter.length<3)return [subject];
+  const sub=(a,b)=>a.map((v,i)=>v-b[i]);
+  const cross=(a,b)=>[
+    a[1]*b[2]-a[2]*b[1],a[2]*b[0]-a[0]*b[2],a[0]*b[1]-a[1]*b[0]
+  ];
+  const dot=(a,b)=>a.reduce((sum,v,i)=>sum+v*b[i],0);
+  const n=cross(sub(cutter[1],cutter[0]),sub(cutter[2],cutter[0]));
+  const normalLength=Math.hypot(...n);
+  if(normalLength<1e-10)return [subject];
+  const clip=(polygon,axis,offset)=>clipPaintPolygon(polygon,axis,offset);
+  let remaining=subject;
+  const outside=[];
+  for(let i=0;i<cutter.length&&remaining.length>=3;i++){
+    const a=cutter[i],b=cutter[(i+1)%cutter.length];
+    const edge=sub(b,a);
+    const outward=cross(edge,n).map(v=>v/normalLength);
+    const offset=dot(outward,a);
+    // Negative of the outside half-space is a fresh convex fragment.
+    const piece=clip(remaining,outward.map(v=>-v),-offset);
+    if(piece.length>=3&&triangulatePaintPolygon(piece).length)outside.push(piece);
+    remaining=clip(remaining,outward,offset);
+  }
+  return outside;
+}
+function applyPatch(state,face,polygon,slot){
+  const regions=[];
+  for(const region of state.regions){
+    const patches=[];
+    for(const patch of region.patches){
+      if(patch.face!==face){patches.push(patch);continue;}
+      for(const fragment of subtractPatch(patch.polygon,polygon))
+        patches.push({face,polygon:fragment});
+    }
+    if(patches.length)regions.push({...region,patches});
+  }
+  if(slot!==null)regions.push({slot,patches:[{face,polygon}]});
+  return {...state,regions};
+}
 export function appendPaintRegion(state,mesh,selection,slot){
   validatePaintRegions(state,mesh);
-  guard(Number.isInteger(slot)&&slot>=0&&slot<64,"Invalid logical paint slot.");
+  guard(slot===null||(Number.isInteger(slot)&&slot>=0&&slot<64),
+    "Invalid logical paint slot.");
   guard(Array.isArray(selection?.faces)&&selection.faces.length<=MAX_PER_EDIT,
     "Invalid surface selection.");
-  guard(state.regions.length<MAX_REGIONS,"Too many paint edits.");
   const mode=selection.mode;
-  guard(mode==="disc"||mode==="height","Unsupported v2 region type.");
+  guard(["disc","height","facet"].includes(mode),"Unsupported v2 region type.");
   if(mode==="disc")
     guard(valid3(selection.centre)&&valid3(selection.normal)&&
       Number.isFinite(selection.radiusMm)&&selection.radiusMm>0&&
       selection.radiusMm<=1000,"Invalid projected brush.");
-  else
+  if(mode==="height")
     guard(Number.isFinite(selection.minHeightMm)&&Number.isFinite(selection.maxHeightMm)&&
       selection.minHeightMm<=selection.maxHeightMm,"Invalid height range.");
-  const seen=new Set(),patches=[];
+  const seen=new Set();
+  let result=state;
   for(const face of selection.faces){
     guard(Number.isInteger(face)&&face>=0&&face<mesh.faceCount,
       "Invalid selected triangle.");
@@ -59,11 +103,16 @@ export function appendPaintRegion(state,mesh,selection,slot){
     const triangle=mesh.triangle(face);
     const polygon=mode==="disc"?
       clipPaintTriangleDisc(triangle,selection.centre,selection.normal,selection.radiusMm):
-      clipPaintTriangleHeight(triangle,selection.minHeightMm,selection.maxHeightMm);
-    if(polygon.length>=3)patches.push({face,polygon:polygon.map(p=>[...p])});
+      mode==="height"?
+      clipPaintTriangleHeight(triangle,selection.minHeightMm,selection.maxHeightMm):
+      triangle.map(p=>[...p]);
+    if(polygon.length>=3&&triangulatePaintPolygon(polygon).length){
+      result=applyPatch(result,face,polygon,slot);
+      // Bound nested edits, including fragments created by erasure.
+      validatePaintRegions(result,mesh);
+    }
   }
-  if(!patches.length)return state;
-  return {...state,regions:[...state.regions,{slot,patches}]};
+  return result;
 }
 /** Snapshot-friendly undo for additive region edits. */
 export function removeLastPaintRegion(state,mesh){
