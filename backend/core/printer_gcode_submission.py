@@ -1,8 +1,11 @@
-"""Opt-in Moonraker G-code browsing and one-shot upload/print submission.
+"""Adapter-aware G-code browsing and one-shot upload/print submission.
 
-No raw G-code execution via MakerVault. Each printer operation has a durable
-receipt before I/O and is never automatically retried after an uncertain send.
-Other printer adapters must implement and validate their own transfer protocol.
+Slicer engines generate printer-neutral G-code artifacts; submission uses the
+selected printer connection's supported native, Moonraker, or other adapter
+protocol independently. A second read-only adapter may verify an upload only
+when it addresses the exact same physical printer and has fresh telemetry.
+Every printer operation has a durable receipt before I/O and is never
+automatically retried after an uncertain send.
 """
 import re
 import logging
@@ -354,8 +357,12 @@ def _verify_moonraker_upload(connection, remote_path, expected_size):
 
 
 def _verify_creality_upload(connection, remote_path, expected_size):
-    """Verify native HTTP-upload presence through an enabled Moonraker source
-    on the SAME printer. This never uploads or starts via the alternate source.
+    """Read-only verification of a native Creality upload.
+
+    Use an explicitly configured, fresh Moonraker source when available;
+    otherwise query the *same* printer's existing native file-list protocol.
+    Only exact filename and integer byte-size matches establish success.
+    Never retry an upload or start a print as part of verification.
     """
     moonraker_sources = PrinterConnection.objects.filter(
         printer_id=connection.printer_id, adapter="moonraker", enabled=True,
@@ -363,11 +370,41 @@ def _verify_creality_upload(connection, remote_path, expected_size):
     for source in moonraker_sources:
         if _online(source):
             return _verify_moonraker_upload(source, remote_path, expected_size)
+    from .creality_gcode import CrealityGcodeError, list_files
+    # Some stock K1 firmware revisions update the native storage index
+    # asynchronously after HTTP acceptance. Allow brief, read-only probes,
+    # but never repeat the upload or issue a print-start command.
+    import time
+    observations = set()
+    last_error = None
+    for attempt in range(3):
+        if attempt:
+            time.sleep(1)
+        try:
+            rows = list_files(connection)
+        except (CrealityGcodeError, OSError, ValueError) as exc:
+            observations.add("unavailable")
+            last_error = exc
+            continue
+        matches = [row for row in rows if row.get("path") == remote_path]
+        if len(matches) == 1 and type(matches[0].get("size_bytes")) is int:
+            if matches[0]["size_bytes"] == expected_size:
+                return matches[0]
+            observations.add("size-mismatch")
+        elif len(matches) > 1:
+            observations.add("ambiguous-duplicate")
+        elif matches:
+            observations.add("size-not-reported")
+        else:
+            observations.add("not-listed")
+    # Do not include file names, URLs, paths or raw firmware responses in
+    # receipts; these are bounded status categories only.
+    reasons = ", ".join(sorted(observations)) or "unknown"
     raise GcodeSubmissionError(
-        "Native Creality HTTP upload was attempted, but no fresh Moonraker storage "
-        "connection is available to verify the file. Inspect printer storage before retrying.", 502
-    )
-
+        "Native Creality HTTP upload was accepted, but K1 storage verification "
+        "remains uncertain (" + reasons + "). No print-start command was issued. "
+        "Inspect the printer's own files before retrying.", 502
+    ) from last_error
 
 def inspect_printer_file(connection, remote_path):
     """Optional, bounded, read-only G-code inspection over an existing Moonraker API.
@@ -547,7 +584,7 @@ def _printer_transfer_name(original_name, request_id):
     """Preserve the original name first, suffix with a stable job identity."""
     original = PurePosixPath(str(original_name or "job.gcode")).name
     stem = re.sub(r"[^A-Za-z0-9_.-]", "_", re.sub(r"(?i)\.gcode$", "", original))
-    stem = stem.strip("._")[:120] or "job"
+    stem = stem.strip("._")[:48] or "job"
     return f"{stem}-mv-{request_id.hex[:12]}.gcode"
 
 
@@ -1042,6 +1079,7 @@ def submit(connection, user, payload):
     mapping_entries = None
     stage = "Preparing submission"
     dispatch_attempted = False
+    confirmed_native_upload_path = None
 
     def progress(message):
         nonlocal stage
@@ -1147,7 +1185,8 @@ def submit(connection, user, payload):
                 _verify_moonraker_upload(connection, remote_path, asset.file.size)
             elif connection.adapter == "creality_local":
                 progress("Native Creality HTTP accepted the transfer. Checking printer storage.")
-                _verify_creality_upload(connection, remote_path, asset.file.size)
+                verified = _verify_creality_upload(connection, remote_path, asset.file.size)
+                confirmed_native_upload_path = verified["path"]
         if action == "print":
             progress("Upload checked. Confirming printer idle before print-start.")
             # Verify state a second time after file transfer, particularly when
@@ -1204,9 +1243,14 @@ def submit(connection, user, payload):
                     )
                 elif connection.adapter == "creality_local":
                     from .creality_gcode import start_single_spool
-                    # Reconfirm the exact file exists on printer before a fire-and-forget start.
-                    if remote_path not in {item["path"] for item in list_printer_gcodes(connection)}:
-                        raise GcodeSubmissionError("Creality did not confirm the expected printer file; no start sent.")
+                    # A newly uploaded file has already been confirmed by
+                    # an exact native path/byte-size readback above. Do not
+                    # require a second volatile K1 listing: legacy stock
+                    # firmware may omit the file on a subsequent probe.
+                    # Existing printer files still need a fresh listing.
+                    if confirmed_native_upload_path != remote_path:
+                        if remote_path not in {item["path"] for item in list_printer_gcodes(connection)}:
+                            raise GcodeSubmissionError("Creality did not confirm the expected printer file; no start sent.")
                     start_single_spool(connection, remote_path)
                     response = None
                 elif connection.adapter == "flashforge":

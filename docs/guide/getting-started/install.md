@@ -140,6 +140,10 @@ This builds the checked-out source using the repository Dockerfile and tags the 
 
 The source-build route changes only how the MakerVault application image is obtained. It uses the **same** PostgreSQL database, Redis data, media, encryption keys, backups, ports and `.env` settings as the GHCR route.
 
+### Optional MakerVault Slicer
+
+The slicing service is **not required** for installation, printer monitoring or G-code management. To understand the planned single-container installation, independent engine selection and update/rollback policy, see the [MakerVault Slicer installation and engine guide](../3d-printing/slicer.md). The multi-engine installer is still in development and is not part of the supported base installation.
+
 ## 5. Set up the first administrator
 
 MakerVault provides a browser-based first-run setup wizard when no administrator exists. Leave `MAKERVAULT_ADMIN_PASSWORD` empty in `.env` to use it. Open MakerVault in your browser at the address shown below: the first-run wizard should appear automatically. On the Docker host, retrieve the required token:

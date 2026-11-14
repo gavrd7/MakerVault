@@ -73,6 +73,7 @@ class PrinterConnectivityAdapterTests(TestCase):
 
     @patch("core.printer_connectivity.requests.get")
     def test_moonraker_normalises_live_snapshot(self, get_mock):
+        paused = [False]
         def side_effect(url, **kwargs):
             if url.endswith("/server/info"):
                 return self.response({
@@ -86,6 +87,7 @@ class PrinterConnectivityAdapterTests(TestCase):
                 return self.response({
                     "result": {
                         "status": {
+                            "pause_resume": {"is_paused": paused[0]},
                             "print_stats": {
                                 "state": "printing",
                                 "filename": "Benchy.gcode",
@@ -117,6 +119,11 @@ class PrinterConnectivityAdapterTests(TestCase):
         self.assertEqual(snapshot["warnings"], ["Test warning"])
         self.assertEqual(snapshot["source_metadata"]["klippy_state"], "ready")
         self.assertTrue(all(call.kwargs["headers"]["X-Api-Key"] == "secret" for call in get_mock.call_args_list))
+        self.assertTrue(any("pause_resume" in call.args[0] for call in get_mock.call_args_list))
+        paused[0] = True
+        snapshot = poll_moonraker("http://moonraker.local:7125", {"api_key": "secret"})
+        self.assertEqual(snapshot["state"], "paused")
+        self.assertEqual(snapshot["job"]["file_name"], "Benchy.gcode")
 
     def test_native_creality_idle_reconciliation_requires_clear_independent_signals(self):
         from types import SimpleNamespace
@@ -284,9 +291,69 @@ class PrinterConnectivityAdapterTests(TestCase):
             "state": 1,
             "err": {"errcode": 500, "key": 121},
         })
-        self.assertEqual(errored["state"], "error")
+        self.assertEqual(errored["state"], "printing")
         self.assertEqual(errored["source_metadata"]["activity_state"], "printing")
         self.assertEqual(errored["warnings"], ["Creality error 500 (key 121)"])
+
+    def test_creality_active_error_warning_retained_on_resume_but_paused_error_still_reported(self):
+        common = {
+            "connect": 1, "printFileName": "part.gcode", "printProgress": 5,
+            "err": {"errcode": 500, "key": 121},
+        }
+        resumed = normalise_creality_snapshot({**common, "state": 1})
+        self.assertEqual(resumed["state"], "printing")
+        self.assertEqual(resumed["job"]["progress"], 5)
+        self.assertIn("Creality error 500 (key 121)", resumed["warnings"])
+        paused = normalise_creality_snapshot({**common, "state": 5})
+        self.assertEqual(paused["state"], "error")
+        self.assertEqual(paused["source_metadata"]["activity_state"], "paused")
+        unknown = normalise_creality_snapshot({**common, "state": 9})
+        self.assertEqual(unknown["state"], "error")
+
+    def test_creality_completed_job_overrides_latched_error_only_with_completion_evidence(self):
+        previous_error = {
+            "connect": 1,
+            "printFileName": "finished.gcode",
+            "printProgress": 100,
+            "dProgress": 100,
+            "err": {"errcode": 101, "key": 104},
+            "nozzleTemp": 35,
+            "targetNozzleTemp": 0,
+            "bedTemp0": 33,
+            "targetBedTemp0": 0,
+        }
+        for native_state in (0, 1):
+            with self.subTest(native_state=native_state):
+                finished = normalise_creality_snapshot({
+                    **previous_error, "state": native_state,
+                })
+                self.assertEqual(finished["state"], "complete")
+                self.assertEqual(finished["state_label"], "Complete")
+                self.assertEqual(finished["job"]["progress"], 100)
+                self.assertEqual(finished["warnings"], ["Creality error 101 (key 104)"])
+                self.assertEqual(finished["source_metadata"]["activity_state"], "complete")
+
+        # A cancellation or pause must not be marked successful just because
+        # the firmware has left a 100% counter and a filename in memory.
+        for native_state in (4, 5, 9):
+            with self.subTest(native_state=native_state):
+                interrupted = normalise_creality_snapshot({
+                    **previous_error, "state": native_state,
+                })
+                self.assertEqual(interrupted["state"], "error")
+
+        interrupted_without_error = normalise_creality_snapshot({
+            **previous_error, "state": 4, "err": {"errcode": 0},
+        })
+        self.assertEqual(interrupted_without_error["state"], "cancelled")
+        self.assertEqual(normalise_creality_snapshot({
+            **previous_error, "state": 5, "err": {"errcode": 0},
+        })["state"], "paused")
+
+        incomplete = normalise_creality_snapshot({
+            **previous_error, "state": 0, "printProgress": 99,
+        })
+        self.assertEqual(incomplete["state"], "error")
 
     def test_manufacturer_mqtt_identity_rejects_topic_wildcards(self):
         self.assertEqual(_mqtt_identifier("01P00TESTSERIAL", "Serial"), "01P00TESTSERIAL")

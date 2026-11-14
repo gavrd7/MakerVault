@@ -1,0 +1,68 @@
+import React from "react";
+
+/** Compact, accessible outline icons for the native MakerVault slicer UI. */
+const paths = {
+  "shape-box": <><path d="m3 7 9-5 9 5-9 5-9-5Z"/><path d="M3 7v10l9 5 9-5V7M12 12v10"/></>,
+  "shape-cylinder": <><ellipse cx="12" cy="5" rx="8" ry="3"/><path d="M4 5v14c0 4 16 4 16 0V5"/></>,
+  "shape-sphere": <><circle cx="12" cy="12" r="9"/><ellipse cx="12" cy="12" rx="4" ry="9"/><path d="M3 12h18"/></>,
+  "shape-cone": <><path d="M12 2 3 19c1 4 17 4 18 0L12 2Z"/><ellipse cx="12" cy="19" rx="9" ry="3"/></>,
+  "shape-disc": <><ellipse cx="12" cy="8" rx="9" ry="4"/><path d="M3 8v7c0 5 18 5 18 0V8"/></>,
+  "shape-torus": <><ellipse cx="12" cy="12" rx="10" ry="8"/><ellipse cx="12" cy="12" rx="4" ry="3"/></>,
+  "shape-text": <><path d="M3 5h18M12 5v16M6 5v3m12-3v3"/></>,
+  "shape-svg": <><path d="M4 2h11l5 5v15H4zM15 2v5h5M7 17l3-6 3 3 4-5"/></>,
+  add: <><path d="M12 5v14M5 12h14"/></>,
+  "add-plate": <><path d="m3 13 9-5 9 5-9 5-9-5Z"/><path d="m3 17 9 5 9-5"/><path d="M17 2v9M12.5 6.5h9"/></>,
+  "plates-overview": <><rect x="2" y="3" width="9" height="8" rx="1"/><rect x="13" y="3" width="9" height="8" rx="1"/><rect x="2" y="13" width="9" height="8" rx="1"/><rect x="13" y="13" width="9" height="8" rx="1"/><path d="M5 6h3m8 0h3M5 16h3m8 0h3"/></>,
+  "paint-support": <><path d="m3 9 9-5 9 5-9 5-9-5Z" fill="currentColor" fillOpacity=".16"/><path d="M4 20h16" strokeWidth="2.3"/><path d="M7 12v8m5-6v6m5-8v8" strokeWidth="2.6"/><path d="m5 16 4 2m6 0 4-2"/><path d="m18 2 3 3m-3 0 3-3" strokeWidth="2"/></>,
+  "paint-seam": <><path d="m5 6 7-4 7 4v12l-7 4-7-4V6Z" fill="currentColor" fillOpacity=".08"/><path d="m5 6 7 4 7-4M12 10v12" strokeDasharray="2 3" strokeWidth="2.5"/><circle cx="12" cy="13" r="1.5" fill="currentColor"/></>,
+  "paint-colour": <><path d="M12 2a10 10 0 1 0 10 10c0-2.2-1.8-3.5-3.9-3.5H16c-1.5 0-2.4-1.3-2.4-2.5 0-1.1.7-2.1 1.1-2.9A10 10 0 0 0 12 2Z"/><circle cx="6.6" cy="10" r="1.1"/><circle cx="9.5" cy="6.4" r="1.1"/><circle cx="15.2" cy="5.5" r="1.1"/><circle cx="6.9" cy="15" r="1.1"/><path d="m17 14 4 4m-5.5-2.5 3.5 3.5"/></>,
+
+  "paint-brush": <><path d="m14 4 6 6-9 9-6-6 9-9Z"/><path d="m14 4 3-2 5 5-2 3M5 13c-2 2-2 5-3 7 3-1 6-1 8-3"/></>,
+  "paint-facet": <><path d="M12 3 3 20h18L12 3Z"/><path d="m12 3 1 12M3 20l10-5 8 5"/></>,
+  "paint-disc": <><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="4"/><path d="M12 1v4M12 19v4M1 12h4m14 0h4"/></>,
+  "paint-sphere": <><circle cx="12" cy="12" r="9"/><ellipse cx="12" cy="12" rx="4.5" ry="9"/><path d="M3 12h18M6 6.5c3.5 2 8.5 2 12 0"/></>,
+  "paint-fill": <><path d="m4 12 8-8 7 7-8 8-7-7Z"/><path d="m9 7 7 7M4 20h13"/><path d="M19 16c0-1.7 2-3.6 2-3.6s2 1.9 2 3.6a2 2 0 0 1-4 0Z"/></>,
+  "paint-smart": <><path d="M4 19 11 5l9 14H4Z"/><path d="m13 8 3 7M8 15l2-4"/></>,
+  "paint-height": <><path d="M4 4h16M4 20h16M4 12h16"/><path d="m9 9 3-3 3 3m-3-3v12m-3-3 3 3 3-3"/></>,
+  undo: <><path d="M9 14 4 9l5-5"/><path d="M4 9h10a6 6 0 0 1 0 12h-2"/></>,
+  redo: <><path d="m15 14 5-5-5-5"/><path d="M20 9H10a6 6 0 0 0 0 12h2"/></>,
+  move: <><path d="M12 2v20M2 12h20M9 5l3-3 3 3M9 19l3 3 3-3M5 9l-3 3 3 3m14-6 3 3-3 3"/></>,
+  rotate: <><path d="M20 11a8 8 0 1 1-2.3-5.6L20 8"/><path d="M20 3v5h-5"/></>,
+  scale: <><rect x="4" y="4" width="16" height="16" rx="2"/><path d="m8 16 8-8M12 8h4v4"/></>,
+  arrange: <><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/><path d="M10 6.5h4M6.5 10v4m11-4v4M10 17.5h4"/></>,
+  center: <><path d="M4 8V4h4M16 4h4v4M20 16v4h-4M8 20H4v-4"/><rect x="8" y="8" width="8" height="8" rx="1.5" fill="currentColor" fillOpacity=".14"/><path d="M12 2v5m0 10v5M2 12h5m10 0h5"/></>,
+  focus: <><path d="M3 9V4h5m8 0h5v5M21 15v5h-5M8 20H3v-5" strokeWidth="2.6"/><path d="m7 11 5-3 5 3v5l-5 3-5-3v-5Z" fill="currentColor" fillOpacity=".18"/><path d="m7 11 5 3 5-3m-5 3v5"/></>,
+  duplicate: <><rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h3"/></>,
+  remove: <><path d="M3 6h18M8 6V4h8v2m3 0-1 15H6L5 6M10 10v7m4-7v7"/></>,
+  orient: <><path d="M3 20h18" strokeWidth="2.4"/><path d="m8 11 4-6 6 4-4 6-6-4Z" fill="currentColor" fillOpacity=".22"/><path d="M5 12a8 8 0 0 0 12 6" strokeWidth="2.2"/><path d="m14 17 3 1-1 3"/><path d="M18 4a9 9 0 0 1 3 8m-3-1 3 1 1-3"/></>,
+  face: <><path d="M2 21h20" strokeWidth="2.4"/><path d="m4 8 11-5 5 9-11 5-5-9Z" fill="currentColor" fillOpacity=".14"/><path d="m6 16 3 2 7-3" strokeWidth="2.5"/><path d="M17 17v4m-3-3 3 3 3-3"/><path d="m9 17 7-4" strokeWidth="2.3"/></>,
+  split: <><path d="m3 7 7-4v16l-7-4V7Zm11-4 7 4v8l-7 4V3Z" fill="currentColor" fillOpacity=".1"/><path d="M12 3v16" strokeDasharray="2 3"/><path d="m7 21-3-2-2 2m15 0 3-2 2 2"/></>,
+  hollow: <><path d="m12 2 9 5v10l-9 5-9-5V7l9-5Z" fill="currentColor" fillOpacity=".12"/><path d="m12 7 5 3v5l-5 3-5-3v-5l5-3Z" fill="none"/><path d="m3 7 9 5 9-5M12 18v4"/></>,
+  drill: <><rect x="8" y="2" width="8" height="5" rx="1.5" fill="currentColor" fillOpacity=".2"/><path d="M12 7v3m-4 0 8 0-2 7-2 5-2-5-2-7Z" fill="currentColor" fillOpacity=".12"/><path d="m9 12 6 2-5 2 4 2"/><path d="M4 21h4m8 0h4"/></>,
+  cut: <><path d="m4 8 8-5 8 5-8 5-8-5Z"/><path d="M4 8v9l8 5 8-5V8M12 13v9"/><path d="M2 12h20" strokeDasharray="3 2" strokeWidth="2.5"/><path d="m17 10 3 2-3 2" strokeWidth="2.5"/></>,
+  boolean: <><rect x="3" y="4" width="13" height="13" rx="2" fill="currentColor" fillOpacity=".10"/><circle cx="15" cy="14" r="7" fill="currentColor" fillOpacity=".10"/><path d="M8 9h8v8H8Z" fill="currentColor" fillOpacity=".36"/><path d="m19 3 3 0m-1.5-1.5v3"/></>,
+  measure: <><path d="m3 15 12-11 6 6-12 11-6-6Z" fill="currentColor" fillOpacity=".12"/><path d="m7 12 3 3m0-6 2 2m1-5 3 3m-11 8 2 2m8-8 2 2"/></>,
+  paint: <><path d="m14 4 6 6M4 20c2 0 4-2 4-4l9-9-4-4-9 9c-1 1-2 3-2 5v3h2Z"/></>,
+  layers: <><path d="m12 2 9 6-9 6-9-6 9-6Zm-9 9 9 6 9-6m-18 5 9 6 9-6"/></>,
+  plate: <><path d="m3 8 9-5 9 5-9 5-9-5Z"/><path d="m3 8 0 8 9 5 9-5V8M12 13v8"/><path d="m8 8 4-2 4 2-4 2-4-2Z"/></>,
+  printer: <><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M6 7h12M6 17h12M8 10h8v5H8zM12 7v3M7 21v1m10-1v1"/><circle cx="18" cy="5" r="1"/></>,
+  models: <><path d="m3 7 5-3 5 3-5 3-5-3Z"/><path d="M3 7v6l5 3 5-3V7M8 10v6"/><path d="m14 13 4-2 4 2-4 2-4-2Z"/><path d="M14 13v5l4 3 4-3v-5M18 15v6"/></>,
+  settings: <><path d="M4 6h16M4 12h16M4 18h16"/><circle cx="9" cy="6" r="2" fill="#10161e"/><circle cx="16" cy="12" r="2" fill="#10161e"/><circle cx="10" cy="18" r="2" fill="#10161e"/></>,
+  quality: <><path d="m12 2 2.8 6.2L22 9l-5.3 4.9 1.4 7L12 17.5 5.9 21l1.4-7L2 9l7.2-.8L12 2Z"/></>,
+  strength: <><path d="M12 2 4 6v6c0 5 3.5 8 8 10 4.5-2 8-5 8-10V6l-8-4Z"/><path d="m9 12 2 2 4-4"/></>,
+  speed: <><path d="M4 16a8 8 0 1 1 16 0M12 16l4-6M4 20h16"/></>,
+  supports: <><path d="m4 7 8-5 8 5-8 5-8-5ZM4 12l8 5 8-5M8 16v6m8-6v6"/></>,
+  multifilament: <><circle cx="7" cy="7" r="3"/><circle cx="17" cy="7" r="3"/><path d="M7 10v4l5 5 5-5v-4M12 19v3"/></>,
+  others: <><circle cx="12" cy="12" r="3"/><path d="M12 2v3m0 14v3M2 12h3m14 0h3M5 5l2 2m10 10 2 2m0-14-2 2M7 17l-2 2"/></>,
+};
+
+const materialTools = new Set([
+  "center","orient","face","focus","split","cut","drill",
+  "hollow","boolean","measure","paint-support","paint-seam",
+]);
+export default function SlicerUiIcon({ name, size = 19 }) {
+  return <svg aria-hidden="true" viewBox="0 0 24 24" width={size} height={size}
+    fill="none" stroke="currentColor"
+    strokeWidth={materialTools.has(name) ? 2 : 1.7} strokeLinecap="round"
+    strokeLinejoin="round" className="slicerUiIcon">{paths[name] || paths.others}</svg>;
+}

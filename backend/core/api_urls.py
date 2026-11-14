@@ -1,8 +1,33 @@
 from django.urls import path
 from . import printer_gcode_api
+from . import slicer_api
 from . import api_views, printed_parts, camera_views, reusable_spools, reusable_spool_discovery, api_key_views, device_api_views, device_pairing, device_measurements, device_tag_registration, device_tag_lookup, weight_history_views, tag_ndef, device_ndef_write, device_cfs_lookup, device_makertag_operations, device_pending_work
 
 urlpatterns = [
+    path("printing/slicer/engines/", slicer_api.engines, name="api-slicer-engines"),
+    path("printing/slicer/profiles/approve/", slicer_api.approve_native_profiles, name="api-slicer-approve-native-profiles"),
+    path("printing/slicer/meshes/temporary/", slicer_api.upload_temporary_mesh, name="api-slicer-temp-mesh"),
+    path("printing/slicer/meshes/<uuid:asset_id>/inspection/", slicer_api.inspect_mesh, name="api-slicer-inspect-mesh"),
+    path("printing/slicer/jobs/", slicer_api.jobs, name="api-slicer-jobs"),
+    path("printing/slicer/profiles/", slicer_api.profiles, name="api-slicer-profiles"),
+    path("printing/slicer/profiles/<uuid:profile_id>/", slicer_api.delete_profile, name="api-slicer-delete-profile"),
+    path("printing/slicer/profiles/<uuid:profile_id>/customise/", slicer_api.customise_profile, name="api-slicer-customise-profile"),
+    path("printing/slicer/profiles/<uuid:profile_id>/save-process/", slicer_api.save_process_profile, name="api-slicer-save-process-profile"),
+    path("printing/slicer/profiles/<uuid:profile_id>/default/", slicer_api.set_default_profile, name="api-slicer-default-profile"),
+    path("printing/slicer/official-profiles/", slicer_api.official_profiles, name="api-slicer-official-profiles"),
+    path("printing/slicer/profiles/<uuid:profile_id>/dependencies/", slicer_api.profile_dependencies, name="api-slicer-profile-dependencies"),
+    path("printing/slicer/profiles/<uuid:profile_id>/settings/", slicer_api.profile_process_settings, name="api-slicer-profile-process-settings"),
+    path("printing/slicer/profiles/<uuid:profile_id>/flush-defaults/", slicer_api.profile_flush_defaults, name="api-slicer-profile-flush-defaults"),
+    path("printing/slicer/profiles/<uuid:profile_id>/plate/", slicer_api.profile_plate, name="api-slicer-profile-plate"),
+    path("printing/slicer/profiles/<uuid:profile_id>/artwork/", slicer_api.profile_artwork, name="api-slicer-profile-artwork"),
+    path("printing/slicer/profiles/<uuid:profile_id>/bed-model/", slicer_api.profile_bed_model, name="api-slicer-profile-bed-model"),
+    path("printing/slicer/jobs/<uuid:job_id>/", slicer_api.job_detail, name="api-slicer-job-detail"),
+    path("printing/slicer/jobs/<uuid:job_id>/start/", slicer_api.job_start, name="api-slicer-job-start"),
+    path("printing/slicer/jobs/<uuid:job_id>/export-project/", slicer_api.export_project_3mf, name="api-slicer-export-project"),
+    path("printing/slicer/projects/import/", slicer_api.import_project_3mf, name="api-slicer-import-project"),
+    path("printing/slicer/jobs/<uuid:job_id>/save-gcode/", slicer_api.save_job_gcode_to_library, name="api-slicer-save-job-gcode"),
+    path("printing/slicer/jobs/<uuid:job_id>/cancel/", slicer_api.job_cancel, name="api-slicer-job-cancel"),
+
     path("device/v1/pending-work/", device_pending_work.pending_work, name="device-pending-work"),
     path("device/tag-lookup/", device_tag_lookup.begin, name="api-device-tag-lookup-begin"),
     path("device/tag-lookup/<uuid:lookup_id>/", device_tag_lookup.status, name="api-device-tag-lookup-status"),
@@ -133,6 +158,8 @@ urlpatterns = [
     path("components/<uuid:component_id>/image/", api_views.component_image, name="api-component-image"),
     path("files/", api_views.files_lookup, name="api-files"),
     path("files/<uuid:asset_id>/gcode/inspect/", api_views.file_gcode_inspect, name="api-file-gcode-inspect"),
+    path("files/<uuid:asset_id>/gcode/layer/", api_views.file_gcode_layer, name="api-file-gcode-layer"),
+    path("files/<uuid:asset_id>/gcode/source/", api_views.file_gcode_source, name="api-file-gcode-source"),
     path("files/<uuid:asset_id>/", api_views.file_detail, name="api-file-detail"),
     path("files/<uuid:asset_id>/versions/", api_views.file_versions, name="api-file-versions"),
     path("projects/", api_views.projects_lookup, name="api-projects"),

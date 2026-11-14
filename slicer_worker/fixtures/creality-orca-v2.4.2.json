@@ -1,0 +1,73 @@
+{
+  "schema": "makervault.orca-fixture-candidates.v1",
+  "upstream_repo": "OrcaSlicer/OrcaSlicer",
+  "upstream_ref": "v2.4.2",
+  "upstream_profile_index": "resources/profiles/Creality.json",
+  "status": "candidate-needs-parent-resolution-and-real-fixture",
+  "note": "Source references only, derived from OrcaSlicer v2.4.2 Creality.json upstream index and specific preset files. Original native inheritance must remain intact. No preset content is bundled or approved for execution.",
+  "printers": [
+    {
+      "model": "Creality K1",
+      "machine_profile": "resources/profiles/Creality/machine/Creality K1 (0.4 nozzle).json",
+      "process_profile": "resources/profiles/Creality/process/0.20mm Standard @Creality K1 (0.4 nozzle).json",
+      "filament_profile": "resources/profiles/Creality/filament/Creality Generic PLA.json",
+      "declared_volume_mm": [
+        220,
+        220,
+        250
+      ],
+      "unresolved_machine_parent": "fdm_creality_common",
+      "unresolved_process_parent": "fdm_process_creality_common",
+      "unresolved_filament_parent": "fdm_filament_pla",
+      "parent_chains": {
+        "machine": [
+          "fdm_machine_common",
+          "fdm_creality_common",
+          "Creality K1 (0.4 nozzle)"
+        ],
+        "process": [
+          "fdm_process_common",
+          "fdm_process_creality_common",
+          "0.20mm Standard @Creality K1 (0.4 nozzle)"
+        ],
+        "filament": [
+          "fdm_filament_common",
+          "fdm_filament_pla",
+          "Creality Generic PLA"
+        ]
+      }
+    },
+    {
+      "model": "Creality K2",
+      "machine_profile": "resources/profiles/Creality/machine/Creality K2 0.4 nozzle.json",
+      "process_profile": "resources/profiles/Creality/process/0.20mm Standard @Creality K2 0.4 nozzle.json",
+      "filament_profile": "resources/profiles/Creality/filament/Creality Generic PLA @K2-all.json",
+      "declared_volume_mm": [
+        260,
+        260,
+        260
+      ],
+      "unresolved_machine_parent": "fdm_creality_common",
+      "unresolved_process_parent": "fdm_process_creality_common",
+      "unresolved_filament_parent": "Creality Generic PLA",
+      "parent_chains": {
+        "machine": [
+          "fdm_machine_common",
+          "fdm_creality_common",
+          "Creality K2 0.4 nozzle"
+        ],
+        "process": [
+          "fdm_process_common",
+          "fdm_process_creality_common",
+          "0.20mm Standard @Creality K2 0.4 nozzle"
+        ],
+        "filament": [
+          "fdm_filament_common",
+          "fdm_filament_pla",
+          "Creality Generic PLA",
+          "Creality Generic PLA @K2-all"
+        ]
+      }
+    }
+  ]
+}

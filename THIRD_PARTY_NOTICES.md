@@ -52,3 +52,13 @@ This notice is informational and is not a substitute for the licence terms of an
 MakerVault can use the Openverse API as a discovery index for openly licensed catalogue images. Openverse does not become the owner or licence issuer of the indexed media. MakerVault retains the upstream creator, landing/source page and reported licence metadata and only automatically accepts CC0/Public Domain, CC BY and CC BY-SA licence families.
 
 Users should follow the attribution and ShareAlike requirements of the original work. MakerVault does not relicense runtime-downloaded Openverse media under the MakerVault software licence.
+
+## Optional slicer engine logos
+
+The following original engine artwork is bundled locally in the MakerVault frontend and displayed solely to identify independently developed slicer engines:
+
+- `frontend/public/slicer-engines/orcaslicer.svg` — copied from [OrcaSlicer/OrcaSlicer, resources/images/OrcaSlicer.svg](https://github.com/OrcaSlicer/OrcaSlicer/blob/main/resources/images/OrcaSlicer.svg). The upstream project's source licence is AGPL-3.0.
+- `frontend/public/slicer-engines/crealityprint.svg` — copied from [CrealityOfficial/CrealityPrint, resources/images/CrealityPrint.svg, v7.3.0](https://github.com/CrealityOfficial/CrealityPrint/blob/v7.3.0/resources/images/CrealityPrint.svg). The upstream project's source licence is AGPL-3.0.
+
+OrcaSlicer and Creality Print names and logos identify their respective upstream products. They are not MakerVault marks, and their inclusion does not imply endorsement, sponsorship or a verified engine installation. These files retain their upstream rights and attribution; no ownership or trademark rights are asserted.
+

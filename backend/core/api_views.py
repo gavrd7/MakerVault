@@ -2,6 +2,7 @@ from .creality_material_database import MaterialDatabaseError, pull_creality_mat
 from .models import PrinterMaterialDatabaseSnapshot
 from .filament_manufacturers import resolve_filament_manufacturer
 import hashlib
+import math
 import json
 import plistlib
 import uuid
@@ -47,6 +48,7 @@ from .filament_catalogue import (
 from .printing_catalogue_seed import COMMON_FILAMENT_MATERIALS
 from .model_analysis import ModelAnalysisError, analyse_file_asset
 from .print_material_reporting import capture_material, gcode_report, material_summary
+from .file_library_visibility import library_visible_assets
 from .printing_integrations import PrintingIntegrationError, probe_simplyprint, probe_spoolman
 from .printer_connectivity import (
     ADAPTERS as PRINTER_ADAPTERS,
@@ -2403,6 +2405,75 @@ def component_image(request, component_id):
 
 @login_required
 @require_http_methods(["GET"])
+def file_gcode_layer(request, asset_id):
+    """Read full-resolution extrusion paths for one layer of an owned G-code file.
+
+    Keep the indexed whole-model summary separate; only the selected layer is
+    returned at full resolution, avoiding the discontinuous global sample.
+    """
+    from .slicer_layer_preview import (
+        MAX_LAYER_SOURCE_BYTES, exact_layer_toolpaths,
+    )
+
+    asset = FileAsset.objects.filter(owner=request.user, pk=asset_id).first()
+    if asset is None:
+        return _error("G-code file not found.", status=404)
+    filename = str((asset.metadata or {}).get("original_name") or asset.name or "")
+    if (asset.metadata or {}).get("extension") != ".gcode" and not filename.lower().endswith(".gcode"):
+        return _error("Only plain-text G-code can be inspected.", status=400)
+    try:
+        layer_z = float(request.GET.get("z", ""))
+        if not 0 <= layer_z <= 2000 or not math.isfinite(layer_z):
+            raise ValueError()
+    except (ValueError, TypeError):
+        return _error("Choose a valid layer Z between 0 and 2000 mm.", status=400)
+    try:
+        with asset.file.storage.open(asset.file.name, "rb") as handle:
+            raw = handle.read(MAX_LAYER_SOURCE_BYTES + 1)
+    except (OSError, ValueError):
+        return _error("Stored G-code could not be opened.", status=404)
+    if len(raw) > MAX_LAYER_SOURCE_BYTES:
+        return _error("Full-resolution layer retrieval is unavailable for G-code larger than 32 MiB.", status=413)
+    if b"\x00" in raw:
+        return _error("Binary G-code is not supported by this viewer.", status=400)
+    try:
+        source = raw.decode("utf-8")
+    except UnicodeDecodeError:
+        return _error("Full-resolution layer retrieval requires UTF-8 G-code.", status=400)
+    result = exact_layer_toolpaths(source, layer_z)
+    response = JsonResponse(result)
+    response["Cache-Control"] = "private, no-store"
+    return response
+
+
+@login_required
+@require_http_methods(["GET"])
+def file_gcode_source(request, asset_id):
+    """Stream the owner's complete original G-code, never the bounded inspection sample."""
+    asset = FileAsset.objects.filter(owner=request.user, pk=asset_id).first()
+    if not asset:
+        return _error("G-code file not found.", status=404)
+    filename = str((asset.metadata or {}).get("original_name") or asset.name or "")
+    if not filename.lower().endswith(".gcode"):
+        return _error("Only plain-text G-code is supported.", status=400)
+    try:
+        handle = asset.file.storage.open(asset.file.name, "rb")
+    except (OSError, ValueError):
+        return _error("Stored G-code could not be opened.", status=404)
+    # Django constructs and escapes Content-Disposition, preserving the source name.
+    response = FileResponse(
+        handle,
+        as_attachment=request.GET.get("download") == "1",
+        filename=Path(filename).name,
+        content_type="text/plain; charset=utf-8",
+    )
+    response["Cache-Control"] = "private, no-store"
+    response["X-Content-Type-Options"] = "nosniff"
+    return response
+
+
+@login_required
+@require_http_methods(["GET"])
 def file_gcode_inspect(request, asset_id):
     """Authenticated, owner-scoped read-only G-code report and source preview."""
     from .gcode_analysis import inspect_asset, compare_printer_metadata
@@ -2459,7 +2530,10 @@ def file_gcode_inspect(request, asset_id):
 @require_http_methods(["GET", "POST"])
 def files_lookup(request):
     if request.method == "GET":
-        qs = FileAsset.objects.filter(owner=request.user).exclude(category="image").filter(superseded_by__isnull=True).select_related(
+        qs = library_visible_assets(
+            FileAsset.objects.filter(owner=request.user).exclude(category="image").filter(superseded_by__isnull=True),
+            request.user,
+        ).select_related(
             "project", "board__manufacturer", "component__category"
         )
         query = request.GET.get("q", "").strip()
@@ -4706,17 +4780,21 @@ def printing_overview(request):
         "common_filament_materials": COMMON_FILAMENT_MATERIALS,
         "gcode_files": [
             _serialise_file_asset(asset)
-            for asset in FileAsset.objects.filter(owner=request.user, superseded_by__isnull=True, metadata__extension=".gcode").select_related("project", "board__manufacturer", "component__category")[:5000]
-        ],
+            for asset in library_visible_assets(
+                FileAsset.objects.filter(owner=request.user, superseded_by__isnull=True, category="gcode", metadata__extension=".gcode"),
+                request.user,
+            ).select_related("project", "board__manufacturer", "component__category")[:5000]
+        ] if request.GET.get("include_files") != "0" else [],
         "model_files": [
             _serialise_file_asset(asset)
-            for asset in FileAsset.objects.filter(owner=request.user).filter(
-                Q(category__in=["mesh", "slicer", "cad", "gcode"]) | Q(metadata__extension=".gcode"),
-                superseded_by__isnull=True,
+            for asset in library_visible_assets(
+                FileAsset.objects.filter(owner=request.user, superseded_by__isnull=True).filter(
+                    Q(category__in=["mesh", "slicer", "cad", "gcode"]) | Q(metadata__extension=".gcode"),
+                ), request.user,
             )
                 .select_related("project", "board__manufacturer", "component__category")
                 .order_by("category", "name")[:5000]
-        ],
+        ] if request.GET.get("include_files") != "0" else [],
         "models": [_serialise_printing_model(model) for model in models_3d],
         "recent_prints": [_serialise_print_job(job) for job in recent_prints],
         "analytics": _printing_analytics(request.user),

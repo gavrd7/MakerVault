@@ -1,0 +1,124 @@
+name: Slicer worker contract
+
+on:
+  pull_request:
+    paths:
+      - "slicer_worker/**"
+      - "compose.slicer.yaml"
+      - "compose.slicer.staging.yaml"
+      - "scripts/install_slicer_staging.py"
+      - "scripts/tests/test_install_slicer_staging.py"
+      - "scripts/probe_slicer_staging.py"
+      - "scripts/tests/test_probe_slicer_staging.py"
+      - ".dockerignore"
+      - ".github/workflows/slicer-contract.yml"
+  push:
+    branches: [main]
+    paths:
+      - "slicer_worker/**"
+      - "compose.slicer.yaml"
+      - "compose.slicer.staging.yaml"
+      - "scripts/install_slicer_staging.py"
+      - "scripts/tests/test_install_slicer_staging.py"
+      - "scripts/probe_slicer_staging.py"
+      - "scripts/tests/test_probe_slicer_staging.py"
+      - ".github/workflows/slicer-contract.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  worker-unit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Worker contract unit tests (no engine binaries)
+        run: python3 -m unittest discover -s slicer_worker/tests -p "test_*.py" -v
+      - name: Compile worker modules
+        run: python3 -m compileall -q slicer_worker
+      - name: Verify staging installer release, secret and lifecycle contracts offline
+        run: python3 -m unittest discover -s scripts/tests -p "test_install_slicer_staging.py" -v
+      - name: Verify real-engine acceptance probe isolation and fail-closed contracts offline
+        run: python3 -m unittest discover -s scripts/tests -p "test_probe_slicer_staging.py" -v
+      - name: Validate explicit staging engine overlay without connecting to printers
+        env:
+          POSTGRES_PASSWORD: ci-only-placeholder
+          MAKERVAULT_SLICER_WORKER_TOKEN: "0123456789012345678901234567890123456789"
+        run: |
+          printf 'POSTGRES_PASSWORD=ci-only-placeholder\n' > .env
+          cat > .slicer-staging.env <<'ENV'
+          MAKERVAULT_SLICER_EXECUTION_ENABLED=1
+          MAKERVAULT_SLICER_WORKER_IMAGE=sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+          MAKERVAULT_SLICER_ENGINE_IMAGE_DIGEST=sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+          MAKERVAULT_SLICER_ENGINES_JSON='{"orcaslicer":{"version":"2.4.2","binary_sha256":"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"}}'
+          SLICER_ENGINES_JSON='{"orcaslicer":{"binary":"/opt/engines/orcaslicer.AppImage","version":"2.4.2","binary_sha256":"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"}}'
+          ENV
+          chmod 600 .slicer-staging.env
+          docker compose --env-file .env --env-file .slicer-staging.env \
+            -f compose.yaml -f compose.build.yaml -f compose.slicer.staging.yaml config --quiet
+      - name: Validate opt-in worker Compose overlay without starting containers
+        env:
+          POSTGRES_PASSWORD: ci-only-placeholder
+          MAKERVAULT_SLICER_WORKER_TOKEN: "0123456789012345678901234567890123456789"
+          MAKERVAULT_SLICER_WORKER_IMAGE: "ghcr.io/example/slicer@sha256:0000000000000000000000000000000000000000000000000000000000000000"
+          MAKERVAULT_SLICER_ENGINE_IMAGE_DIGEST: "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+          MAKERVAULT_SLICER_ENGINE_BINARY_SHA256: "0000000000000000000000000000000000000000000000000000000000000000"
+          MAKERVAULT_SLICER_ENGINE_VERSION: "ci-only-placeholder"
+        run: |
+          printf 'POSTGRES_PASSWORD=ci-only-placeholder\n' > .env
+          docker compose -f compose.yaml -f compose.slicer.yaml --profile slicer config --quiet
+
+
+  candidate-image-build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: Stage a clearly non-executable CI fixture (never a real engine)
+        run: |
+          printf 'CI fixture only, not a slicing engine\\n' > /tmp/creality-fixture.AppImage
+          SHA=$(sha256sum /tmp/creality-fixture.AppImage | cut -d' ' -f1)
+          python3 -m slicer_worker.stage_engines \
+            --engine crealityprint 7.3.0 /tmp/creality-fixture.AppImage "$SHA"
+      - name: Build optional isolated worker candidate image
+        run: docker build -f slicer_worker/Dockerfile.bundle -t makervault-slicer-ci:candidate .
+      - name: Confirm image contains worker code and only the selected engine asset
+        run: |
+          docker run --rm --network none --read-only --tmpfs /tmp:rw,nosuid,size=128m \
+            --entrypoint python3 makervault-slicer-ci:candidate \
+            -c 'from pathlib import Path; import slicer_worker.probe, slicer_worker.service; assert Path("/opt/engines/crealityprint.AppImage").is_file(); assert not Path("/opt/engines/orcaslicer.AppImage").exists()'
+      - name: Boot isolated staging worker from immutable local image ID
+        env:
+          POSTGRES_PASSWORD: ci-only-placeholder
+        run: |
+          IMAGE=$(docker image inspect --format '{{.Id}}' makervault-slicer-ci:candidate)
+          ENGINE_SHA=$(sha256sum slicer-engine-assets/crealityprint.AppImage | cut -d' ' -f1)
+          printf 'POSTGRES_PASSWORD=ci-only-placeholder\n' > .env
+          cat > .slicer-staging.env <<EOF
+          MAKERVAULT_SLICER_EXECUTION_ENABLED=1
+          MAKERVAULT_SLICER_WORKER_IMAGE=${IMAGE}
+          MAKERVAULT_SLICER_ENGINE_IMAGE_DIGEST=${IMAGE}
+          MAKERVAULT_SLICER_WORKER_TOKEN=0123456789012345678901234567890123456789
+          MAKERVAULT_SLICER_ENGINES_JSON='{"crealityprint":{"version":"7.3.0","binary_sha256":"${ENGINE_SHA}"}}'
+          SLICER_ENGINES_JSON='{"crealityprint":{"binary":"/opt/engines/crealityprint.AppImage","version":"7.3.0","binary_sha256":"${ENGINE_SHA}"}}'
+          EOF
+          chmod 600 .slicer-staging.env
+          docker compose --env-file .env --env-file .slicer-staging.env \
+            -f compose.yaml -f compose.slicer.staging.yaml \
+            up -d --no-deps slicer-worker
+          sleep 4
+          docker compose --env-file .env --env-file .slicer-staging.env \
+            -f compose.yaml -f compose.slicer.staging.yaml \
+            ps slicer-worker
+          docker compose --env-file .env --env-file .slicer-staging.env \
+            -f compose.yaml -f compose.slicer.staging.yaml \
+            exec -T slicer-worker python3 -c 'import json,urllib.request; r=json.load(urllib.request.urlopen("http://127.0.0.1:8088/health")); assert r["ready"] and "crealityprint" in r["engines"]'
+      - name: Remove staging worker used by candidate-image CI
+        if: always()
+        run: |
+          if test -f .slicer-staging.env; then
+            docker compose --env-file .env --env-file .slicer-staging.env \
+              -f compose.yaml -f compose.slicer.staging.yaml down --remove-orphans || true
+          fi
+

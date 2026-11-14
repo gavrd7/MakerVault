@@ -3,7 +3,7 @@ import { Modal } from "./Common";
 import PrinterCamera, { CameraPlayback } from "./PrinterCamera";
 import { defaultCamera } from "./cameraPlayback";
 
-export function PrinterCameraPreview({ printer, suspended = false }) {
+export function PrinterCameraPreview({ printer, suspended = false, compact = true }) {
   const container = useRef(null);
   const [visible, setVisible] = useState(false);
   const [pageVisible, setPageVisible] = useState(!document.hidden);
@@ -23,7 +23,7 @@ export function PrinterCameraPreview({ printer, suspended = false }) {
   if (!selected) return null;
   const url = `/api/printing/printers/${printer.id}/connections/${selected.connectionId}/cameras/${selected.camera.id}/media/`;
   return <section ref={container} className="printerCameraCard cameraGlanceCard" aria-label={printer.name + " live camera"}>
-    {visible && pageVisible && !suspended ? <CameraPlayback key={selected.connectionId + ":" + selected.camera.id} camera={selected.camera} url={url} compact /> : <div className="printerCameraPlaceholder">Camera paused</div>}
+    {visible && pageVisible && !suspended ? <CameraPlayback key={selected.connectionId + ":" + selected.camera.id} camera={selected.camera} url={url} compact={compact} /> : <div className="printerCameraPlaceholder">Camera paused</div>}
   </section>;
 }
 

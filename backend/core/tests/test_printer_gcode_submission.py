@@ -846,8 +846,65 @@ class NativeGcodeAdapterTests(SimpleTestCase):
         verify.assert_called_once_with(moon, "mv_ghost.gcode", 1200)
         self.assertEqual(filtered.call_args.kwargs["printer_id"], "one-printer")
         moon.status = "disconnected"
+        with patch("core.creality_gcode.list_files", return_value=[
+            {"path": "mv_ghost.gcode", "size_bytes": 1200}
+        ]) as native_list:
+            self.assertEqual(
+                _verify_creality_upload(native, "mv_ghost.gcode", 1200)["size_bytes"], 1200
+            )
+            native_list.assert_called_once_with(native)
+
+    @patch("time.sleep")
+    @patch("core.printer_gcode_submission.PrinterConnection.objects.filter")
+    @patch("core.creality_gcode.list_files")
+    def test_native_creality_upload_needs_exact_file_and_size(self, browse, filtered, pause):
+        native = connection("creality_local")
+        native.printer_id = "one-printer"
+        filtered.return_value.order_by.return_value = []
+        for rows in (
+            [], [{"path": "mv_ghost.gcode", "size_bytes": None}],
+            [{"path": "mv_ghost.gcode", "size_bytes": 1199}],
+            [{"path": "other.gcode", "size_bytes": 1200}],
+            [{"path": "mv_ghost.gcode", "size_bytes": 1200},
+             {"path": "mv_ghost.gcode", "size_bytes": 1200}],
+        ):
+            with self.subTest(rows=rows):
+                browse.return_value = rows
+                with self.assertRaises(GcodeSubmissionError):
+                    _verify_creality_upload(native, "mv_ghost.gcode", 1200)
+        browse.side_effect = CrealityGcodeError("Unrecognised reply")
         with self.assertRaises(GcodeSubmissionError):
             _verify_creality_upload(native, "mv_ghost.gcode", 1200)
+
+    @patch("time.sleep")
+    @patch("core.printer_gcode_submission.PrinterConnection.objects.filter")
+    @patch("core.creality_gcode.list_files")
+    def test_native_creality_eventual_consistency_uses_read_only_probes(self, browse, filtered, pause):
+        native = connection("creality_local")
+        native.printer_id = "one-printer"
+        filtered.return_value.order_by.return_value = []
+        browse.side_effect = [
+            [],
+            [{"path": "mv_ghost.gcode", "size_bytes": None}],
+            [{"path": "mv_ghost.gcode", "size_bytes": 1200}],
+        ]
+        result = _verify_creality_upload(native, "mv_ghost.gcode", 1200)
+        self.assertEqual(result["size_bytes"], 1200)
+        self.assertEqual(browse.call_count, 3)
+        self.assertEqual(pause.call_count, 2)
+
+    @patch("time.sleep")
+    @patch("core.printer_gcode_submission.PrinterConnection.objects.filter")
+    @patch("core.creality_gcode.list_files")
+    def test_native_creality_unverified_upload_reports_safe_reason(self, browse, filtered, pause):
+        native = connection("creality_local")
+        native.printer_id = "one-printer"
+        filtered.return_value.order_by.return_value = []
+        browse.return_value = [{"path": "mv_ghost.gcode", "size_bytes": None}]
+        with self.assertRaisesRegex(GcodeSubmissionError, "size-not-reported") as caught:
+            _verify_creality_upload(native, "mv_ghost.gcode", 1200)
+        self.assertNotIn("mv_ghost.gcode", str(caught.exception))
+        self.assertEqual(browse.call_count, 3)
 
     @patch("core.creality_gcode.asyncio.run")
     def test_creality_start_rejects_path_traversal_without_websocket(self, worker):

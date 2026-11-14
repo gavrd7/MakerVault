@@ -67,7 +67,7 @@ class PrinterControlApiTests(TestCase):
         row = response.json()["live_printers"][0]
         self.assertEqual(row["connection_id"], str(self.connection.id))
         self.assertTrue(row["can_control"])
-        self.assertEqual(row["controls"]["actions"], ["pause", "cancel"])
+        self.assertEqual(row["controls"]["actions"], ["pause", "resume", "cancel"])
         self.assertEqual(row["controls"]["job_token"], job_token(self.snapshot))
         self.assertNotIn("secret-access-code", response.content.decode())
         self.assertNotIn("secret-api-key", response.content.decode())
@@ -133,8 +133,50 @@ class PrinterControlApiTests(TestCase):
         self.send_mock.assert_not_called()
         self.assertEqual(self.post(action="cancel", confirmed_cancel=True).status_code, 202)
 
-    def test_resume_requires_paused_state(self):
+    def test_moonraker_resume_requires_an_actual_pause(self):
+        self.connection.adapter = "moonraker"
+        self.connection.save(update_fields=["adapter"])
         self.assertEqual(self.post(action="resume").status_code, 409)
+        self.send_mock.assert_not_called()
+
+    def test_creality_resume_is_available_during_active_print(self):
+        from core.printer_controls import control_availability
+        self.assertIn("resume", control_availability(self.connection)["actions"])
+        self.assertEqual(self.post(action="resume").status_code, 202)
+        self.send_mock.assert_called_once()
+
+    def test_creality_error_with_active_underlying_job_can_resume(self):
+        from core.printer_controls import control_availability
+        self.snapshot = {
+            **self.snapshot,
+            "state": "error",
+            "source_metadata": {
+                **self.snapshot["source_metadata"],
+                "activity_state": "self-testing",
+            },
+        }
+        self.connection.last_snapshot = self.snapshot
+        self.connection.save(update_fields=["last_snapshot"])
+        self.assertEqual(control_availability(self.connection)["actions"], ["resume"])
+        self.assertEqual(self.post(
+            action="resume", job_token=job_token(self.snapshot)
+        ).status_code, 202)
+        self.send_mock.assert_called_once()
+
+    def test_creality_terminal_or_unknown_states_cannot_resume(self):
+        from core.printer_controls import control_availability
+        for state in ("idle", "complete", "cancelled", "unknown", "error"):
+            with self.subTest(state=state):
+                self.snapshot = {
+                    **self.snapshot, "state": state,
+                    "source_metadata": {
+                        "print_id": "job-1", "print_start_time": 1234,
+                        "activity_state": "idle",
+                    },
+                }
+                self.connection.last_snapshot = self.snapshot
+                self.connection.save(update_fields=["last_snapshot"])
+                self.assertNotIn("resume", control_availability(self.connection)["actions"])
         self.send_mock.assert_not_called()
 
     def test_unknown_actions_and_bad_ids_are_rejected(self):
@@ -147,6 +189,48 @@ class PrinterControlApiTests(TestCase):
         response = self.client.post(self.url, "[]", content_type="application/json")
         self.assertEqual(response.status_code, 400)
         self.send_mock.assert_not_called()
+
+    def test_k2_preparation_states_offer_explicit_controls(self):
+        from core.printer_controls import control_availability
+        for state in ("self-testing", "processing"):
+            with self.subTest(state=state):
+                PrinterControlRequest.objects.all().delete()
+                self.snapshot = {**self.snapshot, "state": state}
+                self.connection.last_snapshot = self.snapshot
+                self.connection.save(update_fields=["last_snapshot"])
+                available = control_availability(self.connection)
+                self.assertEqual(available["actions"], ["pause", "resume", "cancel"])
+                response = self.post(
+                    action="resume", request_id=str(uuid.uuid4()),
+                    job_token=job_token(self.snapshot)
+                )
+                self.assertEqual(response.status_code, 202, response.content)
+        self.assertEqual(self.send_mock.call_count, 2)
+
+    def test_preparation_controls_stay_disabled_without_identified_job(self):
+        from core.printer_controls import control_availability
+        for state in ("self-testing", "processing"):
+            snapshot = {**self.snapshot, "state": state, "job": {"file_name": ""}}
+            self.connection.last_snapshot = snapshot
+            self.connection.save(update_fields=["last_snapshot"])
+            self.assertEqual(control_availability(self.connection)["actions"], [])
+
+    def test_idle_state_never_exposes_job_controls(self):
+        from core.printer_controls import control_availability
+        self.connection.last_snapshot = {**self.snapshot, "state": "idle"}
+        self.connection.save(update_fields=["last_snapshot"])
+        self.assertEqual(control_availability(self.connection)["actions"], [])
+
+    def test_creality_explicit_pause_overrides_active_self_test_marker(self):
+        from core.printer_connectivity import _creality_state
+        self.assertEqual(_creality_state({
+            "printFileName": "test.gcode", "withSelfTest": 37, "state": 5,
+            "printProgress": 0,
+        }), "paused")
+        self.assertEqual(_creality_state({
+            "printFileName": "test.gcode", "withSelfTest": 37, "state": 0,
+            "printProgress": 0,
+        }), "self-testing")
 
     def test_fresh_paused_job_can_resume(self):
         self.snapshot = {**self.snapshot, "state": "paused"}

@@ -7,7 +7,7 @@ from django.core.exceptions import ValidationError
 ALLOWED_EXTENSIONS = {
     ".png", ".jpg", ".jpeg", ".webp", ".gif", ".svg", ".pdf", ".txt", ".md",
     ".zip", ".7z", ".tar", ".gz", ".ino", ".cpp", ".h", ".hpp", ".py", ".yaml", ".yml",
-    ".json", ".toml", ".bin", ".hex", ".uf2", ".elf", ".exe", ".msi",
+    ".json", ".ini", ".toml", ".bin", ".hex", ".uf2", ".elf", ".exe", ".msi",
     ".stl", ".3mf", ".obj", ".step", ".stp", ".iges", ".igs", ".f3d", ".fcstd",
     ".sldprt", ".scad", ".dxf", ".gcode", ".bgcode", ".kicad_pcb", ".kicad_sch",
 }

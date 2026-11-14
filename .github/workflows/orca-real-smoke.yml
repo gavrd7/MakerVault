@@ -1,0 +1,345 @@
+name: OrcaSlicer real binary smoke test
+
+on:
+  pull_request:
+    paths:
+      - "slicer_worker/**"
+      - "scripts/install_slicer_staging.py"
+      - "scripts/probe_slicer_staging.py"
+      - "scripts/build_orca_reference_fixture.py"
+      - "scripts/build_slicer_multimodel_fixture.py"
+      - ".github/workflows/orca-real-smoke.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  official-orca-runtime:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - name: Prepare GitHub Actions staging environment (no app services)
+        run: printf 'POSTGRES_PASSWORD=ci-only-placeholder\n' > .env
+      - name: Install bounded XML parser used by production 3MF builder
+        run: python3 -m pip install --disable-pip-version-check --no-input "defusedxml>=0.7.1,<0.8"
+      - name: Prepare test-only native K1 and K2 fixtures before expensive image build
+        run: |
+          python3 -m compileall -q scripts/build_orca_reference_fixture.py scripts/probe_slicer_staging.py scripts/build_slicer_multimodel_fixture.py
+          python3 -m unittest scripts.tests.test_native_orca_object_fixture scripts.tests.test_slicer_colour_fixture -v
+          python3 scripts/build_orca_reference_fixture.py --printer k1 --output /tmp/makervault-orca-k1
+          python3 scripts/build_orca_reference_fixture.py --printer k2 --output /tmp/makervault-orca-k2
+          python3 scripts/build_orca_reference_fixture.py --printer prusa-mk4 --output /tmp/makervault-orca-prusa
+          python3 scripts/build_slicer_multimodel_fixture.py --output /tmp/makervault-orca-plate.3mf \
+            --compound-output /tmp/makervault-orca-compound.3mf \
+            --object-output /tmp/makervault-orca-object-settings.3mf \
+            --object-reverse-output /tmp/makervault-orca-object-reversed.3mf \
+            --object-wall-output /tmp/makervault-orca-wall-only.3mf \
+            --object-wall-reverse-output /tmp/makervault-orca-wall-reversed.3mf \
+            --object-infill-output /tmp/makervault-orca-infill-only.3mf \
+            --object-infill-reverse-output /tmp/makervault-orca-infill-reversed.3mf \
+            --material-output /tmp/makervault-orca-two-tool.3mf
+      - name: Download SHA-256 verified official Orca 2.5.0 and build isolated image
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 scripts/install_slicer_staging.py prepare-orca
+      - name: Check restricted worker loads real executable
+        shell: bash
+        run: |
+          set -euo pipefail
+          IMAGE=$(sed -n 's/^MAKERVAULT_SLICER_WORKER_IMAGE=//p' .slicer-staging.env)
+          test "${IMAGE#sha256:}" != "$IMAGE"
+          echo "Testing pinned OrcaSlicer AppImage runtime (no printer, no network)."
+          set +e
+          timeout 90s docker run --rm --network none --read-only \
+            --user 10001:10001 --cap-drop ALL \
+            --security-opt no-new-privileges:true --pids-limit 96 \
+            --memory 3g --cpus 2 \
+            --tmpfs /tmp:rw,exec,nosuid,nodev,size=1g,mode=1777 \
+            -e APPIMAGE_EXTRACT_AND_RUN=1 -e QT_QPA_PLATFORM=offscreen \
+            -e QT_OPENGL=software -e LIBGL_ALWAYS_SOFTWARE=1 \
+            --entrypoint /opt/engines/orcaslicer.AppImage "$IMAGE" --help
+          STATUS=$?
+          set -e
+          echo "Official Orca runtime exit code: $STATUS"
+          if [ "$STATUS" -eq 124 ]; then
+            echo "::error::Official Orca AppImage timed out in the isolated worker."
+            exit 1
+          fi
+          if [ "$STATUS" -ne 0 ]; then
+            echo "::error::Official Orca AppImage cannot start with the checked CLI command."
+            exit 1
+          fi
+          echo "Official Orca CLI started. This is NOT a validated G-code slice."
+      - name: Verify real K1 sliced tetrahedron using complete upstream-native profile parents
+        run: |
+          python3 scripts/probe_slicer_staging.py \
+            --printer /tmp/makervault-orca-k1/printer.json \
+            --filament /tmp/makervault-orca-k1/filament.json \
+            --process /tmp/makervault-orca-k1/process.json
+      - name: Verify real K2 sliced tetrahedron using complete upstream-native profile parents
+        id: k2
+        run: |
+          python3 scripts/probe_slicer_staging.py \
+            --printer /tmp/makervault-orca-k2/printer.json \
+            --filament /tmp/makervault-orca-k2/filament.json \
+            --process /tmp/makervault-orca-k2/process.json
+      - name: Verify real K2 Orca 2.5 two-tool G-code (required; no printer)
+        id: k2_two_tool
+        run: |
+          python3 scripts/probe_slicer_staging.py \
+            --printer /tmp/makervault-orca-k2/printer.json \
+            --filament /tmp/makervault-orca-k2/filament.json \
+            --second-filament /tmp/makervault-orca-k2/filament.json \
+            --process /tmp/makervault-orca-k2/process.json \
+            --model /tmp/makervault-orca-two-tool.3mf
+      - name: Report native K2 two-tool G-code evidence
+        if: always() && steps.k2_two_tool.outcome != 'skipped'
+        run: |
+          echo "### K2 native multi-material fixture (offline)" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Two-tool G-code verification: ${{ steps.k2_two_tool.outcome }}" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Profiles are intentionally the same benign native PLA preset in two tool positions; no printer or CFS commands were sent." >> "$GITHUB_STEP_SUMMARY"
+          echo "- Required software acceptance only; production CFS mappings, physical filament changes and printer submission remain separately gated." >> "$GITHUB_STEP_SUMMARY"
+      - name: Build two-tool native directional flushing test profiles
+        run: |
+          python3 scripts/build_slicer_flush_fixture.py \
+            --process /tmp/makervault-orca-k2/process.json \
+            --output /tmp/makervault-orca-k2-flush-only.json \
+            --prime-tower native
+          python3 scripts/build_slicer_flush_fixture.py \
+            --process /tmp/makervault-orca-k2/process.json \
+            --output /tmp/makervault-orca-k2-flush-process.json \
+            --prime-tower enabled
+      - name: Generate distinct black and white PLA reference colours (offline)
+        run: |
+          python3 scripts/build_slicer_colour_fixture.py \
+            --filament /tmp/makervault-orca-k2/filament.json \
+            --output /tmp/makervault-orca-k2-black.json --colour '#000000'
+          python3 scripts/build_slicer_colour_fixture.py \
+            --filament /tmp/makervault-orca-k2/filament.json \
+            --output /tmp/makervault-orca-k2-white.json --colour '#FFFFFF'
+      - name: Require separate K2 black and white PLA native presets (offline)
+        id: k2_distinct_colour
+        run: |
+          python3 scripts/probe_slicer_staging.py \
+            --printer /tmp/makervault-orca-k2/printer.json \
+            --filament /tmp/makervault-orca-k2-black.json \
+            --second-filament /tmp/makervault-orca-k2-white.json \
+            --process /tmp/makervault-orca-k2-flush-process.json \
+            --model /tmp/makervault-orca-two-tool.3mf \
+            --audit-changeovers
+      - name: Report K2 distinct-colour software acceptance
+        if: always() && steps.k2_distinct_colour.outcome != 'skipped'
+        run: |
+          echo "### K2 two distinct filament-colour presets" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Offline same-material black/white preset result: ${{ steps.k2_distinct_colour.outcome }}" >> "$GITHUB_STEP_SUMMARY"
+          echo "- These are test-only colour metadata; physical spool properties and CFS slots were not authenticated." >> "$GITHUB_STEP_SUMMARY"
+      - name: Probe K2 native flush matrix without tower override (diagnostic)
+        id: k2_flush_only
+        continue-on-error: true
+        run: |
+          python3 scripts/probe_slicer_staging.py \
+            --printer /tmp/makervault-orca-k2/printer.json \
+            --filament /tmp/makervault-orca-k2/filament.json \
+            --second-filament /tmp/makervault-orca-k2/filament.json \
+            --process /tmp/makervault-orca-k2-flush-only.json \
+            --model /tmp/makervault-orca-two-tool.3mf
+      - name: Require K2 native directional flushing, changeovers and prime tower (offline)
+        id: k2_flush_tower
+        run: |
+          python3 scripts/probe_slicer_staging.py \
+            --printer /tmp/makervault-orca-k2/printer.json \
+            --filament /tmp/makervault-orca-k2/filament.json \
+            --second-filament /tmp/makervault-orca-k2/filament.json \
+            --process /tmp/makervault-orca-k2-flush-process.json \
+            --model /tmp/makervault-orca-two-tool.3mf \
+            --audit-changeovers
+      - name: Report native flushing acceptance evidence
+        if: always() && steps.k2_flush_tower.outcome != 'skipped'
+        run: |
+          echo "### K2 test-only flushing matrix and prime tower" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Flush-matrix only: ${{ steps.k2_flush_only.outcome }}" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Flush-matrix with tower enabled: ${{ steps.k2_flush_tower.outcome }}" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Directional volumes 300/220 mm³ are test inputs, NOT calibrated manufacturer values." >> "$GITHUB_STEP_SUMMARY"
+          echo "- The probe records tool-switch counts, stationary extrusion and out-of-model toolpaths; it does not prove the complete physical CFS purge sequence." >> "$GITHUB_STEP_SUMMARY"
+          echo "- This remains diagnostic and does not enable physical CFS printing." >> "$GITHUB_STEP_SUMMARY"
+      - name: Diagnose the two native flushing failures using official fixture logs
+        if: always() && (steps.k2_flush_only.outcome == 'failure' || steps.k2_flush_tower.outcome == 'failure')
+        run: |
+          IMAGE=$(sed -n 's/^MAKERVAULT_SLICER_WORKER_IMAGE=//p' .slicer-staging.env)
+          docker run --rm --network none --read-only --user 10001:10001 \
+            --cap-drop ALL --security-opt no-new-privileges:true --pids-limit 96 \
+            --memory 3g --cpus 2 --tmpfs /tmp:rw,exec,nosuid,nodev,size=1g,mode=1777 \
+            --mount type=bind,src=/tmp/makervault-orca-k2,dst=/fixtures,readonly \
+            --mount type=bind,src=/tmp/makervault-orca-k2-flush-only.json,dst=/flush-process.json,readonly \
+            --mount type=bind,src=/tmp/makervault-orca-two-tool.3mf,dst=/two-tool.3mf,readonly \
+            --entrypoint python3 "$IMAGE" -m slicer_worker.diagnose_orca_fixture \
+            --printer /fixtures/printer.json --filament /fixtures/filament.json \
+            --process /flush-process.json --second-filament /fixtures/filament.json \
+            --model /two-tool.3mf
+      - name: Verify real Prusa MK4 native-profile tetrahedron slice
+        run: |
+          python3 scripts/probe_slicer_staging.py \
+            --printer /tmp/makervault-orca-prusa/printer.json \
+            --filament /tmp/makervault-orca-prusa/filament.json \
+            --process /tmp/makervault-orca-prusa/process.json
+      - name: Inspect whether Orca recognises both 3MF models and placements
+        shell: bash
+        run: |
+          set -euo pipefail
+          IMAGE=$(sed -n 's/^MAKERVAULT_SLICER_WORKER_IMAGE=//p' .slicer-staging.env)
+          docker run --rm --network none --read-only --user 10001:10001 \
+            --cap-drop ALL --security-opt no-new-privileges:true --pids-limit 96 \
+            --memory 3g --cpus 2 \
+            --tmpfs /tmp:rw,exec,nosuid,nodev,size=1g,mode=1777 \
+            -e APPIMAGE_EXTRACT_AND_RUN=1 -e QT_QPA_PLATFORM=offscreen \
+            -e QT_OPENGL=software -e LIBGL_ALWAYS_SOFTWARE=1 \
+            -e HOME=/tmp -e TMPDIR=/tmp \
+            --mount type=bind,src=/tmp/makervault-orca-plate.3mf,dst=/fixtures/plate.3mf,readonly \
+            --entrypoint /opt/engines/orcaslicer.AppImage "$IMAGE" \
+            /fixtures/plate.3mf --info
+      - name: Check native two-object 3MF (known issue under investigation)
+        id: native_multi
+        continue-on-error: true
+        run: |
+          python3 scripts/probe_slicer_staging.py \
+            --printer /tmp/makervault-orca-k1/printer.json \
+            --filament /tmp/makervault-orca-k1/filament.json \
+            --process /tmp/makervault-orca-k1/process.json \
+            --model /tmp/makervault-orca-plate.3mf
+      - name: Probe real Orca 2.5.0 with distinct per-object wall/infill settings
+        id: native_object_settings
+        continue-on-error: true
+        run: |
+          python3 scripts/probe_slicer_staging.py \
+            --printer /tmp/makervault-orca-k1/printer.json \
+            --filament /tmp/makervault-orca-k1/filament.json \
+            --process /tmp/makervault-orca-k1/process.json \
+            --model /tmp/makervault-orca-object-settings.3mf
+      - name: Warn if real object-specific project is not independently sliced
+        if: steps.native_object_settings.outcome == 'failure'
+        run: |
+          echo "::warning::Real Orca per-object 3MF still fails two-object G-code verification. Do not enable object-specific slicing."
+      - name: Measure true per-object settings effect on two separate 20mm cubes
+        id: native_object_effects
+        continue-on-error: true
+        run: |
+          python3 scripts/probe_slicer_staging.py \
+            --printer /tmp/makervault-orca-k1/printer.json \
+            --filament /tmp/makervault-orca-k1/filament.json \
+            --process /tmp/makervault-orca-k1/process.json \
+            --model /tmp/makervault-orca-object-settings.3mf \
+            --verify-object-effects
+      - name: Reverse per-object wall/infill settings and demand opposite extrusion effect
+        id: native_object_reverse
+        continue-on-error: true
+        run: |
+          python3 scripts/probe_slicer_staging.py \
+            --printer /tmp/makervault-orca-k1/printer.json \
+            --filament /tmp/makervault-orca-k1/filament.json \
+            --process /tmp/makervault-orca-k1/process.json \
+            --model /tmp/makervault-orca-object-reversed.3mf \
+            --verify-object-effects --reverse-object-effects
+      - name: Prove wall-loop override alone changes the correct object
+        id: native_wall_effect
+        continue-on-error: true
+        run: |
+          python3 scripts/probe_slicer_staging.py \
+            --printer /tmp/makervault-orca-k1/printer.json \
+            --filament /tmp/makervault-orca-k1/filament.json \
+            --process /tmp/makervault-orca-k1/process.json \
+            --model /tmp/makervault-orca-wall-only.3mf --verify-object-effects
+      - name: Prove wall-loop override after swapping objects
+        id: native_wall_reverse
+        continue-on-error: true
+        run: |
+          python3 scripts/probe_slicer_staging.py \
+            --printer /tmp/makervault-orca-k1/printer.json \
+            --filament /tmp/makervault-orca-k1/filament.json \
+            --process /tmp/makervault-orca-k1/process.json \
+            --model /tmp/makervault-orca-wall-reversed.3mf \
+            --verify-object-effects --reverse-object-effects
+      - name: Prove infill-density override alone changes the correct object
+        id: native_infill_effect
+        continue-on-error: true
+        run: |
+          python3 scripts/probe_slicer_staging.py \
+            --printer /tmp/makervault-orca-k1/printer.json \
+            --filament /tmp/makervault-orca-k1/filament.json \
+            --process /tmp/makervault-orca-k1/process.json \
+            --model /tmp/makervault-orca-infill-only.3mf --verify-object-effects
+      - name: Prove infill-density override after swapping objects
+        id: native_infill_reverse
+        continue-on-error: true
+        run: |
+          python3 scripts/probe_slicer_staging.py \
+            --printer /tmp/makervault-orca-k1/printer.json \
+            --filament /tmp/makervault-orca-k1/filament.json \
+            --process /tmp/makervault-orca-k1/process.json \
+            --model /tmp/makervault-orca-infill-reversed.3mf \
+            --verify-object-effects --reverse-object-effects
+      - name: Summarize two-way per-object Orca verification gate
+        if: always() && steps.native_object_effects.outcome != 'skipped'
+        shell: bash
+        run: |
+          {
+            echo "### Per-object Orca 2.5.0 evidence"
+            echo "- Normal assignments: ${{ steps.native_object_effects.outcome }}"
+            echo "- Reversed assignments: ${{ steps.native_object_reverse.outcome }}"
+            echo "- Wall-only original/reversed: ${{ steps.native_wall_effect.outcome }} / ${{ steps.native_wall_reverse.outcome }}"
+            echo "- Infill-only original/reversed: ${{ steps.native_infill_effect.outcome }} / ${{ steps.native_infill_reverse.outcome }}"
+            if [[ "${{ steps.native_object_effects.outcome }}" == "success" && "${{ steps.native_object_reverse.outcome }}" == "success" ]]; then
+              echo "- Result: **Both directions demonstrate settings effects**. Production admission remains separately gated."
+            else
+              echo "- Result: **Not independently proven**. Production per-object slicing must remain disabled."
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+      - name: Report per-object override verification limitation
+        if: steps.native_object_effects.outcome == 'failure'
+        run: |
+          echo "::warning::Object geometry is verified, but different effective Orca process settings are not yet proven. Keep object slicing disabled."
+      - name: Diagnose native project with all-plates selection
+        id: object_all_plates
+        continue-on-error: true
+        run: |
+          python3 scripts/probe_slicer_staging.py \
+            --printer /tmp/makervault-orca-k1/printer.json \
+            --filament /tmp/makervault-orca-k1/filament.json \
+            --process /tmp/makervault-orca-k1/process.json \
+            --model /tmp/makervault-orca-object-settings.3mf \
+            --experimental-all-plates
+      - name: Diagnose native project with explicit no-arrange
+        id: object_no_arrange
+        continue-on-error: true
+        run: |
+          python3 scripts/probe_slicer_staging.py \
+            --printer /tmp/makervault-orca-k1/printer.json \
+            --filament /tmp/makervault-orca-k1/filament.json \
+            --process /tmp/makervault-orca-k1/process.json \
+            --model /tmp/makervault-orca-object-settings.3mf \
+            --experimental-no-arrange
+      - name: Verify production compound plate prints both transformed models with real Orca
+        run: |
+          python3 scripts/probe_slicer_staging.py \
+            --printer /tmp/makervault-orca-k1/printer.json \
+            --filament /tmp/makervault-orca-k1/filament.json \
+            --process /tmp/makervault-orca-k1/process.json \
+            --model /tmp/makervault-orca-compound.3mf --compound
+      - name: Report raw two-object 3MF import limitation without approving it
+        if: steps.native_multi.outcome == 'failure'
+        run: |
+          echo "::notice::Raw separate-object 3MF is not approved. The actual MakerVault Orca execution path uses the tested single-material compound builder."
+      - name: Diagnose failed native K2 slice without changing runtime admission policy
+        if: failure() && steps.k2.outcome == 'failure'
+        run: |
+          IMAGE=$(sed -n 's/^MAKERVAULT_SLICER_WORKER_IMAGE=//p' .slicer-staging.env)
+          docker run --rm --network none --read-only --user 10001:10001 \
+            --cap-drop ALL --security-opt no-new-privileges:true --pids-limit 96 \
+            --memory 3g --cpus 2 --tmpfs /tmp:rw,exec,nosuid,nodev,size=1g,mode=1777 \
+            --mount type=bind,src=/tmp/makervault-orca-k2,dst=/fixtures,readonly \
+            --entrypoint python3 "$IMAGE" -m slicer_worker.diagnose_orca_fixture \
+            --printer /fixtures/printer.json --filament /fixtures/filament.json --process /fixtures/process.json
+      - name: Explain remaining fixture gate
+        run: |
+          echo "::notice::Even a passed K1/K2 fixture is evidence only; administrator review of G-code and separate approval are still required."

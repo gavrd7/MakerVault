@@ -890,6 +890,12 @@
 
 .dashboardLivePanel{overflow:hidden}
 .dashboardLiveGrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(360px,100%),1fr));gap:10px;padding:14px 16px 16px}
+/* Offline printers remain visible without forcing a blank camera card to fill a live row. */
+.dashboardLiveGrid{align-items:start}
+.dashboardLivePrinter-offline{border-left:3px solid #ee6d78;align-self:start}
+.dashboardLiveOffline{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-top:10px;color:#8b98aa;font-size:12px}
+.dashboardLiveOffline .printerLiveOpen{margin-left:auto}
+
 .dashboardLivePrinter{display:grid;grid-template-columns:64px minmax(0,1fr);gap:11px;width:100%;padding:11px;text-align:left;border:1px solid #2b3542;border-radius:11px;background:linear-gradient(135deg,#101720,#0d131a);color:#dfe7f3}
 .dashboardLivePrinter:hover{border-color:#4b5a70;background:#131c27}
 .dashboardLivePrinter-printing,.dashboardLivePrinter-processing,.dashboardLivePrinter-paused{border-left:3px solid #8c76ff}
@@ -3646,4 +3652,4039 @@ a:focus-visible,
   .printerCameraSetupLayout .printerCameraSaveActions button,
   .printerCameraSetupLayout .printerCameraDoneActions button{width:100%;min-height:44px}
   .printerCameraSetupLayout .printerCameraFlips{align-items:flex-start;flex-direction:column;gap:12px}
+}
+
+/* Slicer workbench: balanced configuration/profile management and consistent insets. */
+.slicerWorkbenchTop{display:grid;grid-template-columns:minmax(0,2fr) minmax(280px,1fr);gap:16px;align-items:start}
+.slicerWorkbenchTop>.panel{min-width:0;height:100%;padding:22px}
+.slicerWorkbenchTop .formGrid{gap:14px 16px}
+.slicerWorkbenchTop .formGrid label{min-width:0}
+.slicerWorkbenchTop .formGrid input,.slicerWorkbenchTop .formGrid select{max-width:100%}
+.slicerWorkbenchTop h3,.slicerProfileSidebar h4{margin-top:0;margin-bottom:14px}
+.slicerProfileSidebar{display:flex;flex-direction:column;gap:12px}
+.slicerProfileActions{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+.slicerProfileActions button{width:100%;min-width:0;min-height:48px;display:flex;align-items:center;justify-content:center;gap:9px;text-align:left}
+.slicerProfileActions button:last-child{grid-column:1/-1}
+.slicerProfileActions svg,.slicerProfileVerification svg{flex-shrink:0}
+.slicerSelectedProfiles{display:grid;grid-template-columns:1fr!important;gap:10px}
+.slicerSelectedProfiles label{grid-column:1/-1;display:grid;grid-template-columns:minmax(85px,0.65fr) minmax(0,1.6fr);align-items:center;gap:10px}
+.slicerSelectedProfiles label select{min-width:0}
+.slicerPlateFooter{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-top:12px}
+.slicerPlateFooter .slicerDraftActions{display:flex;justify-content:flex-end;gap:10px;flex-wrap:wrap;margin:0 0 0 auto}
+.slicerPlateActionHint{font-size:13px;color:var(--muted,#92a1b6);margin:0}
+@media(max-width:600px){.slicerSelectedProfiles label{grid-template-columns:1fr}.slicerPlateFooter .slicerDraftActions{width:100%}.slicerPlateFooter .slicerDraftActions button{flex:1}}
+
+.slicerWorkbenchTop+.panel,.slicerWorkbenchTop~.panel{padding:22px}
+.slicerWorkbenchTop~.panel .formGrid{gap:14px}
+@media(max-width:960px){.slicerWorkbenchTop{grid-template-columns:1fr}.slicerWorkbenchTop>.panel{height:auto}}
+
+.slicerPlateToolbar{display:flex;align-items:end;gap:12px;flex-wrap:wrap;margin:16px 0}
+.slicerPlateToolbar label{flex:1 1 260px;min-width:0}
+.slicerPlateToolbar button{flex:0 1 auto}
+@media(max-width:620px){.slicerPlateToolbar button{flex:1 1 100%}}
+
+/* Keep the visual slicer controls compact rather than stretching every field
+   to fill a wide desktop panel. */
+.slicerPlatePanel{padding:22px!important}
+.slicerPlatePanel>p{max-width:900px}
+.slicerPlatePanel>.formGrid{grid-template-columns:minmax(180px,360px) minmax(150px,250px);align-items:end;justify-content:start;column-gap:16px;row-gap:10px;margin:12px 0}
+.slicerPlatePanel>.formGrid>.full{grid-column:1/-1;max-width:650px}
+.slicerPlatePanel>.formGrid>.checkRow{margin:0}
+.slicerPlatePanel .formGrid:has(input[type="number"]){grid-template-columns:repeat(3,minmax(130px,220px));justify-content:start;align-items:end;gap:10px 14px}
+.slicerPlatePanel input[type="number"],.slicerPlatePanel input[type="color"]{max-width:220px}
+.slicerPlatePanel input[type="file"]{max-width:100%}
+.slicerPlatePanel .slicerPlateHint{font-size:12px;color:var(--muted,#92a1b6);margin:10px 0}
+.slicerPlatePanel .slicerPlateToolbar{margin:10px 0}
+.slicerPlatePanel .slicerPlateToolbar label{flex:0 1 360px}
+@media(max-width:720px){
+  .slicerPlatePanel>.formGrid,.slicerPlatePanel .formGrid:has(input[type="number"]){grid-template-columns:repeat(2,minmax(0,1fr))}
+  .slicerPlatePanel>.formGrid>.full{grid-column:1/-1}
+}
+@media(max-width:480px){
+  .slicerPlatePanel>.formGrid,.slicerPlatePanel .formGrid:has(input[type="number"]){grid-template-columns:minmax(0,1fr)}
+  .slicerPlatePanel>.formGrid>.full{grid-column:auto}
+}
+
+/* Editor workspace: maximise the preview while retaining a compact control rail. */
+.slicerPlateWorkspace{display:grid;grid-template-columns:minmax(0, 2.05fr) minmax(290px, 1fr);gap:18px;align-items:stretch;margin-top:16px}
+.slicerPlateCanvasColumn{min-width:0;min-height:0;display:flex;flex-direction:column;border:1px solid var(--border,#435365);border-radius:12px;background:#0f1720;padding:12px;overflow:hidden}
+.slicerPlateCanvas{width:100%;flex:1 1 auto;min-height:320px;height:auto;border-radius:9px;overflow:hidden;background:#0f1720;touch-action:none}
+.slicerPlateControls{min-width:0;display:flex;flex-direction:column;gap:16px}
+.slicerPlateControlsGroup{border:1px solid #2b3542;border-radius:12px;padding:16px;min-width:0;background:rgba(10,16,22,.35)}
+.slicerPlateControlsGroup h4{margin:0 0 12px}
+.slicerPlatePanel .slicerPlateControls .formGrid,
+.slicerPlatePanel .slicerPlateControls .formGrid:has(input[type="number"]){display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px 12px;margin:0}
+.slicerPlatePanel .slicerPlateControls .slicerPlateImportFields{grid-template-columns:1fr}
+.slicerPlatePanel .slicerPlateControls .formGrid>.full{grid-column:1/-1;max-width:none}
+.slicerPlatePanel .slicerPlateControls label{min-width:0}
+.slicerPlatePanel .slicerPlateControls input,
+.slicerPlatePanel .slicerPlateControls select{width:100%;max-width:100%;min-width:0}
+.slicerPlatePanel .slicerPlateControls .checkRow input{width:auto}
+.slicerPlatePanel .slicerPlateControls .settingsActions{display:flex;align-items:end;justify-content:flex-start;margin:0}
+.slicerPlateControls .slicerPlateToolbar{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin:0 0 12px}
+.slicerPlateControls .slicerPlateToolbar label{grid-column:1/-1;min-width:0}
+.slicerPlateControls .slicerPlateToolbar button{min-width:0;min-height:56px;height:100%;align-self:stretch;display:flex;align-items:center;justify-content:center;text-align:center;white-space:normal;line-height:1.35}
+.slicerPlatePanel .slicerPlateControls .slicerPlateHint{margin:0}
+@media(max-width:1050px){
+  .slicerPlateWorkspace{grid-template-columns:minmax(0,1.5fr) minmax(270px,1fr)}
+}
+@media(max-width:800px){
+  .slicerPlateWorkspace{grid-template-columns:1fr}
+  .slicerPlateCanvas{height:clamp(340px,48vh,550px);flex:none}
+  .slicerPlateControls{display:grid;grid-template-columns:repeat(2,minmax(0,1fr))}
+  .slicerPlateControls>.integrationError{grid-column:1/-1}
+}
+@media(max-width:560px){
+  .slicerPlateControls{grid-template-columns:1fr}
+  .slicerPlateCanvas{height:360px;flex:none}
+}
+
+/* Spool colour hints are informational; native slicing profiles remain separate. */
+.slicerSpoolColour{display:flex;align-items:center;gap:9px;flex-wrap:wrap;margin-top:8px;font-size:12px;color:#98a9bf}
+.slicerSpoolSwatch{display:inline-block;width:22px;height:16px;flex:0 0 22px;border:1px solid #657486;border-radius:4px}
+
+/* Slicer defaults and physical-spool suggestions are compact, supplementary
+   content inside the right-hand profile rail. */
+.slicerMaterialMatch{min-width:0;border:1px solid var(--border,#344052);border-radius:10px;padding:12px;display:flex;flex-direction:column;align-items:flex-start;gap:8px}
+.slicerMaterialMatch strong{font-size:13px}
+.slicerMaterialMatch p{margin:0;color:var(--muted,#99a6b8);font-size:12px;line-height:1.5}
+.slicerMaterialMatch button{max-width:100%;white-space:normal;text-align:center}
+.slicerProfileHint{font-size:12px;line-height:1.5;color:var(--muted,#99a6b8);margin:8px 0 12px}
+
+
+/* Reusable native slicer branding, sized for desktop and narrow mobile screens. */
+.slicerEngineSelection{display:flex;flex-direction:column;align-items:stretch;gap:10px;min-width:0}
+.slicerEngineSelectionLabel{font-size:.92rem}
+.slicerEngineChoices{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,210px),1fr));gap:10px;min-width:0}
+.slicerEngineChoice{display:flex;align-items:center;gap:12px;min-width:0;padding:12px;border:1px solid var(--border-color,#576575);border-radius:12px;background:var(--card-bg,transparent);cursor:pointer;transition:border-color .14s ease,background-color .14s ease}
+.slicerEngineChoice.isSelected{border:2px solid var(--accent,#32a89d);padding:11px;background:rgba(31,158,147,.08)}
+.slicerEngineChoice:focus-within{outline:2px solid var(--accent,#32a89d);outline-offset:2px}
+.slicerEngineChoice.isDisabled{opacity:.55;cursor:not-allowed}
+/* Override generic input width:100% and mobile min-height:44px.
+   The entire card is the accessible touch target; only the indicator is small. */
+.slicerEngineChoice input[type="radio"]{
+  appearance:auto;-webkit-appearance:radio;
+  display:block;flex:0 0 18px;
+  width:18px;min-width:18px;max-width:18px;
+  height:18px;min-height:18px;max-height:18px;
+  margin:0;padding:0;border:0;border-radius:50%;
+  box-shadow:none;accent-color:var(--accent,#32a89d);
+}
+.slicerEngineLogo{width:44px;height:44px;min-width:44px;object-fit:contain;border-radius:9px}
+.slicerEngineLogoSmall{width:28px;height:28px;min-width:28px}
+.slicerEngineLogoFallback{display:inline-flex;align-items:center;justify-content:center;font-size:.75rem;font-weight:700;background:rgba(120,130,145,.16)}
+.slicerEngineChoiceText{display:flex;flex-direction:column;min-width:0;gap:3px}
+.slicerEngineChoiceText strong,.slicerEngineChoiceText small{overflow-wrap:anywhere}
+.slicerEngineChoiceText small{font-size:.76rem;opacity:.75}
+.slicerEngineChoiceInfo{cursor:default;flex-wrap:wrap}
+.slicerEngineInstallHint{width:100%;font-size:.76rem;opacity:.75;padding-left:56px}
+.slicerEngineManageLink{align-self:flex-start;font-size:.85rem}
+@media(max-width:600px){
+  .slicerEngineChoices{grid-template-columns:minmax(0,1fr);gap:9px}
+  .slicerEngineChoice{display:flex;flex-direction:row;align-items:center;flex-wrap:nowrap;gap:11px;padding:11px;min-height:64px}
+  .slicerEngineChoice.isSelected{padding:10px}
+  .slicerEngineChoice input[type="radio"]{
+    flex:0 0 18px;width:18px;min-width:18px;max-width:18px;
+    height:18px;min-height:18px;max-height:18px;
+  }
+  .slicerEngineChoice .slicerEngineLogo{width:36px;height:36px;min-width:36px;flex:0 0 36px}
+  .slicerEngineChoiceText{flex:1 1 auto;gap:3px}
+  .slicerEngineChoiceText strong{font-size:.9rem;line-height:1.25}
+  .slicerEngineChoiceText small{font-size:.76rem;line-height:1.3}
+  .slicerEngineChoiceInfo{flex-wrap:wrap}
+  .slicerEngineInstallHint{padding-left:0}
+}
+
+
+/* Slicer workbench layout polish (profile / draft / build plate). */
+.slicerProfileSidebar .slicerProfileRecommendationActions{
+  display:flex;justify-content:flex-end;margin-top:auto;padding-top:16px;
+}
+.slicerProfileSidebar .slicerProfileRecommendationActions button{max-width:100%;width:auto}
+.slicerWorkbenchTop .slicerNativeVolume{
+  grid-column:1/-1;display:flex;align-items:center;justify-content:space-between;gap:12px;
+  min-width:0;margin:16px 0 4px;padding:14px 16px;border:1px solid var(--border-color,#435365);
+  border-radius:10px;background:rgba(120,130,145,.045);flex-wrap:wrap;
+}
+.slicerNativeVolume strong{font-size:.9rem}
+.slicerNativeVolume span{font-variant-numeric:tabular-nums;white-space:nowrap}
+.slicerWorkbenchTop .slicerDraftActions{
+  grid-column:1/-1;display:flex;justify-content:flex-end;align-items:center;margin-top:18px;
+  padding-top:10px;
+}
+.slicerWorkbenchTop .slicerDraftActions .settingsActions{
+  display:flex;gap:10px;justify-content:flex-end;flex-wrap:wrap;margin:0;
+}
+.slicerPlatePanel .slicerPlateSaveImports{
+  display:flex!important;flex-direction:row!important;align-items:center!important;
+  justify-content:flex-start!important;gap:10px;grid-column:1/-1;
+  width:100%;min-width:0;margin:6px 0 0;line-height:1.4;
+}
+.slicerPlatePanel .slicerPlateSaveImports input[type="checkbox"]{
+  display:block!important;flex:0 0 18px!important;width:18px!important;
+  height:18px!important;min-width:18px!important;max-width:18px!important;
+  margin:0!important;align-self:center!important;
+}
+.slicerPlateSaveImports span{flex:1;min-width:0}
+.slicerPlateHeading{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;margin-bottom:12px}
+.slicerPlateHeading h3{margin:0}
+.slicerPlateHeading button{flex:0 0 auto}
+@media(max-width:600px){
+  .slicerPlateHeading{align-items:stretch}
+  .slicerPlateHeading button{width:100%}
+  .slicerProfileSidebar .slicerProfileRecommendationActions button{width:100%}
+}
+
+/* Keep profile searching navigable while preserving the current catalogue and
+   search input between an official search and local-file import. */
+.slicerProfileNavigation{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:0 0 16px}
+.slicerProfileNavigation button{display:inline-flex;align-items:center;gap:6px}
+.slicerProfileImportNotice{padding:10px 12px;border:1px solid var(--border,#435365);border-radius:8px;margin:12px 0}
+
+/* Keep action results visible beside the buttons at the end of the plate
+   workflow, rather than only above the configuration area. */
+.slicerPlateActionFeedback{flex:1 1 260px;min-width:0}
+.slicerPlateActionFeedback p{margin:0}
+.slicerPlateActionFeedback .integrationError{max-width:100%;overflow-wrap:anywhere}
+
+/* Keep the 3D canvas and its caption within the same full-height pane as the
+   model controls; slice actions remain a separate, right-aligned footer. */
+.slicerPlateCanvasColumn>.slicerPlateHint:last-child{margin-bottom:0}
+.slicerPlatePanel .slicerPlateFooter{margin-top:18px}
+
+/* Slicer-specific post-slice review: estimates above a scroll-safe layer view. */
+.slicerResultStats{display:grid;grid-template-columns:repeat(auto-fit,minmax(135px,1fr));gap:10px;margin:14px 0}
+.slicerResultStats>div{border:1px solid var(--border,#394958);border-radius:10px;padding:12px;min-width:0;display:flex;flex-direction:column;gap:6px}
+.slicerResultStats small{color:var(--muted,#96a7b8)}
+.slicerResultStats strong{font-size:1.1rem;overflow-wrap:anywhere}
+.slicerResultToolpath{display:block;width:min(100%,590px);height:auto;max-height:540px;margin:12px auto;background:#101820;border-radius:10px;border:1px solid var(--border,#394958)}
+.slicerResultFeatures{display:flex;flex-wrap:wrap;gap:8px 16px;margin:12px 0}
+.slicerResultFeatures span{display:inline-flex;align-items:center;gap:6px;font-size:.85rem}
+.slicerResultFeatures i{display:inline-block;width:11px;height:11px;border-radius:3px}
+.slicerResultPreview>label{display:block;max-width:650px}
+.slicerResultPreview input[type=range]{display:block;width:100%;margin:9px 0}
+
+
+/* Full interactive slicer Prepare view; setup and engine-native profiles stay separate. */
+.slicerSetupHeading,.slicerPrepareHeader{display:flex;justify-content:space-between;align-items:flex-start;gap:16px;flex-wrap:wrap}
+.slicerPrepareWorkspace{min-width:0}
+.slicerPrepareHeader p{color:var(--muted,#9aafc3);margin:6px 0 0}
+.slicerPrepareTools{display:flex;flex-wrap:wrap;gap:6px;padding:12px 0;margin:12px 0;border-top:1px solid var(--border,#3e4c5b);border-bottom:1px solid var(--border,#3e4c5b)}
+.slicerPrepareTools button{font-size:.83rem;white-space:nowrap}
+.slicerPrepareTools button:disabled{opacity:.38;cursor:not-allowed}
+.slicerPrepareStructure{display:grid;grid-template-columns:minmax(150px,220px) minmax(0,1fr) minmax(200px,270px);gap:12px;align-items:start}
+.slicerPrepareTree,.slicerPrepareSettings{min-width:0;padding:12px;border:1px solid var(--border,#3e4c5b);border-radius:12px;background:var(--surface-2,#101924)}
+.slicerPrepareTree h4,.slicerPrepareSettings h4{margin:0 0 12px}
+.slicerPrepareTree>button,.slicerPrepareSettings nav button{display:flex;align-items:center;text-align:left;gap:8px;width:100%;min-width:0;overflow-wrap:anywhere;padding:9px;margin-bottom:4px}
+.slicerPrepareTree>button span:first-child{width:12px;height:12px;flex:0 0 12px;border-radius:3px}
+.slicerPrepareTree button.selected,.slicerPrepareSettings button.selected{outline:1px solid var(--accent,#8c71e6);background:rgba(138,112,229,.12)}
+.slicerPrepareTree small,.slicerPrepareSettings p{display:block;color:var(--muted,#9aafc3);font-size:.82rem}
+.slicerPrepareScopes{display:flex;gap:7px;margin-bottom:12px}
+.slicerPrepareSettings nav{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:3px;margin-bottom:16px}
+.slicerPrepareSettings nav button{font-size:.78rem}
+.slicerPrepareScene{min-width:0}
+.slicerPrepareScene>.slicerPlatePanel{margin:0;padding:12px}
+.slicerPrepareScene .slicerPlateWorkspace{grid-template-columns:minmax(0,1fr);gap:12px}
+.slicerPrepareScene .slicerPlateCanvas{height:clamp(350px,58vh,820px);flex:none}
+.slicerPrepareScene .slicerPlateCanvasColumn{min-height:0}
+.slicerPrepareScene .slicerPlateControls{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+.slicerPrepareScene .slicerPlateControlsGroup{min-width:0}
+.slicerPrepareActions{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-top:16px}
+@media(max-width:1150px){
+  .slicerPrepareStructure{grid-template-columns:minmax(140px,190px) minmax(0,1fr)}
+  .slicerPrepareSettings{grid-column:1/-1}
+  .slicerPrepareSettings nav{grid-template-columns:repeat(3,minmax(0,1fr))}
+}
+@media(max-width:760px){
+  .slicerPrepareStructure{grid-template-columns:minmax(0,1fr)}
+  .slicerPrepareScene{grid-row:1}
+  .slicerPrepareTree,.slicerPrepareSettings{grid-column:1}
+  .slicerPrepareScene .slicerPlateControls{grid-template-columns:minmax(0,1fr)}
+  .slicerPrepareSettings nav{grid-template-columns:repeat(2,minmax(0,1fr))}
+}
+
+
+/* Preview stage: explicit bounded extrusion sample, vertical layers/horizontal steps. */
+.slicerResultModeRow{display:flex;align-items:end;gap:18px;flex-wrap:wrap;margin:12px 0}
+.slicerResultModeRow>label:first-child{display:flex;align-items:center;gap:9px}
+.slicerResultModeRow select{width:auto;max-width:220px}
+.slicerResultLayerLayout{display:grid;grid-template-columns:minmax(0,1fr) minmax(62px,95px);align-items:stretch;gap:16px;max-width:800px;margin:12px auto}
+.slicerResultViewport{min-width:0}
+.slicerResultViewport .slicerResultToolpath{margin:0 auto;width:min(100%,600px)}
+.slicerResultLayerSlider{display:flex;flex-direction:column;align-items:center;justify-content:space-between;gap:10px;min-width:0;padding:12px 4px;border:1px solid var(--border,#394958);border-radius:10px}
+.slicerResultLayerSlider span{writing-mode:initial;text-align:center;line-height:1.2;font-size:.75rem}
+.slicerResultLayerSlider input[type=range]{writing-mode:vertical-lr;direction:rtl;flex:1 1 auto;min-height:240px;width:28px;margin:8px auto}
+.slicerResultSteps{padding:10px 0}
+.slicerResultSteps label{display:block;font-size:.85rem}
+.slicerResultSteps input[type=range]{width:100%;margin:12px 0}
+.slicerResultSteps .settingsActions{justify-content:center}
+.slicerResultVisibility{display:flex;flex-wrap:wrap;gap:8px 15px;border:1px solid var(--border,#394958);border-radius:10px;padding:10px;margin:15px 0}
+.slicerResultVisibility legend{font-weight:600}
+.slicerResultVisibility label{font-size:.82rem;white-space:nowrap}
+.slicerResultVisibility i{width:11px;height:11px;display:inline-block;border-radius:2px}
+@media(max-width:550px){.slicerResultLayerLayout{grid-template-columns:minmax(0,1fr) 58px;gap:7px}.slicerResultLayerSlider input[type=range]{min-height:190px}}
+
+
+.slicerAxisScaling{border:1px solid var(--border,#394958);border-radius:9px;padding:10px;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
+.slicerAxisScaling legend{font-size:.86rem;font-weight:600;padding:0 5px}
+.slicerAxisScaling label{min-width:0}
+@media(max-width:500px){.slicerAxisScaling{grid-template-columns:minmax(0,1fr)}}
+
+/* Read-only 3D slicer preview (shared controls with sampled layer/step inspector). */
+/* The G-code viewer is a visual workstation, not an 860px form. Give the
+   3D viewport room without changing ordinary dialogs or mobile layouts. */
+@media (min-width: 900px) {
+  .modal.slicerPreviewModal { width:min(1480px,calc(100vw - 40px)); }
+  .slicerPreviewModal .slicerResultLayerLayout {
+    max-width:none;
+    grid-template-columns:minmax(0,1fr) minmax(68px,94px);
+  }
+  .slicerPreviewModal .slicerToolpath3DCanvas {
+    height:clamp(480px,67vh,850px);
+  }
+}
+.slicerPreviewModal .slicerResultModeRow { flex-wrap:wrap;gap:12px 16px; }
+.slicerPreviewModal .slicerResultViewport {min-width:0}
+
+.slicerToolpath3D{width:100%;min-width:0}
+.slicerToolpath3DCanvas{width:100%;height:clamp(340px,58vh,720px);background:#111b27;border:1px solid var(--border,#394958);border-radius:12px;overflow:hidden;touch-action:none}
+.slicerToolpath3D>small{display:block;color:var(--muted,#9aafc3);margin-top:7px;text-align:center}
+.slicerToolpath3DCanvas canvas{outline:none}
+@media(max-width:650px){.slicerToolpath3DCanvas{height:380px}}
+
+
+/* Slicer UI consistency: prevent nested panels, buttons, labels and long
+   profile names from overflowing their responsive grid tracks. */
+.slicerPrepareWorkspace{box-sizing:border-box;min-width:0;padding:clamp(16px,2vw,26px)!important}
+.slicerPrepareWorkspace *, .slicerPrepareWorkspace *::before,.slicerPrepareWorkspace *::after{box-sizing:border-box}
+.slicerPrepareHeader{align-items:center;margin-bottom:18px}
+.slicerPrepareHeader>div{flex:1 1 320px;min-width:0}
+.slicerPrepareHeader h3{margin:7px 0 9px;line-height:1.3}
+.slicerPrepareHeader p{line-height:1.55;overflow-wrap:anywhere}
+.slicerChangeProfiles{display:inline-flex;align-items:center;gap:8px;min-height:42px;flex:0 0 auto}
+.slicerPrepareTools{display:flex;align-items:center;gap:8px;padding:14px 0;margin:0 0 18px;flex-wrap:wrap}
+.slicerPrepareTools button{display:inline-flex;align-items:center;justify-content:center;
+  flex:0 0 42px;width:42px;height:42px;min-width:42px;min-height:42px;padding:8px;
+  line-height:1;white-space:nowrap}
+.slicerPrepareTools button.isActive{background:rgba(138,112,229,.22);border-color:#ad9dfb;color:#ded6ff}
+.slicerUiIcon{display:block;flex-shrink:0}
+.slicerPrepareStructure{grid-template-columns:minmax(165px,210px) minmax(0,1fr) minmax(220px,285px);
+  gap:16px;align-items:start;min-width:0}
+.slicerPrepareStructure > *{min-width:0;max-width:100%}
+.slicerPrepareTree,.slicerPrepareSettings{padding:16px;overflow:hidden}
+.slicerPrepareTree h4,.slicerPrepareSettings h4{line-height:1.4;margin:0 0 16px}
+.slicerPrepareTree>button{font-size:.85rem;line-height:1.4;padding:10px}
+.slicerPrepareTree>button span:last-child{min-width:0;overflow-wrap:anywhere}
+.slicerPrepareTree small{line-height:1.55;margin-top:14px}
+.slicerPrepareSettings{display:flex;flex-direction:column;gap:13px}
+.slicerPrepareSettings p{margin:0;line-height:1.55;overflow-wrap:anywhere;min-width:0}
+.slicerPrepareSettings nav{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin:0 0 10px}
+.slicerPrepareSettings nav button{display:inline-flex;align-items:center;gap:7px;
+  padding:9px 7px;min-height:40px;margin:0;line-height:1.35;font-size:.77rem}
+.slicerPrepareSettings nav button span{min-width:0;overflow-wrap:anywhere}
+.slicerPrepareScopes{gap:8px;margin-bottom:2px}
+.slicerPrepareScopes button{flex:1 1 0;min-width:0;padding:9px 5px}
+.slicerPrepareSettings .projectUploadHint{padding:12px;background:rgba(120,140,160,.06);
+  border:1px solid var(--border,#394958);border-radius:9px}
+.slicerPrepareScene>.slicerPlatePanel{min-width:0;max-width:100%;padding:16px;overflow:hidden}
+.slicerPrepareScene .slicerPlateHeading{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+.slicerPrepareScene .slicerPlateHeading h3{margin:0;flex:1 1 150px}
+.slicerPrepareScene .slicerPlatePanel>p{line-height:1.55;margin:12px 0}
+.slicerPrepareScene .slicerPlateWorkspace{margin-top:14px;min-width:0}
+.slicerPrepareScene .slicerPlateCanvasColumn{min-width:0}
+.slicerPrepareScene .slicerPlateControls{display:flex;flex-direction:column;gap:14px}
+.slicerPrepareScene .slicerPlateControlsGroup{min-width:0;max-width:100%}
+.slicerPrepareScene .slicerPlateControls .formGrid,
+.slicerPrepareScene .slicerPlateControls .formGrid:has(input[type="number"]){grid-template-columns:repeat(2,minmax(0,1fr))}
+.slicerPrepareScene .slicerPlateControls .slicerPlateImportFields{grid-template-columns:minmax(0,1fr)}
+.slicerPrepareScene .slicerPlateControls .formGrid>label{min-width:0;max-width:100%;overflow-wrap:anywhere}
+.slicerPrepareScene .slicerPlateControls input,
+.slicerPrepareScene .slicerPlateControls select{max-width:100%}
+.slicerPrepareActions{padding:16px 0 0;margin-top:18px;border-top:1px solid var(--border,#394958)}
+.slicerPrepareActions .settingsActions{display:flex;flex-wrap:wrap;gap:10px}
+.slicerChangeProfileGrid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px;margin:20px 0}
+.slicerChangeProfileGrid>label{min-width:0;display:flex;flex-direction:column;gap:7px}
+.slicerChangeProfileGrid select{min-width:0;width:100%;max-width:100%}
+.slicerChangeProfileActions{justify-content:flex-end;margin-top:16px}
+.slicerEngineChoiceInfo{align-content:start;margin:0}
+.slicerEngineChoices:has(.slicerEngineChoiceInfo){row-gap:18px;column-gap:12px;margin:18px 0 26px}
+.slicerEngineChoices:has(.slicerEngineChoiceInfo)+.printingActionGroup{margin-top:24px}
+.slicerEngineInstallHint{padding-left:0;margin-top:6px}
+.slicerResultVisibility{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));
+  align-items:center;gap:10px 14px;min-width:0;padding:16px;margin:18px 0}
+.slicerResultVisibility legend{padding:0 7px;line-height:1.4}
+.slicerResultVisibility label{display:grid;grid-template-columns:18px 13px minmax(0,1fr);
+  gap:10px;align-items:center;min-width:0;white-space:normal;line-height:1.35;cursor:pointer}
+.slicerResultVisibility input[type="checkbox"]{margin:0;width:16px;height:16px}
+.slicerResultVisibility i{width:12px;height:12px}
+@media(max-width:1300px){
+  .slicerPrepareStructure{grid-template-columns:minmax(165px,195px) minmax(0,1fr)}
+  .slicerPrepareSettings{grid-column:1/-1}
+  .slicerPrepareSettings nav{grid-template-columns:repeat(3,minmax(0,1fr))}
+}
+@media(max-width:850px){
+  .slicerPrepareStructure{grid-template-columns:minmax(0,1fr)}
+  .slicerPrepareScene{grid-row:1}
+  .slicerPrepareTree,.slicerPrepareSettings{grid-column:1}
+  .slicerPrepareSettings nav{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .slicerChangeProfileGrid{grid-template-columns:minmax(0,1fr)}
+}
+@media(max-width:550px){
+  .slicerPrepareWorkspace{padding:14px!important}
+  .slicerPrepareTools button{flex-basis:40px;width:40px;min-width:40px;height:40px;min-height:40px}
+  .slicerPrepareHeader .slicerChangeProfiles{width:100%;justify-content:center}
+  .slicerResultVisibility{grid-template-columns:minmax(0,1fr)}
+}
+
+
+/* Provider-neutral live CFS/AMS/RFID slot inventory; read-only until engine
+   native multi-material mapping and painting round-trip are verified. */
+.slicerLiveMaterialSlots{min-width:0;display:flex;flex-direction:column;gap:9px;
+  border:1px solid var(--border,#394958);border-radius:10px;padding:12px;margin-top:4px}
+.slicerLiveMaterialHeader{display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap}
+.slicerLiveMaterialHeader strong{font-size:.83rem}
+.slicerLiveMaterialHeader button{padding:6px 10px;min-height:34px}
+.slicerLiveMaterialSlot{display:flex;align-items:flex-start;gap:9px;padding:8px 0;
+  border-top:1px solid var(--border,#394958);min-width:0}
+.slicerLiveMaterialSwatch{width:18px;height:18px;border-radius:4px;flex:0 0 18px;
+  border:1px solid #718195}
+.slicerLiveMaterialSlot>div{min-width:0;display:flex;flex-direction:column;gap:4px}
+.slicerLiveMaterialSlot strong{font-size:.8rem;overflow-wrap:anywhere;line-height:1.4}
+.slicerLiveMaterialSlot small{color:var(--muted,#9aafc3);font-size:.76rem;overflow-wrap:anywhere;line-height:1.4}
+.slicerLiveMaterialSlots>p{margin:4px 0 0;font-size:.76rem}
+
+
+/* Editing toolbar tooltips: hover even when buttons are disabled, show on
+   keyboard focus, and don't obscure the button or intercept pointer events. */
+.slicerPrepareTools .slicerToolTooltip{display:inline-flex;position:relative;flex:0 0 42px;width:42px;height:42px;min-width:42px}
+.slicerPrepareTools .slicerToolTooltip>button{width:100%;height:100%;min-width:0;min-height:0}
+.slicerToolTooltip::after{content:attr(data-tooltip);position:absolute;z-index:30;
+  left:50%;top:calc(100% + 9px);transform:translateX(-50%) translateY(-3px);
+  box-sizing:border-box;width:max-content;max-width:min(260px,calc(100vw - 40px));
+  padding:8px 11px;border-radius:8px;border:1px solid #536079;background:#202b3b;
+  color:#eef3ff;font-size:12px;font-weight:500;line-height:1.45;text-align:center;
+  white-space:normal;box-shadow:0 9px 20px rgba(0,0,0,.35);opacity:0;
+  visibility:hidden;pointer-events:none;transition:opacity .12s,transform .12s,visibility .12s}
+.slicerToolTooltip:hover::after,.slicerToolTooltip:focus-within::after{
+  visibility:visible;opacity:1;transform:translateX(-50%) translateY(0)}
+@media(max-width:550px){
+  .slicerPrepareTools .slicerToolTooltip{flex-basis:40px;width:40px;height:40px;min-width:40px}
+}
+
+/* Keep the staging slicer availability notice readable and visually separate
+   from the workbench at desktop and mobile widths. */
+.slicerPreviewNotice{
+  display:grid;
+  gap:10px;
+  padding:20px 24px;
+  margin-bottom:20px;
+  align-content:start;
+}
+.slicerPreviewNotice strong{
+  display:block;
+  margin:0;
+  font-size:16px;
+  line-height:1.4;
+}
+.slicerPreviewNotice p{
+  margin:0;
+  color:var(--muted,#aeb8c7);
+  line-height:1.55;
+  overflow-wrap:anywhere;
+}
+@media(max-width:620px){
+  .slicerPreviewNotice{padding:16px 18px;margin-bottom:16px;gap:8px}
+}
+
+/* Interactive slicer: keep plate controls and side panels on the same grid,
+   without stray internal dividers or horizontal overflow. */
+.slicerPrepareStructure{align-items:stretch}
+.slicerPrepareStructure>.slicerPrepareScene{align-self:stretch;min-width:0;overflow:visible}
+.slicerPrepareScene>.slicerPlatePanel{width:100%;height:100%;margin:0;border-radius:12px}
+.slicerPrepareScene .slicerPlateWorkspace{width:100%;min-width:0;align-items:stretch}
+.slicerPrepareScene .slicerPlateCanvasColumn,
+.slicerPrepareScene .slicerPlateControls{width:100%;min-width:0}
+.slicerPrepareScene .slicerPlateControls{padding:0;border:0}
+.slicerPrepareScene .slicerPlateControlsGroup{width:100%;box-sizing:border-box}
+.slicerPrepareScene .slicerPlateControls .slicerPlateToolbar button{min-height:44px}
+.slicerPrepareTree,.slicerPrepareSettings{align-self:start}
+.slicerPrepareSettings .slicerLiveMaterialSlots{width:100%;margin-top:8px}
+.slicerPrepareSettings .slicerLiveMaterialHeader{align-items:center}
+.slicerPrepareSettings .slicerLiveMaterialHeader button{flex:0 0 auto}
+@media(max-width:850px){
+  .slicerPrepareStructure{align-items:start}
+  .slicerPrepareScene>.slicerPlatePanel{height:auto}
+}
+
+/* Native select menus cannot show swatches consistently. Keep the spool picker
+   aligned with the form and scroll options inside its own bounded popover. */
+.slicerSpoolField{min-width:0;display:flex;flex-direction:column;gap:7px}
+.slicerSpoolFieldLabel{color:#aeb8c7;font-size:13px}
+.slicerSpoolPicker{position:relative;min-width:0;width:100%}
+.slicerSpoolPickerTrigger{width:100%;display:flex;align-items:center;text-align:left;gap:11px;
+  min-width:0;min-height:46px;background:#0c1219;border:1px solid #354151;
+  border-radius:9px;padding:10px 12px;font-weight:450}
+.slicerSpoolPickerTrigger:hover:not(:disabled){background:#131d28;border-color:#8069ee}
+.slicerSpoolPickerName{flex:1;min-width:0;overflow-wrap:anywhere}
+.slicerSpoolPickerChevron{flex:0 0 auto;color:#aeb8c7}
+.slicerSpoolPickerSwatch{display:inline-block;flex:0 0 20px;width:20px;height:20px;
+  border:1px solid #748193;border-radius:5px;box-shadow:0 0 0 1px rgba(0,0,0,.12)}
+.slicerSpoolPickerSwatch.isUnknown{background:repeating-linear-gradient(45deg,#293441 0 5px,#4d5968 5px 10px)}
+/* Keep the expanded chooser in the document flow: setup panels use
+   overflow:hidden, which clips an absolutely positioned dropdown. The
+   enclosing card grows instead of obscuring the options and adjacent panels. */
+.slicerSpoolPickerMenu{position:relative;z-index:auto;top:auto;left:auto;right:auto;
+  width:100%;min-width:0;margin-top:8px;background:#0c1219;
+  border:1px solid #435365;border-radius:12px;padding:9px;box-shadow:none}
+.slicerSpoolPickerMenu>input{width:100%;margin-bottom:8px}
+.slicerSpoolPickerOptions{max-height:min(340px,50vh);overflow-y:auto;overscroll-behavior:contain}
+.slicerSpoolPickerOption{display:flex;align-items:center;gap:11px;width:100%;min-width:0;
+  border:0;border-radius:7px;padding:10px 9px;background:transparent;text-align:left;
+  color:#e9eef7;font-weight:450;line-height:1.35}
+.slicerSpoolPickerOption:hover,.slicerSpoolPickerOption:focus-visible{background:#243144}
+.slicerSpoolPickerOption[aria-selected="true"]{background:#25223c}
+.slicerSpoolPickerSelected{color:#b5a6ff;flex:0 0 auto}
+.slicerSpoolPickerEmpty{margin:0;padding:12px;color:#aeb8c7}
+
+/* Selected printer identity sits directly above the object tree. Both cards
+   share the same left-rail width and responsive stacking behaviour. */
+.slicerPrepareLeftRail{display:flex;flex-direction:column;gap:14px;min-width:0;max-width:100%;align-self:start}
+.slicerPrepareLeftRail>.slicerPrepareTree{width:100%;min-width:0;max-width:100%}
+.slicerPreparePrinter{display:flex;flex-direction:column;gap:10px;min-width:0;
+  padding:16px;border:1px solid var(--border,#3e4c5b);border-radius:12px;background:var(--surface-2,#101924)}
+.slicerPreparePrinterCaption{font-size:.72rem;text-transform:uppercase;letter-spacing:.09em;color:#9c8dff;font-weight:750}
+.slicerPreparePrinter>strong{font-size:.88rem;line-height:1.45;overflow-wrap:anywhere}
+.slicerPreparePrinterMeta{display:flex;flex-direction:column;gap:5px;font-size:.8rem;color:#b5c2d4;line-height:1.45}
+.slicerPreparePrinterProfile{font-size:.76rem;color:#91a4bc;line-height:1.45;overflow-wrap:anywhere}
+.slicerPreparePrinter button{width:100%;min-height:38px;padding:8px;font-size:.8rem;white-space:normal}
+@media(max-width:1300px){.slicerPrepareLeftRail{grid-column:1}}
+@media(max-width:850px){.slicerPrepareLeftRail{grid-column:1;grid-row:auto}}
+
+/* Clear local explanations for unavailable draft/slice actions. */
+.slicerPrepareActions .slicerActionStatus{margin:0 0 10px;line-height:1.5;font-size:.84rem;color:var(--muted,#9aafc3)}
+.slicerPrepareActions .slicerActionStatus strong{color:inherit}
+.slicerPrepareActions .slicerActionStatus button{display:inline-flex;align-items:center;min-height:30px;
+  padding:5px 9px;margin:5px 0 0 9px;font-size:.8rem;white-space:normal}
+
+/* Per-model material preview selector, shared with provider-neutral live slots.
+   Keeps the object tree compact and avoids a clipped floating dropdown. */
+.slicerPrepareModelEntry{display:flex;flex-direction:column;gap:3px;min-width:0;margin-bottom:5px}
+.slicerPrepareModelEntry>button:first-child{display:flex;align-items:center;text-align:left;gap:8px;width:100%;
+  min-width:0;overflow-wrap:anywhere;padding:10px;margin:0}
+.slicerPrepareModelEntry>button:first-child span:last-child{min-width:0;overflow-wrap:anywhere}
+.slicerPrepareModelSwatch{width:14px;height:14px;flex:0 0 14px;border-radius:4px;border:1px solid #465668}
+.slicerPrepareTree .slicerModelChangeFilament{width:100%;min-height:32px;padding:6px 9px;margin:0 0 9px;
+  font-size:.76rem;text-align:center;white-space:normal;color:#c6d6ea}
+.slicerModelFilamentChoices{display:flex;flex-direction:column;gap:5px;padding:9px;
+  background:#0c1219;border:1px solid #435365;border-radius:9px;margin-bottom:10px;min-width:0}
+.slicerModelFilamentChoices>strong{font-size:.75rem;color:#b4c2d4;line-height:1.4}
+.slicerPrepareTree .slicerModelFilamentChoices>button{display:flex;align-items:center;gap:8px;min-width:0;
+  width:100%;padding:7px 5px;margin:0;text-align:left;border:0;background:transparent;
+  font-size:.76rem;font-weight:450;line-height:1.35;white-space:normal;overflow-wrap:anywhere}
+.slicerPrepareTree .slicerModelFilamentChoices>button:hover:not(:disabled){background:#243144}
+.slicerModelFilamentChoices .slicerLiveMaterialSwatch{width:16px;height:16px;flex:0 0 16px}
+.slicerModelFilamentChoices small,.slicerModelFilamentNotice{font-size:.73rem;line-height:1.5;
+  color:var(--muted,#9aafc3);overflow-wrap:anywhere}
+.slicerModelFilamentNotice{margin:2px 0 10px}
+
+/* Select printer and nozzle without leaving interactive Prepare; keep native
+   profiles grouped below with room for a clear change-of-machine warning. */
+.slicerChangeProfileGrid .slicerChangePrinterHint{grid-column:1/-1;margin:0;
+  font-size:.81rem;line-height:1.5;color:var(--muted,#aeb9c9)}
+.slicerChangeProfileGrid>label{min-width:0}
+.slicerChangeProfileGrid select,.slicerChangeProfileGrid input{width:100%;max-width:100%}
+
+/* Slicer setup: equal gutters, grouped profile controls and predictable
+   vertical rhythm. Scope these rules to avoid changing other MakerVault
+   screens or modals. */
+.slicerWorkbenchTop{column-gap:20px;row-gap:20px;align-items:stretch}
+.slicerWorkbenchTop>.panel{box-sizing:border-box;min-width:0;height:auto;padding:24px}
+.slicerWorkbenchTop .slicerProfileSidebar{
+  gap:0;
+  align-self:stretch;
+}
+.slicerWorkbenchTop .slicerProfileSidebar>h3{margin:0 0 12px}
+.slicerWorkbenchTop .slicerProfileSidebar>p:first-of-type{margin:0 0 20px;line-height:1.55}
+.slicerWorkbenchTop .slicerProfileActions{gap:12px;margin:0 0 24px}
+.slicerWorkbenchTop .slicerProfileSidebar>h4{margin:0 0 12px;line-height:1.4}
+.slicerWorkbenchTop .slicerSelectedProfiles{
+  display:grid;grid-template-columns:minmax(0,1fr)!important;
+  gap:14px;margin:0 0 22px
+}
+.slicerWorkbenchTop .slicerSelectedProfiles label{
+  min-width:0;grid-column:1/-1;
+  grid-template-columns:minmax(88px,.68fr) minmax(0,1.6fr);
+  column-gap:12px;row-gap:7px;
+}
+.slicerWorkbenchTop .slicerSelectedProfiles select{min-width:0;width:100%;max-width:100%}
+.slicerWorkbenchTop .slicerMaterialMatch{
+  min-width:0;margin:0 0 24px;padding:14px 16px;
+  border-radius:10px;box-sizing:border-box
+}
+.slicerWorkbenchTop .slicerProfileHint{margin:-6px 0 22px;line-height:1.5}
+.slicerWorkbenchTop .slicerProfileSidebar>.checkRow{margin:0 0 12px;align-items:center}
+.slicerWorkbenchTop .slicerProfileSidebar>.formGrid{margin:0 0 16px;gap:12px}
+.slicerWorkbenchTop .slicerProfileRecommendationActions{
+  margin-top:auto;padding-top:20px
+}
+@media(max-width:640px){
+  .slicerWorkbenchTop>.panel{padding:18px}
+  .slicerWorkbenchTop .slicerSelectedProfiles label{grid-template-columns:minmax(0,1fr)}
+}
+
+/* Saved slicer profiles: align icon/text as a real button flex row, rather
+   than inheriting global settingsActions button styles and inline SVG baseline. */
+.slicerSavedProfileToolbar{
+  display:flex;flex-wrap:wrap;align-items:center;justify-content:flex-end;
+  gap:12px;margin:16px 0 22px;
+}
+.slicerSavedProfileToolbar>button{
+  display:inline-flex;flex:0 0 auto;align-items:center;justify-content:center;
+  gap:10px;min-height:44px;max-width:100%;line-height:1.3;
+  white-space:normal;
+}
+.slicerSavedProfileToolbar>button>svg{
+  display:block;flex:0 0 18px;width:18px;height:18px;
+  align-self:center;vertical-align:middle;
+}
+.slicerSavedProfileToolbar>button>span{
+  display:block;line-height:1.3;
+}
+.slicerSavedProfileToolbar>.slicerDependencyToggle{
+  display:inline-flex;align-items:center;gap:10px;min-height:44px;
+  min-width:0;max-width:100%;width:auto;margin:0;padding:0;
+  line-height:1.4;
+}
+.slicerSavedProfileToolbar>.slicerDependencyToggle>input[type="checkbox"]{
+  display:block;flex:0 0 18px;width:18px;height:18px;min-width:18px;
+  max-width:18px;margin:0;align-self:center;
+}
+.slicerSavedProfileToolbar>.slicerDependencyToggle>span{
+  display:block;min-width:0;line-height:1.4;
+}
+/* Keep native profile-file alternative separated from the official search
+   submit button even though these are separate form/action containers. */
+.slicerOfficialImportAlternative{margin:20px 0 22px;gap:12px}
+@media(max-width:700px){
+  .slicerSavedProfileToolbar{display:flex!important;flex-direction:column;align-items:stretch}
+  .slicerSavedProfileToolbar>button{width:100%;justify-content:center}
+  .slicerSavedProfileToolbar>.slicerDependencyToggle{width:100%}
+}
+
+/* Saved slicer profile catalogue filters. Deliberately separate from action
+   toolbar; aligned fields wrap before they become cramped on smaller screens. */
+.slicerSavedProfileFilters{
+  display:grid;grid-template-columns:repeat(4,minmax(0,1fr));
+  gap:14px;margin:14px 0 10px;align-items:end;
+}
+.slicerSavedProfileFilters>label{
+  display:flex;flex-direction:column;gap:7px;min-width:0;
+  font-size:.86rem;line-height:1.4;
+}
+.slicerSavedProfileFilters select,.slicerSavedProfileFilters input{
+  display:block;width:100%;max-width:100%;min-width:0;
+  box-sizing:border-box;
+}
+.slicerSavedProfileFilters>.slicerSavedProfileSearch{grid-column:1/-1}
+.slicerSavedProfileCount{
+  margin:0 0 16px;color:var(--muted,#9faec2);
+  font-size:.81rem;line-height:1.5;
+}
+.slicerSavedProfileEmpty{
+  margin:0;padding:20px 16px;border:1px dashed var(--border-color,#3a4659);
+  border-radius:10px;color:var(--muted,#9faec2);
+}
+@media(max-width:880px){
+  .slicerSavedProfileFilters{grid-template-columns:repeat(2,minmax(0,1fr))}
+}
+@media(max-width:520px){
+  .slicerSavedProfileFilters{grid-template-columns:minmax(0,1fr);gap:12px}
+}
+
+/* Orca-like G-code visualisation controls. Keep the viewport usable and
+   accessible without relying on hovering over small icon-only controls. */
+.slicerToolpathViewBar{
+  display:flex;flex-wrap:wrap;gap:8px 10px;align-items:center;
+  justify-content:center;padding:12px 2px 4px;
+}
+.slicerToolpathViewBar button{
+  display:inline-flex;align-items:center;justify-content:center;
+  min-height:35px;padding:6px 11px;white-space:nowrap;
+  border-radius:8px;line-height:1.3;
+}
+.slicerToolpathViewBar label{
+  display:inline-flex;align-items:center;gap:8px;min-height:35px;
+  padding:4px 6px;margin:0;white-space:nowrap;
+  font-size:.86rem;line-height:1.35;
+}
+.slicerToolpathViewBar label input[type="checkbox"]{
+  width:16px;height:16px;min-width:16px;margin:0;
+}
+@media(max-width:620px){
+  .slicerToolpathViewBar{justify-content:flex-start;gap:7px}
+  .slicerToolpathViewBar button{flex:1 1 auto}
+}
+
+/* The interactive plate and sliced G-code share predictable, accessible view
+   controls without overlapping the canvas or model-editing toolbar. */
+.slicerPlateCameraToolbar{
+  display:flex;flex-wrap:wrap;gap:8px;align-items:center;
+  justify-content:flex-end;padding:6px 0 12px;
+}
+.slicerPlateCameraToolbar button{
+  display:inline-flex;align-items:center;justify-content:center;
+  min-height:35px;line-height:1.25;padding:6px 11px;border-radius:8px;
+}
+.slicerPlateDisplayOptionsRow .slicerBedVisibilityControl{
+  display:inline-flex;align-items:center;gap:8px;min-width:0;
+  font-size:.82rem;white-space:nowrap;
+}
+.slicerPlateDisplayOptionsRow .slicerBedVisibilityControl select{
+  width:auto;max-width:240px;min-width:125px;min-height:34px;
+  border:1px solid var(--border,#394958);border-radius:8px;
+  padding:5px 9px;font-size:.82rem;
+}
+
+@media(max-width:620px){
+  .slicerPlateCameraToolbar{justify-content:flex-start}
+  .slicerPlateCameraToolbar button{flex:1 1 auto}
+  .slicerPlateDisplayOptionsRow .slicerBedVisibilityControl{flex:1 1 100%;white-space:normal;justify-content:space-between}
+  .slicerPlateDisplayOptionsRow .slicerBedVisibilityControl select{flex:1 1 auto;max-width:100%}
+}
+
+/* Plate identification stays visible before the canvas without obscuring
+   controls; the label is persisted with the private slicing draft. */
+.slicerPlateIdentity{
+  display:flex;flex-wrap:wrap;align-items:end;justify-content:space-between;
+  gap:12px 18px;padding:12px 14px;margin:0 0 14px;
+  border:1px solid var(--border,#344357);border-radius:10px;
+  background:rgba(108,136,165,.055);
+}
+.slicerPlateIdentity label{
+  display:flex;flex-direction:column;gap:6px;min-width:170px;
+  flex:1 1 220px;font-size:.82rem;font-weight:600;
+}
+.slicerPlateIdentity input{width:100%;max-width:420px;min-width:0}
+.slicerPlateIdentity>span{
+  color:#aebed0;font-size:.83rem;line-height:1.5;
+  padding-bottom:8px;overflow-wrap:anywhere;
+}
+.slicerPreparePrinterIdentity{
+  display:flex;flex-direction:column;align-items:stretch;
+  gap:10px;min-width:0;
+}
+.slicerPreparePrinterIdentity>img,.slicerPreparePrinterFallback{
+  display:block;box-sizing:border-box;width:min(100%,190px);max-width:100%;
+  height:156px;object-fit:contain;object-position:center center;
+  align-self:center;
+  border:1px solid var(--border,#344357);border-radius:10px;
+  background:#0d1622;padding:8px;
+}
+.slicerPreparePrinterIdentity>strong{
+  font-size:.91rem;line-height:1.45;overflow-wrap:anywhere;
+}
+.slicerPreparePrinterFallback{
+  display:flex;align-items:center;justify-content:center;
+  color:#7590ab;
+}
+.slicerPreparePrinterFallback svg{width:74px;height:74px;max-width:75%}
+@media(max-width:520px){
+  .slicerPlateIdentity{padding:10px;gap:10px}
+  .slicerPlateIdentity>span{padding-bottom:0}
+  .slicerPreparePrinterIdentity>img,.slicerPreparePrinterFallback{max-width:100%;height:100px}
+}
+
+/* Optional artwork from reviewed, locally bundled native slicer assets. */
+.slicerPlateArtToggle{
+  display:inline-flex;align-items:center;gap:10px;
+  width:max-content;max-width:100%;margin:10px 0 4px;
+  font-size:.82rem;color:#c5d2e2;line-height:1.5;
+}
+.slicerPlateArtToggle input[type="checkbox"]{
+  width:17px;height:17px;min-width:17px;flex:0 0 17px;margin:0;
+}
+.slicerPlateHint small{font-size:.78rem;color:#8ba2ba}
+
+/* Independent label groups: narrow screens wrap without obscuring the canvas. */
+.slicerPlateDisplayOptions{
+  border:1px solid #344357;border-radius:10px;
+  padding:10px 12px;margin:12px 0 8px;min-width:0;
+}
+.slicerPlateDisplayOptions legend{font-size:.8rem;color:#b8c9df;font-weight:700;padding:0 5px}
+.slicerPlateDisplayOptionsRow{
+  display:flex;align-items:center;gap:8px 15px;flex-wrap:wrap;
+}
+.slicerPlateDisplayOptionsRow label{
+  display:inline-flex;align-items:center;gap:7px;
+  min-height:30px;margin:0;color:#c8d6e7;font-size:.81rem;
+  line-height:1.35;white-space:normal;
+}
+.slicerPlateDisplayOptionsRow input[type="checkbox"]{
+  width:16px;height:16px;min-width:16px;margin:0;
+}
+.slicerPlateDisplayOptionsRow button{min-height:32px;margin-left:auto;padding:5px 10px}
+@media(max-width:520px){
+  .slicerPlateDisplayOptionsRow button{width:100%;margin-left:0}
+  .slicerPreparePrinterIdentity>img,.slicerPreparePrinterFallback{height:142px}
+}
+.slicerSlicingHelp{
+  margin-top:10px;padding:10px 12px;border:1px solid #344357;
+  border-radius:9px;background:rgba(114,133,171,.055);max-width:820px;
+}
+.slicerSlicingHelp summary{cursor:pointer;font-weight:700;color:#d9e5f3}
+.slicerSlicingHelp p{margin:9px 0 5px;line-height:1.5}
+.slicerSlicingHelp button{margin-top:8px}
+.slicerSettingHelp{font-size:.81rem;color:#a6b9d1;line-height:1.45}
+
+/* Native per-draft process settings: compact in the right rail, responsive
+   in the stacked tablet/mobile layout. Do not allow labels to overlap inputs. */
+.slicerNativeSettingsFields{min-width:0;display:flex;flex-direction:column;gap:10px;margin-bottom:15px}
+.slicerNativeSettingField{display:grid;grid-template-columns:minmax(0,1fr) minmax(82px,100px);
+  align-items:center;gap:10px;min-width:0;font-size:.81rem}
+.slicerNativeSettingField>span{min-width:0;overflow-wrap:anywhere;line-height:1.35}
+.slicerNativeSettingField>input{width:100%;min-width:0;max-width:100%;box-sizing:border-box;
+  padding:7px 8px;border:1px solid var(--border,#394958);border-radius:6px}
+.slicerNativeSettingsActions{display:flex;flex-direction:column;gap:8px;padding-top:10px;
+  border-top:1px solid var(--border,#394958)}
+.slicerNativeSettingsActions>span{color:var(--muted,#9aafc3);font-size:.78rem}
+.slicerNativeSettingsActions>button{align-self:flex-start;max-width:100%;white-space:normal}
+@media(max-width:450px){
+  .slicerNativeSettingField{grid-template-columns:minmax(0,1fr) minmax(75px,100px)}
+}
+
+/* Saving per-draft edits to a reusable custom native process profile. */
+.slicerCustomProcessForm{display:flex;flex-direction:column;gap:9px;min-width:0;
+  margin:8px 0 12px;padding:12px;border:1px solid var(--border,#394958);
+  border-radius:10px;background:var(--surface-2,#101924)}
+.slicerCustomProcessForm>label{font-size:.83rem;font-weight:600;overflow-wrap:anywhere}
+.slicerCustomProcessForm>input{width:100%;max-width:100%;min-width:0;box-sizing:border-box}
+.slicerCustomProcessForm>small{font-size:.76rem;line-height:1.4;color:var(--muted,#9aafc3)}
+.slicerNativeSettingsButtons{display:flex;flex-wrap:wrap;gap:8px;min-width:0}
+.slicerNativeSettingsButtons>button{max-width:100%;white-space:normal;min-width:0}
+
+/* Responsive, searchable native process controls. */
+.slicerSettingsSearchRow{display:flex;align-items:end;flex-wrap:wrap;gap:10px;min-width:0;margin:10px 0 14px}
+.slicerSettingsSearchLabel,.slicerSettingsLevelLabel{display:flex;flex-direction:column;gap:5px;min-width:0;font-size:.78rem}
+.slicerSettingsSearchLabel{flex:1 1 160px}
+.slicerSettingsLevelLabel{flex:0 1 110px}
+.slicerSettingsSearchLabel input,.slicerSettingsLevelLabel select,
+.slicerNativeSettingField select{width:100%;min-width:0;max-width:100%;box-sizing:border-box;padding:7px 8px}
+.slicerNativeSettingField select{font-size:.82rem}
+@media(max-width:420px){.slicerSettingsLevelLabel{flex:1 1 95px}}
+
+/* Native process selection and expert panels — keep the settings rail legible
+   without stretching controls beyond its available width. */
+.slicerProcessQuickSelect{display:flex;flex-direction:column;min-width:0;gap:7px;margin:12px 0 16px}
+.slicerProcessQuickSelect>label{font-weight:600;font-size:.85rem}
+.slicerProcessQuickSelectRow{display:flex;align-items:center;gap:8px;min-width:0}
+.slicerProcessQuickSelectRow>select{min-width:0;flex:1 1 auto;width:0;max-width:100%;
+  padding:9px 8px;box-sizing:border-box}
+.slicerProcessQuickSelectRow>button{flex:0 0 auto;white-space:nowrap}
+.slicerProcessQuickSelect>small{font-size:.76rem;color:var(--muted,#9aafc3);overflow-wrap:anywhere}
+.slicerNativeSettingSection{min-width:0;display:flex;flex-direction:column;gap:10px;
+  padding-bottom:12px;margin-bottom:8px;border-bottom:1px solid var(--border,#394958)}
+.slicerNativeSettingSection>h5{margin:0 0 2px;font-size:.83rem;font-weight:700;
+  padding-bottom:5px;color:var(--text,#e6edf3)}
+.slicerSettingModified{display:block;color:var(--accent,#2bbab1);font-size:.71rem;margin-top:3px}
+.slicerNativeSettingSection .slicerNativeSettingField{width:100%;box-sizing:border-box}
+@media(max-width:440px){
+  .slicerProcessQuickSelectRow{flex-wrap:wrap}
+  .slicerProcessQuickSelectRow>select{flex:1 1 190px;width:auto}
+}
+
+/* Slicer model controls must never overflow the printable workspace column. */
+.slicerPrepareScene .slicerPlateControlsGroup,
+.slicerPrepareScene .slicerPlateTransformFields{min-width:0;width:100%;max-width:100%}
+.slicerPrepareScene .slicerPlateTransformFields > .settingsActions{
+  grid-column:1/-1;display:flex;flex-wrap:wrap;align-items:stretch;
+  justify-content:flex-start;gap:8px;min-width:0;max-width:100%;width:100%;
+}
+.slicerPrepareScene .slicerPlateTransformFields > .settingsActions > button{
+  flex:1 1 145px;min-width:0;max-width:100%;
+  white-space:normal;overflow-wrap:anywhere;line-height:1.3;
+  padding:10px 12px;height:auto;min-height:44px;
+}
+.slicerPrepareScene .slicerPlateTransformFields > label:has(input[type="color"]){
+  min-width:0;grid-column:1/-1;
+}
+.slicerPrepareScene .slicerAxisScaling{min-width:0;max-width:100%}
+.slicerPrepareScene .slicerAxisScaling label{min-width:0}
+.slicerPrepareScene .slicerAxisScaling input{min-width:0;width:100%;max-width:100%}
+@media(min-width:1150px) and (max-width:1500px){
+  .slicerPrepareScene .slicerPlateTransformFields > .settingsActions > button{flex-basis:125px}
+}
+@media(max-width:520px){
+  .slicerPrepareScene .slicerPlateTransformFields > .settingsActions > button{flex:1 1 100%}
+}
+/* The settings sidebar has its own scroll boundary; expanding moves the same
+   stateful controls into a large dialog, not a second form. */
+.slicerPrepareSettings{
+  max-height:min(80vh,900px);overflow-y:auto;overflow-x:hidden;
+  overscroll-behavior:contain;scrollbar-gutter:stable;
+}
+.slicerSettingsPanelHeader{
+  display:flex;gap:10px;align-items:flex-start;justify-content:space-between;
+  flex-wrap:wrap;margin-bottom:12px;min-width:0;
+}
+.slicerSettingsPanelHeader>div{flex:1 1 125px;min-width:0}
+.slicerSettingsPanelHeader h4{margin:0 0 3px}
+.slicerSettingsPanelHeader small{
+  display:block;font-size:.73rem;color:var(--muted,#9aafc3);
+  overflow-wrap:anywhere;line-height:1.4
+}
+.slicerSettingsPanelHeader button{
+  flex:0 0 auto;max-width:100%;white-space:normal;
+  font-size:.77rem;padding:8px 10px
+}
+.slicerSettingsModalBackdrop{
+  position:fixed;inset:0;z-index:11000;display:flex;
+  align-items:center;justify-content:center;
+  padding:clamp(8px,2vw,24px);background:rgba(4,9,16,.84);
+}
+.slicerSettingsModal{
+  width:min(960px,100%);height:min(92dvh,1000px);max-height:92dvh;
+  min-height:0;min-width:0;display:flex;
+  border:1px solid var(--border,#394958);border-radius:14px;
+  box-shadow:0 24px 90px rgba(0,0,0,.55);background:#0f1720;
+  overflow:hidden;
+}
+.slicerSettingsModal .slicerPrepareSettings{
+  width:100%;height:100%;max-height:100%;overflow-y:auto;
+  border:0;border-radius:0;padding:clamp(14px,2vw,28px);
+}
+.slicerSettingsModal .slicerNativeSettingField{
+  grid-template-columns:minmax(0,1fr) minmax(120px,210px);
+  max-width:100%;gap:16px
+}
+.slicerSettingsModal .slicerPrepareSettings nav{grid-template-columns:repeat(3,minmax(0,1fr))}
+@media(max-width:620px){
+  .slicerSettingsModal{height:96dvh;max-height:96dvh}
+  .slicerSettingsModal .slicerPrepareSettings{padding:14px}
+  .slicerSettingsModal .slicerNativeSettingField{
+    grid-template-columns:minmax(0,1fr) minmax(82px,112px);gap:8px
+  }
+  .slicerSettingsModal .slicerPrepareSettings nav{grid-template-columns:repeat(2,minmax(0,1fr))}
+}
+
+/* Independent reset buttons sit beside the associated transform values.
+   The input shrinks but the reset action never escapes the selected-model panel. */
+.slicerPlateTransformFields .slicerTransformFieldWithReset{min-width:0;max-width:100%}
+.slicerTransformFieldWithReset>label{display:block;margin-bottom:7px;font-size:inherit}
+.slicerTransformInputRow{display:flex;gap:7px;align-items:stretch;min-width:0;width:100%}
+.slicerPlatePanel .slicerPlateControls .slicerTransformInputRow>input{
+  flex:1 1 auto;width:0;min-width:0;max-width:100%
+}
+.slicerTransformInputRow>button{
+  flex:0 0 auto;min-width:0;max-width:43%;padding:7px 9px;white-space:normal;
+  font-size:.76rem;line-height:1.25
+}
+@media(max-width:520px){
+  .slicerTransformInputRow{flex-wrap:wrap}
+  .slicerPlatePanel .slicerPlateControls .slicerTransformInputRow>input{flex:1 1 100%;width:100%}
+  .slicerTransformInputRow>button{flex:1 1 auto;max-width:100%}
+}
+
+
+/* Selected-model actions occupy their own full-width grid row, never
+   squeezing alongside the material colour field or escaping the sidebar. */
+.slicerPlatePanel .slicerPlateControls .slicerPlateTransformFields > .slicerModelActions{
+  grid-column:1/-1;
+  display:grid;
+  grid-template-columns:repeat(2,minmax(0,1fr));
+  gap:10px;
+  width:100%;
+  max-width:100%;
+  min-width:0;
+  margin:4px 0 0;
+  align-items:stretch;
+  box-sizing:border-box;
+}
+.slicerPlatePanel .slicerPlateControls .slicerModelActions > button{
+  display:block;
+  width:100%;
+  max-width:100%;
+  min-width:0;
+  height:auto;
+  min-height:48px;
+  padding:10px 12px;
+  white-space:normal;
+  overflow-wrap:anywhere;
+  line-height:1.35;
+  text-align:center;
+  box-sizing:border-box;
+}
+.slicerPlatePanel .slicerPlateControls .slicerPlateTransformFields > label:has(input[type="color"]){
+  min-width:0;
+  grid-column:1/-1;
+}
+@media(max-width:480px){
+  .slicerPlatePanel .slicerPlateControls .slicerPlateTransformFields > .slicerModelActions{
+    grid-template-columns:minmax(0,1fr);
+  }
+}
+
+
+/* Expand settings is a workflow action alongside Detail, not a title action. */
+.slicerSettingsSearchRow .slicerExpandSettingsAction{
+  flex:1 1 125px;
+  min-width:0;
+  max-width:100%;
+  min-height:40px;
+  padding:8px 10px;
+  white-space:normal;
+  overflow-wrap:anywhere;
+  line-height:1.3;
+  align-self:flex-end;
+}
+@media(max-width:480px){
+  .slicerSettingsSearchRow .slicerExpandSettingsAction{flex:1 1 100%}
+}
+
+
+/* Search occupies the first line. Detail and Expand settings always form
+   the same second-line workflow at normal sidebar widths. */
+.slicerPrepareSettings .slicerSettingsSearchRow{
+  display:grid;
+  grid-template-columns:minmax(0, 1fr) minmax(0, 1fr);
+  gap:10px;
+  align-items:end;
+  min-width:0;
+}
+.slicerPrepareSettings .slicerSettingsSearchLabel{
+  grid-column:1/-1;
+  width:100%;
+  min-width:0;
+}
+.slicerPrepareSettings .slicerSettingsLevelLabel{
+  grid-column:1;
+  width:100%;
+  min-width:0;
+}
+.slicerPrepareSettings .slicerSettingsSearchRow .slicerExpandSettingsAction{
+  grid-column:2;
+  width:100%;
+  min-width:0;
+  min-height:40px;
+  align-self:end;
+  margin:0;
+}
+
+
+/* The settings rail may grow to the full neighbouring build-plate panel before
+   internal scrolling. The live ResizeObserver supplies that panel's height. */
+.slicerPrepareStructure > .slicerPrepareSettings{
+  max-height:none;
+  min-height:0;
+  overflow-y:auto;
+  overflow-x:hidden;
+  align-self:start;
+}
+.slicerSettingsModal .slicerPrepareSettings{
+  max-height:100%;
+}
+/* Detail and Expand are peer-sized controls on the same workflow row. */
+.slicerPrepareSettings .slicerSettingsSearchRow{
+  grid-template-columns:minmax(0,1fr) minmax(0,1fr);
+  align-items:end;
+}
+.slicerPrepareSettings .slicerSettingsLevelLabel select,
+.slicerPrepareSettings .slicerSettingsSearchRow .slicerExpandSettingsAction{
+  height:38px;
+  min-height:38px;
+  max-height:38px;
+  box-sizing:border-box;
+  margin:0;
+  padding:7px 8px;
+  font-size:.78rem;
+  line-height:1.3;
+}
+.slicerPrepareSettings .slicerSettingsSearchRow .slicerExpandSettingsAction{
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  white-space:nowrap;
+  overflow:hidden;
+  text-overflow:ellipsis;
+}
+/* Live material inventory now belongs with the model/filament workflow. */
+.slicerPrepareLeftRail > .slicerLiveMaterialSlots{
+  width:100%;
+  min-width:0;
+  max-width:100%;
+  margin:0;
+  padding:12px;
+  box-sizing:border-box;
+  background:var(--surface-2,#101924);
+  border-radius:12px;
+}
+.slicerPrepareLeftRail > .slicerLiveMaterialSlots .slicerLiveMaterialHeader{
+  align-items:flex-start;
+}
+.slicerPrepareLeftRail > .slicerLiveMaterialSlots .slicerLiveMaterialSlot{
+  gap:8px;
+}
+.slicerPrepareLeftRail > .slicerLiveMaterialSlots .slicerLiveMaterialSlot > div{
+  min-width:0;
+  overflow-wrap:anywhere;
+}
+
+
+/* Per-instance settings reuse the same native controls as Global while
+   making the selected model and draft-only execution limitation explicit. */
+.slicerPrepareSettings .slicerObjectSettingsInfo{
+  display:flex;
+  flex-direction:column;
+  gap:8px;
+  padding:10px 12px;
+  border:1px solid var(--border, #334256);
+  border-radius:10px;
+  margin:0 0 12px;
+  min-width:0;
+}
+.slicerPrepareSettings .slicerObjectSettingsInfo label{
+  font-weight:650;
+}
+.slicerPrepareSettings .slicerObjectSettingsInfo select{
+  width:100%;
+  min-width:0;
+  max-width:100%;
+}
+.slicerPrepareSettings .slicerObjectSettingsInfo small{
+  line-height:1.45;
+}
+
+
+/* Read-only, live per-instance bounding measurements in the Prepare editor. */
+.slicerPlateMeasurement {
+  margin: 12px 0;
+  padding: 12px;
+  min-width: 0;
+  border: 1px solid var(--border, #405062);
+  border-radius: 10px;
+  background: var(--surface-muted, rgba(90, 120, 150, 0.07));
+}
+.slicerPlateMeasurement h5 {
+  margin: 0 0 10px;
+}
+.slicerMeasurementGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 145px), 1fr));
+  gap: 8px 12px;
+  margin: 0;
+}
+.slicerMeasurementGrid > div { min-width: 0; }
+.slicerMeasurementGrid dt {
+  font-size: .8rem;
+  opacity: .78;
+}
+.slicerMeasurementGrid dd {
+  margin: 2px 0 0;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+.slicerPlateMeasurement .slicerPlateHint {
+  margin: 12px 0 0;
+}
+
+
+.slicerMeasurementActions {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 140px), 1fr));
+  gap: 8px 12px;
+  margin-bottom: 10px;
+  align-items: end;
+}
+.slicerMeasurementActions label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+.slicerMeasurementActions select { max-width: 100%; min-width: 0; }
+.slicerMeasurementResult {
+  padding: 10px;
+  border-radius: 8px;
+  border: 1px solid var(--border, #405062);
+  font-variant-numeric: tabular-nums;
+  margin: 10px 0;
+  overflow-wrap: anywhere;
+}
+.slicerMeasurementResult > div { margin-bottom: 6px; }
+.slicerMeasurementResult strong { display: block; margin: 6px 0; }
+
+
+/* Expandable, per-tool options are anchored to their toolbar icon. Reuse this
+ * structure for rotate/scale/orient options without expanding the page. */
+.slicerPrepareTools .slicerToolTooltip:has(.slicerToolOptions) { z-index: 45; }
+.slicerPrepareTools .slicerToolTooltip.slicerToolOptionsOpen::after {
+  visibility: hidden;
+  opacity: 0;
+}
+.slicerToolOptions {
+  position: absolute;
+  top: calc(100% + 8px);
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 46;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: 260px;
+  max-width: calc(100vw - 32px);
+  padding: 14px;
+  border: 1px solid var(--border, #48566a);
+  border-radius: 12px;
+  background: #17212c;
+  color: #edf4fa;
+  box-shadow: 0 14px 36px rgba(0,0,0,.48);
+  font-size: .82rem;
+  line-height: 1.4;
+}
+.slicerToolOptionsHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+.slicerPrepareTools .slicerToolOptionsHeader button {
+  flex: 0 0 auto;
+  width: auto;
+  min-width: 0;
+  min-height: 28px;
+  height: 28px;
+  padding: 3px 9px;
+  font-size: .75rem;
+}
+.slicerToolOptions label {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 5px;
+  min-width: 0;
+}
+.slicerToolOptions select { width: 100%; min-width: 0; }
+.slicerToolOptions small { color: #b9c8d5; }
+.slicerPrepareTools .slicerToolOptions .slicerToolOptionsAction {
+  width: 100%;
+  min-width: 0;
+  height: auto;
+  min-height: 36px;
+  flex: 0 0 auto;
+  padding: 8px 12px;
+  justify-content: center;
+}
+/* Anchor the measurement card to the full canvas column so its top aligns
+ * with camera control buttons, even when the buttons wrap. */
+.slicerPlateCanvasColumn { position: relative; }
+.slicerPlateCanvasViewport { position: static; }
+
+/* Floating readout lives in the unused upper-left of the 3D scene, away
+ * from the camera buttons and orientation cube. It never alters STL data. */
+.slicerPlateCanvasViewport {
+  position: relative;
+  width: 100%;
+  min-width: 0;
+  min-height: 350px;
+  height: clamp(350px, 58vh, 820px);
+  flex: 1 1 auto;
+}
+.slicerPlateCanvasColumn .slicerPlateCanvasViewport > .slicerPlateCanvas {
+  width: 100%;
+  min-height: 350px;
+  height: 100%;
+  flex: none;
+}
+.slicerViewportMeasurement {
+  position: absolute;
+  top: 18px;
+  left: 12px;
+  z-index: 5;
+  box-sizing: border-box;
+  width: min(268px, calc(100% - 24px));
+  max-height: min(345px, calc(100% - 24px));
+  overflow-y: auto;
+  padding: 11px 13px;
+  border: 1px solid #475b6c;
+  border-radius: 10px;
+  background: rgba(17, 27, 38, .95);
+  box-shadow: 0 10px 26px rgba(0,0,0,.35);
+  color: #ecf4fa;
+  font-size: .79rem;
+  line-height: 1.45;
+  scrollbar-width: thin;
+}
+.slicerViewportMeasurementHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+.slicerViewportMeasurementHeader strong { font-size: .88rem; }
+.slicerViewportMeasurementHeader button {
+  min-height: 29px;
+  padding: 3px 9px;
+  font-size: .75rem;
+}
+.slicerViewportMeasurementModel {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  margin-bottom: 8px;
+  color: #b5c9d9;
+}
+.slicerViewportMeasurementDimensions {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0,1fr));
+  gap: 5px;
+}
+.slicerViewportMeasurementDimensions span {
+  text-align: center;
+  padding: 5px 2px;
+  border: 1px solid #344b5d;
+  border-radius: 5px;
+  font-variant-numeric: tabular-nums;
+  font-size: .74rem;
+  overflow-wrap: anywhere;
+}
+.slicerViewportMeasurementReadout {
+  margin: 9px 0 7px;
+  padding: 7px;
+  border-radius: 6px;
+  background: rgba(77, 124, 164, .15);
+  font-variant-numeric: tabular-nums;
+}
+.slicerViewportMeasurementReadout span { display:block; }
+.slicerViewportMeasurementBounds,
+.slicerViewportMeasurementPin {
+  overflow-wrap: anywhere;
+  margin: 6px 0;
+  font-variant-numeric: tabular-nums;
+}
+.slicerViewportMeasurementBounds span { display: block; }
+.slicerViewportMeasurementHint {
+  display: block;
+  color: #b7c6d4;
+  line-height: 1.45;
+}
+@media (max-width: 700px) {
+  .slicerPrepareTools .slicerToolOptions { left: auto; right: -10px; transform: none; }
+  .slicerPlateCanvasViewport {
+    display: flex;
+    flex-direction: column;
+    height: auto;
+    min-height: 0;
+  }
+  .slicerPlateCanvasColumn .slicerPlateCanvasViewport > .slicerPlateCanvas {
+    order: 2;
+    height: clamp(350px, 58vh, 650px);
+    flex: none;
+  }
+  .slicerViewportMeasurement {
+    position: relative;
+    top: auto;
+    left: auto;
+    order: 1;
+    width: 100%;
+    max-height: 220px;
+    margin-bottom: 8px;
+  }
+}
+
+
+/* Mobile slicer workspace: keep desktop's three-pane layout intact. Switching
+   tabs only changes visibility; React controls and imported models stay mounted. */
+.slicerMobilePaneTabs{display:none}
+@media(max-width:850px){
+  .slicerMobilePaneTabs{
+    display:grid;grid-template-columns:repeat(3,minmax(0,1fr));
+    gap:6px;position:sticky;top:0;z-index:35;
+    padding:8px 0;background:#10161e;margin:8px 0 12px;
+  }
+  .slicerMobilePaneTabs button{
+    display:flex;align-items:center;justify-content:center;gap:6px;
+    padding:9px 7px;min-width:0;min-height:44px;
+    font-size:clamp(.72rem,2.3vw,.84rem);line-height:1.25;
+    border-radius:9px;white-space:normal;
+    font-weight:650;
+  }
+  .slicerMobilePaneTabs .slicerUiIcon{flex:0 0 18px}
+  .slicerMobileTabLabel{min-width:0;white-space:normal;overflow-wrap:normal;text-align:center;line-height:1.2}
+  .slicerMobileTabCount{
+    display:inline-grid;place-items:center;min-width:19px;height:19px;
+    padding:0 4px;border-radius:99px;background:#26303e;
+    color:#c9d3e4;font-size:.7rem;line-height:1;font-weight:750;
+  }
+  .slicerMobilePaneTabs button.selected .slicerMobileTabCount{
+    background:#4a3e82;color:#f4efff;
+  }
+  @media(max-width:390px){
+    .slicerMobilePaneTabs button{flex-direction:column;gap:4px;min-height:54px;padding:6px 3px}
+    .slicerMobilePaneTabs .slicerUiIcon{flex-basis:18px}
+    .slicerMobileTabCount{position:absolute;right:5px;top:3px}
+    .slicerMobilePaneTabs button{position:relative}
+  }
+  .slicerMobilePaneTabs button.selected{
+    background:#26233f;border-color:#8d78f4;color:#f4efff;
+  }
+  .slicerPrepareStructure[data-mobile-pane="plate"] > .slicerPrepareLeftRail,
+  .slicerPrepareStructure[data-mobile-pane="plate"] > .slicerPrepareSettings,
+  .slicerPrepareStructure[data-mobile-pane="models"] > .slicerPrepareScene,
+  .slicerPrepareStructure[data-mobile-pane="models"] > .slicerPrepareSettings,
+  .slicerPrepareStructure[data-mobile-pane="settings"] > .slicerPrepareScene,
+  .slicerPrepareStructure[data-mobile-pane="settings"] > .slicerPrepareLeftRail{
+    display:none;
+  }
+  .slicerPrepareStructure[data-mobile-pane]{
+    display:block;min-width:0;
+  }
+  .slicerPrepareStructure[data-mobile-pane] > .slicerPrepareScene,
+  .slicerPrepareStructure[data-mobile-pane] > .slicerPrepareLeftRail,
+  .slicerPrepareStructure[data-mobile-pane] > .slicerPrepareSettings{
+    width:100%;max-width:100%;min-width:0;
+  }
+  .slicerPrepareStructure[data-mobile-pane="settings"] > .slicerPrepareSettings{
+    max-height:min(70dvh,850px)!important;overflow-y:auto;
+  }
+  .slicerPrepareActions{margin-top:10px;padding-top:12px}
+  .slicerPrepareActions .settingsActions>button{flex:1 1 130px}
+}
+@media(prefers-reduced-motion:reduce){
+  .slicerMobilePaneTabs{scroll-behavior:auto}
+}
+
+/* Compact G-code modal controls on phones, without affecting desktop. */
+@media(max-width:650px){
+  .slicerPreviewModal .modalBody{padding:12px}
+  .slicerPreviewModal .slicerResultModeRow{
+    display:grid;grid-template-columns:repeat(2,minmax(0,1fr));
+    align-items:start;gap:9px;margin:10px 0;
+  }
+  .slicerPreviewModal .slicerResultModeRow > label{
+    display:flex;flex-direction:column;align-items:stretch;
+    gap:5px;min-width:0;font-size:.79rem;
+  }
+  .slicerPreviewModal .slicerResultModeRow > label:first-child{
+    display:flex;flex-direction:column;align-items:stretch;
+  }
+  .slicerPreviewModal .slicerResultModeRow select{
+    width:100%;max-width:100%;min-width:0;font-size:.79rem;padding:9px 6px;
+  }
+  .slicerPreviewModal .slicerResultModeRow > label.checkRow{
+    grid-column:1/-1;flex-direction:row;align-items:center;justify-content:flex-start;
+  }
+  .slicerPreviewModal .slicerResultLayerLayout{gap:6px}
+  .slicerPreviewModal .slicerToolpath3DCanvas{height:min(54dvh,510px);min-height:300px}
+}
+
+/* Main mobile navigation: fixed chevron controls appear only where the
+   scroll container actually overflows, while keeping native touch-swiping. */
+.mobileNavOverflow{display:contents}
+.mobileNavArrow{display:none}
+@media(max-width:900px){
+  .shell>aside .mobileNavOverflow{
+    grid-area:nav;display:flex;align-items:center;min-width:0;width:100%;gap:2px;
+  }
+  .shell>aside .mobileNavOverflow nav{
+    flex:1 1 auto;min-width:0;grid-area:auto;
+    scroll-behavior:smooth;overflow-x:auto;
+  }
+  .shell>aside .mobileNavArrow{
+    display:grid;place-items:center;flex:0 0 0;width:0;min-width:0;
+    padding:0;border:0;margin:0;opacity:0;overflow:hidden;
+    pointer-events:none;transition:opacity .15s ease;
+  }
+  .shell>aside .mobileNavArrow.isVisible{
+    flex:0 0 32px;width:32px;height:40px;
+    border:1px solid #38465a;border-radius:9px;
+    background:#172231;color:#dce5f2;
+    opacity:1;pointer-events:auto;
+  }
+  .shell>aside .mobileNavArrow.isVisible:hover{
+    background:#25344a;border-color:#7258e8;
+  }
+  .shell>aside .mobileNavArrow svg{
+    width:20px;height:20px;max-width:none;fill:none;
+    stroke:currentColor;stroke-width:2.2;
+    stroke-linecap:round;stroke-linejoin:round;
+  }
+  .shell>aside .mobileNavArrow:focus-visible{
+    outline:2px solid #a99bff;outline-offset:2px;
+  }
+}
+@media(prefers-reduced-motion:reduce){
+  .shell>aside .mobileNavOverflow nav{scroll-behavior:auto}
+  .shell>aside .mobileNavArrow{transition:none}
+}
+
+/* Auto-orient candidate cards live within the editor, not a blocking modal.
+   Desktop layout is unchanged; candidate comparison wraps on mobile. */
+.slicerAutoOrientPanel{
+  display:grid;gap:12px;padding:14px;
+  margin:12px 0;border:1px solid var(--border,#384859);
+  border-radius:12px;background:rgba(19,30,44,.76);
+  min-width:0;
+}
+.slicerAutoOrientPanel h5{margin:0;font-size:1rem}
+.slicerAutoOrientPanel>label{display:grid;gap:6px;min-width:0}
+.slicerAutoOrientPanel>label select{width:100%;min-width:0}
+.slicerAutoOrientPanel>button:last-child{justify-self:start}
+.slicerAutoOrientChoices{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
+.slicerAutoOrientChoices button{
+  display:flex;flex-direction:column;text-align:left;align-items:flex-start;
+  gap:5px;min-width:0;min-height:96px;padding:10px;border-radius:9px;
+  border:1px solid #39495b;background:#141f2c;
+}
+.slicerAutoOrientChoices button.isActive{
+  background:#27223e;border-color:#9585eb;box-shadow:inset 0 0 0 1px #7362cf;
+}
+.slicerAutoOrientChoices button span{overflow-wrap:anywhere}
+.slicerAutoOrientChoices button small{color:#aabdd0}
+.slicerAutoOrientMetrics{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin:0}
+.slicerAutoOrientMetrics div{padding:9px;border-radius:8px;background:#172636;min-width:0}
+.slicerAutoOrientMetrics dt{font-size:.79rem;color:#abbacc}
+.slicerAutoOrientMetrics dd{margin:4px 0 0;font-weight:650;overflow-wrap:anywhere}
+@media(max-width:580px){
+  .slicerAutoOrientChoices{grid-template-columns:1fr}
+  .slicerAutoOrientChoices button{min-height:0}
+  .slicerAutoOrientMetrics{grid-template-columns:1fr}
+  .slicerAutoOrientPanel>button:last-child{width:100%}
+}
+
+/* Prevent the browser from re-anchoring the scroller to the old Setup
+   controls when the tall form is replaced by the interactive canvas. */
+.slicerWorkbenchRoot.slicerEditorOpen { overflow-anchor: none; }
+
+
+/* Auto-orient keeps its choices at the toolbar; comparison opens over the
+   workbench, and hover/focus previews the candidate on the 3D plate. */
+.slicerPrepareTools .slicerAutoOrientMenu { width: 245px; }
+.slicerPrepareTools .slicerAutoOrientMenuChoice {
+  display: flex; justify-content: space-between; align-items: center;
+  gap: 8px; width: 100%; min-width: 0; height: auto; min-height: 38px;
+  padding: 8px 10px; text-align: left;
+  border-radius: 8px; background: #223246;
+}
+.slicerAutoOrientMenuChoice span { color: #91cde9; cursor: help; }
+.slicerAutoOrientModalBackdrop {
+  position: fixed; inset: 0; z-index: 1200;
+  display: flex; align-items: center; justify-content: flex-end;
+  padding: clamp(12px, 4vw, 50px);
+  background: rgba(4, 10, 18, .38);
+}
+.slicerAutoOrientModal {
+  width: min(510px, 100%); max-height: min(88vh, 850px);
+  overflow-y: auto; box-shadow: 0 20px 60px rgba(0,0,0,.55);
+  background: #101d2a; border: 1px solid #41556d;
+}
+.slicerAutoOrientModalHeader, .slicerAutoOrientModalActions {
+  display: flex; align-items: flex-start; justify-content: space-between;
+  gap: 12px;
+}
+.slicerAutoOrientModalHeader h3 { margin: 0; }
+.slicerAutoOrientModalHeader p { margin: 5px 0 0; }
+.slicerAutoOrientModalHeader button { flex: 0 0 auto; }
+.slicerAutoOrientModalActions { align-items: center; justify-content: flex-end; flex-wrap: wrap; }
+@media (max-width: 750px) {
+  .slicerAutoOrientModalBackdrop { justify-content: center; align-items: flex-end; padding: 8px; }
+  .slicerAutoOrientModal { width: 100%; max-height: 76dvh; }
+}
+
+
+/* Directional hints for auto-orient: all four geometry proxies are costs.
+   Preserve a text/icon cue for people who cannot distinguish colours. */
+.slicerAutoOrientMetrics .slicerOrientProxy { color: #edf4fa; }
+.slicerAutoOrientMetrics .slicerOrientDelta {
+  display: inline-block;
+  margin-left: .35em;
+  font-weight: 650;
+  font-size: .9em;
+  white-space: normal;
+}
+.slicerAutoOrientMetrics .slicerOrientDelta.isBetter { color: #68d6a0; }
+.slicerAutoOrientMetrics .slicerOrientDelta.isWorse { color: #ff9c97; }
+.slicerAutoOrientMetrics .slicerOrientDelta.isNeutral { color: #b6c2d0; }
+
+
+/* Temporary split preview: coloured object list stays inside the modal. */
+.slicerSplitParts { display: grid; gap: 8px; max-height: 260px; overflow-y: auto; }
+.slicerSplitParts [role="listitem"] {
+  display: flex; align-items: center; gap: 10px;
+  border: 1px solid #35485b; border-radius: 8px;
+  padding: 9px; background: #192a3b;
+}
+.slicerSplitParts [role="listitem"] > div { display: grid; gap: 3px; min-width: 0; }
+.slicerSplitParts small { color: #b9c8d5; overflow-wrap: anywhere; }
+.slicerSplitSwatch { flex: 0 0 18px; width: 18px; height: 18px; border-radius: 5px; }
+
+
+/* All interactive readouts share one viewport anchor, aligned vertically
+   with the camera-button row immediately above the canvas. */
+@media (min-width: 701px) {
+  .slicerPlateCanvasViewport > .slicerViewportMeasurement {
+    top: -40px;
+    left: 12px;
+  }
+}
+.slicerViewportTransform {
+  width: min(268px, calc(100% - 24px));
+}
+.slicerViewportTransformGrid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px;
+  margin-bottom: 8px;
+}
+.slicerViewportTransformGrid label {
+  min-width: 0;
+  display: grid;
+  gap: 3px;
+  font-size: .75rem;
+  color: #bfcedc;
+}
+.slicerViewportTransformGrid input {
+  width: 100%;
+  min-width: 0;
+  height: 34px;
+  border: 1px solid #445970;
+  border-radius: 6px;
+  padding: 4px;
+  background: #0d1926;
+  color: #f0f6ff;
+  font-variant-numeric: tabular-nums;
+}
+.slicerViewportTransformGrid .slicerTransformReadout {
+  grid-column: 1 / -1;
+  font-size: .76rem;
+  color: #b9c9d8;
+}
+.slicerViewportTransform > button {
+  min-height: 30px;
+  font-size: .78rem;
+}
+
+
+.slicerAssemblyActions {
+  display: grid; gap: 8px; margin: 6px 0 12px;
+  padding: 9px; border: 1px solid #34475c; border-radius: 9px;
+  background: #152333;
+}
+.slicerAssemblyActions small { color: #b7c8d7; line-height: 1.4; }
+.slicerAssemblyActions > div { display: flex; flex-wrap: wrap; gap: 7px; }
+.slicerAssemblyActions button { flex: 1 1 auto; min-height: 33px; font-size: .8rem; }
+
+
+/* The camera toolbar and floating readout share the plate-column anchor;
+   viewport-relative positioning previously put Measure a row too low. */
+@media (min-width: 701px) {
+  .slicerPlateCanvasColumn > .slicerPlateCanvasViewport { position: static; }
+  .slicerPlateCanvasColumn .slicerPlateCanvasViewport > .slicerViewportMeasurement {
+    top: 18px; left: 12px;
+  }
+}
+
+
+/* Compact Move / Rotate / Scale readouts: avoid inherited form/grid row
+   stretching, which previously inserted large blank gaps and scrollbars. */
+.slicerPlateCanvasColumn .slicerViewportMeasurement.slicerViewportTransform {
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-start;
+  align-content: start;
+  align-items: stretch;
+  gap: 7px;
+  height: auto;
+  min-height: 0;
+  max-height: min(390px, calc(100% - 24px));
+  overflow-y: auto;
+  padding: 10px 12px;
+}
+.slicerViewportTransform > *,
+.slicerViewportTransform > p,
+.slicerViewportTransform > small,
+.slicerViewportTransform > div { flex: 0 0 auto; margin-top: 0; margin-bottom: 0; }
+.slicerViewportTransform .slicerViewportMeasurementHeader { margin: 0; }
+.slicerViewportTransform .slicerViewportMeasurementModel {
+  margin: 0; font-size: .75rem; line-height: 1.3;
+}
+.slicerViewportTransform .slicerViewportTransformGrid { margin: 0; gap: 6px; }
+.slicerViewportTransform .slicerViewportTransformGrid label {
+  margin: 0; display: grid; gap: 4px; font-size: .74rem;
+}
+.slicerViewportTransform .slicerViewportTransformGrid input {
+  min-height: 30px; height: 32px; padding: 3px 6px;
+}
+.slicerViewportTransform .slicerViewportMeasurementHint {
+  margin: 0; font-size: .73rem; line-height: 1.4;
+}
+.slicerViewportTransform .slicerViewportScaleUniform {
+  margin: 0; display: grid; gap: 4px; font-size: .76rem;
+}
+.slicerViewportTransform .slicerViewportScaleUniform input {
+  height: 32px; min-height: 30px; min-width: 0;
+  padding: 3px 6px; border: 1px solid #445970; border-radius: 6px;
+  background: #0d1926; color: #f0f6ff;
+}
+.slicerViewportTransform .slicerTransformQuickAction {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  min-height: 34px;
+  height: auto;
+  line-height: 1.25;
+  padding: 7px 10px;
+  font-weight: 600;
+  text-align: center;
+}
+.slicerViewportTransform .slicerTransformQuickAction svg {
+  width: 15px; height: 15px; flex-shrink: 0;
+}
+.slicerViewportTransform .slicerTransformDragAngle {
+  font-size: .75rem; font-weight: 650; line-height: 1.3;
+  color: #b6e7ff; padding: 5px 7px; border-radius: 5px;
+  background: rgba(43, 126, 177, .17);
+}
+
+
+/* Slicer: primary workspace entry remains visible at the very top.
+   Two utility actions sit above a full-width accent CTA on all devices. */
+.slicerWorkbenchRoot .slicerHeroActions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 9px;
+  width: min(100%, 480px);
+  flex: 0 1 480px;
+  align-content: start;
+}
+.slicerWorkbenchRoot .slicerHeroActions > button {
+  min-width: 0;
+  min-height: 43px;
+  white-space: normal;
+}
+.slicerWorkbenchRoot .slicerHeroActions > .slicerHeroInteractive {
+  grid-column: 1 / -1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 9px;
+  min-height: 49px;
+  font-weight: 700;
+}
+.slicerWorkbenchRoot .slicerHeroActions > .slicerHeroBack {
+  grid-column: 1 / -1;
+}
+@media (max-width: 900px) {
+  .slicerWorkbenchRoot .printingHero { display: grid; }
+  .slicerWorkbenchRoot .slicerHeroActions {
+    width: 100%;
+    flex: none;
+  }
+}
+@media (max-width: 390px) {
+  .slicerWorkbenchRoot .slicerHeroActions { gap: 7px; }
+  .slicerWorkbenchRoot .slicerHeroActions > button { font-size: .85rem; }
+}
+
+
+/* Editing commands belong to the build plate, not the distant page header. */
+.slicerPlateEditingToolbar {
+  position: relative;
+  width: 100%;
+  min-width: 0;
+  margin: 0 0 10px;
+  isolation: isolate;
+  z-index: 10;
+}
+.slicerPlateEditingToolbar > .slicerPrepareTools {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 0;
+  padding: 8px;
+  border: 1px solid #34465b;
+  border-radius: 10px;
+  background: #111b27;
+}
+.slicerPlateEditingToolbar .slicerToolTooltip {
+  flex: 0 0 38px;
+  width: 38px;
+  min-width: 38px;
+  height: 38px;
+}
+.slicerPlateEditingToolbar .slicerToolTooltip > button {
+  width: 38px;
+  height: 38px;
+}
+.slicerPlateEditingToolbar .slicerToolOptions {
+  z-index: 55;
+}
+@media (max-width: 850px) {
+  .slicerPlateEditingToolbar > .slicerPrepareTools {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    overflow-y: hidden;
+    overscroll-behavior-x: contain;
+    scrollbar-width: thin;
+    -webkit-overflow-scrolling: touch;
+    padding: 7px;
+  }
+  .slicerPlateEditingToolbar .slicerToolTooltip {
+    flex: 0 0 40px;
+    width: 40px;
+    min-width: 40px;
+    height: 40px;
+  }
+  .slicerPlateEditingToolbar .slicerToolTooltip > button {
+    width: 40px;
+    height: 40px;
+  }
+  /* Dropdowns must be able to extend beyond the horizontal toolbar viewport. */
+  .slicerPlateEditingToolbar > .slicerPrepareTools:has(.slicerToolOptionsOpen) {
+    overflow: visible;
+    flex-wrap: wrap;
+  }
+}
+
+
+/* Small Add model popover adjacent to the build-plate tool icon. */
+.slicerPlateEditingToolbar .slicerAddModelMenu {
+  width: 240px;
+  max-width: min(280px, calc(100vw - 36px));
+  gap: 7px;
+}
+.slicerPlateEditingToolbar .slicerAddModelChoice {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 9px;
+  width: 100%;
+  min-height: 39px;
+  height: auto;
+  padding: 9px 10px;
+  text-align: left;
+  line-height: 1.35;
+  white-space: normal;
+}
+.slicerPlateEditingToolbar .slicerAddModelChoice .slicerUiIcon {
+  flex: 0 0 17px;
+}
+.slicerPlateControlsGroup[data-slicer-add-models] {
+  scroll-margin-top: 24px;
+}
+
+
+/* All toolbar descriptors live within the toolbar border. A reserved row
+ * prevents hover/focus from shifting the plate or clipping at either edge. */
+.slicerPlateEditingToolbar .slicerToolTooltip::after {
+  content: none !important;
+  display: none !important;
+}
+.slicerPlateEditingToolbar > .slicerPrepareTools {
+  overflow: visible;
+}
+.slicerPlateEditingToolbar .slicerToolbarDescriptor {
+  flex: 1 0 100%;
+  box-sizing: border-box;
+  min-width: 0;
+  min-height: 28px;
+  padding: 5px 9px;
+  border: 1px solid #33475c;
+  border-radius: 7px;
+  background: #172433;
+  color: #cedaeb;
+  font-size: 12px;
+  line-height: 1.35;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  text-align: left;
+}
+@media (max-width: 850px) {
+  .slicerPlateEditingToolbar > .slicerPrepareTools {
+    flex-wrap: wrap;
+    overflow: visible;
+  }
+  .slicerPlateEditingToolbar .slicerToolTooltip { flex-shrink: 0; }
+}
+
+
+/* One restrained layout for the four solid-edit operations. */
+.slicerSolidModal {
+  max-width: min(560px, calc(100vw - 26px));
+  max-height: min(86vh, 830px);
+  overflow-y: auto;
+}
+.slicerSolidModal > label,
+.slicerSolidGrid > label {
+  display: grid;
+  gap: 5px;
+  margin: 0;
+  min-width: 0;
+  font-size: .82rem;
+}
+.slicerSolidModal input,
+.slicerSolidModal select {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  min-height: 38px;
+  background: #0f1b27;
+  color: #eaf2fc;
+  border: 1px solid #3c536b;
+  border-radius: 8px;
+  padding: 7px 10px;
+}
+.slicerSolidGrid {
+  display: grid;
+  grid-template-columns: repeat(2,minmax(0,1fr));
+  gap: 10px;
+}
+.slicerSolidGrid > .slicerPlateHint { grid-column: 1/-1; }
+.slicerSolidResult {
+  display: grid;
+  gap: 6px;
+  background: #172a39;
+  padding: 10px;
+  border: 1px solid #426479;
+  border-radius: 8px;
+  font-size: .8rem;
+}
+.slicerSolidModal .slicerAutoOrientModalActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: flex-end;
+}
+@media(max-width: 520px) {
+  .slicerSolidGrid { grid-template-columns: 1fr; }
+  .slicerSolidModal .slicerAutoOrientModalActions button { flex: 1 1 auto; }
+}
+
+
+/* Editing widgets belong to the viewport, below the plate toolbar. */
+.slicerPlateCanvasColumn { position:relative; }
+.slicerPlateCanvasColumn > .slicerPlateCanvasViewport {
+  position:relative !important;
+}
+.slicerPlateCanvasColumn .slicerGroupTransformOverlay {
+  z-index:15;
+  top:14px;
+  left:14px;
+  width:min(290px,calc(100% - 72px));
+  max-height:min(330px,calc(100% - 20px));
+}
+.slicerPlateSectionControl {
+  position:absolute;
+  right:10px;
+  top:60px;
+  bottom:18px;
+  z-index:18;
+  display:flex;
+  align-items:center;
+  flex-direction:column;
+  gap:9px;
+  width:42px;
+  padding:10px 5px;
+  border:1px solid #415a72;
+  border-radius:10px;
+  background:#111c2be8;
+  color:#cad9e7;
+  font-size:.68rem;
+  box-sizing:border-box;
+}
+.slicerPlateSectionControl input[type="range"] {
+  appearance:slider-vertical;
+  writing-mode:vertical-lr;
+  direction:rtl;
+  width:24px;
+  height:100%;
+  min-height:80px;
+  flex:1;
+  accent-color:#43b8e6;
+}
+.slicerPlateSectionControl .slicerSectionValue {
+  font-size:.64rem;
+  overflow-wrap:anywhere;
+  text-align:center;
+}
+.slicerPlateSectionControl button { padding:4px;min-height:26px;width:100%; }
+.slicerSolidPreviewStatus {font-size:.8rem;color:#8fd9c9;align-self:center;margin-right:auto}
+@media(max-width:700px) {
+  .slicerPlateCanvasColumn .slicerGroupTransformOverlay {
+    position:relative;top:auto;left:auto;order:1;width:100%;max-height:none;
+  }
+  .slicerPlateSectionControl { top:20px;right:4px;bottom:20px; }
+}
+.slicerAssemblyTreeHeader {
+  display:flex;gap:5px;align-items:center;padding:5px;
+  border:1px solid #42617a;border-radius:8px;background:#16283a;
+  margin:10px 0 5px;
+}
+.slicerAssemblyTreeHeader>button:first-child {
+  display:flex;align-items:center;gap:6px;flex:1;min-width:0;text-align:left;
+  overflow-wrap:anywhere;
+}
+.slicerAssemblyTreeHeader>button:last-child {min-width:30px;padding:4px}
+.slicerAssemblyTreePart {margin-left:12px; border-left:2px solid #45657b;padding-left:6px}
+
+
+.slicerPrimitivePicker,.slicerBooleanOperands {
+  border:1px solid #3d566e;border-radius:9px;padding:9px 10px;min-width:0;margin:0;
+}
+.slicerPrimitivePicker legend,.slicerBooleanOperands legend {color:#bdd0df;font-size:.83rem;padding:0 5px}
+.slicerPrimitiveShapeGrid {
+  display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:7px;
+}
+.slicerPrimitiveShapeGrid button {
+  display:flex;align-items:center;justify-content:flex-start;gap:8px;
+  min-width:0;min-height:43px;padding:8px;
+  border-radius:8px;border:1px solid #405875;background:#152332;color:#d7e4f3;
+  font-size:.79rem;text-align:left;
+}
+.slicerPrimitiveShapeGrid button.selected {
+  border-color:#aa8bfc;background:#292342;color:#eee7ff;
+}
+.slicerPrimitiveShapeGrid .slicerUiIcon {flex:0 0 21px}
+.slicerBooleanOperands {
+  display:grid;max-height:220px;overflow-y:auto;gap:7px;
+}
+.slicerBooleanOperands label {
+  display:flex;align-items:center;gap:8px;font-size:.79rem;line-height:1.4;
+}
+.slicerBooleanOperands input[type=checkbox] {width:17px;min-height:17px;flex:0 0 17px}
+.slicerBooleanOperands small {font-size:.73rem;color:#9aacbf}
+@media(max-width:480px) {
+  .slicerPrimitiveShapeGrid {grid-template-columns:repeat(2,minmax(0,1fr))}
+}
+
+
+/* Compact large object trees without making long filenames unreadable. */
+.slicerPrepareTree .slicerPrepareModelEntry>button:first-child{
+  min-height:34px;padding:5px 7px;line-height:1.25;font-size:.8rem;
+}
+.slicerPrepareTree .slicerModelChangeFilament{
+  min-height:26px;padding:3px 7px;margin-bottom:4px;line-height:1.2;
+}
+.slicerPrepareTree .slicerAssemblyTreeHeader{margin:6px 0 3px}
+.slicerPlateSectionControl{top:100px;bottom:12px;width:50px}
+.slicerSectionAxisLabel{display:flex;flex-direction:column;gap:3px;align-items:center;
+  width:100%;font-size:.65rem}
+.slicerPlateSectionControl .slicerSectionAxisLabel select{
+  width:100%;min-width:0;border:1px solid #415a72;border-radius:5px;
+  background:#142439;color:#e0edfa;padding:3px 0;font:inherit;
+}
+@media(max-width:700px){
+  .slicerPlateSectionControl{top:100px;right:4px;bottom:12px}
+}
+
+/* Preview geometry transform mode, alongside precise dimension fields. */
+.slicerInsertionMode{
+  display:grid;grid-template-columns:repeat(3,minmax(0,1fr));
+  gap:5px;margin:8px 0 12px;
+}
+.slicerSolidModal .slicerInsertionMode button{
+  width:100%;min-width:0;min-height:32px;
+  padding:5px 7px;font-size:.76rem;
+}
+.slicerSolidModal .slicerInsertionMode button.selected{
+  background:#293853;border-color:#b8a6ff;color:#f1eaff;
+}
+.slicerPrepareTree .slicerModelEditText{
+  width:100%;min-height:26px;padding:3px 7px;margin:0;
+  font-size:.76rem;line-height:1.2;
+}
+
+/* Geometry insertion/editor is an inspector beside the visible print plate.
+   It must not inherit the older right-side modal position or full-page height. */
+.slicerSolidModal.slicerViewportAnchoredModal{
+  box-sizing:border-box;
+  margin:0;
+  padding:12px;
+  min-width:0;
+  max-width:calc(100vw - 16px);
+  min-height:0;
+  overflow-y:auto;
+  overscroll-behavior:contain;
+  scrollbar-gutter:stable;
+  display:flex;
+  flex-direction:column;
+  align-items:stretch;
+  gap:10px;
+}
+.slicerSolidModal.slicerViewportAnchoredModal .slicerAutoOrientModalHeader{
+  position:sticky;
+  top:-12px;
+  z-index:2;
+  background:#101d2a;
+  padding:2px 0 8px;
+  border-bottom:1px solid #30445a;
+}
+.slicerSolidModal.slicerViewportAnchoredModal .slicerAutoOrientModalActions{
+  position:sticky;
+  bottom:-12px;
+  z-index:2;
+  background:#101d2a;
+  border-top:1px solid #30445a;
+  padding:10px 0 2px;
+  margin-top:auto;
+}
+.slicerSolidModal.slicerViewportAnchoredModal .slicerAutoOrientModalHeader h3{
+  font-size:1rem;
+}
+.slicerSolidModal.slicerViewportAnchoredModal .slicerAutoOrientModalHeader p{
+  font-size:.75rem;
+  margin-top:2px;
+}
+.slicerSolidModal.slicerViewportAnchoredModal .slicerPrimitivePicker{
+  padding:6px 8px;
+}
+.slicerSolidModal.slicerViewportAnchoredModal .slicerPrimitiveShapeGrid{
+  gap:5px;
+}
+.slicerSolidModal.slicerViewportAnchoredModal .slicerPrimitiveShapeGrid button{
+  min-height:34px;
+  padding:5px;
+  gap:5px;
+}
+.slicerSolidModal.slicerViewportAnchoredModal .slicerInsertionMode{
+  margin:0;
+}
+.slicerSolidModal.slicerViewportAnchoredModal .slicerSolidGrid{
+  gap:8px;
+}
+.slicerSolidModal.slicerViewportAnchoredModal input,
+.slicerSolidModal.slicerViewportAnchoredModal select{
+  min-height:32px;
+  padding:4px 7px;
+}
+.slicerSolidModal.slicerViewportAnchoredModal .slicerSolidResult{
+  padding:7px 9px;
+}
+@media (max-width:740px){
+  .slicerSolidModal.slicerViewportAnchoredModal{
+    width:calc(100vw - 16px) !important;
+    max-height:calc(100dvh - 16px);
+  }
+}
+
+/* Section tool sits below the view cube at every desktop density.
+   Keep a stable bottom control area rather than squeezing the Axis label. */
+.slicerPlateCanvasViewport > .slicerPlateSectionControl{
+  top:clamp(135px, 22%, 170px);
+  bottom:12px;
+  right:10px;
+  width:62px;
+  min-height:190px;
+  padding:9px 6px;
+  gap:6px;
+}
+.slicerPlateSectionControl .slicerSectionAxisLabel{
+  display:flex;
+  flex-direction:column;
+  align-items:stretch;
+  justify-content:center;
+  flex:0 0 auto;
+  width:100%;
+  min-width:0;
+  gap:4px;
+  margin:0;
+  padding:0;
+  text-align:center;
+  white-space:nowrap;
+  font-size:11px;
+  font-weight:500;
+  line-height:1.2;
+}
+.slicerPlateSectionControl .slicerSectionAxisLabel select{
+  display:block;
+  box-sizing:border-box;
+  width:100%;
+  min-width:0;
+  max-width:100%;
+  height:28px;
+  padding:3px 5px;
+  margin:0;
+  border-radius:5px;
+  text-align:center;
+  text-align-last:center;
+  font-size:12px;
+  line-height:1.2;
+}
+.slicerPlateSectionControl .slicerSectionValue{
+  overflow-wrap:normal;
+  word-break:normal;
+  white-space:nowrap;
+}
+/* Keep the section rail full-height so the thumb reaches the visible top
+   and bottom endpoints rather than stopping short of a shortened rail. */
+.slicerPlateSectionControl input[type="range"]{
+  -webkit-appearance:none;
+  appearance:none;
+  min-height:42px;
+  box-sizing:border-box;
+  border:0;
+  border-radius:0;
+  padding:0;
+  background:linear-gradient(#43b8e6,#43b8e6) center / 4px 100% no-repeat;
+  cursor:pointer;
+}
+.slicerPlateSectionControl input[type="range"]::-webkit-slider-runnable-track{
+  background:transparent;
+  border:0;
+}
+.slicerPlateSectionControl input[type="range"]::-webkit-slider-thumb{
+  -webkit-appearance:none;
+  appearance:none;
+  width:18px;
+  height:18px;
+  border:1px solid #cbd5e1;
+  border-radius:999px;
+  background:#fff;
+}
+.slicerPlateSectionControl input[type="range"]::-moz-range-track{
+  background:transparent;
+  border:0;
+}
+.slicerPlateSectionControl input[type="range"]::-moz-range-thumb{
+  width:18px;
+  height:18px;
+  border:1px solid #cbd5e1;
+  border-radius:999px;
+  background:#fff;
+}
+@media(max-width:700px){
+  .slicerPlateCanvasViewport > .slicerPlateSectionControl{
+    top:clamp(125px, 22%, 155px);
+    right:5px;
+    bottom:10px;
+    width:57px;
+  }
+}
+
+/* Dense object-tree rows with real assembly branches. Tree entries remain
+   separate buttons for selection and individual filament editing. */
+.slicerPrepareTree .slicerPrepareModelEntry{
+  position:relative;
+  display:flex;
+  flex-direction:column;
+  gap:2px;
+  margin:0 0 3px;
+  padding:0;
+}
+.slicerPrepareTree .slicerPrepareModelEntry>button:first-child{
+  min-height:28px;
+  padding:4px 6px;
+  font-size:.76rem;
+  line-height:1.15;
+}
+.slicerPrepareTree .slicerModelChangeFilament,
+.slicerPrepareTree .slicerModelEditText{
+  width:100%;
+  min-height:22px;
+  height:auto;
+  padding:2px 6px;
+  margin:0;
+  font-size:.7rem;
+  line-height:1.15;
+}
+.slicerPrepareTree .slicerAssemblyTreeHeader{
+  padding:3px;
+  margin:6px 0 2px;
+  min-height:32px;
+}
+.slicerPrepareTree .slicerAssemblyTreeHeader>button:first-child{
+  min-height:26px;
+  padding:3px 6px;
+}
+.slicerPrepareTree .slicerAssemblyTreePart{
+  position:relative;
+  margin-left:12px;
+  margin-bottom:0;
+  padding-left:13px;
+  padding-bottom:3px;
+  border:0;
+  border-radius:0;
+  background:transparent;
+}
+.slicerPrepareTree .slicerAssemblyTreePart::before{
+  content:"";
+  position:absolute;
+  left:2px;
+  top:-3px;
+  bottom:0;
+  width:1px;
+  background:#526b83;
+  pointer-events:none;
+}
+.slicerPrepareTree .slicerAssemblyTreePart::after{
+  content:"";
+  position:absolute;
+  left:2px;
+  top:13px;
+  width:11px;
+  height:1px;
+  background:#526b83;
+  pointer-events:none;
+}
+.slicerPrepareTree .slicerAssemblyTreePart.slicerAssemblyTreeLast::before{
+  bottom:auto;
+  height:16px;
+}
+.slicerPrepareTree .slicerModelFilamentChoices{
+  margin:2px 0 4px;
+  padding:5px;
+  gap:3px;
+}
+
+/* Keep the common per-object action on the SAME row as its name. This cuts
+   the repeated vertical height almost in half even for a large plate. */
+.slicerPrepareTree .slicerPrepareModelEntry{
+  display:grid;
+  grid-template-columns:minmax(0,1fr) auto;
+  grid-auto-rows:min-content;
+  gap:2px 4px;
+  align-items:center;
+  margin-bottom:2px;
+}
+.slicerPrepareTree .slicerPrepareModelEntry>button:first-child{
+  grid-column:1;
+  grid-row:1;
+  min-width:0;
+}
+.slicerPrepareTree .slicerPrepareModelEntry>.slicerModelChangeFilament{
+  grid-column:2;
+  grid-row:1;
+  width:auto;
+  min-width:65px;
+  margin:0;
+  padding:4px 5px;
+  border-radius:6px;
+  font-size:.68rem;
+  white-space:nowrap;
+}
+.slicerPrepareTree .slicerPrepareModelEntry>.slicerModelEditText{
+  grid-column:1/-1;
+  grid-row:2;
+}
+.slicerPrepareTree .slicerPrepareModelEntry>.slicerModelFilamentChoices{
+  grid-column:1/-1;
+}
+.slicerPrepareTree .slicerAssemblyTreePart::after{top:15px}
+
+/* Multi-plate project navigation. Keep plates visible without reducing the
+   model canvas or pushing the editing toolbar out of the viewport. */
+.slicerPlateProjectNav{
+  display:flex;align-items:center;gap:7px;min-width:0;
+  margin:5px 0 9px;padding:7px;
+  border:1px solid #344b61;border-radius:9px;
+  background:#111f2d;
+}
+.slicerPlateProjectTabs{
+  display:flex;flex:1;gap:5px;overflow-x:auto;
+  min-width:0;scrollbar-width:thin;
+}
+.slicerPlateProjectNav button{
+  flex:none;display:inline-flex;align-items:center;gap:8px;
+  min-height:33px;padding:5px 10px;
+  white-space:nowrap;font-size:.78rem;
+  border:1px solid #3a4d61;border-radius:7px;
+  background:#152437;color:#c8d7e6;
+}
+.slicerPlateProjectNav button.active{
+  background:#302d50;border-color:#8b80d5;color:#f4eeff;
+}
+.slicerPlateProjectNav button:disabled{opacity:.45;cursor:not-allowed}
+.slicerPlateProjectCount{
+  display:inline-flex;align-items:center;justify-content:center;
+  min-width:18px;padding:1px 5px;border-radius:12px;
+  font-size:.7rem;background:#26374b;
+}
+.slicerPlateSliceScope{
+  align-self:center;flex:1 1 100%;
+  margin:0;font-size:.77rem;color:#a5b9cd;
+}
+@media(max-width:700px){
+  .slicerPlateProjectNav{flex-wrap:wrap;padding:5px}
+  .slicerPlateProjectTabs{flex:1 1 100%;order:0}
+}
+
+/* The project tabs consume their own row; the plate panel must not also
+   claim 100% of the centre column's original height. */
+.slicerPrepareScene>.slicerPlateProjectNav+.slicerPlatePanel{
+  height:auto;
+}
+
+/* Multi-plate object transfer and compact split Slice control. */
+.slicerMoveToPlate{display:grid;grid-template-columns:minmax(0,1fr);gap:6px;
+  padding:7px;margin:6px 0;border:1px solid #375269;border-radius:8px}
+.slicerMoveToPlate label{display:grid;gap:4px;font-size:.76rem;color:#b3c9db}
+.slicerMoveToPlate select{width:100%;min-width:0;min-height:30px;padding:3px 6px}
+.slicerMoveToPlate button{min-height:28px;padding:4px 7px}
+.slicerSliceSplit{display:inline-flex;align-items:stretch;position:relative;flex:none}
+.slicerSliceSplit>button{min-height:36px}
+.slicerSliceSplit>button.primary{border-radius:8px 0 0 8px;padding:7px 18px}
+.slicerSliceSplit>button:nth-child(2){border-radius:0 8px 8px 0;
+  padding:6px 10px;border-left:1px solid #61708d}
+.slicerSliceMenu{position:absolute;right:0;bottom:calc(100% + 5px);z-index:30;
+  min-width:190px;display:grid;gap:4px;padding:6px;background:#142434;
+  border:1px solid #445a72;border-radius:8px;box-shadow:0 8px 20px #0008}
+.slicerSliceMenu button{text-align:left;width:100%;padding:8px 10px;min-height:32px}
+.slicerSliceMenu button:disabled{opacity:.45}
+@media(max-width:650px){
+ .slicerSliceSplit{flex:1 1 100%}
+ .slicerSliceSplit>button.primary{flex:1}
+ .slicerSliceMenu{left:0;right:0}
+}
+
+.slicerProjectImportButton{
+ display:inline-flex;align-items:center;justify-content:center;position:relative;
+ cursor:pointer;min-height:36px;padding:7px 11px;border:1px solid #3b5269;
+ border-radius:8px;background:#182737;color:#d5e4f1;font-size:.8rem;
+}
+.slicerProjectImportButton:focus-within{outline:2px solid #9582df;outline-offset:2px}
+.slicerProjectImportButton input[type="file"]{
+ position:absolute;width:100%;height:100%;inset:0;opacity:0;cursor:pointer;
+}
+.slicerProjectImportButton:has(input:disabled){opacity:.45;cursor:not-allowed}
+
+/* Slicer editing tools are grouped by purpose without consuming another row
+   of labels. The first icon after a group change gets a clear divider. */
+.slicerPrepareTools .slicerToolGroupStart{
+  margin-inline-start:10px;
+  position:relative;
+}
+.slicerPrepareTools .slicerToolGroupStart::before{
+  content:"";position:absolute;left:-7px;top:5px;bottom:5px;
+  width:1px;background:#55687e;pointer-events:none;
+}
+.slicerPrepareTools .slicerToolGroupStart:first-of-type::before{display:none}
+.slicerPrepareTools .slicerToolGroupStart:first-of-type{margin-inline-start:0}
+
+/* Keep filenames readable. The filament control lives on its own slim row,
+   not squeezed alongside a long STL filename. */
+.slicerPrepareTree .slicerPrepareModelEntry{
+  display:flex;flex-direction:column;align-items:stretch;
+  gap:2px;margin:0 0 5px;min-width:0;
+}
+.slicerPrepareTree .slicerPrepareModelEntry>button:first-child{
+  display:flex;flex:0 0 auto;width:100%;min-height:31px;
+  padding:5px 7px;line-height:1.25;
+}
+.slicerPrepareTree .slicerPrepareModelEntry>.slicerModelChangeFilament{
+  width:100%;min-height:23px;padding:3px 7px;margin:0;
+  font-size:.72rem;text-align:center;white-space:normal;line-height:1.2;
+}
+.slicerPrepareTree .slicerPrepareModelEntry>.slicerModelEditText{
+  width:100%;min-height:23px;padding:3px 7px;
+}
+.slicerPrepareTree .slicerAssemblyTreePart::after{top:18px}
+
+/* Show material and assigned printer slot inside the existing compact
+   model-selection row. Never insert an extra metadata row per object. */
+.slicerPrepareTree .slicerPrepareModelEntry>button:first-child{
+  gap:6px;
+  min-width:0;
+}
+.slicerPrepareTree .slicerPrepareMaterialSwatch{
+  display:flex;
+  justify-content:center;
+  align-items:center;
+  width:32px;
+  height:32px;
+  flex:0 0 32px;
+  border-radius:50%;
+  border:1px solid #a0b0c0;
+  box-shadow:0 0 0 1px #111c2b;
+  font-size:11px;
+  font-weight:800;
+  line-height:1;
+  letter-spacing:0;
+  font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+  font-synthesis:none;
+  -webkit-font-smoothing:antialiased;
+  text-shadow:none;
+  overflow:hidden;
+  white-space:nowrap;
+}
+.slicerPrepareTree .slicerPrepareModelName{
+  flex:1 1 auto;
+  min-width:0;
+  overflow:hidden;
+  text-overflow:ellipsis;
+  white-space:nowrap;
+}
+.slicerPrepareTree .slicerPrepareSlotBadge{
+  display:inline-flex;
+  justify-content:center;
+  align-items:center;
+  width:25px;
+  height:25px;
+  min-width:25px;
+  flex:0 0 25px;
+  border-radius:50%;
+  font-size:11px;
+  font-weight:700;
+  color:#eaf4ff;
+  background:#244669;
+  border:1px solid #5d9bcc;
+}
+.slicerPrepareTree .sr-only{
+  position:absolute;
+  width:1px;
+  height:1px;
+  padding:0;
+  margin:-1px;
+  overflow:hidden;
+  clip:rect(0,0,0,0);
+  white-space:nowrap;
+  border:0;
+}
+.slicerPrepareTree .slicerPrepareSlotBadge.stale{
+  border-color:#d8a059;
+  color:#ffe1a8;
+  background:#5e4226;
+}
+
+/* All model inspectors share a measured camera-row top anchor. */
+.slicerPlateCanvasViewport > .slicerViewportMeasurement,
+.slicerPlateCanvasViewport > .slicerViewportMeasurement.slicerViewportTransform,
+.slicerPlateCanvasViewport > .slicerGroupTransformOverlay{
+  top:var(--slicer-overlay-top,-44px) !important;
+  left:12px;
+}
+@media(max-width:700px){
+  .slicerPlateCanvasViewport > .slicerViewportMeasurement,
+  .slicerPlateCanvasViewport > .slicerViewportMeasurement.slicerViewportTransform,
+  .slicerPlateCanvasViewport > .slicerGroupTransformOverlay{
+    top:var(--slicer-overlay-top,-44px) !important;
+    left:8px;
+  }
+}
+.slicerAssemblyActions>div{display:grid;gap:5px}
+.slicerAssemblyActions button{min-height:28px;padding:5px 7px}
+
+/* The all-plates mode is a read-only, top-down project overview. It preserves
+   real plate-relative XY placement and renders no slicing/toolpath guesses. */
+.slicerAllPlates{display:flex;flex-direction:column;gap:13px;min-width:0;
+  padding:14px;border:1px solid #344b61;border-radius:10px;background:#101d2b}
+.slicerAllPlatesHeading{display:flex;flex-wrap:wrap;justify-content:space-between;
+  align-items:center;gap:8px;color:#e0eafa}
+.slicerAllPlatesHeading span{font-size:.78rem;color:#9db4c9}
+.slicerAllPlatesGrid{display:grid;
+  grid-template-columns:repeat(auto-fit,minmax(min(100%,230px),1fr));gap:12px}
+.slicerAllPlatesCard{display:flex;flex-direction:column;gap:8px;
+  align-items:stretch;min-width:0;padding:10px;
+  text-align:left;border:1px solid #3e5771;border-radius:10px;
+  background:#152536;transition:border-color .12s,background .12s}
+.slicerAllPlatesCard:hover,.slicerAllPlatesCard:focus-visible{
+  border-color:#9086ec;background:#1c3146}
+.slicerAllPlatesCardTitle{display:flex;align-items:center;
+  justify-content:space-between;gap:8px}
+.slicerAllPlatesCardTitle strong{min-width:0;overflow-wrap:anywhere;font-size:.83rem}
+.slicerAllPlatesCardTitle small{flex:none;color:#a8bed0;font-size:.74rem}
+.slicerAllPlatesCard svg{display:block;aspect-ratio:1/1;width:100%;
+  max-height:310px;border-radius:5px}
+.slicerAllPlatesOpen{color:#c3b5ff;font-size:.73rem;text-align:right}
+@media(max-width:700px){
+  .slicerAllPlates{padding:9px}
+  .slicerAllPlatesGrid{grid-template-columns:repeat(auto-fit,minmax(min(100%,190px),1fr))}
+}
+
+/* Editable layer boundary, next to the toolpath layer control. */
+.slicerGcodeInsertButton{max-width:100%;padding:5px 7px;font-size:.72rem;white-space:normal;line-height:1.2}
+.slicerGcodeLayerInsert{display:grid;gap:10px;max-width:800px;margin:12px auto;padding:15px;border:1px solid var(--border,#394958);border-radius:10px}
+.slicerGcodeLayerInsert label{display:grid;gap:6px}
+.slicerGcodeLayerInsert textarea{width:100%;box-sizing:border-box;font-family:ui-monospace,SFMono-Regular,Consolas,monospace;font-size:.87rem}
+.slicerGcodeLayerInsert .checkRow{display:flex;align-items:flex-start;gap:7px}
+.slicerGcodeInsertSnippet{overflow:auto;max-height:210px;white-space:pre-wrap;overflow-wrap:anywhere;font-size:.82rem;border:1px solid var(--border,#394958);border-radius:8px;padding:10px}
+.slicerFlushPanel{min-width:0;border-top:1px solid var(--border,#394958);padding-top:10px;margin-top:10px}
+.slicerFlushPanel summary{cursor:pointer;font-weight:600}
+.slicerFlushPanel summary small{font-weight:400;opacity:.7}
+.slicerFlushPanelControls{display:flex;align-items:flex-end;flex-wrap:wrap;gap:10px;margin:10px 0}
+.slicerFlushPanelControls label{display:grid;gap:4px;min-width:110px;flex:1 1 120px}
+.slicerFlushPanelControls input,.slicerFlushPanelControls select{box-sizing:border-box;width:100%;min-width:0}
+.slicerFlushTableScroll{width:100%;overflow:auto}
+.slicerFlushTable{min-width:410px;width:100%;font-size:.77rem}
+.slicerFlushTable input{width:80px;min-width:65px;box-sizing:border-box}
+.slicerFlushTable th{white-space:nowrap;font-size:.77rem}
+.slicerFlushTable td{text-align:center}
+
+
+/* Mobile geometry inspectors: keep all fields and sticky actions inside the
+   available screen, never under Safari's off-screen horizontal edge. */
+.slicerSolidModal.slicerViewportAnchoredModal{
+  min-width:0;min-height:0;overflow-x:hidden;
+}
+.slicerSolidModal.slicerViewportAnchoredModal *,
+.slicerSolidModal.slicerViewportAnchoredModal *::before,
+.slicerSolidModal.slicerViewportAnchoredModal *::after{box-sizing:border-box}
+.slicerSolidModal.slicerViewportAnchoredModal .slicerAutoOrientModalHeader{
+  display:flex;align-items:flex-start;justify-content:space-between;gap:8px;
+  min-width:0;flex:0 0 auto;
+}
+.slicerSolidModal.slicerViewportAnchoredModal .slicerAutoOrientModalHeader>div{
+  min-width:0;flex:1 1 auto;
+}
+.slicerSolidModal.slicerViewportAnchoredModal .slicerAutoOrientModalHeader h3{
+  overflow-wrap:anywhere;word-break:normal;line-height:1.25;
+}
+.slicerSolidModal.slicerViewportAnchoredModal .slicerAutoOrientModalHeader>button{
+  flex:0 0 36px;min-width:36px;
+}
+.slicerSolidModal.slicerViewportAnchoredModal .slicerAutoOrientModalActions{
+  display:flex;flex-wrap:wrap;gap:6px;min-width:0;
+}
+.slicerSolidModal.slicerViewportAnchoredModal .slicerAutoOrientModalActions>*{
+  min-width:0;max-width:100%;
+}
+.slicerSolidModal.slicerViewportAnchoredModal .slicerSolidGrid,
+.slicerSolidModal.slicerViewportAnchoredModal .slicerPrimitivePicker{
+  width:100%;max-width:100%;min-width:0;
+}
+.slicerSolidModal.slicerViewportAnchoredModal input,
+.slicerSolidModal.slicerViewportAnchoredModal select{
+  width:100%;max-width:100%;min-width:0;
+}
+.slicerSolidModal.slicerViewportAnchoredModal .slicerPrimitiveShapeGrid{
+  grid-template-columns:repeat(2,minmax(0,1fr));
+}
+.slicerPaintMobileMinimise{display:none}
+@media(max-width:740px){
+  .slicerSolidModal.slicerViewportAnchoredModal{
+    width:calc(100vw - 16px)!important;
+    max-width:calc(100vw - 16px)!important;
+    overflow-x:hidden;overflow-y:auto;
+    scrollbar-gutter:auto;
+    padding:10px;
+    gap:8px;
+  }
+  .slicerSolidModal.slicerViewportAnchoredModal .slicerAutoOrientModalHeader{
+    top:-10px;align-items:center;
+  }
+  .slicerSolidModal.slicerViewportAnchoredModal .slicerAutoOrientModalHeader h3{
+    font-size:1rem;max-width:100%;
+  }
+  .slicerSolidModal.slicerViewportAnchoredModal .slicerSolidGrid{
+    grid-template-columns:minmax(0,1fr);
+  }
+  .slicerSolidModal.slicerViewportAnchoredModal .slicerInsertionMode{
+    display:flex;flex-wrap:wrap;gap:5px;
+  }
+  .slicerSolidModal.slicerViewportAnchoredModal .slicerInsertionMode>button{
+    flex:1 1 100px;min-width:0;
+  }
+  .slicerSolidModal.slicerViewportAnchoredModal .slicerAutoOrientModalActions{
+    bottom:-10px;justify-content:stretch;flex-direction:row;
+    padding:8px 0 2px;
+  }
+  .slicerSolidModal.slicerViewportAnchoredModal .slicerAutoOrientModalActions button{
+    flex:1 1 120px;max-width:100%;min-height:40px;white-space:normal;
+  }
+  .slicerSolidModal.slicerViewportAnchoredModal .slicerSolidPreviewStatus{
+    flex:1 1 100%;text-align:center;order:-1;margin:0;
+  }
+  /* Painting is a shallow top toolbar on phones, leaving the build plate
+     accessible. Tools and filament slots can scroll sideways independently. */
+  .slicerPlateCanvasViewport>.slicerColourPaintPanel{
+    top:6px!important;left:6px!important;right:6px!important;
+    width:calc(100% - 12px)!important;max-width:calc(100% - 12px)!important;
+    max-height:min(195px,32dvh)!important;overflow-x:hidden;overflow-y:auto;
+    padding:7px!important;gap:5px!important;border-radius:8px;
+    scrollbar-gutter:auto;
+  }
+  .slicerColourPaintPanel>div[role="group"]{
+    display:flex!important;flex-wrap:nowrap!important;gap:4px!important;
+    overflow-x:auto;overscroll-behavior-inline:contain;
+    padding:1px 1px 4px;max-width:100%;min-width:0;
+    scrollbar-width:thin;
+  }
+  .slicerColourPaintPanel>div[role="group"] button{
+    flex:0 0 auto;
+  }
+  .slicerColourPaintPanel>div[role="group"][aria-label="Paint filament palette"] button{
+    min-width:54px;max-width:90px;
+  }
+  .slicerColourPaintPanel>div:first-child>strong{font-size:.86rem}
+  .slicerPaintMobileMinimise{display:inline-flex;align-items:center;min-height:28px;padding:3px 6px;font-size:.72rem}
+  .slicerColourPaintPanel.slicerPaintMinimised{
+    max-height:42px!important;overflow:hidden!important;
+  }
+  .slicerColourPaintPanel.slicerPaintMinimised > :not(:first-child){
+    display:none!important;
+  }
+  .slicerColourPaintPanel label{min-width:0}
+  .slicerColourPaintPanel input[type="range"]{max-width:100%}
+}
+
+/* Keep interactive slicing actions at the trailing/right edge even when the
+   status column is empty or hidden. Narrow screens retain a wrapping footer. */
+.slicerPrepareActions{width:100%;min-width:0}
+.slicerPrepareActions>.settingsActions{
+  margin-left:auto;justify-content:flex-end;align-items:center;
+  max-width:100%;min-width:0;
+}
+@media(max-width:700px){
+  .slicerPrepareActions>.settingsActions{
+    width:100%;margin-left:0;justify-content:stretch;
+  }
+}
+
+/* Accessible flushing editor: one compact action in the setup column,
+   a scrollable modal with a wide, non-cramped transition matrix. */
+.slicerFlushOpenButton{width:100%;max-width:100%;text-align:center;min-height:40px}
+.slicerFlushModalBackdrop{
+  position:fixed;inset:0;z-index:11000;background:rgba(0,0,0,.7);
+  display:flex;align-items:center;justify-content:center;padding:16px;
+}
+.slicerFlushModal{
+  width:min(1020px,100%);max-height:min(90dvh,900px);min-width:0;
+  border:1px solid #43556d;border-radius:12px;background:#111a28;color:#e7edf6;
+  display:flex;flex-direction:column;overflow:hidden;box-shadow:0 22px 70px rgba(0,0,0,.55);
+}
+.slicerFlushModalHeader,.slicerFlushModalFooter{
+  display:flex;align-items:center;justify-content:space-between;gap:10px;
+  padding:12px 16px;flex:0 0 auto;background:#111a28;
+}
+.slicerFlushModalHeader{border-bottom:1px solid #354359}
+.slicerFlushModalHeader h3{margin:0}
+.slicerFlushModalFooter{border-top:1px solid #354359;justify-content:flex-end}
+.slicerFlushModalBody{padding:14px 16px;overflow:auto;min-width:0;min-height:0}
+.slicerFlushModalControls{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}
+.slicerFlushModalControls label{min-width:0;display:grid;gap:5px}
+.slicerFlushModalControls input,.slicerFlushModalControls select{min-width:0;width:100%}
+.slicerFlushModal .slicerFlushTableScroll{overflow:auto;max-width:100%;max-height:40dvh}
+.slicerFlushModal .slicerFlushTable{width:max-content;min-width:100%;border-collapse:separate;white-space:nowrap}
+.slicerFlushModal .slicerFlushTable th{min-width:95px}
+.slicerFlushModal .slicerFlushTable td input{min-width:78px;width:94px;max-width:110px}
+.slicerFlushSlotLabel{display:flex;gap:6px;align-items:center;text-align:left}
+.slicerFlushSwatch{width:18px;height:18px;border:1px solid #8b9aac;border-radius:50%;flex:0 0 18px}
+@media(max-width:700px){
+ .slicerFlushModalBackdrop{padding:8px}
+ .slicerFlushModal{max-height:calc(100dvh - 16px);width:100%}
+ .slicerFlushModalBody{padding:10px}
+ .slicerFlushModalControls{grid-template-columns:1fr}
+ .slicerFlushModalHeader,.slicerFlushModalFooter{padding:9px 11px}
+}
+
+.slicerLiveMaterialSlot .slicerLiveMaterialSwatchRound{
+ border-radius:50%;width:26px;height:26px;min-width:26px;
+ border:1px solid #9cacc0;
+}
+.slicerLiveMaterialSlot>button{
+ margin-left:auto;align-self:center;flex:0 0 auto;
+}
+.slicerSlotProfileModal{width:min(560px,100%)}
+.slicerSlotProfileModal label{display:grid;gap:7px}
+.slicerSlotProfileModal select{width:100%;min-width:0}
+
+/* Keep the eraser visible even if the mobile colour-swatch carousel scrolls.
+   It must not be clipped as the last item inside the horizontally scrolling list. */
+.slicerColourPaintPanel .slicerPaintEditActions{
+  display:flex;align-items:center;justify-content:flex-end;gap:6px;
+  min-width:0;flex-wrap:wrap;
+}
+.slicerColourPaintPanel .slicerPaintEditActions>button{
+  flex:0 0 auto;min-height:32px;white-space:nowrap;padding:5px 9px;
+  border:1px solid #53647a;border-radius:7px;
+}
+.slicerColourPaintPanel .slicerPaintEditActions>button[aria-pressed="true"]{
+  background:#34486b;border-color:#38bdf8;
+}
+@media (max-width:740px){
+  /* The mobile geometry editor is a SHORT scrollable inspector. It must
+     never fill the whole canvas as the earlier auto-height dialog did. */
+  .slicerSolidModal.slicerViewportAnchoredModal{
+    max-height:min(35dvh,300px)!important;
+    min-height:0!important;
+    overscroll-behavior:contain;
+  }
+  .slicerColourPaintPanel .slicerPaintEditActions{gap:5px}
+  .slicerColourPaintPanel .slicerPaintEditActions>button{
+    min-height:32px;padding:5px 7px;font-size:.77rem;
+  }
+}
+
+/* Collapsed mesh inspector retains its title and controls but releases the
+   print bed. The panel can be expanded again without losing operation state. */
+.slicerSolidModal.slicerSolidInspectorCollapsed{
+  height:auto!important;min-height:0!important;
+  max-height:60px!important;padding:7px 10px!important;overflow:hidden!important;
+}
+.slicerSolidModal.slicerSolidInspectorCollapsed > :not(.slicerAutoOrientModalHeader){
+  display:none!important;
+}
+.slicerSolidModal .slicerSolidCollapseButton{
+  flex:0 0 auto;min-width:47px;padding:5px 9px;min-height:33px;
+}
+.slicerSolidModal.slicerSolidInspectorCollapsed .slicerAutoOrientModalHeader{
+  position:static;padding:0!important;margin:0;border:0;align-items:center;
+}
+@media(max-width:740px){
+  .slicerSolidModal.slicerViewportAnchoredModal .slicerAutoOrientModalHeader > button{
+    flex:0 0 auto;min-width:36px;
+  }
+}
+
+
+/* 2026-11: single-line CFS summary rows; detailed telemetry belongs in the modal. */
+.slicerPrepareScene .slicerPlateCanvasColumn{position:relative}
+.slicerLiveMaterialSlots .slicerLiveMaterialSlotCompact{
+  display:grid;grid-template-columns:26px minmax(0,1fr);align-items:center;
+  gap:6px 9px;padding:9px 0;
+}
+.slicerLiveMaterialSlotCompact .slicerLiveMaterialSummary{
+  min-width:0;display:flex;flex-direction:column;gap:2px;
+}
+.slicerLiveMaterialSlotCompact .slicerLiveMaterialSummary strong{
+  white-space:nowrap;text-overflow:ellipsis;overflow:hidden;
+}
+.slicerLiveMaterialSlots .slicerLiveMaterialSlotCompact .slicerLiveMaterialActions{
+  display:grid;grid-template-columns:repeat(2,minmax(0,1fr));
+  gap:6px;grid-column:2;min-width:0;width:100%;
+}
+.slicerLiveMaterialSlots .slicerLiveMaterialSlotCompact .slicerLiveMaterialActions button{
+  width:100%;min-width:0;min-height:34px;margin:0;
+  padding:5px 4px;font-size:.76rem;white-space:nowrap;
+}
+.slicerSlotDetails p{margin:6px 0}
+.slicerFlushModalBody .slicerFlushTableScroll{overflow:auto;max-width:100%;max-height:48dvh}
+.slicerFlushModal .slicerFlushMatrix{
+  border-collapse:collapse;table-layout:fixed;width:100%;min-width:610px;
+  background:transparent;
+}
+.slicerFlushMatrix th,.slicerFlushMatrix td{
+  border:1px solid #38495c;padding:3px 5px;text-align:center;
+  width:120px;min-width:120px;max-width:120px;vertical-align:middle;
+}
+.slicerFlushMatrix th:first-child{width:140px;min-width:140px;max-width:140px}
+.slicerFlushMatrix th{background:#152236;font-weight:600}
+.slicerFlushMatrix tbody tr:nth-child(even){background:rgba(255,255,255,.025)}
+.slicerFlushMatrix .slicerFlushSlotLabel{max-width:100%;white-space:normal;font-size:.76rem}
+.slicerFlushMatrix .slicerFlushSlotLabel span:last-child{
+  min-width:0;overflow:hidden;text-overflow:ellipsis;
+}
+.slicerFlushMatrix .slicerFlushCell{
+  width:100%;max-width:none;min-width:0;display:block;
+  padding:7px 5px;border:0;border-radius:0;text-align:right;
+  background:transparent;font-variant-numeric:tabular-nums;
+  box-shadow:none;outline-offset:-2px;
+}
+.slicerFlushMatrix .slicerFlushCell:focus-visible{
+  outline:2px solid #38bdf8;background:#203348;
+}
+@media(max-width:740px){
+  .slicerPrepareScene .slicerPlateCanvasColumn>.slicerColourPaintPanel{
+    top:var(--slicer-paint-top, 92px)!important;left:6px!important;
+    right:6px!important;width:calc(100% - 12px)!important;
+    max-width:calc(100% - 12px)!important;
+    max-height:min(195px,32dvh)!important;
+    overflow-x:hidden;overflow-y:auto;
+    gap:5px!important;padding:7px!important;
+  }
+  .slicerFlushMatrix th,.slicerFlushMatrix td{min-width:108px;width:108px;max-width:108px}
+}
+
+/* Flush editor: identical input/select heights, and equal label/help tracks. */
+.slicerFlushModal .slicerFlushModalControls{
+  display:grid;grid-template-columns:repeat(2,minmax(0,1fr));
+  gap:18px;align-items:start;
+}
+.slicerFlushModal .slicerFlushField{
+  min-width:0;display:grid;
+  grid-template-rows:22px 48px minmax(30px,auto);
+  gap:5px;align-content:start;
+}
+.slicerFlushModal .slicerFlushField>label{margin:0;min-width:0;align-self:end}
+.slicerFlushModal .slicerFlushField>input,
+.slicerFlushModal .slicerFlushField>select{
+  box-sizing:border-box;width:100%;height:48px;min-height:48px;max-height:48px;
+  margin:0;padding:0 13px;line-height:normal;border-radius:8px;
+}
+.slicerFlushModal .slicerFlushField>small{align-self:start;line-height:1.3}
+.slicerFlushModal .slicerFlushEstimateBar{
+  display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;
+  gap:8px;margin:10px 0;
+}
+.slicerFlushEstimateBar label{display:inline-flex;gap:8px;align-items:center}
+.slicerFlushEstimateBar input[type=checkbox]{width:auto;min-width:auto;margin:0}
+.slicerFlushEstimateBar>button{min-height:34px}
+@media(max-width:700px){
+  .slicerFlushModal .slicerFlushModalControls{grid-template-columns:1fr;gap:7px}
+}
+
+/* A dagger marks colour-only estimates between different filament families.
+   It never suggests a verified ABS/PLA transition or silently saves one. */
+.slicerFlushMatrix td{position:relative}
+.slicerFlushMatrix .slicerFlushMixedMarker{
+  position:absolute;left:4px;top:50%;transform:translateY(-50%);
+  font-size:.8rem;font-weight:700;color:#e5b26d;pointer-events:none;
+}
+.slicerFlushMatrix td:has(.slicerFlushMixedMarker) .slicerFlushCell{padding-left:15px}
+
+
+/* Persistent action captions make the slicer usable without memorising glyphs.
+   Keep the icon dominant, caption readable and group boundaries intact. */
+.slicerPlateEditingToolbar .slicerToolTooltip,
+.slicerPrepareTools .slicerToolTooltip {
+  flex:0 0 65px;
+  width:65px;
+  min-width:65px;
+  height:58px;
+}
+.slicerPlateEditingToolbar .slicerToolTooltip > button,
+.slicerPrepareTools .slicerToolTooltip > button {
+  width:100%;
+  min-width:0;
+  height:58px;
+  min-height:58px;
+  padding:5px 3px 4px;
+  flex-direction:column;
+  justify-content:center;
+  gap:3px;
+}
+.slicerPrepareTools .slicerToolButtonLabel {
+  display:block;
+  width:100%;
+  max-width:100%;
+  font-size:9px;
+  line-height:1.12;
+  font-weight:600;
+  letter-spacing:.01em;
+  text-align:center;
+  white-space:normal;
+  overflow-wrap:normal;
+  color:inherit;
+}
+.slicerPrepareTools .slicerToolTooltip:has(button:disabled) .slicerToolButtonLabel {
+  opacity:.78;
+}
+@media (max-width:550px) {
+  .slicerPlateEditingToolbar .slicerToolTooltip,
+  .slicerPrepareTools .slicerToolTooltip {
+    flex-basis:62px;width:62px;min-width:62px;height:58px;
+  }
+}
+
+
+/* Compact Material-style slicer actions. Keep the 22px glyphs, reduce empty
+   horizontal space, and centre each separator in a symmetric group gutter.
+   This deliberately overrides older desktop/mobile width rules above. */
+.slicerPlateEditingToolbar > .slicerPrepareTools {
+  column-gap:4px;
+  row-gap:5px;
+  padding:7px;
+  align-items:center;
+  align-content:start;
+}
+.slicerPlateEditingToolbar .slicerToolTooltip,
+.slicerPrepareTools .slicerToolTooltip {
+  flex:0 0 57px;
+  width:57px;
+  min-width:57px;
+  height:60px;
+  box-sizing:border-box;
+}
+.slicerPlateEditingToolbar .slicerToolTooltip > button,
+.slicerPrepareTools .slicerToolTooltip > button {
+  display:flex;
+  flex:1 1 100%;
+  flex-direction:column;
+  gap:3px;
+  justify-content:center;
+  align-items:center;
+  box-sizing:border-box;
+  width:100%;
+  min-width:0;
+  height:60px;
+  min-height:60px;
+  padding:5px 2px 4px;
+  border-radius:10px;
+  line-height:1.12;
+}
+.slicerPrepareTools .slicerToolTooltip > button > .slicerUiIcon {
+  flex:0 0 auto;
+  width:22px;
+  height:22px;
+}
+.slicerPrepareTools .slicerToolButtonLabel {
+  display:block;
+  box-sizing:border-box;
+  flex:0 0 auto;
+  width:100%;
+  max-width:100%;
+  margin:0;
+  padding:0 1px;
+  font-size:9px;
+  font-weight:550;
+  line-height:1.1;
+  letter-spacing:0;
+  text-align:center;
+  white-space:normal;
+  overflow-wrap:normal;
+  word-break:normal;
+  hyphens:none;
+}
+.slicerPrepareTools .slicerToolGroupStart {
+  margin-inline-start:10px;
+  position:relative;
+}
+.slicerPrepareTools .slicerToolGroupStart::before {
+  content:"";
+  position:absolute;
+  left:-7px; /* 4px normal gap + 10px group margin = 14px, centred */
+  top:7px;
+  bottom:7px;
+  width:1px;
+  background:#506479;
+  pointer-events:none;
+}
+.slicerPlateEditingToolbar .slicerToolTooltip > button:hover:not(:disabled) {
+  background:#233449;
+  border-color:#71869e;
+}
+.slicerPlateEditingToolbar .slicerToolTooltip > button:focus-visible {
+  outline:2px solid #8ebbea;
+  outline-offset:2px;
+}
+@media(max-width:550px) {
+  .slicerPlateEditingToolbar .slicerToolTooltip,
+  .slicerPrepareTools .slicerToolTooltip {
+    flex:0 0 57px;
+    width:57px;
+    min-width:57px;
+    height:60px;
+  }
+}
+
+
+/* Mobile build workspace: one swipeable editing row with explicit navigation.
+   Its dropdowns are fixed to the viewport and do not alter strip height. */
+.slicerMobileToolArrow { display:none; }
+@media (max-width:850px) {
+  .slicerPlateEditingToolbar {
+    display:grid;
+    grid-template-columns:30px minmax(0,1fr) 30px;
+    align-items:stretch;
+    column-gap:3px;
+    margin-bottom:6px;
+    overflow:visible;
+  }
+  .slicerPlateEditingToolbar > .slicerMobileToolArrow {
+    display:grid;
+    place-items:center;
+    width:30px;
+    min-width:0;
+    min-height:60px;
+    padding:0;
+    border:1px solid #42546b;
+    border-radius:8px;
+    background:#1c2d40;
+    color:#e2edfa;
+    font-size:30px;
+    line-height:1;
+    touch-action:manipulation;
+  }
+  .slicerPlateEditingToolbar > .slicerPrepareTools,
+  .slicerPlateEditingToolbar > .slicerPrepareTools:has(.slicerToolOptionsOpen) {
+    display:flex;
+    flex-wrap:nowrap;
+    align-items:center;
+    align-content:center;
+    column-gap:4px;
+    row-gap:0;
+    width:100%;
+    min-width:0;
+    max-width:100%;
+    height:74px;
+    margin:0;
+    padding:6px 3px;
+    overflow-x:auto;
+    overflow-y:hidden;
+    overscroll-behavior-x:contain;
+    scrollbar-width:none;
+    -webkit-overflow-scrolling:touch;
+    touch-action:pan-x;
+  }
+  .slicerPlateEditingToolbar > .slicerPrepareTools::-webkit-scrollbar {display:none;}
+  .slicerPlateEditingToolbar .slicerToolTooltip {
+    flex:0 0 57px;
+    width:57px;
+    min-width:57px;
+    height:60px;
+  }
+  .slicerPlateEditingToolbar .slicerToolGroupStart {
+    margin-inline-start:10px;
+  }
+  .slicerPlateEditingToolbar .slicerToolbarDescriptor {
+    display:none;
+  }
+  .slicerPlateEditingToolbar .slicerToolOptions {
+    position:fixed;
+    z-index:100;
+  }
+
+  /* On narrow screens the build area is the only visible workspace pane.
+     Spend the available width on the build plate rather than nested gutters. */
+  .slicerPrepareWorkspace {padding:7px !important;}
+  .slicerPrepareStructure[data-mobile-pane="plate"] {width:100%;}
+  .slicerPrepareScene > .slicerPlatePanel {
+    width:calc(100% + 12px);
+    max-width:none;
+    margin-inline:-6px;
+    padding:7px;
+  }
+  .slicerPrepareScene .slicerPlateWorkspace {margin-top:8px;}
+  .slicerPlateCanvasColumn {width:100%;min-width:0;}
+  .slicerPlateCanvasColumn > .slicerPlateCanvasViewport {
+    position:relative !important;
+    display:flex;
+    flex-direction:column;
+    width:100%;
+    height:auto !important;
+    min-height:0;
+  }
+  .slicerPlateCanvasColumn .slicerPlateCanvasViewport > .slicerPlateCanvas {
+    order:1;
+    width:100%;
+    min-height:320px;
+    height:clamp(320px,57dvh,620px);
+    flex:none;
+  }
+  /* Section controls are a compact horizontal strip BELOW the 3D canvas;
+     they no longer obscure the model, orientation cube or print bed. */
+  .slicerPlateCanvasViewport > .slicerPlateSectionControl {
+    position:relative !important;
+    order:2;
+    inset:auto !important;
+    display:flex;
+    flex-direction:row;
+    align-items:center;
+    gap:7px;
+    width:100%;
+    height:44px;
+    min-height:44px;
+    max-height:44px;
+    padding:4px 7px;
+    margin-top:5px;
+    border-radius:8px;
+    font-size:11px;
+  }
+  .slicerPlateSectionControl .slicerSectionTop {flex:0 0 auto;}
+  .slicerPlateSectionControl input[type="range"] {
+    -webkit-appearance:none;
+    appearance:none;
+    writing-mode:horizontal-tb;
+    direction:ltr;
+    flex:1 1 auto;
+    width:0;
+    min-width:40px;
+    height:26px;
+    min-height:0;
+    margin:0;
+    background:linear-gradient(90deg,#43b8e6,#43b8e6) center / 100% 4px no-repeat;
+  }
+  .slicerPlateSectionControl .slicerSectionValue {
+    flex:0 0 auto;
+    font-size:10px;
+  }
+  .slicerPlateSectionControl > button {
+    flex:0 0 auto;
+    width:auto;
+    min-width:34px;
+    min-height:30px;
+    padding:3px 7px;
+  }
+  .slicerPlateSectionControl .slicerSectionAxisLabel {
+    display:flex;
+    flex-direction:row;
+    align-items:center;
+    width:auto;
+    gap:3px;
+    font-size:10px;
+  }
+  .slicerPlateSectionControl .slicerSectionAxisLabel select {
+    width:40px;
+    max-width:40px;
+    height:30px;
+    padding:2px;
+  }
+}
+
+
+/* Editor-width adaptive toolbar: the viewport can stay desktop-width when
+   the app is snapped beside another window. Two rows are a hard maximum. */
+.slicerPlateEditingToolbar {
+  display:block;
+  min-width:0;
+}
+.slicerPlateEditingToolbar .slicerToolbarScrollViewport {
+  min-width:0;
+  width:100%;
+  overflow:visible;
+}
+.slicerPlateEditingToolbar .slicerToolbarScrollViewport > .slicerPrepareTools {
+  display:flex;
+  flex-wrap:wrap;
+  align-items:center;
+  align-content:start;
+  gap:5px 4px;
+  width:100%;
+  min-width:0;
+  margin:0;
+  padding:7px;
+  border:1px solid #34465b;
+  border-radius:10px;
+  background:#111b27;
+}
+.slicerPlateEditingToolbar:not(.isCompact) > .slicerMobileToolArrow {
+  display:none;
+}
+.slicerPlateEditingToolbar.isCompact {
+  display:grid;
+  grid-template-columns:30px minmax(0,1fr) 30px;
+  gap:4px;
+  align-items:start;
+}
+.slicerPlateEditingToolbar.isCompact > .slicerMobileToolArrow {
+  display:grid;
+  place-items:center;
+  width:30px;
+  min-width:0;
+  height:128px;
+  min-height:0;
+  padding:0;
+  border:1px solid #42546b;
+  border-radius:9px;
+  background:#1b2b3d;
+  color:#e4eef9;
+  font-size:28px;
+  line-height:1;
+  cursor:pointer;
+}
+.slicerPlateEditingToolbar.isCompact > .slicerMobileToolArrow:disabled {
+  opacity:.32;
+  cursor:default;
+}
+.slicerPlateEditingToolbar.isCompact .slicerToolbarScrollViewport {
+  overflow-x:auto;
+  overflow-y:hidden;
+  scrollbar-width:none;
+  overscroll-behavior-x:contain;
+  scroll-snap-type:x proximity;
+  -webkit-overflow-scrolling:touch;
+  border:1px solid #34465b;
+  border-radius:10px;
+  background:#111b27;
+}
+.slicerPlateEditingToolbar.isCompact .slicerToolbarScrollViewport::-webkit-scrollbar {
+  display:none;
+}
+.slicerPlateEditingToolbar.isCompact .slicerToolbarScrollViewport > .slicerPrepareTools {
+  display:grid;
+  grid-template-rows:repeat(2,60px);
+  grid-auto-flow:column;
+  grid-auto-columns:57px;
+  column-gap:4px;
+  row-gap:5px;
+  align-items:start;
+  align-content:start;
+  width:max-content;
+  min-width:100%;
+  height:128px;
+  box-sizing:border-box;
+  padding:1px 3px;
+  border:0;
+  border-radius:0;
+  background:transparent;
+  overflow:visible;
+}
+.slicerPlateEditingToolbar.isCompact .slicerToolTooltip {
+  margin:0;
+  width:57px;
+  min-width:57px;
+  height:60px;
+  scroll-snap-align:start;
+}
+.slicerPlateEditingToolbar.isCompact .slicerToolGroupStart::before {
+  display:none;
+}
+.slicerPlateEditingToolbar.isCompact .slicerToolbarDescriptor {
+  display:none;
+}
+/* Popovers already calculate their viewport anchor and must not be clipped
+   by the sliding toolbar. */
+.slicerPlateEditingToolbar.isCompact .slicerToolOptions {
+  position:fixed;
+  z-index:100;
+}
+/* Responsive editor panes follow the app's actual content width, rather than
+   waiting for a device-width breakpoint that a snapped window may never hit. */
+.slicerPrepareWorkspace {
+  container-type:inline-size;
+}
+@container (max-width:760px) {
+  .slicerMobilePaneTabs {
+    display:grid;
+    grid-template-columns:repeat(3,minmax(0,1fr));
+    gap:6px;
+    position:sticky;
+    top:0;
+    z-index:35;
+    margin-bottom:9px;
+  }
+  .slicerMobilePaneTabs button {
+    display:flex;
+    justify-content:center;
+    align-items:center;
+    gap:6px;
+    min-height:44px;
+    padding:8px 4px;
+  }
+  .slicerPrepareStructure[data-mobile-pane] {
+    display:block;
+    width:100%;
+    min-width:0;
+  }
+  .slicerPrepareStructure[data-mobile-pane="plate"] > .slicerPrepareLeftRail,
+  .slicerPrepareStructure[data-mobile-pane="plate"] > .slicerPrepareSettings,
+  .slicerPrepareStructure[data-mobile-pane="models"] > .slicerPrepareScene,
+  .slicerPrepareStructure[data-mobile-pane="models"] > .slicerPrepareSettings,
+  .slicerPrepareStructure[data-mobile-pane="settings"] > .slicerPrepareScene,
+  .slicerPrepareStructure[data-mobile-pane="settings"] > .slicerPrepareLeftRail {
+    display:none;
+  }
+  .slicerPrepareStructure[data-mobile-pane] > .slicerPrepareScene,
+  .slicerPrepareStructure[data-mobile-pane] > .slicerPrepareLeftRail,
+  .slicerPrepareStructure[data-mobile-pane] > .slicerPrepareSettings {
+    width:100%;
+    max-width:100%;
+    min-width:0;
+  }
+  .slicerPrepareStructure[data-mobile-pane="settings"] > .slicerPrepareSettings {
+    max-height:min(70dvh,850px)!important;
+    overflow-y:auto;
+  }
+}
+
+
+/* A disabled modelling action must still explain itself visually. */
+.slicerPlateEditingToolbar .slicerToolTooltip > button:disabled {
+  opacity:.61;
+  cursor:not-allowed;
+}
+.slicerPlateEditingToolbar .slicerToolTooltip > button:disabled .slicerUiIcon {
+  opacity:.9;
+}
+
+
+/* Printer overview: compact cards using the existing MakerVault palette. */
+.printingPrinterCompactList {
+  display:grid;
+  grid-template-columns:repeat(2,minmax(0,1fr));
+  gap:12px;
+}
+.printingPrinterCompactCard {
+  display:grid;
+  grid-template-columns:minmax(110px,1.15fr) minmax(145px,1.25fr) minmax(120px,.95fr);
+  align-items:stretch;
+  gap:10px;
+  min-width:0;
+  padding:12px;
+  container-type:inline-size;
+}
+.printingPrinterCompactCard .printingPrinterCompactIdentity {
+  display:flex;
+  align-items:flex-start;
+  gap:10px;
+  min-width:0;
+}
+.printingPrinterCompactCard .printingPrinterImage {
+  flex:0 0 62px;
+  width:62px;
+  height:82px;
+  margin:0;
+  padding:5px;
+}
+.printingPrinterCompactDetails {
+  display:flex;
+  flex-direction:column;
+  align-items:flex-start;
+  min-width:0;
+  gap:5px;
+}
+.printingPrinterCompactDetails > strong {font-size:15px;}
+.printingPrinterCompactDetails > small {
+  color:#9baec3;
+  overflow-wrap:anywhere;
+}
+.printingPrinterCompactDetails .printingPrinterStatus {
+  display:flex;
+  gap:4px;
+  flex-wrap:wrap;
+  align-items:flex-start;
+  margin:3px 0;
+}
+.printingPrinterCompactActions,
+.printingPrinterManageSecondary {
+  display:flex;
+  flex-wrap:wrap;
+  gap:6px;
+}
+.printingPrinterCompactActions .printingPrinterAction {
+  font-size:12px;
+  min-height:32px;
+  padding:6px 9px;
+}
+.printingPrinterCompactControls {
+  min-width:0;
+  display:flex;
+  flex-direction:column;
+  justify-content:center;
+}
+.printingPrinterCompactCard .printerLiveSummary {
+  margin:0;
+  height:100%;
+  min-width:0;
+  padding:10px;
+}
+.printingPrinterCompactCard .printerLiveQuickStats {flex-basis:100%;}
+.printingPrinterCompactCard .printerLiveFooter .printerLiveOpen {min-height:30px;}
+.printingPrinterCompactCamera {
+  min-width:0;
+  min-height:145px;
+  height:185px;
+  max-height:185px;
+  overflow:hidden;
+  border:1px solid #2b3b4f;
+  border-radius:10px;
+  background:#05090e;
+}
+.printingPrinterCompactCamera > * {
+  width:100%;
+  height:100%;
+  max-height:185px;
+}
+.printingPrinterCompactCamera video,
+.printingPrinterCompactCamera img,
+.printingPrinterCompactCamera canvas {
+  max-height:185px;
+  object-fit:contain;
+}
+.printingPrinterManageSecondary {
+  padding:8px 0;
+  border-top:1px solid #344357;
+}
+@media(max-width:1650px) {
+  .printingPrinterCompactList {grid-template-columns:minmax(0,1fr);}
+}
+@media(max-width:780px) {
+  .printingPrinterCompactCard {
+    grid-template-columns:minmax(0,1fr) minmax(0,1fr);
+  }
+  .printingPrinterCompactCamera {
+    grid-column:1/-1;
+    height:185px;
+  }
+}
+@media(max-width:520px) {
+  .printingPrinterCompactCard {grid-template-columns:minmax(0,1fr);}
+  .printingPrinterCompactCamera {grid-column:auto;}
+}
+
+
+.printingLiveFilamentPanel {
+  margin:14px 0;
+  padding:14px;
+  border:1px solid #2b3b4f;
+  border-radius:12px;
+  background:#0d151f;
+}
+.printingLiveFilamentPanel .printingSlotGrid {
+  display:grid;
+  grid-template-columns:repeat(auto-fit,minmax(min(210px,100%),1fr));
+  gap:10px;
+}
+.printingLiveFilamentPanel .printingSlot {
+  display:grid;
+  grid-template-columns:20px minmax(0,1fr);
+  gap:10px;
+  padding:12px;
+  border:1px solid #314155;
+  border-radius:11px;
+  background:#111c29;
+}
+.printingLiveFilamentPanel .printingSlot > div {
+  display:flex;
+  flex-direction:column;
+  gap:5px;
+  min-width:0;
+}
+.printingLiveFilamentPanel .printingSlot small {
+  color:#91a0b3;
+  overflow-wrap:anywhere;
+}
+
+
+/* 3D Printing overview refinement: roomier printer identity, horizontal live
+   controls and a camera that uses the full compact preview area. */
+.printingPrinterCompactCard {
+  grid-template-columns:minmax(210px,1.1fr) minmax(275px,1.65fr) minmax(225px,1.2fr);
+  gap:12px;
+  padding:12px;
+  min-height:230px;
+  align-items:stretch;
+}
+.printingPrinterCompactCard .printingPrinterCompactIdentity {
+  gap:12px;
+  align-items:flex-start;
+}
+.printingPrinterCompactCard .printingPrinterImage {
+  flex:0 0 84px;
+  width:84px;
+  height:105px;
+  padding:5px;
+}
+.printingPrinterCompactCard .printingPrinterImage img {
+  padding:2px;
+}
+.printingPrinterCompactDetails {
+  flex:1 1 auto;
+  gap:7px;
+}
+.printingPrinterCompactDetails .printingPrinterStatus {
+  justify-content:flex-start;
+  align-items:center;
+  align-content:start;
+  gap:5px;
+  width:100%;
+  margin:2px 0 3px;
+}
+.printingPrinterCompactDetails .printingPrinterStatus .badge {
+  min-height:24px;
+  padding:4px 7px;
+  line-height:1.2;
+  white-space:normal;
+  text-align:center;
+}
+.printingPrinterCompactActions {
+  width:100%;
+  display:grid;
+  grid-template-columns:repeat(2,minmax(0,1fr));
+  align-items:stretch;
+  gap:6px;
+}
+.printingPrinterCompactActions .printingPrinterAction {
+  width:100%;
+  min-width:0;
+  padding:7px 5px;
+  min-height:35px;
+  text-align:center;
+}
+.printingPrinterCompactDetails .printingPrinterImageCredit {
+  margin-top:auto;
+  line-height:1.3;
+}
+.printingPrinterCompactCard .printerLiveSummary {
+  display:grid;
+  grid-template-columns:minmax(0,1fr);
+  grid-template-rows:auto auto auto minmax(0,1fr);
+  gap:8px;
+  height:100%;
+  box-sizing:border-box;
+  padding:11px 12px;
+  align-content:start;
+}
+.printingPrinterCompactCard .printerLiveSummaryHead {
+  min-width:0;
+}
+.printingPrinterCompactCard .printerLiveProgressLine {
+  margin:0;
+}
+.printingPrinterCompactCard .printerLiveActions {
+  margin:0;
+  display:flex;
+  flex-wrap:wrap;
+  gap:8px;
+  align-items:center;
+  justify-content:flex-start;
+}
+.printingPrinterCompactCard .printerLiveActions .printerJobControls {
+  display:flex;
+  flex-wrap:wrap;
+  align-items:center;
+  gap:7px;
+}
+.printingPrinterCompactCard .printerLiveFooter {
+  display:flex;
+  flex-wrap:wrap;
+  align-items:flex-end;
+  justify-content:space-between;
+  gap:8px;
+  margin:0;
+  min-width:0;
+}
+.printingPrinterCompactCard .printerLiveQuickStats {
+  flex:1 1 210px;
+  display:flex;
+  flex-wrap:wrap;
+  align-items:center;
+  gap:5px;
+  margin:0;
+}
+.printingPrinterCompactCard .printerLiveFooter .printerLiveOpen {
+  margin:0 0 0 auto;
+  align-self:flex-end;
+}
+.printingPrinterCompactCamera {
+  align-self:stretch;
+  height:100%;
+  min-height:205px;
+  max-height:none;
+  overflow:hidden;
+}
+.printingPrinterCompactCamera > .cameraGlanceCard {
+  display:block;
+  box-sizing:border-box;
+  width:100%;
+  height:100%;
+  max-height:none;
+  margin:0;
+  padding:0;
+}
+.printingPrinterCompactCamera .cameraGlance {
+  height:100%;
+  max-height:none;
+  display:flex;
+  flex-direction:column;
+}
+.printingPrinterCompactCamera .cameraGlance .printerCameraViewport {
+  flex:1 1 auto;
+  width:100%;
+  height:100%;
+  max-height:none;
+  min-height:0;
+  aspect-ratio:auto;
+  border-radius:0;
+}
+.printingPrinterCompactCamera .cameraGlance .printerCameraViewport img,
+.printingPrinterCompactCamera .cameraGlance .printerCameraViewport video {
+  display:block;
+  width:100%;
+  height:100%;
+  max-height:none;
+  object-fit:cover;
+}
+.printingPrinterCompactCamera .printerCameraPlaceholder {
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  box-sizing:border-box;
+  height:100%;
+  width:100%;
+  min-height:0;
+  aspect-ratio:auto;
+  padding:10px;
+}
+@media(max-width:1650px) {
+  .printingPrinterCompactCard {
+    grid-template-columns:minmax(220px,1fr) minmax(275px,1.4fr) minmax(220px,1fr);
+  }
+}
+@media(max-width:850px) {
+  .printingPrinterCompactCard {
+    grid-template-columns:minmax(0,1fr) minmax(0,1fr);
+  }
+  .printingPrinterCompactCamera {
+    grid-column:1/-1;
+    height:220px;
+    min-height:220px;
+  }
+}
+@media(max-width:520px) {
+  .printingPrinterCompactCard {
+    grid-template-columns:minmax(0,1fr);
+  }
+  .printingPrinterCompactCamera {
+    grid-column:auto;
+    height:215px;
+    min-height:215px;
+  }
+}
+
+
+/* Live overview: offline printers use only a short status, not stale controls or
+   a disconnected camera. Online rows prioritise a single horizontal status
+   strip and combine progress with actions at phone widths. */
+.printingPrinterCompactCard.isOffline {
+  grid-template-columns:minmax(0,1fr);
+  min-height:0;
+  align-content:start;
+}
+.printingPrinterCompactCard.isOffline .printingPrinterCompactIdentity {
+  align-items:center;
+}
+.printingPrinterCompactCard.isOffline .printingPrinterCompactControls {
+  align-self:start;
+}
+.printingPrinterCompactCard.isOffline .printerLiveOffline {
+  min-height:0;
+  height:auto;
+  display:block;
+  padding:9px 11px;
+  margin:0;
+}
+.printingPrinterCompactCard.isOffline .printerLiveOffline .printerLiveState {
+  align-items:center;
+}
+.printingPrinterCompactCard .printerLiveSummary:not(.printerLiveOffline) {
+  display:flex;
+  flex-direction:column;
+  gap:9px;
+  height:100%;
+}
+.printingPrinterCompactCard .printerLiveCommandRow {
+  display:flex;
+  align-items:center;
+  justify-content:flex-start;
+  gap:8px;
+  min-width:0;
+}
+.printingPrinterCompactCard .printerLiveCommandRow .printerLiveProgressLine {
+  flex:1 1 100px;
+  min-width:45px;
+  margin:0;
+}
+.printingPrinterCompactCard .printerLiveCommandRow .printerLiveActions {
+  flex:0 0 auto;
+  min-width:0;
+  margin:0;
+}
+.printingPrinterCompactCard .printerLiveCommandRow .printerJobControls {
+  display:flex;
+  flex-wrap:nowrap;
+  align-items:center;
+  gap:4px;
+  width:auto;
+  min-width:0;
+  flex:0 0 auto;
+}
+.printingPrinterCompactCard .printerLiveCommandRow .printerJobControls button {
+  flex:0 0 auto;
+}
+.printingPrinterCompactCard .printerLiveFooter {
+  flex:1 1 auto;
+  display:flex;
+  flex-direction:column;
+  align-items:stretch;
+  gap:7px;
+  min-height:0;
+  justify-content:flex-end;
+}
+.printingPrinterCompactCard .printerLiveQuickStats {
+  flex:none;
+  display:flex;
+  flex-wrap:nowrap;
+  align-items:center;
+  width:100%;
+  max-width:100%;
+  min-width:0;
+  gap:5px;
+  overflow-x:auto;
+  overflow-y:hidden;
+  overscroll-behavior-x:contain;
+  scrollbar-width:thin;
+  padding-bottom:3px;
+  margin:0;
+}
+.printingPrinterCompactCard .printerLiveQuickStats>span {
+  flex:0 0 auto;
+  white-space:nowrap;
+  padding:4px 5px;
+  gap:4px;
+}
+.printingPrinterCompactCard .printerLiveFooter .printerLiveOpen {
+  margin:0;
+  align-self:flex-end;
+  padding:5px 10px;
+  min-height:30px;
+}
+@media(max-width:850px) {
+  .printingPrinterCompactCard:not(.isOffline) .printerLiveSummary {
+    height:auto;
+  }
+  .printingPrinterCompactCard:not(.isOffline) .printingPrinterCompactControls {
+    min-height:0;
+  }
+}
+@media(max-width:520px) {
+  .printingPrinterCompactCard {
+    gap:10px;
+    min-height:0;
+  }
+  .printingPrinterCompactCard .printerLiveSummary:not(.printerLiveOffline) {
+    padding:10px;
+    gap:8px;
+  }
+  .printingPrinterCompactCard .printerLiveCommandRow {
+    gap:7px;
+  }
+  .printingPrinterCompactCard .printerLiveCommandRow .printerLiveProgressLine {
+    flex:1 1 90px;
+    min-width:45px;
+  }
+  .printingPrinterCompactCard .printerLiveCommandRow .printerJobControls {
+    gap:3px;
+  }
+  .printingPrinterCompactCard .printerLiveFooter .printerLiveOpen {
+    width:auto;
+  }
+  .printingPrinterCompactCard.isOffline .printingPrinterCompactControls {
+    margin-top:0;
+  }
+}
+
+
+/* The overview controls are deliberately denser than the full live modal. */
+.printingPrinterCompactCard .printerLiveCommandRow .printerJobControlButtons {
+  gap:4px;
+}
+.printingPrinterCompactCard .printerLiveCommandRow .printerJobControl {
+  width:31px;
+  height:31px;
+  min-width:31px;
+  min-height:31px;
+  padding:6px;
+}
+.printingPrinterCompactCard .printerLiveCommandRow .printerJobControls {
+  position:relative;
+}
+.printingPrinterCompactCard .printerLiveCommandRow .printerJobControlMessage {
+  position:absolute;
+  left:0;
+  top:100%;
+  z-index:5;
+  width:max-content;
+  max-width:min(280px,70vw);
+  padding:6px 8px;
+  margin:3px 0 0;
+  border:1px solid #35465b;
+  border-radius:7px;
+  background:#111c29;
+  color:#e5ebf5;
+}
+
+
+/* The overview is an operational glance; administrative badges belong in
+   Manage printer and Live monitor rather than alongside every printer name. */
+.printingPrinterCompactCard .printingPrinterCompactDetails {
+  justify-content:center;
+  gap:7px;
+}
+.printingPrinterCompactCard .printingPrinterCompactActions {
+  margin-top:5px;
+}
+.printingPrinterMetadata {
+  display:flex;
+  flex-direction:column;
+  gap:9px;
+  min-width:0;
+  margin:0 0 16px;
+  padding:12px 14px;
+  border:1px solid #2b3b4f;
+  border-radius:11px;
+  background:#101a26;
+}
+.printingPrinterMetadata>strong {
+  font-size:13px;
+}
+.printingPrinterMetadata .printingBadges {
+  display:flex;
+  flex-wrap:wrap;
+  gap:6px;
+  align-items:center;
+}
+.printingPrinterMetadata .badge {
+  white-space:normal;
+  overflow-wrap:anywhere;
+}
+
+
+/* On phones the image should occupy the height already reserved by the
+   printer identity and its actions, without stretching the artwork. */
+@media (max-width:520px) {
+  .printingPrinterCompactCard .printingPrinterCompactIdentity {
+    display:flex;
+    align-items:center;
+    gap:12px;
+  }
+  .printingPrinterCompactCard .printingPrinterImage {
+    flex:0 0 clamp(98px,28vw,118px);
+    width:clamp(98px,28vw,118px) !important;
+    min-width:clamp(98px,28vw,118px) !important;
+    height:auto !important;
+    aspect-ratio:4 / 5;
+    align-self:center;
+    box-sizing:border-box;
+    padding:5px;
+  }
+  .printingPrinterCompactCard .printingPrinterImage img {
+    display:block;
+    width:100%;
+    height:100%;
+    object-fit:contain;
+    padding:2px;
+  }
+}
+
+
+/* Video uses its own native Play/fullscreen controls; a denied autoplay
+   should offer a small hint rather than an empty disconnected panel. */
+.printerCameraGestureHint {
+  margin:0;
+  padding:7px 10px;
+  font-size:12px;
+  line-height:1.4;
+  color:#bdcde1;
+  background:#111b29;
+}
+.cameraGlance .printerCameraGestureHint {
+  position:absolute;
+  left:8px;
+  right:8px;
+  bottom:42px;
+  z-index:2;
+  border-radius:6px;
+  pointer-events:none;
+}
+.cameraGlance .printerCameraViewport video {
+  min-height:0;
+}
+
+
+/* Printer overview: keep the camera on the right, put the printer's two
+   navigation actions above a live status panel spanning the entire left area.
+   The mobile arrangement deliberately retains image + name + actions. */
+.printingPrinterCompactCard:not(.isOffline) {
+  grid-template-columns:minmax(165px,1fr) minmax(125px,.6fr) minmax(215px,1.15fr);
+  grid-template-rows:minmax(84px,auto) minmax(118px,1fr);
+  grid-template-areas:"identity actions camera" "controls controls camera";
+  align-items:stretch;
+  min-height:230px;
+}
+.printingPrinterCompactCard .printingPrinterCompactIdentity {
+  grid-area:identity;
+  align-self:start;
+  min-width:0;
+}
+.printingPrinterCompactCard .printingPrinterCompactActions {
+  grid-area:actions;
+  align-self:start;
+  justify-self:end;
+  display:grid;
+  grid-template-columns:minmax(0,1fr);
+  width:min(100%,150px);
+  gap:7px;
+  margin:0;
+}
+.printingPrinterCompactCard .printingPrinterCompactActions .printingPrinterAction {
+  min-height:34px;
+  padding:6px 10px;
+  font-size:12px;
+  line-height:1.25;
+  white-space:normal;
+}
+.printingPrinterCompactCard .printingPrinterCompactControls {
+  grid-area:controls;
+  min-width:0;
+  min-height:0;
+  justify-content:stretch;
+}
+.printingPrinterCompactCard .printingPrinterCompactControls .printerLiveSummary:not(.printerLiveOffline) {
+  min-height:118px;
+  padding:10px 12px;
+}
+.printingPrinterCompactCard .printingPrinterCompactCamera {
+  grid-area:camera;
+  min-width:0;
+  min-height:205px;
+  height:100%;
+}
+.printingPrinterCompactCard .printerLiveQuickStats {
+  overflow-x:auto;
+  scrollbar-width:thin;
+}
+.printingPrinterCompactCard.isOffline {
+  grid-template-columns:minmax(0,1fr) minmax(130px,auto);
+  grid-template-rows:auto auto;
+  grid-template-areas:"identity actions" "controls controls";
+  min-height:0;
+  align-items:start;
+}
+.printingPrinterCompactCard.isOffline .printingPrinterCompactActions {
+  justify-self:end;
+}
+@media(max-width:900px) {
+  .printingPrinterCompactCard:not(.isOffline),
+  .printingPrinterCompactCard.isOffline {
+    grid-template-columns:clamp(92px,25vw,120px) minmax(0,1fr);
+    grid-template-rows:auto auto auto auto;
+    grid-template-areas:"image details" "image actions" "controls controls" "camera camera";
+    gap:10px 12px;
+    min-height:0;
+    align-items:center;
+  }
+  .printingPrinterCompactCard.isOffline {
+    grid-template-areas:"image details" "image actions" "controls controls";
+  }
+  .printingPrinterCompactCard .printingPrinterCompactIdentity {
+    display:contents;
+  }
+  .printingPrinterCompactCard .printingPrinterImage {
+    grid-area:image;
+    align-self:center;
+    box-sizing:border-box;
+    flex:none;
+    width:100% !important;
+    min-width:0 !important;
+    height:auto !important;
+    aspect-ratio:4 / 5;
+    padding:5px;
+  }
+  .printingPrinterCompactCard .printingPrinterImage img {
+    display:block;
+    width:100%;
+    height:100%;
+    object-fit:contain;
+  }
+  .printingPrinterCompactCard .printingPrinterCompactDetails {
+    grid-area:details;
+    justify-content:end;
+    align-self:end;
+    min-width:0;
+  }
+  .printingPrinterCompactCard .printingPrinterCompactActions {
+    grid-area:actions;
+    justify-self:stretch;
+    align-self:start;
+    grid-template-columns:repeat(2,minmax(0,1fr));
+    width:100%;
+    max-width:none;
+    margin:0;
+    gap:6px;
+  }
+  .printingPrinterCompactCard .printingPrinterCompactControls {
+    grid-area:controls;
+    min-width:0;
+    align-self:stretch;
+  }
+  .printingPrinterCompactCard .printingPrinterCompactCamera {
+    grid-area:camera;
+    height:215px;
+    min-height:215px;
+  }
+  .printingPrinterCompactCard.isOffline .printingPrinterCompactControls {
+    margin-top:0;
+  }
 }

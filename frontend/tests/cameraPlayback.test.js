@@ -1,6 +1,9 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { startFrameLoop, cameraHlsUrl } from "../src/components/cameraPlayback.js";
+import fs from "node:fs";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+import { startFrameLoop, cameraHlsUrl, shouldFallbackToNativeHls, isAutoplayBlocked } from "../src/components/cameraPlayback.js";
 
 test("closing frame viewer aborts in-flight fetch and ignores late frame", async () => {
   let resolve;
@@ -60,4 +63,41 @@ test('preview chooses most recently configured enabled camera across integration
   assert.deepEqual(defaultCamera(rows), { connectionId: 'newer', camera: { id: 'b' } });
   assert.equal(rows[0].id, 'older');
   assert.equal(defaultCamera([]), null);
+});
+
+
+test("video autoplay rejection keeps the stream attached and exposes native play", () => {
+  const source = fs.readFileSync(path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../src/components/PrinterCamera.jsx"), "utf8");
+  const gesture = source.slice(source.indexOf("const needsGesture ="), source.indexOf("const failed ="));
+  assert.match(gesture, /setPlaybackBlocked\(true\)/);
+  assert.doesNotMatch(gesture, /removeAttribute|\.load\(\)/);
+  assert.match(gesture, /if \(!isAutoplayBlocked\(reason\)\) \{/);
+  assert.match(source, /target\.play\(\)\.catch\(needsGesture\)/);
+  assert.doesNotMatch(source, /Playback was blocked\. Use the video play control or reconnect/);
+  assert.match(source, /autoPlay muted playsInline controls onPlaying/);
+  assert.match(source, /camera\.mode !== "creality_webrtc" && <button[^\n]*cameraFullscreen/);
+});
+test("hls.js is preferred and Safari MediaSource reset falls back to native HLS", () => {
+  const source = fs.readFileSync(path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../src/components/PrinterCamera.jsx"), "utf8");
+  assert.ok(source.indexOf("} else if (Hls.isSupported())") < source.indexOf('} else if (target.canPlayType("application/vnd.apple.mpegurl"))'));
+  assert.match(source, /shouldFallbackToNativeHls\(data/);
+  assert.match(source, /hls\?\.destroy\(\)/);
+  assert.match(source, /playbackMode = "native"/);
+  assert.match(source, /data\.type === Hls\.ErrorTypes\.NETWORK_ERROR && relayRetries\.current < 2/);
+  assert.match(source, /clearTimeout\(retryTimer\)/);
+  assert.match(source, /relayRetries\.current = 0; setPlaybackBlocked\(false\)/);
+});
+
+test("only MediaSource reset on a browser with native HLS triggers fallback", () => {
+  assert.equal(shouldFallbackToNativeHls({ details: "mediaSourceRequiresReset", fatal: false }, true), true);
+  assert.equal(shouldFallbackToNativeHls({ details: "mediaSourceRequiresReset" }, false), false);
+  assert.equal(shouldFallbackToNativeHls({ details: "bufferStalledError", fatal: true }, true), false);
+  assert.equal(shouldFallbackToNativeHls(null, true), false);
+});
+
+test("only a genuine autoplay policy rejection prompts for a user gesture", () => {
+  assert.equal(isAutoplayBlocked({ name: "NotAllowedError" }), true);
+  assert.equal(isAutoplayBlocked({ name: "AbortError" }), false);
+  assert.equal(isAutoplayBlocked({ name: "NotSupportedError" }), false);
+  assert.equal(isAutoplayBlocked(undefined), false);
 });

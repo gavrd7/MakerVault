@@ -1,0 +1,41 @@
+# Candidate development image, not yet an approved MakerVault Slicer release.
+# Build only after staging one/both *official*, checksum-reviewed AppImages:
+# python3 -m slicer_worker.stage_engines --engine ... VERSION FILE SHA256
+# docker build -f slicer_worker/Dockerfile.bundle -t makervault-slicer-candidate:local .
+#
+# This image performs no downloads of slicer engines. Verify real CLI output
+# with slicer_worker.probe before deployment; keep application execution disabled.
+FROM ubuntu:24.04
+ENV DEBIAN_FRONTEND=noninteractive
+RUN apt-get update && apt-get install -y --no-install-recommends \
+      python3 ca-certificates libfuse2t64 \
+      libglib2.0-0t64 libgl1 libglu1-mesa libegl1 libopengl0 libdbus-1-3 libnss3 \
+      libfontconfig1 libfreetype6 libx11-6 libxext6 libxrender1 libxi6 \
+      libxrandr2 libxkbcommon0 libxkbcommon-x11-0 libwayland-client0 \
+      libasound2t64 libgtk-3-0t64 \
+      libwebkit2gtk-4.1-0 libjavascriptcoregtk-4.1-0 \
+      libsm6 libice6 libxss1 libxtst6 libxcb-xinerama0 libxcb-cursor0 \
+    && rm -rf /var/lib/apt/lists/*
+RUN groupadd --gid 10001 slicer && useradd --uid 10001 --gid 10001 --no-create-home --shell /usr/sbin/nologin slicer
+WORKDIR /opt/makervault-slicer
+COPY --chown=10001:10001 slicer_worker/ /opt/makervault-slicer/slicer_worker/
+COPY --chown=10001:10001 slicer-engine-assets/ /opt/engines/
+# AppImages cannot reliably mount their squashfs in a rootless, restricted
+# worker (and runtime extract-and-run is fragile on read-only filesystems).
+# Extract the previously digest-verified official AppImage at image build time,
+# leaving its original bytes untouched for the engine registry's SHA-256 check.
+# The derived AppRun is baked into the same immutable worker image.
+RUN if [ -f /opt/engines/orcaslicer.AppImage ]; then \
+      cd /opt/engines && \
+      ./orcaslicer.AppImage --appimage-extract >/dev/null && \
+      test -e squashfs-root/AppRun && \
+      test -x squashfs-root/AppRun && \
+      test -d squashfs-root/usr && \
+      chmod -R a+rX squashfs-root && \
+      test -x squashfs-root/AppRun; \
+    fi
+RUN python3 -m compileall -q /opt/makervault-slicer/slicer_worker && \
+    test -f /opt/engines/manifest.json
+ENV PYTHONPATH=/opt/makervault-slicer PYTHONDONTWRITEBYTECODE=1
+USER 10001:10001
+CMD ["python3", "-m", "slicer_worker.service"]

@@ -3,9 +3,9 @@ import { apiFetch } from "../api";
 import { findSlicedRequirement } from "../utils/gcodeMapping";
 import { Modal } from "./Common";
 
-export default function PrinterStartGcodeModal({ printer, connection, canEdit, onConfigureMoonraker, onClose, onChanged, initialAsset = null }) {
+export default function PrinterStartGcodeModal({ printer, connection, canEdit, onConfigureMoonraker, onClose, onChanged, onSubmissionConfirmed, initialAsset = null, initialAction = "upload" }) {
   const [source, setSource] = useState("makervault");
-  const [action, setAction] = useState("upload");
+  const [action, setAction] = useState(initialAction === "print" ? "print" : "upload");
   const [files, setFiles] = useState([]);
   const [remoteFiles, setRemoteFiles] = useState([]);
   const [assetId, setAssetId] = useState(initialAsset?.id ? String(initialAsset.id) : "");
@@ -30,6 +30,14 @@ export default function PrinterStartGcodeModal({ printer, connection, canEdit, o
   const [mappingMode, setMappingMode] = useState("mapped");
 
 
+  // Do not treat a transport acknowledgement or uncertain CFS dispatch as
+  // proof that a print actually started. Only surface confirmed outcomes.
+  const isConfirmedSubmission = (submission, submittedAction) => {
+    if (submittedAction === "upload") return submission?.status === "uploaded";
+    if (submission?.status !== "started") return false;
+    const message = String(submission.message || "").toLowerCase();
+    return !(/awaiting .*verif|without acknowledgement|awaiting live job|commands dispatched|not acknowledge|unknown outcome|check the k2 display|verify on printer/.test(message));
+  };
   const base = "/api/printing/printers/" + printer.id + "/connections/" + connection.id + "/gcode";
   const cfs = capabilities?.cfs || null;
   const cfsSlicedAvailable = Boolean(capabilities?.can_start_sliced_mapping);
@@ -51,14 +59,42 @@ export default function PrinterStartGcodeModal({ printer, connection, canEdit, o
 
   async function load(refreshStatus = false) {
     // A broken printer-side file API must not hide perfectly valid MakerVault files.
-    const [local, remote] = await Promise.allSettled([
-      apiFetch("/api/files/"),
+    const [local, privateSlices, remote] = await Promise.allSettled([
+      // Library G-code is independent of the selected printer adapter.
+      apiFetch("/api/files/?category=gcode"),
+      // Completed private slice outputs remain selectable for an explicit
+      // printer transfer without being silently saved into the G-code library.
+      apiFetch("/api/printing/slicer/jobs/"),
       apiFetch(base + (refreshStatus === true ? "/files/?refresh_status=1" : "/files/")),
     ]);
-    if (local.status === "fulfilled") {
-      setFiles((local.value.rows || []).filter(f => (f.filename || "").toLowerCase().endsWith(".gcode")));
-    } else {
-      setError("MakerVault file list unavailable: " + local.reason.message);
+    const libraryFiles = local.status === "fulfilled"
+      ? (local.value.rows || []).filter(f => f.category === "gcode")
+      : [];
+    const pendingFiles = privateSlices.status === "fulfilled"
+      ? (privateSlices.value.jobs || [])
+        .filter(job => job.status === "completed" && !job.gcode_in_library && job.output_asset?.id)
+        .map(job => ({
+          ...job.output_asset,
+          category: "other",
+          privateSlice: true,
+          project: "Private sliced output",
+        }))
+      : [];
+    const knownIds = new Set(libraryFiles.map(file => String(file.id)));
+    const allFiles = [...libraryFiles];
+    for (const file of pendingFiles) {
+      if (!knownIds.has(String(file.id))) {
+        knownIds.add(String(file.id));
+        allFiles.push(file);
+      }
+    }
+    setFiles(allFiles);
+    if (local.status === "rejected" && privateSlices.status === "rejected") {
+      setError("MakerVault G-code sources unavailable: " + local.reason.message);
+    } else if (local.status === "rejected") {
+      setNotice("Saved G-code library could not be loaded; private slices remain available.");
+    } else if (privateSlices.status === "rejected") {
+      setNotice("Private slicing jobs could not be loaded; saved G-code remains available.");
     }
     if (remote.status === "fulfilled") {
       setRemoteFiles(remote.value.rows || []);
@@ -100,6 +136,7 @@ export default function PrinterStartGcodeModal({ printer, connection, canEdit, o
             setError("");
             setNotice("Print start verified using the printer's live job status.");
             onChanged?.();
+            onSubmissionConfirmed?.(updated);
           }
         }
       } catch (_err) {
@@ -251,7 +288,12 @@ export default function PrinterStartGcodeModal({ printer, connection, canEdit, o
           setError("Printer outcome is uncertain. Inspect the printer before trying anything else.");
         }
       }
-      await onChanged?.();
+      // A temporary UI refresh failure must not turn a confirmed submission
+      // into an apparent printer error or tempt a second submission.
+      try { await onChanged?.(); } catch (_refreshError) { /* Submission receipt is authoritative. */ }
+      if (isConfirmedSubmission(result.submission, operation)) {
+        onSubmissionConfirmed?.(result.submission);
+      }
     } catch (err) { setError(err.message); setTransferStage("Submission failed or could not be verified."); }
     finally { window.clearInterval(statusTimer); setBusy(false); }
   }
@@ -298,11 +340,14 @@ export default function PrinterStartGcodeModal({ printer, connection, canEdit, o
         <small>This ad-hoc file is saved in MakerVault Files before transfer. It can be linked to a project or model later.</small>
         <button type="button" className="primary" disabled={!newFile || busy || !canEdit} onClick={saveNew}>Save and review</button>
       </div>}
-      {source === "makervault" && <label>MakerVault file<select value={assetId} onChange={e => setAssetId(e.target.value)}>
-        <option value="">Choose a G-code file…</option>
-        {initialAsset && !files.some(f => String(f.id) === String(initialAsset.id)) && <option value={initialAsset.id}>{initialAsset.name} · selected G-code</option>}
-        {files.map(f => <option value={f.id} key={f.id}>{f.name} · {f.project || "Standalone"}</option>)}
-      </select></label>}
+      {source === "makervault" && <>
+        <label>MakerVault file<select value={assetId} onChange={e => setAssetId(e.target.value)}>
+          <option value="">Choose a G-code file…</option>
+          {initialAsset && !files.some(f => String(f.id) === String(initialAsset.id)) && <option value={initialAsset.id}>{initialAsset.name} · selected G-code</option>}
+          {files.map(f => <option value={f.id} key={f.id}>{f.name} · {f.privateSlice ? "Private slice (not in library)" : (f.project || "Standalone")}</option>)}
+        </select></label>
+        {!files.length && !initialAsset && <p role="status">No library G-code or completed private slices were returned. Check the G-code Library and slicing jobs.</p>}
+      </>}
       {source === "printer" && <>
         <label>Printer storage<select value={remotePath} onChange={e => setRemotePath(e.target.value)}>
           <option value="">Choose a printer file…</option>

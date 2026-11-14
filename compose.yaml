@@ -22,6 +22,17 @@ services:
       WEB_CONCURRENCY: ${WEB_CONCURRENCY:-2}
       GUNICORN_TIMEOUT: ${GUNICORN_TIMEOUT:-120}
       MAKERVAULT_BACKUP_ROOT: /app/backups
+      # Optional workbench preview without a slicer worker; never enables execution.
+      MAKERVAULT_SLICER_PREVIEW_ENABLED: ${MAKERVAULT_SLICER_PREVIEW_ENABLED:-0}
+      # Development-only: the worker below is NOT approved for production use.
+      # Uncomment these together only after you have built and verified a digest-pinned
+      # multi-engine worker image and its exact Orca/Creality binary checksums.
+      # MAKERVAULT_SLICER_EXECUTION_ENABLED: ${MAKERVAULT_SLICER_EXECUTION_ENABLED:-0}
+      # MAKERVAULT_SLICER_WORKER_URL: http://slicer-worker:8088
+      # MAKERVAULT_SLICER_WORKER_TOKEN: ${MAKERVAULT_SLICER_WORKER_TOKEN:?Set a long unique token}
+      # MAKERVAULT_SLICER_WORKER_IMAGE: ${MAKERVAULT_SLICER_WORKER_IMAGE:?Pin a verified image by digest}
+      # MAKERVAULT_SLICER_ENGINE_IMAGE_DIGEST: ${MAKERVAULT_SLICER_ENGINE_IMAGE_DIGEST:?Set exact sha256 image digest}
+      # MAKERVAULT_SLICER_ENGINES_JSON: ${MAKERVAULT_SLICER_ENGINES_JSON:?Approve exact installed engine versions and binary SHA256s}
       MAKERVAULT_HTTPS_ENABLED: ${MAKERVAULT_HTTPS_ENABLED:-auto}
       MAKERVAULT_HTTPS_SELF_SIGNED: ${MAKERVAULT_HTTPS_SELF_SIGNED:-false}
       MAKERVAULT_HTTPS_SELF_SIGNED_NAMES: ${MAKERVAULT_HTTPS_SELF_SIGNED_NAMES:-}
@@ -44,12 +55,43 @@ services:
         condition: service_healthy
     networks:
       - makervault_backend
+      # - makervault_slicer  # only if the optional slicer service is enabled
     healthcheck:
       test: ["CMD", "python", "/app/backend/manage.py", "healthcheck"]
       interval: 30s
       timeout: 10s
       retries: 3
       start_period: 45s
+
+  # OPTIONAL SLICER WORKER — NOT INSTALLED BY DEFAULT.
+  #
+  # Staging: scripts/install_slicer_staging.py prepare-orca / enable
+  # Then use scripts/install_slicer_staging.py update for app rebuilds:
+  # this includes compose.slicer.staging.yaml + .slicer-staging.env automatically.
+  # Production: inspect compose.slicer.yaml and supply an independently approved
+  # immutable worker image and engine identity. The commented service below is
+  # architectural reference only; do not enable it alongside either overlay.
+  # No Docker socket, host media mounts or extra privileges are required.
+  # slicer-worker:
+  #   image: ${MAKERVAULT_SLICER_WORKER_IMAGE:?Set an approved image@sha256:...}
+  #   restart: unless-stopped
+  #   user: "10001:10001"
+  #   read_only: true
+  #   init: true
+  #   cap_drop: [ALL]
+  #   security_opt: ["no-new-privileges:true"]
+  #   pids_limit: 96
+  #   mem_limit: 3g
+  #   cpus: 2.0
+  #   tmpfs:
+  #     - /tmp:rw,nosuid,size=1g
+  #   environment:
+  #     SLICER_WORKER_ENABLED: "1"
+  #     SLICER_WORKER_TOKEN: ${MAKERVAULT_SLICER_WORKER_TOKEN:?Set a long unique token}
+  #     SLICER_ENGINES_JSON: ${SLICER_ENGINES_JSON:?Declare verified binaries, versions and SHA256s}
+  #   networks:
+  #     - makervault_slicer
+  #   # No published ports, Docker socket, database credentials or host bind mounts.
 
   postgres:
     image: postgres:18.6
@@ -91,6 +133,9 @@ services:
 networks:
   makervault_backend:
     driver: bridge
+  # Dedicated worker link, no external access. Enable with the optional service.
+  # makervault_slicer:
+  #   internal: true
 
 # These named volumes are used by default. If a *_STORAGE variable is an absolute
 # path instead, Compose treats it as a bind mount and these declarations remain harmless.
