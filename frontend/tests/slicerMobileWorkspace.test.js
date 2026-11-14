@@ -129,18 +129,24 @@ test("adding an existing MakerVault STL returns to the interactive plate",()=>{
   assert.match(workspace,/behavior: "smooth", block: "start"/);
 });
 
-test("mobile build tools scroll in one row with arrows and usable popovers",()=>{
+test("editor-width adaptive toolbar never exceeds two rows and pages with arrows",()=>{
   const plate=fs.readFileSync(path.join(base,"components/SlicerPlateEditor.jsx"),"utf8");
   const workspace=fs.readFileSync(path.join(base,"components/SlicerPrepareWorkspace.jsx"),"utf8");
-  assert.match(plate,/aria-label="Scroll editing tools left"/);
-  assert.match(plate,/aria-label="Scroll editing tools right"/);
-  assert.match(plate,/scrollBy\(\{left:-260,behavior:"smooth"\}\)/);
-  assert.match(plate,/scrollBy\(\{left:260,behavior:"smooth"\}\)/);
-  assert.match(css,/grid-template-columns:30px minmax\(0,1fr\) 30px/);
-  assert.match(css,/\.slicerPlateEditingToolbar > \.slicerPrepareTools:has\(\.slicerToolOptionsOpen\)/);
-  assert.match(css,/flex-wrap:nowrap/);
-  assert.match(css,/touch-action:pan-x/);
-  assert.match(css,/\.slicerPlateEditingToolbar \.slicerToolbarDescriptor \{\s*display:none/);
+  assert.match(plate,/function AdaptiveEditingToolbar\(\{toolbar\}\)/);
+  assert.match(plate,/new ResizeObserver\(update\)/);
+  assert.match(plate,/getBoundingClientRect\(\)\.width<790/);
+  assert.match(plate,/aria-label="Previous editing tools"/);
+  assert.match(plate,/aria-label="Next editing tools"/);
+  assert.match(plate,/disabled=\{!scrollState\.left\}/);
+  assert.match(plate,/disabled=\{!scrollState\.right\}/);
+  assert.match(plate,/scrollBy\(\{left:direction\*/);
+  assert.match(plate,/<AdaptiveEditingToolbar toolbar=\{toolbar\} \/>/);
+  assert.match(css,/\.slicerPlateEditingToolbar\.isCompact/);
+  assert.match(css,/grid-template-rows:repeat\(2,60px\)/);
+  assert.match(css,/grid-auto-flow:column/);
+  assert.match(css,/overflow-x:auto/);
+  assert.match(css,/\.slicerPrepareWorkspace \{\s*container-type:inline-size/);
+  assert.match(css,/@container \(max-width:760px\)/);
   assert.match(workspace,/position:"fixed",left:Math\.max\(12/);
 });
 
