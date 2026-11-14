@@ -82,3 +82,13 @@ test("Safari autoplay rejection keeps existing HLS source and exposes a tap-to-p
   assert.match(source, />Start video<\/button>/);
   assert.match(source, /target\.play\(\)\.then/);
 });
+
+test("fatal HLS errors expose their classification without revealing relay URLs", () => {
+  const source = fs.readFileSync(path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../src/components/PrinterCamera.jsx"), "utf8");
+  assert.match(source, /data\.type \|\| "unknown"/);
+  assert.match(source, /data\.details \|\| "unknown"/);
+  assert.match(source, /HLS: /);
+  assert.match(source, /setPlaybackDiagnostic\(/);
+  assert.match(source, /onError=\{event =>/);
+  assert.doesNotMatch(source, /Camera relay disconnected\. Check the printer connection/);
+});
