@@ -73,8 +73,47 @@ def session_from_master(master):
     return None
 
 
+
+def ts_playlist_progress(text):
+    """Return safe live-playlist progression metadata without session URLs."""
+    if not isinstance(text, str) or not text.startswith("#EXTM3U"):
+        return {"valid": False}
+    sequence = None
+    target = None
+    segments = []
+    for raw_line in text.splitlines():
+        line = raw_line.strip()
+        if line.startswith("#EXT-X-MEDIA-SEQUENCE:"):
+            value = line.partition(":")[2]
+            sequence = int(value) if value.isascii() and value.isdecimal() and len(value) <= 16 else None
+        elif line.startswith("#EXT-X-TARGETDURATION:"):
+            value = line.partition(":")[2]
+            target = int(value) if value.isascii() and value.isdecimal() and len(value) <= 6 else None
+        elif line and not line.startswith("#"):
+            resource, _, query = line.partition("?")
+            if resource.rsplit("/", 1)[-1] not in {"segment.ts", "segment.m4s"}:
+                continue
+            number = None
+            for part in query.split("&"):
+                if part.startswith("n="):
+                    value = part[2:]
+                    number = int(value) if value.isascii() and value.isdecimal() and len(value) <= 16 else None
+                    break
+            segments.append(number)
+    return {
+        "valid": True,
+        "media_sequence": sequence,
+        "target_duration": target,
+        "segment_count": len(segments),
+        "segment_numbers": segments[-8:],
+        "has_endlist": "#EXT-X-ENDLIST" in text,
+    }
+
 class Command(BaseCommand):
     help = "Check safe HLS playlist and MP4 initialization dimensions for Creality cameras."
+
+    def add_arguments(self, parser):
+        parser.add_argument("--watch-ts", action="store_true", help="Compare three native MPEG-TS HLS playlist snapshots, four seconds apart.")
 
     def handle(self, *args, **kwargs):
         count = 0
@@ -85,6 +124,25 @@ class Command(BaseCommand):
                 count += 1
                 self.stdout.write(f"Camera {count}:")
                 try:
+                    if kwargs.get("watch_ts"):
+                        master = hls_master(connection.pk, camera["id"], mpeg_ts=True)
+                        session = session_from_master(master)
+                        if not session:
+                            self.stdout.write("  No HLS session in TS master.")
+                            continue
+                        previous = None
+                        for index in range(3):
+                            if index:
+                                sleep(4)
+                            body, _ = hls_resource(session, "playlist.m3u8")
+                            progress = ts_playlist_progress(body.decode("utf-8"))
+                            progress["changed"] = None if previous is None else (
+                                progress["media_sequence"] != previous["media_sequence"]
+                                or progress["segment_numbers"] != previous["segment_numbers"]
+                            )
+                            self.stdout.write(f"  Sample {index + 1}: {progress}")
+                            previous = progress
+                        continue
                     master = hls_master(connection.pk, camera["id"])
                     self.stdout.write(f"  master: {playlist_summary(master)}")
                     session = session_from_master(master)
