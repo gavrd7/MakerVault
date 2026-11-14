@@ -1,3 +1,7 @@
+export function isIOSWebKit(userAgent = "", platform = "", maxTouchPoints = 0) {
+  return /iPhone|iPad|iPod/.test(userAgent) || (platform === "MacIntel" && maxTouchPoints > 1);
+}
+
 export function cameraHlsUrl(mediaUrl = "") {
   return String(mediaUrl).replace(/media\/$/, "hls/master.m3u8");
 }
