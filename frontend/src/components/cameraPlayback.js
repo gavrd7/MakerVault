@@ -43,3 +43,10 @@ export function defaultCamera(connections = []) {
   const connection = available[0];
   return connection ? { connectionId: connection.id, camera: connection.camera.preview } : null;
 }
+
+// hls.js 1.7 can lose its MediaSource on iOS Safari when a camera
+// preview is detached or resumed. Native HLS is the recovery path, not
+// the initial path: some Creality relays require hls.js to start reliably.
+export function shouldFallbackToNativeHls(error, nativeHlsAvailable) {
+  return Boolean(nativeHlsAvailable && error?.details === "mediaSourceRequiresReset");
+}
