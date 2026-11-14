@@ -234,6 +234,66 @@ function orientationComparison(metricValue) {
   </>;
 }
 
+/** Use the actual editor width, not window width, to limit toolbar rows.
+ * Desktop may wrap to two rows; narrower editors page through two-row columns.
+ */
+function AdaptiveEditingToolbar({toolbar}) {
+  const frameRef=useRef(null);
+  const stripRef=useRef(null);
+  const [compact,setCompact]=useState(false);
+  const [scrollState,setScrollState]=useState({left:false,right:false});
+  const measureScroll=useCallback(()=>{
+    const strip=stripRef.current;
+    if(!strip)return;
+    setScrollState({
+      left:strip.scrollLeft>2,
+      right:strip.scrollLeft+strip.clientWidth<strip.scrollWidth-2,
+    });
+  },[]);
+  useEffect(()=>{
+    const frame=frameRef.current;
+    if(!frame)return;
+    const update=()=>{
+      const next=frame.getBoundingClientRect().width<790;
+      setCompact(next);
+    };
+    update();
+    if(typeof ResizeObserver!=="undefined"){
+      const observer=new ResizeObserver(update);
+      observer.observe(frame);
+      return ()=>observer.disconnect();
+    }
+    window.addEventListener("resize",update);
+    return ()=>window.removeEventListener("resize",update);
+  },[]);
+  useEffect(()=>{
+    const strip=stripRef.current;
+    if(!strip)return;
+    if(!compact)strip.scrollLeft=0;
+    const observer=typeof ResizeObserver!=="undefined"
+      ?new ResizeObserver(measureScroll):null;
+    observer?.observe(strip);
+    measureScroll();
+    return ()=>observer?.disconnect();
+  },[compact,toolbar,measureScroll]);
+  const move=direction=>{
+    const strip=stripRef.current;
+    if(!strip)return;
+    strip.scrollBy({left:direction*Math.max(61,Math.floor(strip.clientWidth/61)*61),behavior:"smooth"});
+  };
+  return <div ref={frameRef} className={"slicerPlateEditingToolbar"+(compact?" isCompact":"")}>
+    <button type="button" className="slicerMobileToolArrow"
+      aria-label="Previous editing tools" disabled={!scrollState.left}
+      onClick={()=>move(-1)}>‹</button>
+    <div ref={stripRef} className="slicerToolbarScrollViewport" onScroll={measureScroll}>
+      {toolbar}
+    </div>
+    <button type="button" className="slicerMobileToolArrow"
+      aria-label="Next editing tools" disabled={!scrollState.right}
+      onClick={()=>move(1)}>›</button>
+  </div>;
+}
+
 export default function SlicerPlateEditor({
   files = [], objects = [], onChange, onPrimaryChange, plate = null, plateType = "default",
   plateLabel = "Plate 1", onPlateLabelChange, plateIndex = 0, plateCount = 1, printerLabel = "",
@@ -3044,15 +3104,7 @@ export default function SlicerPlateEditor({
     </div>
     <div className="slicerPlateWorkspace">
       <div className="slicerPlateCanvasColumn">
-    {toolbar && <div className="slicerPlateEditingToolbar">
-      <button type="button" className="slicerMobileToolArrow" aria-label="Scroll editing tools left"
-        onClick={event=>event.currentTarget.parentElement.querySelector(".slicerPrepareTools")
-          ?.scrollBy({left:-260,behavior:"smooth"})}>‹</button>
-      {toolbar}
-      <button type="button" className="slicerMobileToolArrow" aria-label="Scroll editing tools right"
-        onClick={event=>event.currentTarget.parentElement.querySelector(".slicerPrepareTools")
-          ?.scrollBy({left:260,behavior:"smooth"})}>›</button>
-    </div>}
+    {toolbar && <AdaptiveEditingToolbar toolbar={toolbar} />}
     {paintControls}
     <div className="slicerPlateCameraToolbar" role="toolbar" aria-label="Build-plate camera views">
       <button type="button" onClick={() => setPlateCamera("iso")} title="Isometric build-plate view">Isometric</button>
