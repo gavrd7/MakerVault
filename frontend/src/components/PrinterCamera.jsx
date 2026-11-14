@@ -105,8 +105,6 @@ export default function PrinterCamera({ printerId, connection, canEdit, activeCa
     {!rows.length && <small>{connection.camera?.reported ? "The printer reports a camera. Configure a source to view it." : "Configure a camera source to view this printer."}</small>}
     {notice && <p role="status">{notice}</p>}
     {error && <p className="integrationError" role="alert">{error}</p>}
-    {captureInfo && <small role="status" style={{ display: "block", padding: "4px 10px", overflowWrap: "anywhere" }}>{captureInfo}</small>}
-    {capturedFrame && <img src={capturedFrame} alt="Captured video frame for camera diagnosis" style={{ display: "block", width: "min(100%, 320px)", margin: "8px auto" }} />}
     {settings && canEdit && <form className="formGrid printerCameraForm" onSubmit={save}>
       <div className="full printerCameraGuidance"><small>{provider?.guidance || "Choose a camera source below, or enter its URL manually."}</small></div>
       {warnings.map(message => <p className="full" role="status" key={message}>{message}</p>)}
@@ -424,6 +422,8 @@ export function CameraPlayback({ camera, url, compact = false }) {
           : <span role="status">{status}</span>}
     </div>
     {error && <p className="integrationError" role="alert">{error}</p>}
+    {captureInfo && <small role="status" style={{ display: "block", padding: "4px 10px", overflowWrap: "anywhere" }}>{captureInfo}</small>}
+    {capturedFrame && <img src={capturedFrame} alt="Captured video frame for camera diagnosis" style={{ display: "block", width: "min(100%, 320px)", margin: "8px auto" }} />}
     {playbackDiagnostic && <small role="status" style={{ display: "block", padding: "4px 10px", overflowWrap: "anywhere" }}>{playbackDiagnostic}</small>}
     {playbackBlocked && <small role="status">Safari requires you to start video playback manually.</small>}
     {!compact && <small>{LABELS[camera.mode]}{camera.mode === "creality_webrtc" ? " · Video is relayed through your authenticated MakerVault connection; no camera media port is exposed." : " · Images are relayed securely through your MakerVault session."}</small>}
