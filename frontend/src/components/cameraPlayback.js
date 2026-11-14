@@ -50,3 +50,7 @@ export function defaultCamera(connections = []) {
 export function shouldFallbackToNativeHls(error, nativeHlsAvailable) {
   return Boolean(nativeHlsAvailable && error?.details === "mediaSourceRequiresReset");
 }
+
+export function isAutoplayBlocked(error) {
+  return error?.name === "NotAllowedError";
+}
