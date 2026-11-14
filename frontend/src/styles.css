@@ -7688,3 +7688,39 @@ a:focus-visible,
     margin-top:0;
   }
 }
+
+/* iOS Safari regression isolation: restore the original, self-sized camera
+   video box from main. The overview card retains its grid placement, but it
+   must not impose a stretched 100%-height flex video surface on WebKit.
+   Desktop and other browsers keep the redesigned camera dimensions. */
+@supports (-webkit-touch-callout: none) {
+  @media (max-width: 900px) {
+    .printingPrinterCompactCard .printingPrinterCompactCamera {
+      height:auto;
+      min-height:0;
+      overflow:visible;
+    }
+    .printingPrinterCompactCamera > .cameraGlanceCard {
+      height:auto;
+    }
+    .printingPrinterCompactCamera .cameraGlance {
+      height:auto;
+      display:block;
+      overflow:visible;
+    }
+    .printingPrinterCompactCamera .cameraGlance .printerCameraViewport {
+      display:grid;
+      height:auto;
+      min-height:0;
+      aspect-ratio:16 / 9;
+      max-height:420px;
+    }
+    .printingPrinterCompactCamera .cameraGlance .printerCameraViewport video,
+    .printingPrinterCompactCamera .cameraGlance .printerCameraViewport img {
+      width:100%;
+      height:100%;
+      max-height:65vh;
+      object-fit:contain;
+    }
+  }
+}
