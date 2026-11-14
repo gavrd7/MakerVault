@@ -6566,3 +6566,93 @@ a:focus-visible,
     flex-basis:62px;width:62px;min-width:62px;height:58px;
   }
 }
+
+
+/* Compact Material-style slicer actions. Keep the 22px glyphs, reduce empty
+   horizontal space, and centre each separator in a symmetric group gutter.
+   This deliberately overrides older desktop/mobile width rules above. */
+.slicerPlateEditingToolbar > .slicerPrepareTools {
+  column-gap:4px;
+  row-gap:5px;
+  padding:7px;
+  align-items:center;
+  align-content:start;
+}
+.slicerPlateEditingToolbar .slicerToolTooltip,
+.slicerPrepareTools .slicerToolTooltip {
+  flex:0 0 57px;
+  width:57px;
+  min-width:57px;
+  height:60px;
+  box-sizing:border-box;
+}
+.slicerPlateEditingToolbar .slicerToolTooltip > button,
+.slicerPrepareTools .slicerToolTooltip > button {
+  display:flex;
+  flex-direction:column;
+  gap:3px;
+  justify-content:center;
+  align-items:center;
+  box-sizing:border-box;
+  width:100%;
+  min-width:0;
+  height:60px;
+  min-height:60px;
+  padding:5px 2px 4px;
+  border-radius:10px;
+  line-height:1.12;
+}
+.slicerPrepareTools .slicerToolTooltip > button > .slicerUiIcon {
+  flex:0 0 auto;
+  width:22px;
+  height:22px;
+}
+.slicerPrepareTools .slicerToolButtonLabel {
+  display:block;
+  box-sizing:border-box;
+  flex:0 0 auto;
+  width:100%;
+  max-width:100%;
+  margin:0;
+  padding:0 1px;
+  font-size:9px;
+  font-weight:550;
+  line-height:1.1;
+  letter-spacing:0;
+  text-align:center;
+  white-space:normal;
+  overflow-wrap:normal;
+  word-break:normal;
+  hyphens:none;
+}
+.slicerPrepareTools .slicerToolGroupStart {
+  margin-inline-start:10px;
+  position:relative;
+}
+.slicerPrepareTools .slicerToolGroupStart::before {
+  content:"";
+  position:absolute;
+  left:-7px; /* 4px normal gap + 10px group margin = 14px, centred */
+  top:7px;
+  bottom:7px;
+  width:1px;
+  background:#506479;
+  pointer-events:none;
+}
+.slicerPlateEditingToolbar .slicerToolTooltip > button:hover:not(:disabled) {
+  background:#233449;
+  border-color:#71869e;
+}
+.slicerPlateEditingToolbar .slicerToolTooltip > button:focus-visible {
+  outline:2px solid #8ebbea;
+  outline-offset:2px;
+}
+@media(max-width:550px) {
+  .slicerPlateEditingToolbar .slicerToolTooltip,
+  .slicerPrepareTools .slicerToolTooltip {
+    flex:0 0 57px;
+    width:57px;
+    min-width:57px;
+    height:60px;
+  }
+}
