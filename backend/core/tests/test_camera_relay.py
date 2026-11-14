@@ -55,6 +55,17 @@ class CameraRelayHelperTests(SimpleTestCase):
         self.assertEqual(bounded.call_args.kwargs["params"]["src"], "makervault_test")
 
     @patch("core.camera_relay._bounded_get")
+    def test_segment_sequence_is_forwarded_to_go2rtc(self, bounded):
+        bounded.return_value = (b"segment", "video/iso.segment")
+        data, _ = hls_resource("abc123", "segment.m4s", sequence="1042")
+        self.assertEqual(data, b"segment")
+        self.assertEqual(bounded.call_args.kwargs["params"], {"id": "abc123", "n": "1042"})
+        with self.assertRaisesMessage(ValueError, "Invalid HLS segment sequence"):
+            hls_resource("abc123", "segment.m4s", sequence="../test")
+        with self.assertRaisesMessage(ValueError, "Invalid HLS segment sequence"):
+            hls_resource("abc123", "playlist.m3u8", sequence="1042")
+
+    @patch("core.camera_relay._bounded_get")
     def test_hls_resource_rejects_unknown_resource(self, bounded):
         with self.assertRaisesMessage(ValueError, "Unsupported camera relay resource"):
             hls_resource("abc123", "debug")
@@ -107,6 +118,30 @@ class CameraRelayApiTests(TestCase):
 
     @patch("core.camera_views.hls_resource")
     @patch("core.camera_views.hls_master")
+    def test_segment_uris_retain_distinct_sequence_values(self, master, resource):
+        master.return_value = "#EXTM3U\\n#EXT-X-STREAM-INF:BANDWIDTH=1000000\\nhls/playlist.m3u8?id=abc123\\n"
+        self.client.get(self.base + "master.m3u8")
+        resource.return_value = (
+            b'#EXTM3U\\n#EXT-X-MEDIA-SEQUENCE:1042\\n'
+            b'#EXT-X-MAP:URI="init.mp4?id=abc123"\\n'
+            b'#EXTINF:0.5,\\nsegment.m4s?id=abc123&n=1042\\n'
+            b'#EXTINF:0.5,\\nsegment.m4s?id=abc123&n=1043\\n',
+            "application/vnd.apple.mpegurl",
+        )
+        playlist = self.client.get(self.base + "playlist.m3u8?id=abc123")
+        self.assertEqual(playlist.status_code, 200)
+        self.assertIn(b"segment.m4s?id=abc123&n=1042", playlist.content)
+        self.assertIn(b"segment.m4s?id=abc123&n=1043", playlist.content)
+        self.assertNotIn(b"hls/segment.m4s", playlist.content)
+        resource.return_value = (b"segment", "video/iso.segment")
+        response = self.client.get(self.base + "segment.m4s?id=abc123&n=1042")
+        self.assertEqual(response.status_code, 200)
+        resource.assert_called_with("abc123", "segment.m4s", sequence="1042")
+        denied = self.client.get(self.base + "segment.m4s?id=abc123&n=../test")
+        self.assertEqual(denied.status_code, 400)
+
+    @patch("core.camera_views.hls_resource")
+    @patch("core.camera_views.hls_master")
     def test_hls_resources_require_session_created_for_same_user_and_camera(self, master, resource):
         master.return_value = "#EXTM3U\nhls/playlist.m3u8?id=abc123\n"
         self.client.get(self.base + "master.m3u8")
@@ -117,7 +152,7 @@ class CameraRelayApiTests(TestCase):
         response = self.client.get(self.base + "playlist.m3u8?id=abc123")
         self.assertEqual(response.status_code, 200, response.content)
         self.assertIn(b"segment.m4s?id=abc123", response.content)
-        resource.assert_called_once_with("abc123", "playlist.m3u8")
+        resource.assert_called_once_with("abc123", "playlist.m3u8", sequence=None)
 
         self.client.force_login(self.other)
         denied = self.client.get(self.base + "playlist.m3u8?id=abc123")
