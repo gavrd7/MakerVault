@@ -296,7 +296,7 @@ export function CameraPlayback({ camera, url, compact = false }) {
     </div>
     <div className="printerCameraViewport">
       {camera.mode === "creality_webrtc"
-        ? <video ref={video} style={{ transform }} autoPlay muted playsInline controls onPlaying={() => { relayRetries.current = 0; setPlaybackBlocked(false); setError(""); setStatus("Live video · relayed through MakerVault"); }} />
+        ? <video ref={video} style={{ transform }} autoPlay muted playsInline controls onPlaying={() => { relayRetries.current = 0; setPlaybackBlocked(false); setError(""); setStatus("Live video · relayed through MakerVault"); }} onError={() => { if (video.current?.error) { setPlaybackBlocked(false); setError("Camera stream could not be loaded. Check the camera relay and select Reconnect."); setStatus("Disconnected · select Reconnect to retry"); } }} />
         : image
           ? <img src={image} alt={camera.name + " live camera view"} style={{ transform }} />
           : <span role="status">{status}</span>}
