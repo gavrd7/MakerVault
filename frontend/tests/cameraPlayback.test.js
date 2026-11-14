@@ -71,3 +71,14 @@ test("printer camera retains the pre-refactor HLS playback flow in the redesigne
   assert.doesNotMatch(source, /switchToNative|scheduleWatchdog|requestVideoFrameCallback/);
   assert.match(source, /camera\.mode !== "creality_webrtc" && <button[^\n]*cameraFullscreen/);
 });
+
+test("Safari autoplay rejection keeps existing HLS source and exposes a tap-to-play button", () => {
+  const source = fs.readFileSync(path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../src/components/PrinterCamera.jsx"), "utf8");
+  const handler = source.slice(source.indexOf("const attemptAutoplay ="), source.indexOf('if (camera.mode !== "creality_webrtc") {', source.indexOf("const attemptAutoplay =")));
+  assert.match(handler, /reason\?\.name === "NotAllowedError"/);
+  assert.match(handler, /setPlaybackBlocked\(true\)/);
+  assert.doesNotMatch(handler, /failed\("Playback was blocked|removeAttribute|\.load\(\)/);
+  assert.match(source, /playbackBlocked && camera\.mode === "creality_webrtc"/);
+  assert.match(source, />Start video<\/button>/);
+  assert.match(source, /target\.play\(\)\.then/);
+});
