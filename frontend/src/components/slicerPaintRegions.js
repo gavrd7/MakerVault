@@ -49,6 +49,17 @@ function subtractPatch(subject,cutter){
   const n=cross(sub(cutter[1],cutter[0]),sub(cutter[2],cutter[0]));
   const normalLength=Math.hypot(...n);
   if(normalLength<1e-10)return [subject];
+  // Convex separation test: most repeat strokes and eraser holes are disjoint.
+  // Avoid fragmenting an existing patch against a non-overlapping cursor.
+  for(const polygon of [subject,cutter]){
+    for(let i=0;i<polygon.length;i++){
+      const edge=sub(polygon[(i+1)%polygon.length],polygon[i]);
+      const axis=cross(edge,n);
+      const aa=subject.map(p=>dot(axis,p)),bb=cutter.map(p=>dot(axis,p));
+      if(Math.max(...aa)<Math.min(...bb)-1e-7||
+         Math.max(...bb)<Math.min(...aa)-1e-7)return [subject];
+    }
+  }
   const clip=(polygon,axis,offset)=>clipPaintPolygon(polygon,axis,offset);
   let remaining=subject;
   const outside=[];
