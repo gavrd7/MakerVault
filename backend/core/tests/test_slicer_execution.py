@@ -25,6 +25,23 @@ class IntendedMaterialSafetyTests(SimpleTestCase):
                     _validate_plate_execution(job)
 
 
+    def test_native_slicing_rejects_v1_and_v2_paint_regions(self):
+        from types import SimpleNamespace
+        cases = (
+            {"version": 1, "faces": {"0": 0}},
+            {"version": 2, "regions": [{"slot": 0, "patches": []}]},
+        )
+        for paint in cases:
+            with self.subTest(version=paint["version"]):
+                job = SimpleNamespace(
+                    settings={"plate_objects": [{
+                        "instance_id": "one", "colour_paint": paint,
+                    }]},
+                    engine="orcaslicer",
+                )
+                with self.assertRaisesRegex(SlicerExecutionError, "native region-to-tool"):
+                    _validate_plate_execution(job)
+
     def test_unhandled_flush_matrix_cannot_be_silently_ignored(self):
         from types import SimpleNamespace
         for models in (None, [], [{"instance_id": "one"}]):
