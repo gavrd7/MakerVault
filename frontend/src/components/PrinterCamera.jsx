@@ -150,6 +150,7 @@ export function CameraPlayback({ camera, url, compact = false }) {
   const [error, setError] = useState("");
   const [attempt, setAttempt] = useState(0);
   const [playbackBlocked, setPlaybackBlocked] = useState(false);
+  const [diagnostic, setDiagnostic] = useState("");
   const relayRetries = useRef(0);
   const renderedFrames = useRef(0);
 
@@ -166,7 +167,7 @@ export function CameraPlayback({ camera, url, compact = false }) {
     const target = video.current;
     const controller = new AbortController();
     renderedFrames.current = 0;
-    setImage(""); setError(""); setStatus("Connecting…"); setPlaybackBlocked(false);
+    setImage(""); setError(""); setStatus("Connecting…"); setPlaybackBlocked(false); setDiagnostic("");
 
     const needsGesture = reason => {
       if (cancelled || reason?.name === "AbortError") return;
@@ -209,6 +210,7 @@ export function CameraPlayback({ camera, url, compact = false }) {
         setPlaybackBlocked(false);
         setError("");
         setStatus("Live video · relayed through MakerVault");
+        setDiagnostic("");
       });
     };
     const switchToNative = () => {
@@ -226,6 +228,7 @@ export function CameraPlayback({ camera, url, compact = false }) {
       observeFirstFrame();
       setError("");
       setStatus("Trying native Safari video playback…");
+      setDiagnostic("No frames from hls.js; trying native HLS.");
       scheduleWatchdog();
       target.play().catch(needsGesture);
     };
@@ -239,6 +242,7 @@ export function CameraPlayback({ camera, url, compact = false }) {
           return;
         }
         const health = videoFrameHealth(target, renderedFrames.current);
+        setDiagnostic(videoFrameDiagnostic(health, playbackMode));
         setStatus("No decoded camera frames · select Reconnect to retry");
         setError("The video player started but no camera frames were decoded. " + videoFrameDiagnostic(health, playbackMode));
       }, 12000);
@@ -388,6 +392,7 @@ export function CameraPlayback({ camera, url, compact = false }) {
           ? <img src={image} alt={camera.name + " live camera view"} style={{ transform }} />
           : <span role="status">{status}</span>}
     </div>
+    {camera.mode === "creality_webrtc" && <div className="printerCameraDiagnostic" role="status" style={{ fontSize: "0.75rem", overflowWrap: "anywhere", padding: "0.25rem 0.5rem" }}>{status}{diagnostic ? " · " + diagnostic : ""}</div>}
     {error && <p className="integrationError" role="alert">{error}</p>}
     {playbackBlocked && !error && <p className="printerCameraGestureHint" role="status">Autoplay was blocked. Tap Play on the video to start the feed.</p>}
     {!compact && <small>{LABELS[camera.mode]}{camera.mode === "creality_webrtc" ? " · Video is relayed through your authenticated MakerVault connection; no camera media port is exposed." : " · Images are relayed securely through your MakerVault session."}</small>}
