@@ -6811,3 +6811,159 @@ a:focus-visible,
     padding:2px;
   }
 }
+
+
+/* Editor-width adaptive toolbar: the viewport can stay desktop-width when
+   the app is snapped beside another window. Two rows are a hard maximum. */
+.slicerPlateEditingToolbar {
+  display:block;
+  min-width:0;
+}
+.slicerPlateEditingToolbar .slicerToolbarScrollViewport {
+  min-width:0;
+  width:100%;
+  overflow:visible;
+}
+.slicerPlateEditingToolbar .slicerToolbarScrollViewport > .slicerPrepareTools {
+  display:flex;
+  flex-wrap:wrap;
+  align-items:center;
+  align-content:start;
+  gap:5px 4px;
+  width:100%;
+  min-width:0;
+  margin:0;
+  padding:7px;
+  border:1px solid #34465b;
+  border-radius:10px;
+  background:#111b27;
+}
+.slicerPlateEditingToolbar:not(.isCompact) > .slicerMobileToolArrow {
+  display:none;
+}
+.slicerPlateEditingToolbar.isCompact {
+  display:grid;
+  grid-template-columns:30px minmax(0,1fr) 30px;
+  gap:4px;
+  align-items:start;
+}
+.slicerPlateEditingToolbar.isCompact > .slicerMobileToolArrow {
+  display:grid;
+  place-items:center;
+  width:30px;
+  min-width:0;
+  height:128px;
+  min-height:0;
+  padding:0;
+  border:1px solid #42546b;
+  border-radius:9px;
+  background:#1b2b3d;
+  color:#e4eef9;
+  font-size:28px;
+  line-height:1;
+  cursor:pointer;
+}
+.slicerPlateEditingToolbar.isCompact > .slicerMobileToolArrow:disabled {
+  opacity:.32;
+  cursor:default;
+}
+.slicerPlateEditingToolbar.isCompact .slicerToolbarScrollViewport {
+  overflow-x:auto;
+  overflow-y:hidden;
+  scrollbar-width:none;
+  overscroll-behavior-x:contain;
+  scroll-snap-type:x proximity;
+  -webkit-overflow-scrolling:touch;
+  border:1px solid #34465b;
+  border-radius:10px;
+  background:#111b27;
+}
+.slicerPlateEditingToolbar.isCompact .slicerToolbarScrollViewport::-webkit-scrollbar {
+  display:none;
+}
+.slicerPlateEditingToolbar.isCompact .slicerToolbarScrollViewport > .slicerPrepareTools {
+  display:grid;
+  grid-template-rows:repeat(2,60px);
+  grid-auto-flow:column;
+  grid-auto-columns:57px;
+  column-gap:4px;
+  row-gap:5px;
+  align-items:start;
+  align-content:start;
+  width:max-content;
+  min-width:100%;
+  height:128px;
+  box-sizing:border-box;
+  padding:1px 3px;
+  border:0;
+  border-radius:0;
+  background:transparent;
+  overflow:visible;
+}
+.slicerPlateEditingToolbar.isCompact .slicerToolTooltip {
+  margin:0;
+  width:57px;
+  min-width:57px;
+  height:60px;
+  scroll-snap-align:start;
+}
+.slicerPlateEditingToolbar.isCompact .slicerToolGroupStart::before {
+  display:none;
+}
+.slicerPlateEditingToolbar.isCompact .slicerToolbarDescriptor {
+  display:none;
+}
+/* Popovers already calculate their viewport anchor and must not be clipped
+   by the sliding toolbar. */
+.slicerPlateEditingToolbar.isCompact .slicerToolOptions {
+  position:fixed;
+  z-index:100;
+}
+/* Responsive editor panes follow the app's actual content width, rather than
+   waiting for a device-width breakpoint that a snapped window may never hit. */
+.slicerPrepareWorkspace {
+  container-type:inline-size;
+}
+@container (max-width:760px) {
+  .slicerMobilePaneTabs {
+    display:grid;
+    grid-template-columns:repeat(3,minmax(0,1fr));
+    gap:6px;
+    position:sticky;
+    top:0;
+    z-index:35;
+    margin-bottom:9px;
+  }
+  .slicerMobilePaneTabs button {
+    display:flex;
+    justify-content:center;
+    align-items:center;
+    gap:6px;
+    min-height:44px;
+    padding:8px 4px;
+  }
+  .slicerPrepareStructure[data-mobile-pane] {
+    display:block;
+    width:100%;
+    min-width:0;
+  }
+  .slicerPrepareStructure[data-mobile-pane="plate"] > .slicerPrepareLeftRail,
+  .slicerPrepareStructure[data-mobile-pane="plate"] > .slicerPrepareSettings,
+  .slicerPrepareStructure[data-mobile-pane="models"] > .slicerPrepareScene,
+  .slicerPrepareStructure[data-mobile-pane="models"] > .slicerPrepareSettings,
+  .slicerPrepareStructure[data-mobile-pane="settings"] > .slicerPrepareScene,
+  .slicerPrepareStructure[data-mobile-pane="settings"] > .slicerPrepareLeftRail {
+    display:none;
+  }
+  .slicerPrepareStructure[data-mobile-pane] > .slicerPrepareScene,
+  .slicerPrepareStructure[data-mobile-pane] > .slicerPrepareLeftRail,
+  .slicerPrepareStructure[data-mobile-pane] > .slicerPrepareSettings {
+    width:100%;
+    max-width:100%;
+    min-width:0;
+  }
+  .slicerPrepareStructure[data-mobile-pane="settings"] > .slicerPrepareSettings {
+    max-height:min(70dvh,850px)!important;
+    overflow-y:auto;
+  }
+}
