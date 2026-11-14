@@ -6657,3 +6657,156 @@ a:focus-visible,
     height:60px;
   }
 }
+
+
+/* Mobile build workspace: one swipeable editing row with explicit navigation.
+   Its dropdowns are fixed to the viewport and do not alter strip height. */
+.slicerMobileToolArrow { display:none; }
+@media (max-width:850px) {
+  .slicerPlateEditingToolbar {
+    display:grid;
+    grid-template-columns:30px minmax(0,1fr) 30px;
+    align-items:stretch;
+    column-gap:3px;
+    margin-bottom:6px;
+    overflow:visible;
+  }
+  .slicerPlateEditingToolbar > .slicerMobileToolArrow {
+    display:grid;
+    place-items:center;
+    width:30px;
+    min-width:0;
+    min-height:60px;
+    padding:0;
+    border:1px solid #42546b;
+    border-radius:8px;
+    background:#1c2d40;
+    color:#e2edfa;
+    font-size:30px;
+    line-height:1;
+    touch-action:manipulation;
+  }
+  .slicerPlateEditingToolbar > .slicerPrepareTools,
+  .slicerPlateEditingToolbar > .slicerPrepareTools:has(.slicerToolOptionsOpen) {
+    display:flex;
+    flex-wrap:nowrap;
+    align-items:center;
+    align-content:center;
+    column-gap:4px;
+    row-gap:0;
+    width:100%;
+    min-width:0;
+    max-width:100%;
+    height:74px;
+    margin:0;
+    padding:6px 3px;
+    overflow-x:auto;
+    overflow-y:hidden;
+    overscroll-behavior-x:contain;
+    scrollbar-width:none;
+    -webkit-overflow-scrolling:touch;
+    touch-action:pan-x;
+  }
+  .slicerPlateEditingToolbar > .slicerPrepareTools::-webkit-scrollbar {display:none;}
+  .slicerPlateEditingToolbar .slicerToolTooltip {
+    flex:0 0 57px;
+    width:57px;
+    min-width:57px;
+    height:60px;
+  }
+  .slicerPlateEditingToolbar .slicerToolGroupStart {
+    margin-inline-start:10px;
+  }
+  .slicerPlateEditingToolbar .slicerToolbarDescriptor {
+    display:none;
+  }
+  .slicerPlateEditingToolbar .slicerToolOptions {
+    position:fixed;
+    z-index:100;
+  }
+
+  /* On narrow screens the build area is the only visible workspace pane.
+     Spend the available width on the build plate rather than nested gutters. */
+  .slicerPrepareWorkspace {padding:7px !important;}
+  .slicerPrepareStructure[data-mobile-pane="plate"] {width:100%;}
+  .slicerPrepareScene > .slicerPlatePanel {
+    width:100%;
+    max-width:none;
+    padding:7px;
+  }
+  .slicerPrepareScene .slicerPlateWorkspace {margin-top:8px;}
+  .slicerPlateCanvasColumn {width:100%;min-width:0;}
+  .slicerPlateCanvasColumn > .slicerPlateCanvasViewport {
+    position:relative !important;
+    display:flex;
+    flex-direction:column;
+    width:100%;
+    height:auto !important;
+    min-height:0;
+  }
+  .slicerPlateCanvasColumn .slicerPlateCanvasViewport > .slicerPlateCanvas {
+    order:1;
+    width:100%;
+    min-height:320px;
+    height:clamp(320px,57dvh,620px);
+    flex:none;
+  }
+  /* Section controls are a compact horizontal strip BELOW the 3D canvas;
+     they no longer obscure the model, orientation cube or print bed. */
+  .slicerPlateCanvasViewport > .slicerPlateSectionControl {
+    position:relative !important;
+    order:2;
+    inset:auto !important;
+    display:flex;
+    flex-direction:row;
+    align-items:center;
+    gap:7px;
+    width:100%;
+    height:44px;
+    min-height:44px;
+    max-height:44px;
+    padding:4px 7px;
+    margin-top:5px;
+    border-radius:8px;
+    font-size:11px;
+  }
+  .slicerPlateSectionControl .slicerSectionTop {flex:0 0 auto;}
+  .slicerPlateSectionControl input[type="range"] {
+    -webkit-appearance:none;
+    appearance:none;
+    writing-mode:horizontal-tb;
+    direction:ltr;
+    flex:1 1 auto;
+    width:0;
+    min-width:40px;
+    height:26px;
+    min-height:0;
+    margin:0;
+    background:linear-gradient(90deg,#43b8e6,#43b8e6) center / 100% 4px no-repeat;
+  }
+  .slicerPlateSectionControl .slicerSectionValue {
+    flex:0 0 auto;
+    font-size:10px;
+  }
+  .slicerPlateSectionControl > button {
+    flex:0 0 auto;
+    width:auto;
+    min-width:34px;
+    min-height:30px;
+    padding:3px 7px;
+  }
+  .slicerPlateSectionControl .slicerSectionAxisLabel {
+    display:flex;
+    flex-direction:row;
+    align-items:center;
+    width:auto;
+    gap:3px;
+    font-size:10px;
+  }
+  .slicerPlateSectionControl .slicerSectionAxisLabel select {
+    width:40px;
+    max-width:40px;
+    height:30px;
+    padding:2px;
+  }
+}
