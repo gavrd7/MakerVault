@@ -7561,3 +7561,130 @@ a:focus-visible,
 .cameraGlance .printerCameraViewport video {
   min-height:0;
 }
+
+
+/* Printer overview: keep the camera on the right, put the printer's two
+   navigation actions above a live status panel spanning the entire left area.
+   The mobile arrangement deliberately retains image + name + actions. */
+.printingPrinterCompactCard:not(.isOffline) {
+  grid-template-columns:minmax(165px,1fr) minmax(125px,.6fr) minmax(215px,1.15fr);
+  grid-template-rows:minmax(84px,auto) minmax(118px,1fr);
+  grid-template-areas:"identity actions camera" "controls controls camera";
+  align-items:stretch;
+  min-height:230px;
+}
+.printingPrinterCompactCard .printingPrinterCompactIdentity {
+  grid-area:identity;
+  align-self:start;
+  min-width:0;
+}
+.printingPrinterCompactCard .printingPrinterCompactActions {
+  grid-area:actions;
+  align-self:start;
+  justify-self:end;
+  display:grid;
+  grid-template-columns:minmax(0,1fr);
+  width:min(100%,150px);
+  gap:7px;
+  margin:0;
+}
+.printingPrinterCompactCard .printingPrinterCompactActions .printingPrinterAction {
+  min-height:34px;
+  padding:6px 10px;
+  font-size:12px;
+  line-height:1.25;
+  white-space:normal;
+}
+.printingPrinterCompactCard .printingPrinterCompactControls {
+  grid-area:controls;
+  min-width:0;
+  min-height:0;
+  justify-content:stretch;
+}
+.printingPrinterCompactCard .printingPrinterCompactControls .printerLiveSummary:not(.printerLiveOffline) {
+  min-height:118px;
+  padding:10px 12px;
+}
+.printingPrinterCompactCard .printingPrinterCompactCamera {
+  grid-area:camera;
+  min-width:0;
+  min-height:205px;
+  height:100%;
+}
+.printingPrinterCompactCard .printerLiveQuickStats {
+  overflow-x:auto;
+  scrollbar-width:thin;
+}
+.printingPrinterCompactCard.isOffline {
+  grid-template-columns:minmax(0,1fr) minmax(130px,auto);
+  grid-template-rows:auto auto;
+  grid-template-areas:"identity actions" "controls controls";
+  min-height:0;
+  align-items:start;
+}
+.printingPrinterCompactCard.isOffline .printingPrinterCompactActions {
+  justify-self:end;
+}
+@media(max-width:900px) {
+  .printingPrinterCompactCard:not(.isOffline),
+  .printingPrinterCompactCard.isOffline {
+    grid-template-columns:clamp(92px,25vw,120px) minmax(0,1fr);
+    grid-template-rows:auto auto auto auto;
+    grid-template-areas:"image details" "image actions" "controls controls" "camera camera";
+    gap:10px 12px;
+    min-height:0;
+    align-items:center;
+  }
+  .printingPrinterCompactCard.isOffline {
+    grid-template-areas:"image details" "image actions" "controls controls";
+  }
+  .printingPrinterCompactCard .printingPrinterCompactIdentity {
+    display:contents;
+  }
+  .printingPrinterCompactCard .printingPrinterImage {
+    grid-area:image;
+    align-self:center;
+    box-sizing:border-box;
+    flex:none;
+    width:100% !important;
+    min-width:0 !important;
+    height:auto !important;
+    aspect-ratio:4 / 5;
+    padding:5px;
+  }
+  .printingPrinterCompactCard .printingPrinterImage img {
+    display:block;
+    width:100%;
+    height:100%;
+    object-fit:contain;
+  }
+  .printingPrinterCompactCard .printingPrinterCompactDetails {
+    grid-area:details;
+    justify-content:end;
+    align-self:end;
+    min-width:0;
+  }
+  .printingPrinterCompactCard .printingPrinterCompactActions {
+    grid-area:actions;
+    justify-self:stretch;
+    align-self:start;
+    grid-template-columns:repeat(2,minmax(0,1fr));
+    width:100%;
+    max-width:none;
+    margin:0;
+    gap:6px;
+  }
+  .printingPrinterCompactCard .printingPrinterCompactControls {
+    grid-area:controls;
+    min-width:0;
+    align-self:stretch;
+  }
+  .printingPrinterCompactCard .printingPrinterCompactCamera {
+    grid-area:camera;
+    height:215px;
+    min-height:215px;
+  }
+  .printingPrinterCompactCard.isOffline .printingPrinterCompactControls {
+    margin-top:0;
+  }
+}
