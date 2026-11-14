@@ -55,6 +55,13 @@ class CameraRelayHelperTests(SimpleTestCase):
         self.assertEqual(bounded.call_args.kwargs["params"]["src"], "makervault_test")
 
     @patch("core.camera_relay._bounded_get")
+    @patch("core.camera_relay.ensure_stream", return_value="makervault_test")
+    def test_ios_transport_uses_mpeg_ts_without_mp4_flag(self, ensure, bounded):
+        bounded.return_value = (b"#EXTM3U\\n#EXT-X-STREAM-INF:BANDWIDTH=1000000\\nhls/playlist.m3u8?id=test123\\n", "application/vnd.apple.mpegurl")
+        hls_master(uuid.uuid4(), "camera-1", mpeg_ts=True)
+        self.assertEqual(bounded.call_args.kwargs["params"], {"src": "makervault_test"})
+
+    @patch("core.camera_relay._bounded_get")
     def test_segment_sequence_is_forwarded_to_go2rtc(self, bounded):
         bounded.return_value = (b"segment", "video/iso.segment")
         data, _ = hls_resource("abc123", "segment.m4s", sequence="1042")
@@ -114,6 +121,15 @@ class CameraRelayApiTests(TestCase):
         self.assertEqual(response.status_code, 200, response.content)
         self.assertIn(b"playlist.m3u8?id=abc123", response.content)
         self.assertNotIn(b"hls/playlist", response.content)
+        master.assert_called_once_with(self.connection.pk, "k2-camera")
+
+    @patch("core.camera_views.hls_master")
+    def test_explicit_ts_master_request_is_isolated_from_default(self, master):
+        master.return_value = "#EXTM3U\\n#EXT-X-STREAM-INF:BANDWIDTH=1000000\\nhls/playlist.m3u8?id=abc123\\n"
+        self.assertEqual(self.client.get(self.base + "master.m3u8?format=ts").status_code, 200)
+        master.assert_called_once_with(self.connection.pk, "k2-camera", mpeg_ts=True)
+        master.reset_mock()
+        self.assertEqual(self.client.get(self.base + "master.m3u8").status_code, 200)
         master.assert_called_once_with(self.connection.pk, "k2-camera")
 
     @patch("core.camera_views.hls_resource")
