@@ -125,11 +125,11 @@ test("camera playback does not report recovered until a video frame is presented
   assert.match(source, /target\.removeEventListener\("playing", playingHandler\)/);
 });
 
-test("camera preview prewarms before scrolling into view and stays mounted afterwards", () => {
+test("dashboard camera preview mounts immediately without viewport or page visibility gating", () => {
   const source = fs.readFileSync(path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../src/components/PrinterCameras.jsx"), "utf8");
-  assert.match(source, /rootMargin: "1200px 0px"/);
-  assert.match(source, /if \(entries\[0\]\?\.isIntersecting\) setVisible\(true\)/);
-  assert.doesNotMatch(source, /setVisible\(entries\[0\]\?\.isIntersecting \|\| false\)/);
+  const preview = source.slice(source.indexOf("export function PrinterCameraPreview"), source.indexOf("export function PrinterCameraSetupModal"));
+  assert.match(preview, /<CameraPlayback key=/);
+  assert.doesNotMatch(preview, /IntersectionObserver|document\.hidden|visibilitychange|setVisible|suspended|Camera paused/);
 });
 
 test("camera supports local frame capture to separate rendering failures from black source pixels", () => {
