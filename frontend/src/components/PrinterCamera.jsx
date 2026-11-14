@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from "react";
 import Hls from "hls.js";
 import { apiFetch } from "../api";
-import { startFrameLoop, cameraRequest, cameraHlsUrl } from "./cameraPlayback";
+import { startFrameLoop, cameraRequest, cameraHlsUrl, shouldFallbackToNativeHls } from "./cameraPlayback";
 
 const LABELS = { snapshot: "Live images", mjpeg: "MJPEG live images", creality_webrtc: "Creality WebRTC · experimental" };
 
@@ -157,6 +157,7 @@ export function CameraPlayback({ camera, url, compact = false }) {
     let objectUrl = "";
     let stopFrames;
     let hls;
+    let playbackMode = "";
     let retryTimer;
     const controller = new AbortController();
     setImage(""); setError(""); setStatus("Connecting…"); setPlaybackBlocked(false);
@@ -214,6 +215,7 @@ export function CameraPlayback({ camera, url, compact = false }) {
       if (!target) {
         failed("Camera video element is unavailable.");
       } else if (Hls.isSupported()) {
+        playbackMode = "hls";
         // Keep the previously working playback preference: Safari can expose
         // both native HLS and MediaSource. Use hls.js when it is supported,
         // falling back to native HLS on browsers without MediaSource support.
@@ -229,7 +231,24 @@ export function CameraPlayback({ camera, url, compact = false }) {
           target.play().catch(needsGesture);
         });
         hls.on(Hls.Events.ERROR, (_event, data) => {
-          if (cancelled || !data?.fatal) return;
+          if (cancelled || playbackMode !== "hls") return;
+          if (shouldFallbackToNativeHls(data, Boolean(target.canPlayType("application/vnd.apple.mpegurl")))) {
+            // A MediaSource reset can repeatedly break hls.js on iOS. Detach
+            // its player before assigning the same authenticated HLS URL to
+            // Safari's native player; do not restart the printer-side relay.
+            playbackMode = "native";
+            hls?.destroy();
+            hls = null;
+            target.pause();
+            target.removeAttribute("src");
+            target.load();
+            target.src = source;
+            setError("");
+            setStatus("Switching to native Safari playback…");
+            target.play().catch(needsGesture);
+            return;
+          }
+          if (!data?.fatal) return;
           if (data.type === Hls.ErrorTypes.NETWORK_ERROR && relayRetries.current < 2) {
             // A newly started relay can briefly lack a playlist or segments.
             // Retry a bounded number of times rather than leaving a preview
@@ -244,6 +263,7 @@ export function CameraPlayback({ camera, url, compact = false }) {
         hls.loadSource(source);
         hls.attachMedia(target);
       } else if (target.canPlayType("application/vnd.apple.mpegurl")) {
+        playbackMode = "native";
         target.src = source;
         target.play().catch(needsGesture);
       } else {
