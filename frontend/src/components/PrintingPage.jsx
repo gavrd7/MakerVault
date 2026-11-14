@@ -572,7 +572,7 @@ export default function PrintingPage({ config, projects, searchTarget = null, on
     </section>}
 
     <section className="panel printingSection">
-      <div className="panelHead"><div><h3>Printers &amp; loaded filament</h3><p>Filament slots are provider-neutral so CFS, AMS and later systems can use the same model.</p></div></div>
+      <div className="panelHead"><div><h3>Printers &amp; live monitoring</h3><p>Compact live status and cameras for each printer. Loaded filament and detailed telemetry are available in Live monitor.</p></div></div>
       <div className="printingCards printingPrinterCards printingPrinterCompactList">
         {(data?.printers || []).map(printer => <article
           className={"printingCard printingPrinterCard printingPrinterCompactCard" + (searchTarget?.type === "printers" && searchTarget.id === printer.id ? " searchTargetRow" : "")}
