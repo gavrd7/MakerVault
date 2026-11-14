@@ -37,7 +37,7 @@ test("telemetry refresh preserves already fetched immutable catalogues", () => {
 
 
 test("printer overview uses compact controls and camera without changing spool and model library",()=>{
-  const section=source.slice(source.indexOf('<h3>Printers &amp; loaded filament</h3>'),
+  const section=source.slice(source.indexOf('<h3>Printers &amp; live monitoring</h3>'),
     source.indexOf('<h3>Spool inventory</h3>'));
   assert.match(section,/printingPrinterCompactList/);
   assert.match(section,/printingPrinterCompactIdentity/);
