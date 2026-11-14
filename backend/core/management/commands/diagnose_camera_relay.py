@@ -52,7 +52,9 @@ def safe_tracks(items):
 
 def safe_stream_state(data, name):
     # go2rtc may return a keyed stream collection or an individual stream.
-    if isinstance(data, dict) and isinstance(data.get(name), dict):
+    if isinstance(data, dict) and name not in data:
+        return {"status": "stream not registered in go2rtc"}
+    if isinstance(data, dict):
         data = data[name]
     if not isinstance(data, dict):
         return {"status": "unexpected go2rtc response format"}
@@ -80,7 +82,6 @@ class Command(BaseCommand):
                 try:
                     response = session.get(
                         f"{GO2RTC_API}/api/streams",
-                        params={"src": name},
                         timeout=(2, 5),
                         allow_redirects=False,
                     )
