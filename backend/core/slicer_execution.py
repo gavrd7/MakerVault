@@ -254,12 +254,13 @@ def _validate_plate_execution(job):
     # toolchange commands, and chosen machine topology have passed pinned
     # worker + printer verification. Do NOT silently merge distinct material
     # assignments into a single-filament print.
-    if any(isinstance(item, dict) and item.get("colour_paint", {}).get("faces")
+    if any(isinstance(item, dict) and isinstance(item.get("colour_paint"), dict)
+           and (item["colour_paint"].get("faces") or item["colour_paint"].get("regions"))
            for item in objects):
         raise SlicerExecutionError(
-            "This draft contains painted colour regions, but native facet-to-tool "
-            "mapping is not implemented. Keep the painting in a draft; erase "
-            "painted faces before requesting a single-filament slice."
+            "This draft contains painted colour regions, but native region-to-tool "
+            "mapping is not implemented. Keep the painting in a draft; clear "
+            "painted regions before requesting a single-filament slice."
         )
     if any(isinstance(item, dict) and item.get("material_slot") is not None
            for item in objects):
