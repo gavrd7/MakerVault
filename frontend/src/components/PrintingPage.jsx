@@ -107,6 +107,27 @@ function printerLiveConnected(printer) {
   return Boolean(connection && connection.status === "connected" && !connection.stale);
 }
 
+function PrinterConfigurationBadges({ printer }) {
+  const sources = printer.live_connections || [];
+  const connected = printerLiveConnected(printer);
+  const connection = activePrinterConnection(printer);
+  return <section className="printingPrinterMetadata" aria-label={"Configuration for " + printer.name}>
+    <strong>Printer configuration</strong>
+    <div className="printingBadges">
+      <Badge tone={printer.is_active ? "good" : "neutral"}>{printer.is_active ? "Enabled" : "Inactive"}</Badge>
+      {printer.simplyprint?.external_id && <Badge tone={printer.simplyprint?.online ? "good" : "neutral"}>
+        SimplyPrint · {printer.simplyprint?.state || "linked"}
+      </Badge>}
+      <Badge>{sources.length} live source{sources.length === 1 ? "" : "s"}</Badge>
+      {connection && <Badge tone={connected ? "good" : "danger"}>
+        {connection.adapter_label || "Live source"} · {connected ? (connection.snapshot?.state_label || "Connected") : (connection.stale ? "Stale" : connection.status_label || "Disconnected")}
+      </Badge>}
+      {printer.installed_multi_material_label && <Badge>{printer.installed_multi_material_label}</Badge>}
+      {printer.multi_material_installed && <Badge>{(printer.slots || []).length} slots</Badge>}
+    </div>
+  </section>;
+}
+
 function PrinterLiveSummary({ printer, onOpen, canControl, onChanged }) {
   const connection = activePrinterConnection(printer);
   if (!connection) return null;
@@ -605,14 +626,6 @@ export default function PrintingPage({ config, projects, searchTarget = null, on
             <div className="printingPrinterCompactDetails">
               <strong>{printer.name}</strong>
               <small>{[printer.manufacturer, printer.model].filter(Boolean).join(" · ")}</small>
-              <div className="printingPrinterStatus" aria-label={"Status for " + printer.name}>
-                {printer.is_active ? <Badge tone="good">Active</Badge> : <Badge>Inactive</Badge>}
-                {printer.simplyprint?.external_id && <Badge tone={printer.simplyprint?.online ? "good" : "neutral"}>SimplyPrint · {printer.simplyprint?.state || "linked"}</Badge>}
-                {printer.live_status && <Badge tone="good">{printer.live_status.adapter_label} · {printer.live_status.snapshot?.state_label || "Connected"}</Badge>}
-                {!printer.live_status && printer.live_connections?.length > 0 && <Badge tone={printer.live_connections.some(item => item.status === "error" || item.status === "disconnected") ? "danger" : "neutral"}>{printer.live_connections.length} live source{printer.live_connections.length === 1 ? "" : "s"}</Badge>}
-                {printer.installed_multi_material_label && <Badge>{printer.installed_multi_material_label}</Badge>}
-                {printer.multi_material_installed && <Badge>{printer.slots.length} slots</Badge>}
-              </div>
               <div className="printingPrinterCompactActions">
                 {canChangePrinter && <button type="button" className="printingPrinterAction printingPrinterActionLive" onClick={() => setLivePrinter(printer)}>Live monitor</button>}
                 {canChangePrinter && <button type="button" className="printingPrinterAction" onClick={() => setManagePrinter(printer)}>Manage printer</button>}
@@ -1633,6 +1646,7 @@ function PrinterConnectionsModal({ printer, onClose, onChanged, onAdded, onClaim
   >
     {error && <div className="formError" role="alert">{error}</div>}
     {notice && <div className="notice">{notice}</div>}
+    {!addOnly && <PrinterConfigurationBadges printer={printer} />}
 
     {/* Use the same authenticated camera playback as the printer overview.
         When monitoring is open, the overview preview is suspended so only
@@ -1887,6 +1901,7 @@ function PrinterManageModal({ printer, manufacturers, models, locations, canDele
   }
 
   return <Modal title={"Manage printer · " + printer.name} subtitle="Update the owned-printer record, catalogue profile, location and local connection used by optional integrations." onClose={onClose} wide>
+    <PrinterConfigurationBadges printer={printer} />
     <form className="formGrid" onSubmit={submit}>
       {error && <div className="formError full">{error}</div>}
       <label>Manufacturer<select required value={form.printer_manufacturer_id} onChange={e => makerChanged(e.target.value)}>
