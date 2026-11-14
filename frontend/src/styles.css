@@ -7444,3 +7444,33 @@ a:focus-visible,
     margin-top:0;
   }
 }
+
+
+/* The overview controls are deliberately denser than the full live modal. */
+.printingPrinterCompactCard .printerLiveCommandRow .printerJobControlButtons {
+  gap:4px;
+}
+.printingPrinterCompactCard .printerLiveCommandRow .printerJobControl {
+  width:31px;
+  height:31px;
+  min-width:31px;
+  min-height:31px;
+  padding:6px;
+}
+.printingPrinterCompactCard .printerLiveCommandRow .printerJobControls {
+  position:relative;
+}
+.printingPrinterCompactCard .printerLiveCommandRow .printerJobControlMessage {
+  position:absolute;
+  left:0;
+  top:100%;
+  z-index:5;
+  width:max-content;
+  max-width:min(280px,70vw);
+  padding:6px 8px;
+  margin:3px 0 0;
+  border:1px solid #35465b;
+  border-radius:7px;
+  background:#111c29;
+  color:#e5ebf5;
+}
