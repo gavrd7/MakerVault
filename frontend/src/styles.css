@@ -6589,6 +6589,7 @@ a:focus-visible,
 .slicerPlateEditingToolbar .slicerToolTooltip > button,
 .slicerPrepareTools .slicerToolTooltip > button {
   display:flex;
+  flex:1 1 100%;
   flex-direction:column;
   gap:3px;
   justify-content:center;
