@@ -243,7 +243,8 @@ def camera_hls_master(request, printer_id, connection_id, camera_id):
     if error:
         return private_response(error)
     try:
-        playlist = hls_master(connection.pk, camera_id)
+        # iOS explicitly requests TS to bypass go2rtc's placeholder MP4 SPS.
+        playlist = hls_master(connection.pk, camera_id, mpeg_ts=True) if request.GET.get("format") == "ts" else hls_master(connection.pk, camera_id)
         session_ids = _playlist_session_ids(playlist)
         if not session_ids:
             raise CameraRelayError("The camera relay did not create an HLS session.")
