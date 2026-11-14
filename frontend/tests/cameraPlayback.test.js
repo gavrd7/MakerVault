@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { startFrameLoop, cameraHlsUrl, shouldFallbackToNativeHls } from "../src/components/cameraPlayback.js";
+import { startFrameLoop, cameraHlsUrl, shouldFallbackToNativeHls, isAutoplayBlocked } from "../src/components/cameraPlayback.js";
 
 test("closing frame viewer aborts in-flight fetch and ignores late frame", async () => {
   let resolve;
@@ -92,4 +92,11 @@ test("only MediaSource reset on a browser with native HLS triggers fallback", ()
   assert.equal(shouldFallbackToNativeHls({ details: "mediaSourceRequiresReset" }, false), false);
   assert.equal(shouldFallbackToNativeHls({ details: "bufferStalledError", fatal: true }, true), false);
   assert.equal(shouldFallbackToNativeHls(null, true), false);
+});
+
+test("only a genuine autoplay policy rejection prompts for a user gesture", () => {
+  assert.equal(isAutoplayBlocked({ name: "NotAllowedError" }), true);
+  assert.equal(isAutoplayBlocked({ name: "AbortError" }), false);
+  assert.equal(isAutoplayBlocked({ name: "NotSupportedError" }), false);
+  assert.equal(isAutoplayBlocked(undefined), false);
 });
