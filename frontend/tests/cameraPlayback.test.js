@@ -141,3 +141,16 @@ test("camera supports local frame capture to separate rendering failures from bl
   assert.match(playback, /capturedFrame && <img/);
   assert.match(playback, /average brightness/);
 });
+
+test("iOS uses native MPEG-TS HLS without changing desktop or Android", async () => {
+  const { isIOSWebKit } = await import("../src/components/cameraPlayback.js");
+  assert.equal(isIOSWebKit("Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X)", "iPhone", 5), true);
+  assert.equal(isIOSWebKit("Mozilla/5.0 (iPad; CPU OS 18_0 like Mac OS X)", "iPad", 5), true);
+  assert.equal(isIOSWebKit("Mozilla/5.0 (Macintosh)", "MacIntel", 5), true);
+  assert.equal(isIOSWebKit("Mozilla/5.0 (Android 15)", "Linux armv8l", 5), false);
+  assert.equal(isIOSWebKit("Mozilla/5.0 (Windows NT 10.0; Win64; x64)", "Win32", 0), false);
+  const source = fs.readFileSync(path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../src/components/PrinterCamera.jsx"), "utf8");
+  assert.match(source, /iosWebKit \? "\?format=ts" : ""/);
+  assert.match(source, /target && iosWebKit && target\.canPlayType/);
+  assert.match(source, /hls\.loadSource\(source\)/);
+});
