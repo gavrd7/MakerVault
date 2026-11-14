@@ -85,11 +85,14 @@ export function appendPaintRegion(state,mesh,selection,slot){
   guard(Array.isArray(selection?.faces)&&selection.faces.length<=MAX_PER_EDIT,
     "Invalid surface selection.");
   const mode=selection.mode;
-  guard(["disc","height","facet"].includes(mode),"Unsupported v2 region type.");
+  guard(["disc","sphere","height","facet"].includes(mode),"Unsupported v2 region type.");
   if(mode==="disc")
     guard(valid3(selection.centre)&&valid3(selection.normal)&&
       Number.isFinite(selection.radiusMm)&&selection.radiusMm>0&&
       selection.radiusMm<=1000,"Invalid projected brush.");
+  if(mode==="sphere")
+    guard(valid3(selection.centre)&&Number.isFinite(selection.radiusMm)&&
+      selection.radiusMm>0&&selection.radiusMm<=1000,"Invalid spherical brush.");
   if(mode==="height")
     guard(Number.isFinite(selection.minHeightMm)&&Number.isFinite(selection.maxHeightMm)&&
       selection.minHeightMm<=selection.maxHeightMm,"Invalid height range.");
@@ -101,7 +104,21 @@ export function appendPaintRegion(state,mesh,selection,slot){
     if(seen.has(face))continue;
     seen.add(face);
     const triangle=mesh.triangle(face);
-    const polygon=mode==="disc"?
+    let polygon;
+    if(mode==="sphere"){
+      const a=triangle[0],b=triangle[1],c=triangle[2];
+      const u=b.map((v,i)=>v-a[i]),v=c.map((p,i)=>p-a[i]);
+      const n=[u[1]*v[2]-u[2]*v[1],u[2]*v[0]-u[0]*v[2],
+        u[0]*v[1]-u[1]*v[0]];
+      const length=Math.hypot(...n);
+      if(length<1e-9)continue;
+      const normal=n.map(x=>x/length);
+      const distance=normal.reduce((sum,x,i)=>sum+x*(selection.centre[i]-a[i]),0);
+      const radiusSquared=selection.radiusMm**2-distance**2;
+      if(radiusSquared<=0)continue;
+      const projected=selection.centre.map((x,i)=>x-distance*normal[i]);
+      polygon=clipPaintTriangleDisc(triangle,projected,normal,Math.sqrt(radiusSquared));
+    }else polygon=mode==="disc"?
       clipPaintTriangleDisc(triangle,selection.centre,selection.normal,selection.radiusMm):
       mode==="height"?
       clipPaintTriangleHeight(triangle,selection.minHeightMm,selection.maxHeightMm):
