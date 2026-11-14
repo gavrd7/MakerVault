@@ -213,6 +213,10 @@ export function CameraPlayback({ camera, url, compact = false }) {
       const source = cameraHlsUrl(url);
       if (!target) {
         failed("Camera video element is unavailable.");
+      } else if (target.canPlayType("application/vnd.apple.mpegurl")) {
+        // Native HLS handles Safari/iOS media controls and playback policies.
+        target.src = source;
+        target.play().catch(needsGesture);
       } else if (Hls.isSupported()) {
         hls = new Hls({
           enableWorker: true,
@@ -240,9 +244,6 @@ export function CameraPlayback({ camera, url, compact = false }) {
         });
         hls.loadSource(source);
         hls.attachMedia(target);
-      } else if (target.canPlayType("application/vnd.apple.mpegurl")) {
-        target.src = source;
-        target.play().catch(() => failed("Playback was blocked. Use the video play control or reconnect."));
       } else {
         failed("This browser cannot play the MakerVault camera relay.");
       }
