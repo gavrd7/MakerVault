@@ -162,6 +162,7 @@ export function CameraPlayback({ camera, url, compact = false }) {
     let playbackMode = "";
     let retryTimer;
     let watchdogTimer;
+    let watchdogMode = "";
     let frameCallbackId;
     let gestureRequired = false;
     const target = video.current;
@@ -179,6 +180,8 @@ export function CameraPlayback({ camera, url, compact = false }) {
       // for the user's native Play control instead of treating it as offline.
       gestureRequired = true;
       clearTimeout(watchdogTimer);
+      watchdogTimer = undefined;
+      watchdogMode = "";
       setPlaybackBlocked(true);
       setError("");
       setStatus("Tap Play on the video to start the camera.");
@@ -187,6 +190,7 @@ export function CameraPlayback({ camera, url, compact = false }) {
     const failed = message => {
       if (cancelled) return;
       clearTimeout(watchdogTimer);
+      watchdogMode = "";
       setError(message);
       setStatus("Disconnected · select Reconnect to retry");
       if (video.current) {
@@ -207,6 +211,8 @@ export function CameraPlayback({ camera, url, compact = false }) {
         renderedFrames.current += 1;
         relayRetries.current = 0;
         clearTimeout(watchdogTimer);
+        watchdogTimer = undefined;
+        watchdogMode = "";
         setPlaybackBlocked(false);
         setError("");
         setStatus("Live video · relayed through MakerVault");
@@ -217,6 +223,7 @@ export function CameraPlayback({ camera, url, compact = false }) {
       if (cancelled || !target || playbackMode !== "hls") return;
       playbackMode = "native";
       clearTimeout(watchdogTimer);
+      watchdogMode = "";
       hls?.destroy();
       hls = null;
       target.pause();
@@ -233,9 +240,13 @@ export function CameraPlayback({ camera, url, compact = false }) {
       target.play().catch(needsGesture);
     };
     const scheduleWatchdog = () => {
-      clearTimeout(watchdogTimer);
       if (!target || camera.mode !== "creality_webrtc") return;
+      // Repeated Safari playing events must not postpone the deadline indefinitely.
+      if (watchdogMode === playbackMode && watchdogTimer != null) return;
+      clearTimeout(watchdogTimer);
+      watchdogMode = playbackMode;
       watchdogTimer = setTimeout(() => {
+        watchdogTimer = undefined;
         if (cancelled || gestureRequired || videoFrameHealth(target, renderedFrames.current).hasFrame) return;
         if (playbackMode === "hls" && target.canPlayType("application/vnd.apple.mpegurl")) {
           switchToNative();
@@ -317,6 +328,8 @@ export function CameraPlayback({ camera, url, compact = false }) {
             // permanently black after a transient startup failure.
             relayRetries.current += 1;
             clearTimeout(watchdogTimer);
+            watchdogTimer = undefined;
+            watchdogMode = "";
             setStatus("Reconnecting camera relay…");
             retryTimer = setTimeout(() => setAttempt(value => value + 1), relayRetries.current * 2000);
           } else {
@@ -387,7 +400,7 @@ export function CameraPlayback({ camera, url, compact = false }) {
     </div>
     <div className="printerCameraViewport">
       {camera.mode === "creality_webrtc"
-        ? <video ref={video} style={{ transform }} autoPlay muted playsInline controls onPlaying={() => { setPlaybackBlocked(false); if (renderedFrames.current === 0) setStatus("Playing · waiting for first video frame"); }} onError={() => { if (video.current?.error) { setPlaybackBlocked(false); setError("Camera stream could not be loaded. Check the camera relay and select Reconnect."); setStatus("Disconnected · select Reconnect to retry"); } }} />
+        ? <video ref={video} style={{ transform }} autoPlay muted playsInline controls={!compact} onPlaying={() => { setPlaybackBlocked(false); if (renderedFrames.current === 0) setStatus("Playing · waiting for first video frame"); }} onError={() => { if (video.current?.error) { setPlaybackBlocked(false); setError("Camera stream could not be loaded. Check the camera relay and select Reconnect."); setStatus("Disconnected · select Reconnect to retry"); } }} />
         : image
           ? <img src={image} alt={camera.name + " live camera view"} style={{ transform }} />
           : <span role="status">{status}</span>}
