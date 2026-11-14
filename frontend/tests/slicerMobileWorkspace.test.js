@@ -128,3 +128,28 @@ test("adding an existing MakerVault STL returns to the interactive plate",()=>{
   assert.match(workspace,/data-slicer-add-models/);
   assert.match(workspace,/behavior: "smooth", block: "start"/);
 });
+
+test("mobile build tools scroll in one row with arrows and usable popovers",()=>{
+  const plate=fs.readFileSync(path.join(base,"components/SlicerPlateEditor.jsx"),"utf8");
+  const workspace=fs.readFileSync(path.join(base,"components/SlicerPrepareWorkspace.jsx"),"utf8");
+  assert.match(plate,/aria-label="Scroll editing tools left"/);
+  assert.match(plate,/aria-label="Scroll editing tools right"/);
+  assert.match(plate,/scrollBy\(\{left:-260,behavior:"smooth"\}\)/);
+  assert.match(plate,/scrollBy\(\{left:260,behavior:"smooth"\}\)/);
+  assert.match(css,/grid-template-columns:30px minmax\(0,1fr\) 30px/);
+  assert.match(css,/\.slicerPlateEditingToolbar > \.slicerPrepareTools:has\(\.slicerToolOptionsOpen\)/);
+  assert.match(css,/flex-wrap:nowrap/);
+  assert.match(css,/touch-action:pan-x/);
+  assert.match(css,/\.slicerPlateEditingToolbar \.slicerToolbarDescriptor \{\s*display:none/);
+  assert.match(workspace,/position:"fixed",left:Math\.max\(12/);
+});
+
+test("mobile section slider is horizontal below the canvas and plate uses wider gutters",()=>{
+  assert.match(css,/\.slicerPrepareWorkspace \{padding:7px !important;\}/);
+  assert.match(css,/\.slicerPrepareScene > \.slicerPlatePanel \{/);
+  assert.match(css,/\.slicerPlateCanvasViewport > \.slicerPlateSectionControl \{/);
+  assert.match(css,/position:relative !important;\s*order:2/);
+  assert.match(css,/height:44px;\s*min-height:44px/);
+  assert.match(css,/writing-mode:horizontal-tb/);
+  assert.match(css,/\.slicerPlateCanvasColumn \.slicerPlateCanvasViewport > \.slicerPlateCanvas \{\s*order:1/);
+});
