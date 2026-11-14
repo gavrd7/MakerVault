@@ -150,6 +150,7 @@ export function CameraPlayback({ camera, url, compact = false }) {
   const [error, setError] = useState("");
   const [attempt, setAttempt] = useState(0);
   const [playbackBlocked, setPlaybackBlocked] = useState(false);
+  const [playbackDiagnostic, setPlaybackDiagnostic] = useState("");
 
   useEffect(() => {
     let cancelled = false;
@@ -157,7 +158,7 @@ export function CameraPlayback({ camera, url, compact = false }) {
     let stopFrames;
     let hls;
     const controller = new AbortController();
-    setImage(""); setError(""); setStatus("Connecting…"); setPlaybackBlocked(false);
+    setImage(""); setError(""); setStatus("Connecting…"); setPlaybackBlocked(false); setPlaybackDiagnostic("");
 
     const failed = message => {
       if (cancelled) return;
@@ -228,7 +229,16 @@ export function CameraPlayback({ camera, url, compact = false }) {
           attemptAutoplay(target);
         });
         hls.on(Hls.Events.ERROR, (_event, data) => {
-          if (!cancelled && data?.fatal) failed("Camera relay disconnected. Check the printer connection, then reconnect.");
+          if (cancelled || !data?.fatal) return;
+          // Do not label every fatal HLS playback error as a disconnected
+          // printer. Expose the safe hls.js classification without URLs,
+          // credentials, media payloads, or other response content.
+          const type = String(data.type || "unknown").slice(0, 64);
+          const detail = String(data.details || "unknown").slice(0, 96);
+          const code = Number(data.response?.code);
+          const status = Number.isInteger(code) && code >= 100 && code <= 599 ? " · HTTP " + code : "";
+          setPlaybackDiagnostic("HLS: " + type + " / " + detail + status);
+          failed("Camera video playback failed. Select Reconnect to retry.");
         });
         hls.loadSource(source);
         hls.attachMedia(target);
@@ -287,12 +297,18 @@ export function CameraPlayback({ camera, url, compact = false }) {
     </div>
     <div className="printerCameraViewport">
       {camera.mode === "creality_webrtc"
-        ? <video ref={video} style={{ transform }} autoPlay muted playsInline controls={!compact} onPlaying={() => { setPlaybackBlocked(false); setError(""); setStatus("Live video · relayed through MakerVault"); }} />
+        ? <video ref={video} style={{ transform }} autoPlay muted playsInline controls={!compact}
+            onError={event => {
+              const code = Number(event.currentTarget.error?.code || 0);
+              if (code) setPlaybackDiagnostic(previous => previous || "Video element error " + code + " (1=aborted, 2=network, 3=decode, 4=unsupported)");
+            }}
+            onPlaying={() => { setPlaybackBlocked(false); setError(""); setStatus("Live video · relayed through MakerVault"); }} />
         : image
           ? <img src={image} alt={camera.name + " live camera view"} style={{ transform }} />
           : <span role="status">{status}</span>}
     </div>
     {error && <p className="integrationError" role="alert">{error}</p>}
+    {playbackDiagnostic && <small role="status" style={{ display: "block", padding: "4px 10px", overflowWrap: "anywhere" }}>{playbackDiagnostic}</small>}
     {playbackBlocked && <small role="status">Safari requires you to start video playback manually.</small>}
     {!compact && <small>{LABELS[camera.mode]}{camera.mode === "creality_webrtc" ? " · Video is relayed through your authenticated MakerVault connection; no camera media port is exposed." : " · Images are relayed securely through your MakerVault session."}</small>}
   </div>;
