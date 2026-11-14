@@ -48,6 +48,32 @@ class MultiPlateProject3MFTests(SimpleTestCase):
         self.assertEqual(plate_ids,[["1"],["2"]])
 
 
+    def test_v2_paint_regions_are_exported_into_exact_project_sidecars(self):
+        shape = fixture_stl()
+        asset_id = str(uuid.uuid4())
+        paint = {"version": 2, "signature": "1:abcdef01",
+                 "palette": [{"color": "#ff0000", "label": "Red"}],
+                 "regions": [{"slot": 0, "patches": [
+                     {"face": 0, "polygon": [[0, 0, 0], [2, 0, 0], [0, 2, 0]]}
+                 ]}]}
+        item = {"asset_id": asset_id, "instance_id": str(uuid.uuid4()),
+                "x_mm": 0, "y_mm": 0, "rotation_deg": 0,
+                "scale_percent": 100, "color": "#123456", "colour_paint": paint}
+        metadata = {"format": "makervault-project-v1", "active_plate_id": "plate-1",
+                    "plates": [{"id": "plate-1", "name": "Plate 1", "objects": [item]}]}
+        data = build_makervault_project_3mf(
+            [("Plate 1", [(item, shape)])], bed_width=220, bed_depth=220,
+            metadata=metadata)
+        with zipfile.ZipFile(io.BytesIO(data)) as package:
+            exported = json.loads(package.read("Metadata/makervault-project.json"))
+            stored_item = exported["plates"][0]["objects"][0]
+            self.assertNotIn("colour_paint", stored_item)
+            self.assertEqual(stored_item["paint_sidecar"],
+                             "Metadata/paint/paint-0001.json")
+            self.assertEqual(json.loads(package.read(stored_item["paint_sidecar"])), paint)
+            self.assertEqual(metadata["plates"][0]["objects"][0]["colour_paint"], paint)
+
+
 class BuildPlate3MFTests(SimpleTestCase):
     def test_elevation_is_preserved_in_individual_and_compound_3mf(self):
         shape = fixture_stl()
