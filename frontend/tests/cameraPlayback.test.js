@@ -1,5 +1,8 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import fs from "node:fs";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { startFrameLoop, cameraHlsUrl } from "../src/components/cameraPlayback.js";
 
 test("closing frame viewer aborts in-flight fetch and ignores late frame", async () => {
