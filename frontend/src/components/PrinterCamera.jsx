@@ -400,7 +400,7 @@ export function CameraPlayback({ camera, url, compact = false }) {
       {!compact && <small role="status">{status}</small>}
       {playbackBlocked && camera.mode === "creality_webrtc" && <button type="button" onClick={() => { const target = video.current; if (!target) return; target.play().then(() => { setPlaybackBlocked(false); setError(""); }).catch(reason => { if (reason?.name !== "NotAllowedError") setError("Video could not start. Select Reconnect."); }); }}>Start video</button>}
       {(!compact || error) && <button type="button" onClick={() => setAttempt(value => value + 1)}>Reconnect</button>}
-      {camera.mode === "creality_webrtc" && <button type="button" onClick={inspectFrame}>Inspect frame</button>
+      {camera.mode === "creality_webrtc" && <button type="button" onClick={inspectFrame}>Inspect frame</button>}
       {camera.mode !== "creality_webrtc" && <button type="button" className="cameraFullscreen" aria-label={expanded ? "Close fullscreen camera" : "Open fullscreen camera"} onClick={fullscreen}>{expanded ? "Close" : "Fullscreen"}</button>}
     </div>
     <div className="printerCameraViewport">
