@@ -1,9 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import fs from "node:fs";
-import path from "node:path";
-import { fileURLToPath } from "node:url";
-import { startFrameLoop, cameraHlsUrl, shouldFallbackToNativeHls, isAutoplayBlocked, videoFrameHealth, videoFrameDiagnostic } from "../src/components/cameraPlayback.js";
+import { startFrameLoop, cameraHlsUrl } from "../src/components/cameraPlayback.js";
 
 test("closing frame viewer aborts in-flight fetch and ignores late frame", async () => {
   let resolve;
@@ -65,67 +62,12 @@ test('preview chooses most recently configured enabled camera across integration
   assert.equal(defaultCamera([]), null);
 });
 
-
-test("video autoplay rejection keeps the stream attached and exposes native play", () => {
+test("printer camera retains the pre-refactor HLS playback flow in the redesigned cards", () => {
   const source = fs.readFileSync(path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../src/components/PrinterCamera.jsx"), "utf8");
-  const gesture = source.slice(source.indexOf("const needsGesture ="), source.indexOf("const failed ="));
-  assert.match(gesture, /setPlaybackBlocked\(true\)/);
-  assert.doesNotMatch(gesture, /removeAttribute|\.load\(\)/);
-  assert.match(gesture, /if \(!isAutoplayBlocked\(reason\)\) \{/);
-  assert.match(source, /target\.play\(\)\.catch\(needsGesture\)/);
-  assert.doesNotMatch(source, /Playback was blocked\. Use the video play control or reconnect/);
-  assert.match(source, /autoPlay muted playsInline controls=\{!compact\} onPlaying/);
+  assert.match(source, /hls\.loadSource\(source\)/);
+  assert.match(source, /hls\.attachMedia\(target\)/);
+  assert.match(source, /hls\.on\(Hls\.Events\.MANIFEST_PARSED/);
+  assert.match(source, /autoPlay muted playsInline controls=\{!compact\}/);
+  assert.doesNotMatch(source, /switchToNative|scheduleWatchdog|requestVideoFrameCallback/);
   assert.match(source, /camera\.mode !== "creality_webrtc" && <button[^\n]*cameraFullscreen/);
-});
-test("hls.js is preferred and Safari MediaSource reset falls back to native HLS", () => {
-  const source = fs.readFileSync(path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../src/components/PrinterCamera.jsx"), "utf8");
-  assert.ok(source.indexOf("} else if (Hls.isSupported())") < source.indexOf('} else if (target.canPlayType("application/vnd.apple.mpegurl"))'));
-  assert.match(source, /shouldFallbackToNativeHls\(data/);
-  assert.match(source, /hls\?\.destroy\(\)/);
-  assert.match(source, /playbackMode = "native"/);
-  assert.match(source, /data\.type === Hls\.ErrorTypes\.NETWORK_ERROR && relayRetries\.current < 2/);
-  assert.match(source, /clearTimeout\(retryTimer\)/);
-  assert.match(source, /relayRetries\.current = 0;/);
-  assert.match(source, /videoFrameHealth\(target, renderedFrames\.current\)/);
-  assert.match(source, /switchToNative\(\)/);
-  assert.match(source, /requestVideoFrameCallback/);
-  assert.match(source, /videoFrameDiagnostic\(health, playbackMode\)/);
-  assert.match(source, /if \(watchdogMode === playbackMode && watchdogTimer != null\) return/);
-});
-
-test("only MediaSource reset on a browser with native HLS triggers fallback", () => {
-  assert.equal(shouldFallbackToNativeHls({ details: "mediaSourceRequiresReset", fatal: false }, true), true);
-  assert.equal(shouldFallbackToNativeHls({ details: "mediaSourceRequiresReset" }, false), false);
-  assert.equal(shouldFallbackToNativeHls({ details: "bufferStalledError", fatal: true }, true), false);
-  assert.equal(shouldFallbackToNativeHls(null, true), false);
-});
-
-test("only a genuine autoplay policy rejection prompts for a user gesture", () => {
-  assert.equal(isAutoplayBlocked({ name: "NotAllowedError" }), true);
-  assert.equal(isAutoplayBlocked({ name: "AbortError" }), false);
-  assert.equal(isAutoplayBlocked({ name: "NotSupportedError" }), false);
-  assert.equal(isAutoplayBlocked(undefined), false);
-});
-
-test("playing without a decoded frame is not reported as a live camera", () => {
-  const video = {
-    videoWidth: 1920, videoHeight: 1080, readyState: 4,
-    currentTime: 5.25, buffered: { length: 1, end: () => 7 },
-    requestVideoFrameCallback: () => 1,
-  };
-  const stalled = videoFrameHealth(video, 0);
-  assert.equal(stalled.hasFrame, false);
-  assert.equal(stalled.width, 1920);
-  assert.match(videoFrameDiagnostic(stalled, "hls"), /Mode: hls; decoded: 0; size: 1920×1080/);
-  assert.equal(videoFrameHealth(video, 1).hasFrame, true);
-});
-
-test("older Safari video diagnostics use decoded frame counters when callback is absent", () => {
-  const video = {
-    videoWidth: 1280, videoHeight: 720, readyState: 2,
-    currentTime: 1, webkitDecodedFrameCount: 2,
-  };
-  assert.equal(videoFrameHealth(video).hasFrame, true);
-  assert.equal(videoFrameHealth({ videoWidth: 0, videoHeight: 0, readyState: 1 }).hasFrame, false);
-  assert.equal(videoFrameHealth(null).hasFrame, false);
 });
