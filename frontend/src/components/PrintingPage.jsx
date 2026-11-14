@@ -755,6 +755,7 @@ export default function PrintingPage({ config, projects, searchTarget = null, on
     />}
     {livePrinter && <PrinterConnectionsModal
       printer={livePrinter}
+      onClaimSlot={canAddSpool ? slot => {setClaimSlot({printer:livePrinter,slot});setLivePrinter(null);} : null}
       onClose={() => setLivePrinter(null)}
       onAdded={async connection => {
         setSourceNotice(`${connection.adapter_label} successfully added for ${livePrinter.name}. Open live to check the connection status.`);
@@ -1366,7 +1367,7 @@ function LocationModal({ location = null, onClose, onSaved }) {
   </Modal>;
 }
 
-function PrinterConnectionsModal({ printer, onClose, onChanged, onAdded, addOnly = false }) {
+function PrinterConnectionsModal({ printer, onClose, onChanged, onAdded, onClaimSlot, addOnly = false }) {
   const [gcodeConnection, setGcodeConnection] = useState(null);
   function prepareCrealityMoonrakerSource(connection) {
     let endpoint = "";
@@ -1634,6 +1635,8 @@ function PrinterConnectionsModal({ printer, onClose, onChanged, onAdded, addOnly
           <div><strong>{slot.product_name || slot.material || "Unknown material"}</strong>
             <small>{[slot.vendor,slot.material].filter(Boolean).join(" · ")} · {slot.system_label} · unit {slot.unit_index + 1}, slot {slot.slot_index + 1}</small>
             <small>{slot.spool_code || "Unmatched MakerVault spool"} · {slot.remaining_percent != null ? Math.round(slot.remaining_percent) + "% remaining" : grams(slot.remaining_weight_g)}</small>
+            {!slot.spool_id && onClaimSlot && <button type="button" className="slotInventoryAction"
+              onClick={() => onClaimSlot(slot)}>Add to inventory</button>}
           </div>
         </div>)}
         {!(printer.slots || []).some(slot => slot.is_loaded) && <div className="printingEmptyInline">No loaded filament slots discovered.</div>}
