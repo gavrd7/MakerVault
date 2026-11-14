@@ -109,12 +109,16 @@ def _bounded_get(path: str, *, params=None, max_bytes: int, timeout=(2, 20)):
         response.close()
 
 
-def hls_master(connection_id, camera_id: str) -> str:
-    """Create/refresh the protected K2 source and return go2rtc's HLS/fMP4 master playlist."""
+def hls_master(connection_id, camera_id: str, *, mpeg_ts: bool = False) -> str:
+    """Create/refresh protected K2 HLS; use MPEG-TS on iOS to avoid dummy MP4 SPS."""
     name = ensure_stream(connection_id, camera_id)
+    # go2rtc can generate an MP4 init with placeholder 128x96 H264 SPS/PPS
+    # when the WebRTC source supplies parameters only in-band. Native Safari
+    # trusts the incorrect init, unlike desktop/Android players.
+    params = {"src": name} if mpeg_ts else {"src": name, "mp4": ""}
     data, _content_type = _bounded_get(
         "/api/stream.m3u8",
-        params={"src": name, "mp4": ""},
+        params=params,
         max_bytes=_PLAYLIST_MAX_BYTES,
     )
     try:
