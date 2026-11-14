@@ -123,3 +123,13 @@ test("printer overview shows identity and live status without administrative bad
   assert.match(source,/printer\.installed_multi_material_label/);
   assert.match(source,/printer\.simplyprint\?\.external_id/);
 });
+
+
+test("mobile printer art fills identity height proportionally without altering desktop",()=>{
+  const css=fs.readFileSync(path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../src/styles.css"),"utf8");
+  assert.match(css,/@media \(max-width:520px\) \{\s*\.printingPrinterCompactCard \.printingPrinterCompactIdentity/);
+  assert.match(css,/flex:0 0 clamp\(98px,28vw,118px\)/);
+  assert.match(css,/aspect-ratio:4 \/ 5/);
+  assert.match(css,/\.printingPrinterCompactCard \.printingPrinterImage img \{[\s\S]*?object-fit:contain/);
+  assert.match(css,/align-self:center/);
+});
