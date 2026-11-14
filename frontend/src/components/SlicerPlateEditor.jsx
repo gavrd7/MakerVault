@@ -18,6 +18,7 @@ import { evaluateAutoOrient, AUTO_ORIENT_GOALS } from "./slicerAutoOrient";
 import { splitDisconnectedMesh } from "./slicerSplitObjects";
 import { createPaintMesh, selectPaintFaces, applyPaint } from "./slicerColourPainting";
 import { paintPreview, paintPreviewDelta } from "./slicerColourPaintPreview";
+import { createPaintRegions, appendPaintRegion } from "./slicerPaintRegions";
 import { executeSolidOperation } from "./slicerSolidOperations";
 import { PRIMITIVE_TYPES, TEXT_FONTS, createPrimitiveMesh, createPrimitiveStl, createTextStl, createSvgStl } from "./slicerPrimitives";
 import { validateStackPlacement } from "./slicerStacking";
@@ -1969,8 +1970,26 @@ export default function SlicerPlateEditor({
       });
       const original = latestObjectsRef.current.find(item => item.instance_id === pending.instanceId);
       if (!original) return;
-      // Applying a large stroke must not copy hundreds of thousands of face
-      // assignments and repaint the full mesh on every pointermove.
+      if (pending.paint?.version === 2) {
+        // A v2 stroke records the actual local patch at each pointer position.
+        // Do not deduplicate by original face: subsequent cursor positions on
+        // a large triangle must paint adjacent portions of the SAME face.
+        const centre = mesh.worldToLocal(hit.point.clone()).toArray();
+        const normal = hit.face.normal.toArray(); // THREE face normals are mesh-local
+        const mode = options.mode === "height" ? "height" :
+          ["brush", "circle"].includes(options.mode) ? "disc" : "facet";
+        const next = appendPaintRegion(pending.paint, paintMesh, {
+          mode,faces,centre,normal,radiusMm:options.radiusMm,
+          minHeightMm:options.minHeightMm,maxHeightMm:options.maxHeightMm,
+        },pending.slot);
+        if (next !== pending.paint) {
+          pending.paint = next;
+          paintPreview(mesh,{...original,colour_paint:next});
+          pending.changed = true;
+        }
+        return;
+      }
+      // Retain v1 whole-facet editing for old drafts until explicitly migrated.
       const unique = faces.filter(face => !pending.touched.has(face) &&
         (pending.slot === null ? pending.paint?.faces?.[face] !== undefined :
           pending.paint?.faces?.[face] !== pending.slot));
@@ -2045,7 +2064,9 @@ export default function SlicerPlateEditor({
           if (slot !== null && (!Number.isInteger(slot) || slot < 0 || slot >= palette.length))
             throw new Error("The selected paint slot is no longer available.");
           painting = { pointerId:event.pointerId, instanceId:item.instance_id,
-            slot, palette, paint:item.colour_paint || null, touched:new Set(), initialised:false, changed:false };
+            slot, palette, paint:item.colour_paint ||
+              {...createPaintRegions(createPaintMesh(hit.object.geometry)),palette},
+            touched:new Set(), initialised:false, changed:false };
           paintHit(hit, painting);
           controls.enabled = false;
           renderer.domElement.setPointerCapture?.(event.pointerId);
