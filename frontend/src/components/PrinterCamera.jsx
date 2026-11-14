@@ -163,6 +163,7 @@ export function CameraPlayback({ camera, url, compact = false }) {
     let retryTimer;
     let watchdogTimer;
     let watchdogMode = "";
+    let diagnosticTimer;
     let frameCallbackId;
     let gestureRequired = false;
     const target = video.current;
@@ -213,6 +214,7 @@ export function CameraPlayback({ camera, url, compact = false }) {
         clearTimeout(watchdogTimer);
         watchdogTimer = undefined;
         watchdogMode = "";
+        clearInterval(diagnosticTimer);
         setPlaybackBlocked(false);
         setError("");
         setStatus("Live video · relayed through MakerVault");
@@ -262,6 +264,19 @@ export function CameraPlayback({ camera, url, compact = false }) {
       gestureRequired = false;
       if (!videoFrameHealth(target, renderedFrames.current).hasFrame) scheduleWatchdog();
     };
+    // Keep the compact preview informative even if iOS suppresses an error
+    // or repeatedly reports "playing" without presenting a single frame.
+    // This samples the *local video element* only; it never polls the relay.
+    const updateFrameDiagnostic = () => {
+      if (cancelled || !target || camera.mode !== "creality_webrtc") return;
+      const health = videoFrameHealth(target, renderedFrames.current);
+      if (!health.hasFrame && playbackMode) {
+        setDiagnostic(videoFrameDiagnostic(health, playbackMode));
+      }
+    };
+    if (camera.mode === "creality_webrtc") {
+      diagnosticTimer = setInterval(updateFrameDiagnostic, 3000);
+    }
     if (camera.mode === "creality_webrtc" && target) target.addEventListener("playing", handlePlaying);
 
     if (camera.mode !== "creality_webrtc") {
@@ -356,6 +371,7 @@ export function CameraPlayback({ camera, url, compact = false }) {
       stopFrames?.();
       clearTimeout(retryTimer);
       clearTimeout(watchdogTimer);
+      clearInterval(diagnosticTimer);
       target?.removeEventListener("playing", handlePlaying);
       if (frameCallbackId != null) target?.cancelVideoFrameCallback?.(frameCallbackId);
       hls?.destroy();
