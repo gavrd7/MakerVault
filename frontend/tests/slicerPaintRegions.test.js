@@ -73,3 +73,15 @@ test("v2 spherical paint clips a tangent plane to the correct circle",()=>{
   assert.ok(polygon.every(p=>Math.hypot(p[0],p[1])<=4.00001));
   assert.ok(polygon.every(p=>Math.abs(p[2])<1e-6));
 });
+
+test("v2 a later smaller stamp inside an erased hole does not fragment surrounding paint",()=>{
+  const solid=appendPaintRegion(createPaintRegions(mesh),mesh,
+    {mode:"facet",faces:[0]},1);
+  const erased=appendPaintRegion(solid,mesh,{mode:"disc",faces:[0],
+    centre:[0,0,0],normal:[0,0,1],radiusMm:5},null);
+  const around=erased.regions[0].patches.length;
+  const smaller=appendPaintRegion(erased,mesh,{mode:"disc",faces:[0],
+    centre:[0,0,0],normal:[0,0,1],radiusMm:2},2);
+  assert.equal(smaller.regions[0].patches.length,around);
+  assert.equal(smaller.regions.find(r=>r.slot===2).patches.length,1);
+});
