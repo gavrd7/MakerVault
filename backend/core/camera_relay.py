@@ -126,14 +126,23 @@ def hls_master(connection_id, camera_id: str) -> str:
     return text
 
 
-def hls_resource(session_id: str, resource: str):
+def hls_resource(session_id: str, resource: str, *, sequence: str | None = None):
     """Fetch a bounded HLS resource from the loopback-only go2rtc API."""
     if resource not in _HLS_RESOURCES:
         raise CameraRelayError("Unsupported camera relay resource.")
     if not session_id or len(session_id) > 128 or not all(ch.isalnum() or ch in "_-" for ch in session_id):
         raise CameraRelayError("Invalid camera relay session.")
+    if sequence is not None and (
+        resource not in {"segment.m4s", "segment.ts"}
+        or not sequence or len(sequence) > 18
+        or not sequence.isascii() or not sequence.isdecimal()
+    ):
+        raise CameraRelayError("Invalid HLS segment sequence.")
+    params = {"id": session_id}
+    if sequence is not None:
+        params["n"] = sequence
     return _bounded_get(
         f"/api/hls/{resource}",
-        params={"id": session_id},
+        params=params,
         max_bytes=_HLS_RESOURCES[resource],
     )
