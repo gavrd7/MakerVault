@@ -457,12 +457,12 @@ test("slicer Device action opens selected physical printer live monitoring", () 
 
 test("live monitoring modal uses the shared camera preview before telemetry", () => {
   const printing = read("PrintingPage.jsx");
-  const modalStart = printing.indexOf('title={"Live monitoring · " + printer.name}');
+  const modalStart = printing.indexOf('title={(addOnly ? "Add live source · " : "Live monitoring · ") + printer.name}');
   const cameraAt = printing.indexOf("<PrinterCameraPreview", modalStart);
   const telemetryAt = printing.indexOf('className="printingIntegrationGrid printerLiveSources"', modalStart);
   assert.ok(modalStart > 0 && cameraAt > modalStart && telemetryAt > cameraAt);
   assert.match(printing.slice(cameraAt, telemetryAt), /live_connections: \(data\.rows \|\| \[\]\)/);
-  assert.match(printing, /suspended=\{Boolean\(cameraSetup \|\| livePrinter \|\| cameraOffer\)\}/);
+  assert.match(printing, /suspended=\{Boolean\(cameraSetup \|\| livePrinter \|\| cameraOffer \|\| addSourcePrinter\)\}/);
 });
 
 test("per-object settings inherit global profile values and remain instance scoped", () => {
@@ -665,8 +665,8 @@ test("model toolbar renders immediately above the interactive build plate, not i
   const header = scene.slice(scene.indexOf('className="slicerPrepareHeader"'),
     scene.indexOf('className="slicerMobilePaneTabs"'));
   assert.doesNotMatch(header, /className="slicerPrepareTools"/);
-  assert.match(plate, /\{toolbar && <div className="slicerPlateEditingToolbar">\{toolbar\}<\/div>\}/);
-  const index = plate.indexOf('className="slicerPlateEditingToolbar"');
+  assert.match(plate, /\{toolbar && <AdaptiveEditingToolbar toolbar=\{toolbar\} \/>\}/);
+  const index = plate.indexOf('className={"slicerPlateEditingToolbar"');
   assert.ok(index > 0);
   assert.ok(index < plate.indexOf('className="slicerPlateCameraToolbar"', index));
   assert.doesNotMatch(plate, /Arrange models, change their size and position, and preview the build plate/);
