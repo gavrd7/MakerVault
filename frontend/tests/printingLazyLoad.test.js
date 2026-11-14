@@ -71,3 +71,17 @@ test("overview cameras are compact while full monitor retains native controls",(
   assert.match(source,/className="printingPrinterCompactCamera"/);
   assert.match(source,/onClaimSlot=\{canAddSpool \? slot =>/);
 });
+
+
+test("compact printer styling preserves large controls and properly fills preview without changing full monitor",()=>{
+  const css=fs.readFileSync(path.resolve(
+    path.dirname(fileURLToPath(import.meta.url)), "../src/styles.css"
+  ),"utf8");
+  assert.match(css,/\.printingPrinterCompactCard \.printingPrinterImage \{\s*flex:0 0 84px/);
+  assert.match(css,/\.printingPrinterCompactActions \{\s*width:100%;\s*display:grid;\s*grid-template-columns:repeat\(2,minmax\(0,1fr\)\)/);
+  assert.match(css,/\.printingPrinterCompactCard \.printerLiveActions \{\s*margin:0;\s*display:flex/);
+  assert.match(css,/\.printingPrinterCompactCamera \.cameraGlance \.printerCameraViewport \{/);
+  assert.match(css,/object-fit:cover/);
+  assert.match(css,/@media\(max-width:850px\)/);
+  assert.match(css,/\.printingPrinterCompactCamera \.printerCameraPlaceholder/);
+});
