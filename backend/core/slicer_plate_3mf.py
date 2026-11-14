@@ -431,7 +431,30 @@ def build_makervault_project_3mf(plates_with_stl, *, bed_width, bed_depth, metad
                                ("instance_id", "0"),
                                ("identify_id", str(global_index))):
                 ET.SubElement(row, "metadata", {"key": key, "value": value})
-    manifest = json.dumps(metadata, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
+    # Large v2 surface-region data belongs in separate compressed project
+    # sidecars, never inside the small 3MF metadata manifest or native toolpaths.
+    paint_sidecars = {}
+    portable_metadata = {**metadata, "plates": []}
+    for plate in metadata.get("plates", []):
+        portable_plate = {**plate, "objects": []}
+        for row in plate.get("objects", []):
+            paint = row.get("colour_paint")
+            if isinstance(paint, dict) and paint.get("version") == 2:
+                name = "Metadata/paint/paint-%04d.json" % (len(paint_sidecars) + 1)
+                blob = json.dumps(paint, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
+                if len(blob) > 16 * 1024 * 1024:
+                    raise SlicerProfileError("Painted model exceeds project 3MF region limit.")
+                paint_sidecars[name] = blob
+                portable_plate["objects"].append({
+                    **{key: value for key, value in row.items() if key != "colour_paint"},
+                    "paint_sidecar": name,
+                })
+            else:
+                portable_plate["objects"].append(row)
+        portable_metadata["plates"].append(portable_plate)
+    if sum(map(len, paint_sidecars.values())) > 64 * 1024 * 1024:
+        raise SlicerProfileError("Project painting regions exceed the export limit.")
+    manifest = json.dumps(portable_metadata, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
     if len(manifest) > 131072:
         raise SlicerProfileError("Project metadata is too large.")
     output = io.BytesIO()
@@ -443,6 +466,8 @@ def build_makervault_project_3mf(plates_with_stl, *, bed_width, bed_depth, metad
                          ET.tostring(plate_manifest, encoding="utf-8", xml_declaration=True))
         package.writestr("Metadata/makervault-project.json", manifest)
         for name, data in embedded.items():
+            package.writestr(name, data)
+        for name, data in paint_sidecars.items():
             package.writestr(name, data)
         for asset_id, raw in source_stls.items():
             package.writestr("Metadata/sources/" + asset_id + ".stl", raw)
