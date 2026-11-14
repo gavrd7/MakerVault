@@ -7092,3 +7092,36 @@ a:focus-visible,
   .printingPrinterCompactCard {grid-template-columns:minmax(0,1fr);}
   .printingPrinterCompactCamera {grid-column:auto;}
 }
+
+
+.printingLiveFilamentPanel {
+  margin:14px 0;
+  padding:14px;
+  border:1px solid #2b3b4f;
+  border-radius:12px;
+  background:#0d151f;
+}
+.printingLiveFilamentPanel .printingSlotGrid {
+  display:grid;
+  grid-template-columns:repeat(auto-fit,minmax(min(210px,100%),1fr));
+  gap:10px;
+}
+.printingLiveFilamentPanel .printingSlot {
+  display:grid;
+  grid-template-columns:20px minmax(0,1fr);
+  gap:10px;
+  padding:12px;
+  border:1px solid #314155;
+  border-radius:11px;
+  background:#111c29;
+}
+.printingLiveFilamentPanel .printingSlot > div {
+  display:flex;
+  flex-direction:column;
+  gap:5px;
+  min-width:0;
+}
+.printingLiveFilamentPanel .printingSlot small {
+  color:#91a0b3;
+  overflow-wrap:anywhere;
+}
