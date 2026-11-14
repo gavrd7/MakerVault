@@ -33,6 +33,6 @@ class RelayTrackInspectionTests(SimpleTestCase):
             self.assertNotIn(secret, result_text)
 
     def test_unknown_or_absent_streams_do_not_leak_raw_payload(self):
-        self.assertEqual(safe_stream_state({"some_other_stream": {"url": "secret"}}, "camera")["producer_count"], 0)
+        self.assertEqual(safe_stream_state({"some_other_stream": {"url": "secret"}}, "camera")["status"], "stream not registered in go2rtc")
         self.assertEqual(safe_stream_state("not json", "camera")["status"], "unexpected go2rtc response format")
         self.assertEqual(safe_codec_info({"codec_name": "H265", "fmtp_line": "token=secret"}), "h265")
