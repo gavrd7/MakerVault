@@ -35,3 +35,41 @@ test("reject stale geometry, palette mismatch and malicious patch coordinates",(
   assert.throws(()=>appendPaintRegion(painted,mesh,{mode:"disc",faces:[1],
     centre:[0,0,0],normal:[0,0,0],radiusMm:5},1));
 });
+
+test("v2 eraser cuts a hole in a painted face without removing the whole triangle",()=>{
+  const base=createPaintRegions(mesh);
+  const painted=appendPaintRegion(base,mesh,{mode:"facet",faces:[0]},1);
+  const erased=appendPaintRegion(painted,mesh,{mode:"disc",faces:[0],
+    centre:[0,0,0],normal:[0,0,1],radiusMm:5},null);
+  assert.ok(erased.regions.length>0,"the surrounding colour must remain");
+  assert.ok(erased.regions[0].patches.length>1,"the original face should split into fragments");
+  assert.ok(erased.regions[0].patches.every(p=>p.polygon.length>=3));
+  assert.deepEqual(painted.regions[0].patches[0].polygon,mesh.triangle(0));
+  assert.deepEqual(validatePaintRegions(JSON.parse(JSON.stringify(erased)),mesh,[1]),erased);
+});
+test("v2 overlapping colour replaces only the intersecting subregion",()=>{
+  const painted=appendPaintRegion(createPaintRegions(mesh),
+    mesh,{mode:"facet",faces:[0]},1);
+  const recoloured=appendPaintRegion(painted,mesh,{mode:"disc",faces:[0],
+    centre:[0,0,0],normal:[0,0,1],radiusMm:5},2);
+  assert.ok(recoloured.regions.some(r=>r.slot===1));
+  assert.ok(recoloured.regions.some(r=>r.slot===2));
+  assert.ok(recoloured.regions.find(r=>r.slot===1).patches.length>1);
+  assert.ok(recoloured.regions.find(r=>r.slot===2).patches[0].polygon.length>=12);
+});
+test("v2 large height selection is stored as one region rather than one edit per face",()=>{
+  const many={signature:"5000:abc",faceCount:5000,triangle:()=>mesh.triangle(1)};
+  const painted=appendPaintRegion(createPaintRegions(many),many,
+    {mode:"height",faces:Array.from({length:5000},(_,i)=>i),
+      minHeightMm:4,maxHeightMm:9},1);
+  assert.equal(painted.regions.length,1);
+  assert.equal(painted.regions[0].patches.length,5000);
+});
+test("v2 spherical paint clips a tangent plane to the correct circle",()=>{
+  const painted=appendPaintRegion(createPaintRegions(mesh),mesh,{mode:"sphere",
+    faces:[0],centre:[0,0,3],radiusMm:5},1);
+  const polygon=painted.regions[0].patches[0].polygon;
+  assert.ok(polygon.length>=12);
+  assert.ok(polygon.every(p=>Math.hypot(p[0],p[1])<=4.00001));
+  assert.ok(polygon.every(p=>Math.abs(p[2])<1e-6));
+});
