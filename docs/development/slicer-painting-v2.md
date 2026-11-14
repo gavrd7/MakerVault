@@ -1,11 +1,26 @@
 # MakerVault painting v2: surface regions rather than original STL faces
 
-Status: **incremental implementation in progress**. The v2 surface-region schema,
-clipped-polygon preview renderer, frontend/backend validation and draft
-round-trip foundation are committed. The interactive paint tools still
-write v1 facet assignments; v2 editing, erasure/overlap resolution,
-3MF round-trips and native engine export are **not yet connected**.
-Do not enable physical multicolour slicing from painted regions.
+Status: **Painting v2 interactive preview and MakerVault draft/project persistence
+implemented on the development branch; printer-native paint export remains blocked**.
+
+- New painting uses a versioned, mesh-fingerprinted, ordered clipped-polygon
+  representation. Existing v1 face-colour drafts remain editable in legacy mode
+  until an explicit migration exists.
+- Brush, circle, sphere, height-range, fill and smart-fill tools now route
+  new edits through v2 surface patches. Convex overlap subtraction supports
+  targeted erasing and recolouring rather than whole-facet erasure.
+- Region overlays are independent of printable STL geometry. Workspace
+  history provides undo/redo for immutable region edits.
+- Draft validation is implemented in both frontend and backend. MakerVault
+  project 3MF export/import stores v2 regions as validated, bounded sidecars,
+  preserving the real polygon coordinates across a round-trip.
+- These sidecars are **MakerVault-specific editable metadata**, not native
+  Orca/Bambu material painting, and are **not** interpreted as multicolour
+  G-code. The frontend and backend both block native slicing of painted regions.
+- Remaining: staging acceptance tests, cross-engine native material export,
+  proof of 200k+ facet responsiveness, spatial indexing/large-mesh latency,
+  improved adaptive topology, geometry validation hardening and future
+  support enforcer/blocker use.
 
 ## Problem confirmed by staging (13 November 2026)
 
