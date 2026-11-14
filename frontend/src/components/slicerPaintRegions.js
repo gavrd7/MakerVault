@@ -64,20 +64,6 @@ function subtractPatch(subject,cutter){
   }
   return outside;
 }
-function applyPatch(state,face,polygon,slot){
-  const regions=[];
-  for(const region of state.regions){
-    const patches=[];
-    for(const patch of region.patches){
-      if(patch.face!==face){patches.push(patch);continue;}
-      for(const fragment of subtractPatch(patch.polygon,polygon))
-        patches.push({face,polygon:fragment});
-    }
-    if(patches.length)regions.push({...region,patches});
-  }
-  if(slot!==null)regions.push({slot,patches:[{face,polygon}]});
-  return {...state,regions};
-}
 export function appendPaintRegion(state,mesh,selection,slot){
   validatePaintRegions(state,mesh);
   guard(slot===null||(Number.isInteger(slot)&&slot>=0&&slot<64),
@@ -97,7 +83,7 @@ export function appendPaintRegion(state,mesh,selection,slot){
     guard(Number.isFinite(selection.minHeightMm)&&Number.isFinite(selection.maxHeightMm)&&
       selection.minHeightMm<=selection.maxHeightMm,"Invalid height range.");
   const seen=new Set();
-  let result=state;
+  const additions=new Map();
   for(const face of selection.faces){
     guard(Number.isInteger(face)&&face>=0&&face<mesh.faceCount,
       "Invalid selected triangle.");
@@ -123,12 +109,27 @@ export function appendPaintRegion(state,mesh,selection,slot){
       mode==="height"?
       clipPaintTriangleHeight(triangle,selection.minHeightMm,selection.maxHeightMm):
       triangle.map(p=>[...p]);
-    if(polygon.length>=3&&triangulatePaintPolygon(polygon).length){
-      result=applyPatch(result,face,polygon,slot);
-      // Bound nested edits, including fragments created by erasure.
-      validatePaintRegions(result,mesh);
-    }
+    if(polygon.length>=3&&triangulatePaintPolygon(polygon).length)
+      additions.set(face,polygon);
   }
+  if(!additions.size)return state;
+  const regions=[];
+  let touchedExisting=false;
+  for(const region of state.regions){
+    const patches=[];
+    for(const patch of region.patches){
+      const cutter=additions.get(patch.face);
+      if(!cutter){patches.push(patch);continue;}
+      const fragments=subtractPatch(patch.polygon,cutter);
+      if(fragments.length!==1||fragments[0]!==patch.polygon)touchedExisting=true;
+      for(const polygon of fragments)patches.push({face:patch.face,polygon});
+    }
+    if(patches.length)regions.push({...region,patches});
+  }
+  if(slot!==null)regions.push({slot,patches:[...additions].map(([face,polygon])=>({face,polygon}))});
+  if(slot===null&&!touchedExisting)return state;
+  const result={...state,regions};
+  validatePaintRegions(result,mesh);
   return result;
 }
 /** Snapshot-friendly undo for additive region edits. */
