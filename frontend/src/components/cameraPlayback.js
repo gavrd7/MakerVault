@@ -54,3 +54,34 @@ export function shouldFallbackToNativeHls(error, nativeHlsAvailable) {
 export function isAutoplayBlocked(error) {
   return error?.name === "NotAllowedError";
 }
+
+/**
+ * Distinguish a playing media element from one that has actually decoded a
+ * frame. Safari may fire "playing" for an HLS playlist with no visible video.
+ * requestVideoFrameCallback is the strongest signal when the browser has it.
+ */
+export function videoFrameHealth(video, renderedFrames = 0) {
+  if (!video) return { hasFrame: false, width: 0, height: 0, readyState: 0, time: 0, buffered: 0, decoded: 0 };
+  const width = Number(video.videoWidth) || 0;
+  const height = Number(video.videoHeight) || 0;
+  const readyState = Number(video.readyState) || 0;
+  const time = Number(video.currentTime) || 0;
+  let buffered = 0;
+  try {
+    if (video.buffered?.length) buffered = Math.max(0, Number(video.buffered.end(video.buffered.length - 1)) - time);
+  } catch { /* media buffer may change while being read */ }
+  let decoded = Number(renderedFrames) || 0;
+  try {
+    decoded = Math.max(decoded, Number(video.getVideoPlaybackQuality?.().totalVideoFrames) || 0);
+  } catch { /* unsupported on some Safari versions */ }
+  decoded = Math.max(decoded, Number(video.webkitDecodedFrameCount) || 0);
+  const frameCallbackSupported = typeof video.requestVideoFrameCallback === "function";
+  return {
+    hasFrame: decoded > 0 || (!frameCallbackSupported && width > 0 && height > 0 && readyState >= 2),
+    width, height, readyState, time, buffered, decoded,
+  };
+}
+
+export function videoFrameDiagnostic(health, mode) {
+  return `Mode: ${mode || "unknown"}; decoded: ${health.decoded}; size: ${health.width}×${health.height}; ready: ${health.readyState}; time: ${health.time.toFixed(1)}s; buffer: ${health.buffered.toFixed(1)}s.`;
+}
