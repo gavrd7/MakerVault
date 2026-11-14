@@ -105,3 +105,21 @@ test("live overview keeps progress and commands together and all stats in a scro
   assert.match(css,/\.printingPrinterCompactCard \.printerLiveQuickStats \{\s*flex:none;\s*display:flex;\s*flex-wrap:nowrap;/);
   assert.match(css,/overscroll-behavior-x:contain/);
 });
+
+
+test("printer overview shows identity and live status without administrative badges",()=>{
+  const start=source.indexOf('<h3>Printers &amp; live monitoring</h3>');
+  const end=source.indexOf('<h3>Spool inventory</h3>',start);
+  const overview=source.slice(start,end);
+  assert.ok(start>=0 && end>start);
+  assert.match(overview,/printingPrinterCompactIdentity/);
+  assert.match(overview,/printingPrinterCompactActions/);
+  assert.match(overview,/<PrinterLiveSummary/);
+  assert.doesNotMatch(overview,/className="printingPrinterStatus"/);
+  assert.doesNotMatch(overview,/<Badge/);
+  assert.match(source,/function PrinterConfigurationBadges\(\{ printer \}\)/);
+  assert.match(source,/function PrinterConnectionsModal[\s\S]*?!addOnly && <PrinterConfigurationBadges printer=\{printer\}/);
+  assert.match(source,/function PrinterManageModal[\s\S]*?<PrinterConfigurationBadges printer=\{printer\}/);
+  assert.match(source,/printer\.installed_multi_material_label/);
+  assert.match(source,/printer\.simplyprint\?\.external_id/);
+});
