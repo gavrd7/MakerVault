@@ -107,6 +107,7 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
   const [materialTopology,setMaterialTopology] = useState("");
   const [profileLineages, setProfileLineages] = useState({});
   const [workerConfigured, setWorkerConfigured] = useState(false);
+  const [workerDeploymentEnabled, setWorkerDeploymentEnabled] = useState(false);
   const [canVerifyProfiles, setCanVerifyProfiles] = useState(false);
   const [verifyingProfiles, setVerifyingProfiles] = useState(false);
   const [mayCancel, setMayCancel] = useState(false);
@@ -476,7 +477,8 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
       setEngines(catalogue.engines || []);
       setCanVerifyProfiles(catalogue.can_verify_profiles === true);
       setJobs(existing.jobs || []);
-      setWorkerConfigured(existing.worker_configured === true);
+      setWorkerConfigured(catalogue.worker_configured === true);
+      setWorkerDeploymentEnabled(catalogue.deployment_enabled === true);
       setMayCancel(existing.can_cancel === true);
       setMayDeleteDraft(existing.can_delete === true);
       setProfiles(native.profiles || []);
@@ -1348,7 +1350,11 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
         <p className="full slicerEngineStatus" role="status">
           {engines.find(engine => engine.key === form.engine)?.available
             ? "The selected engine has passed worker identity checks. Compatible native profiles are still required for slicing."
-            : "The selected engine is not installed or verified. You can prepare drafts, but slicing is disabled."}
+            : !workerDeploymentEnabled
+              ? "Slicing execution is disabled in this deployment. The isolated slicer-worker Compose overlay must be included and execution enabled before slicing; native profiles alone do not enable an engine."
+              : !workerConfigured
+                ? "Slicing execution is enabled, but no pinned worker engine passed health, image digest and binary-version checks. Inspect the slicer-worker container and configured engine hashes."
+                : "The selected engine/version is not among the verified worker engines. Choose an installed matching engine or restore its verified configuration."}
         </p>
         <label>Engine version
           <input required maxLength="80" disabled={!canPrepare || busy} value={form.engine_version} onChange={e => { setFlushSettings(null); update("engine_version", e.target.value); }} placeholder="Exact installed/version-matched engine version" />
