@@ -245,6 +245,25 @@ class OrcaRunnerTests(TestCase):
             b"".join(first) + b"\n" + b"".join(last)),
             ("new_supported_setting",))
 
+    def test_orca_rejected_settings_are_attached_to_safe_worker_error(self):
+        import io
+        class FakeProcess:
+            returncode = 238
+            stdout = io.BytesIO(
+                b"Param values in 3mf/config error:\n"
+                b"retraction_distances_when_cut: 30 not in range [10,18]\n"
+                b"api_key: 123 not in range [0,999]\n"
+            )
+            stderr = io.BytesIO(b"")
+            def wait(self, timeout=None):
+                return self.returncode
+        with patch("slicer_worker.orca_runner.subprocess.Popen", return_value=FakeProcess()):
+            with self.assertRaises(WorkerError) as caught:
+                run_orca(self.binary, self.root)
+        self.assertEqual(caught.exception.option_keys, ("retraction_distances_when_cut",))
+        self.assertNotIn("30", str(caught.exception))
+        self.assertNotIn("api_key", str(caught.exception))
+
     def test_orca_stdout_project_error_is_categorized_without_leaking_data(self):
         import io
         class FakeProcess:
