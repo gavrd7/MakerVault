@@ -162,7 +162,7 @@ def _draft_plate_settings(user, input_asset, settings):
     """Persist preview-only plate geometry; never compile it into slicer flags."""
     if settings is None:
         settings = {}
-    if not isinstance(settings, dict) or set(settings) - {"plate_objects", "plate_label", "plates", "active_plate_id", "save_gcode_to_library", "workflow", "process_overrides", "flush_settings", "slot_filament_profiles"}:
+    if not isinstance(settings, dict) or set(settings) - {"plate_objects", "plate_label", "plates", "active_plate_id", "save_gcode_to_library", "workflow", "process_overrides", "flush_settings", "slot_filament_profiles", "material_tool_bindings", "material_topology"}:
         raise ValueError("Unsupported slicer plate settings.")
     process_overrides = validate_process_overrides(settings.get("process_overrides"))
     flush_settings = validate_flush_settings(settings.get("flush_settings"))
@@ -187,6 +187,34 @@ def _draft_plate_settings(user, input_asset, settings):
         seen_slots.add(slot_id)
         slot_profiles.append({"slot_id":slot_id,"profile_id":str(profile_id)})
     slot_fields = {"slot_filament_profiles":slot_profiles} if slot_profiles else {}
+    # Explicit physical bay -> native tool mapping, never inferred from slot
+    # order. Persisted for multi-material preflight only; physical printer
+    # changeover remains a separate gated capability.
+    raw_bindings = settings.get("material_tool_bindings", [])
+    if not isinstance(raw_bindings, list) or len(raw_bindings) > 16:
+        raise ValueError("Invalid native tool binding list.")
+    bindings, used_slots, used_tools = [], set(), set()
+    for entry in raw_bindings:
+        if not isinstance(entry, dict) or set(entry) != {"slot_id", "tool_index"}:
+            raise ValueError("Invalid native tool binding.")
+        slot_id, tool = entry["slot_id"], entry["tool_index"]
+        if (not isinstance(slot_id, str) or not 1 <= len(slot_id) <= 128 or
+                any(ord(ch) < 33 or ord(ch) > 126 for ch in slot_id)
+                or slot_id in used_slots or isinstance(tool, bool)
+                or not isinstance(tool, int) or not 0 <= tool <= 15 or tool in used_tools):
+            raise ValueError("Slot and logical tool assignments must be unique and bounded.")
+        used_slots.add(slot_id)
+        used_tools.add(tool)
+        bindings.append({"slot_id": slot_id, "tool_index": tool})
+    topology = settings.get("material_topology")
+    if topology is not None and topology not in {
+        "single_nozzle_changer", "independent_toolheads"
+    }:
+        raise ValueError("Unsupported material changeover topology.")
+    routing_fields = {
+        **({"material_tool_bindings": bindings} if bindings else {}),
+        **({"material_topology": topology} if topology is not None else {}),
+    }
     workflow = settings.get("workflow", "interactive")
     if not isinstance(workflow, str) or workflow not in {"setup", "quick", "interactive"}:
         raise ValueError("Unknown slicer workflow.")
@@ -244,7 +272,7 @@ def _draft_plate_settings(user, input_asset, settings):
     if "plate_objects" not in settings:
         return {"plate_label": label, "save_gcode_to_library": save_to_library,
                 "workflow": workflow, "process_overrides": process_overrides,
-                **({"flush_settings": flush_settings} if flush_settings is not None else {}), **slot_fields, **project_fields}
+                **({"flush_settings": flush_settings} if flush_settings is not None else {}), **slot_fields, **routing_fields, **project_fields}
     objects = settings["plate_objects"]
     if not isinstance(objects, list) or not 1 <= len(objects) <= 200:
         raise ValueError("The visual build plate supports up to 200 model instances.")
