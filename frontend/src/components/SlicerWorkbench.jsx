@@ -1468,9 +1468,9 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
               !plateObjects.length || !printers.length || unresolvedPlateIssues}>
             {busy ? "Preparing…" : "Quick slice"}
           </button>
-          <button type="button" className="primary" onClick={() => { setError(""); setNotice(""); window.scrollTo({ top: 0, left: 0, behavior: "instant" }); setEditorOpen(true); }}
+          <button type="button" className="primary slicerHeroInteractive" onClick={() => { setError(""); setNotice(""); window.scrollTo({ top: 0, left: 0, behavior: "instant" }); setEditorOpen(true); }}
             disabled={!canPrepare || busy || loading}>
-            Slice → Interactive slicer
+            ✦ Open Interactive Slicer
           </button>
         </div>
       </>}
