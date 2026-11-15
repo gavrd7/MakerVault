@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useState } from "react";
 import { AllCommunityModule, ModuleRegistry } from "ag-grid-community";
 import { apiFetch } from "./api";
+import { installRegionalSpelling, spellingVariant } from "./regionalSpelling";
 import BoardsPage, { ImportBoardModal } from "./components/BoardsPage";
 import ComponentsPage from "./components/ComponentsPage";
 import { consumePrinterIntent } from "./components/printerNavigation";
@@ -10,15 +11,16 @@ import ProjectsPage from "./components/ProjectsPage";
 import FilesPage from "./components/FilesPage";
 import AboutPage from "./components/AboutPage";
 import SettingsPage from "./components/SettingsPage";
-import PrintingPage from "./components/PrintingPage";
+import PrintingPage, { preloadSlicerWorkbench } from "./components/PrintingPage";
 import GlobalSearch from "./components/GlobalSearch";
+import ResponsiveNav from "./components/ResponsiveNav";
 import SearchPage from "./components/SearchPage";
 import MakerTagsPage from "./components/MakerTagsPage";
 import WiringPage from "./components/WiringPage";
 
 ModuleRegistry.registerModules([AllCommunityModule]);
 
-const NAV = ["Dashboard", "Search", "Board Catalogue", "Components", "Projects", "Inventory", "3D Printing", "Model Library", "Files", "Interactive Wiring", "MakerTags", "Settings", "About"];
+const NAV = ["Dashboard", "Search", "Board Catalogue", "Components", "Projects", "Inventory", "3D Printing", "MakerVault Slicer", "Model Library", "Files", "Interactive Wiring", "MakerTags", "Settings", "About"];
 
 function formatBackupBytes(value) {
   const bytes = Number(value || 0);
@@ -43,6 +45,14 @@ export default function App() {
   const [components, setComponents] = useState([]);
   const [projects, setProjects] = useState([]);
   const [config, setConfig] = useState(null);
+  useEffect(()=>{
+    if(!config)return undefined;
+    document.documentElement.lang=spellingVariant(config.timezone);
+    return installRegionalSpelling(document.body,config.timezone);
+  },[config?.timezone]);
+
+  const [slicerStatus, setSlicerStatus] = useState({ state: "checking" });
+  const [pendingSlicerNavigation, setPendingSlicerNavigation] = useState(false);
   const [error, setError] = useState("");
   const [importOpen, setImportOpen] = useState(false);
   const [notice, setNotice] = useState("");
@@ -94,6 +104,36 @@ export default function App() {
       setDashboard(d); setInventory(i.rows || []); setConfig(c); setBoards(b.rows || []); setComponents(comp.rows || []); setProjects(p.rows || []);
     }).catch(err => setError(err.message || "MakerVault could not load its initial data."));
   }, []);
+
+  useEffect(() => {
+    let active = true;
+    const checkSlicer = async () => {
+      try {
+        const result = await apiFetch("/api/printing/slicer/engines/");
+        if (!active) return;
+        setSlicerStatus({
+          state: result.worker_configured ? "ready"
+            : result.preview_enabled ? "preview"
+            : result.deployment_enabled ? "unavailable" : "not_installed",
+        });
+      } catch {
+        if (active) setSlicerStatus({ state: "unknown" });
+      }
+    };
+    checkSlicer();
+    const timer = window.setInterval(checkSlicer, 60000);
+    return () => { active = false; window.clearInterval(timer); };
+  }, []);
+
+  useEffect(() => {
+    if (!["ready", "preview"].includes(slicerStatus.state)) return;
+    // Prefetch the lazy slicer once availability is known, avoiding a cold
+    // module request on the user's first sidebar navigation.
+    void preloadSlicerWorkbench().catch(() => {
+      // Lazy import still has a dedicated error boundary if staging assets
+      // change after this prefetch.
+    });
+  }, [slicerStatus.state]);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -235,7 +275,24 @@ export default function App() {
     setMakerTagReturn(null);
   }
 
+  useEffect(() => {
+    if (!pendingSlicerNavigation || slicerStatus.state === "checking") return;
+    setPendingSlicerNavigation(false);
+    if (["ready", "preview"].includes(slicerStatus.state)) {
+      setMakerTagReturn(null);
+      setSearchTarget(null);
+      setSection("MakerVault Slicer");
+    }
+  }, [pendingSlicerNavigation, slicerStatus.state]);
+
   function navigateSection(next) {
+    if (next === "MakerVault Slicer" && slicerStatus.state === "checking") {
+      // Do not discard the first click while engine availability is loading.
+      setPendingSlicerNavigation(true);
+      return;
+    }
+    setPendingSlicerNavigation(false);
+    if (next === "MakerVault Slicer" && !["ready", "preview"].includes(slicerStatus.state)) return;
     setMakerTagReturn(null);
     setSearchTarget(next === "Model Library" ? { type: "models", token: Date.now() } : null);
     setSection(next);
@@ -250,7 +307,7 @@ export default function App() {
     if (section === "Board Catalogue") return <BoardsPage boards={boards} setBoards={setBoards} components={components} projects={projects} config={config} onOpenImport={() => setImportOpen(true)} refreshDashboard={refreshDashboard} openBoardId={searchTarget?.type === "boards" ? searchTarget.id : ""} openToken={searchTarget?.token} onInventoryCreated={async (item, items = [item]) => { setInventory(rows => { const ids = new Set(items.map(entry => entry.id)); return [...rows.filter(row => !ids.has(row.id)), ...items].sort((a,b) => a.inventory_id.localeCompare(b.inventory_id)); }); await refreshDashboard(); }} />;
     if (section === "Components") return <ComponentsPage components={components} setComponents={setComponents} boards={boards} projects={projects} config={config} refreshDashboard={refreshDashboard} openComponentId={searchTarget?.type === "components" ? searchTarget.id : ""} openToken={searchTarget?.token} onInventoryCreated={async (item, items = [item]) => { setInventory(rows => { const ids = new Set(items.map(entry => entry.id)); return [...rows.filter(row => !ids.has(row.id)), ...items].sort((a,b) => a.inventory_id.localeCompare(b.inventory_id)); }); await refreshDashboard(); }} />;
     if (section === "Projects") return <ProjectsPage projects={projects} setProjects={setProjects} config={config} refreshDashboard={refreshDashboard} refreshInventory={refreshInventory} onOpenMakerTags={openMakerTagsForRecord} boards={boards} components={components} inventory={inventory} openProjectId={projectTarget} onOpenConsumed={() => setProjectTarget("")} />;
-    if (section === "3D Printing" || section === "Model Library") return <PrintingPage key={section} config={config} projects={projects} onOpenMakerTags={openMakerTagsForRecord} onModelLibraryBack={() => { setSearchTarget(null); setSection("3D Printing"); }} searchTarget={searchTarget} onOpenConsumed={token => setSearchTarget(current => consumePrinterIntent(current, token))} />;
+    if (section === "3D Printing" || section === "MakerVault Slicer" || section === "Model Library") return <PrintingPage key={section} initialWorkspaceView={section === "MakerVault Slicer" ? "slicer" : "overview"} onOpenSlicerDevice={printerId => { if (!printerId) return; setSearchTarget({ type: "printers", id: String(printerId), openLive: true, token: Date.now() }); setSection("3D Printing"); }} onOpenSlicer={(jobId = null) => { if (["ready", "preview"].includes(slicerStatus.state)) { setSearchTarget(jobId ? { type: "slicer_job", id: jobId, token: Date.now() } : null); setSection("MakerVault Slicer"); } }} slicerStatus={slicerStatus} config={config} projects={projects} onOpenMakerTags={openMakerTagsForRecord} onModelLibraryBack={() => { setSearchTarget(null); setSection("3D Printing"); }} searchTarget={searchTarget} onOpenConsumed={token => setSearchTarget(current => consumePrinterIntent(current, token))} />;
     if (section === "Files") return <FilesPage projects={projects} config={config} searchTarget={searchTarget?.type === "files" ? searchTarget : null} onOpenModel={modelId => { setSearchTarget({ type: "models", id: modelId, token: Date.now() }); setSection("Model Library"); }} onOpenProject={projectId => { setProjectTarget(projectId); setSection("Projects"); }} />;
     if (section === "Settings") return <SettingsPage config={config} onBackupStarted={watchBackup} onOpenPrinterConnections={() => { setSearchTarget(null); setSection("3D Printing"); }} />;
     return <AboutPage config={config} />;
@@ -266,7 +323,13 @@ export default function App() {
         <small className="brandVersion">{config?.version ? "v" + config.version : "version loading…"} · AGPL</small>
       </div>
       <GlobalSearch onOpenResult={openSearchResult} onOpenAdvanced={openAdvancedSearch} />
-      <nav>{NAV.map(n => <button key={n} className={section === n ? "active" : ""} onClick={() => navigateSection(n)}>{n}</button>)}</nav>
+      <ResponsiveNav items={NAV} selected={section} onSelect={navigateSection}
+        isDisabled={n => n === "MakerVault Slicer" && !["ready", "preview", "checking"].includes(slicerStatus.state)}
+        getTitle={n => n === "MakerVault Slicer" && slicerStatus.state === "checking"
+          ? "Slicer availability is loading. Select to open automatically when ready."
+          : n === "MakerVault Slicer" && !["ready", "preview"].includes(slicerStatus.state)
+          ? "The optional slicer service is not available. See 3D Printing for details." : undefined}
+      />
       <div className="asideBottom">{config?.is_superuser && <a href="/admin/">Administration</a>}<a href="/accounts/logout/">Sign out</a></div>
     </aside>
     <main>

@@ -72,6 +72,8 @@ nav:
       - Models and the 3D viewer: using/models.md
       - Print history and costs: using/print-history.md
       - Printed parts: using/printed-parts.md
+  - MakerVault Slicer (development):
+      - Installation and engine management: 3d-printing/slicer.md
   - Optional integrations:
       - Spoolman: integrations/spoolman.md
       - Creality local & CFS: integrations/creality.md

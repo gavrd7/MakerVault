@@ -534,6 +534,17 @@ def poll_moonraker(endpoint_url: str, config: dict | None = None) -> dict:
     status = result.get("status") or {}
     print_stats = status.get("print_stats") or {}
     print_info = print_stats.get("info") or {}
+    pause_resume = {}
+    # pause_resume is a Klipper optional object. Query it separately only
+    # when print_stats indicates an active job, so a printer without the
+    # module never loses its whole telemetry snapshot.
+    if (str(print_stats.get("state") or "").strip().lower() == "printing"
+            and print_stats.get("filename")):
+        try:
+            optional = _get(base + "/printer/objects/query?pause_resume", headers=headers)
+            pause_resume = ((optional.get("result") or {}).get("status") or {}).get("pause_resume") or {}
+        except PrinterConnectionError:
+            pause_resume = {}
     display = status.get("display_status") or {}
     virtual_sd = status.get("virtual_sdcard") or {}
     extruder = status.get("extruder") or {}
@@ -579,6 +590,14 @@ def poll_moonraker(endpoint_url: str, config: dict | None = None) -> dict:
         "error": "error",
     }
     normalised_state = state_map.get(state, state)
+    # Klipper can signal a paused macro through pause_resume while print_stats
+    # still reflects the last reported 'printing' status. Trust the explicit
+    # flag only for a currently identified, nonterminal print.
+    if (normalised_state in {"printing", "paused"}
+            and print_stats.get("filename")
+            and isinstance(pause_resume, dict)
+            and pause_resume.get("is_paused") is True):
+        normalised_state = "paused"
     progress = _number(virtual_sd.get("progress"))
     if progress is None:
         progress = _number(display.get("progress"))
@@ -731,10 +750,6 @@ def _creality_state(payload: dict, *, ignore_error=False) -> str:
     if not ignore_error and errcode not in (None, 0):
         return "error"
 
-    self_test = _finite_number(payload.get("withSelfTest"))
-    if self_test is not None and 1 <= self_test <= 99:
-        return "self-testing"
-
     filename = str(payload.get("printFileName") or "").strip()
     progress = _finite_number(
         payload.get("printProgress")
@@ -744,13 +759,20 @@ def _creality_state(payload: dict, *, ignore_error=False) -> str:
     raw_state = _finite_number(payload.get("state"))
     raw_state = int(raw_state) if raw_state is not None else None
 
+    # A K2 can pause during self-test before G-code extrusion begins. The
+    # explicit paused state must win over the self-test progress marker so
+    # Resume remains available when the operator clears a build-plate warning.
+    if filename and raw_state == 5:
+        return "paused"
+    if filename and raw_state == 4:
+        return "cancelled"
+    self_test = _finite_number(payload.get("withSelfTest"))
+    if self_test is not None and 1 <= self_test <= 99:
+        return "self-testing"
+
     if filename:
         if progress is not None and progress >= 100:
             return "complete"
-        if raw_state == 5:
-            return "paused"
-        if raw_state == 4:
-            return "cancelled"
         if raw_state == 1:
             return "printing"
         if raw_state == 0:
@@ -839,6 +861,19 @@ def normalise_creality_snapshot(payload: dict) -> dict:
 
     state = _creality_state(payload)
     activity_state = _creality_state(payload, ignore_error=True)
+    # K-series firmware may keep an old errcode latched after the user
+    # dismisses a warning. Trust *unambiguous* job telemetry over that
+    # historical error while retaining the raw warning for diagnostics.
+    # Do not let 100% alone override an explicit pause/cancel/failure state:
+    # those signals may remain after an interrupted print.
+    raw_state = _finite_number(payload.get("state"))
+    raw_state = int(raw_state) if raw_state is not None else None
+    filename_present = bool(str(payload.get("printFileName") or "").strip())
+    if state == "error" and filename_present:
+        if activity_state == "printing" and raw_state == 1:
+            state = "printing"
+        elif activity_state == "complete" and raw_state in (0, 1):
+            state = "complete"
     progress = _finite_number(
         payload.get("printProgress")
         if payload.get("printProgress") is not None
@@ -1145,6 +1180,26 @@ def poll_connection(connection) -> dict:
         capabilities["materials"] = bool(
             metadata.get("ace_connected") or snapshot.get("materials")
         )
+    # Publish read-only material architecture evidence for the slicer adapter
+    # contract. These signals identify a supported automatic feeder, NOT
+    # verified firmware toolchange commands or permission to start prints.
+    feeder_flags = {
+        "creality_local": "cfs_connected",
+        "bambu_local": "ams_connected",
+        "flashforge": "material_station_connected",
+        "anycubic": "ace_connected",
+    }
+    feeder_flag = feeder_flags.get(connection.adapter)
+    if feeder_flag and metadata.get(feeder_flag) is True:
+        capabilities["material_system"] = {
+            "available": True,
+            "topology": "single_nozzle_changer",
+            "physical_toolchange_verified": False,
+        }
+    elif feeder_flag:
+        # Do not advertise an absent or stale system merely because the
+        # selected printer model may be capable of using one.
+        capabilities.pop("material_system", None)
     connection.capabilities = capabilities
     connection.last_snapshot = snapshot
     connection.save(update_fields=[

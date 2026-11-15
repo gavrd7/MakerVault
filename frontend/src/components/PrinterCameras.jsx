@@ -1,29 +1,17 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, { useState } from "react";
 import { Modal } from "./Common";
 import PrinterCamera, { CameraPlayback } from "./PrinterCamera";
 import { defaultCamera } from "./cameraPlayback";
 
-export function PrinterCameraPreview({ printer, suspended = false }) {
-  const container = useRef(null);
-  const [visible, setVisible] = useState(false);
-  const [pageVisible, setPageVisible] = useState(!document.hidden);
+// Camera playback is intentionally mounted as soon as the preview renders.
+// No viewport/visibility observer or document.hidden gate: this isolates
+// Safari HLS startup from scrolling and intersection-driven mount churn.
+export function PrinterCameraPreview({ printer, compact = true }) {
   const selected = defaultCamera(printer.live_connections || printer.camera_connections || []);
-  useEffect(() => {
-    const node = container.current;
-    if (!node) return;
-    const changed = () => setPageVisible(!document.hidden);
-    document.addEventListener("visibilitychange", changed);
-    let observer;
-    if (globalThis.IntersectionObserver) {
-      observer = new IntersectionObserver(entries => setVisible(entries[0]?.isIntersecting || false));
-      observer.observe(node);
-    } else setVisible(true);
-    return () => { observer?.disconnect(); document.removeEventListener("visibilitychange", changed); };
-  }, [Boolean(selected)]);
   if (!selected) return null;
   const url = `/api/printing/printers/${printer.id}/connections/${selected.connectionId}/cameras/${selected.camera.id}/media/`;
-  return <section ref={container} className="printerCameraCard cameraGlanceCard" aria-label={printer.name + " live camera"}>
-    {visible && pageVisible && !suspended ? <CameraPlayback key={selected.connectionId + ":" + selected.camera.id} camera={selected.camera} url={url} compact /> : <div className="printerCameraPlaceholder">Camera paused</div>}
+  return <section className="printerCameraCard cameraGlanceCard" aria-label={printer.name + " live camera"}>
+    <CameraPlayback key={selected.connectionId + ":" + selected.camera.id} camera={selected.camera} url={url} compact={compact} />
   </section>;
 }
 
