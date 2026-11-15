@@ -599,7 +599,7 @@ def import_project_3mf(request):
                     if filename is None:
                         continue
                     if ("colour_paint" in row or not isinstance(filename, str) or
-                            not re.fullmatch(r"Metadata/paint/paint-[0-9]{4}\\.json", filename) or
+                            not re.fullmatch(r"Metadata/paint/paint-[0-9]{4}\.json", filename) or
                             filename in seen_paint_files):
                         raise ValueError("Invalid project paint sidecar.")
                     seen_paint_files.add(filename)
