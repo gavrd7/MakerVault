@@ -58,7 +58,7 @@ export default function SlicerPrepareWorkspace({
   plates = [], activePlateId = "plate-1", onChoosePlate, onAddPlate, onRemovePlate, onMoveModelsToPlate,
   onPlateLabelChange, onPrimaryChange, onFilesUploaded,
   defaultColor, onManualColorChange, canEdit, busy, error, notice,
-  onChangeProfiles, onOpenDevice, onSaveDraft, onSaveProject, onImportProject, onSlice, onSliceAll, engine, printer,
+  onChangeProfiles, onOpenDevice, onSaveDraft, onSaveProject, onExportNativeMaterials, onImportProject, onSlice, onSliceAll, engine, printer,
   selectedProfiles, workerConfigured, printerId,
   processOverrides = {}, onProcessOverridesChange, onSaveCustomProcessProfile,
   flushSettings = null, onFlushSettingsChange,
@@ -620,6 +620,10 @@ export default function SlicerPrepareWorkspace({
     && assignedSlots.every(slot => String(slot.printer_id) === String(printerId)
       && slot.slot_id === assignedSlots[0].slot_id
       && slot.slot_index === assignedSlots[0].slot_index);
+  const multiMaterialReadyForExport = assignedSlots.length === objects.length
+    && new Set(assignedSlots.map(slot => slot.slot_id)).size >= 2
+    && materialToolBindings.length >= 2 && slotFilamentProfiles.length >= 2
+    && Boolean(materialTopology);
   const singleSlotProfileMatches = slotFilamentProfiles.length === 0
     || (slotFilamentProfiles.length === 1
       && slotFilamentProfiles[0].slot_id === assignedSlots[0]?.slot_id
@@ -1530,6 +1534,12 @@ export default function SlicerPrepareWorkspace({
         </p>}
         <button type="button" disabled={!plateReady || !profilesReady} onClick={onSaveDraft}>Save draft</button>
         <button type="button" disabled={!plateReady || !profilesReady} onClick={onSaveProject}>Save project (.3mf)</button>
+        {multiMaterialReadyForExport && <button type="button"
+          disabled={!activePlateReady || !profilesReady || busy}
+          onClick={onExportNativeMaterials}
+          title="Download an Orca-compatible 3MF with validated native filament assignments. No slicing or printing.">
+          Export multi-material 3MF (offline)
+        </button>}
         <label className="slicerProjectImportButton" aria-label="Open project from 3MF file">
           Open project (.3mf)
           <input type="file" accept=".3mf" disabled={!canEdit||busy}
