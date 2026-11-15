@@ -8119,3 +8119,69 @@ a:focus-visible,
     grid-template-columns:minmax(0,1fr)!important;
   }
 }
+
+/* Mobile Move / Rotate / Scale use precisely the same viewport dock as Measure.
+   Shared selector prevents tool-specific height, width or anchor drift. */
+@media(max-width:740px){
+  .slicerPlateCanvasColumn .slicerPlateCanvasViewport > .slicerViewportToolDock,
+  .slicerPlateCanvasColumn .slicerPlateCanvasViewport > .slicerViewportToolDock.slicerViewportTransform{
+    position:relative!important;
+    inset:auto!important;
+    top:auto!important;
+    left:auto!important;
+    right:auto!important;
+    bottom:auto!important;
+    order:1;
+    display:flex;
+    flex-direction:column;
+    align-items:stretch;
+    flex:0 0 auto;
+    box-sizing:border-box;
+    width:100%!important;
+    max-width:100%!important;
+    min-width:0;
+    height:auto!important;
+    min-height:0;
+    max-height:min(220px, 35dvh)!important;
+    margin:0 0 8px!important;
+    padding:11px 13px;
+    gap:7px;
+    overflow-y:auto!important;
+    overflow-x:hidden!important;
+    -webkit-overflow-scrolling:touch;
+    overscroll-behavior:contain;
+  }
+  .slicerPlateCanvasViewport > .slicerViewportToolDock .slicerViewportMeasurementHeader{
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    gap:8px;
+    flex:0 0 auto;
+    width:100%;
+    min-width:0;
+    margin:0;
+  }
+  .slicerPlateCanvasViewport > .slicerViewportToolDock .slicerViewportMeasurementHeader strong{
+    flex:1 1 auto;
+    min-width:0;
+  }
+  .slicerPlateCanvasViewport > .slicerViewportToolDock .slicerViewportMeasurementHeader button{
+    flex:0 0 auto;
+  }
+  .slicerPlateCanvasViewport > .slicerViewportToolDock .slicerViewportTransformGrid{
+    display:grid;
+    grid-template-columns:repeat(3,minmax(0,1fr));
+    gap:6px;
+    width:100%;
+    min-width:0;
+  }
+  .slicerPlateCanvasViewport > .slicerViewportToolDock .slicerViewportTransformGrid label,
+  .slicerPlateCanvasViewport > .slicerViewportToolDock .slicerViewportScaleUniform{
+    min-width:0;
+  }
+  .slicerPlateCanvasViewport > .slicerViewportToolDock input{
+    box-sizing:border-box;
+    min-width:0;
+    max-width:100%;
+  }
+}
