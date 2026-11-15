@@ -621,7 +621,7 @@ def import_project_3mf(request):
                     if support_filename is None:
                         continue
                     if ("support_paint" in row or not isinstance(support_filename, str) or
-                            not re.fullmatch(r"Metadata/paint/support-[0-9]{4}\\.json", support_filename) or
+                            not re.fullmatch(r"Metadata/paint/support-[0-9]{4}\.json", support_filename) or
                             support_filename in seen_paint_files):
                         raise ValueError("Invalid project support-paint sidecar.")
                     seen_paint_files.add(support_filename)
