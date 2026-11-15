@@ -92,3 +92,45 @@ def resolve_native_material_palette(
         "filament_profiles": tuple(resolved),
         "topology": topology,
     }
+
+
+def prepare_multimaterial_plate(
+    objects_with_stl, *, bed_width, bed_depth, printer_id, owner_id,
+    engine, engine_version, topology, tool_bindings, native_filament_profiles,
+    resolver=resolved_native_profile,
+):
+    """Prepare a native multi-filament 3MF and ordered palette for offline review.
+
+    This function has NO scheduling or printer-submission side effects. The
+    firmware's physical slot-to-tool command semantics, purge behaviour,
+    painting and actual toolchange compatibility must be validated separately.
+    """
+    from .slicer_plate_3mf import build_plate_3mf
+
+    if not isinstance(objects_with_stl, (list, tuple)) or not objects_with_stl:
+        raise MaterialRoutingError("A multi-material plate needs models.")
+    if len(objects_with_stl) > 12 or any(
+        not isinstance(pair, tuple) or len(pair) != 2
+        or not isinstance(pair[0], dict) or not isinstance(pair[1], bytes)
+        for pair in objects_with_stl
+    ):
+        raise MaterialRoutingError("Invalid multi-material plate geometry.")
+    objects = [item for item, _raw in objects_with_stl]
+    result = resolve_native_material_palette(
+        objects, printer_id=printer_id, owner_id=owner_id,
+        engine=engine, engine_version=engine_version,
+        topology=topology, tool_bindings=tool_bindings,
+        native_filament_profiles=native_filament_profiles,
+        resolver=resolver,
+    )
+    project = build_plate_3mf(
+        objects_with_stl, bed_width=bed_width, bed_depth=bed_depth,
+        native_tool_indices=result["native_tool_indices"],
+    )
+    return {
+        "model_3mf": project,
+        "filament_profiles": result["filament_profiles"],
+        "native_tool_indices": result["native_tool_indices"],
+        "topology": result["topology"],
+        "printer_submission_verified": False,
+    }
