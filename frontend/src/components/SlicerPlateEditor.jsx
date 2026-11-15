@@ -3163,14 +3163,14 @@ export default function SlicerPlateEditor({
           onClick={() => transformGroup(groupDeltaX, groupDeltaY, groupRotation, groupScale)}>Apply group transform</button>
       </aside>}
       {selection.length <= 1 && ["move", "rotate", "scale"].includes(toolMode) && chosen && <aside
-        className="slicerViewportMeasurement slicerViewportTransform"
+        className="slicerViewportMeasurement slicerViewportTransform slicerViewportToolDock"
         aria-label={toolMode === "move" ? "On-plate position controls" : toolMode === "rotate" ? "On-plate rotation controls" : "On-plate scale controls"}>
         <div className="slicerViewportMeasurementHeader">
           <strong>{toolMode === "move" ? "Move · mm" : toolMode === "rotate" ? "Rotate · degrees" : "Scale · %"}</strong>
-          {toolMode !== "move" && <button type="button" aria-expanded={transformOverlayExpanded}
+          <button type="button" aria-expanded={transformOverlayExpanded}
             onClick={() => setTransformOverlayExpanded(open => !open)}>
             {transformOverlayExpanded ? "Less" : "Details"}
-          </button>}
+          </button>
         </div>
         <div className="slicerViewportMeasurementModel">{sourceFiles.find(file =>
           String(file.id) === String(chosen.asset_id))?.name || "Selected model"}</div>
@@ -3193,6 +3193,10 @@ export default function SlicerPlateEditor({
               "The model cannot be centred without leaving the bed or overlapping another model.")}>
             <SlicerUiIcon name="center" /> <span>Centre model</span>
           </button>
+          {transformOverlayExpanded && <small className="slicerViewportMeasurementHint">
+            Move the model with the on-plate handles or enter X, Y and Z positions directly.
+            Centre model restores its X and Y position to the plate centre.
+          </small>
         </> : toolMode === "rotate" ? <>
           <div className="slicerViewportTransformGrid">
             {["X", "Y", "Z"].map((axis, index) => <label key={axis}>{axis} (°)
@@ -3258,7 +3262,7 @@ export default function SlicerPlateEditor({
           </small>}
         </>}
       </aside>}
-      {selection.length <= 1 && measurementVisible && chosen && <aside className="slicerViewportMeasurement" aria-label="On-plate measurements">
+      {selection.length <= 1 && measurementVisible && chosen && <aside className="slicerViewportMeasurement slicerViewportToolDock" aria-label="On-plate measurements">
         <div className="slicerViewportMeasurementHeader">
           <strong>Measure · {measureUnit === "mm" ? "mm" : "in"}</strong>
           <button type="button" aria-expanded={measureOverlayExpanded}
