@@ -8034,3 +8034,88 @@ a:focus-visible,
   .slicerNativeToolBindings{padding:10px}
   .slicerNativeToolBindings select{min-height:42px}
 }
+
+/* Geometry editors share the on-plate position used by the Measure overlay.
+   A portal into the canvas viewport (not the outer plate section) keeps the
+   3D model visible while editing, even on very long mobile slicer pages. */
+.slicerMobileGeometryDock{display:none}
+@media (max-width:740px){
+  .slicerPlateCanvasViewport > .slicerMobileGeometryDock{
+    display:block;
+    position:absolute;
+    z-index:9;
+    left:12px;right:12px;bottom:12px;
+    width:auto;min-width:0;
+    pointer-events:none;
+  }
+  .slicerMobileGeometryDock > .slicerAutoOrientModalBackdrop:has(.slicerViewportAnchoredModal){
+    display:block!important;
+    position:relative!important;
+    inset:auto!important;
+    padding:0!important;
+    margin:0!important;
+    width:100%!important;
+    max-width:100%!important;
+    background:transparent!important;
+    pointer-events:none!important;
+    z-index:auto!important;
+  }
+  .slicerMobileGeometryDock > .slicerAutoOrientModalBackdrop > .slicerSolidModal.slicerViewportAnchoredModal{
+    display:flex!important;
+    position:relative!important;
+    inset:auto!important;
+    top:auto!important;left:auto!important;right:auto!important;bottom:auto!important;
+    width:100%!important;max-width:100%!important;
+    min-width:0!important;
+    height:auto!important;min-height:0!important;
+    max-height:min(46dvh, 320px)!important;
+    overflow-y:auto!important;
+    overflow-x:hidden!important;
+    -webkit-overflow-scrolling:touch;
+    overscroll-behavior:contain;
+    padding:12px!important;
+    margin:0!important;
+    box-sizing:border-box;
+    border-radius:10px;
+    pointer-events:auto!important;
+  }
+  .slicerMobileGeometryDock > .slicerAutoOrientModalBackdrop > .slicerSolidModal.slicerSolidInspectorCollapsed{
+    max-height:56px!important;
+    overflow:hidden!important;
+  }
+  .slicerMobileGeometryDock .slicerAutoOrientModalHeader{
+    display:grid!important;
+    grid-template-columns:minmax(0,1fr) auto auto;
+    gap:8px;
+    align-items:center;
+    position:relative!important;
+    min-width:0;
+  }
+  .slicerMobileGeometryDock .slicerAutoOrientModalHeader>div{
+    width:auto!important;min-width:0!important;
+    flex:none!important;
+  }
+  .slicerMobileGeometryDock .slicerAutoOrientModalHeader h3{
+    width:auto!important;
+    white-space:normal!important;
+    overflow-wrap:normal!important;
+    word-break:normal!important;
+    line-height:1.25;
+  }
+  .slicerMobileGeometryDock .slicerAutoOrientModalHeader>button{
+    width:auto!important;
+    min-width:36px!important;
+    margin:0!important;
+    flex:none!important;
+  }
+  .slicerMobileGeometryDock .slicerAutoOrientModalActions{
+    position:sticky!important;
+    bottom:0;
+    background:#101e2b;
+    padding:8px 0 0!important;
+    margin-top:8px;
+  }
+  .slicerMobileGeometryDock .slicerSolidGrid{
+    grid-template-columns:minmax(0,1fr)!important;
+  }
+}
