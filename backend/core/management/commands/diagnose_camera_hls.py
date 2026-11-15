@@ -133,7 +133,7 @@ def transport_packet_summary(payload):
                 position += 1 + packet[4]
             if position < 188:
                 payload_packets += 1
-                if packet[1] & 0x40 and packet[position:position + 3] == b"\\x00\\x00\\x01":
+                if packet[1] & 0x40 and packet[position:position + 3] == b"\x00\x00\x01":
                     pes_starts += 1
     return {
         "valid_ts": True,
