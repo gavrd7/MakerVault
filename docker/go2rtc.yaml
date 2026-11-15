@@ -13,7 +13,8 @@ api:
     - "/api/hls/segment.ts"
 
 webrtc:
-  listen: "127.0.0.1:8555"
+  # Signalling remains loopback-only. Only ICE media is reachable externally.
+  listen: ":8555"
   candidates:
-    - "127.0.0.1:8555"
+    - "${MAKERVAULT_WEBRTC_CANDIDATE:stun:8555}"
   ice_servers: []
