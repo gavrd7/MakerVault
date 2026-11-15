@@ -306,7 +306,7 @@ export default function SlicerPrepareWorkspace({
     if (hex) onManualColorChange?.(instanceId);
     setFilamentPickerId("");
     setFilamentNotice("Assigned " + slotName(slot) +
-      " to the project model. This is not yet a native slicer tool assignment.");
+      " to the project model. One-slot slicing retains the selected native filament; multi-slot printing requires verified tool routing.");
   };
   const clearModelFilament = instanceId => {
     updatePlate(latest.current.map(item => {
@@ -593,14 +593,30 @@ export default function SlicerPrepareWorkspace({
   const objectSettingsPending = objects.some(item =>
     Object.keys(item.process_overrides || {}).some(key => !verifiedObjectSettings.has(key))
   );
-  const materialRoutingPending = plates.some(plate =>
+  // Physical feeder slots are not Orca tool numbers. A single selected
+  // feeder may annotate a normal one-filament slice; multiple feeders need
+  // separate native palette + printer-changeover verification.
+  const assignedSlots = objects.map(item => item.material_slot).filter(Boolean);
+  const hasSingleSlot = assignedSlots.length > 0
+    && assignedSlots.length === objects.length
+    && assignedSlots.every(slot => String(slot.printer_id) === String(printerId)
+      && slot.slot_id === assignedSlots[0].slot_id
+      && slot.slot_index === assignedSlots[0].slot_index);
+  const singleSlotProfileMatches = slotFilamentProfiles.length === 0
+    || (slotFilamentProfiles.length === 1
+      && slotFilamentProfiles[0].slot_id === assignedSlots[0]?.slot_id
+      && String(slotFilamentProfiles[0].profile_id) === String(selectedProfiles?.filament_id));
+  const materialRoutingPending = assignedSlots.length > 0
+    ? !(hasSingleSlot && singleSlotProfileMatches)
+    : slotFilamentProfiles.length > 0;
+  const projectRoutingPending = plates.some(plate =>
     (plate.objects || []).some(item => item.material_slot != null)
-  ) || objects.some(item => item.material_slot != null);
+  ) || slotFilamentProfiles.length > 0;
   const sliceBlockReason = draftBlockReason ||
     (!activePlateReady ? "Select a plate containing models to slice." : "") ||
     (conflictsBlockSlice ? "Resolve build-plate conflicts or wait for models to finish loading before slicing." : "") ||
     (flushSettings != null ? "This draft contains flushing/prime-tower overrides, but the physical multi-material path is not yet enabled. Save the draft or reset flushing settings to slice a single-filament job." : "") ||
-    (materialRoutingPending ? "This draft contains intended filament slots. Offline multi-colour Orca 2.5 fixtures pass, but this registered printer's live slot-to-tool bindings and physical changeovers are not yet verified. Save the draft; clear assignments to slice with the proven single-filament path."
+    (materialRoutingPending ? "Multiple assigned slots or incompatible per-slot presets need verified multi-material tool mapping. For single-filament slicing, assign the same physical slot to every model and use the selected native filament preset."
       : objectSettingsPending
       ? "Some Object settings are not yet verified for slicing. Wall loops and sparse infill density are supported; other Object overrides can be saved in drafts but cannot be sliced yet."
       : !workerConfigured
@@ -1484,7 +1500,7 @@ export default function SlicerPrepareWorkspace({
               disabled={!activePlateReady || conflictsBlockSlice || objectSettingsPending || materialRoutingPending}
               onClick={()=>{setSliceMenuOpen(false);onSlice?.();}}>Slice active plate</button>
             <button type="button" role="menuitem"
-              disabled={!projectHasModels || objectSettingsPending || materialRoutingPending}
+              disabled={!projectHasModels || objectSettingsPending || projectRoutingPending}
               onClick={()=>{setSliceMenuOpen(false);onSliceAll?.();}}>
               Slice all plates ({plates.filter(plate=>plate.objects.length).length})
             </button>
