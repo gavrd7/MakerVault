@@ -10,7 +10,8 @@ const read = name => fs.readFileSync(path.join(root, name), "utf8");
 test("setup is retained and a separate interactive Prepare workspace is available", () => {
   const workbench = read("SlicerWorkbench.jsx");
   assert.match(workbench, /Slicer setup/);
-  assert.match(workbench, /Slice → Interactive slicer/);
+  assert.match(workbench, /Open Interactive Slicer/);
+  assert.match(workbench, /className="primary slicerHeroInteractive"/);
   assert.match(workbench, /onClick=\{\(\) => saveDraft\("quick"\)\}/);
   assert.match(workbench, /onClick=\{\(\) => saveDraft\("draft"\)\}/);
   assert.match(workbench, /editorOpen \? <SlicerPrepareWorkspace/);
