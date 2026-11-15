@@ -733,8 +733,24 @@ def export_native_multimaterial_3mf(request, job_id):
         # logical tool indices. User-supplied tool maps/topology are not trusted.
         connections = PrinterConnection.objects.filter(printer=job.printer, enabled=True)
         topology = detect_material_system(connections)
+        primary_slots = {
+            row.get("slot_id") for row in profile_rows
+            if isinstance(row, dict)
+            and str(row.get("profile_id")) == str(job.filament_profile_id)
+        }
+        assigned_ids = {
+            item.get("material_slot", {}).get("slot_id")
+            for item in objects if isinstance(item, dict)
+            and isinstance(item.get("material_slot"), dict)
+        }
+        primary_slots &= assigned_ids
+        if not primary_slots:
+            raise MaterialRoutingError(
+                "The selected main filament preset is not assigned to any model."
+            )
         tool_bindings = derive_native_tool_order(
             objects, printer_id=job.printer_id, topology=topology,
+            preferred_slot_id=sorted(primary_slots)[0],
         )
         binding_rows = [
             {"slot_id": slot_id, "tool_index": index}
