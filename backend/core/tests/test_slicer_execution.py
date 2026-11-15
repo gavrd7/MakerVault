@@ -6,23 +6,52 @@ from core.slicer_execution import verified_installation, _single_unmodified_stl,
 
 
 class IntendedMaterialSafetyTests(SimpleTestCase):
-    def test_mapped_draft_cannot_silently_produce_single_filament_gcode(self):
+    def test_single_slot_is_valid_slicing_annotation_not_tool_selection(self):
         from types import SimpleNamespace
-        for count in (1, 2):
-            with self.subTest(count=count):
-                models = [{
-                    "instance_id": str(index),
-                    "material_slot": {
-                        "printer_id": "printer", "slot_id": "slot-" + str(index),
-                        "slot_index": index,
-                    },
-                } for index in range(count)]
-                job = SimpleNamespace(
-                    settings={"plate_objects": models},
-                    engine="orcaslicer",
-                )
-                with self.assertRaisesRegex(SlicerExecutionError, "not yet verified"):
-                    _validate_plate_execution(job)
+        model = {"instance_id": "a", "material_slot": {
+            "printer_id": "printer", "slot_id": "bay-four", "slot_index": 3,
+        }}
+        job = SimpleNamespace(
+            settings={"plate_objects": [model]},
+            printer_id="printer", filament_profile_id="selected-preset",
+            engine="orcaslicer",
+        )
+        # This is still a normal single-filament Orca slice. The physical bay
+        # is advisory and MUST NOT select tool 3 in the G-code.
+        self.assertTrue(_validate_plate_execution(job))
+        job.settings["slot_filament_profiles"] = [{
+            "slot_id": "bay-four", "profile_id": "selected-preset",
+        }]
+        self.assertTrue(_validate_plate_execution(job))
+
+    def test_distinct_slots_and_mismatched_native_presets_fail_closed(self):
+        from types import SimpleNamespace
+        one = {"instance_id": "a", "material_slot": {
+            "printer_id": "printer", "slot_id": "bay-one", "slot_index": 0,
+        }}
+        two = {"instance_id": "b", "material_slot": {
+            "printer_id": "printer", "slot_id": "bay-two", "slot_index": 1,
+        }}
+        job = SimpleNamespace(
+            settings={"plate_objects": [one, two]},
+            printer_id="printer", filament_profile_id="selected-preset",
+            engine="orcaslicer",
+        )
+        with self.assertRaisesRegex(SlicerExecutionError, "More than one filament slot"):
+            _validate_plate_execution(job)
+        job.settings = {
+            "plate_objects": [one],
+            "slot_filament_profiles": [{
+                "slot_id": "bay-one", "profile_id": "different-preset",
+            }],
+        }
+        with self.assertRaisesRegex(SlicerExecutionError, "must match"):
+            _validate_plate_execution(job)
+        job.settings = {"plate_objects": [{**one, "material_slot": {
+            **one["material_slot"], "printer_id": "another-printer",
+        }}]}
+        with self.assertRaisesRegex(SlicerExecutionError, "another printer"):
+            _validate_plate_execution(job)
 
 
     def test_native_slicing_rejects_v1_and_v2_paint_regions(self):
