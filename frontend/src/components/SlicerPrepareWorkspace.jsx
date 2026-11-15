@@ -1279,7 +1279,10 @@ export default function SlicerPrepareWorkspace({
               <select value={materialTopology} onChange={event => onMaterialTopologyChange?.(event.target.value)}>
                 <option value="">Choose system</option>
                 <option value="single_nozzle_changer">One nozzle · automatic filament changer (AMS/CFS/MMU)</option>
-                <option value="independent_toolheads">Independent printheads / toolchanger</option>
+                <option value="independent_toolheads">Independent printheads</option>
+                <option value="toolchanger">Automatic toolchanger</option>
+                <option value="idex">IDEX · independent dual extrusion</option>
+                <option value="manual_filament_change">Manual filament changes (pause / M600)</option>
               </select>
             </label>
             {liveMaterials.map(slot => {
