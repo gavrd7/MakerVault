@@ -8,13 +8,13 @@ from core.slicer_execution import verified_installation, _single_unmodified_stl,
 class IntendedMaterialSafetyTests(SimpleTestCase):
     def test_single_slot_is_valid_slicing_annotation_not_tool_selection(self):
         from types import SimpleNamespace
-        model = {"instance_id": "a", "material_slot": {
+        model = {"instance_id": "a", "x_mm": 0, "y_mm": 0, "rotation_deg": 0, "scale_percent": 100, "material_slot": {
             "printer_id": "printer", "slot_id": "bay-four", "slot_index": 3,
         }}
         job = SimpleNamespace(
             settings={"plate_objects": [model]},
             printer_id="printer", filament_profile_id="selected-preset",
-            engine="orcaslicer",
+            printer_profile_id="native-printer", engine="orcaslicer",
         )
         # This is still a normal single-filament Orca slice. The physical bay
         # is advisory and MUST NOT select tool 3 in the G-code.
