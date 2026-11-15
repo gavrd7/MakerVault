@@ -117,6 +117,8 @@ def store_generated_gcode(job_id, raw: bytes):
                     "input_asset_id": str(job.input_asset_id),
                     "printer_id": str(job.printer_id),
                     "source_review": report.get("target_review", {}),
+                    "multi_material_test": (job.settings or {}).get("multi_material_test") is True,
+                    "printer_submission_verified": (job.settings or {}).get("multi_material_test") is not True,
                 },
             )
             stored.file = ContentFile(raw, name=output_name)
