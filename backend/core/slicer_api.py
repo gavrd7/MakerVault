@@ -708,7 +708,7 @@ def export_native_multimaterial_3mf(request, job_id):
     This is never printer submission and does not allow queued multi-material
     execution. Each selected filament must already be a verified native profile.
     """
-    from .slicer_native_material_palette import prepare_multimaterial_plate
+    from .slicer_native_material_palette import prepare_multimaterial_plate, ordered_material_profile_ids
     from .slicer_material_routing import MaterialRoutingError
     from .slicer_execution import _read_owned_file, MAX_INPUT
     from .slicer_bed_dimensions import trusted_plate_dimensions
@@ -731,21 +731,10 @@ def export_native_multimaterial_3mf(request, job_id):
     if settings.get("flush_settings") is not None:
         return _error("Custom flushing settings require separate native validation.", 409)
     try:
+        ordered_ids = ordered_material_profile_ids(
+            binding_rows, profile_rows, main_profile_id=job.filament_profile_id,
+        )
         tool_bindings = {item["slot_id"]: item["tool_index"] for item in binding_rows}
-        profile_map = {item["slot_id"]: item["profile_id"] for item in profile_rows}
-        if (len(tool_bindings) != len(binding_rows)
-                or len(profile_map) != len(profile_rows)
-                or set(tool_bindings) != set(profile_map)):
-            raise MaterialRoutingError("Provide one native filament preset for each mapped physical slot.")
-        count = len(tool_bindings)
-        if set(tool_bindings.values()) != set(range(count)):
-            raise MaterialRoutingError("Native filament tools must form a contiguous sequence starting at zero.")
-        ordered_ids = [
-            profile_map[next(slot for slot, tool in tool_bindings.items() if tool == index)]
-            for index in range(count)
-        ]
-        if str(ordered_ids[0]) != str(job.filament_profile_id):
-            raise MaterialRoutingError("Logical tool 0 must use the selected main filament preset.")
         by_id = {str(p.pk): p for p in SlicerProfile.objects.filter(
             owner=request.user, pk__in=ordered_ids, kind="filament"
         )}
