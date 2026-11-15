@@ -76,7 +76,7 @@ class CameraHlsMetadataTests(SimpleTestCase):
             packet[1] = 0x40
             packet[2] = 0x01
             packet[3] = 0x10
-            packet[4:8] = b"\\x00\\x00\\x01\\xe0"
+            packet[4:8] = b"\x00\x00\x01\xe0"
             return bytes(packet), "video/mp2t"
         resource.side_effect = reply
         lines = []
