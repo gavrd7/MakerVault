@@ -142,3 +142,35 @@ class SingleMaterialSliceAnnotationTests(SimpleTestCase):
                 self.models, **self.options,
                 slot_filament_profiles=[{"slot_id": "cfs-bay-4", "profile_id": "wrong"}])
 
+
+
+class PersistedToolRouteTests(SimpleTestCase):
+    def test_draft_serialization_retains_explicit_native_tool_bindings(self):
+        from core.slicer_api import _draft_plate_settings
+        settings = _draft_plate_settings(None, None, {
+            "material_tool_bindings": [
+                {"slot_id": "bay-4", "tool_index": 1},
+                {"slot_id": "bay-1", "tool_index": 0},
+            ],
+            "material_topology": "single_nozzle_changer",
+        })
+        self.assertEqual(settings["material_tool_bindings"], [
+            {"slot_id": "bay-4", "tool_index": 1},
+            {"slot_id": "bay-1", "tool_index": 0},
+        ])
+        self.assertEqual(settings["material_topology"], "single_nozzle_changer")
+
+    def test_draft_rejects_duplicate_and_bool_native_tool_indices(self):
+        from core.slicer_api import _draft_plate_settings
+        bad = [
+            [{"slot_id": "bay-4", "tool_index": 0},
+             {"slot_id": "bay-1", "tool_index": 0}],
+            [{"slot_id": "bay-4", "tool_index": True}],
+            [{"slot_id": "bay-4", "tool_index": -1}],
+        ]
+        for bindings in bad:
+            with self.subTest(bindings=bindings):
+                with self.assertRaises(ValueError):
+                    _draft_plate_settings(None, None, {
+                        "material_tool_bindings": bindings,
+                    })
