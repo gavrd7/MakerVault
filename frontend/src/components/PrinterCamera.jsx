@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from "react";
 import Hls from "hls.js";
+import { connectCameraWebRTC } from "./cameraWebRTC";
 import { apiFetch } from "../api";
 import { startFrameLoop, cameraRequest, cameraHlsUrl, shouldFallbackToNativeHls, videoFrameHealth, videoFrameDiagnostic, isIOSWebKit } from "./cameraPlayback";
 
@@ -149,6 +150,7 @@ export function CameraPlayback({ camera, url, compact = false }) {
   const [status, setStatus] = useState("Connecting…");
   const [error, setError] = useState("");
   const [attempt, setAttempt] = useState(0);
+  const [transport, setTransport] = useState("webrtc");
   const [playbackBlocked, setPlaybackBlocked] = useState(false);
   const [playbackDiagnostic, setPlaybackDiagnostic] = useState("");
   const [capturedFrame, setCapturedFrame] = useState("");
@@ -234,6 +236,53 @@ export function CameraPlayback({ camera, url, compact = false }) {
         failed("Camera playback failed. Select Reconnect to retry.");
       });
     };
+
+    if (camera.mode === "creality_webrtc" && transport === "webrtc") {
+      const target = video.current;
+      let receiver;
+      let connectionWatch;
+      const fallback = message => {
+        if (cancelled) return;
+        setPlaybackDiagnostic(message);
+        setTransport("hls");
+      };
+      if (!target) {
+        fallback("WebRTC video element unavailable; using compatibility playback.");
+      } else {
+        setStatus("Connecting low-latency WebRTC…");
+        connectCameraWebRTC({
+          mediaUrl: url,
+          video: target,
+          signal: controller.signal,
+          exchange: (path, sdp, signal) => apiFetch(path, { method: "POST", body: { sdp }, signal }),
+          onState: state => {
+            if (cancelled) return;
+            if (state === "connected") {
+              clearTimeout(connectionWatch);
+              setStatus("Live · WebRTC");
+              setError("");
+              setPlaybackDiagnostic("");
+            } else if (state === "failed" || state === "playback-error") {
+              fallback("WebRTC connection failed; trying compatibility playback.");
+            }
+          },
+        }).then(result => {
+          if (cancelled) { result.close(); return; }
+          receiver = result;
+        }).catch(error => {
+          if (cancelled || error?.name === "AbortError") return;
+          fallback("WebRTC unavailable; trying compatibility playback.");
+        });
+        // Do not wait indefinitely for unreachable Docker/ICE candidates.
+        connectionWatch = setTimeout(() => fallback("WebRTC connection timed out; using compatibility playback."), 12000);
+      }
+      return () => {
+        cancelled = true;
+        controller.abort();
+        clearTimeout(connectionWatch);
+        receiver?.close();
+      };
+    }
 
     if (camera.mode !== "creality_webrtc") {
       stopFrames = startFrameLoop({
@@ -348,7 +397,7 @@ export function CameraPlayback({ camera, url, compact = false }) {
       }
       if (objectUrl) URL.revokeObjectURL(objectUrl);
     };
-  }, [camera.id, url, attempt]);
+  }, [camera.id, url, attempt, transport]);
 
   useEffect(() => {
     if (!expanded) return;
@@ -407,7 +456,7 @@ export function CameraPlayback({ camera, url, compact = false }) {
     <div className="printerCameraToolbar">
       {!compact && <small role="status">{status}</small>}
       {playbackBlocked && camera.mode === "creality_webrtc" && <button type="button" onClick={() => { const target = video.current; if (!target) return; target.play().then(() => { setPlaybackBlocked(false); setError(""); }).catch(reason => { if (reason?.name !== "NotAllowedError") setError("Video could not start. Select Reconnect."); }); }}>Start video</button>}
-      {(!compact || error) && <button type="button" onClick={() => setAttempt(value => value + 1)}>Reconnect</button>}
+      {(!compact || error) && <button type="button" onClick={() => { setTransport("webrtc"); setAttempt(value => value + 1); }}>Reconnect</button>}
       {camera.mode === "creality_webrtc" && <button type="button" onClick={inspectFrame}>Inspect frame</button>}
       {camera.mode !== "creality_webrtc" && <button type="button" className="cameraFullscreen" aria-label={expanded ? "Close fullscreen camera" : "Open fullscreen camera"} onClick={fullscreen}>{expanded ? "Close" : "Fullscreen"}</button>}
     </div>
@@ -424,7 +473,7 @@ export function CameraPlayback({ camera, url, compact = false }) {
                 }
               }
             }}
-            onPlaying={() => { setPlaybackBlocked(false); setError(""); setStatus("Video playing · checking decoded frames…"); }} />
+            onPlaying={() => { setPlaybackBlocked(false); setError(""); setStatus(transport === "webrtc" ? "Live · WebRTC" : "Video playing · checking decoded frames…"); }} />
         : image
           ? <img src={image} alt={camera.name + " live camera view"} style={{ transform }} />
           : <span role="status">{status}</span>}
