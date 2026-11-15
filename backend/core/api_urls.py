@@ -98,6 +98,7 @@ urlpatterns = [
     path("printing/printers/<uuid:printer_id>/connections/<uuid:connection_id>/cameras/", camera_views.camera_sources),
     path("printing/printers/<uuid:printer_id>/connections/<uuid:connection_id>/cameras/discover/", camera_views.camera_discover),
     path("printing/printers/<uuid:printer_id>/connections/<uuid:connection_id>/cameras/<str:camera_id>/remove/", camera_views.camera_source_remove),
+    path("printing/printers/<uuid:printer_id>/connections/<uuid:connection_id>/cameras/<str:camera_id>/webrtc/offer/", camera_views.camera_webrtc_offer),
     path("printing/printers/<uuid:printer_id>/connections/<uuid:connection_id>/cameras/<str:camera_id>/hls/master.m3u8", camera_views.camera_hls_master),
     path("printing/printers/<uuid:printer_id>/connections/<uuid:connection_id>/cameras/<str:camera_id>/hls/<str:resource>", camera_views.camera_hls_resource),
     path("printing/printers/<uuid:printer_id>/connections/<uuid:connection_id>/cameras/<str:camera_id>/media/", camera_views.camera_media),
