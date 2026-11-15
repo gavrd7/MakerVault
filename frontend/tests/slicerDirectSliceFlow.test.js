@@ -10,7 +10,7 @@ const source = fs.readFileSync(path.join(root, "src/components/SlicerWorkbench.j
 test("main workbench directly submits approved slicing jobs after draft creation", () => {
   assert.match(source, /onClick=\{\(\) => saveDraft\("quick"\)\}/);
   assert.match(source, /Quick slice/);
-  assert.match(source, /const sliceNow = !\["draft","project"\]\.includes\(mode\)/);
+  assert.match(source, /const sliceNow = !\["draft","project","native-material"\]\.includes\(mode\)/);
   assert.match(source, /apiFetch\("\/api\/printing\/slicer\/jobs\/" \+ job\.id \+ "\/start\/"/);
   assert.match(source, /workerConfigured && engines\.some/);
 });
@@ -94,7 +94,7 @@ test("saved drafts can be deleted without touching model files", () => {
 test("three distinct plate actions control draft creation, quick slice and interactive editing", () => {
   assert.match(source, /onClick=\{\(\) => saveDraft\("draft"\)\}/);
   assert.match(source, /onClick=\{\(\) => saveDraft\("quick"\)\}/);
-  assert.match(source, /Slice → Interactive slicer/);
+  assert.match(source, /Open Interactive Slicer/);
   assert.match(source, /const saveOutput = mode === "save-and-slice"/);
   assert.match(source, /save_gcode_to_library: saveOutput, workflow/);
   assert.doesNotMatch(source, /All three native profiles require administrator verification/);
@@ -129,5 +129,5 @@ test("explicit slice-all creates independent queued jobs, while default Slice is
 });
 test("3mf project export uses owner-scoped server endpoint",()=>{
   assert.match(source,/export-project\//);
-  assert.match(source,/link\.download="MakerVault-project\.3mf"/);
+  assert.match(source,/link\.download=mode==="native-material"\?/);
 });
