@@ -159,3 +159,34 @@ test("mobile section slider is horizontal below the canvas and plate uses wider 
   assert.match(css,/writing-mode:horizontal-tb/);
   assert.match(css,/\.slicerPlateCanvasColumn \.slicerPlateCanvasViewport > \.slicerPlateCanvas \{\s*order:1/);
 });
+
+test("mobile Slice button keeps its dropdown at 42px rather than stretching", () => {
+  assert.match(css, /grid-template-columns:minmax\(0,1fr\) 42px/);
+  assert.match(css, /\.slicerPrepareActions \.slicerSliceSplit > button:nth-child\(2\)/);
+  assert.match(css, /width:42px;min-width:42px;max-width:42px/);
+});
+
+test("mobile mesh operations share a scrollable viewport-safe inspector", () => {
+  const plate = fs.readFileSync(path.join(base,"components/SlicerPlateEditor.jsx"),"utf8");
+  for (const type of ["hollow","drill","cut","boolean"]) {
+    assert.match(plate, new RegExp('solidDialog.kind===\\"' + type + '\\"'));
+  }
+  assert.match(css, /\.slicerAutoOrientModalBackdrop > \.slicerSolidModal\.slicerViewportAnchoredModal/);
+  assert.match(css, /max-height:min\(75dvh,680px\)!important/);
+  assert.match(css, /overflow-y:auto!important;overflow-x:hidden!important/);
+  assert.match(css, /slicerSolidInspectorCollapsed/);
+});
+
+test("settings categories are visible in both compact and expanded views", () => {
+  assert.match(editor, /const \[settingsLevel, setSettingsLevel\] = useState\("advanced"\)/);
+  for (const category of ["Quality", "Strength", "Speed", "Supports", "Multifilament", "Others"]) {
+    assert.match(editor, new RegExp('\\["' + category + '",'));
+  }
+  assert.match(css, /slicerPrepareSettings nav\[aria-label="Process settings groups"\]/);
+  assert.match(css, /slicerSettingsModal \.slicerPrepareSettings nav\[aria-label="Process settings groups"\]/);
+});
+
+test("painting toolbar uses complete action names", () => {
+  for (const label of ["Support painting", "Seam painting", "Variable layer height"])
+    assert.match(editor, new RegExp('"' + label + '":"' + label + '"'));
+});
