@@ -39,8 +39,8 @@ const TOOL_SHORT_LABELS = {
   "Add model":"Add model","Add plate":"Add plate","Duplicate":"Duplicate",
   "Remove":"Delete","Centre selected":"Centre","Auto-arrange":"Arrange",
   "Auto-orient":"Auto-orient","Lay on face":"Lay on face","Fit selected":"Fit model",
-  "Mesh boolean":"Boolean","Support painting":"Supports","Seam painting":"Seams",
-  "Variable layer height":"Layer height","Colour painting":"Colour paint",
+  "Mesh boolean":"Boolean","Support painting":"Support painting","Seam painting":"Seam painting",
+  "Variable layer height":"Variable layer height","Colour painting":"Colour paint",
 };
 const SECTION_ORDER = {
   Quality: ["Layer height", "Line width", "Seam", "Precision", "Ironing", "Z contouring", "Walls and surfaces", "Overhangs", "Bridging"],
@@ -201,7 +201,7 @@ export default function SlicerPrepareWorkspace({
   useEffect(() => { setNativeFieldDrafts({}); }, [scope, selectedId]);
   const updateNativeChoice = (key, value) => {
     const spec = nativeProcessFields[key];
-    if (!spec?.options?.some(option => option.value === value)) return;
+    if (!spec || (spec.kind !== "toggle" && !spec.options?.some(option => String(option.value) === String(value)))) return;
     changeEditingOverrides(current => {
       const next = { ...current };
       if (value === String(editingObject ? inheritedValue(key, spec) : spec.current)) delete next[key];
