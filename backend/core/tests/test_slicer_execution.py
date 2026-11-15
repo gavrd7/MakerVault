@@ -385,3 +385,39 @@ class NativeOrcaCustomPrinterCompatibilityTests(SimpleTestCase):
             manager.filter.return_value.select_related.return_value.first.return_value = self.source
             with self.assertRaises(SlicerExecutionError):
                 _execution_printer_profile(self.custom, json.dumps(self.custom_json).encode(), unrelated)
+
+
+class MultiMaterialTestAdmissionTests(SimpleTestCase):
+    def setUp(self):
+        from types import SimpleNamespace
+        self.job = SimpleNamespace(
+            engine="orcaslicer", printer_id="printer", filament_profile_id="main",
+            printer_profile_id="native", printer_profile=SimpleNamespace(),
+            settings={"multi_material_test": True, "plate_objects": [
+                {"instance_id": "a", "material_slot": {
+                    "printer_id": "printer", "slot_id": "bay-4", "slot_index": 3}},
+                {"instance_id": "b", "material_slot": {
+                    "printer_id": "printer", "slot_id": "bay-1", "slot_index": 0}},
+            ]},
+        )
+
+    @patch("core.slicer_execution.trusted_plate_dimensions", return_value=(260, 260))
+    @patch("core.slicer_execution.plan_native_multimaterial")
+    def test_native_multicolour_test_is_admitted_without_enabling_print(self, plan, bed):
+        self.assertTrue(_validate_plate_execution(self.job))
+        plan.assert_called_once_with(self.job)
+        bed.assert_called_once_with(self.job.printer_profile)
+
+    @patch("core.slicer_execution.trusted_plate_dimensions", return_value=(260, 260))
+    @patch("core.slicer_execution.plan_native_multimaterial")
+    def test_painting_and_flush_override_still_fail_closed(self, plan, bed):
+        self.job.settings["plate_objects"][0]["colour_paint"] = {
+            "version": 2, "regions": [{"slot": 1, "patches": []}],
+        }
+        with self.assertRaisesRegex(SlicerExecutionError, "painted colour regions"):
+            _validate_plate_execution(self.job)
+        self.job.settings["plate_objects"][0].pop("colour_paint")
+        self.job.settings["flush_settings"] = {"some": "custom"}
+        with self.assertRaisesRegex(SlicerExecutionError, "flushing"):
+            _validate_plate_execution(self.job)
+        plan.assert_not_called()
