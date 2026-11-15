@@ -168,7 +168,7 @@ class CameraRelayApiTests(TestCase):
 
     @patch("core.camera_views.hls_master")
     def test_explicit_ts_master_request_is_isolated_from_default(self, master):
-        master.return_value = "#EXTM3U\\n#EXT-X-STREAM-INF:BANDWIDTH=1000000\\nhls/playlist.m3u8?id=abc123\\n"
+        master.return_value = "#EXTM3U\n#EXT-X-STREAM-INF:BANDWIDTH=1000000\nhls/playlist.m3u8?id=abc123\n"
         self.assertEqual(self.client.get(self.base + "master.m3u8?format=ts").status_code, 200)
         master.assert_called_once_with(self.connection.pk, "k2-camera", mpeg_ts=True)
         master.reset_mock()
@@ -178,13 +178,13 @@ class CameraRelayApiTests(TestCase):
     @patch("core.camera_views.hls_resource")
     @patch("core.camera_views.hls_master")
     def test_segment_uris_retain_distinct_sequence_values(self, master, resource):
-        master.return_value = "#EXTM3U\\n#EXT-X-STREAM-INF:BANDWIDTH=1000000\\nhls/playlist.m3u8?id=abc123\\n"
+        master.return_value = "#EXTM3U\n#EXT-X-STREAM-INF:BANDWIDTH=1000000\nhls/playlist.m3u8?id=abc123\n"
         self.client.get(self.base + "master.m3u8")
         resource.return_value = (
-            b'#EXTM3U\\n#EXT-X-MEDIA-SEQUENCE:1042\\n'
-            b'#EXT-X-MAP:URI="init.mp4?id=abc123"\\n'
-            b'#EXTINF:0.5,\\nsegment.m4s?id=abc123&n=1042\\n'
-            b'#EXTINF:0.5,\\nsegment.m4s?id=abc123&n=1043\\n',
+            b'#EXTM3U\n#EXT-X-MEDIA-SEQUENCE:1042\n'
+            b'#EXT-X-MAP:URI="init.mp4?id=abc123"\n'
+            b'#EXTINF:0.5,\nsegment.m4s?id=abc123&n=1042\n'
+            b'#EXTINF:0.5,\nsegment.m4s?id=abc123&n=1043\n',
             "application/vnd.apple.mpegurl",
         )
         playlist = self.client.get(self.base + "playlist.m3u8?id=abc123")
