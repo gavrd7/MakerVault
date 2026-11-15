@@ -208,7 +208,8 @@ def _draft_plate_settings(user, input_asset, settings):
         bindings.append({"slot_id": slot_id, "tool_index": tool})
     topology = settings.get("material_topology")
     if topology is not None and topology not in {
-        "single_nozzle_changer", "independent_toolheads"
+        "single_nozzle_changer", "independent_toolheads", "toolchanger",
+        "idex", "manual_filament_change",
     }:
         raise ValueError("Unsupported material changeover topology.")
     routing_fields = {
