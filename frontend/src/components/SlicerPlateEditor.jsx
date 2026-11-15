@@ -3056,6 +3056,13 @@ export default function SlicerPlateEditor({
     };
   }, [solidDialog?.kind,solidDialog?.id,solidDialog?.editTargetId,Boolean(splitPreview)]);
 
+  // On phones, mount mesh inspectors after the plate's controls rather than
+  // over the 3D canvas. The desktop inspector stays in the document portal.
+  const mobileMeshInspector = typeof window !== "undefined"
+    && window.matchMedia("(max-width: 740px)").matches;
+  const meshInspectorHost = mobileMeshInspector
+    ? hostRef.current?.closest(".slicerPlatePanel") || document.body
+    : document.body;
   const solidPanelStyle=(()=>{
     if(typeof window==="undefined")return {pointerEvents:"auto"};
     const rect=solidViewportRect;
@@ -3650,7 +3657,7 @@ export default function SlicerPlateEditor({
               {solidBusy?"Saving…":"Apply mesh edit"}</button>
           </footer>
         </section>
-      </div>,document.body
+      </div>,meshInspectorHost
     )}
     {splitPreview && createPortal(
       <div className="slicerAutoOrientModalBackdrop" role="presentation"
