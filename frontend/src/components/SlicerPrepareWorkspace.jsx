@@ -58,7 +58,7 @@ export default function SlicerPrepareWorkspace({
   plates = [], activePlateId = "plate-1", onChoosePlate, onAddPlate, onRemovePlate, onMoveModelsToPlate,
   onPlateLabelChange, onPrimaryChange, onFilesUploaded,
   defaultColor, onManualColorChange, canEdit, busy, error, notice,
-  onChangeProfiles, onOpenDevice, onSaveDraft, onSaveProject, onExportNativeMaterials, onImportProject, onSlice, onSliceAll, engine, printer,
+  onChangeProfiles, onOpenDevice, onSaveDraft, onSaveProject, onExportNativeMaterials, onSliceMultimaterialTest, onImportProject, onSlice, onSliceAll, engine, printer,
   selectedProfiles, workerConfigured, printerId,
   processOverrides = {}, onProcessOverridesChange, onSaveCustomProcessProfile,
   flushSettings = null, onFlushSettingsChange,
@@ -1501,6 +1501,13 @@ export default function SlicerPrepareWorkspace({
           onClick={onExportNativeMaterials}
           title="Download an Orca-compatible 3MF; the backend detects the printer material system and derives tool order. Printing remains disabled until physical changeovers are verified.">
           Export multi-material 3MF (offline)
+        </button>}
+        {multiMaterialReadyForExport && <button type="button"
+          disabled={!activePlateReady || !profilesReady || !workerConfigured || busy ||
+                    conflictsBlockSlice || objectSettingsPending}
+          onClick={onSliceMultimaterialTest}
+          title="Generate an audited multi-colour Orca G-code test. Printer upload and print start are intentionally blocked.">
+          Slice multi-colour (test)
         </button>}
         <label className="slicerProjectImportButton" aria-label="Open project from 3MF file">
           Open project (.3mf)
