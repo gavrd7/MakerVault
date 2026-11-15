@@ -88,7 +88,7 @@ test("Measure options open at the toolbar while a compact readout lives at top l
   assert.match(scene, /Finish measuring/);
   assert.match(editor, /measurePinPlacedRef\.current\?\.\(\)/);
   assert.match(editor, /className="slicerPlateCanvasViewport"/);
-  assert.match(editor, /className="slicerViewportMeasurement"/);
+  assert.match(editor, /className="slicerViewportMeasurement slicerViewportToolDock"/);
   assert.match(editor, /aria-label="On-plate measurements"/);
   assert.match(editor, /pinDistance !== null/);
   assert.match(editor, /measureOverlayExpanded/);
@@ -162,7 +162,7 @@ test("slicer setup offers Save draft / Quick slice / interactive Slice at plate 
   assert.match(buttons, /Open Interactive Slicer/);
   assert.ok(buttons.indexOf("Save draft") < buttons.indexOf("Quick slice"));
   assert.ok(buttons.indexOf("Quick slice") < buttons.indexOf("Open Interactive Slicer"));
-  assert.doesNotMatch(workbench.slice(workbench.indexOf('className="slicerSetupHeading"'), workbench.indexOf('className="slicerSetupHeading"') + 250), /Open interactive slicer/);
+  assert.doesNotMatch(workbench.slice(workbench.indexOf('className="slicerSetupHeading"'), workbench.indexOf('className="slicerSetupHeading"') + 250), /Open Interactive Slicer/);
   assert.match(buttons, /disabled=\{!canPrepare \|\| busy \|\| loading\}/);
 });
 
@@ -200,7 +200,7 @@ test("live CFS AMS RFID slots support draft assignments without enabling unverif
   assert.match(scene, /materialRoutingPending/);
   assert.match(scene, /flushSettings != null/);
   assert.match(scene, /physical multi-material path is not yet enabled/);
-  assert.match(scene, /live slot-to-tool bindings and physical changeovers are not yet verified/);
+  assert.match(scene, /multi-slot printing requires verified tool routing/);
 });
 
 test("switching registered printers invalidates physical CFS slots and flush volumes", () => {
@@ -608,8 +608,8 @@ test("top slicer header provides a matching direct interactive entry on mobile a
   const header = workbench.slice(start, end);
   assert.match(header, /Printing overview/);
   assert.match(header, /Saved drafts/);
-  assert.match(header, /Open interactive slicer/);
-  assert.ok(header.indexOf("Saved drafts") < header.indexOf("Open interactive slicer"));
+  assert.match(header, /Open Interactive Slicer/);
+  assert.ok(header.indexOf("Saved drafts") < header.indexOf("Open Interactive Slicer"));
   assert.match(header, /className="primary slicerHeroInteractive"/);
   assert.match(header, /setEditorOpen\(true\)/);
   assert.match(header, /disabled=\{!canPrepare \|\| busy \|\| loading\}/);
@@ -791,7 +791,7 @@ test("material system complexity stays in the adapter layer, not normal slicer c
 });
 
 test("slicer engine status differentiates deployment and worker verification", () => {
-  const workbench = fs.readFileSync(path.join(base,"components/SlicerWorkbench.jsx"),"utf8");
+  const workbench = fs.readFileSync(path.join(root,"SlicerWorkbench.jsx"),"utf8");
   assert.match(workbench, /catalogue\.deployment_enabled === true/);
   assert.match(workbench, /!workerDeploymentEnabled/);
   assert.match(workbench, /!workerConfigured/);
