@@ -2,11 +2,11 @@
 import io
 import zipfile
 from defusedxml import ElementTree as ET
-from django.test import SimpleTestCase
+from django.test import SimpleTestCase\nfrom types import SimpleNamespace
 
 from core.slicer_approval import fixture_stl
 from core.slicer_material_routing import (
-    MaterialRoutingError, plan_material_routes, single_material_slice_assignment,
+    MaterialRoutingError, plan_material_routes, single_material_slice_assignment,\n    detect_material_system, derive_native_tool_order,
 )
 from core.slicer_plate_3mf import build_plate_3mf, NS
 from core.slicer_profiles import SlicerProfileError
@@ -211,3 +211,57 @@ class PersistedToolRouteTests(SimpleTestCase):
         self.assertEqual(result["material_tool_bindings"],
                          [{"slot_id": "manual-slot-1", "tool_index": 0}])
         self.assertEqual(result["material_topology"], "manual_filament_change")
+
+
+class AutomaticAdapterMaterialRoutingTests(SimpleTestCase):
+    def connection(self, adapter, topology, *, available=True, status="connected"):
+        return SimpleNamespace(
+            adapter=adapter, enabled=True, status=status,
+            capabilities={"material_system": {
+                "available": available, "topology": topology,
+                "physical_toolchange_verified": False,
+            }},
+        )
+
+    def test_adapter_declares_architecture_without_authorising_printing(self):
+        for adapter, topology in [
+            ("creality_local", "single_nozzle_changer"),
+            ("bambu_local", "single_nozzle_changer"),
+            ("prusa", "toolchanger"),
+            ("moonraker", "idex"),
+            ("snapmaker", "toolchanger"),
+            ("octoprint", "manual_filament_change"),
+        ]:
+            with self.subTest(adapter=adapter):
+                self.assertEqual(
+                    detect_material_system([self.connection(adapter, topology)]),
+                    topology,
+                )
+
+    def test_unknown_unsupported_or_conflicting_system_requires_verification(self):
+        cases = [
+            [],
+            [self.connection("creality_local", "toolchanger")],
+            [self.connection("bambu_local", "single_nozzle_changer", available=False)],
+            [self.connection("creality_local", "single_nozzle_changer", status="disconnected")],
+            [self.connection("moonraker", "idex"), self.connection("octoprint", "toolchanger")],
+        ]
+        for connections in cases:
+            with self.subTest(connections=connections):
+                with self.assertRaisesRegex(MaterialRoutingError, "could not be confirmed"):
+                    detect_material_system(connections)
+
+    def test_tool_assignment_uses_filament_selection_not_physical_bay_number(self):
+        models = [
+            {"instance_id": "a", "material_slot": {
+                "printer_id": "printer", "slot_id": "cfs-4", "slot_index": 3}},
+            {"instance_id": "b", "material_slot": {
+                "printer_id": "printer", "slot_id": "cfs-1", "slot_index": 0}},
+            {"instance_id": "c", "material_slot": {
+                "printer_id": "printer", "slot_id": "cfs-4", "slot_index": 3}},
+        ]
+        self.assertEqual(
+            derive_native_tool_order(
+                models, printer_id="printer", topology="single_nozzle_changer",
+            ), {"cfs-4": 0, "cfs-1": 1},
+        )
