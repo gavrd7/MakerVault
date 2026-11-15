@@ -297,10 +297,14 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
     return { ...current, [name]: value };
     });
   };
+  // Saved profiles belong to the selected engine AND its exact installed
+  // version. Keeping older versions in the database is useful for returning
+  // to an older engine, but showing them here makes them look selectable.
   const visibleSavedProfiles = useMemo(() => profiles.filter(profile =>
     profile.engine === form.engine &&
+    profile.engine_version === form.engine_version &&
     (!profile.is_dependency || (managingSavedProfiles && showProfileDependencies))
-  ), [profiles, form.engine, managingSavedProfiles, showProfileDependencies]);
+  ), [profiles, form.engine, form.engine_version, managingSavedProfiles, showProfileDependencies]);
   const kindSavedProfiles = visibleSavedProfiles.filter(profile =>
     savedProfileKind === "all" || profile.kind === savedProfileKind);
   const vendorSavedProfiles = kindSavedProfiles.filter(profile =>
@@ -1745,7 +1749,10 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
 
     </Modal>}
     {profileModal === "saved" && <Modal title="Saved slicer profiles" onClose={() => setProfileModal("")} wide>
-      <p>Profiles for the selected engine. Native parent presets are hidden from everyday selection and retained automatically for inherited profiles.</p>
+      <p>Showing profiles for <strong>{engines.find(engine => engine.key === form.engine)?.label || form.engine}</strong>
+        {" · "}<strong>{form.engine_version || "No engine version selected"}</strong>.
+        Profiles for other engines and versions are retained but hidden automatically.
+        Native parent presets are hidden from everyday selection and retained for inherited profiles.</p>
       <div className="settingsActions slicerSavedProfileToolbar">
         <button type="button" onClick={() => setManagingSavedProfiles(current => !current)}>
           <ProfileActionIcon name="settings" /><span>{managingSavedProfiles ? "Done managing" : "Manage"}</span>
@@ -1835,7 +1842,12 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
             </div>}
           </div>
         )}
-        {filteredSavedProfiles.length === 0 && <p className="slicerSavedProfileEmpty">No profiles match these filters. Try another type, manufacturer or search term.</p>}
+        {filteredSavedProfiles.length === 0 && <p className="slicerSavedProfileEmpty">
+          {visibleSavedProfiles.length === 0
+            ? "No saved profiles for " + form.engine + " " + (form.engine_version || "(version not selected)") +
+              ". Import the matching native printer, filament and process presets to use this engine version."
+            : "No profiles match these filters. Try another type, manufacturer or search term."}
+        </p>}
       </div>
 
     </Modal>}
