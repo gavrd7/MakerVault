@@ -344,6 +344,8 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
     setProfileSuggestions({});
     setFlushSettings(null);
     setSlotFilamentProfiles([]);
+    setMaterialToolBindings([]);
+    setMaterialTopology("");
     // Physical CFS/AMS slot IDs belong to the previously registered printer.
     // Preserve every model and visual colour, but clear invalid physical
     // bindings on *all* plates before using another printer.
