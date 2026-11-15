@@ -21,10 +21,11 @@ SETTINGS = {
         "deretraction_speed": (0, 200),
         "retraction_minimum_travel": (0, 100),
         "wipe_distance": (0, 100),
-        # OrcaSlicer 2.4.2 CLI validates this range more narrowly than some
-        # official K2 presets. An explicit custom copy may adjust the value;
-        # never silently mutate the manufacturer preset.
-        "retraction_distances_when_cut": (10, 18),
+        # This is a UI editing bound, NOT an engine validation rule.
+        # Official engine versions and vendor presets may legitimately disagree
+        # about accepted ranges. The actual worker performs native validation;
+        # never hide an upstream value because of a fixed, version-specific cap.
+        "retraction_distances_when_cut": (0, 100),
     },
     "filament": {
         "nozzle_temperature": (100, 350),
