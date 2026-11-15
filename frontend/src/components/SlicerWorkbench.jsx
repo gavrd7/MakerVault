@@ -1470,7 +1470,7 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
           </button>
           <button type="button" className="primary slicerHeroInteractive" onClick={() => { setError(""); setNotice(""); window.scrollTo({ top: 0, left: 0, behavior: "instant" }); setEditorOpen(true); }}
             disabled={!canPrepare || busy || loading}>
-            ✦ Open Interactive Slicer
+            <span aria-hidden="true">✦</span> Open Interactive Slicer
           </button>
         </div>
       </>}
