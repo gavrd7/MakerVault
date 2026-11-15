@@ -10,7 +10,7 @@ from django.http import HttpResponse, JsonResponse
 from django.views.decorators.http import require_http_methods
 
 from .api_views import _error, _read_json, _require_permission
-from .camera_relay import CameraRelayError, hls_master, hls_resource
+from .camera_relay import CameraRelayError, hls_master, hls_resource, webrtc_answer
 from .models import PrinterConnection
 from .printer_cameras import CameraError, discover_result, frame, negotiate, normalise_source, sources, provider_info, setup_presets
 
@@ -234,6 +234,25 @@ def _rewrite_hls_playlist(text, expected_resource=None):
                     break
         rewritten.append(f"{resource}?id={session_id}" + (f"&n={sequence}" if sequence else ""))
     return "\n".join(rewritten)
+
+
+
+@login_required
+@require_http_methods(["POST"])
+def camera_webrtc_offer(request, printer_id, connection_id, camera_id):
+    """Same-origin, owner-scoped WebRTC signalling. ICE media runs separately."""
+    connection, _source, error = _hls_camera(request, printer_id, connection_id, camera_id)
+    if error:
+        return private_response(error)
+    if request.content_type != "application/json" or len(request.body) > 70000:
+        return private_response(_error("Invalid WebRTC signalling request.", 400))
+    try:
+        payload = _read_json(request)
+        offer = payload.get("sdp") if isinstance(payload, dict) else None
+        answer = webrtc_answer(connection.pk, camera_id, offer)
+        return private_response(JsonResponse({"type": "answer", "sdp": answer}))
+    except (CameraRelayError, CameraError, ValueError, TypeError):
+        return private_response(_error("Camera WebRTC connection unavailable.", 502))
 
 
 @login_required
