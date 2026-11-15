@@ -1,11 +1,15 @@
 """Ordered native palette preflight; never queue a printer job."""
 import json
+import io
+import zipfile
+from defusedxml import ElementTree as ET
+from core.slicer_approval import fixture_stl
 from types import SimpleNamespace
 
 from django.test import SimpleTestCase
 
 from core.slicer_material_routing import MaterialRoutingError
-from core.slicer_native_material_palette import resolve_native_material_palette
+from core.slicer_native_material_palette import resolve_native_material_palette, prepare_multimaterial_plate
 
 
 class NativeMaterialPaletteTests(SimpleTestCase):
@@ -91,3 +95,37 @@ class NativeMaterialPaletteTests(SimpleTestCase):
                 with self.assertRaises(MaterialRoutingError):
                     resolve_native_material_palette(
                         self.objects, **self.payload, resolver=lambda profile: blob)
+
+    def test_offline_multimaterial_preflight_preserves_native_slot_order(self):
+        pairs = [
+            ({**self.objects[0], "x_mm": -30, "y_mm": 0,
+              "rotation_deg": 0, "scale_percent": 100}, fixture_stl()),
+            ({**self.objects[1], "x_mm": 30, "y_mm": 0,
+              "rotation_deg": 0, "scale_percent": 100}, fixture_stl()),
+        ]
+        result = prepare_multimaterial_plate(
+            pairs, bed_width=220, bed_depth=220,
+            **self.payload, resolver=self.resolve)
+        self.assertEqual(result["native_tool_indices"], (1, 0))
+        self.assertFalse(result["printer_submission_verified"])
+        self.assertEqual(len(result["filament_profiles"]), 2)
+        with zipfile.ZipFile(io.BytesIO(result["model_3mf"])) as archive:
+            manifest = ET.fromstring(archive.read("Metadata/model_settings.config"))
+        self.assertEqual([
+            meta.attrib["value"]
+            for object_ in manifest.findall("object")
+            for meta in object_.findall("metadata")
+            if meta.attrib["key"] == "extruder"
+        ], ["2", "1"])
+
+    def test_offline_multimaterial_preflight_requires_explicit_route(self):
+        rows = [
+            ({**self.objects[0], "x_mm": -30, "y_mm": 0,
+              "rotation_deg": 0, "scale_percent": 100}, fixture_stl()),
+            ({**self.objects[1], "x_mm": 30, "y_mm": 0,
+              "rotation_deg": 0, "scale_percent": 100}, fixture_stl()),
+        ]
+        with self.assertRaisesRegex(MaterialRoutingError, "verified native tool mapping"):
+            prepare_multimaterial_plate(
+                rows, bed_width=220, bed_depth=220,
+                **{**self.payload, "tool_bindings": {}}, resolver=self.resolve)
