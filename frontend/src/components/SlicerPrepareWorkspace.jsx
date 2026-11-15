@@ -976,6 +976,45 @@ export default function SlicerPrepareWorkspace({
       {paintError&&<small role="alert" style={{color:"#fca5a5"}}>{paintError}</small>}
     </section>
   );
+  // Mobile toolbar scroll viewports clip all descendants, even position:fixed.
+  // Portal the menu on phones; keep the desktop popover in its original place.
+  const addModelMenu = (
+    <div
+          className="slicerToolOptions slicerAddModelMenu" style={toolPopupStyle} id="slicer-add-model-toolbar-options"
+          role="group" aria-label="Add model options">
+          <div className="slicerToolOptionsHeader"><strong>Add model</strong>
+            <button type="button" aria-label="Close Add model menu"
+              onClick={() => setAddModelMenuOpen(false)}>Close</button>
+          </div>
+          <button type="button" className="slicerAddModelChoice" onClick={event => {
+            setAddModelMenuOpen(false);
+            editorRef.current?.querySelector('input[type="file"][accept=".stl,.3mf"]')?.click();
+          }}><SlicerUiIcon name="add" /> Upload from device</button>
+          <button type="button" className="slicerAddModelChoice" onClick={event => {
+            setAddModelMenuOpen(false);
+            setMobilePane("plate");
+            editorRef.current?.querySelector('[data-slicer-add-models]')?.scrollIntoView({
+              behavior: "smooth", block: "start"
+            });
+          }}><SlicerUiIcon name="models" /> Add from MakerVault</button>
+          <button type="button" className="slicerAddModelChoice" onClick={event => {
+            setAddModelMenuOpen(false);setMobilePane("plate");
+            setSolidRequest({kind:"primitive",id:Date.now(),anchorRect:toolbarAnchor(event)});
+          }}><SlicerUiIcon name="models" /> Add primitive shape</button>
+          <button type="button" className="slicerAddModelChoice" onClick={event => {
+            setAddModelMenuOpen(false);setMobilePane("plate");
+            setSolidRequest({kind:"text",id:Date.now(),anchorRect:toolbarAnchor(event)});
+          }}><SlicerUiIcon name="shape-text" /> Add text</button>
+          <button type="button" className="slicerAddModelChoice" onClick={event => {
+            setAddModelMenuOpen(false);setMobilePane("plate");
+            setSolidRequest({kind:"svg",id:Date.now(),anchorRect:toolbarAnchor(event)});
+          }}><SlicerUiIcon name="shape-svg" /> Add SVG</button>
+          <button type="button" className="slicerAddModelChoice" disabled={!objects.length} onClick={event => {
+            setAddModelMenuOpen(false);setMobilePane("plate");
+            setSolidRequest({kind:"negative",id:Date.now(),anchorRect:toolbarAnchor(event)});
+          }}><SlicerUiIcon name="cut" /> Add negative volume</button>
+        </div>
+  );
   const modelToolbar = (
 <div className="slicerPrepareTools" role="toolbar" aria-label="Model editing tools">
       <span className="slicerToolTooltip" onMouseEnter={() => setToolDescriptor("Undo · Ctrl+Z")}
@@ -1019,41 +1058,17 @@ export default function SlicerPrepareWorkspace({
           aria-controls={tool.target === "import" ? "slicer-add-model-toolbar-options" : tool.target === "auto_orient" ? "slicer-auto-orient-toolbar-options" : tool.expandable ? "slicer-measure-toolbar-options" : undefined}
           disabled={!!tool.pending || !canEdit || busy || (tool.target==="add_plate" && plates.length>=8) || (!["import","add_plate"].includes(tool.target) && !objects.length)}
           onClick={event => selectTool(tool,event)}><SlicerUiIcon name={tool.icon || "others"} size={22}/><span className="slicerToolButtonLabel">{TOOL_SHORT_LABELS[tool.name] || tool.name}</span></button>
-        {tool.target === "import" && addModelMenuOpen && <div
-          className="slicerToolOptions slicerAddModelMenu" style={toolPopupStyle} id="slicer-add-model-toolbar-options"
-          role="group" aria-label="Add model options">
-          <div className="slicerToolOptionsHeader"><strong>Add model</strong>
-            <button type="button" aria-label="Close Add model menu"
-              onClick={() => setAddModelMenuOpen(false)}>Close</button>
-          </div>
-          <button type="button" className="slicerAddModelChoice" onClick={event => {
-            setAddModelMenuOpen(false);
-            editorRef.current?.querySelector('input[type="file"][accept=".stl,.3mf"]')?.click();
-          }}><SlicerUiIcon name="add" /> Upload from device</button>
-          <button type="button" className="slicerAddModelChoice" onClick={event => {
-            setAddModelMenuOpen(false);
-            setMobilePane("plate");
-            editorRef.current?.querySelector('[data-slicer-add-models]')?.scrollIntoView({
-              behavior: "smooth", block: "start"
-            });
-          }}><SlicerUiIcon name="models" /> Add from MakerVault</button>
-          <button type="button" className="slicerAddModelChoice" onClick={event => {
-            setAddModelMenuOpen(false);setMobilePane("plate");
-            setSolidRequest({kind:"primitive",id:Date.now(),anchorRect:toolbarAnchor(event)});
-          }}><SlicerUiIcon name="models" /> Add primitive shape</button>
-          <button type="button" className="slicerAddModelChoice" onClick={event => {
-            setAddModelMenuOpen(false);setMobilePane("plate");
-            setSolidRequest({kind:"text",id:Date.now(),anchorRect:toolbarAnchor(event)});
-          }}><SlicerUiIcon name="shape-text" /> Add text</button>
-          <button type="button" className="slicerAddModelChoice" onClick={event => {
-            setAddModelMenuOpen(false);setMobilePane("plate");
-            setSolidRequest({kind:"svg",id:Date.now(),anchorRect:toolbarAnchor(event)});
-          }}><SlicerUiIcon name="shape-svg" /> Add SVG</button>
-          <button type="button" className="slicerAddModelChoice" disabled={!objects.length} onClick={event => {
-            setAddModelMenuOpen(false);setMobilePane("plate");
-            setSolidRequest({kind:"negative",id:Date.now(),anchorRect:toolbarAnchor(event)});
-          }}><SlicerUiIcon name="cut" /> Add negative volume</button>
-        </div>}
+        {tool.target === "import" && addModelMenuOpen && (
+          toolPopupStyle?.position === "fixed"
+            ? createPortal(
+                <div className="slicerAddModelOverlay" role="presentation"
+                  onMouseDown={event => { if (event.target === event.currentTarget) setAddModelMenuOpen(false); }}>
+                  {addModelMenu}
+                </div>,
+                document.body
+              )
+            : addModelMenu
+        )}
         {tool.target === "auto_orient" && autoOrientMenuOpen && <div className="slicerToolOptions slicerAutoOrientMenu" style={toolPopupStyle} id="slicer-auto-orient-toolbar-options" role="group" aria-label="Auto-orient choices">
           <div className="slicerToolOptionsHeader"><strong>Auto-orient</strong><button type="button" onClick={() => setAutoOrientMenuOpen(false)}>Close</button></div>
           {[
