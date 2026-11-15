@@ -804,8 +804,8 @@ test("offline multi-material export preserves physical mapping without enabling 
   const prepare = read("SlicerPrepareWorkspace.jsx");
   assert.match(workbench, /onExportNativeMaterials=\{\(\) => saveDraft\("native-material"\)\}/);
   assert.match(workbench, /mode==="native-material"\?"\/export-native-materials\/"\:"\/export-project\/"/);
-  assert.match(workbench, /material_tool_bindings:materialToolBindings/g);
-  assert.match(workbench, /material_topology:materialTopology/g);
+  assert.doesNotMatch(workbench, /material_tool_bindings:materialToolBindings/);
+  assert.doesNotMatch(workbench, /material_topology:materialTopology/);
   assert.match(prepare, /Export multi-material 3MF \(offline\)/);
   assert.match(prepare, /multiMaterialReadyForExport/);
   assert.match(prepare, /slotFilamentProfiles\.length >= 2/);
