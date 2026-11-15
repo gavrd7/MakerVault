@@ -782,6 +782,7 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
               id:plate.id,name:plate.name.trim()||"Untitled plate",objects:plate.objects,
             })),active_plate_id:activePlateId,
             save_gcode_to_library: saveOutput, workflow,
+            ...(mode === "multi-material-test" ? {multi_material_test:true} : {}),
             ...(flushSettings ? { flush_settings: flushSettings } : {}),
             ...(slotFilamentProfiles.length ? {slot_filament_profiles:slotFilamentProfiles} : {}),
             ...(form.engine === "orcaslicer" ? { process_overrides: processOverrides } : {}) },
@@ -816,9 +817,11 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
         setJobs(current => current.map(item => item.id === job.id ? queued.job : item));
         awaitingSlicePreviewRef.current = job.id;
         setPreviewJobId(null);
-        setNotice(saveOutput
-          ? "Slicing queued. Generated G-code will be saved to your G-code library after completion."
-          : "Slicing queued. Generated G-code will remain private unless you add it to the library.");
+        setNotice(mode === "multi-material-test"
+          ? "Multi-colour test slicing queued. G-code will be audited and retained for inspection only; printer upload and start are blocked."
+          : saveOutput
+            ? "Slicing queued. Generated G-code will be saved to your G-code library after completion."
+            : "Slicing queued. Generated G-code will remain private unless you add it to the library.");
         setShowDrafts(true);
       }
     } catch (err) {
@@ -1304,7 +1307,7 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
       filamentProfiles={forKind("filament")}
       onSaveCustomProcessProfile={saveInteractiveProcessProfile}
       onBackToSetup={() => setEditorOpen(false)} onSaveDraft={() => saveDraft("draft")}
-      onSaveProject={() => saveDraft("project")} onExportNativeMaterials={() => saveDraft("native-material")} onSliceAll={() => saveDraft("all")}
+      onSaveProject={() => saveDraft("project")} onExportNativeMaterials={() => saveDraft("native-material")} onSliceMultimaterialTest={() => saveDraft("multi-material-test")} onSliceAll={() => saveDraft("all")}
        onImportProject={importProjectFile}
       onSlice={() => saveDraft("slice")}
     /> : <>
