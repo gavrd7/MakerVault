@@ -748,8 +748,6 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
               save_gcode_to_library:false,
               ...(flushSettings ? {flush_settings:flushSettings} : {}),
               ...(slotFilamentProfiles.length ? {slot_filament_profiles:slotFilamentProfiles} : {}),
-            ...(materialToolBindings.length ? {material_tool_bindings:materialToolBindings} : {}),
-            ...(materialTopology ? {material_topology:materialTopology} : {}),
               ...(materialToolBindings.length ? {material_tool_bindings:materialToolBindings} : {}),
               ...(materialTopology ? {material_topology:materialTopology} : {}),
               ...(form.engine==="orcaslicer"?{process_overrides:processOverrides}:{}),
@@ -795,6 +793,8 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
             save_gcode_to_library: saveOutput, workflow,
             ...(flushSettings ? { flush_settings: flushSettings } : {}),
             ...(slotFilamentProfiles.length ? {slot_filament_profiles:slotFilamentProfiles} : {}),
+            ...(materialToolBindings.length ? {material_tool_bindings:materialToolBindings} : {}),
+            ...(materialTopology ? {material_topology:materialTopology} : {}),
             ...(form.engine === "orcaslicer" ? { process_overrides: processOverrides } : {}) },
         },
       });
