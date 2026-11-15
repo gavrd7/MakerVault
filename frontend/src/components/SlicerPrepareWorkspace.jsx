@@ -578,13 +578,14 @@ export default function SlicerPrepareWorkspace({
   const activePlateReady = canEdit && !!objects.length && !busy;
   const conflictsBlockSlice = !plateIssues || plateIssues.signature !== JSON.stringify(objects) ||
     plateIssues.issues.length > 0;
-  const profilesReady = ["printer", "process", "filament"].every(
-    kind => selectedProfiles?.[kind + "_id"]);
+  const missingNativeProfiles = ["printer", "process", "filament"].filter(
+    kind => !selectedProfiles?.[kind + "_id"]);
+  const profilesReady = missingNativeProfiles.length === 0;
   const draftBlockReason = !canEdit
     ? "Your account cannot prepare slicing drafts."
     : busy ? "The slicer is still loading or processing a request."
     : !projectHasModels ? "Add a model to at least one build plate first."
-    : !profilesReady ? "Select native printer, process and filament profiles in Slicer setup."
+    : !profilesReady ? "Missing native " + missingNativeProfiles.join(", ") + (missingNativeProfiles.length === 1 ? " profile" : " profiles") + ". Choose the matching profiles in Slicer setup."
     : "";
   // Matches the bounded keys proven by the pinned Orca 2.5.0 real-binary
   // two-object G-code fixture. Object edits outside this set remain draft-only.
