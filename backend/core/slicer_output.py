@@ -127,9 +127,14 @@ def store_generated_gcode(job_id, raw: bytes):
             job.output_asset = stored
             job.status = "completed"
             job.progress = 100
-            job.message = ("G-code saved to MakerVault library. Inspect before printing."
-                           if keep_in_library else
-                           "G-code retained with slice job; add it to the library when ready.")
+            job.message = (
+                "Multi-colour G-code test completed and tool extrusion audited. "
+                "Printer upload and print start remain disabled."
+                if (job.settings or {}).get("multi_material_test") is True
+                else ("G-code saved to MakerVault library. Inspect before printing."
+                      if keep_in_library else
+                      "G-code retained with slice job; add it to the library when ready.")
+            )
             job.save(update_fields=["output_asset", "status", "progress", "message", "updated_at"])
             return stored
     except Exception:
