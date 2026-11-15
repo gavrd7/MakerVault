@@ -88,7 +88,7 @@ class GeneratedSlicerFileTests(TestCase):
     def test_multicolour_test_output_is_marked_unapproved_for_printer_submission(self):
         self.job.settings = {"multi_material_test": True}
         self.job.save(update_fields=["settings"])
-        output = store_generated_gcode(self.job.pk, b"; generated\\nT0\\nG1 X1 Y1 E0.5\\n")
+        output = store_generated_gcode(self.job.pk, b"; generated\nT0\nG1 X1 Y1 E0.5\n")
         self.assertTrue(output.metadata["multi_material_test"])
         self.assertFalse(output.metadata["printer_submission_verified"])
         self.assertEqual(output.category, "other")
