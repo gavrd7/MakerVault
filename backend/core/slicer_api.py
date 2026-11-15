@@ -162,7 +162,7 @@ def _draft_plate_settings(user, input_asset, settings):
     """Persist preview-only plate geometry; never compile it into slicer flags."""
     if settings is None:
         settings = {}
-    if not isinstance(settings, dict) or set(settings) - {"plate_objects", "plate_label", "plates", "active_plate_id", "save_gcode_to_library", "workflow", "process_overrides", "flush_settings", "slot_filament_profiles", "material_tool_bindings", "material_topology"}:
+    if not isinstance(settings, dict) or set(settings) - {"plate_objects", "plate_label", "plates", "active_plate_id", "save_gcode_to_library", "workflow", "process_overrides", "flush_settings", "slot_filament_profiles", "material_tool_bindings", "material_topology", "multi_material_test"}:
         raise ValueError("Unsupported slicer plate settings.")
     process_overrides = validate_process_overrides(settings.get("process_overrides"))
     flush_settings = validate_flush_settings(settings.get("flush_settings"))
@@ -219,6 +219,9 @@ def _draft_plate_settings(user, input_asset, settings):
     workflow = settings.get("workflow", "interactive")
     if not isinstance(workflow, str) or workflow not in {"setup", "quick", "interactive"}:
         raise ValueError("Unknown slicer workflow.")
+    multi_material_test = settings.get("multi_material_test", False)
+    if not isinstance(multi_material_test, bool):
+        raise ValueError("Multi-material test mode must be true or false.")
     save_to_library = settings.get("save_gcode_to_library", False)
     if not isinstance(save_to_library, bool):
         raise ValueError("G-code library preference must be true or false.")
@@ -273,6 +276,7 @@ def _draft_plate_settings(user, input_asset, settings):
     if "plate_objects" not in settings:
         return {"plate_label": label, "save_gcode_to_library": save_to_library,
                 "workflow": workflow, "process_overrides": process_overrides,
+            **({"multi_material_test": True} if multi_material_test else {}),
                 **({"flush_settings": flush_settings} if flush_settings is not None else {}), **slot_fields, **routing_fields, **project_fields}
     objects = settings["plate_objects"]
     if not isinstance(objects, list) or not 1 <= len(objects) <= 200:
