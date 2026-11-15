@@ -63,8 +63,6 @@ export default function SlicerPrepareWorkspace({
   processOverrides = {}, onProcessOverridesChange, onSaveCustomProcessProfile,
   flushSettings = null, onFlushSettingsChange,
   slotFilamentProfiles = [], onSlotFilamentProfilesChange, filamentProfiles = [],
-  materialToolBindings = [], onMaterialToolBindingsChange,
-  materialTopology = "", onMaterialTopologyChange,
   processProfiles = [], onSelectProcessProfile, onResetProcessSettings,
   printerDetails, nozzleMm, selectedPlateType = "Native / profile default",
   localAssets = [], onLocalAssetsChange, onPlateIssuesChange, plateIssues = null,
@@ -611,16 +609,12 @@ export default function SlicerPrepareWorkspace({
     || (slotFilamentProfiles.length === 1
       && slotFilamentProfiles[0].slot_id === assignedSlots[0]?.slot_id
       && String(slotFilamentProfiles[0].profile_id) === String(selectedProfiles?.filament_id));
-  const singleSlotToolMatches = materialToolBindings.length === 0
-    || (materialToolBindings.length === 1
-      && materialToolBindings[0].slot_id === assignedSlots[0]?.slot_id
-      && materialToolBindings[0].tool_index === 0);
   const materialRoutingPending = assignedSlots.length > 0
-    ? !(hasSingleSlot && singleSlotProfileMatches && singleSlotToolMatches)
-    : slotFilamentProfiles.length > 0 || materialToolBindings.length > 0;
+    ? !(hasSingleSlot && singleSlotProfileMatches)
+    : slotFilamentProfiles.length > 0;
   const projectRoutingPending = plates.some(plate =>
     (plate.objects || []).some(item => item.material_slot != null)
-  ) || slotFilamentProfiles.length > 0 || materialToolBindings.length > 0;
+  ) || slotFilamentProfiles.length > 0;
   const sliceBlockReason = draftBlockReason ||
     (!activePlateReady ? "Select a plate containing models to slice." : "") ||
     (conflictsBlockSlice ? "Resolve build-plate conflicts or wait for models to finish loading before slicing." : "") ||
