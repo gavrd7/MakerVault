@@ -11,7 +11,10 @@ permissions:
 jobs:
   build-and-test:
     runs-on: ubuntu-24.04
-    timeout-minutes: 120
+    # First build compiles Orca's extensive native dependencies and GUI.
+    # The initial two-hour run was still progressing (476/824 sources)
+    # when GitHub killed it; do not mistake that for a compilation failure.
+    timeout-minutes: 360
     steps:
       - name: Checkout MakerVault compatibility tooling
         uses: actions/checkout@v4
@@ -34,12 +37,36 @@ jobs:
           python3 scripts/orca_compatibility_patch.py upstream-orca
           git -C upstream-orca diff --check
           git -C upstream-orca diff -- src/libslic3r/PrintConfig.cpp
+      # Orca upstream separates a reusable installed dependency prefix from
+      # the application build. Cache only that install prefix, following
+      # upstream's own build_deps/build_orca workflows. Save it immediately
+      # after successful dependency compilation so a later app timeout does
+      # not lose the expensive dependency work again.
+      - name: Restore pinned Orca build dependencies
+        id: deps-cache
+        uses: actions/cache/restore@v4
+        with:
+          path: upstream-orca/deps/build/destdir
+          key: orca-v2.5.0-40ecc66f-ubuntu2404-gcc-deps-v1
+      - name: Build Orca dependencies on cache miss
+        if: steps.deps-cache.outputs.cache-hit != 'true'
+        run: |
+          cd upstream-orca
+          ./build_linux.sh -g -r -j 2 -d
+          test -d deps/build/destdir
+          test -n "$(find deps/build/destdir -mindepth 1 -maxdepth 3 -print -quit)"
+      - name: Preserve built Orca dependencies before compiling application
+        if: steps.deps-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: upstream-orca/deps/build/destdir
+          key: orca-v2.5.0-40ecc66f-ubuntu2404-gcc-deps-v1
       - name: Compile isolated Orca AppImage from patched source
         run: |
           cd upstream-orca
-          # Hosted runners have less RAM than Orca's recommended workstation.
-          # Limit parallelism instead of silently changing compiler flags.
-          ./build_linux.sh -g -r -j 2 -dsi
+          # Dependency build is omitted intentionally: the exact-version
+          # installed dependencies were either restored or compiled above.
+          ./build_linux.sh -g -r -j 2 -si
       - name: Find and checksum source-built AppImage
         id: built
         shell: bash
