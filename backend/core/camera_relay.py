@@ -150,3 +150,36 @@ def hls_resource(session_id: str, resource: str, *, sequence: str | None = None)
         params=params,
         max_bytes=_HLS_RESOURCES[resource],
     )
+
+
+def webrtc_answer(connection_id, camera_id: str, offer: str) -> str:
+    """Exchange bounded SDP with loopback-only go2rtc, never exposing its API."""
+    if not isinstance(offer, str) or not 30 <= len(offer) <= 65536 or not offer.startswith("v=0") or "m=video " not in offer:
+        raise CameraRelayError("Invalid video-only WebRTC offer.")
+    if "m=application " in offer or "m=audio " in offer:
+        raise CameraRelayError("Only receive-only video is supported.")
+    name = ensure_stream(connection_id, camera_id)
+    try:
+        response = _SESSION.post(
+            f"{GO2RTC_API}/api/webrtc",
+            params={"src": name},
+            data=offer.encode("utf-8"),
+            headers={"Content-Type": "application/sdp"},
+            timeout=(2, 15),
+            allow_redirects=False,
+        )
+    except requests.RequestException as exc:
+        raise CameraRelayError("Camera WebRTC signalling is unavailable.") from exc
+    try:
+        if not 200 <= response.status_code < 300:
+            raise CameraRelayError("Camera WebRTC signalling was rejected.")
+        if len(response.content) > 65536:
+            raise CameraRelayError("Camera WebRTC answer is too large.")
+        answer = response.content.decode("utf-8")
+        if not answer.startswith("v=0") or "m=video " not in answer:
+            raise CameraRelayError("Camera WebRTC answer is invalid.")
+        return answer
+    except UnicodeDecodeError as exc:
+        raise CameraRelayError("Camera WebRTC answer is invalid.") from exc
+    finally:
+        response.close()
