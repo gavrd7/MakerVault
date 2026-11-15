@@ -13,8 +13,8 @@ const paths = {
   add: <><path d="M12 5v14M5 12h14"/></>,
   "add-plate": <><path d="m3 13 9-5 9 5-9 5-9-5Z"/><path d="m3 17 9 5 9-5"/><path d="M17 2v9M12.5 6.5h9"/></>,
   "plates-overview": <><rect x="2" y="3" width="9" height="8" rx="1"/><rect x="13" y="3" width="9" height="8" rx="1"/><rect x="2" y="13" width="9" height="8" rx="1"/><rect x="13" y="13" width="9" height="8" rx="1"/><path d="M5 6h3m8 0h3M5 16h3m8 0h3"/></>,
-  "paint-support": <><path d="m3 8 9-5 9 5-9 5-9-5Z" fill="currentColor" fillOpacity=".12"/><path d="m5 20h14M7 12v8m5-5v5m5-8v8" strokeWidth="2.1"/><path d="m3 3 3 3m0-3-3 3"/><circle cx="19" cy="3" r="2" fill="currentColor" stroke="none"/></>,
-  "paint-seam": <><path d="m5 6 7-4 7 4v12l-7 4-7-4V6Z" fill="currentColor" fillOpacity=".08"/><path d="m5 6 7 4 7-4M12 10v12"/><path d="m12 11 0 9" strokeDasharray="1 3" strokeWidth="3.2"/><circle cx="18.5" cy="5.5" r="2" fill="currentColor" stroke="none"/></>,
+  "paint-support": <><path d="m3 7 9-5 9 5-9 5-9-5Z"/><path d="M7 12v9m5-7v7m5-9v9M4 21h16"/><path d="m17 4 3 3"/></>,
+  "paint-seam": <><path d="m5 6 7-4 7 4v12l-7 4-7-4V6Z"/><path d="m5 6 7 4 7-4"/><path d="M12 10v12" strokeDasharray="1 3" strokeWidth="2.5"/></>,
   "paint-colour": <><path d="M12 2a10 10 0 1 0 10 10c0-2.2-1.8-3.5-3.9-3.5H16c-1.5 0-2.4-1.3-2.4-2.5 0-1.1.7-2.1 1.1-2.9A10 10 0 0 0 12 2Z"/><circle cx="6.6" cy="10" r="1.1"/><circle cx="9.5" cy="6.4" r="1.1"/><circle cx="15.2" cy="5.5" r="1.1"/><circle cx="6.9" cy="15" r="1.1"/><path d="m17 14 4 4m-5.5-2.5 3.5 3.5"/></>,
 
   "paint-brush": <><path d="m14 4 6 6-9 9-6-6 9-9Z"/><path d="m14 4 3-2 5 5-2 3M5 13c-2 2-2 5-3 7 3-1 6-1 8-3"/></>,
@@ -34,16 +34,16 @@ const paths = {
   focus: <><path d="M3 9V4h5m8 0h5v5M21 15v5h-5M8 20H3v-5" strokeWidth="2.6"/><path d="m7 11 5-3 5 3v5l-5 3-5-3v-5Z" fill="currentColor" fillOpacity=".18"/><path d="m7 11 5 3 5-3m-5 3v5"/></>,
   duplicate: <><rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h3"/></>,
   remove: <><path d="M3 6h18M8 6V4h8v2m3 0-1 15H6L5 6M10 10v7m4-7v7"/></>,
-  orient: <><path d="M3 21h18" strokeWidth="2.4"/><path d="m7 9 7-6 6 6-7 6-6-6Z" fill="currentColor" fillOpacity=".12"/><path d="m4 15 7 5 7-5" strokeDasharray="2 2"/><path d="m11 12 0 5m-3-3 3 3 3-3"/><path d="M3 7c0-3 3-5 6-5m-2 0 2 0 0 3"/></>,
-  face: <><path d="M2 21h20" strokeWidth="2.6"/><path d="m5 7 10-4 5 8-10 4-5-8Z" fill="currentColor" fillOpacity=".12"/><path d="m10 15 4 4 5-4" strokeWidth="2.5"/><path d="m14 13 0 6" strokeDasharray="2 2"/></>,
-  split: <><path d="M12 2v20" strokeDasharray="2 2" strokeWidth="2.2"/><path d="m10 5-7 3v9l7 4V5Zm4 0 7 3v9l-7 4V5Z" fill="currentColor" fillOpacity=".1"/><path d="m8 11-4 2 4 2m8-4 4 2-4 2"/></>,
-  hollow: <><path d="m12 2 9 5v10l-9 5-9-5V7l9-5Z" fill="currentColor" fillOpacity=".12"/><path d="m12 7 5 3v5l-5 3-5-3v-5l5-3Z" fill="none"/><path d="m3 7 9 5 9-5M12 18v4"/></>,
-  drill: <><rect x="8" y="2" width="8" height="5" rx="1.5" fill="currentColor" fillOpacity=".2"/><path d="M12 7v3m-4 0 8 0-2 7-2 5-2-5-2-7Z" fill="currentColor" fillOpacity=".12"/><path d="m9 12 6 2-5 2 4 2"/><path d="M4 21h4m8 0h4"/></>,
-  cut: <><path d="m4 8 8-5 8 5-8 5-8-5Z"/><path d="M4 8v9l8 5 8-5V8M12 13v9"/><path d="M2 13h20" strokeWidth="2.5" strokeDasharray="5 2"/><path d="m15 9 5 4-5 4"/></>,
-  boolean: <><rect x="3" y="4" width="13" height="13" rx="2" fill="currentColor" fillOpacity=".10"/><circle cx="15" cy="14" r="7" fill="currentColor" fillOpacity=".10"/><path d="M8 9h8v8H8Z" fill="currentColor" fillOpacity=".36"/><path d="m19 3 3 0m-1.5-1.5v3"/></>,
+  orient: <><rect x="4" y="16" width="16" height="4" rx="1"/><path d="m7 12 4-7 7 4-4 7-7-4Z"/><path d="M19 4a8 8 0 0 1 2 8"/><path d="m18 10 3 2 2-3"/></>,
+  face: <><path d="M3 20h18"/><path d="m5 8 10-5 5 10-10 5-5-10Z"/><path d="m12 12 3 5"/><path d="m12 17 3 1 1-3"/></>,
+  split: <><path d="M12 3v18" strokeDasharray="2 3"/><path d="M10 5 4 8v8l6 3V5Z"/><path d="m14 5 6 3v8l-6 3V5Z"/><path d="m7 12-4 0m0 0 2-2m-2 2 2 2M17 12h4m0 0-2-2m2 2-2 2"/></>,
+  hollow: <><path d="m12 2 9 5v10l-9 5-9-5V7l9-5Z"/><path d="m12 7 5 3v5l-5 3-5-3v-5l5-3Z" strokeDasharray="3 2"/><path d="m3 7 9 5 9-5"/></>,
+  drill: <><rect x="9" y="2" width="6" height="5" rx="1"/><path d="M8 7h8l-4 15-4-15Z"/><path d="m10 12 4 2-5 2"/></>,
+  cut: <><path d="m5 8 7-4 7 4-7 4-7-4Z"/><path d="M5 8v9l7 4 7-4V8M12 12v9"/><path d="M2 13h20" strokeDasharray="3 3"/></>,
+  boolean: <><rect x="3" y="4" width="13" height="13" rx="2"/><circle cx="15" cy="14" r="7"/><path d="M9 9h7v7H9Z" fill="currentColor" fillOpacity=".22"/></>,
   measure: <><path d="m3 15 12-11 6 6-12 11-6-6Z" fill="currentColor" fillOpacity=".12"/><path d="m7 12 3 3m0-6 2 2m1-5 3 3m-11 8 2 2m8-8 2 2"/></>,
   paint: <><path d="m14 4 6 6M4 20c2 0 4-2 4-4l9-9-4-4-9 9c-1 1-2 3-2 5v3h2Z"/></>,
-  layers: <><path d="m12 2 9 6-9 6-9-6 9-6Zm-9 9 9 6 9-6m-18 5 9 6 9-6"/></>,
+  layers: <><path d="m12 3 9 5-9 5-9-5 9-5Z"/><path d="m3 12 9 5 9-5m-18 5 9 5 9-5"/><path d="M12 3v10"/></>,
   plate: <><path d="m3 8 9-5 9 5-9 5-9-5Z"/><path d="m3 8 0 8 9 5 9-5V8M12 13v8"/><path d="m8 8 4-2 4 2-4 2-4-2Z"/></>,
   printer: <><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M6 7h12M6 17h12M8 10h8v5H8zM12 7v3M7 21v1m10-1v1"/><circle cx="18" cy="5" r="1"/></>,
   models: <><path d="m3 7 5-3 5 3-5 3-5-3Z"/><path d="M3 7v6l5 3 5-3V7M8 10v6"/><path d="m14 13 4-2 4 2-4 2-4-2Z"/><path d="M14 13v5l4 3 4-3v-5M18 15v6"/></>,
@@ -63,6 +63,6 @@ const materialTools = new Set([
 export default function SlicerUiIcon({ name, size = 19 }) {
   return <svg aria-hidden="true" viewBox="0 0 24 24" width={size} height={size}
     fill="none" stroke="currentColor"
-    strokeWidth={materialTools.has(name) ? 2 : 1.7} strokeLinecap="round"
+    strokeWidth={1.85} strokeLinecap="round"
     strokeLinejoin="round" className="slicerUiIcon">{paths[name] || paths.others}</svg>;
 }
