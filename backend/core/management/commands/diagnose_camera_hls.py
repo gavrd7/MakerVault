@@ -4,7 +4,7 @@ Run inside an existing staging app container while viewing the camera.
 This creates a temporary HLS consumer. It makes no configuration changes.
 """
 import re
-from time import sleep
+from time import sleep, monotonic
 
 from django.core.management.base import BaseCommand
 
@@ -113,7 +113,43 @@ class Command(BaseCommand):
     help = "Check safe HLS playlist and MP4 initialization dimensions for Creality cameras."
 
     def add_arguments(self, parser):
-        parser.add_argument("--watch-ts", action="store_true", help="Compare three native MPEG-TS HLS playlist snapshots, four seconds apart.")
+        parser.add_argument("--watch-ts", action="store_true", help="Request bounded MPEG-TS segments and measure whether the live playlist advances.")
+
+    def probe_ts_segments(self, session):
+        """Consume bounded TS segments; playlist polling alone cannot advance go2rtc."""
+        for sample in range(3):
+            started = monotonic()
+            payload, _ = hls_resource(session, "playlist.m3u8")
+            state = ts_playlist_progress(payload.decode("utf-8"))
+            if not state.get("valid") or not state["segment_numbers"]:
+                self.stdout.write(f"  Sample {sample + 1}: no valid TS segment references")
+                return
+            number = state["segment_numbers"][0]
+            if number is None:
+                self.stdout.write(f"  Sample {sample + 1}: missing segment sequence")
+                return
+            try:
+                segment, mime = hls_resource(session, "segment.ts", sequence=str(number))
+                elapsed = round(monotonic() - started, 2)
+                valid_ts = bool(segment) and segment[0] == 0x47
+                self.stdout.write(
+                    f"  Sample {sample + 1}: playlist_sequence={state['media_sequence']}, "
+                    f"requested_segment={number}, bytes={len(segment)}, "
+                    f"elapsed_seconds={elapsed}, ts_sync={valid_ts}, "
+                    f"mime_ok={mime == 'video/mp2t'}"
+                )
+                if not valid_ts:
+                    self.stdout.write("  MPEG-TS segment is empty or does not start with a sync byte.")
+                    return
+            except CameraRelayError:
+                self.stdout.write(f"  Sample {sample + 1}: segment request failed after {round(monotonic() - started, 2)}s")
+                return
+        payload, _ = hls_resource(session, "playlist.m3u8")
+        state = ts_playlist_progress(payload.decode("utf-8"))
+        self.stdout.write(
+            f"  After segment consumption: playlist_sequence={state.get('media_sequence')}, "
+            f"segment_numbers={state.get('segment_numbers')}"
+        )
 
     def handle(self, *args, **kwargs):
         count = 0
@@ -130,18 +166,7 @@ class Command(BaseCommand):
                         if not session:
                             self.stdout.write("  No HLS session in TS master.")
                             continue
-                        previous = None
-                        for index in range(3):
-                            if index:
-                                sleep(4)
-                            body, _ = hls_resource(session, "playlist.m3u8")
-                            progress = ts_playlist_progress(body.decode("utf-8"))
-                            progress["changed"] = None if previous is None else (
-                                progress["media_sequence"] != previous["media_sequence"]
-                                or progress["segment_numbers"] != previous["segment_numbers"]
-                            )
-                            self.stdout.write(f"  Sample {index + 1}: {progress}")
-                            previous = progress
+                        self.probe_ts_segments(session)
                         continue
                     master = hls_master(connection.pk, camera["id"])
                     self.stdout.write(f"  master: {playlist_summary(master)}")
