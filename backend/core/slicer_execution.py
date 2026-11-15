@@ -250,8 +250,8 @@ def _validate_plate_execution(job):
             raise SlicerExecutionError(
                 "The active build plate does not match the saved slicing model list.")
     if not objects:
-        if settings.get("slot_filament_profiles"):
-            raise SlicerExecutionError("Remove unused slot-specific filament profiles before slicing.")
+        if settings.get("slot_filament_profiles") or settings.get("material_tool_bindings"):
+            raise SlicerExecutionError("Remove unused slot-specific filament profiles and tool bindings before slicing.")
         return True
     # Saved CFS/AMS/head mappings are advisory until the native palette,
     # toolchange commands, and chosen machine topology have passed pinned
@@ -273,6 +273,7 @@ def _validate_plate_execution(job):
             printer_id=job.printer_id,
             selected_filament_profile_id=job.filament_profile_id,
             slot_filament_profiles=settings.get("slot_filament_profiles") or [],
+            material_tool_bindings=settings.get("material_tool_bindings") or [],
         )
     except MaterialRoutingError as exc:
         raise SlicerExecutionError(str(exc)) from exc
