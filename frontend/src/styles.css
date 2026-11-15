@@ -8012,3 +8012,25 @@ a:focus-visible,
     grid-column:1/-1;min-width:0;max-width:100%;
   }
 }
+
+/* Material routing is a separate printer-neutral mapping layer: physical bay
+   identifiers must not be confused with native Orca filament/tool order. */
+.slicerNativeToolBindings{
+  display:grid;grid-template-columns:minmax(0,1fr);
+  gap:10px;margin:12px 0;padding:12px;
+  border:1px solid var(--border,#33465b);border-radius:10px;
+  background:rgba(19,30,45,.55);min-width:0;
+}
+.slicerNativeToolBindings>.slicerLiveMaterialHeader{
+  display:flex;flex-wrap:wrap;justify-content:space-between;gap:8px;
+}
+.slicerNativeToolBindings>label{
+  display:grid;grid-template-columns:minmax(0,1fr);
+  gap:6px;min-width:0;line-height:1.35;
+}
+.slicerNativeToolBindings select{width:100%;min-width:0;max-width:100%}
+.slicerNativeToolBindings small{line-height:1.4;overflow-wrap:anywhere}
+@media(max-width:650px){
+  .slicerNativeToolBindings{padding:10px}
+  .slicerNativeToolBindings select{min-height:42px}
+}
