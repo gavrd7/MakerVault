@@ -76,7 +76,7 @@ def plan_material_routes(objects, *, printer_id, topology, tool_bindings):
 
 
 def single_material_slice_assignment(objects, *, printer_id, selected_filament_profile_id,
-                                     slot_filament_profiles=()):
+                                     slot_filament_profiles=(), material_tool_bindings=()):
     """Validate an optional physical slot annotation for ONE logical filament.
 
     Slicing uses the already-selected native filament preset and logical tool 0.
@@ -87,11 +87,15 @@ def single_material_slice_assignment(objects, *, printer_id, selected_filament_p
         return None
     if not isinstance(slot_filament_profiles, (list, tuple)):
         raise MaterialRoutingError("Invalid slot filament profile list.")
+    if not isinstance(material_tool_bindings, (list, tuple)):
+        raise MaterialRoutingError("Invalid native tool binding list.")
     slots = [item.get("material_slot") for item in objects if isinstance(item, dict)]
     if len(slots) != len(objects):
         raise MaterialRoutingError("Invalid model material assignment.")
     assigned = [slot for slot in slots if slot is not None]
     if not assigned:
+        if material_tool_bindings:
+            raise MaterialRoutingError("Remove unused native tool bindings before slicing.")
         if slot_filament_profiles:
             raise MaterialRoutingError("Remove unused slot-specific filament presets before slicing.")
         return None
@@ -110,6 +114,12 @@ def single_material_slice_assignment(objects, *, printer_id, selected_filament_p
         raise MaterialRoutingError("Invalid physical material slot index.")
     if any(slot != target for slot in assigned[1:]):
         raise MaterialRoutingError("More than one filament slot requires verified multi-material slicing.")
+    if material_tool_bindings:
+        if (len(material_tool_bindings) != 1
+                or material_tool_bindings[0] != {"slot_id": slot_id, "tool_index": 0}):
+            raise MaterialRoutingError(
+                "Single-filament slicing requires logical tool 0; other tool bindings need multi-material verification."
+            )
     if len(slot_filament_profiles) > 1:
         raise MaterialRoutingError("Multi-filament native profile routing is not enabled.")
     if slot_filament_profiles:
