@@ -1,3 +1,5 @@
+from unittest.mock import patch
+
 from django.test import SimpleTestCase
 
 from core.management.commands.diagnose_camera_hls import (
@@ -5,6 +7,7 @@ from core.management.commands.diagnose_camera_hls import (
     playlist_summary,
     session_from_master,
     ts_playlist_progress,
+    Command,
 )
 
 
@@ -50,3 +53,26 @@ class CameraHlsMetadataTests(SimpleTestCase):
         self.assertNotEqual(a["segment_numbers"], b["segment_numbers"])
         self.assertEqual(a["target_duration"], 2)
         self.assertNotIn("private-session", str(a))
+
+    @patch("core.management.commands.diagnose_camera_hls.hls_resource")
+    def test_live_ts_diagnostic_consumes_segments_not_just_playlists(self, resource):
+        sequences = iter([0, 1, 2, 3])
+        def reply(_session, kind, **kwargs):
+            if kind == "playlist.m3u8":
+                number = next(sequences)
+                body = (
+                    f"#EXTM3U\\n#EXT-X-MEDIA-SEQUENCE:{number}\\n"
+                    f"#EXTINF:0.5,\\nsegment.ts?id=private&n={number}\\n"
+                ).encode()
+                return body, "application/vnd.apple.mpegurl"
+            self.assertEqual(kind, "segment.ts")
+            self.assertIn(kwargs.get("sequence"), {"0", "1", "2"})
+            return b"\\x47" + b"packet", "video/mp2t"
+        resource.side_effect = reply
+        lines = []
+        cmd = Command()
+        cmd.stdout.write = lines.append
+        cmd.probe_ts_segments("private")
+        self.assertEqual(sum("requested_segment=" in line for line in lines), 3)
+        self.assertTrue(any("playlist_sequence=3" in line for line in lines))
+        self.assertNotIn("private", str(lines))
