@@ -3686,7 +3686,7 @@ export default function SlicerPlateEditor({
             </button>
           </footer>
         </section>
-      </div>, document.body
+      </div>, meshInspectorHost
     )}
     {splitError && !splitPreview && <p role="alert" className="integrationError">{splitError}</p>}
     {autoOrientModalOpen && createPortal(
