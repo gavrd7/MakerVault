@@ -19,6 +19,8 @@ from .slicer_output import store_generated_gcode
 from .slicer_native_resolution import resolved_native_profile
 from .slicer_bed_dimensions import trusted_plate_dimensions
 from .slicer_material_routing import single_material_slice_assignment, MaterialRoutingError
+from .slicer_multimaterial_execution import plan_native_multimaterial, prepare_job_multimaterial
+from .slicer_material_gcode_audit import audit_native_tool_usage, MaterialGcodeAuditError
 from .slicer_native_overrides import apply_orca_job_overrides
 from .slicer_process_settings import apply_process_overrides
 from .slicer_plate_3mf import build_plate_3mf, build_compound_plate_3mf
@@ -265,6 +267,21 @@ def _validate_plate_execution(job):
             "mapping is not implemented. Keep the painting in a draft; clear "
             "painted regions before requesting a single-filament slice."
         )
+    if settings.get("multi_material_test") is True:
+        # This permits *offline G-code generation* only. Uploaded or started
+        # printer jobs are blocked by the submission API for these artifacts.
+        try:
+            plan_native_multimaterial(job)
+            trusted_plate_dimensions(job.printer_profile)
+        except (MaterialRoutingError, ValueError) as exc:
+            raise SlicerExecutionError(str(exc)) from exc
+        for item in objects:
+            overrides = item.get("process_overrides") or {}
+            if not isinstance(overrides, dict) or set(overrides) - VERIFIED_OBJECT_PROCESS_KEYS:
+                raise SlicerExecutionError(
+                    "Only verified per-object wall and infill overrides are supported in multi-colour tests."
+                )
+        return True
     # One physical bay can annotate an otherwise ordinary single-filament
     # Orca slice. Do not convert the bay number into a native tool index.
     try:
@@ -446,6 +463,8 @@ def process_queued_job(job_id):
     try:
         model = _read_owned_file(job.input_asset, job.owner_id, MAX_INPUT, "Model")
         model_format = "stl"
+        material_result = None
+        is_multi_test = (job.settings or {}).get("multi_material_test") is True
         plate = (job.settings or {}).get("plate_objects")
         if plate:
             # Every source remains owner-scoped and verified at execution time;
@@ -461,7 +480,15 @@ def process_queued_job(job_id):
                 if asset.sha256 and hashlib.sha256(raw).hexdigest() != asset.sha256:
                     raise SlicerExecutionError("A plate STL has changed since import.")
                 source_models.append((item, raw))
-            if _single_unmodified_stl(plate):
+            if is_multi_test:
+                stage = "preparing the native multi-filament test plate"
+                width, depth = trusted_plate_dimensions(job.printer_profile)
+                material_result = prepare_job_multimaterial(
+                    job, source_models, bed_width=width, bed_depth=depth,
+                )
+                model = material_result["model_3mf"]
+                model_format = "3mf"
+            elif _single_unmodified_stl(plate):
                 # Avoid an unnecessary 3MF round trip for one untransformed
                 # model. The validated native STL CLI path performs its own
                 # auto-arrangement and uses the same approved profiles.
@@ -504,6 +531,12 @@ def process_queued_job(job_id):
             profiles[2] = apply_process_overrides(
                 profiles[2], (job.settings or {}).get("process_overrides") or {},
             )
+            if material_result is not None:
+                # The worker protocol checks byte equality between the legacy
+                # first preset and the first member of the ordered palette.
+                palette = list(material_result["filament_profiles"])
+                palette[0] = profiles[1]
+                material_result["filament_profiles"] = tuple(palette)
         if model_format == "stl" and job.input_asset.sha256 and hashlib.sha256(model).hexdigest() != job.input_asset.sha256:
             raise SlicerExecutionError("Model contents changed since the job was prepared.")
         stage = "executing the isolated slicer worker"
@@ -511,7 +544,20 @@ def process_queued_job(job_id):
             job.pk, job.engine, job.engine_version, model,
             profiles[0], profiles[1], profiles[2],
             model_format=model_format,
+            filament_profiles=(material_result["filament_profiles"]
+                               if material_result is not None else None),
         )
+        if material_result is not None:
+            stage = "auditing multi-material tool selections and extrusion"
+            try:
+                audit_native_tool_usage(
+                    output.decode("utf-8"),
+                    expected_tools=set(material_result["native_tool_indices"]),
+                )
+            except (UnicodeDecodeError, MaterialGcodeAuditError) as exc:
+                raise SlicerExecutionError(
+                    "Multi-colour test G-code did not pass the native tool/extrusion audit."
+                ) from exc
         stage = "validating and storing generated G-code"
         asset = store_generated_gcode(job.pk, output)
         return {"status": "completed", "asset_id": str(asset.pk)}
