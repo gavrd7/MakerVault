@@ -3060,9 +3060,11 @@ export default function SlicerPlateEditor({
   // over the 3D canvas. The desktop inspector stays in the document portal.
   const mobileMeshInspector = typeof window !== "undefined"
     && window.matchMedia("(max-width: 740px)").matches;
-  const meshInspectorHost = mobileMeshInspector
-    ? hostRef.current?.closest(".slicerPlatePanel") || document.body
-    : document.body;
+  // The dock is inside the 3D viewport, next to the existing Measure overlay.
+  // Do not portal to the outer plate panel: its last child is below every
+  // plate option, and puts the inspector at the bottom of the page on phones.
+  const [mobileMeshDock, setMobileMeshDock] = useState(null);
+  const meshInspectorHost = mobileMeshInspector ? mobileMeshDock : document.body;
   const solidPanelStyle=(()=>{
     if(typeof window==="undefined")return {pointerEvents:"auto"};
     const rect=solidViewportRect;
@@ -3307,6 +3309,8 @@ export default function SlicerPlateEditor({
           Options are in the Measure toolbar.
         </small>
       </aside>}
+      <div ref={setMobileMeshDock} className="slicerMobileGeometryDock"
+        aria-label="On-plate geometry inspector" />
     </div>
 
     <fieldset className="slicerPlateDisplayOptions">
@@ -3457,7 +3461,7 @@ export default function SlicerPlateEditor({
       </> : <p role="status">Measuring the selected STL preview…</p>}
     </section>}
 
-    {solidDialog && createPortal(
+    {solidDialog && meshInspectorHost && createPortal(
       <div className="slicerAutoOrientModalBackdrop" role="presentation"
         style={{pointerEvents:"none"}}>
         <section className={"slicerAutoOrientPanel slicerAutoOrientModal slicerSolidModal slicerViewportAnchoredModal"+(solidInspectorCollapsed?" slicerSolidInspectorCollapsed":"")}
@@ -3659,7 +3663,7 @@ export default function SlicerPlateEditor({
         </section>
       </div>,meshInspectorHost
     )}
-    {splitPreview && createPortal(
+    {splitPreview && meshInspectorHost && createPortal(
       <div className="slicerAutoOrientModalBackdrop" role="presentation"
         style={{pointerEvents:"none"}}>
         <section className="slicerAutoOrientPanel slicerAutoOrientModal slicerSolidModal slicerViewportAnchoredModal"
