@@ -17,6 +17,13 @@ implemented on the development branch; printer-native paint export remains block
 - These sidecars are **MakerVault-specific editable metadata**, not native
   Orca/Bambu material painting, and are **not** interpreted as multicolour
   G-code. The frontend and backend both block native slicing of painted regions.
+- Shared support enforcer/blocker surface-region painting now uses the v2 selector and
+  independent action annotations, with Erase, Clear all, brush, sphere, fill
+  and height-range UI. MakerVault drafts and MakerVault project 3MF sidecars
+  retain support regions; previews use separate green/red overlays.
+- Native support-paint export is deliberately blocked: previews and saved
+  annotations are not printable supports until engine-specific native support
+  metadata generation and slicing tests are verified.
 - Remaining: staging acceptance tests, cross-engine native material export,
   proof of 200k+ facet responsiveness, spatial indexing/large-mesh latency,
   improved adaptive topology, geometry validation hardening and future
@@ -101,3 +108,19 @@ https://github.com/OrcaSlicer/OrcaSlicer/blob/v2.5.0/src/slic3r/GUI/Gizmos/GLGiz
 The existing v1 frontend can improve intersection detection and coverage,
 but **cannot eliminate jagged face boundaries**. Do not describe those
 improvements as smooth brush painting or complete support painting.
+
+## Support-painting acceptance (first integration pass)
+
+- **Enforce supports** and **Block supports** are mutually exclusive semantic
+  annotations; neither value is a physical spool slot or a nozzle/tool index.
+- The colour and support surfaces are independent. Support overlay drawing
+  does not alter source STL geometry or existing filament painting.
+- Brush, sphere, fill and height paint reuse the same clipped polygons and
+  mesh fingerprints; an eraser removes only selected support paint.
+- Paint, erase, undo/redo, draft save/reopen and MakerVault project-3MF
+  round-trip must retain the same regions on both desktop and mobile.
+- **Do not slice or print a support-painted draft** until the selected engine
+  can encode the exact regions as its supported enforcer/blocker metadata.
+- Next verification: load the staging UI, test both annotation types, restore
+  a saved draft and exported 3MF, verify erase plus selection history, and
+  assert native slicing is rejected with a clear explanatory error.
