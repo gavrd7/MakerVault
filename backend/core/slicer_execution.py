@@ -288,7 +288,7 @@ def _validate_plate_execution(job):
         single_material_slice_assignment(
             objects,
             printer_id=getattr(job, "printer_id", None),
-            selected_filament_profile_id=job.filament_profile_id,
+            selected_filament_profile_id=getattr(job, "filament_profile_id", None),
             slot_filament_profiles=settings.get("slot_filament_profiles") or [],
             material_tool_bindings=settings.get("material_tool_bindings") or [],
         )
