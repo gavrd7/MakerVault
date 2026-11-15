@@ -62,13 +62,13 @@ class CameraHlsMetadataTests(SimpleTestCase):
             if kind == "playlist.m3u8":
                 number = next(sequences)
                 body = (
-                    f"#EXTM3U\\n#EXT-X-MEDIA-SEQUENCE:{number}\\n"
-                    f"#EXTINF:0.5,\\nsegment.ts?id=private&n={number}\\n"
+                    f"#EXTM3U\n#EXT-X-MEDIA-SEQUENCE:{number}\n"
+                    f"#EXTINF:0.5,\nsegment.ts?id=private&n={number}\n"
                 ).encode()
                 return body, "application/vnd.apple.mpegurl"
             self.assertEqual(kind, "segment.ts")
             self.assertIn(kwargs.get("sequence"), {"0", "1", "2"})
-            return b"\\x47" + b"packet", "video/mp2t"
+            return b"\x47" + b"packet", "video/mp2t"
         resource.side_effect = reply
         lines = []
         cmd = Command()
@@ -93,7 +93,7 @@ class CameraHlsMetadataTests(SimpleTestCase):
         self.assertEqual(result["packets"], 2)
         self.assertEqual(result["pes_starts"], 0)
         self.assertEqual(result["other_pid_packets"], 1)
-        video = packet(0x101, True, b"\\x00\\x00\\x01\\xe0")
+        video = packet(0x101, True, b"\x00\x00\x01\xe0")
         result = transport_packet_summary(tables + video)
         self.assertEqual(result["pes_starts"], 1)
         self.assertEqual(result["other_pid_packets"], 2)
