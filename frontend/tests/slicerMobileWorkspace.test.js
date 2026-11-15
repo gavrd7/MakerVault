@@ -228,3 +228,19 @@ test("Move Rotate Scale and Measure share the same mobile viewport dock", () => 
   assert.match(css, /max-height:min\(220px, 35dvh\)!important/);
   assert.match(css, /\.slicerPlateCanvasViewport > \.slicerViewportToolDock \.slicerViewportTransformGrid/);
 });
+
+test("mobile Add model picker escapes the horizontally scrolling toolbar", () => {
+  const menu = editor.slice(editor.indexOf("const addModelMenu = ("), editor.indexOf("const modelToolbar = ("));
+  assert.match(menu, /Upload from device/);
+  assert.match(menu, /Add from MakerVault/);
+  assert.match(menu, /Add primitive shape/);
+  assert.match(menu, /Add text/);
+  assert.match(menu, /Add SVG/);
+  assert.match(menu, /Add negative volume/);
+  assert.match(editor, /toolPopupStyle\?\.position === "fixed"\s*\? createPortal\(/);
+  assert.match(editor, /className="slicerAddModelOverlay"/);
+  assert.match(editor, /document\.body\s*\)\s*:\s*addModelMenu/);
+  assert.match(css, /\.slicerAddModelOverlay\s*>\s*\.slicerAddModelMenu/);
+  assert.match(css, /max-height:min\(85dvh,650px\)!important/);
+  assert.match(css, /z-index:13000/);
+});
