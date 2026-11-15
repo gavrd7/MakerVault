@@ -1,0 +1,88 @@
+name: Build reviewed Orca 2.5.0 CLI compatibility candidate
+
+# Explicit operator action only: compiling upstream from source is expensive.
+# Never publish a release or automatically activate a new engine in staging.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    steps:
+      - name: Checkout MakerVault compatibility tooling
+        uses: actions/checkout@v4
+      - name: Download pinned Orca source
+        run: |
+          git clone --depth 1 --branch v2.5.0 https://github.com/OrcaSlicer/OrcaSlicer.git upstream-orca
+          test "$(git -C upstream-orca rev-parse HEAD)" = "40ecc66f78ed72dc368e0c1ebe40d77f00cc8a19"
+      - name: Apply reviewed validation correction
+        run: |
+          python3 -m unittest scripts.tests.test_orca_compatibility_patch -v
+          python3 scripts/orca_compatibility_patch.py upstream-orca
+          git -C upstream-orca diff --check
+          git -C upstream-orca diff -- src/libslic3r/PrintConfig.cpp
+      - name: Compile isolated Orca AppImage from patched source
+        run: |
+          cd upstream-orca
+          ./build_linux.sh -g -dsi
+      - name: Find and checksum source-built AppImage
+        id: built
+        shell: bash
+        run: |
+          set -euo pipefail
+          mapfile -t assets < <(find upstream-orca/build -type f -name '*.AppImage' -size +10M)
+          test "${#assets[@]}" -eq 1
+          asset="${assets[0]}"
+          sha=$(sha256sum "$asset" | cut -d ' ' -f 1)
+          test "${#sha}" -eq 64
+          echo "asset=$asset" >> "$GITHUB_OUTPUT"
+          echo "sha=$sha" >> "$GITHUB_OUTPUT"
+          echo "### Source-built Orca 2.5.0 candidate" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Reviewed source: pinned v2.5.0 with native cut-retraction schema upper bound 30 mm" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Binary SHA-256: \`$sha\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "- This is an independently reviewable development candidate, not an approved production release." >> "$GITHUB_STEP_SUMMARY"
+      - name: Stage image with binary identity locked
+        run: |
+          python3 -m slicer_worker.stage_engines \
+            --engine orcaslicer 2.5.0 "${{ steps.built.outputs.asset }}" "${{ steps.built.outputs.sha }}" \
+            --destination slicer-engine-assets
+          docker build -f slicer_worker/Dockerfile.bundle -t makervault-orca-reviewed:ci .
+          id=$(docker image inspect --format '{{.Id}}' makervault-orca-reviewed:ci)
+          echo "MAKERVAULT_SLICER_WORKER_IMAGE=$id" > .slicer-staging.env
+          echo "MAKERVAULT_SLICER_ENGINE_IMAGE_DIGEST=$id" >> .slicer-staging.env
+          echo "SLICER_ENGINES_JSON='{\"orcaslicer\":{\"binary\":\"/opt/engines/orcaslicer.AppImage\",\"version\":\"2.5.0\",\"binary_sha256\":\"${{ steps.built.outputs.sha }}\"}}'" >> .slicer-staging.env
+          chmod 600 .slicer-staging.env
+      - name: Fetch unmodified official profile fixtures
+        run: |
+          python3 scripts/build_orca_reference_fixture.py --printer k1 --output /tmp/orca-official-k1 --preserve-official-values
+          python3 scripts/build_orca_reference_fixture.py --printer k2 --output /tmp/orca-official-k2 --preserve-official-values
+          python3 scripts/build_slicer_multimodel_fixture.py --material-output /tmp/orca-two-tool.3mf
+      - name: Require unmodified K1 and K2 profiles to produce real G-code
+        run: |
+          python3 scripts/probe_slicer_staging.py \
+            --printer /tmp/orca-official-k1/printer.json \
+            --filament /tmp/orca-official-k1/filament.json \
+            --process /tmp/orca-official-k1/process.json
+          python3 scripts/probe_slicer_staging.py \
+            --printer /tmp/orca-official-k2/printer.json \
+            --filament /tmp/orca-official-k2/filament.json \
+            --process /tmp/orca-official-k2/process.json
+      - name: Require native two-tool K2 G-code generation offline
+        run: |
+          python3 scripts/probe_slicer_staging.py \
+            --printer /tmp/orca-official-k2/printer.json \
+            --filament /tmp/orca-official-k2/filament.json \
+            --second-filament /tmp/orca-official-k2/filament.json \
+            --process /tmp/orca-official-k2/process.json \
+            --model /tmp/orca-two-tool.3mf
+      - name: Publish tested binary for manual review and checksum approval
+        uses: actions/upload-artifact@v4
+        with:
+          name: orcaslicer-2.5.0-reviewed-compatibility-candidate
+          path: ${{ steps.built.outputs.asset }}
+          retention-days: 7
+          if-no-files-found: error
