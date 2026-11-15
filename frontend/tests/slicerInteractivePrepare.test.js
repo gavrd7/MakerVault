@@ -778,3 +778,25 @@ test("inspector top uses measured camera row instead of a fixed viewport offset"
   assert.match(editor,/camera\.getBoundingClientRect\(\)\.top/);
   assert.match(editor,/viewport\.style\.setProperty\("--slicer-overlay-top"/);
 });
+
+test("native slot-to-tool assignments persist through a slicer draft and cannot silently enable multimaterial slicing", () => {
+  const workbench = fs.readFileSync(path.join(base, "components/SlicerWorkbench.jsx"), "utf8");
+  const scene = fs.readFileSync(path.join(base, "components/SlicerPrepareWorkspace.jsx"), "utf8");
+  assert.match(workbench, /setMaterialToolBindings\(job\.settings\?\.material_tool_bindings \|\| \[\]\)/);
+  assert.match(workbench, /setMaterialTopology\(job\.settings\?\.material_topology \|\| ""\)/);
+  assert.match(workbench, /material_tool_bindings:materialToolBindings/);
+  assert.match(workbench, /material_topology:materialTopology/);
+  assert.match(scene, /Native tool assignments/);
+  assert.match(scene, /Physical slot positions are not native tool indices/);
+  assert.match(scene, /singleSlotToolMatches/);
+  assert.match(scene, /materialRoutingPending/);
+  assert.match(scene, /manual_filament_change/);
+  assert.match(scene, /independent_toolheads/);
+});
+test("slicer engine status differentiates deployment and worker verification", () => {
+  const workbench = fs.readFileSync(path.join(base,"components/SlicerWorkbench.jsx"),"utf8");
+  assert.match(workbench, /catalogue\.deployment_enabled === true/);
+  assert.match(workbench, /!workerDeploymentEnabled/);
+  assert.match(workbench, /!workerConfigured/);
+  assert.match(workbench, /worker engine passed health, image digest and binary-version checks/);
+});
