@@ -312,6 +312,7 @@ def run_orca(binary: Path, workdir: Path, *, timeout_seconds: int = DEFAULT_TIME
             output = (b"".join(stderr_head) + b"\n" + b"".join(stderr_tail) +
                       b"\n" + b"".join(stdout_head) + b"\n" + b"".join(stdout_tail))
             reason = _engine_exit_reason(output)
+            keys = ()
             if reason == "native-project-settings-invalid":
                 keys = _safe_out_of_range_options(output)
                 logger.warning("OrcaSlicer rejected native config ranges; known keys=%s; "
@@ -326,7 +327,10 @@ def run_orca(binary: Path, workdir: Path, *, timeout_seconds: int = DEFAULT_TIME
                 reason = "cli-validation-exit-239"
             # Reason and exit status are bounded diagnostics, not CLI output.
             logger.warning("OrcaSlicer subprocess ended: exit=%s category=%s", proc.returncode, reason)
-            raise WorkerError("OrcaSlicer CLI exited: " + reason + ".")
+            error = WorkerError("OrcaSlicer CLI exited: " + reason + ".")
+            # Expose only validated option identifiers, never CLI output or values.
+            error.option_keys = keys if reason == "native-project-settings-invalid" else ()
+            raise error
         outdir = workdir / "orca-output"
         if outdir.is_symlink() or not outdir.is_dir():
             raise WorkerError("OrcaSlicer produced no safe output directory.")
