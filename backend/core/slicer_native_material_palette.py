@@ -94,6 +94,40 @@ def resolve_native_material_palette(
     }
 
 
+def ordered_material_profile_ids(bindings, slot_profiles, *, main_profile_id):
+    """Return native filament preset IDs in exact tool order, not bay order."""
+    if (not isinstance(bindings, list) or not isinstance(slot_profiles, list)
+            or not 2 <= len(bindings) <= MAX_NATIVE_TOOLS
+            or len(slot_profiles) != len(bindings)):
+        raise MaterialRoutingError("Choose 2–16 mapped tools and matching native filament presets.")
+    mapping = {}
+    for row in bindings:
+        if (not isinstance(row, dict) or set(row) != {"slot_id", "tool_index"}
+                or not isinstance(row["slot_id"], str)
+                or not isinstance(row["tool_index"], int)
+                or isinstance(row["tool_index"], bool)
+                or row["slot_id"] in mapping):
+            raise MaterialRoutingError("Invalid or duplicate material tool mapping.")
+        mapping[row["slot_id"]] = row["tool_index"]
+    tools = sorted(mapping.values())
+    if tools != list(range(len(bindings))):
+        raise MaterialRoutingError("Native tool indices must form a contiguous sequence starting at zero.")
+    profiles = {}
+    for row in slot_profiles:
+        if (not isinstance(row, dict) or set(row) != {"slot_id", "profile_id"}
+                or row["slot_id"] not in mapping
+                or row["slot_id"] in profiles):
+            raise MaterialRoutingError("Each physical slot needs one unique native filament preset.")
+        profiles[row["slot_id"]] = row["profile_id"]
+    if len(profiles) != len(mapping):
+        raise MaterialRoutingError("Every mapped tool needs a matching native filament preset.")
+    slots_by_tool = {tool:slot for slot, tool in mapping.items()}
+    ordered = tuple(profiles[slots_by_tool[index]] for index in range(len(bindings)))
+    if str(ordered[0]) != str(main_profile_id):
+        raise MaterialRoutingError("Logical tool 0 must match the selected main filament preset.")
+    return ordered
+
+
 def prepare_multimaterial_plate(
     objects_with_stl, *, bed_width, bed_depth, printer_id, owner_id,
     engine, engine_version, topology, tool_bindings, native_filament_profiles,
