@@ -699,7 +699,7 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
 
   async function saveDraft(mode = "draft") {
     if (busy || loading || !canPrepare) return;
-    const sliceNow = !["draft","project"].includes(mode);
+    const sliceNow = !["draft","project","native-material"].includes(mode);
     const saveOutput = mode === "save-and-slice";
     const workflow = mode === "quick" ? "quick" : mode === "draft" && !editorOpen ? "setup" : "interactive";
     setError(""); setNotice("");
@@ -801,9 +801,9 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
       savedJob = job;
       setJobs(current => [job, ...current]);
       if (!sliceNow) {
-        if(mode==="project"){
+        if(mode==="project" || mode==="native-material"){
           const response=await fetch("/api/printing/slicer/jobs/"+job.id+
-            "/export-project/",{credentials:"same-origin"});
+            (mode==="native-material"?"/export-native-materials/":"/export-project/"),{credentials:"same-origin"});
           if(!response.ok){
             const failure=await response.json().catch(()=>({}));
             throw new Error(failure.error||"3MF project export was rejected.");
@@ -812,10 +812,10 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
           const url=URL.createObjectURL(blob);
           try{
             const link=document.createElement("a");
-            link.href=url;link.download="MakerVault-project.3mf";
+            link.href=url;link.download=mode==="native-material"?"MakerVault-native-material-test.3mf":"MakerVault-project.3mf";
             document.body.appendChild(link);link.click();link.remove();
           }finally{setTimeout(()=>URL.revokeObjectURL(url),1000);}
-          setNotice("Saved multi-plate project as a .3mf file.");
+          setNotice(mode==="native-material"?"Exported Orca-compatible multi-material 3MF for offline review. Physical printer tool changes are NOT verified or enabled.":"Saved multi-plate project as a .3mf file.");
         }else{
           setNotice("Slicing configuration saved as a private draft. No slicer or printer command was run.");
           setShowDrafts(true);
@@ -1317,7 +1317,7 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
       filamentProfiles={forKind("filament")}
       onSaveCustomProcessProfile={saveInteractiveProcessProfile}
       onBackToSetup={() => setEditorOpen(false)} onSaveDraft={() => saveDraft("draft")}
-      onSaveProject={() => saveDraft("project")} onSliceAll={() => saveDraft("all")}
+      onSaveProject={() => saveDraft("project")} onExportNativeMaterials={() => saveDraft("native-material")} onSliceAll={() => saveDraft("all")}
        onImportProject={importProjectFile}
       onSlice={() => saveDraft("slice")}
     /> : <>
