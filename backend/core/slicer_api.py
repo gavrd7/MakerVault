@@ -702,6 +702,88 @@ def import_project_3mf(request):
 
 @login_required
 @require_http_methods(["GET"])
+def export_native_multimaterial_3mf(request, job_id):
+    """Export an Orca-compatible model/tool 3MF for OFFLINE inspection.
+
+    This is never printer submission and does not allow queued multi-material
+    execution. Each selected filament must already be a verified native profile.
+    """
+    from .slicer_native_material_palette import prepare_multimaterial_plate
+    from .slicer_material_routing import MaterialRoutingError
+    from .slicer_execution import _read_owned_file, MAX_INPUT
+    from .slicer_bed_dimensions import trusted_plate_dimensions
+
+    job = SliceJob.objects.select_related("printer_profile", "filament_profile").filter(
+        pk=job_id, owner=request.user, status="draft"
+    ).first()
+    if not job:
+        return _error("Slicer draft not found.", 404)
+    settings = job.settings or {}
+    objects = settings.get("plate_objects") or []
+    binding_rows = settings.get("material_tool_bindings") or []
+    profile_rows = settings.get("slot_filament_profiles") or []
+    if (job.engine != "orcaslicer" or not 2 <= len(objects) <= 12
+            or not 2 <= len(binding_rows) <= 16
+            or not isinstance(profile_rows, list)):
+        return _error("Choose a saved Orca draft with two or more routed model filaments.", 409)
+    if any(item.get("colour_paint") for item in objects):
+        return _error("Per-face colour painting is not yet supported in native multi-material export.", 409)
+    if settings.get("flush_settings") is not None:
+        return _error("Custom flushing settings require separate native validation.", 409)
+    try:
+        tool_bindings = {item["slot_id"]: item["tool_index"] for item in binding_rows}
+        profile_map = {item["slot_id"]: item["profile_id"] for item in profile_rows}
+        if (len(tool_bindings) != len(binding_rows)
+                or len(profile_map) != len(profile_rows)
+                or set(tool_bindings) != set(profile_map)):
+            raise MaterialRoutingError("Provide one native filament preset for each mapped physical slot.")
+        count = len(tool_bindings)
+        if set(tool_bindings.values()) != set(range(count)):
+            raise MaterialRoutingError("Native filament tools must form a contiguous sequence starting at zero.")
+        ordered_ids = [
+            profile_map[next(slot for slot, tool in tool_bindings.items() if tool == index)]
+            for index in range(count)
+        ]
+        if str(ordered_ids[0]) != str(job.filament_profile_id):
+            raise MaterialRoutingError("Logical tool 0 must use the selected main filament preset.")
+        by_id = {str(p.pk): p for p in SlicerProfile.objects.filter(
+            owner=request.user, pk__in=ordered_ids, kind="filament"
+        )}
+        if len(by_id) != len(set(str(value) for value in ordered_ids)):
+            raise MaterialRoutingError("One or more native filament profiles are unavailable.")
+        profiles = [by_id[str(profile_id)] for profile_id in ordered_ids]
+        width, depth = trusted_plate_dimensions(job.printer_profile)
+        source_models = []
+        for item in objects:
+            asset = FileAsset.objects.filter(
+                pk=item["asset_id"], owner=request.user, category="mesh"
+            ).first()
+            if asset is None:
+                raise MaterialRoutingError("A model asset is no longer available.")
+            source_models.append((
+                item, _read_owned_file(asset, request.user.pk, MAX_INPUT, "Model STL")
+            ))
+        result = prepare_multimaterial_plate(
+            source_models, bed_width=width, bed_depth=depth,
+            printer_id=job.printer_id, owner_id=job.owner_id,
+            engine=job.engine, engine_version=job.engine_version,
+            topology=settings.get("material_topology"),
+            tool_bindings=tool_bindings, native_filament_profiles=profiles,
+        )
+    except (MaterialRoutingError, ValueError, KeyError, TypeError,
+            SlicerExecutionError, SlicerProfileError, OSError) as exc:
+        # Only bounded validator error messages are returned; no source file content.
+        return _error(str(exc), 409)
+    response = HttpResponse(result["model_3mf"], content_type="model/3mf")
+    response["Content-Disposition"] = 'attachment; filename="MakerVault-native-material-test.3mf"'
+    response["X-Content-Type-Options"] = "nosniff"
+    response["Cache-Control"] = "no-store"
+    response["X-MakerVault-Printer-Submission-Verified"] = "false"
+    return response
+
+
+@login_required
+@require_http_methods(["GET"])
 def export_project_3mf(request, job_id):
     """Return a self-contained private 3MF project. Never send it to a printer."""
     job = SliceJob.objects.filter(pk=job_id, owner=request.user).select_related(
