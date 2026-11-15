@@ -30,7 +30,7 @@ const TOOLS = [
   { name: "Hollow", target: "hollow", icon: "hollow", group: "geometry" },
   { name: "Mesh boolean", target: "boolean", icon: "boolean", group: "geometry" },
   { name: "Measure", target: "measure", icon: "measure", expandable: true, group: "inspect" },
-  { name: "Support painting", icon: "paint-support", pending: "Native per-face support annotations", group: "paint" },
+  { name: "Support painting", target: "paint_support", icon: "paint-support", group: "paint" },
   { name: "Seam painting", icon: "paint-seam", pending: "Native seam-region annotations", group: "paint" },
   { name: "Variable layer height", icon: "layers", pending: "Native variable layer representation", group: "paint" },
   { name: "Colour painting", target: "paint_colour", icon: "paint-colour", group: "paint" },
@@ -499,11 +499,11 @@ export default function SlicerPrepareWorkspace({
       return;
     }
     setAddModelMenuOpen(false);
-    if (tool.target === "paint_colour") {
+    if (["paint_colour","paint_support"].includes(tool.target)) {
       if (!selectedId && objects[0]?.instance_id) selectSingle(objects[0].instance_id);
       setMeasureOptionsOpen(false);setMeasurementVisible(false);setAutoOrientMenuOpen(false);
       setPaintError("");
-      setToolMode(current => current === "paint_colour" ? "select" : "paint_colour");
+      setToolMode(current => current === tool.target ? "select" : tool.target);
       setMobilePane("plate");
       return;
     }
@@ -849,14 +849,15 @@ export default function SlicerPrepareWorkspace({
     ["height","paint-height","Height range · paint between two model heights"],
   ];
   const paintSelected = objects.find(row => row.instance_id === selectedId);
-  const paintPanel = toolMode === "paint_colour" && (
-    <section className={"slicerColourPaintPanel"+(paintMobileMinimised?" slicerPaintMinimised":"")} aria-label="Colour painting controls"
+  const isSupportPainting=toolMode==="paint_support";
+  const paintPanel = ["paint_colour","paint_support"].includes(toolMode) && (
+    <section className={"slicerColourPaintPanel"+(paintMobileMinimised?" slicerPaintMinimised":"")} aria-label={isSupportPainting?"Support painting controls":"Colour painting controls"}
       style={{position:"absolute",top:"var(--slicer-paint-top, 56px)",left:12,zIndex:20,width:"min(310px, calc(100% - 74px))",
         maxHeight:"min(490px, calc(100% - 24px))",overflowY:"auto",padding:10,
         border:"1px solid #476079",borderRadius:10,background:"rgba(17,27,42,.96)",
         boxShadow:"0 8px 26px rgba(0,0,0,.4)",display:"grid",gap:8}}>
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:8}}>
-        <strong>Colour painting</strong>
+        <strong>{isSupportPainting?"Support painting":"Colour painting"}</strong>
         <div style={{display:"flex",alignItems:"center",gap:5}}>
           <button type="button" className="slicerPaintMobileMinimise"
             aria-expanded={!paintMobileMinimised}
@@ -864,7 +865,7 @@ export default function SlicerPrepareWorkspace({
             {paintMobileMinimised?"Tools":"Minimise"}
           </button>
         <button type="button" onClick={()=>{setToolMode("select");setPaintError("");}}
-          aria-label="Close colour painting">Done</button>
+          aria-label="Close painting">Done</button>
         </div>
       </div>
       <div role="group" aria-label="Painting tools" style={{display:"flex",flexWrap:"wrap",gap:5}}>
@@ -875,7 +876,7 @@ export default function SlicerPrepareWorkspace({
             borderRadius:7,width:33,height:33,display:"grid",placeItems:"center",padding:5}}>
           <SlicerUiIcon name={icon} size={19}/></button>)}
       </div>
-      <div role="group" aria-label="Paint filament palette" style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+      {!isSupportPainting&&<div role="group" aria-label="Paint filament palette" style={{display:"flex",gap:6,flexWrap:"wrap"}}>
         {paintPalette.map((slot,index)=><button key={index} type="button"
           title={slot.label} aria-label={"Paint with "+slot.label}
           aria-pressed={!paintErase&&paintSlot===index}
@@ -889,16 +890,22 @@ export default function SlicerPrepareWorkspace({
             border:"1px solid #9aa9bc",display:"grid",placeItems:"center",
             color:materialTextColor(slot.color),fontWeight:700,fontSize:11}}>{index+1}</span>
         </button>)}
-      </div>
+      </div>}
+      {isSupportPainting&&<div role="group" aria-label="Support painting action" style={{display:"flex",gap:5}}>
+        {[[0,"Enforce supports"],[1,"Block supports"]].map(([slot,label])=><button type="button" key={slot}
+          aria-pressed={!paintErase&&paintSlot===slot} className={!paintErase&&paintSlot===slot?"isActive":""}
+          onClick={()=>{setPaintSlot(slot);setPaintErase(false);}}>{label}</button>)}
+      </div>}
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:5}}>
-        <small>{paintSelected?.colour_paint?.version === 2 ? `${paintSelected.colour_paint.regions?.reduce((n,region)=>n+region.patches.length,0)||0} clipped patches` : `${paintSelected?.colour_paint ? Object.keys(paintSelected.colour_paint.faces||{}).length : 0} facets (legacy)`}</small>
+        <small>{isSupportPainting ? `${paintSelected?.support_paint?.regions?.reduce((n,r)=>n+r.patches.length,0)||0} support patches` : paintSelected?.colour_paint?.version === 2 ? `${paintSelected.colour_paint.regions?.reduce((n,region)=>n+region.patches.length,0)||0} clipped patches` : `${paintSelected?.colour_paint ? Object.keys(paintSelected.colour_paint.faces||{}).length : 0} facets (legacy)`}</small>
         <div className="slicerPaintEditActions">
           <button type="button" title="Erase painted faces" aria-label="Erase painted faces"
             aria-pressed={paintErase} onClick={()=>setPaintErase(true)}
             className={paintErase?"isActive":""}>Erase</button>
-        <button type="button" disabled={!paintSelected?.colour_paint}
+        <button type="button" disabled={!(isSupportPainting?paintSelected?.support_paint:paintSelected?.colour_paint)}
           onClick={()=>{updatePlate(latest.current.map(item=>{
             if(item.instance_id!==selectedId)return item;
+            if(isSupportPainting){const {support_paint:unused,...rest}=item;return rest;}
             const {colour_paint:unused,...rest}=item;return rest;
           }));setPaintError("");}}>Clear all</button>
         </div>
@@ -1020,11 +1027,12 @@ export default function SlicerPrepareWorkspace({
             (tool.target === "rotation_deg" && toolMode === "rotate") ||
             (tool.target === "scale_percent" && toolMode === "scale") ||
             (tool.target === "measure" && measurementVisible) ||
+            (tool.target === "paint_support" && toolMode === "paint_support") ||
             (tool.target === "paint_colour" && toolMode === "paint_colour") ||
             (tool.target === "lay_face" && toolMode === "lay_face") ||
             (tool.target === "auto_orient" && autoOrientMenuOpen) ||
             (tool.target === "import" && addModelMenuOpen)) ? "isActive" : ""}
-          aria-pressed={tool.target === "paint_colour" ? toolMode === "paint_colour" : tool.target === "measure" ? measurementVisible :
+          aria-pressed={["paint_colour","paint_support"].includes(tool.target) ? toolMode === tool.target : tool.target === "measure" ? measurementVisible :
             tool.target === "lay_face" ? toolMode === "lay_face" :
             tool.target === "auto_orient" ? autoOrientMenuOpen :
             ["x_mm", "rotation_deg", "scale_percent"].includes(tool.target)
