@@ -1882,7 +1882,11 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
               <summary>Understand this slicing failure and how to fix it</summary>
               {/238|native-project-settings-invalid|out.of.range/i.test(job.message || "") ? <>
                 <p>OrcaSlicer rejected a native setting. Even official presets can contain values that the installed command-line engine does not accept.</p>
-                <p><strong>Next steps:</strong> Check the rejected setting name in the failure message, if supplied. MakerVault keeps official presets unchanged and should resolve their dependencies automatically during import. A missing setting name means the engine has not supplied enough information for a safe automatic correction. Do not guess a replacement retraction value.</p>
+                {/Rejected native setting\(s\):/i.test(job.message || "") ? (
+                  <p><strong>Identified settings:</strong> The names of the rejected settings are shown in the failure message above. MakerVault preserves your official profiles. The engine must validate any replacement before slicing.</p>
+                ) : (
+                  <p><strong>Why no setting is shown:</strong> This saved failure contains only the error category, not OrcaSlicer's rejected setting names. Updating MakerVault cannot recover details that were never saved with the job. Open this configuration and start a new slice using the updated worker to capture any setting names OrcaSlicer reports. Do not change retraction values by guesswork.</p>
+                )}
               </> : /239|compatib|native machine identity/i.test(job.message || "") ? <>
                 <p>The native printer and process identities may not match. The exit code alone cannot establish the exact cause.</p>
                 <p><strong>Next steps:</strong> Select the matching official printer and process profiles, or a compatible self-contained custom printer profile with unchanged machine geometry and nozzle.</p>
