@@ -3196,7 +3196,7 @@ export default function SlicerPlateEditor({
           {transformOverlayExpanded && <small className="slicerViewportMeasurementHint">
             Move the model with the on-plate handles or enter X, Y and Z positions directly.
             Centre model restores its X and Y position to the plate centre.
-          </small>
+          </small>}
         </> : toolMode === "rotate" ? <>
           <div className="slicerViewportTransformGrid">
             {["X", "Y", "Z"].map((axis, index) => <label key={axis}>{axis} (°)
