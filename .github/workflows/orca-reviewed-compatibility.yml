@@ -15,6 +15,15 @@ jobs:
     steps:
       - name: Checkout MakerVault compatibility tooling
         uses: actions/checkout@v4
+        with:
+          # Registered on main, but executable patch and tests are on this branch.
+          ref: feature/self-hosted-slicer-foundation
+      - name: Verify required compatibility tooling is present
+        run: |
+          test -f scripts/orca_compatibility_patch.py
+          test -f scripts/tests/test_orca_compatibility_patch.py
+          test -f scripts/build_orca_reference_fixture.py
+          test -f scripts/probe_slicer_staging.py
       - name: Download pinned Orca source
         run: |
           git clone --depth 1 --branch v2.5.0 https://github.com/OrcaSlicer/OrcaSlicer.git upstream-orca
