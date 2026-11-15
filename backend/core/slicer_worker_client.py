@@ -140,6 +140,7 @@ def run_remote_job(job_id, engine, version, model, printer_profile, filament_pro
                        "running slicer engine", "validating generated G-code"}
             stage = None
             reason = None
+            reason_details = None
             reasons = set(REASONS)
             try:
                 declared_error_length = response.headers.get("Content-Length")
@@ -158,9 +159,24 @@ def run_remote_job(job_id, engine, version, model, printer_profile, filament_pro
                                 stage = result["stage"]
                             if result.get("reason") in reasons:
                                 reason = result["reason"]
+                            setting_keys = result.get("setting_keys") if reason == "native-project-settings-invalid" else None
+                            if isinstance(setting_keys, list) and len(setting_keys) <= 8:
+                                import re
+                                safe_keys = [key for key in setting_keys
+                                             if isinstance(key, str) and
+                                             re.fullmatch(r"[a-z][a-z0-9_]{1,63}", key) and
+                                             not any(word in key for word in (
+                                                 "secret", "password", "token", "apikey",
+                                                 "api_key", "authorization", "credential",
+                                                 "private", "access_key"
+                                             ))]
+                                if safe_keys:
+                                    reason_details = ", ".join(dict.fromkeys(safe_keys))
             except (ValueError, requests.RequestException, UnicodeDecodeError):
                 pass
             message = explain_worker_failure(reason, response.status_code)
+            if reason_details:
+                message += " Rejected native setting(s): " + reason_details + "."
             if reason:
                 message += " [" + reason + "]"
             raise SlicerWorkerError(message)
