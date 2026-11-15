@@ -616,6 +616,23 @@ def import_project_3mf(request):
                     if not isinstance(value, dict) or value.get("version") != 2:
                         raise ValueError("Project sidecar is not v2 painting data.")
                     row["colour_paint"] = validate_colour_paint(value)
+                for row in plate["objects"]:
+                    support_filename = row.pop("support_sidecar", None)
+                    if support_filename is None:
+                        continue
+                    if ("support_paint" in row or not isinstance(support_filename, str) or
+                            not re.fullmatch(r"Metadata/paint/support-[0-9]{4}\\.json", support_filename) or
+                            support_filename in seen_paint_files):
+                        raise ValueError("Invalid project support-paint sidecar.")
+                    seen_paint_files.add(support_filename)
+                    info = archive.getinfo(support_filename)
+                    if not 0 < info.file_size <= 16 * 1024 * 1024:
+                        raise ValueError("Project support-paint sidecar exceeds safe limits.")
+                    sidecar_bytes += info.file_size
+                    if sidecar_bytes > 64 * 1024 * 1024:
+                        raise ValueError("Project painting regions exceed safe limits.")
+                    value = json.loads(archive.read(info).decode("utf-8"))
+                    row["support_paint"] = validate_support_paint(value)
             active_id = metadata.get("active_plate_id")
             ids, source_names, total = set(), set(), 0
             for plate in plates:
