@@ -191,13 +191,19 @@ test("painting toolbar uses complete action names", () => {
     assert.match(editor, new RegExp('"' + label + '":"' + label + '"'));
 });
 
-test("mobile inspector docks below the plate instead of covering the 3D model", () => {
+test("mobile mesh tools dock inside the 3D viewport alongside Measure", () => {
   const plate = fs.readFileSync(path.join(base, "components/SlicerPlateEditor.jsx"), "utf8");
-  assert.match(plate, /const mobileMeshInspector = typeof window !== "undefined"/);
-  assert.match(plate, /hostRef\.current\?\.closest\("\.slicerPlatePanel"\)/);
-  assert.match(plate, /<\/div>,meshInspectorHost/);
-  assert.match(css, /\.slicerPlatePanel>\.slicerAutoOrientModalBackdrop:has\(\.slicerViewportAnchoredModal\)/);
-  assert.match(css, /position:relative!important;/);
+  const viewport = plate.indexOf('<div className="slicerPlateCanvasViewport"');
+  const measure = plate.indexOf('aria-label="On-plate measurements"', viewport);
+  const mount = plate.indexOf('className="slicerMobileGeometryDock"', measure);
+  const options = plate.indexOf('className="slicerPlateDisplayOptions"', mount);
+  assert.ok(viewport >= 0 && measure > viewport && mount > measure && options > mount);
+  assert.match(plate, /const meshInspectorHost = mobileMeshInspector \? mobileMeshDock : document\.body/);
+  assert.match(plate, /solidDialog && meshInspectorHost && createPortal/);
+  assert.match(plate, /splitPreview && meshInspectorHost && createPortal/);
+  assert.match(css, /slicerPlateCanvasViewport > \.slicerMobileGeometryDock/);
+  assert.match(css, /max-height:min\(46dvh, 320px\)!important/);
+  assert.match(css, /slicerMobileGeometryDock \.slicerAutoOrientModalHeader h3/);
 });
 
 test("mobile settings selection is inset and model transform fields align vertically", () => {
