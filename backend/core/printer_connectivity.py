@@ -1180,6 +1180,26 @@ def poll_connection(connection) -> dict:
         capabilities["materials"] = bool(
             metadata.get("ace_connected") or snapshot.get("materials")
         )
+    # Publish read-only material architecture evidence for the slicer adapter
+    # contract. These signals identify a supported automatic feeder, NOT
+    # verified firmware toolchange commands or permission to start prints.
+    feeder_flags = {
+        "creality_local": "cfs_connected",
+        "bambu_local": "ams_connected",
+        "flashforge": "material_station_connected",
+        "anycubic": "ace_connected",
+    }
+    feeder_flag = feeder_flags.get(connection.adapter)
+    if feeder_flag and metadata.get(feeder_flag) is True:
+        capabilities["material_system"] = {
+            "available": True,
+            "topology": "single_nozzle_changer",
+            "physical_toolchange_verified": False,
+        }
+    elif feeder_flag:
+        # Do not advertise an absent or stale system merely because the
+        # selected printer model may be capable of using one.
+        capabilities.pop("material_system", None)
     connection.capabilities = capabilities
     connection.last_snapshot = snapshot
     connection.save(update_fields=[
