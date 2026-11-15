@@ -45,8 +45,8 @@ services:
       - "${MAKERVAULT_BIND_ADDRESS:-0.0.0.0}:${MAKERVAULT_PORT:-8765}:8000"
       - "${MAKERVAULT_HTTPS_BIND_ADDRESS:-0.0.0.0}:${MAKERVAULT_HTTPS_PORT:-8443}:8443"
       # WebRTC media only (go2rtc API/signalling remains loopback-only).
-      - "${MAKERVAULT_WEBRTC_BIND_ADDRESS:-0.0.0.0}:8555:8555/udp"
-      - "${MAKERVAULT_WEBRTC_BIND_ADDRESS:-0.0.0.0}:8555:8555/tcp"
+      - "${MAKERVAULT_WEBRTC_BIND_ADDRESS:-0.0.0.0}:${MAKERVAULT_WEBRTC_PORT:-8555}:8555/udp"
+      - "${MAKERVAULT_WEBRTC_BIND_ADDRESS:-0.0.0.0}:${MAKERVAULT_WEBRTC_PORT:-8555}:8555/tcp"
     volumes:
       - ${MEDIA_STORAGE:-makervault_media}:/app/media
       - ${KEY_STORAGE:-makervault_keys}:/app/keys
