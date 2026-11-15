@@ -155,6 +155,55 @@ export function CameraPlayback({ camera, url, compact = false }) {
   const [captureInfo, setCaptureInfo] = useState("");
   const nativeRecovery = useRef(false);
   const frameSeen = useRef(false);
+  // Safari can suspend a WebRTC peer without firing "failed" when the app
+  // backgrounds. Recreate its receive-only connection when the page returns.
+  useEffect(() => {
+    if (camera.mode !== "creality_webrtc") return;
+    let backgrounded = document.visibilityState === "hidden";
+    let lastResume = 0;
+    const restart = () => {
+      if (document.visibilityState === "hidden") return;
+      const target = video.current;
+      const stale = backgrounded || target?.srcObject?.getVideoTracks?.().some(track =>
+        track.readyState === "ended" || track.muted
+      );
+      if (!stale) {
+        // A foreground tap/focus can also revive suspended autoplay.
+        if (target?.paused && target.srcObject) {
+          target.play().catch(reason => {
+            if (reason?.name === "NotAllowedError") setPlaybackBlocked(true);
+          });
+        }
+        return;
+      }
+      const now = Date.now();
+      if (now - lastResume < 1500) return; // pageshow + focus often arrive together
+      lastResume = now;
+      backgrounded = false;
+      setTransport("webrtc");
+      setAttempt(current => current + 1);
+    };
+    const visibilityChanged = () => {
+      if (document.visibilityState === "hidden") backgrounded = true;
+      else restart();
+    };
+    const pageHidden = () => { backgrounded = true; };
+    const pageShown = event => {
+      if (event.persisted) backgrounded = true;
+      restart();
+    };
+    document.addEventListener("visibilitychange", visibilityChanged);
+    window.addEventListener("pagehide", pageHidden);
+    window.addEventListener("pageshow", pageShown);
+    window.addEventListener("focus", restart);
+    return () => {
+      document.removeEventListener("visibilitychange", visibilityChanged);
+      window.removeEventListener("pagehide", pageHidden);
+      window.removeEventListener("pageshow", pageShown);
+      window.removeEventListener("focus", restart);
+    };
+  }, [camera.mode, camera.id, url]);
+
 
   useEffect(() => {
     let cancelled = false;
