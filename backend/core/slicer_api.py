@@ -1317,7 +1317,7 @@ def customise_profile(request, profile_id):
                     numeric = float(value.removesuffix("%") if isinstance(value, str) else value)
                 except (ValueError, TypeError):
                     continue
-                if math.isfinite(numeric) and limits[0] <= numeric <= limits[1]:
+                if math.isfinite(numeric):
                     available[key] = limits
                     current[key] = numeric
         except (OSError, ValueError, UnicodeDecodeError):
@@ -1325,7 +1325,8 @@ def customise_profile(request, profile_id):
         return JsonResponse({
             "profile": _profile_summary(profile),
             "settings": {name: {"min": limits[0], "max": limits[1],
-                               "current": current.get(name)}
+                               "current": current.get(name),
+                               "outside_editor_bounds": not (limits[0] <= current[name] <= limits[1])}
                          for name, limits in available.items()},
             "warning": "Custom presets are unverified; original native preset is preserved.",
         })
