@@ -139,6 +139,21 @@ class CameraRelayApiTests(TestCase):
         self.assertEqual(self.client.post(url, {"sdp": offer}, content_type="application/json").status_code, 404)
         answer.assert_called_once()
 
+    @patch("core.camera_views.webrtc_answer")
+    def test_webrtc_signalling_rejects_disabled_and_non_webrtc_sources(self, answer):
+        url = self.base.replace("hls/", "webrtc/offer/")
+        offer = "v=0\\r\\nm=video 9 UDP 96\\r\\n"
+        self.connection.enabled = False
+        self.connection.save(update_fields=["enabled"])
+        self.assertEqual(self.client.post(url, {"sdp": offer}, content_type="application/json").status_code, 409)
+        self.connection.enabled = True
+        config = dict(self.connection.config)
+        config["cameras"] = [{**config["cameras"][0], "mode": "snapshot", "url": "http://printer.lan/snap.jpg"}]
+        self.connection.config = config
+        self.connection.save(update_fields=["enabled", "config"])
+        self.assertEqual(self.client.post(url, {"sdp": offer}, content_type="application/json").status_code, 400)
+        answer.assert_not_called()
+
     @patch("core.camera_views.hls_master")
     def test_owner_can_start_authenticated_hls_session(self, master):
         master.return_value = (
