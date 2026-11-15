@@ -134,7 +134,7 @@ export default function SlicerPrepareWorkspace({
   const [measureClearVersion, setMeasureClearVersion] = useState(0);
   const [nativeProcessFields, setNativeProcessFields] = useState({});
   const [settingsSearch, setSettingsSearch] = useState("");
-  const [settingsLevel, setSettingsLevel] = useState("basic");
+  const [settingsLevel, setSettingsLevel] = useState("advanced");
   const [settingsExpanded, setSettingsExpanded] = useState(false);
   const [mobilePane, setMobilePane] = useState("plate");
   const [nativeFieldDrafts, setNativeFieldDrafts] = useState({});
@@ -760,7 +760,7 @@ export default function SlicerPrepareWorkspace({
               !nativeProcessLoading && !nativeProcessError && <p>
                 {group === "Multifilament"
                   ? "Multicolour tool mappings and flushing volumes require engine-native multi-material support."
-                  : "No matching supported native settings are available. Try Advanced or another search."}
+                  : "No matching settings in this native process profile at the selected detail level. Try Expert or another process profile."}
               </p>}
             {Object.keys(editingOverrides).length > 0 && <div className="slicerNativeSettingsActions">
               <span>{Object.keys(editingOverrides).length} {editingObject ? "object" : "global"} draft override(s) · Original profile unchanged</span>
