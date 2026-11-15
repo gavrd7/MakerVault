@@ -1522,9 +1522,9 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
           <p className="full slicerSettingHelp">
             <strong>Retraction when cutting filament</strong> is separate from ordinary travel retraction.
             It affects some filament-change and cutting workflows, including multi-material systems.
-            An official profile may contain a value accepted by its desktop slicer but rejected
-            by a particular CLI build. Only edit a custom copy after checking the printer's
-            requirements: reducing the value may affect CFS unloading and filament changes.
+            Official presets are preserved. A CLI version that rejects the manufacturer's
+            value requires an engine compatibility fix, not a mandatory user adjustment.
+            Changing this value can affect filament cutting and material changes.
           </p>}
         <div className="full settingsActions">
           <button type="button" disabled={editProfileBusy} onClick={() => setProfileModal("saved")}>Cancel</button>
