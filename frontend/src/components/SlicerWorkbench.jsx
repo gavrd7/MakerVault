@@ -103,8 +103,6 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
   const [customBed, setCustomBed] = useState({ enabled: false, x: "220", y: "220" });
   const [flushSettings, setFlushSettings] = useState(null);
   const [slotFilamentProfiles,setSlotFilamentProfiles] = useState([]);
-  const [materialToolBindings,setMaterialToolBindings] = useState([]);
-  const [materialTopology,setMaterialTopology] = useState("");
   const [profileLineages, setProfileLineages] = useState({});
   const [workerConfigured, setWorkerConfigured] = useState(false);
   const [workerDeploymentEnabled, setWorkerDeploymentEnabled] = useState(false);
@@ -327,7 +325,6 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
     // presets. Never silently reuse an old printer’s directional matrix.
     setFlushSettings(null);
     if(kind==="printer" || kind==="filament")setSlotFilamentProfiles([]);
-    if(kind==="printer") { setMaterialToolBindings([]); setMaterialTopology(""); }
     manuallyChosenProfiles.current.add(kind);
     const profile = profiles.find(item => item.id === id);
     setForm(current => ({
@@ -344,8 +341,6 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
     setProfileSuggestions({});
     setFlushSettings(null);
     setSlotFilamentProfiles([]);
-    setMaterialToolBindings([]);
-    setMaterialTopology("");
     // Physical CFS/AMS slot IDs belong to the previously registered printer.
     // Preserve every model and visual colour, but clear invalid physical
     // bindings on *all* plates before using another printer.
@@ -531,8 +526,6 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
     setProcessOverrides(job.settings?.process_overrides || {});
     setFlushSettings(job.settings?.flush_settings || null);
     setSlotFilamentProfiles(job.settings?.slot_filament_profiles || []);
-    setMaterialToolBindings(job.settings?.material_tool_bindings || []);
-    setMaterialTopology(job.settings?.material_topology || "");
     setEditorOpen(true);
     setForm(current => ({
       ...current,
@@ -748,8 +741,6 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
               save_gcode_to_library:false,
               ...(flushSettings ? {flush_settings:flushSettings} : {}),
               ...(slotFilamentProfiles.length ? {slot_filament_profiles:slotFilamentProfiles} : {}),
-              ...(materialToolBindings.length ? {material_tool_bindings:materialToolBindings} : {}),
-              ...(materialTopology ? {material_topology:materialTopology} : {}),
               ...(form.engine==="orcaslicer"?{process_overrides:processOverrides}:{}),
             },
           };
@@ -793,8 +784,6 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
             save_gcode_to_library: saveOutput, workflow,
             ...(flushSettings ? { flush_settings: flushSettings } : {}),
             ...(slotFilamentProfiles.length ? {slot_filament_profiles:slotFilamentProfiles} : {}),
-            ...(materialToolBindings.length ? {material_tool_bindings:materialToolBindings} : {}),
-            ...(materialTopology ? {material_topology:materialTopology} : {}),
             ...(form.engine === "orcaslicer" ? { process_overrides: processOverrides } : {}) },
         },
       });
@@ -1312,8 +1301,6 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
       processOverrides={processOverrides} onProcessOverridesChange={setProcessOverrides}
       flushSettings={flushSettings} onFlushSettingsChange={setFlushSettings}
       slotFilamentProfiles={slotFilamentProfiles} onSlotFilamentProfilesChange={setSlotFilamentProfiles}
-      materialToolBindings={materialToolBindings} onMaterialToolBindingsChange={setMaterialToolBindings}
-      materialTopology={materialTopology} onMaterialTopologyChange={setMaterialTopology}
       filamentProfiles={forKind("filament")}
       onSaveCustomProcessProfile={saveInteractiveProcessProfile}
       onBackToSetup={() => setEditorOpen(false)} onSaveDraft={() => saveDraft("draft")}
