@@ -76,7 +76,7 @@ def resolved(kind, name, *, opener=urlopen, ancestors=(), vendor="Creality"):
     return result
 
 
-def generate(destination, printer, *, opener=urlopen):
+def generate(destination, printer, *, opener=urlopen, preserve_official_values=False):
     if printer not in FIXTURES:
         raise ValueError("Only pinned reference fixtures are supported.")
     target = Path(destination)
@@ -87,7 +87,8 @@ def generate(destination, printer, *, opener=urlopen):
     for kind in ("printer", "filament", "process"):
         name = fixture[kind]
         data = resolved(kind, name, opener=opener, vendor=fixture["vendor"])
-        if printer == "k2" and kind == "printer" and data.get("retraction_distances_when_cut") == "30":
+        if (not preserve_official_values and printer == "k2" and kind == "printer"
+                and data.get("retraction_distances_when_cut") == "30"):
             # Reference-only workaround for the earlier 2.4.2 validation
             # discrepancy. Keep disabled when the new upstream profile has
             # corrected it; never modify production manufacturer profiles.
@@ -109,8 +110,10 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--printer", choices=sorted(FIXTURES), required=True)
     parser.add_argument("--output", type=Path, required=True)
+    parser.add_argument("--preserve-official-values", action="store_true",
+                        help="Diagnostic: retain upstream setting values, even if the CLI rejects them.")
     args = parser.parse_args()
-    generate(args.output, args.printer)
+    generate(args.output, args.printer, preserve_official_values=args.preserve_official_values)
 
 
 if __name__ == "__main__":
