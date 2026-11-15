@@ -110,6 +110,7 @@ export default function SlicerPrepareWorkspace({
   const [toolMode, setToolMode] = useState("select");
   const [paintMode, setPaintMode] = useState("brush");
   const [paintSlot, setPaintSlot] = useState(0);
+  const [supportSlot, setSupportSlot] = useState(0);
   const [paintBrushMm, setPaintBrushMm] = useState(3);
   const [paintAngle, setPaintAngle] = useState(30);
   const [paintHeight, setPaintHeight] = useState([0, 10]);
@@ -841,7 +842,7 @@ export default function SlicerPrepareWorkspace({
       color, label: "Preview colour " + (index + 1),
     }));
   })();
-  // A focused toolset, sharing selection semantics with future support painting.
+  // Shared brush and region selectors for colour and support painting.
   const paintTools = [
     ["brush","paint-brush","Brush · paint the visible surface with an adjustable pen"],
     ["sphere","paint-sphere","Sphere · paint a 3D region around the pointer"],
@@ -893,8 +894,8 @@ export default function SlicerPrepareWorkspace({
       </div>}
       {isSupportPainting&&<div role="group" aria-label="Support painting action" style={{display:"flex",gap:5}}>
         {[[0,"Enforce supports"],[1,"Block supports"]].map(([slot,label])=><button type="button" key={slot}
-          aria-pressed={!paintErase&&paintSlot===slot} className={!paintErase&&paintSlot===slot?"isActive":""}
-          onClick={()=>{setPaintSlot(slot);setPaintErase(false);}}>{label}</button>)}
+          aria-pressed={!paintErase&&supportSlot===slot} className={!paintErase&&supportSlot===slot?"isActive":""}
+          onClick={()=>{setSupportSlot(slot);setPaintErase(false);}}>{label}</button>)}
       </div>}
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:5}}>
         <small>{isSupportPainting ? `${paintSelected?.support_paint?.regions?.reduce((n,r)=>n+r.patches.length,0)||0} support patches` : paintSelected?.colour_paint?.version === 2 ? `${paintSelected.colour_paint.regions?.reduce((n,region)=>n+region.patches.length,0)||0} clipped patches` : `${paintSelected?.colour_paint ? Object.keys(paintSelected.colour_paint.faces||{}).length : 0} facets (legacy)`}</small>
@@ -1439,7 +1440,7 @@ export default function SlicerPrepareWorkspace({
           </div>
         </section> : <SlicerPlateEditor key={activePlateId} plateIndex={Math.max(0,plates.findIndex(item=>item.id===activePlateId))} plateCount={plates.length||1} toolbar={modelToolbar} paintControls={paintPanel} files={files} localAssets={localAssets}
           onLocalAssetsChange={onLocalAssetsChange} onPlateIssuesChange={onPlateIssuesChange} objects={objects} onChange={updatePlate}
-          colourPaintOptions={{mode:paintMode,slot:paintErase?null:paintSlot,palette:paintPalette,
+          colourPaintOptions={{mode:paintMode,slot:paintErase?null:(isSupportPainting?supportSlot:paintSlot),palette:paintPalette,
             radiusMm:paintBrushMm,angleDeg:paintAngle,minHeightMm:paintHeight[0],maxHeightMm:paintHeight[1]}}
           onColourPaintHeightPick={z=>{
             if(!paintHeightFollow)return;
