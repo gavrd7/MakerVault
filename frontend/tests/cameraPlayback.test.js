@@ -179,3 +179,18 @@ test("live camera controls remain uncluttered and manual retry appears only for 
   assert.match(view, /\{!compact && error && <small role="status">\{status\}<\/small>\}/);
   assert.doesNotMatch(view, /Creality WebRTC · experimental|Video is relayed through your authenticated MakerVault connection/);
 });
+
+test("WebRTC camera recreates its session when Safari returns from background", () => {
+  const player = fs.readFileSync(path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../src/components/PrinterCamera.jsx"), "utf8");
+  assert.match(player, /document\.addEventListener\("visibilitychange", visibilityChanged\)/);
+  assert.match(player, /window\.addEventListener\("pagehide", pageHidden\)/);
+  assert.match(player, /window\.addEventListener\("pageshow", pageShown\)/);
+  assert.match(player, /window\.addEventListener\("focus", restart\)/);
+  assert.match(player, /if \(event\.persisted\) backgrounded = true/);
+  assert.match(player, /setTransport\("webrtc"\);\s*setAttempt\(current => current \+ 1\)/);
+  assert.match(player, /document\.removeEventListener\("visibilitychange", visibilityChanged\)/);
+  assert.match(player, /window\.removeEventListener\("pagehide", pageHidden\)/);
+  assert.match(player, /window\.removeEventListener\("pageshow", pageShown\)/);
+  assert.match(player, /window\.removeEventListener\("focus", restart\)/);
+  assert.match(player, /now - lastResume < 1500/);
+});
