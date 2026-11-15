@@ -144,6 +144,48 @@ class ConfigurationTests(unittest.TestCase):
         self.assertEqual((self.root / ".slicer-staging.env.pre-upgrade").read_text(), env)
         self.assertTrue((self.root / "slicer-engine-assets.pre-upgrade" / "orcaslicer.AppImage").is_file())
 
+    def test_reviewed_source_build_upgrade_reuses_verified_binary_and_rolls_back(self):
+        import hashlib
+        from slicer_worker.stage_engines import stage_engines
+        old = self.root / "old.AppImage"
+        old.write_bytes(b"original official Orca image")
+        stage_engines([("orcaslicer", "2.5.0", str(old),
+                       hashlib.sha256(old.read_bytes()).hexdigest())],
+                      self.root / "slicer-engine-assets")
+        image = "sha256:" + "a" * 64
+        before = "\n".join([
+            "MAKERVAULT_SLICER_EXECUTION_ENABLED=1",
+            "MAKERVAULT_SLICER_WORKER_TOKEN=retain-secret",
+            "MAKERVAULT_SLICER_WORKER_IMAGE=" + image,
+            "MAKERVAULT_SLICER_ENGINE_IMAGE_DIGEST=" + image,
+            "MAKERVAULT_SLICER_ENGINES_JSON='{}'",
+            "SLICER_ENGINES_JSON='{}'", "",
+        ])
+        self.env.write_text(before)
+        reviewed = self.root / "reviewed.AppImage"
+        reviewed.write_bytes(b"reviewed source-patched Orca AppImage")
+        approved_sha = hashlib.sha256(reviewed.read_bytes()).hexdigest()
+        candidate_image = "sha256:" + "b" * 64
+        with (patch.object(installer, "_github_asset") as download,
+              patch.object(installer, "_run", return_value=candidate_image)):
+            installer.upgrade_orca("2.5.0", reviewed_appimage=reviewed,
+                                   expected_sha=approved_sha)
+        download.assert_not_called()
+        self.assertIn(approved_sha, self.env.read_text())
+        self.assertIn("retain-secret", self.env.read_text())
+        self.assertEqual((self.root / ".slicer-staging.env.pre-upgrade").read_text(), before)
+        self.assertEqual((self.root / "slicer-engine-assets.pre-upgrade" /
+                          "orcaslicer.AppImage").read_bytes(), old.read_bytes())
+
+    def test_reviewed_source_build_wrong_digest_aborts_before_staging(self):
+        reviewed = self.root / "reviewed.AppImage"
+        reviewed.write_bytes(b"reviewed source patch")
+        with patch.object(installer, "_run") as run:
+            with self.assertRaisesRegex(ValueError, "SHA-256"):
+                installer.upgrade_orca("2.5.0", reviewed_appimage=reviewed,
+                                       expected_sha="0" * 64)
+        run.assert_not_called()
+
     def test_upgrade_refuses_previous_backup(self):
         (self.root / ".slicer-staging.env.pre-upgrade").touch()
         with patch.object(installer, "_resume_staged_bundle", return_value={
