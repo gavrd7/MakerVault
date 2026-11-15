@@ -1882,12 +1882,12 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
               <summary>Understand this slicing failure and how to fix it</summary>
               {/238|native-project-settings-invalid|out.of.range/i.test(job.message || "") ? <>
                 <p>OrcaSlicer rejected a native setting. Even official presets can contain values that the installed command-line engine does not accept.</p>
-                <p><strong>Next steps:</strong> Review the printer, filament and process profiles. Create a custom copy of the affected preset and change only the setting identified by the engine, if known. Normal nozzle retraction and <strong>retraction when cutting filament</strong> are separate controls. Do not guess a replacement value or change a manufacturer original.</p>
+                <p><strong>Next steps:</strong> Check the rejected setting name in the failure message, if supplied. MakerVault keeps official presets unchanged and should resolve their dependencies automatically during import. A missing setting name means the engine has not supplied enough information for a safe automatic correction. Do not guess a replacement retraction value.</p>
               </> : /239|compatib|native machine identity/i.test(job.message || "") ? <>
                 <p>The native printer and process identities may not match. The exit code alone cannot establish the exact cause.</p>
                 <p><strong>Next steps:</strong> Select the matching official printer and process profiles, or a compatible self-contained custom printer profile with unchanged machine geometry and nozzle.</p>
               </> : /parent|missing native/i.test(job.message || "") ? <>
-                <p>A profile may depend on a missing native parent. Re-import the official preset to restore its verified parent chain.</p>
+                <p>A native parent profile may be missing or unavailable. Official profile downloads include their parent chain automatically; download the selected official profile again to restore its dependencies. You do not need to identify individual parent presets.</p>
               </> : <>
                 <p>Check matching printer, filament and process engine versions. An unchanged STL can help separate a profile problem from project geometry. Review the isolated worker logs if this still fails.</p>
               </>}
