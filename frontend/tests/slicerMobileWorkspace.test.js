@@ -217,3 +217,14 @@ test("single-colour slicing explains which required native profile is absent", (
   assert.match(editor, /const missingNativeProfiles = \["printer", "process", "filament"\]\.filter/);
   assert.match(editor, /"Missing native " \+ missingNativeProfiles\.join\(", "\)/);
 });
+
+test("Move Rotate Scale and Measure share the same mobile viewport dock", () => {
+  const plate = fs.readFileSync(path.join(base, "components/SlicerPlateEditor.jsx"), "utf8");
+  assert.match(plate, /className="slicerViewportMeasurement slicerViewportTransform slicerViewportToolDock"/);
+  assert.match(plate, /className="slicerViewportMeasurement slicerViewportToolDock" aria-label="On-plate measurements"/);
+  assert.match(plate, /\["move", "rotate", "scale"\]\.includes\(toolMode\)/);
+  assert.match(plate, /transformOverlayExpanded \? "Less" : "Details"/);
+  assert.match(css, /\.slicerPlateCanvasColumn \.slicerPlateCanvasViewport > \.slicerViewportToolDock\.slicerViewportTransform/);
+  assert.match(css, /max-height:min\(220px, 35dvh\)!important/);
+  assert.match(css, /\.slicerPlateCanvasViewport > \.slicerViewportToolDock \.slicerViewportTransformGrid/);
+});
