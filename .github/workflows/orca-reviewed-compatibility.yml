@@ -60,7 +60,7 @@ jobs:
         run: |
           python3 scripts/build_orca_reference_fixture.py --printer k1 --output /tmp/orca-official-k1 --preserve-official-values
           python3 scripts/build_orca_reference_fixture.py --printer k2 --output /tmp/orca-official-k2 --preserve-official-values
-          python3 scripts/build_slicer_multimodel_fixture.py --material-output /tmp/orca-two-tool.3mf
+          python3 scripts/build_slicer_multimodel_fixture.py --output /tmp/orca-plate.3mf --material-output /tmp/orca-two-tool.3mf
       - name: Require unmodified K1 and K2 profiles to produce real G-code
         run: |
           python3 scripts/probe_slicer_staging.py \
