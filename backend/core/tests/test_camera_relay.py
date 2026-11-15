@@ -12,6 +12,7 @@ from core.camera_relay import (
     hls_resource,
     stream_name,
     valid_bridge_signature,
+    webrtc_answer,
 )
 from core.models import Printer, PrinterConnection
 
@@ -60,6 +61,21 @@ class CameraRelayHelperTests(SimpleTestCase):
         bounded.return_value = (b"#EXTM3U\\n#EXT-X-STREAM-INF:BANDWIDTH=1000000\\nhls/playlist.m3u8?id=test123\\n", "application/vnd.apple.mpegurl")
         hls_master(uuid.uuid4(), "camera-1", mpeg_ts=True)
         self.assertEqual(bounded.call_args.kwargs["params"], {"src": "makervault_test"})
+
+    @patch("core.camera_relay.ensure_stream", return_value="makervault_test")
+    @patch("core.camera_relay._SESSION.post")
+    def test_webrtc_offer_exchange_is_private_and_bounded(self, post, ensure):
+        reply = MagicMock(status_code=200, content=b"v=0\\r\\nm=video 9 UDP/TLS/RTP/SAVPF 96\\r\\n")
+        post.return_value = reply
+        offer = "v=0\\r\\nm=video 9 UDP/TLS/RTP/SAVPF 96\\r\\n"
+        answer = webrtc_answer(uuid.uuid4(), "camera-1", offer)
+        self.assertEqual(answer, reply.content.decode())
+        self.assertEqual(post.call_args.kwargs["params"], {"src": "makervault_test"})
+        self.assertEqual(post.call_args.kwargs["headers"], {"Content-Type": "application/sdp"})
+        self.assertFalse(post.call_args.kwargs["allow_redirects"])
+        reply.close.assert_called_once()
+        with self.assertRaisesMessage(ValueError, "Only receive-only video"):
+            webrtc_answer(uuid.uuid4(), "camera-1", offer + "m=audio 9 UDP 0\\r\\n")
 
     @patch("core.camera_relay._bounded_get")
     def test_segment_sequence_is_forwarded_to_go2rtc(self, bounded):
@@ -110,6 +126,18 @@ class CameraRelayApiTests(TestCase):
             f"{self.connection.id}/cameras/k2-camera/hls/"
         )
         self.client.force_login(self.owner)
+
+    @patch("core.camera_views.webrtc_answer", return_value="v=0\\r\\nm=video 9 UDP 96\\r\\n")
+    def test_webRTC_signalling_is_owner_scoped_and_uses_existing_source(self, answer):
+        url = self.base.replace("hls/", "webrtc/offer/")
+        offer = "v=0\\r\\nm=video 9 UDP 96\\r\\n"
+        result = self.client.post(url, {"sdp": offer}, content_type="application/json")
+        self.assertEqual(result.status_code, 200, result.content)
+        self.assertEqual(result.json()["type"], "answer")
+        answer.assert_called_once_with(self.connection.pk, "k2-camera", offer)
+        self.client.force_login(self.other)
+        self.assertEqual(self.client.post(url, {"sdp": offer}, content_type="application/json").status_code, 404)
+        answer.assert_called_once()
 
     @patch("core.camera_views.hls_master")
     def test_owner_can_start_authenticated_hls_session(self, master):
