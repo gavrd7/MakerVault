@@ -810,3 +810,15 @@ test("offline multi-material export preserves physical mapping without enabling 
   assert.match(prepare, /multiMaterialReadyForExport/);
   assert.match(prepare, /slotFilamentProfiles\.length >= 2/);
 });
+
+
+test("explicit multicolour test slices use the isolated worker and do not activate printer upload", () => {
+  const workbench = read("SlicerWorkbench.jsx");
+  const prepare = read("SlicerPrepareWorkspace.jsx");
+  assert.match(prepare, /Slice multi-colour \(test\)/);
+  assert.match(prepare, /onSliceMultimaterialTest/);
+  assert.match(workbench, /onSliceMultimaterialTest=\{\(\) => saveDraft\("multi-material-test"\)\}/);
+  assert.match(workbench, /mode === "multi-material-test" \? \{multi_material_test:true\}/);
+  assert.match(workbench, /printer upload and start are blocked/);
+  assert.doesNotMatch(prepare, /Material changeover system/);
+});
