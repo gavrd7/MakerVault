@@ -136,3 +136,79 @@ def single_material_slice_assignment(objects, *, printer_id, selected_filament_p
                 "The assigned slot's native filament preset must match the selected slicing preset."
             )
     return {"slot_id": slot_id, "slot_index": slot_index, "logical_tool": 0}
+
+
+# Material-system declarations are adapter-owned. Never trust user-supplied
+# topology or a physical tray number as an actual printer tool command.
+ADAPTER_MATERIAL_SYSTEMS = {
+    "creality_local": frozenset({"single_nozzle_changer"}),
+    "bambu_local": frozenset({"single_nozzle_changer"}),
+    "prusa": frozenset({"single_nozzle_changer", "independent_toolheads", "toolchanger"}),
+    "moonraker": TOPOLOGIES,
+    "octoprint": TOPOLOGIES,
+    "snapmaker": frozenset({"single_nozzle_changer", "toolchanger", "independent_toolheads"}),
+    "flashforge": frozenset({"single_nozzle_changer", "independent_toolheads"}),
+    "anycubic": frozenset({"single_nozzle_changer", "independent_toolheads"}),
+    "elegoo": frozenset({"single_nozzle_changer", "independent_toolheads"}),
+    "qidi": frozenset({"single_nozzle_changer", "independent_toolheads"}),
+    "other": TOPOLOGIES,
+}
+
+
+def detect_material_system(connections):
+    """Use adapter-reported, explicit multi-material capability evidence only.
+
+    Returns a known topology for slicing preparation. This is *not* proof of
+    firmware toolchange commands or permission to submit multi-material G-code.
+    Ambiguous/multiple sources are rejected instead of guessed.
+    """
+    detected = set()
+    for connection in connections:
+        if not connection.enabled or connection.status not in {"connected", "experimental"}:
+            continue
+        capabilities = connection.capabilities
+        if not isinstance(capabilities, dict):
+            continue
+        material = capabilities.get("material_system")
+        if not isinstance(material, dict) or material.get("available") is not True:
+            continue
+        topology = material.get("topology")
+        if topology not in ADAPTER_MATERIAL_SYSTEMS.get(connection.adapter, frozenset()):
+            continue
+        detected.add(topology)
+    if len(detected) != 1:
+        raise MaterialRoutingError(
+            "The printer's multi-material system could not be confirmed. "
+            "Refresh its connection and verify the supported material adapter."
+        )
+    return detected.pop()
+
+
+def derive_native_tool_order(objects, *, printer_id, topology):
+    """Assign logical Orca filament indices by first model use, not tray position.
+
+    Adapter-specific hardware routing is intentionally not emitted here.
+    """
+    if topology not in TOPOLOGIES:
+        raise MaterialRoutingError("Unsupported material changeover system.")
+    if not isinstance(objects, list) or not 2 <= len(objects) <= 200:
+        raise MaterialRoutingError("Multi-material assignment needs at least two models.")
+    unique_slots = []
+    for item in objects:
+        if not isinstance(item, dict) or not isinstance(item.get("material_slot"), dict):
+            raise MaterialRoutingError("Choose a filament for every model.")
+        slot = item["material_slot"]
+        if str(slot.get("printer_id")) != str(printer_id):
+            raise MaterialRoutingError("A filament belongs to a different printer.")
+        slot_id = slot.get("slot_id")
+        slot_index = slot.get("slot_index")
+        if (not isinstance(slot_id, str) or not 1 <= len(slot_id) <= 128
+                or not isinstance(slot_index, int) or isinstance(slot_index, bool)
+                or not 0 <= slot_index <= 63):
+            raise MaterialRoutingError("Invalid filament slot assignment.")
+        if slot_id not in unique_slots:
+            unique_slots.append(slot_id)
+    if not 2 <= len(unique_slots) <= 16:
+        raise MaterialRoutingError("Choose between two and sixteen different filaments.")
+    bindings = {slot_id: index for index, slot_id in enumerate(unique_slots)}
+    return bindings
