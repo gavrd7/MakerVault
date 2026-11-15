@@ -7724,3 +7724,101 @@ a:focus-visible,
     }
   }
 }
+
+/* Mobile slicer usability: give Slice its own bounded split control.
+   Generic settingsActions button flex must not enlarge the dropdown trigger. */
+.slicerPrepareActions .settingsActions > .slicerSliceSplit {
+  box-sizing:border-box;
+  display:grid;
+  grid-template-columns:minmax(0,1fr) 42px;
+  align-items:stretch;
+  min-width:170px;
+  max-width:100%;
+}
+.slicerPrepareActions .slicerSliceSplit > button.primary {
+  box-sizing:border-box;
+  min-width:0;width:100%;flex:none;
+  border-radius:8px 0 0 8px;
+  padding:8px 12px;
+}
+.slicerPrepareActions .slicerSliceSplit > button:nth-child(2) {
+  box-sizing:border-box;flex:none;
+  width:42px;min-width:42px;max-width:42px;
+  padding:6px;line-height:1;
+  font-size:1rem;
+}
+@media(max-width:650px){
+  .slicerPrepareActions .settingsActions > .slicerSliceSplit{
+    flex:1 1 100%;width:100%;
+    grid-template-columns:minmax(0,1fr) 42px;
+  }
+  .slicerPrepareActions .slicerSliceMenu {
+    left:0;right:0;max-width:100%;box-sizing:border-box;
+  }
+}
+
+/* Ensure every process group is reachable across both normal and expanded
+   views; the settings controls themselves retain one shared stateful form. */
+.slicerPrepareSettings nav[aria-label="Process settings groups"]{
+  display:grid;
+  grid-template-columns:repeat(2,minmax(0,1fr));
+  gap:7px;min-width:0;width:100%;
+  flex:0 0 auto;
+}
+.slicerPrepareSettings nav[aria-label="Process settings groups"] > button {
+  box-sizing:border-box;display:flex;
+  min-width:0;width:100%;
+  white-space:normal;overflow-wrap:anywhere;
+}
+.slicerSettingsModal .slicerPrepareSettings nav[aria-label="Process settings groups"]{
+  display:grid;
+  grid-template-columns:repeat(3,minmax(0,1fr));
+}
+@media(max-width:620px){
+  .slicerSettingsModal .slicerPrepareSettings nav[aria-label="Process settings groups"]{
+    grid-template-columns:repeat(2,minmax(0,1fr));
+  }
+  .slicerPrepareStructure[data-mobile-pane="settings"] > .slicerPrepareSettings{
+    overflow-y:auto;overflow-x:hidden;
+    -webkit-overflow-scrolling:touch;
+  }
+}
+
+/* Mobile geometry tools are fully scrollable sheets instead of short floating
+   panels clipped by a canvas/toolbar offset. Applies to Hollow, Drill, Cut,
+   Boolean and split preview without changing their desktop placement. */
+@media(max-width:740px){
+  .slicerAutoOrientModalBackdrop:has(.slicerViewportAnchoredModal){
+    position:fixed;inset:0;z-index:11050;
+    display:flex;align-items:flex-end;justify-content:center;
+    padding:0;
+    pointer-events:none;
+  }
+  .slicerAutoOrientModalBackdrop > .slicerSolidModal.slicerViewportAnchoredModal {
+    position:fixed!important;
+    inset:auto 8px max(8px,env(safe-area-inset-bottom,0px)) 8px!important;
+    top:auto!important;left:8px!important;right:8px!important;
+    width:calc(100vw - 16px)!important;
+    max-width:calc(100vw - 16px)!important;
+    max-height:min(75dvh,680px)!important;
+    min-height:0!important;
+    overflow-y:auto!important;overflow-x:hidden!important;
+    -webkit-overflow-scrolling:touch;
+    scrollbar-gutter:auto;
+    pointer-events:auto;
+    border-radius:12px;
+    padding:12px;
+  }
+  .slicerSolidModal.slicerViewportAnchoredModal .slicerSolidGrid{
+    grid-template-columns:minmax(0,1fr)!important;
+  }
+  .slicerSolidModal.slicerViewportAnchoredModal .slicerBooleanOperands,
+  .slicerSolidModal.slicerViewportAnchoredModal .slicerBooleanOperands label{
+    min-width:0;max-width:100%;
+    overflow-wrap:anywhere;
+  }
+  .slicerSolidModal.slicerViewportAnchoredModal .slicerAutoOrientModalHeader,
+  .slicerSolidModal.slicerViewportAnchoredModal .slicerAutoOrientModalActions{
+    flex-shrink:0;
+  }
+}
