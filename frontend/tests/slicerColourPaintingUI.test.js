@@ -26,8 +26,8 @@ test("paint mode restores right-mouse navigation and hides non-paint selection o
   const editor=read("SlicerPlateEditor.jsx");
   assert.match(editor,/controls\.mouseButtons\.RIGHT = THREE\.MOUSE\.PAN/);
   assert.match(editor,/state\.controls\.enabled = true/);
-  assert.match(editor,/toolMode === "paint_colour" \? \[\] : selection/);
-  assert.match(editor,/toolMode === "paint_colour" \? 0 : conflictIds/);
+  assert.match(editor,/\["paint_colour","paint_support"\]\.includes\(toolMode\) \? \[\] : selection/);
+  assert.match(editor,/\["paint_colour","paint_support"\]\.includes\(toolMode\) \? 0 : conflictIds/);
   assert.match(editor,/previewPaintGuide\(hit\)/);
   assert.match(editor,/latestPaintHeightPickRef\.current\?\.\(next\)/);
 });
@@ -77,4 +77,15 @@ test("approved icons are preserved and other tools use Material-style symbols",(
   assert.match(style,/left:-7px/);
   assert.match(style,/width:57px/);
   assert.match(style,/hyphens:none/);
+});
+
+test("support paint uses shared geometry with independent action controls",()=>{
+  const workspace=read("SlicerPrepareWorkspace.jsx");
+  const editor=read("SlicerPlateEditor.jsx");
+  assert.match(workspace,/target: "paint_support", icon: "paint-support"/);
+  assert.match(workspace,/aria-label="Support painting action"/);
+  assert.match(workspace,/supportSlot:setSupportSlot|setSupportSlot/);
+  assert.match(editor,/applySupportPaint\(pending.paint,paintMesh/);
+  assert.match(editor,/supportPaintPreview\(mesh,next\)/);
+  assert.match(editor,/stroke.kind==="support"/);
 });
