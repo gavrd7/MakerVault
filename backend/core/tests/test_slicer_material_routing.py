@@ -6,7 +6,7 @@ from django.test import SimpleTestCase
 
 from core.slicer_approval import fixture_stl
 from core.slicer_material_routing import (
-    MaterialRoutingError, plan_material_routes,
+    MaterialRoutingError, plan_material_routes, single_material_slice_assignment,
 )
 from core.slicer_plate_3mf import build_plate_3mf, NS
 from core.slicer_profiles import SlicerProfileError
@@ -92,3 +92,53 @@ class MaterialRoutingTests(SimpleTestCase):
                 with self.assertRaises(SlicerProfileError):
                     build_plate_3mf(items, bed_width=220, bed_depth=220,
                                     native_tool_indices=invalid)
+
+
+class SingleMaterialSliceAnnotationTests(SimpleTestCase):
+    def setUp(self):
+        self.slot = {"printer_id": "printer-1", "slot_id": "cfs-bay-4", "slot_index": 3}
+        self.models = [
+            {"instance_id": "a", "material_slot": dict(self.slot)},
+            {"instance_id": "b", "material_slot": dict(self.slot)},
+        ]
+        self.options = {
+            "printer_id": "printer-1",
+            "selected_filament_profile_id": "native-pla",
+        }
+
+    def test_same_slot_slices_as_logical_tool_zero_not_bay_index(self):
+        result = single_material_slice_assignment(
+            self.models, **self.options,
+            slot_filament_profiles=[{"slot_id": "cfs-bay-4", "profile_id": "native-pla"}],
+        )
+        self.assertEqual(result, {
+            "slot_id": "cfs-bay-4", "slot_index": 3, "logical_tool": 0,
+        })
+
+    def test_no_assignment_preserves_single_filament_flow(self):
+        self.assertIsNone(single_material_slice_assignment(
+            [{"instance_id": "a"}], **self.options))
+        with self.assertRaisesRegex(MaterialRoutingError, "unused"):
+            single_material_slice_assignment(
+                [{"instance_id": "a"}], **self.options,
+                slot_filament_profiles=[{"slot_id": "cfs-bay-4", "profile_id": "native-pla"}])
+
+    def test_mismatched_or_missing_assignments_fail_closed(self):
+        cases = [
+            [{**self.models[0]}, {"instance_id": "b"}],
+            [self.models[0], {"instance_id": "b", "material_slot": {
+                "printer_id": "printer-1", "slot_id": "cfs-bay-1", "slot_index": 0}}],
+            [{"instance_id": "a", "material_slot": {
+                **self.slot, "printer_id": "someone-else"}}],
+            [{"instance_id": "a", "material_slot": {
+                **self.slot, "slot_index": True}}],
+        ]
+        for models in cases:
+            with self.subTest(models=models):
+                with self.assertRaises(MaterialRoutingError):
+                    single_material_slice_assignment(models, **self.options)
+        with self.assertRaisesRegex(MaterialRoutingError, "must match"):
+            single_material_slice_assignment(
+                self.models, **self.options,
+                slot_filament_profiles=[{"slot_id": "cfs-bay-4", "profile_id": "wrong"}])
+
