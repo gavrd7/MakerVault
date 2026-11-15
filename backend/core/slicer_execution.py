@@ -267,6 +267,13 @@ def _validate_plate_execution(job):
             "mapping is not implemented. Keep the painting in a draft; clear "
             "painted regions before requesting a single-filament slice."
         )
+    if any(isinstance(item, dict) and isinstance(item.get("support_paint"), dict)
+           and item["support_paint"].get("regions") for item in objects):
+        raise SlicerExecutionError(
+            "This draft contains support enforcer/blocker regions, but verified native "
+            "support painting export is not implemented. Keep the painting in a draft "
+            "until the engine adapter supports these annotations."
+        )
     if settings.get("multi_material_test") is True:
         # This permits *offline G-code generation* only. Uploaded or started
         # printer jobs are blocked by the submission API for these artifacts.
