@@ -68,7 +68,7 @@ test("approved icons are preserved and other tools use Material-style symbols",(
   for(const name of ["center","orient","face","focus","split","cut","drill","hollow","boolean","measure","paint-support","paint-seam"]){
     assert.ok(icons.includes('"'+name+'":')||icons.includes("  "+name+":"),name);
   }
-  assert.match(icons,/materialTools\.has\(name\) \? 2 : 1\.7/);
+  assert.match(icons,/strokeWidth=\{1\.85\}/);
   assert.match(workspace,/"Lay on face":"Lay on face"/);
   assert.doesNotMatch(workspace,/"Lay on face":"Lay flat"/);
   assert.match(workspace,/index>0&&TOOLS\[index-1\]\.group!==tool\.group/);
