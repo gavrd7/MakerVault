@@ -779,20 +779,17 @@ test("inspector top uses measured camera row instead of a fixed viewport offset"
   assert.match(editor,/viewport\.style\.setProperty\("--slicer-overlay-top"/);
 });
 
-test("native slot-to-tool assignments persist through a slicer draft and cannot silently enable multimaterial slicing", () => {
-  const workbench = fs.readFileSync(path.join(base, "components/SlicerWorkbench.jsx"), "utf8");
-  const scene = fs.readFileSync(path.join(base, "components/SlicerPrepareWorkspace.jsx"), "utf8");
-  assert.match(workbench, /setMaterialToolBindings\(job\.settings\?\.material_tool_bindings \|\| \[\]\)/);
-  assert.match(workbench, /setMaterialTopology\(job\.settings\?\.material_topology \|\| ""\)/);
-  assert.match(workbench, /material_tool_bindings:materialToolBindings/);
-  assert.match(workbench, /material_topology:materialTopology/);
-  assert.match(scene, /Native tool assignments/);
-  assert.match(scene, /Physical slot positions are not native tool indices/);
-  assert.match(scene, /singleSlotToolMatches/);
-  assert.match(scene, /materialRoutingPending/);
-  assert.match(scene, /manual_filament_change/);
-  assert.match(scene, /independent_toolheads/);
+test("material system complexity stays in the adapter layer, not normal slicer controls", () => {
+  const workbench = read("SlicerWorkbench.jsx");
+  const scene = read("SlicerPrepareWorkspace.jsx");
+  assert.match(workbench, /setSlotFilamentProfiles\(job\.settings\?\.slot_filament_profiles \|\| \[\]\)/);
+  assert.match(scene, /slotFilamentProfiles\.length >= 2/);
+  assert.doesNotMatch(scene, /Native tool assignments/);
+  assert.doesNotMatch(scene, /Material changeover system/);
+  assert.doesNotMatch(scene, /Physical slot positions are not native tool indices/);
+  assert.match(scene, /liveMaterials\.map\(slot => \{/);
 });
+
 test("slicer engine status differentiates deployment and worker verification", () => {
   const workbench = fs.readFileSync(path.join(base,"components/SlicerWorkbench.jsx"),"utf8");
   assert.match(workbench, /catalogue\.deployment_enabled === true/);
@@ -811,10 +808,5 @@ test("offline multi-material export preserves physical mapping without enabling 
   assert.match(workbench, /material_topology:materialTopology/g);
   assert.match(prepare, /Export multi-material 3MF \(offline\)/);
   assert.match(prepare, /multiMaterialReadyForExport/);
-  assert.match(prepare, /materialToolBindings\.length >= 2/);
   assert.match(prepare, /slotFilamentProfiles\.length >= 2/);
-  assert.match(prepare, /manual_filament_change/);
-  assert.match(prepare, /independent_toolheads/);
-  assert.match(prepare, /toolchanger/);
-  assert.match(prepare, /idex/);
 });
