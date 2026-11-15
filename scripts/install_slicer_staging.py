@@ -10,6 +10,8 @@ A separate real native-profile test slice is still needed in MakerVault GUI.
   python3 scripts/install_slicer_staging.py update
   python3 scripts/install_slicer_staging.py refresh-worker
   python3 scripts/install_slicer_staging.py upgrade-orca --version 2.5.0
+  # Only after a locally reviewed source-corrected build passes real G-code CI:
+  python3 scripts/install_slicer_staging.py upgrade-reviewed-orca --reviewed-appimage /path/to/reviewed.AppImage --reviewed-sha256 <approved-64-hex-digest>
   python3 scripts/install_slicer_staging.py disable
 
 Requires Docker access, internet access for the prepare step, and a valid
@@ -291,10 +293,12 @@ def upgrade_orca(version=VERSION, *, reviewed_appimage=None, expected_sha=None):
         if (not isinstance(expected_sha, str) or len(expected_sha) != 64 or
                 any(ch not in "0123456789abcdef" for ch in expected_sha)):
             raise ValueError("Reviewed AppImage requires its independently verified SHA-256.")
-        reviewed_appimage = Path(reviewed_appimage).resolve(strict=True)
-        if (not reviewed_appimage.is_file() or
-                reviewed_appimage.is_symlink() or
+        reviewed_appimage = Path(reviewed_appimage)
+        if (reviewed_appimage.is_symlink() or not reviewed_appimage.is_file() or
                 not reviewed_appimage.name.endswith(".AppImage")):
+            raise ValueError("Reviewed source build must be a regular AppImage.")
+        reviewed_appimage = reviewed_appimage.resolve(strict=True)
+        if not reviewed_appimage.is_file():
             raise ValueError("Reviewed source build must be a regular AppImage.")
         with reviewed_appimage.open("rb") as stream:
             actual_sha = hashlib.file_digest(stream, "sha256").hexdigest()
