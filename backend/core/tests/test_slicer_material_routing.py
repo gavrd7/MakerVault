@@ -2,11 +2,13 @@
 import io
 import zipfile
 from defusedxml import ElementTree as ET
-from django.test import SimpleTestCase\nfrom types import SimpleNamespace
+from django.test import SimpleTestCase
+from types import SimpleNamespace
 
 from core.slicer_approval import fixture_stl
 from core.slicer_material_routing import (
-    MaterialRoutingError, plan_material_routes, single_material_slice_assignment,\n    detect_material_system, derive_native_tool_order,
+    MaterialRoutingError, plan_material_routes, single_material_slice_assignment,
+    detect_material_system, derive_native_tool_order,
 )
 from core.slicer_plate_3mf import build_plate_3mf, NS
 from core.slicer_profiles import SlicerProfileError
