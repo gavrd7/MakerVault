@@ -159,9 +159,9 @@ test("slicer setup offers Save draft / Quick slice / interactive Slice at plate 
   const buttons = workbench.slice(footer, end);
   assert.match(buttons, /Save draft/);
   assert.match(buttons, /Quick slice/);
-  assert.match(buttons, /Slice → Interactive slicer/);
+  assert.match(buttons, /Open Interactive Slicer/);
   assert.ok(buttons.indexOf("Save draft") < buttons.indexOf("Quick slice"));
-  assert.ok(buttons.indexOf("Quick slice") < buttons.indexOf("Slice → Interactive slicer"));
+  assert.ok(buttons.indexOf("Quick slice") < buttons.indexOf("Open Interactive Slicer"));
   assert.doesNotMatch(workbench.slice(workbench.indexOf('className="slicerSetupHeading"'), workbench.indexOf('className="slicerSetupHeading"') + 250), /Open interactive slicer/);
   assert.match(buttons, /disabled=\{!canPrepare \|\| busy \|\| loading\}/);
 });
