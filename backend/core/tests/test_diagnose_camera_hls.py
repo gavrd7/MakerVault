@@ -7,6 +7,7 @@ from core.management.commands.diagnose_camera_hls import (
     playlist_summary,
     session_from_master,
     ts_playlist_progress,
+    transport_packet_summary,
     Command,
 )
 
@@ -76,3 +77,23 @@ class CameraHlsMetadataTests(SimpleTestCase):
         self.assertEqual(sum("requested_segment=" in line for line in lines), 3)
         self.assertTrue(any("playlist_sequence=3" in line for line in lines))
         self.assertNotIn("private", str(lines))
+
+    def test_transport_packet_probe_distinguishes_tables_from_video_payload(self):
+        def packet(pid, payload_start=False, content=b""):
+            data = bytearray(188)
+            data[0] = 0x47
+            data[1] = ((pid >> 8) & 0x1f) | (0x40 if payload_start else 0)
+            data[2] = pid & 0xff
+            data[3] = 0x10
+            data[4:4 + len(content)] = content
+            return bytes(data)
+        tables = packet(0) + packet(0x100)
+        result = transport_packet_summary(tables)
+        self.assertTrue(result["valid_ts"])
+        self.assertEqual(result["packets"], 2)
+        self.assertEqual(result["pes_starts"], 0)
+        self.assertEqual(result["other_pid_packets"], 1)
+        video = packet(0x101, True, b"\\x00\\x00\\x01\\xe0")
+        result = transport_packet_summary(tables + video)
+        self.assertEqual(result["pes_starts"], 1)
+        self.assertEqual(result["other_pid_packets"], 2)
