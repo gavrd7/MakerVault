@@ -705,6 +705,10 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
         "Add at least one STL to any plate before saving.");
       return;
     }
+    if (sliceNow && projectPlates.some(plate=>plate.objects.some(item=>item.support_paint?.regions?.length))) {
+      setError("Support painting is saved as an editable preview. Native support enforcer/blocker export has not been verified; slicing is blocked to avoid silently ignoring your annotations.");
+      return;
+    }
     if (sliceNow && projectPlates.some(plate=>plate.objects.some(item=>
       (Object.keys(item.colour_paint?.faces || {}).length || item.colour_paint?.regions?.length)))) {
       setError("This project has painted colour regions. Save the draft; native painted-toolpath slicing is not yet enabled.");
