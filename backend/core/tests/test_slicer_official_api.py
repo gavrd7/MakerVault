@@ -243,6 +243,38 @@ class OfficialProfileApiTests(TestCase):
         self.assertIn("@v2.5.0/OrcaFilamentLibrary/filament/eSUN/", profile.provenance)
         self.addCleanup(lambda asset=profile.file_asset: asset.file.delete(save=False))
 
+    def test_k2_official_long_retraction_remains_visible_in_custom_editor(self):
+        """The settings API must not hide valid upstream values by GUI limits."""
+        self.client.force_login(self.user)
+        selection = {
+            "engine": "orcaslicer", "engine_version": "2.5.0",
+            "kind": "printer", "vendor": "Creality",
+            "name": "Creality K2 0.4 nozzle",
+            "sub_path": "machine/Creality K2 0.4 nozzle.json",
+        }
+        original = json.dumps({
+            "name": selection["name"], "type": "machine",
+            "nozzle_diameter": ["0.4"],
+            "long_retractions_when_cut": "1",
+            "retraction_distances_when_cut": "30",
+        }).encode()
+        with patch("core.slicer_api.official_profile_chain",
+                   return_value=[(selection["name"], selection["sub_path"], original)]):
+            imported = self.post(selection)
+        self.assertEqual(imported.status_code, 201, imported.content)
+        profile_id = imported.json()["profile"]["id"]
+        profile = SlicerProfile.objects.get(pk=profile_id)
+        self.addCleanup(lambda asset=profile.file_asset: asset.file.delete(save=False))
+        response = self.client.get(
+            f"/api/printing/slicer/profiles/{profile_id}/customise/"
+        )
+        self.assertEqual(response.status_code, 200, response.content)
+        setting = response.json()["settings"]["retraction_distances_when_cut"]
+        self.assertEqual(setting["current"], 30)
+        self.assertFalse(setting["outside_editor_bounds"])
+        self.assertEqual(setting["max"], 100)
+        self.assertIn("nozzle_diameter", response.json()["settings"])
+
     def test_unprivileged_user_cannot_import(self):
         self.client.force_login(self.other)
         with patch("core.slicer_api.fetch_official_profile") as external:
