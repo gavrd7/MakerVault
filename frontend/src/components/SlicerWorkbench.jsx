@@ -11,6 +11,7 @@ import { slicerSpoolHex, recolorUnmodifiedPlate } from "./slicerSpoolColour";
 import SlicerSpoolPicker from "./SlicerSpoolPicker";
 import { spoolMaterial, chooseSuggestedProfile, defaultOfficialSearch, suggestOfficialVendor } from "./slicerProfileSuggestions";
 import { availableSlicerPrintConnections, preferredSlicerPrintConnection } from "./slicerPrintRouting";
+import { profilesForEngineVersion } from "./slicerSavedProfileFilter";
 
 function ProfileActionIcon({ name }) {
   return <svg viewBox="0 0 24 24" width="18" height="18" fill="none"
@@ -300,10 +301,9 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
   // Saved profiles belong to the selected engine AND its exact installed
   // version. Keeping older versions in the database is useful for returning
   // to an older engine, but showing them here makes them look selectable.
-  const visibleSavedProfiles = useMemo(() => profiles.filter(profile =>
-    profile.engine === form.engine &&
-    profile.engine_version === form.engine_version &&
-    (!profile.is_dependency || (managingSavedProfiles && showProfileDependencies))
+  const visibleSavedProfiles = useMemo(() => profilesForEngineVersion(
+    profiles, form.engine, form.engine_version,
+    { managing: managingSavedProfiles, showDependencies: showProfileDependencies }
   ), [profiles, form.engine, form.engine_version, managingSavedProfiles, showProfileDependencies]);
   const kindSavedProfiles = visibleSavedProfiles.filter(profile =>
     savedProfileKind === "all" || profile.kind === savedProfileKind);
