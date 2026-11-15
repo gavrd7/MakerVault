@@ -241,6 +241,17 @@ export function CameraPlayback({ camera, url, compact = false }) {
       const target = video.current;
       let receiver;
       let connectionWatch;
+      let frameWatch;
+      let frameCallbackId;
+      let frameReceived = false;
+      const receivedFrame = () => {
+        if (cancelled) return;
+        frameReceived = true;
+        clearTimeout(connectionWatch);
+        setStatus("Live · WebRTC");
+        setError("");
+        setPlaybackDiagnostic("");
+      };
       const fallback = message => {
         if (cancelled) return;
         setPlaybackDiagnostic(message);
@@ -250,6 +261,14 @@ export function CameraPlayback({ camera, url, compact = false }) {
         fallback("WebRTC video element unavailable; using compatibility playback.");
       } else {
         setStatus("Connecting low-latency WebRTC…");
+        if (typeof target.requestVideoFrameCallback === "function") {
+          frameCallbackId = target.requestVideoFrameCallback(receivedFrame);
+        }
+        frameWatch = setInterval(() => {
+          if (cancelled || frameReceived || typeof target.requestVideoFrameCallback === "function") return;
+          const health = videoFrameHealth(target);
+          if (health.hasFrame) receivedFrame();
+        }, 700);
         connectCameraWebRTC({
           mediaUrl: url,
           video: target,
@@ -258,10 +277,7 @@ export function CameraPlayback({ camera, url, compact = false }) {
           onState: state => {
             if (cancelled) return;
             if (state === "connected") {
-              clearTimeout(connectionWatch);
-              setStatus("Live · WebRTC");
-              setError("");
-              setPlaybackDiagnostic("");
+              setStatus(frameReceived ? "Live · WebRTC" : "WebRTC connected · waiting for first video frame");
             } else if (state === "failed" || state === "playback-error") {
               fallback("WebRTC connection failed; trying compatibility playback.");
             }
@@ -274,12 +290,16 @@ export function CameraPlayback({ camera, url, compact = false }) {
           fallback("WebRTC unavailable; trying compatibility playback.");
         });
         // Do not wait indefinitely for unreachable Docker/ICE candidates.
-        connectionWatch = setTimeout(() => fallback("WebRTC connection timed out; using compatibility playback."), 12000);
+        connectionWatch = setTimeout(() => {
+          if (!frameReceived) fallback("WebRTC video did not deliver a frame; using compatibility playback.");
+        }, 15000);
       }
       return () => {
         cancelled = true;
         controller.abort();
         clearTimeout(connectionWatch);
+        clearInterval(frameWatch);
+        if (frameCallbackId != null && target?.cancelVideoFrameCallback) target.cancelVideoFrameCallback(frameCallbackId);
         receiver?.close();
       };
     }
@@ -473,7 +493,7 @@ export function CameraPlayback({ camera, url, compact = false }) {
                 }
               }
             }}
-            onPlaying={() => { setPlaybackBlocked(false); setError(""); setStatus(transport === "webrtc" ? "Live · WebRTC" : "Video playing · checking decoded frames…"); }} />
+            onPlaying={() => { setPlaybackBlocked(false); setError(""); setStatus(transport === "webrtc" ? "WebRTC playing · checking first frame…" : "Video playing · checking decoded frames…"); }} />
         : image
           ? <img src={image} alt={camera.name + " live camera view"} style={{ transform }} />
           : <span role="status">{status}</span>}
