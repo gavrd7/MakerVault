@@ -17,7 +17,7 @@ from django.db import IntegrityError, transaction
 from django.db.models.deletion import ProtectedError
 from django.views.decorators.http import require_http_methods
 
-from .models import FileAsset, Printer, SliceJob, Spool, SlicerProfile
+from .models import FileAsset, Printer, PrinterConnection, SliceJob, Spool, SlicerProfile
 from .slicer_engines import engine_catalogue, get_engine
 from .slicer_profiles import SlicerProfileError, inspect_native_profile
 from .slicer_profile_edit import SETTINGS as EDITABLE_PROFILE_SETTINGS, customise_native_json
@@ -709,7 +709,7 @@ def export_native_multimaterial_3mf(request, job_id):
     execution. Each selected filament must already be a verified native profile.
     """
     from .slicer_native_material_palette import prepare_multimaterial_plate, ordered_material_profile_ids
-    from .slicer_material_routing import MaterialRoutingError
+    from .slicer_material_routing import (MaterialRoutingError, detect_material_system, derive_native_tool_order)
     from .slicer_execution import _read_owned_file, MAX_INPUT
     from .slicer_bed_dimensions import trusted_plate_dimensions
 
@@ -720,21 +720,29 @@ def export_native_multimaterial_3mf(request, job_id):
         return _error("Slicer draft not found.", 404)
     settings = job.settings or {}
     objects = settings.get("plate_objects") or []
-    binding_rows = settings.get("material_tool_bindings") or []
     profile_rows = settings.get("slot_filament_profiles") or []
     if (job.engine != "orcaslicer" or not 2 <= len(objects) <= 12
-            or not 2 <= len(binding_rows) <= 16
             or not isinstance(profile_rows, list)):
-        return _error("Choose a saved Orca draft with two or more routed model filaments.", 409)
+        return _error("Choose a saved Orca draft with two or more assigned model filaments.", 409)
     if any(item.get("colour_paint") for item in objects):
         return _error("Per-face colour painting is not yet supported in native multi-material export.", 409)
     if settings.get("flush_settings") is not None:
         return _error("Custom flushing settings require separate native validation.", 409)
     try:
+        # Printer adapters identify the material system; the slicer assigns
+        # logical tool indices. User-supplied tool maps/topology are not trusted.
+        connections = PrinterConnection.objects.filter(printer=job.printer, enabled=True)
+        topology = detect_material_system(connections)
+        tool_bindings = derive_native_tool_order(
+            objects, printer_id=job.printer_id, topology=topology,
+        )
+        binding_rows = [
+            {"slot_id": slot_id, "tool_index": index}
+            for slot_id, index in tool_bindings.items()
+        ]
         ordered_ids = ordered_material_profile_ids(
             binding_rows, profile_rows, main_profile_id=job.filament_profile_id,
         )
-        tool_bindings = {item["slot_id"]: item["tool_index"] for item in binding_rows}
         by_id = {str(p.pk): p for p in SlicerProfile.objects.filter(
             owner=request.user, pk__in=ordered_ids, kind="filament"
         )}
@@ -756,7 +764,7 @@ def export_native_multimaterial_3mf(request, job_id):
             source_models, bed_width=width, bed_depth=depth,
             printer_id=job.printer_id, owner_id=job.owner_id,
             engine=job.engine, engine_version=job.engine_version,
-            topology=settings.get("material_topology"),
+            topology=topology,
             tool_bindings=tool_bindings, native_filament_profiles=profiles,
         )
     except (MaterialRoutingError, ValueError, KeyError, TypeError,
