@@ -73,3 +73,51 @@ def plan_material_routes(objects, *, printer_id, topology, tool_bindings):
             if previous != item.slot_id:
                 raise MaterialRoutingError("Multiple physical slots target one independent printhead.")
     return result
+
+
+def single_material_slice_assignment(objects, *, printer_id, selected_filament_profile_id,
+                                     slot_filament_profiles=()):
+    """Validate an optional physical slot annotation for ONE logical filament.
+
+    Slicing uses the already-selected native filament preset and logical tool 0.
+    This does *not* claim to bind the resulting G-code to a physical feeder:
+    that mapping is checked independently at printer submission.
+    """
+    if not isinstance(objects, list) or not objects:
+        return None
+    if not isinstance(slot_filament_profiles, (list, tuple)):
+        raise MaterialRoutingError("Invalid slot filament profile list.")
+    slots = [item.get("material_slot") for item in objects if isinstance(item, dict)]
+    if len(slots) != len(objects):
+        raise MaterialRoutingError("Invalid model material assignment.")
+    assigned = [slot for slot in slots if slot is not None]
+    if not assigned:
+        if slot_filament_profiles:
+            raise MaterialRoutingError("Remove unused slot-specific filament presets before slicing.")
+        return None
+    if len(assigned) != len(slots):
+        raise MaterialRoutingError("Assign the same filament slot to every model, or clear the assignments.")
+    target = assigned[0]
+    if not isinstance(target, dict) or set(target) != {"printer_id", "slot_id", "slot_index"}:
+        raise MaterialRoutingError("Invalid physical material slot.")
+    if str(target["printer_id"]) != str(printer_id):
+        raise MaterialRoutingError("Assigned filament slot belongs to another printer.")
+    slot_id = target["slot_id"]
+    slot_index = target["slot_index"]
+    if not isinstance(slot_id, str) or not 1 <= len(slot_id) <= 128:
+        raise MaterialRoutingError("Invalid physical material slot ID.")
+    if isinstance(slot_index, bool) or not isinstance(slot_index, int) or not 0 <= slot_index <= 63:
+        raise MaterialRoutingError("Invalid physical material slot index.")
+    if any(slot != target for slot in assigned[1:]):
+        raise MaterialRoutingError("More than one filament slot requires verified multi-material slicing.")
+    if len(slot_filament_profiles) > 1:
+        raise MaterialRoutingError("Multi-filament native profile routing is not enabled.")
+    if slot_filament_profiles:
+        entry = slot_filament_profiles[0]
+        if (not isinstance(entry, dict)
+                or entry.get("slot_id") != slot_id
+                or str(entry.get("profile_id")) != str(selected_filament_profile_id)):
+            raise MaterialRoutingError(
+                "The assigned slot's native filament preset must match the selected slicing preset."
+            )
+    return {"slot_id": slot_id, "slot_index": slot_index, "logical_tool": 0}
