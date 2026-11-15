@@ -7822,3 +7822,22 @@ a:focus-visible,
     flex-shrink:0;
   }
 }
+
+@media(max-width:740px){
+  /* A collapsed geometry inspector must remain a compact bar rather than
+     retaining the expanded mobile bottom-sheet size. */
+  .slicerAutoOrientModalBackdrop > .slicerSolidModal.slicerViewportAnchoredModal.slicerSolidInspectorCollapsed{
+    max-height:60px!important;
+    overflow:hidden!important;
+  }
+  /* iOS dynamic viewport + keyboard: the header, options and action footer
+     must remain scrollable without pushing fields past the phone edge. */
+  .slicerSolidModal.slicerViewportAnchoredModal{
+    overscroll-behavior:contain;
+    touch-action:pan-y;
+  }
+  .slicerSolidModal.slicerViewportAnchoredModal .slicerSolidResult,
+  .slicerSolidModal.slicerViewportAnchoredModal .slicerBooleanOperands{
+    flex-shrink:0;
+  }
+}
