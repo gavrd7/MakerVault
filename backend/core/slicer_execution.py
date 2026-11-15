@@ -18,6 +18,7 @@ from .slicer_engines import validate_engine_selection
 from .slicer_output import store_generated_gcode
 from .slicer_native_resolution import resolved_native_profile
 from .slicer_bed_dimensions import trusted_plate_dimensions
+from .slicer_material_routing import single_material_slice_assignment, MaterialRoutingError
 from .slicer_native_overrides import apply_orca_job_overrides
 from .slicer_process_settings import apply_process_overrides
 from .slicer_plate_3mf import build_plate_3mf, build_compound_plate_3mf
@@ -262,13 +263,17 @@ def _validate_plate_execution(job):
             "mapping is not implemented. Keep the painting in a draft; clear "
             "painted regions before requesting a single-filament slice."
         )
-    if any(isinstance(item, dict) and item.get("material_slot") is not None
-           for item in objects):
-        raise SlicerExecutionError(
-            "This draft has intended filament-slot assignments, but native multi-material "
-            "tool mapping is not yet verified. Save the draft; remove assignments to "
-            "slice using the single-filament profile."
+    # One physical bay can annotate an otherwise ordinary single-filament
+    # Orca slice. Do not convert the bay number into a native tool index.
+    try:
+        single_material_slice_assignment(
+            objects,
+            printer_id=job.printer_id,
+            selected_filament_profile_id=job.filament_profile_id,
+            slot_filament_profiles=settings.get("slot_filament_profiles") or [],
         )
+    except MaterialRoutingError as exc:
+        raise SlicerExecutionError(str(exc)) from exc
     if job.engine != "orcaslicer":
         raise SlicerExecutionError("Multi-model plate execution is currently verified only for the single-material OrcaSlicer worker.")
     if not isinstance(objects, list) or not 1 <= len(objects) <= 12:
@@ -304,12 +309,6 @@ def _validate_plate_execution(job):
 
 def validate_scheduling(job, installed=None):
     """Pure admission check; caller must hold a row lock before queueing."""
-    if (job.settings or {}).get("slot_filament_profiles"):
-        raise SlicerExecutionError(
-            "Per-slot filament profiles are saved in this draft, but independent "
-            "native tool-to-profile routing has not yet been verified. "
-            "Remove the per-slot assignments before single-filament slicing."
-        )
     _validate_plate_execution(job)
     if job.status != "draft" or job.output_asset_id:
         raise SlicerExecutionError("Only unscheduled slice drafts can be queued.")
