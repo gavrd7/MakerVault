@@ -8185,3 +8185,72 @@ a:focus-visible,
     max-width:100%;
   }
 }
+
+/* Add model is a viewport-level mobile dialog, not a child of the horizontally
+   scrolling two-row toolbar. iOS clips fixed-position descendants there. */
+.slicerAddModelOverlay{display:none}
+@media(max-width:850px){
+  .slicerAddModelOverlay{
+    position:fixed;
+    inset:0;
+    z-index:13000;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    box-sizing:border-box;
+    padding:calc(12px + env(safe-area-inset-top,0px)) 12px
+      calc(12px + env(safe-area-inset-bottom,0px));
+    background:rgba(4,10,18,.68);
+  }
+  .slicerAddModelOverlay>.slicerAddModelMenu{
+    position:relative!important;
+    inset:auto!important;
+    left:auto!important;
+    top:auto!important;
+    right:auto!important;
+    bottom:auto!important;
+    transform:none!important;
+    display:flex!important;
+    flex-direction:column;
+    gap:7px;
+    box-sizing:border-box;
+    width:min(100%,390px)!important;
+    max-width:390px!important;
+    min-width:0;
+    max-height:min(85dvh,650px)!important;
+    overflow-y:auto!important;
+    overflow-x:hidden!important;
+    padding:14px!important;
+    margin:0!important;
+    background:#101e2b;
+    border:1px solid #475e76;
+    border-radius:12px;
+    box-shadow:0 16px 45px rgba(0,0,0,.5);
+    -webkit-overflow-scrolling:touch;
+    overscroll-behavior:contain;
+  }
+  .slicerAddModelOverlay .slicerToolOptionsHeader{
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    gap:12px;
+    width:100%;
+    min-width:0;
+  }
+  .slicerAddModelOverlay .slicerAddModelChoice{
+    display:flex;
+    align-items:center;
+    justify-content:flex-start;
+    gap:10px;
+    width:100%;
+    min-width:0;
+    min-height:44px;
+    padding:10px 12px;
+    white-space:normal;
+    text-align:left;
+    line-height:1.35;
+  }
+  .slicerAddModelOverlay .slicerAddModelChoice .slicerUiIcon{
+    flex:0 0 19px;
+  }
+}
