@@ -9,7 +9,7 @@ from types import SimpleNamespace
 from django.test import SimpleTestCase
 
 from core.slicer_material_routing import MaterialRoutingError
-from core.slicer_native_material_palette import resolve_native_material_palette, prepare_multimaterial_plate
+from core.slicer_native_material_palette import resolve_native_material_palette, prepare_multimaterial_plate, ordered_material_profile_ids
 
 
 class NativeMaterialPaletteTests(SimpleTestCase):
@@ -129,3 +129,37 @@ class NativeMaterialPaletteTests(SimpleTestCase):
             prepare_multimaterial_plate(
                 rows, bed_width=220, bed_depth=220,
                 **{**self.payload, "tool_bindings": {}}, resolver=self.resolve)
+
+
+class OrderedMaterialProfileTests(SimpleTestCase):
+    def setUp(self):
+        self.bindings = [
+            {"slot_id": "cfs-4", "tool_index": 1},
+            {"slot_id": "cfs-1", "tool_index": 0},
+        ]
+        self.profiles = [
+            {"slot_id": "cfs-4", "profile_id": "blue"},
+            {"slot_id": "cfs-1", "profile_id": "red"},
+        ]
+
+    def test_tool_zero_is_not_necessarily_the_first_physical_slot(self):
+        self.assertEqual(
+            ordered_material_profile_ids(self.bindings, self.profiles,
+                                         main_profile_id="red"),
+            ("red", "blue"),
+        )
+
+    def test_invalid_and_ambiguous_tool_maps_fail_closed(self):
+        cases = [
+            ([{"slot_id": "cfs-4", "tool_index": 3}, self.bindings[1]], self.profiles),
+            ([self.bindings[0], self.bindings[0]], self.profiles),
+            ([{"slot_id": "cfs-4", "tool_index": True}, self.bindings[1]], self.profiles),
+            (self.bindings, [self.profiles[0], self.profiles[0]]),
+            (self.bindings, [self.profiles[0], {"slot_id": "unmapped", "profile_id": "red"}]),
+        ]
+        for bindings, profiles in cases:
+            with self.subTest(bindings=bindings, profiles=profiles):
+                with self.assertRaises(MaterialRoutingError):
+                    ordered_material_profile_ids(bindings, profiles, main_profile_id="red")
+        with self.assertRaisesRegex(MaterialRoutingError, "Logical tool 0"):
+            ordered_material_profile_ids(self.bindings, self.profiles, main_profile_id="blue")
