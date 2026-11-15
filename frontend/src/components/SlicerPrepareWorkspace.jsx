@@ -273,22 +273,6 @@ export default function SlicerPrepareWorkspace({
     });
   const [liveMaterials, setLiveMaterials] = useState([]);
   const [editingSlotProfile,setEditingSlotProfile] = useState(null);
-  const assignedLogicalTools = new Set(materialToolBindings.map(item => item.tool_index));
-  const materialSlotBinding = slot => materialToolBindings.find(
-    item => item.slot_id === String(slot.id));
-  const updateMaterialToolBinding = (slotId, value) => {
-    const next = materialToolBindings.filter(item => item.slot_id !== slotId);
-    if (value !== "") {
-      const index = Number(value);
-      if (!Number.isInteger(index) || index < 0 || index > 15) return;
-      // One-to-one mapping must remain explicit, including physical systems
-      // with many slots attached to one shared hotend.
-      if (next.some(item => item.tool_index === index)) return;
-      next.push({slot_id:slotId,tool_index:index});
-    }
-    onMaterialToolBindingsChange?.(next);
-  };
-
   const [detailsSlotId,setDetailsSlotId] = useState(null);
   const [filamentPickerId, setFilamentPickerId] = useState("");
   const [filamentNotice, setFilamentNotice] = useState("");
@@ -622,8 +606,7 @@ export default function SlicerPrepareWorkspace({
       && slot.slot_index === assignedSlots[0].slot_index);
   const multiMaterialReadyForExport = assignedSlots.length === objects.length
     && new Set(assignedSlots.map(slot => slot.slot_id)).size >= 2
-    && materialToolBindings.length >= 2 && slotFilamentProfiles.length >= 2
-    && Boolean(materialTopology);
+    && slotFilamentProfiles.length >= 2;
   const singleSlotProfileMatches = slotFilamentProfiles.length === 0
     || (slotFilamentProfiles.length === 1
       && slotFilamentProfiles[0].slot_id === assignedSlots[0]?.slot_id
@@ -1291,36 +1274,6 @@ export default function SlicerPrepareWorkspace({
         {filamentNotice && <p className="slicerModelFilamentNotice" role="status">{filamentNotice}</p>}
         </aside>
         <section className="slicerLiveMaterialSlots" aria-label="Loaded printer filament slots">
-          {liveMaterials.length > 1 && <div className="slicerNativeToolBindings" aria-label="Native material tool assignments">
-            <div className="slicerLiveMaterialHeader"><strong>Native tool assignments</strong>
-              <small>Offline multi-material preparation</small></div>
-            <label>Material changeover system
-              <select value={materialTopology} onChange={event => onMaterialTopologyChange?.(event.target.value)}>
-                <option value="">Choose system</option>
-                <option value="single_nozzle_changer">One nozzle · automatic filament changer (AMS/CFS/MMU)</option>
-                <option value="independent_toolheads">Independent printheads</option>
-                <option value="toolchanger">Automatic toolchanger</option>
-                <option value="idex">IDEX · independent dual extrusion</option>
-                <option value="manual_filament_change">Manual filament changes (pause / M600)</option>
-              </select>
-            </label>
-            {liveMaterials.map(slot => {
-              const current = materialSlotBinding(slot);
-              return <label key={slot.id}>{slotName(slot)}
-                <select value={current?.tool_index ?? ""}
-                  onChange={event => updateMaterialToolBinding(String(slot.id),event.target.value)}>
-                  <option value="">Not mapped</option>
-                  {Array.from({length:Math.min(16,Math.max(2,liveMaterials.length))},(_,index)=>
-                    <option key={index} value={index}
-                      disabled={assignedLogicalTools.has(index) && current?.tool_index !== index}>
-                      {"Slicer filament "+(index+1)+" (tool "+index+")"}
-                    </option>)}
-                </select>
-              </label>;
-            })}
-            <small>Physical slot positions are not native tool indices. These assignments are saved with the draft for verification; they do not yet enable printer tool changes.</small>
-          </div>}
-
           <div className="slicerLiveMaterialHeader"><strong>Loaded printer filaments</strong>
             <button type="button" disabled={materialRefreshing || !printerId} onClick={refreshPrinterMaterials}>
               {materialRefreshing ? "Refreshing…" : "Refresh"}
@@ -1552,7 +1505,7 @@ export default function SlicerPrepareWorkspace({
         {multiMaterialReadyForExport && <button type="button"
           disabled={!activePlateReady || !profilesReady || busy}
           onClick={onExportNativeMaterials}
-          title="Download an Orca-compatible 3MF with validated native filament assignments. No slicing or printing.">
+          title="Download an Orca-compatible 3MF; the backend detects the printer material system and derives tool order. Printing remains disabled until physical changeovers are verified.">
           Export multi-material 3MF (offline)
         </button>}
         <label className="slicerProjectImportButton" aria-label="Open project from 3MF file">
