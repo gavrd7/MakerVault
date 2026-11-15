@@ -174,3 +174,40 @@ class PersistedToolRouteTests(SimpleTestCase):
                     _draft_plate_settings(None, None, {
                         "material_tool_bindings": bindings,
                     })
+
+
+    def test_model_assignment_and_tool_bindings_survive_full_draft_validation(self):
+        import uuid
+        from types import SimpleNamespace
+        from unittest.mock import patch
+        from core.slicer_api import _draft_plate_settings
+
+        asset_id = uuid.uuid4()
+        printer_id = uuid.uuid4()
+        asset = SimpleNamespace(
+            pk=asset_id, name="benchy.stl", metadata={"extension": ".stl"},
+        )
+        model = {
+            "instance_id": str(uuid.uuid4()),
+            "asset_id": str(asset_id),
+            "x_mm": 0, "y_mm": 0, "rotation_deg": 0, "scale_percent": 100,
+            "color": "#aabbcc",
+            "material_slot": {
+                "printer_id": str(printer_id),
+                "slot_id": "manual-slot-1", "slot_index": 0,
+            },
+        }
+        with patch("core.slicer_api.FileAsset.objects.filter") as lookup:
+            lookup.return_value.first.return_value = asset
+            result = _draft_plate_settings(None, asset, {
+                "plate_objects": [model],
+                "material_tool_bindings": [
+                    {"slot_id": "manual-slot-1", "tool_index": 0},
+                ],
+                "material_topology": "manual_filament_change",
+            })
+        self.assertEqual(result["plate_objects"][0]["material_slot"],
+                         model["material_slot"])
+        self.assertEqual(result["material_tool_bindings"],
+                         [{"slot_id": "manual-slot-1", "tool_index": 0}])
+        self.assertEqual(result["material_topology"], "manual_filament_change")
