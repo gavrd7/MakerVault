@@ -1510,7 +1510,13 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
   outer_wall_speed: "Outer wall speed (mm/s)",
 })[key] || key.replaceAll("_", " ")}
           <input type="number" min={spec.min} max={spec.max} step="any" value={editProfileValues[key] ?? ""}
-            disabled={editProfileBusy} onChange={e => setEditProfileValues(current => ({ ...current, [key]: e.target.value }))} />
+            disabled={editProfileBusy || spec.outside_editor_bounds}
+            onChange={e => setEditProfileValues(current => ({ ...current, [key]: e.target.value }))} />
+          {spec.outside_editor_bounds && <small className="slicerSettingHelp">
+            This native preset value is outside MakerVault's basic editor bounds.
+            It is shown without modification; the selected slicer engine decides
+            whether it is valid. MakerVault will not automatically clamp it.
+          </small>}
         </label>)}
         {editingProfile.kind === "printer" && "retraction_distances_when_cut" in editProfileSchema &&
           <p className="full slicerSettingHelp">
