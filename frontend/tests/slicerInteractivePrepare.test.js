@@ -800,3 +800,21 @@ test("slicer engine status differentiates deployment and worker verification", (
   assert.match(workbench, /!workerConfigured/);
   assert.match(workbench, /worker engine passed health, image digest and binary-version checks/);
 });
+
+
+test("offline multi-material export preserves physical mapping without enabling direct prints", () => {
+  const workbench = read("SlicerWorkbench.jsx");
+  const prepare = read("SlicerPrepareWorkspace.jsx");
+  assert.match(workbench, /onExportNativeMaterials=\{\(\) => saveDraft\("native-material"\)\}/);
+  assert.match(workbench, /mode==="native-material"\?"\/export-native-materials\/"\:"\/export-project\/"/);
+  assert.match(workbench, /material_tool_bindings:materialToolBindings/g);
+  assert.match(workbench, /material_topology:materialTopology/g);
+  assert.match(prepare, /Export multi-material 3MF \(offline\)/);
+  assert.match(prepare, /multiMaterialReadyForExport/);
+  assert.match(prepare, /materialToolBindings\.length >= 2/);
+  assert.match(prepare, /slotFilamentProfiles\.length >= 2/);
+  assert.match(prepare, /manual_filament_change/);
+  assert.match(prepare, /independent_toolheads/);
+  assert.match(prepare, /toolchanger/);
+  assert.match(prepare, /idex/);
+});
