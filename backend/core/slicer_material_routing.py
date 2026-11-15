@@ -11,7 +11,10 @@ class MaterialRoutingError(ValueError):
     pass
 
 
-TOPOLOGIES = frozenset({"single_nozzle_changer", "independent_toolheads"})
+TOPOLOGIES = frozenset({
+    "single_nozzle_changer", "independent_toolheads", "toolchanger",
+    "idex", "manual_filament_change",
+})
 
 
 @dataclass(frozen=True)
@@ -64,7 +67,7 @@ def plan_material_routes(objects, *, printer_id, topology, tool_bindings):
         if isinstance(tool, bool) or not isinstance(tool, int) or not 0 <= tool <= 63:
             raise MaterialRoutingError("Invalid native tool index.")
         result.append(MaterialRoute(instance, str(printer_id), slot_id, index, tool))
-    if topology == "independent_toolheads":
+    if topology in {"independent_toolheads", "toolchanger", "idex"}:
         # One physical head is dedicated to one filament, so reject
         # contradictory assignments to the same toolhead.
         heads = {}
@@ -72,6 +75,8 @@ def plan_material_routes(objects, *, printer_id, topology, tool_bindings):
             previous = heads.setdefault(item.tool_index, item.slot_id)
             if previous != item.slot_id:
                 raise MaterialRoutingError("Multiple physical slots target one independent printhead.")
+    if topology == "idex" and any(item.tool_index > 1 for item in result):
+        raise MaterialRoutingError("IDEX mode supports only its two distinct toolheads.")
     return result
 
 
