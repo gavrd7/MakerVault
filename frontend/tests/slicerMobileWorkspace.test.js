@@ -190,3 +190,24 @@ test("painting toolbar uses complete action names", () => {
   for (const label of ["Support painting", "Seam painting", "Variable layer height"])
     assert.match(editor, new RegExp('"' + label + '":"' + label + '"'));
 });
+
+test("mobile inspector docks below the plate instead of covering the 3D model", () => {
+  const plate = fs.readFileSync(path.join(base, "components/SlicerPlateEditor.jsx"), "utf8");
+  assert.match(plate, /const mobileMeshInspector = typeof window !== "undefined"/);
+  assert.match(plate, /hostRef\.current\?\.closest\("\.slicerPlatePanel"\)/);
+  assert.match(plate, /<\/div>,meshInspectorHost/);
+  assert.match(css, /\.slicerPlatePanel>\.slicerAutoOrientModalBackdrop:has\(\.slicerViewportAnchoredModal\)/);
+  assert.match(css, /position:relative!important;/);
+});
+
+test("mobile settings selection is inset and model transform fields align vertically", () => {
+  assert.match(css, /slicerPrepareSettings nav\[aria-label="Process settings groups"\]>button\.selected/);
+  assert.match(css, /box-shadow:inset 0 0 0 1px #9b85ee/);
+  assert.match(css, /\.slicerPrepareScene \.slicerPlateTransformFields>label/);
+  assert.match(css, /grid-template-columns:minmax\(0,1fr\)!important/);
+});
+
+test("single-colour slicing explains which required native profile is absent", () => {
+  assert.match(editor, /const missingNativeProfiles = \["printer", "process", "filament"\]\.filter/);
+  assert.match(editor, /"Missing native " \+ missingNativeProfiles\.join\(", "\)/);
+});
