@@ -73,10 +73,17 @@ class NativeSlicerProfileEditorTests(SimpleTestCase):
         self.assertEqual(candidate["retraction_distances_when_cut"], "18")
         self.assertEqual(candidate["nozzle_diameter"], ["0.4"])
         self.assertEqual(json.loads(original)["retraction_distances_when_cut"], "30")
+        # A profile's 30 mm value is not a reason for MakerVault to suppress
+        # it or silently force the range from a different Orca release.
+        retained = json.loads(customise_native_json(
+            original, "printer", "Preserved official long retraction",
+            {"retraction_distances_when_cut": 30},
+        ))
+        self.assertEqual(retained["retraction_distances_when_cut"], "30")
         with self.assertRaises(SlicerProfileError):
             customise_native_json(
-                original, "printer", "Invalid K2 value",
-                {"retraction_distances_when_cut": 30},
+                original, "printer", "Beyond editor safety limit",
+                {"retraction_distances_when_cut": 101},
             )
 
     def test_custom_k2_copy_is_flattened_and_keeps_inherited_bed(self):
