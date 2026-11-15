@@ -268,10 +268,23 @@ class Handler(BaseHTTPRequestHandler):
                 reason = safe_reasons.get(str(exc), "validation-error")
             logger.warning("Isolated slicer rejected job at %s (%s, %s)", stage,
                            type(exc).__name__, reason)
-            return self._json(422, {
+            response = {
                 "error": "Slicing input or output was rejected.",
                 "stage": stage, "reason": reason,
-            })
+            }
+            if reason == "native-project-settings-invalid":
+                keys = getattr(exc, "option_keys", ())
+                if isinstance(keys, (list, tuple)):
+                    import re
+                    safe = [key for key in keys[:8]
+                            if isinstance(key, str) and re.fullmatch(r"[a-z][a-z0-9_]{1,63}", key)
+                            and not any(word in key for word in (
+                                "secret", "password", "token", "apikey", "api_key",
+                                "authorization", "credential", "private", "access_key"
+                            ))]
+                    if safe:
+                        response["setting_keys"] = list(dict.fromkeys(safe))
+            return self._json(422, response)
         except OSError as exc:
             logger.exception("Isolated slicer filesystem failure at %s", stage)
             return self._json(500, {
