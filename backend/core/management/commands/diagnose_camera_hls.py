@@ -109,6 +109,42 @@ def ts_playlist_progress(text):
         "has_endlist": "#EXT-X-ENDLIST" in text,
     }
 
+def transport_packet_summary(payload):
+    """Report packet types only; never expose video bytes or packet contents."""
+    if not payload or len(payload) % 188:
+        return {"valid_ts": False, "packets": 0}
+    tables = 0
+    other_packets = 0
+    payload_packets = 0
+    pes_starts = 0
+    for offset in range(0, len(payload), 188):
+        packet = payload[offset:offset + 188]
+        if packet[0] != 0x47:
+            return {"valid_ts": False, "packets": len(payload) // 188}
+        pid = ((packet[1] & 0x1F) << 8) | packet[2]
+        if pid in {0, 0x1FFF} or pid < 0x20:
+            tables += 1
+        else:
+            other_packets += 1
+        afc = (packet[3] >> 4) & 0x03
+        if afc in {1, 3}:
+            position = 4
+            if afc == 3:
+                position += 1 + packet[4]
+            if position < 188:
+                payload_packets += 1
+                if packet[1] & 0x40 and packet[position:position + 3] == b"\\x00\\x00\\x01":
+                    pes_starts += 1
+    return {
+        "valid_ts": True,
+        "packets": len(payload) // 188,
+        "table_or_reserved_packets": tables,
+        "other_pid_packets": other_packets,
+        "packets_with_payload": payload_packets,
+        "pes_starts": pes_starts,
+    }
+
+
 class Command(BaseCommand):
     help = "Check safe HLS playlist and MP4 initialization dimensions for Creality cameras."
 
@@ -131,12 +167,15 @@ class Command(BaseCommand):
             try:
                 segment, mime = hls_resource(session, "segment.ts", sequence=str(number))
                 elapsed = round(monotonic() - started, 2)
-                valid_ts = bool(segment) and segment[0] == 0x47
+                packet_info = transport_packet_summary(segment)
+                valid_ts = packet_info["valid_ts"]
                 self.stdout.write(
                     f"  Sample {sample + 1}: playlist_sequence={state['media_sequence']}, "
                     f"requested_segment={number}, bytes={len(segment)}, "
                     f"elapsed_seconds={elapsed}, ts_sync={valid_ts}, "
-                    f"mime_ok={mime == 'video/mp2t'}"
+                    f"mime_ok={mime == 'video/mp2t'}, packets={packet_info['packets']}, "
+                    f"other_pid_packets={packet_info.get('other_pid_packets', 0)}, "
+                    f"pes_starts={packet_info.get('pes_starts', 0)}"
                 )
                 if not valid_ts:
                     self.stdout.write("  MPEG-TS segment is empty or does not start with a sync byte.")
