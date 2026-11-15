@@ -274,20 +274,42 @@ def refresh_worker():
     print("Refreshed staging worker; engine binary hash and token preserved.")
 
 
-def upgrade_orca(version=VERSION):
+def upgrade_orca(version=VERSION, *, reviewed_appimage=None, expected_sha=None):
     """Replace the staging engine safely, preserving credentials and rollback assets.
 
     Requires a stopped/idle slicer queue. Refuses to overwrite a previous
     rollback snapshot. Both identity-locked configurations are recoverable.
     """
-    _release_spec(version)
+    if reviewed_appimage is None:
+        _release_spec(version)
+    else:
+        # Only an operator-reviewed, locally rebuilt v2.5.0 executable may
+        # use this path. Never download or approve a source-patched binary by
+        # version alone, and never change native profile version identities.
+        if version != VERSION:
+            raise ValueError("Reviewed Orca source corrections require the pinned v2.5.0 version.")
+        if (not isinstance(expected_sha, str) or len(expected_sha) != 64 or
+                any(ch not in "0123456789abcdef" for ch in expected_sha)):
+            raise ValueError("Reviewed AppImage requires its independently verified SHA-256.")
+        reviewed_appimage = Path(reviewed_appimage).resolve(strict=True)
+        if (not reviewed_appimage.is_file() or
+                reviewed_appimage.is_symlink() or
+                not reviewed_appimage.name.endswith(".AppImage")):
+            raise ValueError("Reviewed source build must be a regular AppImage.")
+        with reviewed_appimage.open("rb") as stream:
+            actual_sha = hashlib.file_digest(stream, "sha256").hexdigest()
+        if actual_sha != expected_sha:
+            raise ValueError("Reviewed source build SHA-256 does not match.")
     current_env = _read_env()
     current = _resume_staged_bundle()
     installed = json.loads(current["worker_engines_json"]).get("orcaslicer")
     if not installed:
         raise ValueError("Installed staging worker has no OrcaSlicer engine.")
-    if installed["version"] == version:
+    if installed["version"] == version and reviewed_appimage is None:
         print("OrcaSlicer " + version + " is already staged; no upgrade required.")
+        return
+    if reviewed_appimage is not None and installed["binary_sha256"] == expected_sha:
+        print("The exact reviewed source-build binary is already installed.")
         return
     env_backup = ROOT / ".slicer-staging.env.pre-upgrade"
     bundle_backup = ROOT / "slicer-engine-assets.pre-upgrade"
@@ -295,12 +317,20 @@ def upgrade_orca(version=VERSION):
         raise ValueError("Previous upgrade backup exists. Preserve or inspect it before upgrading.")
     # Do not replace a live binary while a slicer operation is in progress.
     print("Ensure no slicing jobs are queued or running before proceeding.")
-    url, expected_sha = _github_asset(version)
+    if reviewed_appimage is None:
+        url, expected_sha = _github_asset(version)
     with tempfile.TemporaryDirectory(prefix=".orca-upgrade-", dir=ROOT) as directory:
         directory = Path(directory)
-        appimage = directory / _release_spec(version)[1]
-        print("Downloading and verifying pinned OrcaSlicer " + version + "…")
-        _download_verified(url, expected_sha, appimage)
+        appimage = directory / (
+            reviewed_appimage.name if reviewed_appimage is not None
+            else _release_spec(version)[1]
+        )
+        if reviewed_appimage is not None:
+            print("Copying the explicitly approved reviewed OrcaSlicer AppImage…")
+            shutil.copyfile(reviewed_appimage, appimage)
+        else:
+            print("Downloading and verifying pinned OrcaSlicer " + version + "…")
+            _download_verified(url, expected_sha, appimage)
         from slicer_worker.stage_engines import stage_engines
         candidate = directory / "bundle"
         staged = stage_engines(
@@ -433,14 +463,26 @@ def status():
 
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("action", choices=["prepare-orca", "enable", "disable", "status", "refresh-worker", "upgrade-orca", "update"])
+    parser.add_argument("action", choices=["prepare-orca", "enable", "disable", "status", "refresh-worker", "upgrade-orca", "upgrade-reviewed-orca", "update"])
     parser.add_argument("--version", default=VERSION,
                         help="Approved Orca release for prepare-orca and upgrade-orca (default: 2.5.0)")
+    parser.add_argument("--reviewed-appimage", type=Path,
+                        help="Manually compiled and reviewed Orca AppImage for upgrade-reviewed-orca only")
+    parser.add_argument("--reviewed-sha256",
+                        help="Independently reviewed SHA-256 of the local AppImage")
     args = parser.parse_args(argv)
     try:
         if args.action == "prepare-orca":
             prepare_orca(version=args.version)
             return 0
+        if args.action == "upgrade-reviewed-orca":
+            if not args.reviewed_appimage or not args.reviewed_sha256:
+                raise ValueError("Specify --reviewed-appimage and --reviewed-sha256.")
+            upgrade_orca(version=args.version, reviewed_appimage=args.reviewed_appimage,
+                         expected_sha=args.reviewed_sha256)
+            return 0
+        if args.reviewed_appimage is not None or args.reviewed_sha256 is not None:
+            raise ValueError("Reviewed binary arguments require upgrade-reviewed-orca.")
         if args.action == "upgrade-orca":
             upgrade_orca(version=args.version)
             return 0
