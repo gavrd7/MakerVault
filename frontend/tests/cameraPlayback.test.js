@@ -175,7 +175,7 @@ test("all camera surfaces share WebRTC-first playback without altering their lay
 test("live camera controls remain uncluttered and manual retry appears only for errors", () => {
   const player = fs.readFileSync(path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../src/components/PrinterCamera.jsx"), "utf8");
   const view = player.slice(player.indexOf('return <div className={"printerCameraPlayback"'));
-  assert.match(view, /\{error && <button type="button"[^>]*>Retry video<\/button>\}/);
+  assert.match(view, /\{error && <button type="button"[^\n]*>Retry video<\/button>\}/);
   assert.match(view, /\{!compact && error && <small role="status">\{status\}<\/small>\}/);
   assert.doesNotMatch(view, /Creality WebRTC · experimental|Video is relayed through your authenticated MakerVault connection/);
 });
