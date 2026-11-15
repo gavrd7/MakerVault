@@ -1014,6 +1014,13 @@ def submit(connection, user, payload):
         asset = FileAsset.objects.filter(owner=user, pk=aid, superseded_by__isnull=True).first()
         if not asset or (asset.metadata or {}).get("extension") != ".gcode":
             raise GcodeSubmissionError("Select an owned, current plain-text G-code file.", 404)
+        # Experimental multicolour slices are offline evidence only.
+        # No opt-in, adapter flag or CFS acknowledgement bypasses this guard.
+        if (asset.metadata or {}).get("multi_material_test") is True:
+            raise GcodeSubmissionError(
+                "Multi-colour test G-code is not approved for printer upload or print start. "
+                "Complete manufacturer-specific toolchange verification first.", 409
+            )
         if asset.file.size > MAX_UPLOAD_BYTES:
             raise GcodeSubmissionError("This release supports printer transfers up to 64 MiB. Large files require the streaming transport.", 413)
         # Keep the original filename recognisable; suffix avoids overwrites.
