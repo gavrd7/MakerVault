@@ -154,6 +154,33 @@ class SlicerWorkerClientTests(SimpleTestCase):
     @patch("core.slicer_worker_client._session")
     @patch("core.slicer_worker_client.worker_settings",
            return_value=("http://slicer-worker:8088", "x" * 40))
+    def test_native_validation_reports_safe_setting_identifiers(self, settings, session):
+        import json
+        response = Mock()
+        response.status_code = 422
+        payload = json.dumps({
+            "stage": "running slicer engine",
+            "reason": "native-project-settings-invalid",
+            "setting_keys": ["retraction_distances_when_cut", "api_key",
+                             "/private/file", "wall_loops"],
+            "error": "private original settings and filenames",
+        }).encode()
+        response.headers = {"Content-Length": str(len(payload))}
+        response.iter_content.return_value = [payload]
+        session.return_value.post.return_value = response
+        with self.assertRaises(SlicerWorkerError) as caught:
+            run_remote_job(uuid.uuid4(), "orcaslicer", "2.5.0",
+                           b"model", b"printer", b"filament", b"process")
+        message = str(caught.exception)
+        self.assertIn("retraction_distances_when_cut", message)
+        self.assertIn("wall_loops", message)
+        self.assertNotIn("api_key", message)
+        self.assertNotIn("/private/file", message)
+        self.assertNotIn("private original", message)
+
+    @patch("core.slicer_worker_client._session")
+    @patch("core.slicer_worker_client.worker_settings",
+           return_value=("http://slicer-worker:8088", "x" * 40))
     def test_unknown_reason_does_not_leak_raw_diagnostics(self, settings, session):
         import json
         response = Mock()
