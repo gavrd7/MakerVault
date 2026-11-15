@@ -11,7 +11,10 @@ permissions:
 jobs:
   build-and-test:
     runs-on: ubuntu-24.04
-    timeout-minutes: 120
+    # First build compiles Orca's extensive native dependencies and GUI.
+    # The initial two-hour run was still progressing (476/824 sources)
+    # when GitHub killed it; do not mistake that for a compilation failure.
+    timeout-minutes: 360
     steps:
       - name: Checkout MakerVault compatibility tooling
         uses: actions/checkout@v4
@@ -37,8 +40,8 @@ jobs:
       - name: Compile isolated Orca AppImage from patched source
         run: |
           cd upstream-orca
-          # Hosted runners have less RAM than Orca's recommended workstation.
-          # Limit parallelism instead of silently changing compiler flags.
+          # Limit parallelism for hosted-runner RAM. A cold Orca build may
+          # take several hours; timeout is set at job level above.
           ./build_linux.sh -g -r -j 2 -dsi
       - name: Find and checksum source-built AppImage
         id: built
