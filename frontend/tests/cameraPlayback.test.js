@@ -154,3 +154,20 @@ test("iOS uses native MPEG-TS HLS without changing desktop or Android", async ()
   assert.match(source, /target && iosWebKit && target\.canPlayType/);
   assert.match(source, /hls\.loadSource\(source\)/);
 });
+
+test("WebRTC offer URL is derived from the authenticated camera endpoint", async () => {
+  const { cameraWebRTCOfferUrl } = await import("../src/components/cameraWebRTC.js");
+  assert.equal(cameraWebRTCOfferUrl("/api/printing/printers/p/connections/c/cameras/k2/media/"),
+    "/api/printing/printers/p/connections/c/cameras/k2/webrtc/offer/");
+});
+
+test("all camera surfaces share WebRTC-first playback without altering their layouts", () => {
+  const player = fs.readFileSync(path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../src/components/PrinterCamera.jsx"), "utf8");
+  const previews = fs.readFileSync(path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../src/components/PrinterCameras.jsx"), "utf8");
+  assert.match(player, /connectCameraWebRTC\(/);
+  assert.match(player, /WebRTC connected · waiting for first video frame/);
+  assert.match(player, /requestVideoFrameCallback\(receivedFrame\)/);
+  assert.match(player, /setTransport\("hls"\)/);
+  assert.match(player, /<video ref=\{video\}/);
+  assert.match(previews, /<CameraPlayback key=/);
+});
