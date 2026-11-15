@@ -184,7 +184,7 @@ def detect_material_system(connections):
     return detected.pop()
 
 
-def derive_native_tool_order(objects, *, printer_id, topology):
+def derive_native_tool_order(objects, *, printer_id, topology, preferred_slot_id=None):
     """Assign logical Orca filament indices by first model use, not tray position.
 
     Adapter-specific hardware routing is intentionally not emitted here.
@@ -210,5 +210,12 @@ def derive_native_tool_order(objects, *, printer_id, topology):
             unique_slots.append(slot_id)
     if not 2 <= len(unique_slots) <= 16:
         raise MaterialRoutingError("Choose between two and sixteen different filaments.")
+    if preferred_slot_id is not None:
+        if preferred_slot_id not in unique_slots:
+            raise MaterialRoutingError(
+                "The selected main filament preset does not match an assigned slot."
+            )
+        unique_slots.remove(preferred_slot_id)
+        unique_slots.insert(0, preferred_slot_id)
     bindings = {slot_id: index for index, slot_id in enumerate(unique_slots)}
     return bindings
