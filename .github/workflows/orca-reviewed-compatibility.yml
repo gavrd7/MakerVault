@@ -28,7 +28,9 @@ jobs:
       - name: Compile isolated Orca AppImage from patched source
         run: |
           cd upstream-orca
-          ./build_linux.sh -g -dsi
+          # Hosted runners have less RAM than Orca's recommended workstation.
+          # Limit parallelism instead of silently changing compiler flags.
+          ./build_linux.sh -g -r -j 2 -dsi
       - name: Find and checksum source-built AppImage
         id: built
         shell: bash
