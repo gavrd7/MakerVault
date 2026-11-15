@@ -68,7 +68,16 @@ class CameraHlsMetadataTests(SimpleTestCase):
                 return body, "application/vnd.apple.mpegurl"
             self.assertEqual(kind, "segment.ts")
             self.assertIn(kwargs.get("sequence"), {"0", "1", "2"})
-            return b"\x47" + b"packet", "video/mp2t"
+            # A genuine single 188-byte MPEG-TS packet; the diagnostic
+            # correctly rejects truncated packets rather than treating
+            # arbitrary bytes after a sync marker as a valid segment.
+            packet = bytearray(188)
+            packet[0] = 0x47
+            packet[1] = 0x40
+            packet[2] = 0x01
+            packet[3] = 0x10
+            packet[4:8] = b"\\x00\\x00\\x01\\xe0"
+            return bytes(packet), "video/mp2t"
         resource.side_effect = reply
         lines = []
         cmd = Command()
