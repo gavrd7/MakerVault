@@ -46,21 +46,21 @@ jobs:
         id: deps-cache
         uses: actions/cache/restore@v4
         with:
-          path: upstream-orca/deps/build/destdir
-          key: orca-v2.5.0-40ecc66f-ubuntu2404-gcc-deps-v1
+          path: upstream-orca/deps/build/OrcaSlicer_dep
+          key: orca-v2.5.0-40ecc66f-ubuntu2404-gcc-deps-v2
       - name: Build Orca dependencies on cache miss
         if: steps.deps-cache.outputs.cache-hit != 'true'
         run: |
           cd upstream-orca
           ./build_linux.sh -g -r -j 2 -d
-          test -d deps/build/destdir
-          test -n "$(find deps/build/destdir -mindepth 1 -maxdepth 3 -print -quit)"
+          test -d deps/build/OrcaSlicer_dep/usr/local/lib
+          test -n "$(find deps/build/OrcaSlicer_dep/usr/local/lib -mindepth 1 -maxdepth 1 -print -quit)"
       - name: Preserve built Orca dependencies before compiling application
         if: steps.deps-cache.outputs.cache-hit != 'true'
         uses: actions/cache/save@v4
         with:
-          path: upstream-orca/deps/build/destdir
-          key: orca-v2.5.0-40ecc66f-ubuntu2404-gcc-deps-v1
+          path: upstream-orca/deps/build/OrcaSlicer_dep
+          key: orca-v2.5.0-40ecc66f-ubuntu2404-gcc-deps-v2
       - name: Compile isolated Orca AppImage from patched source
         run: |
           cd upstream-orca
