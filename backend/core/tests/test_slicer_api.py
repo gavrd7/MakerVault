@@ -477,6 +477,40 @@ class SliceJobApiTests(TestCase):
             }})
             self.assertEqual(rejected.status_code, 400, rejected.content)
 
+    def test_native_tool_bindings_roundtrip_and_do_not_infer_physical_slot_order(self):
+        self.client.force_login(self.owner)
+        instance = {
+            "instance_id": str(uuid.uuid4()), "asset_id": str(self.input_asset.pk),
+            "x_mm": 0, "y_mm": 0, "rotation_deg": 0, "scale_percent": 100,
+            "color": "#58b5e4",
+            "material_slot": {"printer_id": str(self.printer.pk),
+                              "slot_id": "bay-4", "slot_index": 3},
+        }
+        routing = [{"slot_id": "bay-4", "tool_index": 0},
+                   {"slot_id": "bay-1", "tool_index": 1}]
+        result = self.post({**self.payload, "settings": {
+            "plate_objects": [instance],
+            "material_tool_bindings": routing,
+            "material_topology": "single_nozzle_changer",
+        }})
+        self.assertEqual(result.status_code, 201, result.content)
+        saved = SliceJob.objects.get(pk=result.json()["job"]["id"]).settings
+        self.assertEqual(saved["material_tool_bindings"], routing)
+        self.assertEqual(saved["material_topology"], "single_nozzle_changer")
+        for invalid in (
+            [{"slot_id": "bay-4", "tool_index": True}],
+            [{"slot_id": "bay-4", "tool_index": 17}],
+            [{"slot_id": "bay-4", "tool_index": 0},
+             {"slot_id": "bay-1", "tool_index": 0}],
+            [{"slot_id": "bay-4", "tool_index": 0, "commands": "T3"}],
+        ):
+            with self.subTest(invalid=invalid):
+                rejected = self.post({**self.payload, "settings": {
+                    "plate_objects": [instance],
+                    "material_tool_bindings": invalid,
+                }})
+                self.assertEqual(rejected.status_code, 400, rejected.content)
+
     def test_invalid_object_setting_is_rejected_before_draft_creation(self):
         self.client.force_login(self.owner)
         obj = {
