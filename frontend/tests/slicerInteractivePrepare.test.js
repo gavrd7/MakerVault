@@ -105,7 +105,7 @@ test("active 3D model has a temporary outline and preserves preview filament col
   assert.match(scene, /selectMultiple\(object.instance_id, event.ctrlKey/);
   assert.match(editor, /const helper = new THREE.BoxHelper\(mesh, 0x39d9ff\)/);
   assert.match(editor, /selectionOutlines\.forEach\(helper=>helper\.update\(\)\)/);
-  assert.match(editor, /state\.setSelectionOutlines\(toolMode === "paint_colour" \? \[\] : selection\.map\(id=>state\.meshes\.get\(id\)\)/);
+  assert.match(editor, /state\.setSelectionOutlines\(\["paint_colour","paint_support"\]\.includes\(toolMode\) \? \[\] : selection\.map\(id=>state\.meshes\.get\(id\)\)/);
   assert.match(editor, /paintPreview\(mesh, item, PALETTE\[0\]\)/);
   assert.match(editor, /selection.includes\(item.instance_id\) \? "#168ab4" : "#000000"/);
   assert.match(editor, /setSelectionOutlines\(\[\]\)/);
@@ -114,10 +114,11 @@ test("active 3D model has a temporary outline and preserves preview filament col
 });
 test("advanced tools are visibly gated pending safe native transformations", () => {
   const scene = read("SlicerPrepareWorkspace.jsx");
-  for (const tool of ["Support painting", "Seam painting", "Variable layer height"]) {
+  for (const tool of ["Seam painting", "Variable layer height"]) {
     assert.match(scene, new RegExp('name: "' + tool + '", icon: "[^"]+", pending:'));
   }
   assert.match(scene, /name: "Colour painting", target: "paint_colour", icon: "paint-colour"/);
+  assert.match(scene, /name: "Support painting", target: "paint_support", icon: "paint-support"/);
   assert.match(scene, /disabled=\{!!tool.pending/);
   assert.match(scene, /name: "Add plate", target: "add_plate"/);
   assert.match(scene, /name: "Lay on face", target: "lay_face", icon: "face"/);
@@ -725,7 +726,7 @@ test("assembly toolbar gizmos use a shared pivot and keep meshes independent",()
   assert.match(scene,/state\.transform\.attach\(pivot\)/);
   assert.match(scene,/groupCommitRef\.current\?\.\(dx,dy,rotation,scale\)/);
   assert.match(scene,/groupEditable = canEdit && !solidDialog && selection\.length > 1/);
-  assert.match(scene,/state\.setSelectionOutlines\(toolMode === "paint_colour" \? \[\] : selection\.map/);
+  assert.match(scene,/state\.setSelectionOutlines\(\["paint_colour","paint_support"\]\.includes\(toolMode\) \? \[\] : selection\.map/);
   assert.match(scene,/transformGroup\(groupDeltaX, groupDeltaY, groupRotation, groupScale\)/);
   assert.match(workspace,/const memberIds = item\.assembly_id/);
   assert.match(workspace,/memberIds\.every\(value => current\.includes\(value\)\)/);
