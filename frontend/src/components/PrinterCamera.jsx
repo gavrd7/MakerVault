@@ -4,8 +4,6 @@ import { connectCameraWebRTC } from "./cameraWebRTC";
 import { apiFetch } from "../api";
 import { startFrameLoop, cameraRequest, cameraHlsUrl, shouldFallbackToNativeHls, videoFrameHealth, videoFrameDiagnostic, isIOSWebKit } from "./cameraPlayback";
 
-const LABELS = { snapshot: "Live images", mjpeg: "MJPEG live images", creality_webrtc: "Creality WebRTC · experimental" };
-
 function endpointLabel(url) {
   try {
     const parsed = new URL(url);
@@ -474,9 +472,9 @@ export function CameraPlayback({ camera, url, compact = false }) {
 
   return <div className={"printerCameraPlayback" + (compact ? " cameraGlance" : "") + (expanded ? " cameraExpanded" : "")} ref={container}>
     <div className="printerCameraToolbar">
-      {!compact && <small role="status">{status}</small>}
+      {!compact && error && <small role="status">{status}</small>}
       {playbackBlocked && camera.mode === "creality_webrtc" && <button type="button" onClick={() => { const target = video.current; if (!target) return; target.play().then(() => { setPlaybackBlocked(false); setError(""); }).catch(reason => { if (reason?.name !== "NotAllowedError") setError("Video could not start. Select Reconnect."); }); }}>Start video</button>}
-      {(!compact || error) && <button type="button" onClick={() => { setTransport("webrtc"); setAttempt(value => value + 1); }}>Reconnect</button>}
+      {error && <button type="button" onClick={() => { setTransport("webrtc"); setAttempt(value => value + 1); }}>Retry video</button>}
       {camera.mode === "creality_webrtc" && error && <button type="button" onClick={inspectFrame}>Inspect frame</button>}
       {camera.mode !== "creality_webrtc" && <button type="button" className="cameraFullscreen" aria-label={expanded ? "Close fullscreen camera" : "Open fullscreen camera"} onClick={fullscreen}>{expanded ? "Close" : "Fullscreen"}</button>}
     </div>
@@ -503,6 +501,5 @@ export function CameraPlayback({ camera, url, compact = false }) {
     {capturedFrame && <img src={capturedFrame} alt="Captured video frame for camera diagnosis" style={{ display: "block", width: "min(100%, 320px)", margin: "8px auto" }} />}
     {playbackDiagnostic && <small role="status" style={{ display: "block", padding: "4px 10px", overflowWrap: "anywhere" }}>{playbackDiagnostic}</small>}
     {playbackBlocked && <small role="status">Safari requires you to start video playback manually.</small>}
-    {!compact && <small>{LABELS[camera.mode]}{camera.mode === "creality_webrtc" ? " · Video is relayed through your authenticated MakerVault connection; no camera media port is exposed." : " · Images are relayed securely through your MakerVault session."}</small>}
   </div>;
 }
