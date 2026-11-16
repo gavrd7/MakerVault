@@ -330,8 +330,70 @@ export default function SlicerPrepareWorkspace({
     setFilamentPickerId("");
     setFilamentNotice("Model's intended printer slot cleared. The native filament preset is unchanged.");
   };
+  const [suppressedSlotMatches, setSuppressedSlotMatches] = useState([]);
+  const [slotImportBusy, setSlotImportBusy] = useState(false);
+  const lookupEngine = String(engine).split(" ")[0];
+  const lookupVersion = String(engine).split(" ").slice(1).join(" ");
+  const slotMatch = slot => matchLoadedSlotProfiles(slot, filamentProfiles, {
+    engine: lookupEngine, version: lookupVersion, printer: printerDetails,
+  });
+  const findOfficialSlotProfiles = async slot => {
+    const id = String(slot.id);
+    setSlotOfficialBusy(id);
+    setSlotOfficialError("");
+    setSlotOfficialResults(current => ({...current, [id]: []}));
+    try {
+      if (lookupEngine !== "orcaslicer") {
+        throw new Error("Direct slot profile search currently supports the pinned OrcaSlicer catalogue only.");
+      }
+      const query = slotProfileSearchTerm(slot);
+      if (!query || query.length < 2) throw new Error("This slot has no recognisable filament material.");
+      const params = new URLSearchParams({
+        engine: lookupEngine, version: lookupVersion, vendor: "OrcaFilamentLibrary",
+        kind: "filament", q: query,
+      });
+      const result = await apiFetch("/api/printing/slicer/official-profiles/?" + params.toString());
+      // Server catalogue matches are candidates only; never auto-import,
+      // auto-activate, or claim printer compatibility from a text match.
+      setSlotOfficialResults(current => ({...current, [id]: (result.profiles || []).slice(0, 20)}));
+    } catch (err) {
+      setSlotOfficialError(err.message || "Cannot search the official profile catalogue.");
+    } finally {
+      setSlotOfficialBusy("");
+    }
+  };
+  const importOfficialSlotProfile = async (slot, candidate) => {
+    if (!canEdit || slotImportBusy) return;
+    if (!window.confirm("Import " + candidate.name + " and its native parent presets for " +
+        slotName(slot) + "? The imported profile may still require slicing verification.")) return;
+    setSlotImportBusy(true);
+    setSlotOfficialError("");
+    try {
+      const result = await apiFetch("/api/printing/slicer/official-profiles/", {
+        method: "POST",
+        body: {kind:"filament",vendor:"OrcaFilamentLibrary",engine:lookupEngine,
+          engine_version:lookupVersion,name:candidate.name,sub_path:candidate.sub_path},
+      });
+      const imported = result.profile;
+      // The parent reloads the profile list, including the newly imported
+      // dependencies; only the chosen slot is modified, never the main preset.
+      await onFilamentProfilesReload?.();
+      onSlotFilamentProfilesChange?.([
+        ...slotFilamentProfiles.filter(row => String(row.slot_id) !== String(slot.id)),
+        {slot_id: String(slot.id), profile_id: String(imported.id)},
+      ]);
+      setSlotOfficialResults(current => ({...current, [String(slot.id)]: []}));
+      setMaterialMessage("Imported " + imported.name + " for slot " +
+        ((slot.slot_index ?? 0) + 1) + ". Profile compatibility is checked when slicing.");
+    } catch (err) {
+      setSlotOfficialError(err.message || "Profile import failed.");
+    } finally {
+      setSlotImportBusy(false);
+    }
+  };
   const [materialRefreshing, setMaterialRefreshing] = useState(false);
   const [materialMessage, setMaterialMessage] = useState("Select Refresh to read current printer filament slots.");
+  useEffect(() => { setSuppressedSlotMatches([]); setSlotOfficialResults({}); }, [printerId]);
   const requestRef = useRef(0);
   const refreshPrinterMaterials = useCallback(async () => {
     const requestId = ++requestRef.current;
@@ -366,7 +428,7 @@ export default function SlicerPrepareWorkspace({
   useEffect(() => {
     if (!canEdit || !liveMaterials.length || !filamentProfiles.length) return;
     const existing = new Set(slotFilamentProfiles.map(row => String(row.slot_id)));
-    const inferred = liveMaterials.filter(slot => !existing.has(String(slot.id)))
+    const inferred = liveMaterials.filter(slot => !existing.has(String(slot.id)) && !suppressedSlotMatches.includes(String(slot.id)))
       .map(slot => ({slot, match: matchLoadedSlotProfiles(slot, filamentProfiles, {
         engine: String(engine).split(" ")[0],
         version: String(engine).split(" ").slice(1).join(" "),
@@ -375,7 +437,7 @@ export default function SlicerPrepareWorkspace({
       .filter(({match}) => match.level === "exact")
       .map(({slot, match}) => ({slot_id: String(slot.id), profile_id: String(match.profile.id)}));
     if (inferred.length) onSlotFilamentProfilesChange?.([...slotFilamentProfiles, ...inferred]);
-  }, [canEdit, liveMaterials, filamentProfiles, slotFilamentProfiles, engine, printerDetails, onSlotFilamentProfilesChange]);
+  }, [canEdit, liveMaterials, filamentProfiles, slotFilamentProfiles, engine, printerDetails, onSlotFilamentProfilesChange, suppressedSlotMatches]);
   useEffect(() => {
     refreshPrinterMaterials();
     return () => { requestRef.current += 1; };
