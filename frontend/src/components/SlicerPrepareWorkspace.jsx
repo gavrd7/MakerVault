@@ -610,7 +610,7 @@ export default function SlicerPrepareWorkspace({
   };
   function selectTool(tool, event) {
     const feature = NATIVE_TOOL_FEATURES[tool.target];
-    if (feature && !["draft_only","verified"].includes(engineCapabilities[feature]?.status)) return;
+    if (feature && !["draft_only","test_only","verified"].includes(engineCapabilities[feature]?.status)) return;
     // Keep each menu inside the bordered toolbar, even when icons wrap.
     if (["import","auto_orient"].includes(tool.target)) {
       const anchor=event?.currentTarget?.closest(".slicerToolTooltip");
@@ -772,7 +772,7 @@ export default function SlicerPrepareWorkspace({
     (plate.objects || []).some(item => item.material_slot != null)
   ) || slotFilamentProfiles.length > 0;
   const incompatibleEdits = usedNativeFeatures([{objects}]).filter(
-    key => engineCapabilities[key]?.status !== "verified");
+    key => !["verified","test_only"].includes(engineCapabilities[key]?.status));
   const nativeEditReason = incompatibleEdits.length
     ? "Native export not yet verified for " + incompatibleEdits.map(key=>FEATURE_NAMES[key]).join(", ") +
       ". The project is preserved; choose an engine with verified native support before slicing."
@@ -1322,7 +1322,7 @@ export default function SlicerPrepareWorkspace({
           aria-expanded={tool.target === "import" ? addModelMenuOpen : tool.target === "auto_orient" ? autoOrientMenuOpen : undefined}
           aria-controls={tool.target === "import" ? "slicer-add-model-toolbar-options" : tool.target === "auto_orient" ? "slicer-auto-orient-toolbar-options" : undefined}
           disabled={!!tool.pending || !canEdit || busy ||
-            (NATIVE_TOOL_FEATURES[tool.target] && !["draft_only","verified"].includes(
+            (NATIVE_TOOL_FEATURES[tool.target] && !["draft_only","test_only","verified"].includes(
               engineCapabilities[NATIVE_TOOL_FEATURES[tool.target]]?.status)) ||
             (tool.target==="add_plate" && plates.length>=8) ||
             (!["import","add_plate"].includes(tool.target) && !objects.length)}
@@ -1838,6 +1838,13 @@ export default function SlicerPrepareWorkspace({
     </div>
     <div className="slicerPrepareActions">
       <div aria-live="polite">
+        {objects.some(item => (item.variable_layer_profile?.bands || []).length > 0) &&
+          engineCapabilities.variable_layer_profile?.status === "test_only" &&
+          <p className="slicerActionStatus" role="status">
+            Variable layer height is an offline OrcaSlicer test. Use one upright, unscaled
+            model. Generated G-code cannot be uploaded or printed until its actual layer
+            transitions have passed native verification.
+          </p>}
         {incompatibleEdits.length > 0 && <p className="slicerActionStatus" role="status">
           Saved edits require verified native export: {incompatibleEdits.map(key => FEATURE_NAMES[key]).join(", ")}.
           None will be silently discarded from generated G-code.
