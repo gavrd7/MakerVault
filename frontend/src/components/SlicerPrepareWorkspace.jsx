@@ -348,14 +348,29 @@ export default function SlicerPrepareWorkspace({
       }
       const query = slotProfileSearchTerm(slot);
       if (!query || query.length < 2) throw new Error("This slot has no recognisable filament material.");
-      const params = new URLSearchParams({
-        engine: lookupEngine, version: lookupVersion, vendor: "OrcaFilamentLibrary",
-        kind: "filament", q: query,
-      });
-      const result = await apiFetch("/api/printing/slicer/official-profiles/?" + params.toString());
-      // Server catalogue matches are candidates only; never auto-import,
-      // auto-activate, or claim printer compatibility from a text match.
-      setSlotOfficialResults(current => ({...current, [id]: (result.profiles || []).slice(0, 20)}));
+      const printerBrand = String([slot.manufacturer, slot.brand, printerDetails?.manufacturer,
+        printerDetails?.brand].filter(Boolean).join(" "));
+      const manufacturerCatalogue = /creality/i.test(printerBrand) ? "Creality"
+        : /bambu/i.test(printerBrand) ? "BBL"
+        : /elegoo/i.test(printerBrand) ? "Elegoo" : "";
+      const vendors = ["OrcaFilamentLibrary", ...(manufacturerCatalogue ? [manufacturerCatalogue] : [])];
+      const searches = await Promise.allSettled(vendors.map(async vendor => {
+        const params = new URLSearchParams({
+          engine: lookupEngine, version: lookupVersion, vendor,
+          kind: "filament", q: query,
+        });
+        const result = await apiFetch("/api/printing/slicer/official-profiles/?" + params.toString());
+        return (result.profiles || []).map(profile => ({...profile, vendor}));
+      }));
+      const candidates = searches.filter(row => row.status === "fulfilled")
+        .flatMap(row => row.value);
+      if (!searches.some(row => row.status === "fulfilled")) {
+        throw new Error("The official filament catalogues could not be searched.");
+      }
+      // Candidate names can occur in multiple vendor catalogues.
+      const distinct = new Map(candidates.map(profile =>
+        [profile.vendor + ":" + profile.sub_path, profile]));
+      setSlotOfficialResults(current => ({...current, [id]: [...distinct.values()].slice(0, 20)}));
     } catch (err) {
       setSlotOfficialError(err.message || "Cannot search the official profile catalogue.");
     } finally {
@@ -371,7 +386,7 @@ export default function SlicerPrepareWorkspace({
     try {
       const result = await apiFetch("/api/printing/slicer/official-profiles/", {
         method: "POST",
-        body: {kind:"filament",vendor:"OrcaFilamentLibrary",engine:lookupEngine,
+        body: {kind:"filament",vendor:candidate.vendor,engine:lookupEngine,
           engine_version:lookupVersion,name:candidate.name,sub_path:candidate.sub_path},
       });
       const imported = result.profile;
@@ -1500,7 +1515,7 @@ export default function SlicerPrepareWorkspace({
                   {(slotOfficialResults[String(slot.id)] || []).map(row =>
                     <button type="button" key={row.sub_path} disabled={slotImportBusy}
                       onClick={() => importOfficialSlotProfile(slot,row)}>
-                      Import {row.name}
+                      Import {row.name} ({row.vendor})
                     </button>)}
                 </div>}
               </div>}
