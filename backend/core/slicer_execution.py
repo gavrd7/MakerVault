@@ -482,7 +482,8 @@ def _single_unmodified_stl(plate):
     if not isinstance(plate, list) or len(plate) != 1 or not isinstance(plate[0], dict):
         return False
     item = plate[0]
-    if item.get("process_overrides") or (item.get("variable_layer_profile") or {}).get("bands"):
+    if (item.get("process_overrides") or (item.get("variable_layer_profile") or {}).get("bands")
+            or (item.get("support_paint") or {}).get("regions")):
         return False  # Native object or variable-layer settings must never fall back to plain STL.
     try:
         if any(float(item.get(key, 0) if key == "z_mm" else item[key]) != expected for key, expected in (
