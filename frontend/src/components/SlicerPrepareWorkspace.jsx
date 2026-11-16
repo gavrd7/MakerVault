@@ -1146,8 +1146,18 @@ export default function SlicerPrepareWorkspace({
         <strong>Variable layer height</strong>
         <button type="button" onClick={()=>{setToolMode("select");setPaintError("");}}>Done</button>
       </div>
-      <small>Set Z ranges; other layers use the process preset.</small>
-      <div className="slicerVariableLayerPointerControls">
+      <small>Only selected height bands override the process preset.</small>
+      <label style={{display:"grid",gap:4}}>
+         Band thickness · {(Math.max(0.5,Number(variableBandDraft.to_mm)-Number(variableBandDraft.from_mm))).toFixed(1)} mm
+         <input type="range" min="0.5" max="50" step="0.5"
+           aria-label="Variable layer height Z band thickness"
+           value={Math.max(0.5,Math.min(50,Number(variableBandDraft.to_mm)-Number(variableBandDraft.from_mm)))}
+           onChange={e=>setVariableBandDraft(current=>({
+             ...current,to_mm:Math.min(1000,Math.round((current.from_mm+Number(e.target.value))*2)/2)
+           }))}/>
+         <small>Choose thickness, then click or tap the model to position the band.</small>
+       </label>
+       <div className="slicerVariableLayerPointerControls">
         <label className="checkRow" style={{display:"flex",gap:7,alignItems:"center"}}>
           <input type="checkbox" checked={variableBandFollow}
             onChange={event=>setVariableBandFollow(event.target.checked)} />
@@ -1157,8 +1167,8 @@ export default function SlicerPrepareWorkspace({
           <select aria-label="Variable layer height pointer target"
             value={variableBandTarget}
             onChange={event=>setVariableBandTarget(event.target.value)}>
-            <option value="from">Start of range (From Z)</option>
-            <option value="to">End of range (To Z)</option>
+            <option value="from">Position entire band</option>
+            <option value="to">Adjust end of band</option>
           </select>
         </label>
         <small>Hover to preview Z; click or tap to set it.</small>
