@@ -28,7 +28,8 @@ jobs:
       - name: Checkout reviewed slicer implementation
         uses: actions/checkout@v4
         with:
-          ref: feature/self-hosted-slicer-foundation
+          # Reviewed implementation snapshot (no mutable branch checkout during release).
+          ref: f10d7c1f540a9b4a3cc73967d5c6c56f13966bf0
 
       - name: Unit test persistent engine registry
         run: python3 -m unittest slicer_worker.tests.test_engine_store slicer_worker.tests.test_engine_store_admin -v
