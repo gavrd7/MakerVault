@@ -85,11 +85,15 @@ def ha_request(setting, method, endpoint, *, body=None):
     base = validate_url(setting.endpoint_url)
     token = decrypt_token(setting.config)
     try:
-        response = requests.request(
-            method, base + endpoint,
-            headers={"Authorization": "Bearer " + token, "Content-Type": "application/json"},
-            json=body, timeout=(3, 7), allow_redirects=False,
-        )
+        with requests.Session() as session:
+            # Avoid forwarding the Home Assistant bearer token to any proxy
+            # configured through environment variables.
+            session.trust_env = False
+            response = session.request(
+                method, base + endpoint,
+                headers={"Authorization": "Bearer " + token, "Content-Type": "application/json"},
+                json=body, timeout=(3, 7), allow_redirects=False,
+            )
     except requests.RequestException as exc:
         raise HomeAssistantPowerError("Could not reach Home Assistant.") from exc
     if not 200 <= response.status_code < 300:
