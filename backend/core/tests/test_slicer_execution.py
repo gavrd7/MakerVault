@@ -87,6 +87,32 @@ class IntendedMaterialSafetyTests(SimpleTestCase):
                 with self.assertRaisesRegex(SlicerExecutionError, error):
                     _validate_plate_execution(job)
 
+    def test_orca_25_variable_layers_are_offline_single_model_only(self):
+        from types import SimpleNamespace
+        model = {"instance_id": "one", "x_mm": 0, "y_mm": 0,
+                 "rotation_deg": 0, "scale_percent": 100,
+                 "variable_layer_profile": {"version": 1, "bands": [
+                     {"from_mm": 4, "to_mm": 10, "layer_mm": .12}]}}
+        job = SimpleNamespace(
+            settings={"plate_objects": [model]},
+            engine="orcaslicer", engine_version="2.5.0",
+            printer_id="printer", filament_profile_id="filament",
+        )
+        self.assertTrue(_validate_plate_execution(job))
+        self.assertFalse(_single_unmodified_stl([model]))
+        job.engine_version = "2.4.2"
+        with self.assertRaisesRegex(SlicerExecutionError, "2.5.0"):
+            _validate_plate_execution(job)
+        job.engine_version = "2.5.0"
+        job.settings["plate_objects"] = [model, {**model, "instance_id": "two"}]
+        with self.assertRaisesRegex(SlicerExecutionError, "one single-material"):
+            _validate_plate_execution(job)
+        for setting in ({"z_mm": 5}, {"scale_percent": 80},
+                        {"rotation_xyz_deg": [30, 0]}):
+            job.settings["plate_objects"] = [{**model, **setting}]
+            with self.assertRaisesRegex(SlicerExecutionError, "upright|unscaled"):
+                _validate_plate_execution(job)
+
     def test_unhandled_flush_matrix_cannot_be_silently_ignored(self):
         from types import SimpleNamespace
         for models in (None, [], [{"instance_id": "one"}]):
