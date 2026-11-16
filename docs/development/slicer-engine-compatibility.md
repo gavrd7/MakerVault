@@ -33,7 +33,15 @@ Native slicing engines are output adapters, not the source of truth.
   `Metadata/layer_config_ranges.xml` and audits actual `;LAYER_CHANGE` / `;Z:`
   increments against each requested interval. Generated G-code carries
   `variable_layer_test=true` and is explicitly denied printer submission.
-  Other painted annotations remain `draft_only` pending their adapters.
+  Support enforcer/blocker painting is also `test_only` for one upright,
+  unscaled model: saved clipped brush polygons are re-triangulated into
+  equivalent native faces carrying Orca's `paint_supports=4/8` states.
+  The worker accepts only these exact leaf annotation values. Source STL
+  fingerprints are checked in the same local coordinates used by the browser.
+  Generated G-code is marked `support_paint_test=true` and is denied upload/
+  print start; actual support generation still needs a pinned-binary
+  comparison before declaring the adapter verified.
+  Colour, seam and selective fuzzy skin painting remain `draft_only`.
 - Cura: no accurate native translation is currently implemented;
   `incompatible` disables those editor tools while preserving saved edits.
 - Other engines and unreviewed versions: `unverified` (fail closed).
