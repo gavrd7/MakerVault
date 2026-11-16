@@ -9,11 +9,13 @@ export default function PrinterPowerButton({printerId, compact = false}) {
   const [power, setPower] = useState(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const [feedback, setFeedback] = useState("");
   useEffect(() => {
     let alive = true;
     let generation = 0;
     setPower(null);
     setError("");
+    setFeedback("");
     if (!printerId) return () => { alive = false; };
     const refresh = () => {
       const request = ++generation;
@@ -49,6 +51,7 @@ export default function PrinterPowerButton({printerId, compact = false}) {
     )) return;
     setBusy(true);
     setError("");
+    setFeedback("");
     try {
       const result = await apiFetch("/api/printing/printers/" + printerId + "/power/", {
         method: "POST", body: {action, ...(action === "off" ? {confirm: true} : {})},
@@ -57,20 +60,28 @@ export default function PrinterPowerButton({printerId, compact = false}) {
         throw new Error("Home Assistant has not confirmed the requested switch state.");
       }
       setPower(result.state);
+      setFeedback("success");
     } catch (err) {
       setError(err.message || "Power command failed.");
+      setFeedback("error");
     } finally {
       setBusy(false);
     }
   };
   return <span className={"printerPowerControl" + (compact ? " isCompact" : "")}>
-    <button type="button" className={"printerPowerButton state-" + power}
+    <button type="button"
+      className={"printerPowerButton state-" + power + (busy ? " isSwitching" : "") + (feedback ? " feedback-" + feedback : "")}
       disabled={busy || !available} onClick={turn}
+      onAnimationEnd={event => {
+        if (event.target === event.currentTarget) setFeedback("");
+      }}
       aria-label={busy ? "Switching printer power" : power === "on" ? "Turn printer power off" : "Turn printer power on"}
-      title={available ? "Home Assistant reports power " + power + ". Click to turn " + (power === "on" ? "off" : "on") + "." : "Home Assistant switch unavailable"}>
-      <span aria-hidden="true">⏻</span>
+      title={error || (available ? "Home Assistant reports power " + power + ". Click to turn " + (power === "on" ? "off" : "on") + "." : "Home Assistant switch unavailable")}>
+      <span className="printerPowerGlyph" aria-hidden="true">{feedback === "success" ? "✓" : feedback === "error" ? "!" : "⏻"}</span>
       <span className="printerPowerLabel">{busy ? "Switching…" : power === "on" ? "Turn off" : power === "off" ? "Turn on" : "Unavailable"}</span>
     </button>
-    {error && <small className="printerPowerError" role="alert">{error}</small>}
+    <span className="printerPowerSrOnly" role="status" aria-live="polite">
+      {busy ? "Switching printer power" : error ? error : feedback === "success" ? "Printer power confirmed " + power : ""}
+    </span>
   </span>;
 }
