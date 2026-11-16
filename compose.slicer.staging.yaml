@@ -33,6 +33,9 @@ services:
     # restricted to this worker, not a host bind mount or MakerVault's media.
     tmpfs:
       - /tmp:rw,nosuid,size=1g,mode=1777
+    # Persistent engine inventory shared by all engines; worker cannot modify it.
+    volumes:
+      - makervault_slicer_engines:/opt/engine-store:ro
     environment:
       SLICER_WORKER_ENABLED: "1"
       SLICER_WORKER_TOKEN: ${MAKERVAULT_SLICER_WORKER_TOKEN:?Worker token required}
@@ -50,3 +53,6 @@ services:
 networks:
   makervault_slicer:
     internal: true
+
+volumes:
+  makervault_slicer_engines:
