@@ -28,6 +28,8 @@ from .slicer_process_settings import process_schema, validate_process_overrides,
 from .slicer_flush_settings import validate_flush_settings
 from .slicer_colour_painting import validate_colour_paint
 from .slicer_support_painting import validate_support_paint
+from .slicer_semantic_painting import validate_semantic_paint
+from .slicer_variable_layers import validate_variable_layer_profile
 from .slicer_mesh import inspect_stl, MeshInspectionError, MAX_INSPECTION_BYTES
 from .slicer_bed import inspect_orca_plate, inspect_creality_plate
 from .slicer_bed_artwork import (official_artwork_source, cached_official_artwork,
@@ -288,7 +290,7 @@ def _draft_plate_settings(user, input_asset, settings):
         required = {"instance_id", "asset_id", "x_mm", "y_mm", "rotation_deg",
                     "scale_percent", "color"}
         if (not isinstance(item, dict) or not required.issubset(item)
-                or set(item) - required - {"scale_xyz_percent", "process_overrides", "rotation_xyz_deg", "assembly_id", "z_mm", "text_model", "material_slot", "colour_paint", "support_paint"}):
+                or set(item) - required - {"scale_xyz_percent", "process_overrides", "rotation_xyz_deg", "assembly_id", "z_mm", "text_model", "material_slot", "colour_paint", "support_paint", "seam_paint", "fuzzy_skin_paint", "variable_layer_profile"}):
             raise ValueError("Invalid plate model instance.")
         instance_id = str(_uuid(item["instance_id"]))
         asset_id = _uuid(item["asset_id"])
@@ -386,6 +388,11 @@ def _draft_plate_settings(user, input_asset, settings):
             paint_fields["colour_paint"] = validate_colour_paint(item["colour_paint"])
         if "support_paint" in item:
             paint_fields["support_paint"] = validate_support_paint(item["support_paint"])
+        for field, kind in (("seam_paint", "seam"), ("fuzzy_skin_paint", "fuzzy")):
+            if field in item:
+                paint_fields[field] = validate_semantic_paint(item[field], kind)
+        if "variable_layer_profile" in item:
+            paint_fields["variable_layer_profile"] = validate_variable_layer_profile(item["variable_layer_profile"])
         saved.append({"instance_id": instance_id, "asset_id": str(asset_id),
                       **({"assembly_id": assembly_id} if assembly_id is not None else {}),
                       **values, "color": color.lower(), **text_fields, **material_fields, **paint_fields,
@@ -752,6 +759,12 @@ def export_native_multimaterial_3mf(request, job_id):
         return _error("Per-face colour painting is not yet supported in native multi-material export.", 409)
     if any(item.get("support_paint", {}).get("regions") for item in objects):
         return _error("Support painting needs verified native enforcer/blocker export before slicing.", 409)
+    if any(item.get("seam_paint", {}).get("regions") for item in objects):
+        return _error("Seam painting needs verified native enforcer/blocker export before slicing.", 409)
+    if any(item.get("fuzzy_skin_paint", {}).get("regions") for item in objects):
+        return _error("Fuzzy skin painting needs verified native fuzzy facet export before slicing.", 409)
+    if any(item.get("variable_layer_profile", {}).get("bands") for item in objects):
+        return _error("Variable layer heights need verified native Orca layer-profile export before slicing.", 409)
     if settings.get("flush_settings") is not None:
         return _error("Custom flushing settings require separate native validation.", 409)
     try:
