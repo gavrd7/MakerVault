@@ -31,7 +31,7 @@ jobs:
           ref: feature/self-hosted-slicer-foundation
 
       - name: Unit test persistent engine registry
-        run: python3 -m unittest slicer_worker.tests.test_engine_store -v
+        run: python3 -m unittest slicer_worker.tests.test_engine_store slicer_worker.tests.test_engine_store_admin -v
 
       - name: Build generic single-worker image
         run: docker build -f slicer_worker/Dockerfile.generic -t makervault-slicer-generic:acceptance .
