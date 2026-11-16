@@ -116,5 +116,6 @@ class HomeAssistantPowerApiTests(TestCase):
     def test_turn_off_blocked_when_busy(self, switch, busy):
         self.printer.profile_data = {"ha_power_entity": "switch.printer_a"}
         self.printer.save()
-        self.assertEqual(self.post(self.power_url, {"action": "off"}).status_code, 409)
+        self.assertEqual(self.post(self.power_url, {"action": "off"}).status_code, 400)
+        self.assertEqual(self.post(self.power_url, {"action": "off", "confirm": True}).status_code, 409)
         switch.assert_not_called()
