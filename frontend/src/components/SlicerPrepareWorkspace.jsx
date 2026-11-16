@@ -1616,12 +1616,12 @@ export default function SlicerPrepareWorkspace({
                         setSuppressedSlotMatches(current => current.filter(row => row !== editingSlotProfile));
                         updated.push({slot_id:editingSlotProfile,profile_id:e.target.value});
                       } else {
-                        // Respect an explicit "Use main filament preset" choice.
+                        // Respect an explicit clear; never silently reuse the main preset.
                         setSuppressedSlotMatches(current => [...new Set([...current,editingSlotProfile])]);
                       }
                       onSlotFilamentProfilesChange?.(updated);
                     }}>
-                    <option value="">Use main filament preset</option>
+                    <option value="">No slot profile selected · slicing blocked when this slot is assigned</option>
                     {filamentProfiles.map(profile=><option key={profile.id} value={profile.id}>
                       {profile.name}{profile.status==="candidate"?" · candidate":""}
                     </option>)}
