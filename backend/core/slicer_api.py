@@ -648,7 +648,7 @@ def import_project_3mf(request):
                     if native_file is None:
                         continue
                     if (field in row or not isinstance(native_file, str) or
-                            not re.fullmatch(r"Metadata/paint/" + prefix + r"-[0-9]{4}\\.json", native_file) or
+                            not re.fullmatch(r"Metadata/paint/" + prefix + r"-[0-9]{4}\.json", native_file) or
                             native_file in seen_paint_files):
                         raise ValueError("Invalid project semantic paint sidecar.")
                     seen_paint_files.add(native_file)
