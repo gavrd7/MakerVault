@@ -149,7 +149,7 @@ def search_official_profiles(query, kind, vendor="Creality", printer_model=None,
         all_entries = _entries(vendor, kind, version)
         matches = slot_filament_catalogue(
             all_entries, printer_model, product=query, material=material,
-            manufacturer=manufacturer)
+            manufacturer=manufacturer, catalogue_vendor=vendor)
     elif printer_model:
         matches = narrow_catalogue(matches, kind, printer_model)
     return {
