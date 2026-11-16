@@ -482,14 +482,33 @@ export default function SlicerPrepareWorkspace({
             right:"auto",transform:"none",width:width+"px",
             maxHeight:"min(65dvh, 360px)",overflowY:"auto",
           });
+        } else if (tool.target === "measure") {
+          // The measurement readout occupies the left of the plate. Place its
+          // options alongside that readout rather than covering the figures.
+          const viewport=document.querySelector(".slicerPlateCanvasViewport");
+          const plate=viewport?.getBoundingClientRect();
+          const readout=viewport?.querySelector(".slicerViewportMeasurement");
+          const card=readout?.getBoundingClientRect();
+          const width=260;
+          const desiredLeft=(card?.right ?? ((plate?.left ?? frame.left)+280))+12;
+          const left=Math.max(12,Math.min(desiredLeft,window.innerWidth-width-12));
+          const top=Math.max(12,Math.min(
+            (card?.top ?? plate?.top ?? button.bottom)+2,
+            window.innerHeight-390
+          ));
+          setToolPopupStyle({
+            position:"fixed",left:left+"px",top:top+"px",
+            right:"auto",transform:"none",width:width+"px",
+            maxHeight:"min(65dvh, 360px)",overflowY:"auto",
+          });
         } else {
-        const width=Math.min(260,Math.max(160,frame.width-16));
-        const desired=button.left+button.width/2-frame.left-width/2;
-        const left=Math.max(8,Math.min(desired,frame.width-width-8));
-        setToolPopupStyle({
-          left:(left-(button.left-frame.left))+"px",
-          right:"auto",transform:"none",width:width+"px",
-        });
+          const width=Math.min(260,Math.max(160,frame.width-16));
+          const desired=button.left+button.width/2-frame.left-width/2;
+          const left=Math.max(8,Math.min(desired,frame.width-width-8));
+          setToolPopupStyle({
+            left:(left-(button.left-frame.left))+"px",
+            right:"auto",transform:"none",width:width+"px",
+          });
         }
       }
     }
