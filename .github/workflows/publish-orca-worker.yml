@@ -1,0 +1,102 @@
+name: Publish reviewed Orca slicer worker
+
+# This workflow deliberately does not compile upstream or follow latest.
+# It packages the exact already-tested, SHA-256 reviewed Orca 2.5.0 binary.
+# Run only after confirming the source patch and official K1/K2 G-code tests.
+on:
+  workflow_dispatch:
+    inputs:
+      confirmation:
+        description: 'Enter PUBLISH-ORCA-2.5.0-MV1 to approve the reviewed engine'
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  actions: read
+  packages: write
+
+concurrency:
+  group: makervault-slicer-orca-2.5.0-mv1
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    if: ${{ inputs.confirmation == 'PUBLISH-ORCA-2.5.0-MV1' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    steps:
+      - name: Checkout pinned MakerVault slicer branch
+        uses: actions/checkout@v4
+        with:
+          ref: feature/self-hosted-slicer-foundation
+
+      - name: Download exactly the tested Orca AppImage artifact
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          mkdir -p reviewed-orca
+          gh run download 43789319270 --repo gavrd7/MakerVault \
+            --name orcaslicer-2.5.0-reviewed-compatibility-candidate \
+            --dir reviewed-orca
+          mapfile -t files < <(find reviewed-orca -type f -name 'OrcaSlicer_Linux_V*.AppImage')
+          test "${#files[@]}" -eq 1
+          mv "${files[0]}" reviewed-orca/reviewed.AppImage
+
+      - name: Verify independently approved executable checksum
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "b30b0ae933e653692cf85a493287a949215ae4c14d547a00203d16dfcadb8054  reviewed-orca/reviewed.AppImage" | sha256sum --check -
+          test "$(stat -c %s reviewed-orca/reviewed.AppImage)" -gt 100000000
+          python3 -m unittest scripts.tests.test_orca_compatibility_patch -v
+          python3 -m slicer_worker.stage_engines \
+            --engine orcaslicer 2.5.0 reviewed-orca/reviewed.AppImage \
+            b30b0ae933e653692cf85a493287a949215ae4c14d547a00203d16dfcadb8054
+
+      - name: Build and inspect the reviewed image before publication
+        run: |
+          set -euo pipefail
+          docker build -f slicer_worker/Dockerfile.bundle -t makervault-orca-reviewed:preflight .
+          docker run --rm --network none --read-only \
+            --tmpfs /tmp:rw,nosuid,size=1g \
+            makervault-orca-reviewed:preflight \
+            python3 -c 'import hashlib,json,pathlib; root=pathlib.Path("/opt/engines"); m=json.loads((root/"manifest.json").read_text()); e=m["engines"]["orcaslicer"]; p=root/"orcaslicer.AppImage"; assert e["version"]=="2.5.0"; assert hashlib.sha256(p.read_bytes()).hexdigest()=="b30b0ae933e653692cf85a493287a949215ae4c14d547a00203d16dfcadb8054"; assert (root/"squashfs-root/AppRun").exists()'
+
+      - name: Configure Docker Buildx and GHCR
+        uses: docker/setup-buildx-action@v3
+      - name: Sign in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and publish reviewed worker (linux/amd64 only)
+        id: image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: slicer_worker/Dockerfile.bundle
+          platforms: linux/amd64
+          push: true
+          tags: ghcr.io/gavrd7/makervault-slicer-orca:2.5.0-mv1
+          provenance: true
+          sbom: true
+          cache-from: type=gha,scope=orcaslicer-worker
+          cache-to: type=gha,mode=max,scope=orcaslicer-worker
+
+      - name: Emit immutable deployment identities
+        shell: bash
+        env:
+          IMAGE_DIGEST: ${{ steps.image.outputs.digest }}
+        run: |
+          set -euo pipefail
+          test "${IMAGE_DIGEST#sha256:}" != "$IMAGE_DIGEST"
+          echo "### Reviewed MakerVault OrcaSlicer worker" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Engine: OrcaSlicer 2.5.0 + reviewed 30 mm cut-retraction validation correction" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Engine SHA-256: \`b30b0ae933e653692cf85a493287a949215ae4c14d547a00203d16dfcadb8054\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Pull image: \`ghcr.io/gavrd7/makervault-slicer-orca@${IMAGE_DIGEST}\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Platform: linux/amd64 only" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Publication does not activate or upgrade any MakerVault installation." >> "$GITHUB_STEP_SUMMARY"
