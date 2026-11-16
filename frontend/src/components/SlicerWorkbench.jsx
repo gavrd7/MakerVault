@@ -330,7 +330,7 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
   // the operator deliberately imports it for a physical feeder slot.
   const slotFilamentChoices = profiles.filter(profile =>
     profile.engine === form.engine && profile.engine_version === form.engine_version &&
-    profile.kind === "filament" && !/@\\s*.*\\bbase\\s*$/i.test(profile.name || ""));
+    profile.kind === "filament" && !/@\s*.*\bbase\s*$/i.test(profile.name || ""));
   const engineVersions = [...new Set([
     ...engines.filter(item => item.key === form.engine).flatMap(item =>
       [item.installed_version, ...(Array.isArray(item.installed_versions) ? item.installed_versions : [])]),
