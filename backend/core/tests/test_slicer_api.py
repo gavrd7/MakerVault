@@ -795,6 +795,51 @@ class SliceJobApiTests(TestCase):
         )
         self.assertEqual(self.post({**linked, "printer_profile_id": str(foreign.pk)}).status_code, 400)
 
+    def test_assigned_cfs_slot_native_profile_overrides_main_filament(self):
+        source = FileAsset.objects.create(
+            owner=self.owner, name="Native presets", category="source",
+            metadata={"extension": ".json"},
+        )
+        def profile(kind, name):
+            return SlicerProfile.objects.create(
+                owner=self.owner, engine="orcaslicer", engine_version="2.5.0",
+                kind=kind, name=name, file_asset=source,
+                content_sha256="b" * 64,
+            )
+        printer = profile("printer", "Creality K2 0.4 nozzle")
+        process = profile("process", "0.20mm Standard")
+        main = profile("filament", "Generic PLA Matte @System")
+        slot_abs = profile("filament", "CR-ABS @Creality K2")
+        model = {
+            "instance_id": str(uuid.uuid4()), "asset_id": str(self.input_asset.pk),
+            "x_mm": 0, "y_mm": 0, "rotation_deg": 0, "scale_percent": 100,
+            "color": "#000000",
+            "material_slot": {
+                "printer_id": str(self.printer.pk),
+                "slot_id": "cfs-abs-slot-2", "slot_index": 1,
+            },
+        }
+        self.client.force_login(self.owner)
+        payload = {
+            **self.payload, "engine": "orcaslicer", "engine_version": "2.5.0",
+            "printer_preset": printer.name, "printer_profile_id": str(printer.pk),
+            "filament_preset": main.name, "filament_profile_id": str(main.pk),
+            "process_preset": process.name, "process_profile_id": str(process.pk),
+            "settings": {
+                "plate_objects": [model],
+                "slot_filament_profiles": [
+                    {"slot_id": "cfs-abs-slot-2", "profile_id": str(slot_abs.pk)},
+                ],
+            },
+        }
+        response = self.post(payload)
+        self.assertEqual(response.status_code, 201, response.content)
+        job = SliceJob.objects.get(pk=response.json()["job"]["id"])
+        self.assertEqual(job.filament_profile_id, slot_abs.pk)
+        self.assertEqual(job.filament_preset, slot_abs.name)
+        self.assertNotEqual(job.filament_profile_id, main.pk)
+        self.assertEqual(job.settings["slot_filament_profiles"][0]["profile_id"], str(slot_abs.pk))
+
     def test_rejects_untrusted_execution_fields_and_profile_paths(self):
         self.client.force_login(self.owner)
         for patch in (
