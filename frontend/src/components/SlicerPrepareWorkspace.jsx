@@ -281,6 +281,8 @@ export default function SlicerPrepareWorkspace({
     });
   const [liveMaterials, setLiveMaterials] = useState([]);
   const [slotOfficialResults, setSlotOfficialResults] = useState({});
+  const [slotOfficialSelections, setSlotOfficialSelections] = useState({});
+  const [slotOfficialSearched, setSlotOfficialSearched] = useState({});
   const [slotOfficialBusy, setSlotOfficialBusy] = useState("");
   const [slotOfficialError, setSlotOfficialError] = useState("");
   const [editingSlotProfile,setEditingSlotProfile] = useState(null);
@@ -345,6 +347,8 @@ export default function SlicerPrepareWorkspace({
     setSlotOfficialBusy(id);
     setSlotOfficialError("");
     setSlotOfficialResults(current => ({...current, [id]: []}));
+    setSlotOfficialSelections(current => ({...current, [id]: ""}));
+    setSlotOfficialSearched(current => ({...current, [id]: false}));
     try {
       if (lookupEngine !== "orcaslicer") {
         throw new Error("Direct slot profile search currently supports the pinned OrcaSlicer catalogue only.");
@@ -378,7 +382,20 @@ export default function SlicerPrepareWorkspace({
       const distinct = new Map(candidates.map(profile =>
         [profile.vendor + ":" + profile.sub_path, profile]));
       if (currentPrinterIdRef.current !== targetPrinterId) return;
-      setSlotOfficialResults(current => ({...current, [id]: [...distinct.values()].slice(0, 12)}));
+      const shortlisted = [...distinct.values()].sort((a,b) => {
+        // The selected printer's native/vendor preset appears before generic
+        // @System candidates; internal @base candidates were already excluded.
+        const priority = entry => {
+          const title = String(entry.name || "").toLowerCase();
+          const model = String(printerDetails?.model || "").toLowerCase();
+          const variant = model.match(/\\bk[12]\\b/)?.[0] || "";
+          const onPrinter = variant && title.includes("@" ) && title.includes(variant);
+          return (onPrinter ? 0 : 3) + (entry.vendor === manufacturerCatalogue ? 0 : 1);
+        };
+        return priority(a) - priority(b) || a.name.localeCompare(b.name);
+      }).slice(0, 80);
+      setSlotOfficialResults(current => ({...current, [id]: shortlisted}));
+      setSlotOfficialSearched(current => ({...current, [id]: true}));
     } catch (err) {
       setSlotOfficialError(err.message || "Cannot search the official profile catalogue.");
     } finally {
@@ -408,6 +425,7 @@ export default function SlicerPrepareWorkspace({
         {slot_id: String(slot.id), profile_id: String(imported.id)},
       ]);
       setSlotOfficialResults(current => ({...current, [String(slot.id)]: []}));
+      setSlotOfficialSelections(current => ({...current, [String(slot.id)]: ""}));
       setMaterialMessage("Imported " + imported.name + " for slot " +
         ((slot.slot_index ?? 0) + 1) + ". Profile compatibility is checked when slicing.");
     } catch (err) {
@@ -418,7 +436,7 @@ export default function SlicerPrepareWorkspace({
   };
   const [materialRefreshing, setMaterialRefreshing] = useState(false);
   const [materialMessage, setMaterialMessage] = useState("Select Refresh to read current printer filament slots.");
-  useEffect(() => { setSuppressedSlotMatches([]); setSlotOfficialResults({}); }, [printerId]);
+  useEffect(() => { setSuppressedSlotMatches([]); setSlotOfficialResults({}); setSlotOfficialSelections({}); setSlotOfficialSearched({}); }, [printerId]);
   const requestRef = useRef(0);
   const refreshPrinterMaterials = useCallback(async () => {
     const requestId = ++requestRef.current;
@@ -1521,13 +1539,29 @@ export default function SlicerPrepareWorkspace({
                   onClick={() => findOfficialSlotProfiles(slot)}>
                   {slotOfficialBusy === String(slot.id) ? "Searching…" : "Find official profiles"}
                 </button>
-                {(slotOfficialResults[String(slot.id)] || []).length > 0 && <div>
-                  <small>Upstream candidates — choose a compatible profile to import.</small>
-                  {(slotOfficialResults[String(slot.id)] || []).map(row =>
-                    <button type="button" key={row.sub_path} disabled={slotImportBusy}
-                      onClick={() => importOfficialSlotProfile(slot,row)}>
-                      Import {row.name} ({row.vendor})
-                    </button>)}
+                {slotOfficialSearched[String(slot.id)] && <div>
+                  <small>{(slotOfficialResults[String(slot.id)] || []).length
+                    ? "Official candidates ranked for this printer — import only after reviewing compatibility."
+                    : "No suitable direct-import profiles were found for this printer and material."}</small>
+                  {(slotOfficialResults[String(slot.id)] || []).length > 0 && <>
+                    <label>Official native filament candidates
+                      <select value={slotOfficialSelections[String(slot.id)] || ""}
+                        onChange={event => setSlotOfficialSelections(current =>
+                          ({...current,[String(slot.id)]:event.target.value}))}>
+                        <option value="">Choose a profile for review…</option>
+                        {(slotOfficialResults[String(slot.id)] || []).map(row =>
+                          <option key={row.vendor+":"+row.sub_path} value={row.vendor+":"+row.sub_path}>
+                            {row.name} ({row.vendor})
+                          </option>)}
+                      </select>
+                    </label>
+                    <button type="button" disabled={slotImportBusy || !slotOfficialSelections[String(slot.id)]}
+                      onClick={() => {
+                        const selected=(slotOfficialResults[String(slot.id)] || []).find(row =>
+                          row.vendor+":"+row.sub_path === slotOfficialSelections[String(slot.id)]);
+                        if (selected) importOfficialSlotProfile(slot,selected);
+                      }}>Import selected profile</button>
+                  </>}
                 </div>}
               </div>}
             </div>;
