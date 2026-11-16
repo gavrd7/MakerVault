@@ -1590,9 +1590,9 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
     </Modal>}
     {profileModal === "engines" && <Modal title="Slicer engine installations"
       subtitle="Optional self-hosted engines" onClose={() => setProfileModal("")} wide>
-      <p>OrcaSlicer and Creality Print run independently in the optional isolated worker.
-        Engine installation from MakerVault is not available yet. A configured worker must pass
-        verification before an engine can execute slicing jobs.</p>
+      <p>All supported slicer engines share one optional MakerVault Slicer worker container.
+        Engines marked Verified are already installed and ready for slicing with compatible
+        native profiles. Installation and updates from this screen are not available yet.</p>
       <SlicerEngineChoices engines={engines.length ? engines :
         [{ key: "orcaslicer", label: "OrcaSlicer", available: false },
          { key: "crealityprint", label: "Creality Print", available: false }]}
@@ -1608,7 +1608,7 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
         </a>
         <small>The experimental OrcaSlicer staging installer is documented separately from the future production installation.</small>
       </div>
-      <p>You can continue preparing slicing drafts without installing either engine.</p>
+      <p>You can save slicing drafts without an installed engine; generating G-code requires a verified engine.</p>
     </Modal>}
     {profileModal === "search" && <Modal title="Search official profiles" onClose={() => setProfileModal("")} wide>
       <div className="slicerProfileNavigation">
