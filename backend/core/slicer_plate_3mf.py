@@ -462,6 +462,19 @@ def build_makervault_project_3mf(plates_with_stl, *, bed_width, bed_depth, metad
                 paint_sidecars[name] = blob
                 portable_plate["objects"][-1].pop("support_paint", None)
                 portable_plate["objects"][-1]["support_sidecar"] = name
+            # Preserve independent Orca-style seam and fuzzy masks as
+            # MakerVault sidecars, never native printable annotations.
+            for field, prefix in (("seam_paint", "seam"), ("fuzzy_skin_paint", "fuzzy")):
+                annotation = row.get(field)
+                if isinstance(annotation, dict) and annotation.get("version") == 2:
+                    name = "Metadata/paint/%s-%04d.json" % (prefix, len(paint_sidecars) + 1)
+                    blob = json.dumps(annotation, ensure_ascii=False,
+                                      separators=(",", ":")).encode("utf-8")
+                    if len(blob) > 16 * 1024 * 1024:
+                        raise SlicerProfileError("Semantic painted model exceeds project 3MF region limit.")
+                    paint_sidecars[name] = blob
+                    portable_plate["objects"][-1].pop(field, None)
+                    portable_plate["objects"][-1][prefix + "_sidecar"] = name
         portable_metadata["plates"].append(portable_plate)
     if sum(map(len, paint_sidecars.values())) > 64 * 1024 * 1024:
         raise SlicerProfileError("Project painting regions exceed the export limit.")
