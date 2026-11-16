@@ -193,5 +193,7 @@ def printer_is_busy(printer):
 def set_switch(setting, entity, desired):
     if desired not in {"on", "off"} or not valid_entity(entity):
         raise HomeAssistantPowerError("Invalid power request.")
+    # A successful service response acknowledges the command, not an immediate
+    # physical state transition. Home Assistant state updates can lag behind.
     ha_request(setting, "POST", "/api/services/switch/turn_" + desired, body={"entity_id": entity})
-    return switch_state(setting, entity)
+    return desired
