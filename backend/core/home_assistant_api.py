@@ -158,20 +158,19 @@ def printer_power(request, printer_id):
     printer = Printer.objects.filter(owner=request.user, pk=printer_id).first()
     if not printer:
         return _error("Printer not found.", 404)
+    # Hide the control entirely for users without permission to operate it.
+    if not request.user.has_perm("core.change_printer"):
+        return JsonResponse({"available": False}) if request.method == "GET" else _error("Printer control permission required.", 403)
     row = _setting(request.user)
     entity = (printer.profile_data or {}).get("ha_power_entity")
     if not row or not row.enabled or not valid_entity(entity):
         return JsonResponse({"available": False}) if request.method == "GET" else _error("Printer power is not configured.", 404)
     if request.method == "GET":
-        if not request.user.has_perm("core.view_printer"):
-            return _error("Printer permission required.", 403)
         try:
             state = switch_state(row, entity)
         except HomeAssistantPowerError as exc:
             return _error(exc, 502)
         return JsonResponse({"available": True, "state": state})
-    if not request.user.has_perm("core.change_printer"):
-        return _error("Printer control permission required.", 403)
     try:
         data = _body(request)
         if set(data) != {"action"} or data["action"] not in {"on", "off"}:
