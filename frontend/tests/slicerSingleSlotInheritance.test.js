@@ -29,5 +29,5 @@ test("different physical slots and unrelated profiles stay blocked", () => {
 
 test("slot profile and main profile both reach backend for authoritative resolution", () => {
   assert.match(workbench, /slot_filament_profiles:slotFilamentProfiles/);
-  assert.match(workbench, /filament_profile_id: form\.filament_profile_id/);
+  assert.match(workbench, /body: \{\s*\.\.\.form,/);
 });
