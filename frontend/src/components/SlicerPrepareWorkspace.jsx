@@ -818,7 +818,7 @@ export default function SlicerPrepareWorkspace({
               {!processProfiles.some(profile => profile.id === selectedProfiles?.process_id) &&
                 <option value="">Choose a process profile</option>}
               {processProfiles.map(profile => <option key={profile.id} value={profile.id}>
-                {profile.name}{profile.status === "candidate" ? " · Unverified" : ""}
+                {profile.name}
               </option>)}
             </select>
             <button type="button" disabled={!canEdit || busy ||
@@ -1633,7 +1633,7 @@ export default function SlicerPrepareWorkspace({
                     }}>
                     <option value="">No slot profile selected · slicing blocked when this slot is assigned</option>
                     {filamentProfiles.map(profile=><option key={profile.id} value={profile.id}>
-                      {profile.name}{profile.status==="candidate"?" · candidate":""}
+                      {profile.name}
                     </option>)}
                   </select>
                 </label>
