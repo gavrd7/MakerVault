@@ -1645,8 +1645,40 @@ export default function SlicerPrepareWorkspace({
                     </option>)}
                   </select>
                 </label>
-                {!filamentProfiles.length&&<p className="projectUploadHint">Import filament presets
-                  through Profile Management before assigning them to CFS slots.</p>}
+                {!filamentProfiles.length&&<p className="projectUploadHint">No native filament presets are installed for this slicer engine and version. Find an official preset below.</p>}
+                {lookupEngine === "orcaslicer" && liveMaterials.filter(slot => String(slot.id) === editingSlotProfile).map(slot =>
+                  <div key={slot.id} className="slicerSlotProfileSuggestions">
+                    <button type="button" disabled={!canEdit || busy || slotImportBusy || slotOfficialBusy === String(slot.id)}
+                      onClick={() => findOfficialSlotProfiles(slot)}>
+                      {slotOfficialBusy === String(slot.id) ? "Searching…" : "Find official profiles"}
+                    </button>
+                    {slotOfficialSearched[String(slot.id)] && <>
+                      {!(slotOfficialResults[String(slot.id)] || []).length && <p className="projectUploadHint">No matching official filament presets were found.</p>}
+                      {!!(slotOfficialResults[String(slot.id)] || []).length && <>
+                        <label>Available official profiles
+                          <select value={slotOfficialSelections[String(slot.id)] || ""}
+                            disabled={slotImportBusy || !canEdit}
+                            onChange={event => setSlotOfficialSelections(current => ({...current,[String(slot.id)]:event.target.value}))}>
+                            <option value="">Choose official profile…</option>
+                            {(slotOfficialResults[String(slot.id)] || []).map(row =>
+                              <option key={row.vendor+":"+row.sub_path} value={row.vendor+":"+row.sub_path}>
+                                {row.name} ({row.vendor})
+                              </option>)}
+                          </select>
+                        </label>
+                        <button type="button" disabled={!canEdit || slotImportBusy || !slotOfficialSelections[String(slot.id)]}
+                          onClick={() => {
+                            const candidate = (slotOfficialResults[String(slot.id)] || []).find(row =>
+                              row.vendor+":"+row.sub_path === slotOfficialSelections[String(slot.id)]);
+                            if (candidate) importOfficialSlotProfile(slot,candidate);
+                          }}>
+                          {slotImportBusy ? "Importing…" : "Import & assign"}
+                        </button>
+                      </>}
+                    </>}
+                    {slotOfficialError && <p className="formError" role="alert">{slotOfficialError}</p>}
+                  </div>
+                )}
               </div>
               <footer className="slicerFlushModalFooter">
                 <button type="button" onClick={()=>setEditingSlotProfile(null)}>Done</button>
