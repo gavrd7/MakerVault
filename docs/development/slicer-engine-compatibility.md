@@ -83,3 +83,26 @@ equivalence; UI similarity and common slicer ancestry are not sufficient.
   user acknowledgement must preserve those annotations, not flatten them.
 - Draft/project save remains available. Slice is blocked whenever the current
   plate contains any annotation without verified export capability.
+
+## Remembered loaded-filament presets
+
+The selected native filament profile for a detected material is now saved as
+an owner-scoped database preference independent of slicing drafts. The key
+includes the physical printer, engine/version, and a privacy-preserving hash
+of material/product/vendor/colour identity (or a spool/RFID identity when
+product information is unavailable). It is **not** keyed only by CFS/AMS bay
+number: a different filament loaded into the same bay does not inherit the
+previous profile, whereas an identical product in another bay can reuse the
+saved choice.
+
+All manual slot-preset selections and successful official imports write the
+preference immediately. Reopening the editor or refreshing filament slots
+fetches and restores matching preferences; owner-scoped API validation
+rejects unrelated printers, stale/foreign native profiles, unrecognised
+versions and unidentified materials. Explicitly saved draft settings are
+still retained and are not overwritten during ordinary rehydration.
+
+The current application has no automatic backfill of preferences from old
+drafts. Existing manually chosen profiles need to be selected once after
+this migration, after which their associations are remembered. A missing
+material fingerprint is reported rather than persisted ambiguously.
