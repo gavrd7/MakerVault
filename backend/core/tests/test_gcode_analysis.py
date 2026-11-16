@@ -40,6 +40,25 @@ class GcodeAnalysisTests(SimpleTestCase):
         self.assertEqual(report["print_setup"]["temperatures_c"]["bed_c"], 100.0)
         self.assertEqual(report["print_setup"]["temperatures_c"]["source"], "requested_start_gcode")
 
+    def test_orca_k2_abs_start_print_temperature_parsing(self):
+        # Real-world OrcaSlicer start G-code contains initial zero resets,
+        # then a Klipper macro call with the actual requested temperatures.
+        gcode = (
+            "M106 P2 S255\n"
+            "M191 S60\n"
+            "M140 S0\n"
+            "M104 S0\n"
+            "START_PRINT EXTRUDER_TEMP=260 BED_TEMP=100\n"
+            "T0\n"
+            "M109 S260\n"
+            ";LAYER_CHANGE\n"
+            "M104 S220\n"
+        )
+        result = analyse_text(gcode)["print_setup"]["temperatures_c"]
+        self.assertEqual(result["nozzle_c"], 260.0)
+        self.assertEqual(result["bed_c"], 100.0)
+        self.assertEqual(result["source"], "requested_start_gcode")
+
     def test_unknown_and_reset_only_temperatures_are_not_invented(self):
         report = analyse_text("M104 S0\\nM140 S0\\nG28\\n")
         self.assertIsNone(report["print_setup"]["temperatures_c"]["nozzle_c"])
