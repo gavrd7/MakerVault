@@ -46,6 +46,17 @@ test("branded slots do not claim exact matches with generic or unrelated brands"
   ],scope);
   assert.notEqual(result.level,"exact");
 });
+test("PLA+ never auto-matches an ordinary PLA native preset",()=>{
+  const result=matchLoadedSlotProfiles({product_name:"PLA+",material:"PLA"},[
+    profile("plain","Generic PLA @System"),
+  ],scope);
+  assert.notEqual(result.level,"exact");
+  const plus=matchLoadedSlotProfiles({product_name:"PLA+",material:"PLA"},[
+    profile("plus","Generic PLA+ @System"),
+  ],scope);
+  assert.equal(plus.level,"exact");
+  assert.equal(plus.profile.id,"plus");
+});
 test("unknown material is not auto matched and search terms stay bounded",()=>{
   assert.equal(matchLoadedSlotProfiles({product_name:"Unknown Spool"},[profile("x","Generic PLA")],scope).level,"unknown");
   assert.equal(slotProfileSearchTerm({product_name:"PLA Silk",material:"PLA"}),"PLA Silk");
