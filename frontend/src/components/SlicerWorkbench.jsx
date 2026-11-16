@@ -1315,6 +1315,11 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
       flushSettings={flushSettings} onFlushSettingsChange={setFlushSettings}
       slotFilamentProfiles={slotFilamentProfiles} onSlotFilamentProfilesChange={setSlotFilamentProfiles}
       filamentProfiles={forKind("filament")}
+      onFilamentProfilesReload={async () => {
+        const loaded = await apiFetch("/api/printing/slicer/profiles/");
+        setProfiles(loaded.profiles || []);
+        return loaded.profiles || [];
+      }}
       onSaveCustomProcessProfile={saveInteractiveProcessProfile}
       onBackToSetup={() => setEditorOpen(false)} onSaveDraft={() => saveDraft("draft")}
       onSaveProject={() => saveDraft("project")} onExportNativeMaterials={() => saveDraft("native-material")} onSliceMultimaterialTest={() => saveDraft("multi-material-test")} onSliceAll={() => saveDraft("all")}
