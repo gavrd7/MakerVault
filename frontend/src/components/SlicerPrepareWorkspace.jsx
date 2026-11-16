@@ -43,7 +43,7 @@ const TOOL_SHORT_LABELS = {
   "Auto-orient":"Auto-orient","Lay on face":"Lay on face","Fit selected":"Fit model",
   "Mesh boolean":"Boolean","Support painting":"Support painting","Seam painting":"Seam painting",
   "Variable layer height":"Variable layer", "Fuzzy skin painting":"Fuzzy skin",
-  "Variable layer height":"Variable layer height","Colour painting":"Colour paint",
+  "Colour painting":"Colour paint",
 };
 const SECTION_ORDER = {
   Quality: ["Layer height", "Line width", "Seam", "Precision", "Ironing", "Z contouring", "Walls and surfaces", "Overhangs", "Bridging"],
