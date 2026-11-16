@@ -1838,6 +1838,14 @@ export default function SlicerPrepareWorkspace({
     </div>
     <div className="slicerPrepareActions">
       <div aria-live="polite">
+        {objects.some(item => (item.support_paint?.regions || []).length > 0) &&
+          engineCapabilities.support_paint?.status === "test_only" &&
+          <p className="slicerActionStatus" role="status">
+            Support painting is an offline OrcaSlicer 2.5.0 test. Use a single
+            upright, unscaled model and check that support generation is enabled
+            in the process profile. Inspect support toolpaths before printing;
+            printer submission is disabled for experimental G-code.
+          </p>}
         {objects.some(item => (item.variable_layer_profile?.bands || []).length > 0) &&
           engineCapabilities.variable_layer_profile?.status === "test_only" &&
           <p className="slicerActionStatus" role="status">
