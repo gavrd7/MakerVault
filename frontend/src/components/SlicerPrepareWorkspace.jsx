@@ -1553,15 +1553,13 @@ export default function SlicerPrepareWorkspace({
                   {slotOfficialBusy === String(slot.id) ? "Searching…" : "Find official profiles"}
                 </button>
                 {slotOfficialSearched[String(slot.id)] && <div>
-                  <small>{(slotOfficialResults[String(slot.id)] || []).length
-                    ? "Official candidates ranked for this printer — import only after reviewing compatibility."
-                    : "No suitable direct-import profiles were found for this printer and material."}</small>
+                  {!(slotOfficialResults[String(slot.id)] || []).length && <small>No matching profiles found.</small>}
                   {(slotOfficialResults[String(slot.id)] || []).length > 0 && <>
-                    <label>Official native filament candidates
+                    <label>Available profiles
                       <select value={slotOfficialSelections[String(slot.id)] || ""}
                         onChange={event => setSlotOfficialSelections(current =>
                           ({...current,[String(slot.id)]:event.target.value}))}>
-                        <option value="">Choose a profile for review…</option>
+                        <option value="">Choose profile…</option>
                         {(slotOfficialResults[String(slot.id)] || []).map(row =>
                           <option key={row.vendor+":"+row.sub_path} value={row.vendor+":"+row.sub_path}>
                             {row.name} ({row.vendor})
@@ -1573,7 +1571,7 @@ export default function SlicerPrepareWorkspace({
                         const selected=(slotOfficialResults[String(slot.id)] || []).find(row =>
                           row.vendor+":"+row.sub_path === slotOfficialSelections[String(slot.id)]);
                         if (selected) importOfficialSlotProfile(slot,selected);
-                      }}>Import selected profile</button>
+                      }}>Import & assign</button>
                   </>}
                 </div>}
               </div>}
