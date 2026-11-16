@@ -846,10 +846,17 @@ class SliceJobApiTests(TestCase):
             metadata={"extension": ".json"},
         )
         self.client.force_login(self.owner)
+        # All catalogue entries share the same draft/profile inheritance
+        # contract. This does NOT claim that their engines can execute yet.
         for engine, version in (
             ("orcaslicer", "2.5.0"),
             ("crealityprint", "7.3.0"),
             ("prusaslicer", "2.9.4"),
+            ("bambustudio", "2.5.0"),
+            ("snapmakerorca", "2.5.0"),
+            ("elegooslicer", "1.0.0"),
+            ("cura", "5.0.0"),
+            ("anycubicslicernext", "1.0.0"),
         ):
             with self.subTest(engine=engine):
                 def make(kind, name):
