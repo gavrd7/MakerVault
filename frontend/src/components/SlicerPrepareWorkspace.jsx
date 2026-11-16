@@ -332,6 +332,8 @@ export default function SlicerPrepareWorkspace({
   };
   const [suppressedSlotMatches, setSuppressedSlotMatches] = useState([]);
   const [slotImportBusy, setSlotImportBusy] = useState(false);
+  const currentPrinterIdRef = useRef(String(printerId || ""));
+  currentPrinterIdRef.current = String(printerId || "");
   const lookupEngine = String(engine).split(" ")[0];
   const lookupVersion = String(engine).split(" ").slice(1).join(" ");
   const slotMatch = slot => matchLoadedSlotProfiles(slot, filamentProfiles, {
@@ -339,6 +341,7 @@ export default function SlicerPrepareWorkspace({
   });
   const findOfficialSlotProfiles = async slot => {
     const id = String(slot.id);
+    const targetPrinterId = String(printerId || "");
     setSlotOfficialBusy(id);
     setSlotOfficialError("");
     setSlotOfficialResults(current => ({...current, [id]: []}));
@@ -370,6 +373,7 @@ export default function SlicerPrepareWorkspace({
       // Candidate names can occur in multiple vendor catalogues.
       const distinct = new Map(candidates.map(profile =>
         [profile.vendor + ":" + profile.sub_path, profile]));
+      if (currentPrinterIdRef.current !== targetPrinterId) return;
       setSlotOfficialResults(current => ({...current, [id]: [...distinct.values()].slice(0, 20)}));
     } catch (err) {
       setSlotOfficialError(err.message || "Cannot search the official profile catalogue.");
@@ -381,6 +385,7 @@ export default function SlicerPrepareWorkspace({
     if (!canEdit || slotImportBusy) return;
     if (!window.confirm("Import " + candidate.name + " and its native parent presets for " +
         slotName(slot) + "? The imported profile may still require slicing verification.")) return;
+    const targetPrinterId = String(printerId || "");
     setSlotImportBusy(true);
     setSlotOfficialError("");
     try {
@@ -393,6 +398,7 @@ export default function SlicerPrepareWorkspace({
       // The parent reloads the profile list, including the newly imported
       // dependencies; only the chosen slot is modified, never the main preset.
       await onFilamentProfilesReload?.();
+      if (currentPrinterIdRef.current !== targetPrinterId) return;
       onSlotFilamentProfilesChange?.([
         ...slotFilamentProfiles.filter(row => String(row.slot_id) !== String(slot.id)),
         {slot_id: String(slot.id), profile_id: String(imported.id)},
