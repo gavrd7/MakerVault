@@ -8358,3 +8358,20 @@ a:focus-visible,
     max-height:min(65dvh, 540px)!important;
   }
 }
+
+
+/* Unified Measure dock: an always-visible close action should not require
+ * scrolling to the bottom of a tall measurement inspector. */
+.slicerViewportMeasureHeaderActions {
+  display:flex;
+  align-items:center;
+  justify-content:flex-end;
+  gap:5px;
+  flex:0 0 auto;
+}
+.slicerViewportMeasureHeaderActions button {
+  flex:0 0 auto;
+  min-width:0;
+  padding:4px 7px;
+  white-space:nowrap;
+}
