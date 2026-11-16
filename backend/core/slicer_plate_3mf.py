@@ -15,6 +15,7 @@ from defusedxml import ElementTree as SafeET
 from .slicer_mesh import MeshInspectionError
 from .slicer_profiles import SlicerProfileError
 from .slicer_process_settings import PROCESS_FIELDS, validate_process_overrides
+from .slicer_variable_layers import orca_layer_config_ranges
 
 NS = "http://schemas.microsoft.com/3dmanufacturing/core/2015/02"
 # Match the validated source-STL limit. Generated XML/archive limits remain
@@ -165,6 +166,7 @@ def build_plate_3mf(objects_with_stl, *, bed_width, bed_depth, native_tool_indic
         isinstance(entry, tuple) and len(entry) == 2 and
         isinstance(entry[0], dict) and (
             bool(entry[0].get("process_overrides")) or
+            bool((entry[0].get("variable_layer_profile") or {}).get("bands")) or
             abs(float(entry[0].get("z_mm", 0))) > 1e-7 or
             any(abs(float(v)) > 1e-7 for v in entry[0].get("rotation_xyz_deg", [0, 0]))
         )
@@ -230,8 +232,12 @@ def build_plate_3mf(objects_with_stl, *, bed_width, bed_depth, native_tool_indic
             per_object.append(validate_process_overrides(item.get("process_overrides")))
         except ValueError as exc:
             raise SlicerProfileError("Invalid native per-object process setting.") from exc
+    try:
+        layer_ranges_xml = orca_layer_config_ranges(objects_with_stl)
+    except (ValueError, TypeError, OverflowError) as exc:
+        raise SlicerProfileError(str(exc)) from exc
     plate_xml = None
-    if len(objects_with_stl) > 1 or any(per_object) or native_tool_indices is not None:
+    if len(objects_with_stl) > 1 or any(per_object) or native_tool_indices is not None or layer_ranges_xml is not None:
         manifest = ET.Element("config")
         for index, overrides in enumerate(per_object, start=1):
             if not overrides and native_tool_indices is None:
@@ -264,6 +270,8 @@ def build_plate_3mf(objects_with_stl, *, bed_width, bed_depth, native_tool_indic
         package.writestr("3D/3dmodel.model", model_xml)
         if plate_xml is not None:
             package.writestr("Metadata/model_settings.config", plate_xml)
+        if layer_ranges_xml is not None:
+            package.writestr("Metadata/layer_config_ranges.xml", layer_ranges_xml)
         package.writestr("[Content_Types].xml",
                          '<?xml version="1.0" encoding="UTF-8"?>'
                          '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">'
