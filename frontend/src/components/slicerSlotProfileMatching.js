@@ -58,6 +58,9 @@ export function matchLoadedSlotProfiles(slot, profiles, {
     const label = nameOf(p);
     const full = core(product);
     const candidate = core(label);
+    // Enhanced material formulations must not fall back to a plain material
+    // as an alleged compatible match without any technical validation.
+    if (full.split(" ").includes("plus") && !candidate.split(" ").includes("plus")) return false;
     return candidate === full || candidate === family || label === "generic " + family;
   });
   return {
