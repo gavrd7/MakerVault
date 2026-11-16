@@ -82,7 +82,7 @@ class IntendedMaterialSafetyTests(SimpleTestCase):
             with self.subTest(field=field):
                 job = SimpleNamespace(
                     settings={"plate_objects": [{"instance_id": "one", field: value}]},
-                    engine="orcaslicer",
+                    engine="orcaslicer", engine_version="2.4.2",
                 )
                 with self.assertRaisesRegex(SlicerExecutionError, error):
                     _validate_plate_execution(job)
