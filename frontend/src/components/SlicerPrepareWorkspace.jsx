@@ -3,6 +3,7 @@ import { createPortal } from "react-dom";
 import SlicerPlateEditor from "./SlicerPlateEditor";
 import {addVariableLayerBand} from "./slicerVariableLayers.js";
 import SlicerUiIcon from "./SlicerUiIcon";
+import {NATIVE_TOOL_FEATURES, FEATURE_NAMES, usedNativeFeatures} from "./slicerEngineCompatibility";
 import SlicerFlushVolumes from "./SlicerFlushVolumes";
 import { apiFetch } from "../api";
 import { matchLoadedSlotProfiles, slotProfileSearchTerm, resolveSlotLibrarySpool } from "./slicerSlotProfileMatching.js";
@@ -63,7 +64,7 @@ export default function SlicerPrepareWorkspace({
   onPlateLabelChange, onPrimaryChange, onFilesUploaded,
   defaultColor, onManualColorChange, canEdit, busy, error, notice,
   onChangeProfiles, onOpenDevice, onSaveDraft, onSaveProject, onExportNativeMaterials, onSliceMultimaterialTest, onImportProject, onSlice, onSliceAll, engine, printer,
-  selectedProfiles, workerConfigured, printerId,
+  selectedProfiles, workerConfigured, engineCapabilities = {}, printerId,
   processOverrides = {}, onProcessOverridesChange, onSaveCustomProcessProfile,
   flushSettings = null, onFlushSettingsChange,
   slotFilamentProfiles = [], onSlotFilamentProfilesChange, filamentProfiles = [], onFilamentProfilesReload, spools = [],
@@ -608,6 +609,8 @@ export default function SlicerPrepareWorkspace({
     return rect ? {left:rect.left,right:rect.right,top:rect.top,bottom:rect.bottom} : null;
   };
   function selectTool(tool, event) {
+    const feature = NATIVE_TOOL_FEATURES[tool.target];
+    if (feature && !["draft_only","verified"].includes(engineCapabilities[feature]?.status)) return;
     // Keep each menu inside the bordered toolbar, even when icons wrap.
     if (["import","auto_orient"].includes(tool.target)) {
       const anchor=event?.currentTarget?.closest(".slicerToolTooltip");
@@ -768,7 +771,14 @@ export default function SlicerPrepareWorkspace({
   const projectRoutingPending = plates.some(plate =>
     (plate.objects || []).some(item => item.material_slot != null)
   ) || slotFilamentProfiles.length > 0;
+  const incompatibleEdits = usedNativeFeatures([{objects}]).filter(
+    key => engineCapabilities[key]?.status !== "verified");
+  const nativeEditReason = incompatibleEdits.length
+    ? "Native export not yet verified for " + incompatibleEdits.map(key=>FEATURE_NAMES[key]).join(", ") +
+      ". The project is preserved; choose an engine with verified native support before slicing."
+    : "";
   const sliceBlockReason = draftBlockReason ||
+    nativeEditReason ||
     (!activePlateReady ? "Select a plate containing models to slice." : "") ||
     (conflictsBlockSlice ? "Resolve build-plate conflicts or wait for models to finish loading before slicing." : "") ||
     (flushSettings != null ? "This draft contains flushing/prime-tower overrides, but the physical multi-material path is not yet enabled. Save the draft or reset flushing settings to slice a single-filament job." : "") ||
@@ -1279,11 +1289,15 @@ export default function SlicerPrepareWorkspace({
           aria-label="Redo"><SlicerUiIcon name="redo" /><span className="slicerToolButtonLabel">Redo</span></button>
       </span>
       {TOOLS.map((tool,index) => <div className={"slicerToolTooltip" + (index>0&&TOOLS[index-1].group!==tool.group?" slicerToolGroupStart":"") + (((tool.target === "auto_orient" && autoOrientMenuOpen) || (tool.target === "import" && addModelMenuOpen)) ? " slicerToolOptionsOpen" : "")} key={tool.name}
-        onMouseEnter={() => setToolDescriptor(tool.pending ? tool.name + " · Not yet available: " + tool.pending : tool.name)}
+        onMouseEnter={() => setToolDescriptor(NATIVE_TOOL_FEATURES[tool.target] ?
+          tool.name + " · " + (engineCapabilities[NATIVE_TOOL_FEATURES[tool.target]]?.reason || "Native export has not been verified.") :
+          tool.pending ? tool.name + " · Not yet available: " + tool.pending : tool.name)}
         onMouseLeave={() => setToolDescriptor("")}
         onFocus={() => setToolDescriptor(tool.pending ? tool.name + " · Not yet available: " + tool.pending : tool.name)}
         onBlur={() => setToolDescriptor("")}
-        data-tooltip={tool.pending ? tool.name + " · Not yet available: " + tool.pending
+        data-tooltip={NATIVE_TOOL_FEATURES[tool.target] ?
+          tool.name + " · " + (engineCapabilities[NATIVE_TOOL_FEATURES[tool.target]]?.reason || "Not verified for this engine/version. Try OrcaSlicer for draft editing.") :
+          tool.pending ? tool.name + " · Not yet available: " + tool.pending
           : tool.expandable ? tool.name + " · Options in the Measure panel" : tool.name}>
         <button type="button"
           className={((tool.target === "x_mm" && toolMode === "move") ||
@@ -1307,7 +1321,11 @@ export default function SlicerPrepareWorkspace({
           aria-label={tool.name}
           aria-expanded={tool.target === "import" ? addModelMenuOpen : tool.target === "auto_orient" ? autoOrientMenuOpen : undefined}
           aria-controls={tool.target === "import" ? "slicer-add-model-toolbar-options" : tool.target === "auto_orient" ? "slicer-auto-orient-toolbar-options" : undefined}
-          disabled={!!tool.pending || !canEdit || busy || (tool.target==="add_plate" && plates.length>=8) || (!["import","add_plate"].includes(tool.target) && !objects.length)}
+          disabled={!!tool.pending || !canEdit || busy ||
+            (NATIVE_TOOL_FEATURES[tool.target] && !["draft_only","verified"].includes(
+              engineCapabilities[NATIVE_TOOL_FEATURES[tool.target]]?.status)) ||
+            (tool.target==="add_plate" && plates.length>=8) ||
+            (!["import","add_plate"].includes(tool.target) && !objects.length)}
           onClick={event => selectTool(tool,event)}><SlicerUiIcon name={tool.icon || "others"} size={22}/><span className="slicerToolButtonLabel">{TOOL_SHORT_LABELS[tool.name] || tool.name}</span></button>
         {tool.target === "import" && addModelMenuOpen && (
           toolPopupStyle?.position === "fixed"
@@ -1820,6 +1838,10 @@ export default function SlicerPrepareWorkspace({
     </div>
     <div className="slicerPrepareActions">
       <div aria-live="polite">
+        {incompatibleEdits.length > 0 && <p className="slicerActionStatus" role="status">
+          Saved edits require verified native export: {incompatibleEdits.map(key => FEATURE_NAMES[key]).join(", ")}.
+          None will be silently discarded from generated G-code.
+        </p>}
         {error && <p role="alert" className="integrationError">{error}</p>}
         {notice && <p role="status">{notice}</p>}
         {!draftBlockReason && !error && <p className="slicerActionStatus">
