@@ -76,7 +76,7 @@ def orca_layer_config_ranges(objects_with_stl):
     return ET.tostring(root, encoding="utf-8", xml_declaration=True)
 
 
-_LAYER_Z = re.compile(r"^;Z:\\s*([0-9]+(?:\\.[0-9]+)?)\\s*$", re.I)
+_LAYER_Z = re.compile(r"^;Z:\s*([0-9]+(?:\.[0-9]+)?)\s*$", re.I)
 
 
 def audit_orca_variable_layers(gcode, bands):
