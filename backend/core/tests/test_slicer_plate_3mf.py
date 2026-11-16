@@ -204,6 +204,37 @@ class BuildPlate3MFTests(SimpleTestCase):
         self.assertAlmostEqual(transform[1], 1, places=5)
         self.assertAlmostEqual(transform[3], -1, places=5)
 
+    def test_native_support_paint_subdivides_facets_without_changing_mesh_area(self):
+        from core.slicer_plate_3mf import _triangles
+        from core.slicer_native_support_paint import _fingerprint
+        shape = fixture_stl()
+        source = list(_triangles(shape))
+        extent_min = [min(p[a] for tri in source for p in tri) for a in range(3)]
+        extent_max = [max(p[a] for tri in source for p in tri) for a in range(3)]
+        center = [(extent_min[0]+extent_max[0])/2,
+                  (extent_min[1]+extent_max[1])/2, extent_min[2]]
+        local = [[tuple(p[a]-center[a] for a in range(3)) for p in tri]
+                 for tri in source]
+        face = local[0]
+        centroid = [sum(p[a] for p in face)/3 for a in range(3)]
+        patch = [[(p[a]+centroid[a])/2 for a in range(3)] for p in face]
+        obj = {
+            "x_mm": 0, "y_mm": 0, "rotation_deg": 0,
+            "rotation_xyz_deg": [0,0], "scale_percent": 100,
+            "support_paint": {"version": 2, "signature": _fingerprint(local),
+                              "regions": [{"slot": 0, "patches": [
+                                  {"face": 0, "polygon": patch}]}]},
+        }
+        archive_bytes = build_plate_3mf([(obj,shape)],bed_width=220,bed_depth=220)
+        with zipfile.ZipFile(io.BytesIO(archive_bytes)) as archive:
+            mesh = ET.fromstring(archive.read("3D/3dmodel.model"))
+            triangles = mesh.findall(".//{%s}triangle" % NS)
+            native = ET.fromstring(archive.read("Metadata/model_settings.config"))
+        self.assertGreater(len(triangles),len(source))
+        self.assertTrue(any(face.attrib.get("paint_supports")=="4" for face in triangles))
+        self.assertTrue(any("paint_supports" not in face.attrib for face in triangles))
+        self.assertEqual(len(native.find("plate").findall("model_instance")),1)
+
     def test_variable_layer_ranges_are_native_orca_3mf_per_object(self):
         base = {"x_mm": 0, "y_mm": 0, "rotation_deg": 0,
                 "scale_percent": 100, "rotation_xyz_deg": [0, 0]}
