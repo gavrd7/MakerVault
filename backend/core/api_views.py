@@ -3727,7 +3727,7 @@ def _serialise_printing_integration(item):
     safe_config = {
         key: value
         for key, value in (item.config or {}).items()
-        if key not in {"pending_reviews", "api_key"}
+        if key not in {"pending_reviews", "api_key", "encrypted_token"}
     }
     if item.provider == "simplyprint":
         safe_config["api_key_configured"] = bool((item.config or {}).get("api_key"))
@@ -3816,6 +3816,8 @@ def printing_integration_settings(request):
 def printing_integration_detail(request, provider):
     if not can_manage_workspace_settings(request.user):
         return _error("Administrator access is required.", status=403)
+    if provider == "homeassistant":
+        return _error("Use the dedicated Home Assistant power settings.", status=409)
     if provider not in dict(PrintingIntegrationSetting.PROVIDERS):
         return _error("Unknown printing integration.", status=404)
     item, _ = PrintingIntegrationSetting.objects.get_or_create(
@@ -3922,6 +3924,8 @@ def printing_integration_detail(request, provider):
 def printing_integration_test(request, provider):
     if not can_manage_workspace_settings(request.user):
         return _error("Administrator access is required.", status=403)
+    if provider == "homeassistant":
+        return _error("Use the dedicated Home Assistant power settings.", status=409)
     if provider not in dict(PrintingIntegrationSetting.PROVIDERS):
         return _error("Unknown printing integration.", status=404)
     item, _ = PrintingIntegrationSetting.objects.get_or_create(
