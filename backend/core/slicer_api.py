@@ -995,8 +995,8 @@ def jobs(request):
     if not request.user.has_perm("core.add_fileasset"):
         return _error("You do not have permission to prepare slicing jobs.", 403)
     try:
-        if len(request.body) > 8192:
-            return _error("Slice configuration is too large.", 413)
+        if len(request.body) > 131072:
+            return _error("Slice configuration exceeds the 128 KiB limit. Reduce painted regions or remove unused plates.", 413)
         data = json.loads(request.body.decode("utf-8"))
         job = _draft(request.user, data)
     except (ValueError, TypeError, UnicodeDecodeError) as exc:
