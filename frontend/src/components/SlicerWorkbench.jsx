@@ -1316,6 +1316,9 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
       slotFilamentProfiles={slotFilamentProfiles} onSlotFilamentProfilesChange={setSlotFilamentProfiles}
       filamentProfiles={forKind("filament")}
       onFilamentProfilesReload={async () => {
+        // Importing for a physical CFS/AMS bay must not switch the main
+        // session filament preset through suggestion reconciliation.
+        manuallyChosenProfiles.current.add("filament");
         const loaded = await apiFetch("/api/printing/slicer/profiles/");
         setProfiles(loaded.profiles || []);
         return loaded.profiles || [];
