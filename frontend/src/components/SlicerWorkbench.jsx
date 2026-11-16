@@ -329,9 +329,10 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
   // A named printer-specific filament may also be referenced as a native
   // inheritance parent elsewhere. That does not make it unsuitable when
   // the operator deliberately imports it for a physical feeder slot.
-  const slotFilamentChoices = profiles.filter(profile =>
+  const slotFilamentChoices = useMemo(() => profiles.filter(profile =>
     profile.engine === form.engine && profile.engine_version === form.engine_version &&
-    profile.kind === "filament" && !/@\s*.*\bbase\s*$/i.test(profile.name || ""));
+    profile.kind === "filament" && !/@\s*.*\bbase\s*$/i.test(profile.name || "")),
+    [profiles, form.engine, form.engine_version]);
   const engineVersions = [...new Set([
     ...engines.filter(item => item.key === form.engine).flatMap(item =>
       [item.installed_version, ...(Array.isArray(item.installed_versions) ? item.installed_versions : [])]),
