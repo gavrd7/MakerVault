@@ -1986,26 +1986,10 @@ export default function SlicerPlateEditor({
     hidePaintGuides();
     let lastHoverHeight = null;
     let variableHeightPointerId=null;
-    const showVariableHeightGuide=(hit)=>{
+    // Height painting uses the Z position only. Leave the mesh and plate
+    // completely unobscured; the selected range is shown numerically.
+    const showVariableHeightGuide=()=>{
       variableGuide.forEach(guide=>{guide.visible=false;});
-      if(latestToolModeRef.current!=="variable_layers"||!hit?.face)return;
-      const preview=variableLayerRef.current.preview;
-      if(!preview)return;
-      const target=hit.object;
-      // Variable layer ranges are printer-build Z heights, not STL-local Z.
-      // Their guides stay horizontal even when a model is rotated.
-      target.updateMatrixWorld(true);
-      const box=new THREE.Box3().setFromObject(target);
-      const centre=box.getCenter(new THREE.Vector3());
-      for(let i=0;i<2;i++){
-        const plane=variableGuide[i];
-        plane.position.set(centre.x,centre.y,
-          i===0?preview.from_mm:preview.to_mm);
-        plane.quaternion.identity();
-        plane.scale.set(Math.max(.1,box.max.x-box.min.x),
-          Math.max(.1,box.max.y-box.min.y),1);
-        plane.visible=true;
-      }
     };
     const pickVariableHeight=(hit)=>{
       if(!hit?.face)return;
@@ -2845,7 +2829,7 @@ export default function SlicerPlateEditor({
   useEffect(() => {
     const state = sceneRef.current;
     if (state && !state.transform.dragging) state.controls.enabled = true;
-    if (!["paint_colour","paint_support","paint_seam","paint_fuzzy"].includes(toolMode)) state?.hidePaintGuides?.();
+    if (!["paint_colour","paint_support","paint_seam","paint_fuzzy","variable_layers"].includes(toolMode)) state?.hidePaintGuides?.();
   }, [toolMode, objectKey]);
 
   useEffect(() => {
@@ -2858,13 +2842,13 @@ export default function SlicerPlateEditor({
       // Position-only changes must never alter the displayed filament colour.
       try {paintPreview(mesh, {...item,colour_paint:toolMode==="paint_colour"?item.colour_paint:null}, PALETTE[0]);supportPaintPreview(mesh,toolMode==="paint_support"?item.support_paint:null);semanticPaintPreview(mesh,toolMode==="paint_seam"?item.seam_paint:null,"seam");semanticPaintPreview(mesh,toolMode==="paint_fuzzy"?item.fuzzy_skin_paint:null,"fuzzy");}
       catch (error) {latestPaintErrorRef.current?.(error.message || "Invalid saved colour painting.");}
-      mesh.material.emissive.set(["paint_colour","paint_support","paint_seam","paint_fuzzy"].includes(toolMode) ? "#000000" : conflictIds.has(item.instance_id) ? "#e84a53" :
+      mesh.material.emissive.set(["paint_colour","paint_support","paint_seam","paint_fuzzy","variable_layers"].includes(toolMode) ? "#000000" : conflictIds.has(item.instance_id) ? "#e84a53" :
         selection.includes(item.instance_id) ? "#168ab4" : "#000000");
-      mesh.material.emissiveIntensity = ["paint_colour","paint_support","paint_seam","paint_fuzzy"].includes(toolMode) ? 0 : conflictIds.has(item.instance_id) ? 0.72 :
+      mesh.material.emissiveIntensity = ["paint_colour","paint_support","paint_seam","paint_fuzzy","variable_layers"].includes(toolMode) ? 0 : conflictIds.has(item.instance_id) ? 0.72 :
         selection.includes(item.instance_id) ? 0.32 : 0;
     }
     const selectedMesh = state.meshes.get(selected);
-    state.setSelectionOutlines(["paint_colour","paint_support","paint_seam","paint_fuzzy"].includes(toolMode) ? [] : selection.map(id=>state.meshes.get(id)).filter(Boolean));
+    state.setSelectionOutlines(["paint_colour","paint_support","paint_seam","paint_fuzzy","variable_layers"].includes(toolMode) ? [] : selection.map(id=>state.meshes.get(id)).filter(Boolean));
     const singleEditable = canEdit && toolMode !== "paint_colour" && !solidDialog && selectedMesh && selection.length < 2;
     const groupEditable = canEdit && !solidDialog && selection.length > 1 &&
       ["move","rotate","scale"].includes(toolMode);
