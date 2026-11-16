@@ -11,7 +11,7 @@ import { slicerSpoolHex, recolorUnmodifiedPlate } from "./slicerSpoolColour";
 import SlicerSpoolPicker from "./SlicerSpoolPicker";
 import { spoolMaterial, chooseSuggestedProfile, defaultOfficialSearch, suggestOfficialVendor } from "./slicerProfileSuggestions";
 import { availableSlicerPrintConnections, preferredSlicerPrintConnection } from "./slicerPrintRouting";
-import { profilesForEngineVersion } from "./slicerSavedProfileFilter";
+import { profilesForEngineVersion, isInternalNativeProfile, readableNativeProfile } from "./slicerSavedProfileFilter";
 
 function ProfileActionIcon({ name }) {
   return <svg viewBox="0 0 24 24" width="18" height="18" fill="none"
@@ -321,7 +321,7 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
   });
   const forKind = kind => profiles.filter(profile =>
     profile.engine === form.engine && profile.engine_version === form.engine_version &&
-    profile.kind === kind && !profile.is_dependency
+    profile.kind === kind && !isInternalNativeProfile(profile)
   );
   const selectNativeProfile = (kind, id) => {
     if (kind === "process") setProcessOverrides({});
@@ -384,7 +384,7 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
     const reasons = {};
     for (const kind of ["printer", "filament", "process"]) {
       if (manuallyChosenProfiles.current.has(kind)) continue;
-      const suggestion = chooseSuggestedProfile(profiles.filter(profile => !profile.is_dependency), jobs, {
+      const suggestion = chooseSuggestedProfile(profiles.filter(profile => !isInternalNativeProfile(profile)), jobs, {
         engine: form.engine, version: form.engine_version, kind,
         printer: selectedPrinter, nozzle: form.nozzle_mm,
         material: kind === "filament" ? materialHint : "",
@@ -1399,7 +1399,7 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
       <div className="slicerProfileActions">
         <button type="button" onClick={() => openOfficialSearch()}><ProfileActionIcon name="search" />Search official profiles</button>
         <button type="button" onClick={() => setProfileModal("import")}><ProfileActionIcon name="upload" />Import profile</button>
-        <button type="button" onClick={() => { setManagingSavedProfiles(false); setProfileModal("saved"); }}><ProfileActionIcon name="bookmark" />Saved profiles ({profiles.filter(item => item.engine === form.engine && !item.is_dependency).length})</button>
+        <button type="button" onClick={() => { setManagingSavedProfiles(false); setProfileModal("saved"); }}><ProfileActionIcon name="bookmark" />Saved profiles ({profiles.filter(item => item.engine === form.engine && !isInternalNativeProfile(item)).length})</button>
       </div>
       {materialHint && <div className="slicerMaterialMatch">
         <strong>Filament match: {materialHint}</strong>
@@ -1420,7 +1420,7 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
             onChange={event => selectNativeProfile(kind, event.target.value)}>
             <option value="">Select {kind} profile</option>
             {forKind(kind).map(profile => <option key={profile.id} value={profile.id}>
-              {profile.name}{profile.is_default ? " · default" : ""}
+              {readableNativeProfile(profile).name}{profile.is_default ? " · default" : ""}
             </option>)}
           </select>
         </label>)}
@@ -1756,7 +1756,7 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
       <p>Showing profiles for <strong>{engines.find(engine => engine.key === form.engine)?.label || form.engine}</strong>
         {" · "}<strong>{form.engine_version || "No engine version selected"}</strong>.
         Profiles for other engines and versions are retained but hidden automatically.
-        Native parent presets are hidden from everyday selection and retained for inherited profiles.</p>
+        Internal base and inherited parent presets are hidden by default but retained for native inheritance.</p>
       <div className="settingsActions slicerSavedProfileToolbar">
         <button type="button" onClick={() => setManagingSavedProfiles(current => !current)}>
           <ProfileActionIcon name="settings" /><span>{managingSavedProfiles ? "Done managing" : "Manage"}</span>
@@ -1767,7 +1767,7 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
         {managingSavedProfiles && <label className="checkRow slicerDependencyToggle">
           <input type="checkbox" checked={showProfileDependencies}
             onChange={e => setShowProfileDependencies(e.target.checked)} />
-          <span>Show protected native parent presets</span>
+          <span>Show internal parent presets (advanced)</span>
         </label>}
       </div>
       <div className="slicerSavedProfileFilters" role="group" aria-label="Filter saved profiles">
@@ -1821,9 +1821,10 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
         {filteredSavedProfiles.map(profile =>
           <div className="cameraSourceRow" key={profile.id}>
             <div className="cameraSourceIdentity">
-              <strong>{profile.name} · {profile.kind}{profile.is_default ? " · Default" : ""}</strong>
-              <small>{profile.engine} {profile.engine_version} · {profile.status} · {profile.provenance || "No source supplied"}</small>
-              {profile.is_dependency && <small role="note">Protected inherited parent — managed automatically, not selectable for slicing</small>}
+              <strong title={profile.name}>{readableNativeProfile(profile).name} · {profile.kind}{profile.is_default ? " · Default" : ""}</strong>
+              <small>{readableNativeProfile(profile).type} · {profile.engine} {profile.engine_version} · {profile.status}</small>
+              {managingSavedProfiles && <small title={profile.provenance || ""}>Native name: {profile.name} · {profile.provenance || "No source supplied"}</small>}
+              {isInternalNativeProfile(profile) && <small role="note">Internal native parent — retained for inheritance, not selectable for slicing</small>}
               {profileLineages[profile.id] && <small role="status">
                 {profileLineages[profile.id].checking ? "Checking native parent presets…" :
                   profileLineages[profile.id].status === "complete" ? "Parent chain present — still unverified for slicing" :
@@ -1838,11 +1839,11 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
             </div>
             {managingSavedProfiles && <div className="cameraSourceActions">
               {profile.engine === "orcaslicer" && <button type="button" disabled={profileLineages[profile.id]?.checking} onClick={() => inspectProfile(profile)}>Check parent presets</button>}
-              {!profile.is_dependency && ["orcaslicer", "crealityprint"].includes(profile.engine) && <button type="button" disabled={busy} onClick={() => openProfileEditor(profile)}>Edit as custom</button>}
-              {!profile.is_dependency && <button type="button" disabled={busy} onClick={() => toggleProfileDefault(profile)}>
+              {!isInternalNativeProfile(profile) && ["orcaslicer", "crealityprint"].includes(profile.engine) && <button type="button" disabled={busy} onClick={() => openProfileEditor(profile)}>Edit as custom</button>}
+              {!isInternalNativeProfile(profile) && <button type="button" disabled={busy} onClick={() => toggleProfileDefault(profile)}>
                 {profile.is_default ? "Clear default" : "Set as default"}
               </button>}
-              {!profile.is_dependency && <button type="button" disabled={busy} onClick={() => removeProfile(profile)}>Remove profile</button>}
+              {!isInternalNativeProfile(profile) && <button type="button" disabled={busy} onClick={() => removeProfile(profile)}>Remove profile</button>}
             </div>}
           </div>
         )}
