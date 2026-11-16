@@ -4,6 +4,7 @@
  * Never infer logical tools or adjust CFS/AMS hardware.
  */
 const normal = value => String(value || "").toLowerCase()
+  .replace(/([a-z])\+/gi, "$1 plus") // PLA+ and PLA must not be treated as the same product
   .normalize("NFKD").replace(/[\u0300-\u036f]/g, "")
   .replace(/[^a-z0-9]+/g, " ").trim().replace(/\s+/g, " ");
 const materialOf = value => {
