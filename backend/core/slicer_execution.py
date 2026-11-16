@@ -641,6 +641,8 @@ def process_queued_job(job_id):
             # All messages in this branch are fixed, server-authored
             # compatibility guidance; no native preset contents are echoed.
             diagnostic = str(exc)[:180]
+        elif stage == "auditing native variable layer height" and isinstance(exc, SlicerExecutionError):
+            diagnostic = str(exc)[:180]
         logger.exception("Slicing job %s failed during %s", job.pk, stage)
         with transaction.atomic():
             row = SliceJob.objects.select_for_update().filter(pk=job.pk).first()
@@ -650,7 +652,10 @@ def process_queued_job(job_id):
                     ("Build-plate preparation failed: " + diagnostic)
                     if diagnostic and stage == "assembling the build plate 3MF"
                     else ("Native profile compatibility: " + diagnostic)
-                    if diagnostic else "Slicing failed during " + stage +
+                    if diagnostic and stage == "checking native printer/process compatibility"
+                    else ("Variable layer test failed: " + diagnostic)
+                    if diagnostic and stage == "auditing native variable layer height"
+                    else "Slicing failed during " + stage +
                     ". Check MakerVault application logs for this job."
                 )[:240]
                 row.save(update_fields=["status", "message", "updated_at"])
