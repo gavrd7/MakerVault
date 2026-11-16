@@ -51,6 +51,18 @@ def decrypt_token(config):
         raise HomeAssistantPowerError("Saved Home Assistant token cannot be decrypted.") from exc
 
 
+_PRIVATE_LAN_NETWORKS = tuple(ipaddress.ip_network(network) for network in (
+    "10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16",
+    "127.0.0.0/8", "::1/128", "fc00::/7",
+))
+
+
+def _safe_private_ip(address):
+    return (any(address in network for network in _PRIVATE_LAN_NETWORKS
+                if network.version == address.version)
+            and not address.is_link_local and not address.is_multicast)
+
+
 def validate_url(value):
     """Accept private LAN endpoints or public HTTPS hostnames for HA.
 
@@ -83,7 +95,7 @@ def validate_url(value):
     except ValueError:
         literal = None
     if literal is not None:
-        if not (literal.is_private or literal.is_loopback):
+        if not _safe_private_ip(literal):
             raise HomeAssistantPowerError("Use a private network IP, or a trusted HTTPS domain.")
     elif "." not in host and host != "localhost":
         # A single-label LAN hostname is still valid (Docker DNS, for example).
@@ -99,8 +111,7 @@ def validate_url(value):
         ) from exc
     if not ips:
         raise HomeAssistantPowerError("Home Assistant hostname has no usable address.")
-    private = all((ip.is_private or ip.is_loopback) and not ip.is_link_local
-                  and not ip.is_multicast and not ip.is_unspecified for ip in ips)
+    private = all(_safe_private_ip(ip) for ip in ips)
     public = all(ip.is_global for ip in ips)
     if not private and not public:
         raise HomeAssistantPowerError(
