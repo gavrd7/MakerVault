@@ -119,6 +119,7 @@ export default function Dashboard({ dashboard, inventory, onNavigate, onOpenLive
               {showProgress && <small className="dashboardLiveProgressLabel">{pct.toFixed(pct % 1 ? 1 : 0)}%</small>}
               <div className="printerLiveActions">
                 <PrinterJobControls printer={printer} connection={{ id: printer.connection_id, controls: printer.controls, snapshot: { job: printer.job } }} canControl={printer.can_control} onChanged={onChanged} />
+                <PrinterPowerButton printerId={printer.id} compact />
                 <button type="button" className="printerLiveOpen" onClick={() => onOpenLive(printer)}>Open live</button>
               </div>
               <PrinterCameraPreview printer={printer} />
