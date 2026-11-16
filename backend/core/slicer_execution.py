@@ -22,6 +22,7 @@ from .slicer_material_routing import single_material_slice_assignment, MaterialR
 from .slicer_multimaterial_execution import plan_native_multimaterial, prepare_job_multimaterial
 from .slicer_material_gcode_audit import audit_native_tool_usage, MaterialGcodeAuditError
 from .slicer_native_overrides import apply_orca_job_overrides
+from .slicer_variable_layers import audit_orca_variable_layers
 from .slicer_process_settings import apply_process_overrides
 from .slicer_plate_3mf import build_plate_3mf, build_compound_plate_3mf
 from .slicer_plate_validation import validate_plate_collisions, PlateCollisionError
@@ -599,6 +600,20 @@ def process_queued_job(job_id):
             except (UnicodeDecodeError, MaterialGcodeAuditError) as exc:
                 raise SlicerExecutionError(
                     "Multi-colour test G-code did not pass the native tool/extrusion audit."
+                ) from exc
+        variable_test = next((
+            (item.get("variable_layer_profile") or {}).get("bands")
+            for item in (job.settings or {}).get("plate_objects", [])
+            if isinstance(item, dict) and (item.get("variable_layer_profile") or {}).get("bands")
+        ), None)
+        if variable_test:
+            stage = "auditing native variable layer height"
+            try:
+                audit_orca_variable_layers(output.decode("utf-8"), variable_test)
+            except (UnicodeDecodeError, ValueError) as exc:
+                raise SlicerExecutionError(
+                    "Orca did not produce verifiable native variable layer heights. "
+                    "The generated G-code has not been approved or stored."
                 ) from exc
         stage = "validating and storing generated G-code"
         asset = store_generated_gcode(job.pk, output)
