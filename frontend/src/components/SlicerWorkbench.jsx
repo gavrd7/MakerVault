@@ -1731,8 +1731,8 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
         {officialError && <p className="integrationError" role="alert">{officialError}</p>}
         {officialImportNotice && <p role="status" className="slicerProfileImportNotice">{officialImportNotice}</p>}
         {form.engine==="orcaslicer" && officialVendor==="OrcaFilamentLibrary" &&
-          <p className="slicerPlateHint">Native filament manufacturer presets are imported as candidates
-            from the selected OrcaSlicer release. Parent presets and printer compatibility must be verified before slicing.</p>}
+          <p className="slicerPlateHint">Native filament manufacturer presets are imported
+            from the selected OrcaSlicer release. Preset dependencies are checked automatically.</p>}
         {officialResults && <div className="printingStack" role="region" aria-label="Official profile search results">
           <p>{officialResults.total_matches} matching official presets in {officialResults.vendor} · showing up to {officialResults.profiles.length} · original upstream release {officialResults.ref}{officialResults.printer_model_filter ? " · filtered for " + officialResults.printer_model_filter + " (name-based, not verified compatibility)" : ""}</p>
           {officialResults.profiles.map(candidate => <div className="cameraSourceRow" key={candidate.sub_path}>
@@ -1742,7 +1742,7 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
             </div>
             <div className="cameraSourceActions">
               <button type="button" onClick={() => importOfficialProfile(candidate)} disabled={!canPrepare || officialBusy}>
-                Import candidate
+                Import profile
               </button>
               <button type="button" onClick={() => importOfficialProfile(candidate, true)} disabled={!canPrepare || officialBusy}>
                 Import &amp; set default
