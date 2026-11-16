@@ -87,7 +87,7 @@ def fuzzy_name_match(name, query):
         word.startswith(term) for word in words)) for term in terms)
 
 
-def slot_filament_catalogue(entries, printer_model, product="", material="", manufacturer=""):
+def slot_filament_catalogue(entries, printer_model, product="", material="", manufacturer="", catalogue_vendor=""):
     """Rank user-selected printer filament candidates BEFORE truncating results.
 
     This is discovery only. Do not misrepresent a similarly named preset as
@@ -109,6 +109,17 @@ def slot_filament_catalogue(entries, printer_model, product="", material="", man
         q = _words(qualifier)
         if not q or q == ["base"] or path.split("/")[1:2] == ["base"]:
             continue
+        if catalogue_vendor == "OrcaFilamentLibrary":
+            folder = _words(path.split("/")[1] if len(path.split("/")) > 2 else "")
+            # Filament-library manufacturer folders are authoritative about
+            # which brand published this preset; do not recommend Bambu/BETA
+            # for an unknown-brand Creality spool simply because both say PLA.
+            printer_brand = "creality" if "creality" in _words(printer_model) else (
+                "bambu" if "bambu" in _words(printer_model) else "")
+            acceptable = {"generic", "system", printer_brand}
+            acceptable.update(vendor)
+            if folder and not (set(folder) & acceptable):
+                continue
         # @System is a generic candidate; printer-specific profiles must
         # reference the selected model and not an unrelated model variant.
         if q != ["system"]:
