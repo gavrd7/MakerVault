@@ -1,10 +1,12 @@
 import json
+from datetime import timedelta
 from types import SimpleNamespace
 from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Permission
 from django.test import TestCase, SimpleTestCase
+from django.utils import timezone
 
 from core.home_assistant_power import (
     HomeAssistantPowerError, decrypt_token, encrypt_token, printer_is_busy,
@@ -78,6 +80,27 @@ class HomeAssistantPowerUnitTests(SimpleTestCase):
                 SimpleNamespace(last_snapshot={"state": "printing"})]),
         )
         self.assertTrue(printer_is_busy(printer))
+
+
+    def test_stale_print_history_does_not_override_fresh_idle_telemetry(self):
+        now = timezone.now()
+        active_history = SimpleNamespace(filter=lambda **kw: SimpleNamespace(exists=lambda: True))
+        def printer(connection):
+            return SimpleNamespace(
+                print_jobs=active_history,
+                live_connections=SimpleNamespace(filter=lambda **kw: [connection]),
+            )
+
+        connection = SimpleNamespace(
+            last_snapshot={"state": "idle", "job": {"state": "complete"}},
+            status="connected", last_checked_at=now, poll_interval_seconds=30,
+        )
+        self.assertFalse(printer_is_busy(printer(connection)))
+        connection.last_checked_at = now - timedelta(minutes=10)
+        self.assertTrue(printer_is_busy(printer(connection)))
+        connection.last_checked_at = now
+        connection.last_snapshot = {"state": "idle", "job": {"state": "printing"}}
+        self.assertTrue(printer_is_busy(printer(connection)))
 
 
 class HomeAssistantPowerApiTests(TestCase):
