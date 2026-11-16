@@ -120,10 +120,29 @@ class SingleMaterialSliceAnnotationTests(SimpleTestCase):
     def test_no_assignment_preserves_single_filament_flow(self):
         self.assertIsNone(single_material_slice_assignment(
             [{"instance_id": "a"}], **self.options))
-        with self.assertRaisesRegex(MaterialRoutingError, "unused"):
+        # An imported preset for a loaded but unused slot is metadata, not a
+        # printer tool selection and must not block an otherwise normal slice.
+        self.assertIsNone(single_material_slice_assignment(
+            [{"instance_id": "a"}], **self.options,
+            slot_filament_profiles=[{"slot_id": "cfs-bay-4", "profile_id": "native-pla"}]))
+
+    def test_multiple_loaded_slot_presets_do_not_force_multimaterial(self):
+        result = single_material_slice_assignment(
+            self.models, **self.options, slot_filament_profiles=[
+                {"slot_id": "cfs-bay-1", "profile_id": "unused-abs"},
+                {"slot_id": "cfs-bay-4", "profile_id": "native-pla"},
+                {"slot_id": "cfs-bay-3", "profile_id": "unused-petg"},
+            ])
+        self.assertEqual(result["logical_tool"], 0)
+        self.assertEqual(result["slot_id"], "cfs-bay-4")
+
+    def test_duplicate_loaded_slot_presets_still_fail_closed(self):
+        with self.assertRaisesRegex(MaterialRoutingError, "duplicate"):
             single_material_slice_assignment(
-                [{"instance_id": "a"}], **self.options,
-                slot_filament_profiles=[{"slot_id": "cfs-bay-4", "profile_id": "native-pla"}])
+                self.models, **self.options, slot_filament_profiles=[
+                    {"slot_id": "cfs-bay-4", "profile_id": "native-pla"},
+                    {"slot_id": "cfs-bay-4", "profile_id": "other"},
+                ])
 
     def test_mismatched_or_missing_assignments_fail_closed(self):
         cases = [
