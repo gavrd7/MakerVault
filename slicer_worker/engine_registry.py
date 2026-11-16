@@ -6,6 +6,7 @@ No discovery, PATH lookup, package installation or network downloads happen here
 import hashlib
 import json
 import os
+import re
 from pathlib import Path
 from functools import lru_cache
 
@@ -32,7 +33,7 @@ def _read_active_manifest():
         raise ValueError("Engine manifest exceeds size limit.")
     doc = json.loads(ACTIVE_MANIFEST.read_text(encoding="utf-8"))
     if (not isinstance(doc, dict) or set(doc) != {"schema_version", "engines"}
-            or doc["schema_version"] != 1 or not isinstance(doc["engines"], dict)
+            or type(doc["schema_version"]) is not int or doc["schema_version"] != 1 or not isinstance(doc["engines"], dict)
             or len(doc["engines"]) > len(SUPPORTED)):
         raise ValueError("Invalid engine manifest schema.")
     return doc["engines"]
@@ -43,6 +44,8 @@ def _valid_store_path(path, key, version):
     if not path.is_absolute() or path.is_symlink() or not path.is_file():
         return False
     # Reject traversal and symlinked engine/version parent directories.
+    if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._+-]{0,79}", version) or version in {".", ".."}:
+        return False
     base = ENGINE_STORE / "versions" / key / version
     if any(node.is_symlink() for node in (ENGINE_STORE, ENGINE_STORE / "versions",
                                          ENGINE_STORE / "versions" / key, base)):
