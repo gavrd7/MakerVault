@@ -126,6 +126,8 @@ export default function SlicerPrepareWorkspace({
   const [paintError, setPaintError] = useState("");
   const [paintMobileMinimised, setPaintMobileMinimised] = useState(false);
   const [variableBandDraft,setVariableBandDraft] = useState({from_mm:0,to_mm:10,layer_mm:0.12});
+  const [variableBandFollow,setVariableBandFollow] = useState(false);
+  const [variableBandTarget,setVariableBandTarget] = useState("from");
   const [splitRequest, setSplitRequest] = useState(0);
   const [solidRequest, setSolidRequest] = useState(null);
   const [autoOrientMenuOpen, setAutoOrientMenuOpen] = useState(false);
@@ -1008,6 +1010,22 @@ export default function SlicerPrepareWorkspace({
         <button type="button" onClick={()=>{setToolMode("select");setPaintError("");}}>Done</button>
       </div>
       <small>Specify Z ranges and their layer heights; other heights use the process preset.</small>
+      <div className="slicerVariableLayerPointerControls">
+        <label className="checkRow" style={{display:"flex",gap:7,alignItems:"center"}}>
+          <input type="checkbox" checked={variableBandFollow}
+            onChange={event=>setVariableBandFollow(event.target.checked)} />
+          Position range on model
+        </label>
+        <label>Pointer adjusts
+          <select aria-label="Variable layer height pointer target"
+            value={variableBandTarget}
+            onChange={event=>setVariableBandTarget(event.target.value)}>
+            <option value="from">Start of range (From Z)</option>
+            <option value="to">End of range (To Z)</option>
+          </select>
+        </label>
+        <small>Move the pointer over the model to position the chosen boundary; click or tap to keep it. The highlighted horizontal planes preview the range. You can still edit both values below.</small>
+      </div>
       <div className="slicerVariableLayerBandGrid">
         {[
           ["from_mm","From Z (mm)",0.5],
@@ -1504,6 +1522,21 @@ export default function SlicerPrepareWorkspace({
               return low===lower && high===upper?[lower,upper]:[low,high];
             });
           }}
+          variableLayerPreview={toolMode==="variable_layers" ? variableBandDraft : null}
+          onVariableLayerHeightPick={z=>{
+            if(!variableBandFollow)return;
+            const mm=Math.max(0,Math.round(z*2)/2);
+            setVariableBandDraft(current=>{
+              if(variableBandTarget==="from"){
+                const span=Math.max(.5,current.to_mm-current.from_mm);
+                const next={...current,from_mm:mm,to_mm:Math.min(1000,Math.round((mm+span)*2)/2)};
+                return next.from_mm===current.from_mm&&next.to_mm===current.to_mm?current:next;
+              }
+              const next={...current,to_mm:Math.max(current.from_mm+.5,mm)};
+              return next.to_mm===current.to_mm?current:next;
+            });
+          }}
+          onVariableLayerHeightCommit={()=>setVariableBandFollow(false)}
           onColourPaintError={setPaintError}
           onPrimaryChange={onPrimaryChange} onFilesUploaded={onFilesUploaded}
           onManualColorChange={onManualColorChange} defaultColor={defaultColor}
