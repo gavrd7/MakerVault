@@ -245,6 +245,63 @@ class OfficialProfileApiTests(TestCase):
         self.assertIn("@v2.5.0/OrcaFilamentLibrary/filament/eSUN/", profile.provenance)
         self.addCleanup(lambda asset=profile.file_asset: asset.file.delete(save=False))
 
+    def test_vendor_scoped_common_parent_names_do_not_mix_abs_inheritance(self):
+        """A CR-ABS chain must not silently use another vendor's fdm_filament_common."""
+        from core.slicer_native_resolution import resolved_native_profile
+
+        self.client.force_login(self.user)
+        parent = "fdm_filament_common"
+        import tempfile
+        source_payloads = {
+            "Creality": [
+                (parent, "filament/fdm_filament_common.json", json.dumps({
+                    "name": parent, "type": "filament", "temperature": ["260"],
+                }).encode()),
+                ("CR-ABS @K2", "filament/CR-ABS @K2.json", json.dumps({
+                    "name": "CR-ABS @K2", "type": "filament",
+                    "inherits": parent, "filament_type": ["ABS"],
+                }).encode()),
+            ],
+            "OrcaFilamentLibrary": [
+                (parent, "filament/fdm_filament_common.json", json.dumps({
+                    "name": parent, "type": "filament", "temperature": ["230"],
+                }).encode()),
+                ("Generic ABS @System", "filament/Generic ABS @System.json", json.dumps({
+                    "name": "Generic ABS @System", "type": "filament",
+                    "inherits": parent, "filament_type": ["ABS"],
+                }).encode()),
+            ],
+        }
+        ids = {}
+        for vendor, chain in source_payloads.items():
+            leaf, subpath, _ = chain[-1]
+            data = {"engine": "orcaslicer", "engine_version": "2.5.0",
+                    "kind": "filament", "vendor": vendor,
+                    "name": leaf, "sub_path": subpath}
+            with patch("core.slicer_api.official_profile_chain", return_value=chain):
+                response = self.post(data)
+            self.assertEqual(response.status_code, 201, response.content)
+            ids[vendor] = response.json()["profile"]["id"]
+        parents = list(SlicerProfile.objects.filter(name=parent, engine_version="2.5.0"))
+        self.assertEqual(len(parents), 2)
+        self.assertNotEqual(parents[0].source_scope, parents[1].source_scope)
+        for vendor, expected in (("Creality", "260"), ("OrcaFilamentLibrary", "230")):
+            child = SlicerProfile.objects.get(pk=ids[vendor])
+            resolved = json.loads(resolved_native_profile(child))
+            self.assertEqual(resolved["temperature"], [expected])
+            self.assertEqual(resolved["filament_type"], ["ABS"])
+        # Importing again must use the same exact scope and be idempotent.
+        vendor = "Creality"
+        chain = source_payloads[vendor]
+        with patch("core.slicer_api.official_profile_chain", return_value=chain):
+            duplicate = self.post({"engine": "orcaslicer", "engine_version": "2.5.0",
+                                   "kind": "filament", "vendor": vendor,
+                                   "name": chain[-1][0], "sub_path": chain[-1][1]})
+        self.assertEqual(duplicate.status_code, 200)
+        self.assertEqual(duplicate.json()["profile"]["id"], ids[vendor])
+        for profile in SlicerProfile.objects.filter(engine_version="2.5.0"):
+            self.addCleanup(lambda asset=profile.file_asset: asset.file.delete(save=False))
+
     def test_k2_official_long_retraction_remains_visible_in_custom_editor(self):
         """The settings API must not hide valid upstream values by GUI limits."""
         self.client.force_login(self.user)
