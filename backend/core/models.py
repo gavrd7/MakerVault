@@ -535,6 +535,7 @@ class PrintingIntegrationSetting(TimeStampedModel):
         ("spoolman", "Spoolman"),
         ("simplyprint", "SimplyPrint"),
         ("creality_cfs", "Creality CFS"),
+        ("homeassistant", "Home Assistant · printer power"),
         ("bambu_ams", "Bambu Lab / AMS"),
         ("prusalink", "PrusaLink"),
         ("anycubic_ace", "Anycubic LAN / ACE"),
