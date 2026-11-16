@@ -23,8 +23,9 @@ test("power button is absent until server confirms integration and assignment", 
 });
 
 test("button confirms by animation rather than red inline text", () => {
-  assert.match(button, /feedback-success/);
-  assert.match(button, /feedback-error/);
+  assert.match(button, /feedback \? " feedback-" \+ feedback/);
+  assert.match(button, /setFeedback\("success"\)/);
+  assert.match(button, /setFeedback\("error"\)/);
   assert.match(button, /onAnimationEnd=/);
   assert.match(button, /printerPowerGlyph/);
   assert.doesNotMatch(button, /className="printerPowerError"/);
