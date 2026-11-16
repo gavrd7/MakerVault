@@ -36,6 +36,12 @@ def native_capabilities(engine, version):
                   "work; native slicing is still pending.")
     result = {key: {"status": state, "reason": reason} for key in FEATURES}
     if engine == "orcaslicer" and version == "2.5.0":
+        result["support_paint"] = {
+            "status": "test_only",
+            "reason": ("Support enforcer/blocker export is available for offline "
+                       "single-object Orca 2.5.0 tests. Printer submission is "
+                       "blocked until native supports are validated."),
+        }
         result["variable_layer_profile"] = {
             "status": "test_only",
             "reason": ("Native Orca layer_config_ranges export is enabled for offline "
