@@ -57,6 +57,24 @@ class UnverifiedMaterialSubmissionTests(SimpleTestCase):
                         "file_asset_id": str(uuid.uuid4()),
                     })
 
+    @patch("core.printer_gcode_submission.FileAsset.objects.filter")
+    def test_support_paint_test_gcode_cannot_be_uploaded_or_started(self, fetch):
+        import uuid
+        from core.printer_gcode_submission import submit
+        asset = SimpleNamespace(
+            metadata={"extension": ".gcode", "support_paint_test": True},
+            file=SimpleNamespace(size=1024),
+        )
+        fetch.return_value.first.return_value = asset
+        for action in ("upload", "print"):
+            with self.subTest(action=action):
+                with self.assertRaisesRegex(GcodeSubmissionError, "not approved"):
+                    submit(SimpleNamespace(), SimpleNamespace(), {
+                        "confirmed": True, "source": "makervault", "action": action,
+                        "request_id": str(uuid.uuid4()),
+                        "file_asset_id": str(uuid.uuid4()),
+                    })
+
 
 def connection(adapter, *, enabled=True, status="connected", state="idle"):
     return SimpleNamespace(
