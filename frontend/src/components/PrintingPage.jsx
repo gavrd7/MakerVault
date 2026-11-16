@@ -6,6 +6,8 @@ import WeightHistory from "./WeightHistory";
 import { printerIntent } from "./printerNavigation";
 import { PrinterCameraPreview, PrinterCameraSetupModal } from "./PrinterCameras";
 import PrinterJobControls from "./PrinterJobControls";
+import PrinterPowerButton from "./PrinterPowerButton";
+import PrinterPowerAssignment from "./PrinterPowerAssignment";
 import { Badge, ImageManagerModal, LoadingBlock, Modal } from "./Common";
 import ModelViewerModal, { isViewableModelFile } from "./ModelViewer";
 import { suggestNextVersion } from "./FileVersionModal";
@@ -631,6 +633,7 @@ export default function PrintingPage({ config, projects, searchTarget = null, on
           {canChangePrinter && <div className="printingPrinterCompactActions">
             <button type="button" className="printingPrinterAction printingPrinterActionLive" onClick={() => setLivePrinter(printer)}>Live monitor</button>
             <button type="button" className="printingPrinterAction" onClick={() => setManagePrinter(printer)}>Manage printer</button>
+            <PrinterPowerButton printerId={printer.id} compact />
           </div>}
           <div className="printingPrinterCompactControls" aria-label={"Live controls for " + printer.name}>
             <PrinterLiveSummary printer={printer} onOpen={() => setLivePrinter(printer)}
@@ -1646,6 +1649,7 @@ function PrinterConnectionsModal({ printer, onClose, onChanged, onAdded, onClaim
     {error && <div className="formError" role="alert">{error}</div>}
     {notice && <div className="notice">{notice}</div>}
     {!addOnly && <PrinterConfigurationBadges printer={printer} />}
+    {!addOnly && <div className="printerLiveActions"><PrinterPowerButton printerId={printer.id} /></div>}
 
     {/* Use the same authenticated camera playback as the printer overview.
         When monitoring is open, the overview preview is suspended so only
@@ -1917,6 +1921,7 @@ function PrinterManageModal({ printer, manufacturers, models, locations, canDele
       <label>Serial number<input value={form.serial_number} onChange={e => set("serial_number", e.target.value)} /></label>
       <label>Location<select value={form.location_id} onChange={e => set("location_id", e.target.value)}><option value="">Unassigned</option>{locations.map(x => <option key={x.id} value={x.id}>{x.name} · {x.kind_label}</option>)}</select></label>
       <label>Local host / IP<input value={form.connection_host} onChange={e => set("connection_host", e.target.value)} placeholder="192.168.1.34" /></label>
+      <PrinterPowerAssignment printerId={printer.id} />
       {selectedModel?.multi_material_system && <label className="settingsToggle full"><div><strong>{selectedModel.multi_material_label} installed</strong><small>This is an optional add-on for this owned printer. Turning it off retires its live slot assignments until it is enabled and synced again.</small></div><input type="checkbox" checked={form.multi_material_installed} onChange={e => set("multi_material_installed", e.target.checked)} /></label>}
       <label>Nozzle (mm)<input type="number" min="0.1" step="0.05" value={form.nozzle_mm} onChange={e => set("nozzle_mm", e.target.value)} /></label>
       <label>Build X (mm)<input type="number" min="1" step="0.1" value={form.build_volume_x_mm} onChange={e => set("build_volume_x_mm", e.target.value)} /></label>
