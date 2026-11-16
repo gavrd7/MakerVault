@@ -75,3 +75,28 @@ export function slotProfileSearchTerm(slot) {
   return product.length >= 2 && product.length <= 80 ? product
     : family.toUpperCase();
 }
+
+/** Enrich a loaded physical bay only when its spool code identifies a UNIQUE
+ * MakerVault/Spoolman library spool. A matching material or colour alone does
+ * not prove that it is the same physical spool.
+ */
+export function resolveSlotLibrarySpool(slot, spools = []) {
+  const code = normal(slot?.spool_code);
+  if (!code) return {slot, spool:null};
+  const matches = (spools || []).filter(spool => {
+    const keys = [spool.spool_id, spool.spool_code, spool.external_id]
+      .filter(Boolean).map(normal);
+    return keys.includes(code);
+  });
+  if (matches.length !== 1) return {slot, spool:null};
+  const spool = matches[0];
+  return {
+    spool,
+    slot:{
+      ...slot,
+      product_name: String(spool.product_name || spool.filament || slot.product_name || "").trim(),
+      manufacturer: String(spool.manufacturer || spool.brand || slot.manufacturer || "").trim(),
+      material: String(spool.material || slot.material || "").trim(),
+    },
+  };
+}
