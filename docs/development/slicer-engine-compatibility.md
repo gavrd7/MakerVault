@@ -26,8 +26,13 @@ Native slicing engines are output adapters, not the source of truth.
 
 ## Current contract
 
-- Orca 2.4.2/2.5.0: all five semantic features are `draft_only`. This keeps
-  painting available for edit/save/reopen tests, not native G-code export.
+- Orca 2.4.2: all five semantic features are `draft_only`.
+- Orca 2.5.0: variable-layer ranges are `test_only` for an **offline**, single,
+  upright, unscaled model. The native adapter writes
+  `Metadata/layer_config_ranges.xml` and audits actual `;LAYER_CHANGE` / `;Z:`
+  increments against each requested interval. Generated G-code carries
+  `variable_layer_test=true` and is explicitly denied printer submission.
+  Other painted annotations remain `draft_only` pending their adapters.
 - Cura: no accurate native translation is currently implemented;
   `incompatible` disables those editor tools while preserving saved edits.
 - Other engines and unreviewed versions: `unverified` (fail closed).
