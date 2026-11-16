@@ -89,13 +89,18 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--printer", choices=("k1", "k2"), default="k2",
                         help="Pinned official Orca v2.5.0 Creality fixture (default: k2)")
+    parser.add_argument("--image", default=IMAGE,
+                        help="Pinned GHCR image or local CI-built test image")
+    parser.add_argument("--skip-pull", action="store_true",
+                        help="Use an image already available on this host")
     args = parser.parse_args()
     token = secrets.token_hex(32)
     name = "makervault-worker-smoke-" + uuid.uuid4().hex[:12]
     launched = False
     try:
-        print("Pulling immutable published worker image...", flush=True)
-        run(["docker", "pull", IMAGE], timeout=600)
+        if not args.skip_pull:
+            print("Pulling reviewed worker image...", flush=True)
+            run(["docker", "pull", args.image], timeout=600)
         with tempfile.TemporaryDirectory(prefix="makervault-worker-smoke-") as temporary:
             fixture_dir = Path(temporary) / "fixtures"
             generate(fixture_dir, args.printer, preserve_official_values=True)
@@ -114,7 +119,7 @@ def main():
                 "--env", "SLICER_WORKER_TOKEN=" + token,
                 "--env", "SLICER_ENGINES_JSON=" + ENGINE_REGISTRY,
                 "--env", "EXPECTED_ENGINE_SHA256=" + ENGINE_SHA256,
-                IMAGE,
+                args.image,
             ]
             run(cmd, timeout=90, capture=True)
             launched = True
