@@ -125,6 +125,9 @@ class NativeProcessSettingsTests(SimpleTestCase):
         fields = process_schema(source)
         self.assertEqual(fields["zaa_enabled"]["level"], "expert")
         self.assertEqual(fields["fuzzy_skin"]["section"], "Fuzzy skin")
+        self.assertIn({"value": "none", "label": "Painted only"}, fields["fuzzy_skin"]["options"])
+        self.assertIn({"value": "disabled_fuzzy", "label": "Off"}, fields["fuzzy_skin"]["options"])
+        self.assertIn("none", fields["fuzzy_skin_thickness"]["enabled_when"]["in"])
         self.assertEqual(fields["prime_tower_width"]["category"], "Multifilament")
         self.assertEqual(fields["prime_tower_width"]["enabled_when"],
                          {"key": "enable_prime_tower", "not": "0"})
