@@ -13,8 +13,9 @@ Native slicing engines are output adapters, not the source of truth.
 2. **Capability negotiation**: engine key AND exact installed version determine
    whether an annotation can be edited in the selected workspace and whether
    its native export is verified. The `/api/printing/slicer/engines/` response
-   publishes capabilities. Values are `verified`, `draft_only`,
-   `unverified`, and `incompatible`.
+   publishes capabilities. Values are `verified`, `test_only`, `draft_only`,
+   `unverified`, and `incompatible`. `test_only` is strictly offline and
+   must always carry a no-printer-submission marker.
 3. **Native translation**: a future adapter maps precise MakerVault surface
    polygons, filament/tool bindings and layer bands into an engine-native
    project. All omitted or lossy mappings are explicit errors.
