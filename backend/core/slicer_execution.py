@@ -216,7 +216,8 @@ def _plate_builder(objects_with_stl):
     """
     return (build_plate_3mf if any(
         isinstance(item, dict) and (bool(item.get("process_overrides")) or
-            bool((item.get("variable_layer_profile") or {}).get("bands")))
+            bool((item.get("variable_layer_profile") or {}).get("bands")) or
+            bool((item.get("support_paint") or {}).get("regions")))
         for item, _raw in objects_with_stl
     ) else build_compound_plate_3mf)
 
@@ -271,11 +272,29 @@ def _validate_plate_execution(job):
         )
     if any(isinstance(item, dict) and isinstance(item.get("support_paint"), dict)
            and item["support_paint"].get("regions") for item in objects):
-        raise SlicerExecutionError(
-            "This draft contains support enforcer/blocker regions, but verified native "
-            "support painting export is not implemented. Keep the painting in a draft "
-            "until the engine adapter supports these annotations."
-        )
+        # Native geometry splitting and paint_supports attributes are
+        # experimental until compared with real Orca-generated toolpaths.
+        if job.engine != "orcaslicer" or job.engine_version != "2.5.0":
+            raise SlicerExecutionError(
+                "Native support painting test requires OrcaSlicer 2.5.0.")
+        if len(objects) != 1 or settings.get("multi_material_test"):
+            raise SlicerExecutionError(
+                "Support painting test requires one single-filament model.")
+        item = objects[0]
+        if (item.get("variable_layer_profile") or {}).get("bands"):
+            raise SlicerExecutionError(
+                "Combine support painting and variable layer ranges after independent native validation.")
+        if item.get("process_overrides"):
+            raise SlicerExecutionError(
+                "Support painting with per-object overrides is not verified.")
+        if any(abs(float(value)) > 0.000001 for value in
+               item.get("rotation_xyz_deg", [0, 0])) or abs(float(item.get("z_mm", 0))) > 0.000001):
+            raise SlicerExecutionError(
+                "Support painting test requires an upright, non-elevated model.")
+        if any(abs(float(value) - 100) > 0.000001 for value in
+               item.get("scale_xyz_percent", [item.get("scale_percent", 100)] * 3)):
+            raise SlicerExecutionError(
+                "Support painting test requires an unscaled model.")
     for field, label in (
         ("seam_paint", "Seam enforcer/blocker painting"),
         ("fuzzy_skin_paint", "Paint-on fuzzy skin"),
