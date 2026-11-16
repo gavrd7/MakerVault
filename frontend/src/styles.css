@@ -8306,3 +8306,55 @@ a:focus-visible,
   font-size:.73rem;
   line-height:1.4;
 }
+
+
+/* Consolidated Measure inspector: one anchored card contains both readouts
+ * and the settings previously rendered as a second floating toolbar menu. */
+.slicerPlateCanvasColumn .slicerViewportMeasurement.slicerViewportToolDock:not(.slicerViewportTransform) {
+  max-height:min(610px, calc(100% - 24px));
+  overflow-y:auto;
+}
+.slicerViewportMeasureControls {
+  display:grid;
+  grid-template-columns:minmax(0,1fr);
+  gap:8px;
+  min-width:0;
+  padding-top:9px;
+  border-top:1px solid #344b5d;
+}
+.slicerViewportMeasureControls label {
+  display:flex;
+  flex-direction:column;
+  align-items:stretch;
+  gap:4px;
+  min-width:0;
+  margin:0;
+  font-size:.75rem;
+  line-height:1.3;
+}
+.slicerViewportMeasureControls select {
+  box-sizing:border-box;
+  display:block;
+  width:100%;
+  min-width:0;
+  min-height:34px;
+  padding:5px 7px;
+  font-size:.78rem;
+}
+.slicerViewportMeasureActions {
+  display:grid;
+  grid-template-columns:minmax(0,1fr);
+  gap:6px;
+}
+.slicerViewportMeasureActions button {
+  width:100%;
+  min-width:0;
+  min-height:34px;
+  padding:6px 9px;
+  font-size:.78rem;
+}
+@media(max-width:740px) {
+  .slicerPlateCanvasColumn .slicerPlateCanvasViewport > .slicerViewportMeasurement.slicerViewportToolDock:not(.slicerViewportTransform) {
+    max-height:min(65dvh, 540px)!important;
+  }
+}
