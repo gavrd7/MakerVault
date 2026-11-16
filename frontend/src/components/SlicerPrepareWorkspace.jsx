@@ -414,21 +414,30 @@ export default function SlicerPrepareWorkspace({
         body: {kind:"filament",vendor:candidate.vendor,engine:lookupEngine,
           engine_version:lookupVersion,name:candidate.name,sub_path:candidate.sub_path},
       });
-      const imported = result.profile;
-      // The parent reloads the profile list, including the newly imported
-      // dependencies; only the chosen slot is modified, never the main preset.
-      await onFilamentProfilesReload?.();
+      const imported = result?.profile;
+      if (!imported?.id || imported.kind !== "filament" ||
+          imported.engine !== lookupEngine || imported.engine_version !== lookupVersion) {
+        throw new Error("Imported preset did not match the active engine and version.");
+      }
+      // Return this exact profile to the parent's list immediately. The list
+      // endpoint can be capped; reloading it alone must never hide a newly
+      // imported preset just because it sorts after other installed parents.
+      await onFilamentProfilesReload?.(imported);
       if (currentPrinterIdRef.current !== targetPrinterId) return;
-      onSlotFilamentProfilesChange?.([
-        ...slotFilamentProfiles.filter(row => String(row.slot_id) !== String(slot.id)),
+      onSlotFilamentProfilesChange?.(current => [
+        ...(current || []).filter(row => String(row.slot_id) !== String(slot.id)),
         {slot_id: String(slot.id), profile_id: String(imported.id)},
       ]);
+      setSuppressedSlotMatches(current => current.filter(id => id !== String(slot.id)));
       setSlotOfficialResults(current => ({...current, [String(slot.id)]: []}));
       setSlotOfficialSelections(current => ({...current, [String(slot.id)]: ""}));
-      setMaterialMessage("Imported " + imported.name + " for slot " +
-        ((slot.slot_index ?? 0) + 1) + ". Ready to use for this slot.");
+      setMaterialMessage(imported.name + " assigned to slot " +
+        ((slot.slot_index ?? 0) + 1) + " (" +
+        Math.max(0, (result.parent_chain_length || 1) - 1) + " parent preset(s)).");
     } catch (err) {
       setSlotOfficialError(err.message || "Profile import failed.");
+      setMaterialMessage("CRITICAL: The selected slot profile was not assigned. " +
+        (err.message || "Check native preset import."));
     } finally {
       setSlotImportBusy(false);
     }
@@ -1548,6 +1557,7 @@ export default function SlicerPrepareWorkspace({
                 </label>
               </div>}
               {!profile && lookupEngine === "orcaslicer" && <div className="slicerSlotProfileSuggestions">
+                {slotOfficialError && <small role="alert" className="formError">{slotOfficialError}</small>}
                 <button type="button" disabled={slotOfficialBusy === String(slot.id) || slotImportBusy || !canEdit}
                   onClick={() => findOfficialSlotProfiles(slot)}>
                   {slotOfficialBusy === String(slot.id) ? "Searching…" : "Find official profiles"}
