@@ -31,9 +31,10 @@ const TOOLS = [
   { name: "Mesh boolean", target: "boolean", icon: "boolean", group: "geometry" },
   { name: "Measure", target: "measure", icon: "measure", expandable: true, group: "inspect" },
   { name: "Support painting", target: "paint_support", icon: "paint-support", group: "paint" },
-  { name: "Seam painting", icon: "paint-seam", pending: "Native seam-region annotations", group: "paint" },
+  { name: "Seam painting", target: "paint_seam", icon: "paint-seam", group: "paint" },
   { name: "Variable layer height", icon: "layers", pending: "Native variable layer representation", group: "paint" },
   { name: "Colour painting", target: "paint_colour", icon: "paint-colour", group: "paint" },
+  { name: "Fuzzy skin painting", target: "paint_fuzzy", icon: "paint-fuzzy", group: "paint" },
 ];
 const TOOL_SHORT_LABELS = {
   "Add model":"Add model","Add plate":"Add plate","Duplicate":"Duplicate",
@@ -111,6 +112,7 @@ export default function SlicerPrepareWorkspace({
   const [paintMode, setPaintMode] = useState("brush");
   const [paintSlot, setPaintSlot] = useState(0);
   const [supportSlot, setSupportSlot] = useState(0);
+  const [seamSlot, setSeamSlot] = useState(0);
   const [supportOverhangsOnly, setSupportOverhangsOnly] = useState(false);
   const [supportOverhangAngle, setSupportOverhangAngle] = useState(45);
   const [paintBrushMm, setPaintBrushMm] = useState(3);
@@ -500,7 +502,7 @@ export default function SlicerPrepareWorkspace({
       return;
     }
     setAddModelMenuOpen(false);
-    if (["paint_colour","paint_support"].includes(tool.target)) {
+    if (["paint_colour","paint_support","paint_seam","paint_fuzzy"].includes(tool.target)) {
       if (!selectedId && objects[0]?.instance_id) selectSingle(objects[0].instance_id);
       setMeasurementVisible(false);setAutoOrientMenuOpen(false);
       setPaintError("");
@@ -846,14 +848,20 @@ export default function SlicerPrepareWorkspace({
   ];
   const paintSelected = objects.find(row => row.instance_id === selectedId);
   const isSupportPainting=toolMode==="paint_support";
-  const paintPanel = ["paint_colour","paint_support"].includes(toolMode) && (
-    <section className={"slicerColourPaintPanel"+(paintMobileMinimised?" slicerPaintMinimised":"")} aria-label={isSupportPainting?"Support painting controls":"Colour painting controls"}
+  const isSeamPainting=toolMode==="paint_seam";
+  const isFuzzyPainting=toolMode==="paint_fuzzy";
+  const isSemanticPainting=isSeamPainting||isFuzzyPainting;
+  const activeSemanticField=isSeamPainting?"seam_paint":"fuzzy_skin_paint";
+  const activePaintState=isSupportPainting?paintSelected?.support_paint:
+    isSemanticPainting?paintSelected?.[activeSemanticField]:paintSelected?.colour_paint;
+  const paintPanel = ["paint_colour","paint_support","paint_seam","paint_fuzzy"].includes(toolMode) && (
+    <section className={"slicerColourPaintPanel"+(paintMobileMinimised?" slicerPaintMinimised":"")} aria-label={isSupportPainting?"Support painting controls":isSeamPainting?"Seam painting controls":isFuzzyPainting?"Fuzzy skin painting controls":"Colour painting controls"}
       style={{position:"absolute",top:"var(--slicer-paint-top, 56px)",left:12,zIndex:20,width:"min(310px, calc(100% - 74px))",
         maxHeight:"min(490px, calc(100% - 24px))",overflowY:"auto",padding:10,
         border:"1px solid #476079",borderRadius:10,background:"rgba(17,27,42,.96)",
         boxShadow:"0 8px 26px rgba(0,0,0,.4)",display:"grid",gap:8}}>
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:8}}>
-        <strong>{isSupportPainting?"Support painting":"Colour painting"}</strong>
+        <strong>{isSupportPainting?"Support painting":isSeamPainting?"Seam painting":isFuzzyPainting?"Fuzzy skin painting":"Colour painting"}</strong>
         <div style={{display:"flex",alignItems:"center",gap:5}}>
           <button type="button" className="slicerPaintMobileMinimise"
             aria-expanded={!paintMobileMinimised}
@@ -872,7 +880,7 @@ export default function SlicerPrepareWorkspace({
             borderRadius:7,width:33,height:33,display:"grid",placeItems:"center",padding:5}}>
           <SlicerUiIcon name={icon} size={19}/></button>)}
       </div>
-      {!isSupportPainting&&<div role="group" aria-label="Paint filament palette" style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+      {!isSupportPainting&&!isSemanticPainting&&<div role="group" aria-label="Paint filament palette" style={{display:"flex",gap:6,flexWrap:"wrap"}}>
         {paintPalette.map((slot,index)=><button key={index} type="button"
           title={slot.label} aria-label={"Paint with "+slot.label}
           aria-pressed={!paintErase&&paintSlot===index}
@@ -905,16 +913,24 @@ export default function SlicerPrepareWorkspace({
           <small style={{opacity:.8}}>Restricts new support-enforcer strokes to downward-facing overhangs. Blockers and erasing remain unrestricted.</small>
         </label>}
       </>}
+      {isSeamPainting&&<div role="group" aria-label="Seam painting action" style={{display:"flex",gap:5}}>
+        {[[0,"Enforce seam"],[1,"Block seam"]].map(([slot,label])=><button type="button" key={slot}
+          aria-pressed={!paintErase&&seamSlot===slot} className={!paintErase&&seamSlot===slot?"isActive":""}
+          onClick={()=>{setSeamSlot(slot);setPaintErase(false);}}>{label}</button>)}
+      </div>}
+      {isFuzzyPainting&&<small>Paint fuzzy skin on the selected surface. Erase removes the painted mask. Native fuzzy skin must be enabled in the print profile for it to affect slicing.</small>}
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:5}}>
-        <small>{isSupportPainting ? `${paintSelected?.support_paint?.regions?.reduce((n,r)=>n+r.patches.length,0)||0} support patches` : paintSelected?.colour_paint?.version === 2 ? `${paintSelected.colour_paint.regions?.reduce((n,region)=>n+region.patches.length,0)||0} clipped patches` : `${paintSelected?.colour_paint ? Object.keys(paintSelected.colour_paint.faces||{}).length : 0} facets (legacy)`}</small>
+        <small>{isSupportPainting ? `${paintSelected?.support_paint?.regions?.reduce((n,r)=>n+r.patches.length,0)||0} support patches` : isSemanticPainting ? `${activePaintState?.regions?.reduce((n,r)=>n+r.patches.length,0)||0} ${isSeamPainting?"seam":"fuzzy skin"} patches` : paintSelected?.colour_paint?.version === 2 ? `${paintSelected.colour_paint.regions?.reduce((n,region)=>n+region.patches.length,0)||0} clipped patches` : `${paintSelected?.colour_paint ? Object.keys(paintSelected.colour_paint.faces||{}).length : 0} facets (legacy)`}</small>
         <div className="slicerPaintEditActions">
           <button type="button" title="Erase painted faces" aria-label="Erase painted faces"
             aria-pressed={paintErase} onClick={()=>setPaintErase(true)}
             className={paintErase?"isActive":""}>Erase</button>
-        <button type="button" disabled={!(isSupportPainting?paintSelected?.support_paint:paintSelected?.colour_paint)}
+        <button type="button" disabled={!activePaintState}
           onClick={()=>{updatePlate(latest.current.map(item=>{
             if(item.instance_id!==selectedId)return item;
             if(isSupportPainting){const {support_paint:unused,...rest}=item;return rest;}
+            if(isSeamPainting){const {seam_paint:unused,...rest}=item;return rest;}
+            if(isFuzzyPainting){const {fuzzy_skin_paint:unused,...rest}=item;return rest;}
             const {colour_paint:unused,...rest}=item;return rest;
           }));setPaintError("");}}>Clear all</button>
         </div>
@@ -1037,11 +1053,13 @@ export default function SlicerPrepareWorkspace({
             (tool.target === "scale_percent" && toolMode === "scale") ||
             (tool.target === "measure" && measurementVisible) ||
             (tool.target === "paint_support" && toolMode === "paint_support") ||
+            (tool.target === "paint_seam" && toolMode === "paint_seam") ||
+            (tool.target === "paint_fuzzy" && toolMode === "paint_fuzzy") ||
             (tool.target === "paint_colour" && toolMode === "paint_colour") ||
             (tool.target === "lay_face" && toolMode === "lay_face") ||
             (tool.target === "auto_orient" && autoOrientMenuOpen) ||
             (tool.target === "import" && addModelMenuOpen)) ? "isActive" : ""}
-          aria-pressed={["paint_colour","paint_support"].includes(tool.target) ? toolMode === tool.target : tool.target === "measure" ? measurementVisible :
+          aria-pressed={["paint_colour","paint_support","paint_seam","paint_fuzzy"].includes(tool.target) ? toolMode === tool.target : tool.target === "measure" ? measurementVisible :
             tool.target === "lay_face" ? toolMode === "lay_face" :
             tool.target === "auto_orient" ? autoOrientMenuOpen :
             ["x_mm", "rotation_deg", "scale_percent"].includes(tool.target)
@@ -1414,7 +1432,7 @@ export default function SlicerPrepareWorkspace({
           </div>
         </section> : <SlicerPlateEditor key={activePlateId} plateIndex={Math.max(0,plates.findIndex(item=>item.id===activePlateId))} plateCount={plates.length||1} toolbar={modelToolbar} paintControls={paintPanel} files={files} localAssets={localAssets}
           onLocalAssetsChange={onLocalAssetsChange} onPlateIssuesChange={onPlateIssuesChange} objects={objects} onChange={updatePlate}
-          colourPaintOptions={{mode:paintMode,slot:paintErase?null:(isSupportPainting?supportSlot:paintSlot),palette:paintPalette,
+          colourPaintOptions={{mode:paintMode,slot:paintErase?null:(isSupportPainting?supportSlot:isSeamPainting?seamSlot:isFuzzyPainting?0:paintSlot),palette:paintPalette,
             radiusMm:paintBrushMm,angleDeg:paintAngle,minHeightMm:paintHeight[0],maxHeightMm:paintHeight[1],
             supportOverhangsOnly:supportOverhangsOnly,supportOverhangAngle:supportOverhangAngle}}
           onColourPaintHeightPick={z=>{
