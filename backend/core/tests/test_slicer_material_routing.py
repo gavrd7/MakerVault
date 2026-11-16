@@ -144,6 +144,14 @@ class SingleMaterialSliceAnnotationTests(SimpleTestCase):
                     {"slot_id": "cfs-bay-4", "profile_id": "other"},
                 ])
 
+    def test_assigned_slot_without_native_profile_cannot_fall_back_to_main(self):
+        with self.assertRaisesRegex(MaterialRoutingError, "no native filament profile"):
+            single_material_slice_assignment(self.models, **self.options)
+        with self.assertRaisesRegex(MaterialRoutingError, "no native filament profile"):
+            single_material_slice_assignment(
+                self.models, **self.options,
+                slot_filament_profiles=[{"slot_id": "cfs-bay-1", "profile_id": "unused-abs"}])
+
     def test_mismatched_or_missing_assignments_fail_closed(self):
         cases = [
             [{**self.models[0]}, {"instance_id": "b"}],
