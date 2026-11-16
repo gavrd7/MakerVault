@@ -20,6 +20,7 @@ import { createPaintMesh, selectPaintFaces, applyPaint } from "./slicerColourPai
 import { paintPreview, paintPreviewDelta } from "./slicerColourPaintPreview";
 import { createPaintRegions, appendPaintRegion } from "./slicerPaintRegions";
 import { clearPaintRegionOverlay } from "./slicerPaintRegionsPreview";
+import { filterSupportOverhangFaces } from "./slicerSupportOverhang";
 import {createSupportPaint,applySupportPaint} from "./slicerSupportPainting.js";
 import {supportPaintPreview,clearSupportPaintPreview} from "./slicerSupportPaintPreview.js";
 import { executeSolidOperation } from "./slicerSolidOperations";
@@ -2026,12 +2027,23 @@ export default function SlicerPlateEditor({
       if (!options || !["brush","circle","sphere","facet","fill","smart_fill","height"].includes(options.mode)) return;
       if (!mesh.userData.paintMesh) mesh.userData.paintMesh = createPaintMesh(mesh.geometry);
       const paintMesh = mesh.userData.paintMesh;
-      const faces = selectPaintFaces(paintMesh, {
+      let faces = selectPaintFaces(paintMesh, {
         mode:options.mode,face:hit.faceIndex,radiusMm:options.radiusMm,
         angleDeg:options.angleDeg,minHeightMm:options.minHeightMm,maxHeightMm:options.maxHeightMm,
         centre:mesh.worldToLocal(hit.point.clone()).toArray(),
         surfaceNormal:hit.face.normal.toArray(),
       });
+      // Only new support ENFORCER paint is restricted; blocking and erasing
+      // remain possible on any surface, including previously painted patches.
+      // Calculate in printer/world coordinates, not STL-local coordinates:
+      // rotated or non-uniformly scaled models must be classified correctly.
+      if (pending.kind === "support" && pending.slot === 0 && options.supportOverhangsOnly) {
+        mesh.updateMatrixWorld(true);
+        const normalMatrix = new THREE.Matrix3().getNormalMatrix(mesh.matrixWorld);
+        faces = filterSupportOverhangFaces(
+          faces,paintMesh.normals,normalMatrix.elements,options.supportOverhangAngle ?? 45);
+      }
+      if (!faces.length) return;
       const original = latestObjectsRef.current.find(item => item.instance_id === pending.instanceId);
       if (!original) return;
       if (pending.kind === "support") {
@@ -3287,10 +3299,14 @@ export default function SlicerPlateEditor({
       {selection.length <= 1 && measurementVisible && chosen && <aside className="slicerViewportMeasurement slicerViewportToolDock" aria-label="On-plate measurements">
         <div className="slicerViewportMeasurementHeader">
           <strong>Measure · {measureUnit === "mm" ? "mm" : "in"}</strong>
-          <button type="button" aria-expanded={measureOverlayExpanded}
-            onClick={() => setMeasureOverlayExpanded(current => !current)}>
-            {measureOverlayExpanded ? "Less" : "Details"}
-          </button>
+          <div className="slicerViewportMeasureHeaderActions">
+            <button type="button" aria-expanded={measureOverlayExpanded}
+              onClick={() => setMeasureOverlayExpanded(current => !current)}>
+              {measureOverlayExpanded ? "Less" : "Details"}
+            </button>
+            <button type="button" onClick={() => onMeasureFinish?.()}
+              aria-label="Close Measure panel">Done</button>
+          </div>
         </div>
         <div className="slicerViewportMeasurementModel" title={
           sourceFiles.find(file => String(file.id) === String(chosen.asset_id))?.name || "Selected model"
