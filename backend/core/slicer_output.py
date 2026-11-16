@@ -101,6 +101,10 @@ def store_generated_gcode(job_id, raw: bytes):
             ensure_storage_capacity(job.owner, len(raw))
             output_name = generated_slice_name(job)
             keep_in_library = (job.settings or {}).get("save_gcode_to_library") is True
+            variable_test = any(
+                isinstance(item, dict) and (item.get("variable_layer_profile") or {}).get("bands")
+                for item in (job.settings or {}).get("plate_objects", [])
+            )
             stored = FileAsset(
                 owner=job.owner,
                 project=job.input_asset.project,
@@ -119,6 +123,8 @@ def store_generated_gcode(job_id, raw: bytes):
                     "source_review": report.get("target_review", {}),
                     **({"multi_material_test": True, "printer_submission_verified": False}
                        if (job.settings or {}).get("multi_material_test") is True else {}),
+                    **({"variable_layer_test": True, "printer_submission_verified": False}
+                       if variable_test else {}),
                 },
             )
             stored.file = ContentFile(raw, name=output_name)
@@ -131,6 +137,8 @@ def store_generated_gcode(job_id, raw: bytes):
                 "Multi-colour G-code test completed and tool extrusion audited. "
                 "Printer upload and print start remain disabled."
                 if (job.settings or {}).get("multi_material_test") is True
+                else "Variable layer-height test slice completed. Verify generated layer transitions; printer upload remains disabled."
+                if variable_test
                 else ("G-code saved to MakerVault library. Inspect before printing."
                       if keep_in_library else
                       "G-code retained with slice job; add it to the library when ready.")
