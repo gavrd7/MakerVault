@@ -1328,13 +1328,25 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
       flushSettings={flushSettings} onFlushSettingsChange={setFlushSettings}
       slotFilamentProfiles={slotFilamentProfiles} onSlotFilamentProfilesChange={setSlotFilamentProfiles}
       filamentProfiles={slotFilamentChoices} spools={spools}
-      onFilamentProfilesReload={async () => {
-        // Importing for a physical CFS/AMS bay must not switch the main
-        // session filament preset through suggestion reconciliation.
+      onFilamentProfilesReload={async imported => {
+        // The server returns the exact saved preset. Keep it visible even
+        // when the general profile listing is capped or a refresh fails.
         manuallyChosenProfiles.current.add("filament");
-        const loaded = await apiFetch("/api/printing/slicer/profiles/");
-        setProfiles(loaded.profiles || []);
-        return loaded.profiles || [];
+        if (imported?.id) setProfiles(current => [
+          ...(current || []).filter(row => String(row.id) !== String(imported.id)), imported,
+        ]);
+        try {
+          const loaded = await apiFetch("/api/printing/slicer/profiles/");
+          setProfiles(current => {
+            const indexed = new Map((loaded.profiles || []).map(row => [String(row.id), row]));
+            if (imported?.id) indexed.set(String(imported.id), imported);
+            return [...indexed.values()];
+          });
+          return loaded.profiles || [];
+        } catch (error) {
+          if (!imported?.id) throw error;
+          return [imported];
+        }
       }}
       onSaveCustomProcessProfile={saveInteractiveProcessProfile}
       onBackToSetup={() => setEditorOpen(false)} onSaveDraft={() => saveDraft("draft")}
