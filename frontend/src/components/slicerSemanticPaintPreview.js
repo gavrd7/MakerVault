@@ -32,7 +32,28 @@ export function semanticPaintPreview(mesh,state,kind){
   const geometry=new THREE.BufferGeometry();
   geometry.setAttribute("position",new THREE.Float32BufferAttribute(positions,3));
   geometry.setAttribute("color",new THREE.Float32BufferAttribute(colors,3));
-  const material=new THREE.MeshBasicMaterial({
+  // Fuzzy skin is a surface treatment, not a filament colour. Render a
+  // screen-space stipple so the underlying model material stays visible and
+  // the marked region is recognisable at any camera distance. No STL
+  // displacement or printable geometry is created by this preview.
+  const material=kind==="fuzzy" ? new THREE.ShaderMaterial({
+    uniforms:{uColor:{value:new THREE.Color("#f6c76b")}},
+    vertexShader:`
+      void main() {
+        gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.0);
+      }
+    `,
+    fragmentShader:`
+      uniform vec3 uColor;
+      void main() {
+        vec2 cell = mod(gl_FragCoord.xy, vec2(7.0));
+        if(distance(cell,vec2(3.5)) > 1.6) discard;
+        gl_FragColor = vec4(uColor,0.92);
+      }
+    `,
+    side:THREE.DoubleSide,transparent:true,depthTest:true,depthWrite:false,
+    polygonOffset:true,polygonOffsetFactor:-4,polygonOffsetUnits:-4,
+  }) : new THREE.MeshBasicMaterial({
     vertexColors:true,side:THREE.DoubleSide,transparent:true,opacity:.83,
     depthTest:true,depthWrite:false,polygonOffset:true,
     polygonOffsetFactor:-4,polygonOffsetUnits:-4,
