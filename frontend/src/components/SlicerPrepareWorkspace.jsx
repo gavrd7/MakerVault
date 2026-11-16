@@ -42,6 +42,7 @@ const TOOL_SHORT_LABELS = {
   "Remove":"Delete","Centre selected":"Centre","Auto-arrange":"Arrange",
   "Auto-orient":"Auto-orient","Lay on face":"Lay on face","Fit selected":"Fit model",
   "Mesh boolean":"Boolean","Support painting":"Support painting","Seam painting":"Seam painting",
+  "Variable layer height":"Variable layer", "Fuzzy skin painting":"Fuzzy skin",
   "Variable layer height":"Variable layer height","Colour painting":"Colour paint",
 };
 const SECTION_ORDER = {
@@ -925,7 +926,7 @@ export default function SlicerPrepareWorkspace({
           aria-pressed={!paintErase&&seamSlot===slot} className={!paintErase&&seamSlot===slot?"isActive":""}
           onClick={()=>{setSeamSlot(slot);setPaintErase(false);}}>{label}</button>)}
       </div>}
-      {isFuzzyPainting&&<small>Paint fuzzy skin on the selected surface. Erase removes the painted mask. Native fuzzy skin must be enabled in the print profile for it to affect slicing.</small>}
+      {isFuzzyPainting&&<small>Enable native fuzzy skin in Print Settings before slicing. Painted masks are currently draft-only.</small>}
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:5}}>
         <small>{isSupportPainting ? `${paintSelected?.support_paint?.regions?.reduce((n,r)=>n+r.patches.length,0)||0} support patches` : isSemanticPainting ? `${activePaintState?.regions?.reduce((n,r)=>n+r.patches.length,0)||0} ${isSeamPainting?"seam":"fuzzy skin"} patches` : paintSelected?.colour_paint?.version === 2 ? `${paintSelected.colour_paint.regions?.reduce((n,region)=>n+region.patches.length,0)||0} clipped patches` : `${paintSelected?.colour_paint ? Object.keys(paintSelected.colour_paint.faces||{}).length : 0} facets (legacy)`}</small>
         <div className="slicerPaintEditActions">
@@ -988,7 +989,7 @@ export default function SlicerPrepareWorkspace({
           </label>
         </div>
       </div>}
-      <small style={{fontSize:11,opacity:.8}}>Left drag: paint · Right drag: move view · Wheel: zoom · Ctrl+Z / Ctrl+Y: undo / redo. Saved v2 regions are preview-only, not native multicolour toolpaths.</small>
+      <small style={{fontSize:11,opacity:.8}}>Left drag: paint · Right drag: rotate view · Wheel: zoom · Ctrl+Z / Ctrl+Y: undo / redo. Paint annotations are preview-only until native export is verified.</small>
       {paintError&&<small role="alert" style={{color:"#fca5a5"}}>{paintError}</small>}
     </section>
   );
@@ -1006,15 +1007,15 @@ export default function SlicerPrepareWorkspace({
         <strong>Variable layer height</strong>
         <button type="button" onClick={()=>{setToolMode("select");setPaintError("");}}>Done</button>
       </div>
-      <small>Apply a different layer height within specified model Z ranges. Outside those bands, the normal process layer height applies.</small>
+      <small>Specify Z ranges and their layer heights; other heights use the process preset.</small>
       <div className="slicerVariableLayerBandGrid">
         {[
           ["from_mm","From Z (mm)",0.5],
           ["to_mm","To Z (mm)",0.5],
           ["layer_mm","Layer height (mm)",0.01],
         ].map(([key,label,step])=><label key={key}>{label}
-          <input type="number" min={key==="layer_mm"?.05:0}
-            max={key==="layer_mm"?.5:1000} step={step}
+          <input type="number" min={key==="layer_mm" ? 0.05 : 0}
+            max={key==="layer_mm" ? 0.5 : 1000} step={step}
             value={variableBandDraft[key]}
             onChange={event=>setVariableBandDraft(current=>({...current,
               [key]:Number(event.target.value)}))} />
@@ -1040,7 +1041,7 @@ export default function SlicerPrepareWorkspace({
             setPaintError("");
           }}>Remove</button>
       </div>)}
-      <small>Draft preview only. Native Orca layer-height profile conversion must be verified before these bands can change G-code.</small>
+      <small>Draft only · Native layer-profile export pending</small>
       {paintError&&<small role="alert" style={{color:"#fca5a5"}}>{paintError}</small>}
     </section>
   );
