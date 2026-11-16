@@ -149,6 +149,11 @@ def native_support_triangles(triangles, paint):
                                            _minus(pt, source[i])),unit) >= -0.0001
                            for i in range(3)):
                     raise ValueError("Support patch lies outside its source triangle.")
+            for existing, previous_slot in painted:
+                _, duplicate = _pieces(existing, cutter, unit)
+                if duplicate and _area(duplicate, unit) > 1e-6:
+                    raise ValueError(
+                        "Overlapping support paint patches must be resolved in the editor.")
             next_free = []
             for cell in free:
                 outside, overlap = _pieces(cell,cutter,unit)
