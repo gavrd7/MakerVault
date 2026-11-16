@@ -358,15 +358,26 @@ export default function SlicerPrepareWorkspace({
       printer_id:String(printerId),engine:lookupEngine,version:lookupVersion,
     });
     apiFetch("/api/printing/slicer/material-profile-preferences/?"+query.toString())
-      .then(result=>{
+      .then(async result=>{
         if(cancelled)return;
         const loaded=new Set(liveMaterials.map(slot=>String(slot.id)));
         const recovered=(result.assignments||[]).filter(row=>
-          loaded.has(String(row.slot_id)) && !touchedSlotsRef.current.has(String(row.slot_id)) &&
-          filamentProfiles.some(profile=>String(profile.id)===String(row.profile_id)));
+          loaded.has(String(row.slot_id)) && !touchedSlotsRef.current.has(String(row.slot_id)));
+        // The general profile list is capped. Restore the exact imported
+        // profiles as well, otherwise the remembered IDs look unselected.
+        const missing=recovered.filter(row=>row.profile &&
+          !filamentProfiles.some(profile=>String(profile.id)===String(row.profile_id)));
+        for(const row of missing){
+          if(cancelled)return;
+          await onFilamentProfilesReload?.(row.profile);
+        }
+        if(cancelled)return;
         if(recovered.length)onSlotFilamentProfilesChange?.(current=>{
           const already=new Set((current||[]).map(row=>String(row.slot_id)));
-          return [...(current||[]),...recovered.filter(row=>!already.has(String(row.slot_id)))];
+          return [...(current||[]),...recovered
+            .filter(row=>!already.has(String(row.slot_id)) &&
+              !touchedSlotsRef.current.has(String(row.slot_id)))
+            .map(row=>({slot_id:String(row.slot_id),profile_id:String(row.profile_id)}))];
         });
       })
       .catch(err=>{if(!cancelled)setMaterialMessage(
