@@ -121,7 +121,9 @@ def audit_orca_variable_layers(gcode, bands):
         observed = [round(upper-lower, 4) for lower, upper in samples]
         tolerance = max(.018, wanted * .12)
         matched = [delta for delta in observed if abs(delta - wanted) <= tolerance]
-        if not matched:
+        # One coincidental layer does not prove that the engine applied the
+        # requested range. Require a majority of interior layers to agree.
+        if len(matched) < 2 or len(matched) < math.ceil(len(observed) * .6):
             raise ValueError(
                 "Native Orca G-code did not demonstrate the requested variable "
                 "layer height in the %.3f-%.3f mm range." % (begin, end))
