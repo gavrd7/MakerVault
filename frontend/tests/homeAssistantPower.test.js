@@ -22,6 +22,22 @@ test("power button is absent until server confirms integration and assignment", 
   assert.doesNotMatch(button, /setInterval\(/);
 });
 
+test("button labels describe the action rather than the current state", () => {
+  assert.match(button, /power === "on" \? "Turn off" : power === "off" \? "Turn on"/);
+  assert.match(button, /Home Assistant reports power/);
+  assert.match(button, /power === "on" \? "off" : "on"/);
+});
+
+test("saving a switch assignment immediately refreshes the matching printer control", () => {
+  assert.match(assignment, /window\.dispatchEvent\(new CustomEvent\("makervault:printer-power-assignment-changed"/);
+  assert.match(assignment, /detail: \{printerId\}/);
+  assert.match(button, /window\.addEventListener\("makervault:printer-power-assignment-changed", onAssignmentChange\)/);
+  assert.match(button, /String\(event\.detail\?\.printerId\) === String\(printerId\)/);
+  assert.match(button, /window\.removeEventListener\("makervault:printer-power-assignment-changed", onAssignmentChange\)/);
+  assert.match(button, /window\.addEventListener\("focus", onFocus\)/);
+  assert.doesNotMatch(button, /setInterval\(/);
+});
+
 test("Home Assistant assignment is opt-in and hidden when disabled", () => {
   assert.match(assignment, /if \(!item\?\.enabled \|\| !item\.token_configured\) return/);
   assert.match(assignment, /if \(!available\) return null/);
