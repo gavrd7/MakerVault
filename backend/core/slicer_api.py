@@ -640,26 +640,27 @@ def import_project_3mf(request):
                         raise ValueError("Project painting regions exceed safe limits.")
                     value = json.loads(archive.read(info).decode("utf-8"))
                     row["support_paint"] = validate_support_paint(value)
-                for field, prefix, kind in (
-                    ("seam_paint", "seam", "seam"),
-                    ("fuzzy_skin_paint", "fuzzy", "fuzzy"),
-                ):
-                    native_file = row.pop(prefix + "_sidecar", None)
-                    if native_file is None:
-                        continue
-                    if (field in row or not isinstance(native_file, str) or
-                            not re.fullmatch(r"Metadata/paint/" + prefix + r"-[0-9]{4}\.json", native_file) or
-                            native_file in seen_paint_files):
-                        raise ValueError("Invalid project semantic paint sidecar.")
-                    seen_paint_files.add(native_file)
-                    info = archive.getinfo(native_file)
-                    if not 0 < info.file_size <= 16 * 1024 * 1024:
-                        raise ValueError("Project semantic paint sidecar exceeds safe limits.")
-                    sidecar_bytes += info.file_size
-                    if sidecar_bytes > 64 * 1024 * 1024:
-                        raise ValueError("Project painting regions exceed safe limits.")
-                    row[field] = validate_semantic_paint(
-                        json.loads(archive.read(info).decode("utf-8")), kind)
+                for row in plate["objects"]:
+                    for field, prefix, kind in (
+                        ("seam_paint", "seam", "seam"),
+                        ("fuzzy_skin_paint", "fuzzy", "fuzzy"),
+                    ):
+                        native_file = row.pop(prefix + "_sidecar", None)
+                        if native_file is None:
+                            continue
+                        if (field in row or not isinstance(native_file, str) or
+                                not re.fullmatch(r"Metadata/paint/" + prefix + r"-[0-9]{4}\.json", native_file) or
+                                native_file in seen_paint_files):
+                            raise ValueError("Invalid project semantic paint sidecar.")
+                        seen_paint_files.add(native_file)
+                        info = archive.getinfo(native_file)
+                        if not 0 < info.file_size <= 16 * 1024 * 1024:
+                            raise ValueError("Project semantic paint sidecar exceeds safe limits.")
+                        sidecar_bytes += info.file_size
+                        if sidecar_bytes > 64 * 1024 * 1024:
+                            raise ValueError("Project painting regions exceed safe limits.")
+                        row[field] = validate_semantic_paint(
+                            json.loads(archive.read(info).decode("utf-8")), kind)
             active_id = metadata.get("active_plate_id")
             ids, source_names, total = set(), set(), 0
             for plate in plates:
