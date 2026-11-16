@@ -22,6 +22,15 @@ test("power button is absent until server confirms integration and assignment", 
   assert.doesNotMatch(button, /setInterval\(/);
 });
 
+test("button confirms by animation rather than red inline text", () => {
+  assert.match(button, /feedback-success/);
+  assert.match(button, /feedback-error/);
+  assert.match(button, /onAnimationEnd=/);
+  assert.match(button, /printerPowerGlyph/);
+  assert.doesNotMatch(button, /className="printerPowerError"/);
+  assert.match(button, /printerPowerSrOnly/);
+});
+
 test("button labels describe the action rather than the current state", () => {
   assert.match(button, /power === "on" \? "Turn off" : power === "off" \? "Turn on"/);
   assert.match(button, /Home Assistant reports power/);
