@@ -48,5 +48,5 @@
 @keyframes printerPowerNudge{0%,100%{transform:translateX(0)}25%{transform:translateX(-3px)}65%{transform:translateX(3px)}}
 @media(prefers-reduced-motion:reduce){
   .printerPowerButton.isSwitching .printerPowerGlyph,.printerPowerButton.feedback-success,
-  .printerPowerButton.feedback-error{animation:none}
+  .printerPowerButton.feedback-error{animation-duration:1ms;animation-iteration-count:1}
 }
