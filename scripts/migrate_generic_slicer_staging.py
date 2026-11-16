@@ -21,6 +21,10 @@ import subprocess
 import sys
 import time
 
+# Direct script execution puts scripts/ (rather than the checkout) on sys.path.
+ROOT = Path(__file__).resolve().parent.parent
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
 from scripts import install_slicer_staging as staging
 
 IMAGE = ("ghcr.io/gavrd7/makervault-slicer@sha256:"
@@ -164,6 +168,8 @@ def preflight():
     if not staging.OVERLAY.is_file() or "makervault_slicer_engines:" not in staging.OVERLAY.read_text():
         raise ValueError("Update slicer staging branch; persistent engine volume is missing.")
     _safe_run(staging._compose_args() + ["config", "--quiet"])
+    # Rollback must remain possible even if the registry becomes unavailable.
+    _safe_run(["docker", "image", "inspect", config["MAKERVAULT_SLICER_WORKER_IMAGE"]], capture=True)
     print("PASS: reviewed source worker, current Compose and backup path verified.")
     print("Existing pinned image ID:", config["MAKERVAULT_SLICER_WORKER_IMAGE"])
     print("New generic registry image:", IMAGE)
