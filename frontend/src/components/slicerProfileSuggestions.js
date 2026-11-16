@@ -24,6 +24,10 @@ const machineSuffixCompatible = (profile, printer) => {
   const raw = String(profile.name || "");
   const at = raw.indexOf("@");
   if (at === -1) return true; // Generic material/process profile, still unverified.
+  // Orca/Bambu use "@System" for generic built-in presets, not a
+  // printer-specific qualifier. These are eligible for defaults on any
+  // selected machine, subject to engine/version and material checks.
+  if (/^system$/i.test(raw.slice(at + 1).trim())) return true;
   const qualifier = raw.slice(at + 1)
     .replace(/\b\d+(?:\.\d+)?\s*(?:mm\s*)?nozzle\b/gi, " ");
   const expected = words(qualifier).split(" ")
