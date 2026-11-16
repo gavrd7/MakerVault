@@ -1404,8 +1404,16 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
         <label>Engine version
           <select required disabled={!canPrepare || busy || !engineVersions.length}
             value={form.engine_version} onChange={e => {
+              const version = e.target.value;
+              const engineRecord = engines.find(item => item.key === form.engine);
+              const issues = engineCompatibilityIssues(engineRecord,version,projectPlates);
+              if (version !== form.engine_version && issues.length && !window.confirm(
+                "This version cannot yet slice these saved edits: " +
+                issues.map(item => item.label).join(", ") +
+                ". Your edits will be preserved. Change version anyway?"
+              )) return;
               setFlushSettings(null);setSlotFilamentProfiles([]);
-              update("engine_version",e.target.value);
+              update("engine_version",version);
             }}>
             <option value="">Choose a slicer version</option>
             {engineVersions.map(version => {
