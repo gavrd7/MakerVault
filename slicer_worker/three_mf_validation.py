@@ -13,6 +13,7 @@ from .runner import WorkerError
 CORE_NS = "http://schemas.microsoft.com/3dmanufacturing/core/2015/02"
 ALLOWED = {"3D/3dmodel.model", "_rels/.rels", "[Content_Types].xml"}
 PLATE_MANIFEST = "Metadata/model_settings.config"
+LAYER_RANGES = "Metadata/layer_config_ranges.xml"
 # Keep the worker aligned with the validated STL and server-side 3MF builder.
 # Expanded XML, compressed archive and model upload bounds remain separate.
 MAX_TRIANGLES = 500_000
@@ -40,8 +41,12 @@ def validate_worker_3mf(data, *, native_tool_count=None):
         with zipfile.ZipFile(io.BytesIO(data)) as package:
             info = package.infolist()
             names = {part.filename for part in info}
-            if len(info) not in (3, 4) or names not in (ALLOWED, ALLOWED | {PLATE_MANIFEST}):
+            approved = (ALLOWED, ALLOWED | {PLATE_MANIFEST},
+                        ALLOWED | {PLATE_MANIFEST, LAYER_RANGES})
+            if len(info) not in (3, 4, 5) or names not in approved:
                 raise WorkerError("Unsupported 3MF package members.")
+            if LAYER_RANGES in names and package.getinfo(LAYER_RANGES).file_size > 32768:
+                raise WorkerError("Native layer range metadata is oversized.")
             if PLATE_MANIFEST in names and package.getinfo(PLATE_MANIFEST).file_size > 8192:
                 raise WorkerError("3MF plate metadata is oversized.")
             if any(part.file_size <= 0 or part.file_size > 80 * 1024 * 1024
@@ -51,6 +56,7 @@ def validate_worker_3mf(data, *, native_tool_count=None):
                 raise WorkerError("3MF archive expansion exceeds the limit.")
             raw = package.read("3D/3dmodel.model")
             manifest = package.read(PLATE_MANIFEST) if PLATE_MANIFEST in names else None
+            layer_ranges = package.read(LAYER_RANGES) if LAYER_RANGES in names else None
         root = ET.fromstring(raw)
     except WorkerError:
         raise
@@ -65,6 +71,43 @@ def validate_worker_3mf(data, *, native_tool_count=None):
     ids = {obj.attrib.get("id") for obj in objects}
     if len(ids) != len(objects) or any(item.attrib.get("objectid") not in ids for item in items):
         raise WorkerError("3MF build references unknown objects.")
+    # Accept only simple, bounded per-object layer heights, never script keys.
+    if layer_ranges is not None:
+        if native_tool_count is not None or len(objects) != 1:
+            raise WorkerError("Native variable layer test requires one single-material object.")
+        try:
+            layer_root = ET.fromstring(layer_ranges)
+        except ET.ParseError:
+            raise WorkerError("Malformed native variable layer configuration.") from None
+        if layer_root.tag != "objects" or layer_root.attrib or len(layer_root) != 1:
+            raise WorkerError("Unexpected native variable layer structure.")
+        layer_object = layer_root[0]
+        if (layer_object.tag != "object" or
+                layer_object.attrib != {"id": objects[0].attrib["id"]}):
+            raise WorkerError("Variable layer object does not match native mesh.")
+        if not 1 <= len(layer_object) <= 80:
+            raise WorkerError("Invalid native variable layer band count.")
+        previous_max = 0.0
+        for band in layer_object:
+            if (band.tag != "range" or set(band.attrib) != {"min_z", "max_z"}
+                    or len(band) != 1):
+                raise WorkerError("Unsupported native layer range.")
+            option = band[0]
+            if (option.tag != "option" or option.attrib != {"opt_key": "layer_height"}
+                    or len(option) or option.text is None):
+                raise WorkerError("Unsupported native layer range setting.")
+            try:
+                lower = float(band.attrib["min_z"])
+                upper = float(band.attrib["max_z"])
+                height = float(option.text)
+            except ValueError:
+                raise WorkerError("Invalid native layer range value.") from None
+            if (not all(math.isfinite(value) for value in (lower, upper, height))
+                    or not 0 <= lower < upper <= 1000
+                    or not .05 <= height <= .5
+                    or lower < previous_max):
+                raise WorkerError("Unsafe native variable layer range.")
+            previous_max = upper
     count = 0
     for obj in objects:
         vertices = obj.findall("./{%s}mesh/{%s}vertices/{%s}vertex" % (CORE_NS, CORE_NS, CORE_NS))
