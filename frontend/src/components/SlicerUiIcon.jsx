@@ -15,6 +15,7 @@ const paths = {
   "plates-overview": <><rect x="2" y="3" width="9" height="8" rx="1"/><rect x="13" y="3" width="9" height="8" rx="1"/><rect x="2" y="13" width="9" height="8" rx="1"/><rect x="13" y="13" width="9" height="8" rx="1"/><path d="M5 6h3m8 0h3M5 16h3m8 0h3"/></>,
   "paint-support": <><path d="m3 7 9-5 9 5-9 5-9-5Z"/><path d="M7 12v9m5-7v7m5-9v9M4 21h16"/><path d="m17 4 3 3"/></>,
   "paint-seam": <><path d="m5 6 7-4 7 4v12l-7 4-7-4V6Z"/><path d="m5 6 7 4 7-4"/><path d="M12 10v12" strokeDasharray="1 3" strokeWidth="2.5"/></>,
+  "paint-fuzzy": <><path d="m4 7 8-4 8 4-8 4-8-4ZM4 7v10l8 4 8-4V7"/><path d="m4 12 3-2 2 4 3-2 2 4 3-3 3 2" strokeDasharray="2 2"/><path d="m12 11 1 2-1 2 1 2" /></>,
   "paint-colour": <><path d="M12 2a10 10 0 1 0 10 10c0-2.2-1.8-3.5-3.9-3.5H16c-1.5 0-2.4-1.3-2.4-2.5 0-1.1.7-2.1 1.1-2.9A10 10 0 0 0 12 2Z"/><circle cx="6.6" cy="10" r="1.1"/><circle cx="9.5" cy="6.4" r="1.1"/><circle cx="15.2" cy="5.5" r="1.1"/><circle cx="6.9" cy="15" r="1.1"/><path d="m17 14 4 4m-5.5-2.5 3.5 3.5"/></>,
 
   "paint-brush": <><path d="m14 4 6 6-9 9-6-6 9-9Z"/><path d="m14 4 3-2 5 5-2 3M5 13c-2 2-2 5-3 7 3-1 6-1 8-3"/></>,
@@ -58,7 +59,7 @@ const paths = {
 
 const materialTools = new Set([
   "center","orient","face","focus","split","cut","drill",
-  "hollow","boolean","measure","paint-support","paint-seam",
+  "hollow","boolean","measure","paint-support","paint-seam","paint-fuzzy",
 ]);
 export default function SlicerUiIcon({ name, size = 19 }) {
   return <svg aria-hidden="true" viewBox="0 0 24 24" width={size} height={size}
