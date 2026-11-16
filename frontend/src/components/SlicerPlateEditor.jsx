@@ -1937,6 +1937,12 @@ export default function SlicerPlateEditor({
     const activeTouchPointers = new Set();
     let touchNavigation = false;
     function cancelTouchEdit() {
+      if (variableHeightPointerId!==null) {
+        if(renderer.domElement.hasPointerCapture?.(variableHeightPointerId))
+          renderer.domElement.releasePointerCapture(variableHeightPointerId);
+        variableHeightPointerId=null;
+        controls.enabled=true;
+      }
       if (painting) {
         const stroke=painting;
         painting=null;
@@ -1986,23 +1992,24 @@ export default function SlicerPlateEditor({
       const preview=variableLayerRef.current.preview;
       if(!preview)return;
       const target=hit.object;
-      const box=target.geometry.boundingBox;
-      if(!box)return;
+      // Variable layer ranges are printer-build Z heights, not STL-local Z.
+      // Their guides stay horizontal even when a model is rotated.
+      target.updateMatrixWorld(true);
+      const box=new THREE.Box3().setFromObject(target);
       const centre=box.getCenter(new THREE.Vector3());
-      const worldScale=target.getWorldScale(new THREE.Vector3());
       for(let i=0;i<2;i++){
         const plane=variableGuide[i];
-        plane.position.copy(target.localToWorld(new THREE.Vector3(centre.x,centre.y,
-          i===0?preview.from_mm:preview.to_mm)));
-        plane.quaternion.copy(target.getWorldQuaternion(new THREE.Quaternion()));
-        plane.scale.set(Math.max(.1,box.max.x-box.min.x)*worldScale.x,
-          Math.max(.1,box.max.y-box.min.y)*worldScale.y,1);
+        plane.position.set(centre.x,centre.y,
+          i===0?preview.from_mm:preview.to_mm);
+        plane.quaternion.identity();
+        plane.scale.set(Math.max(.1,box.max.x-box.min.x),
+          Math.max(.1,box.max.y-box.min.y),1);
         plane.visible=true;
       }
     };
     const pickVariableHeight=(hit)=>{
       if(!hit?.face)return;
-      const height=Math.max(0,Math.round(hit.object.worldToLocal(hit.point.clone()).z*2)/2);
+      const height=Math.max(0,Math.round(hit.point.z*2)/2);
       variableLayerRef.current.pick?.(height);
       showVariableHeightGuide(hit);
     };
@@ -2463,6 +2470,7 @@ export default function SlicerPlateEditor({
 
     function pointerUp(event) {
       if(variableHeightPointerId===event.pointerId){
+        activeTouchPointers.delete(event.pointerId);
         variableHeightPointerId=null;
         controls.enabled=true;
         if(renderer.domElement.hasPointerCapture?.(event.pointerId))
