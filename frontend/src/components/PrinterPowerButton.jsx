@@ -5,7 +5,7 @@ import "./homeAssistantPower.css";
 /** Intentionally renders nothing until a configured printer power entity is found.
  * No polling or automation; state is refreshed only after explicit interaction.
  */
-export default function PrinterPowerButton({printerId, compact = false}) {
+export default function PrinterPowerButton({printerId, compact = false, connectionHint = null}) {
   const [power, setPower] = useState(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -42,10 +42,14 @@ export default function PrinterPowerButton({printerId, compact = false}) {
     };
   }, [printerId]);
   if (power == null) return null;
-  const available = power === "on" || power === "off";
+  // Home Assistant is authoritative. Reachability is only a display/action hint
+  // when its switch state is unknown; offline does not prove mains power is off.
+  const inferred = power !== "on" && power !== "off";
+  const effectivePower = inferred && ["on", "off"].includes(connectionHint) ? connectionHint : power;
+  const available = effectivePower === "on" || effectivePower === "off";
   const turn = async () => {
     if (busy || !available) return;
-    const action = power === "on" ? "off" : "on";
+    const action = effectivePower === "on" ? "off" : "on";
     if (action === "off" && !window.confirm(
       "Turn off printer power? Confirm printing is finished and the hotend, bed and electronics have cooled. This cuts mains power immediately."
     )) return;
@@ -70,15 +74,15 @@ export default function PrinterPowerButton({printerId, compact = false}) {
   };
   return <span className={"printerPowerControl" + (compact ? " isCompact" : "")}>
     <button type="button"
-      className={"printerPowerButton state-" + power + (busy ? " isSwitching" : "") + (feedback ? " feedback-" + feedback : "")}
+      className={"printerPowerButton state-" + effectivePower + (busy ? " isSwitching" : "") + (feedback ? " feedback-" + feedback : "")}
       disabled={busy || !available} onClick={turn}
       onAnimationEnd={event => {
         if (event.target === event.currentTarget) setFeedback("");
       }}
-      aria-label={busy ? "Switching printer power" : power === "on" ? "Turn printer power off" : "Turn printer power on"}
-      title={error || (available ? "Home Assistant reports power " + power + ". Click to turn " + (power === "on" ? "off" : "on") + "." : "Home Assistant switch unavailable")}>
+      aria-label={busy ? "Switching printer power" : effectivePower === "on" ? "Turn printer power off" : available ? "Turn printer power on" : "Printer power state unavailable"}
+      title={error || (inferred ? (available ? "Home Assistant switch state unavailable. Button uses printer connection status as an estimate; offline does not necessarily mean powered off." : "Home Assistant switch state unavailable.") : "Home Assistant reports power " + power + ". Click to turn " + (power === "on" ? "off" : "on") + ".")}>
       <span className="printerPowerGlyph" aria-hidden="true">{feedback === "success" ? "✓" : feedback === "error" ? "!" : "⏻"}</span>
-      <span className="printerPowerLabel">{busy ? "Switching…" : power === "on" ? "Turn off" : power === "off" ? "Turn on" : "Unavailable"}</span>
+      <span className="printerPowerLabel">{busy ? "Switching…" : effectivePower === "on" ? "Turn off" : effectivePower === "off" ? "Turn on" : "Unavailable"}</span>
     </button>
     <span className="printerPowerSrOnly" role="status" aria-live="polite">
       {busy ? "Switching printer power" : error ? error : feedback === "success" ? "Printer power confirmed " + power : ""}
