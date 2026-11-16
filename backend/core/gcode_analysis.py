@@ -40,11 +40,11 @@ def _requested_start_temperatures(text):
     """
     found = {}
     for raw in text.splitlines()[:4000]:
+        if re.match(r"^;\\s*(?:LAYER_CHANGE|LAYER:)", raw.strip(), re.I):
+            break
         line = raw.split(";", 1)[0].strip()
         if not line:
             continue
-        if line.startswith(";LAYER_CHANGE") or line.startswith("; layer"):
-            break
         if re.match(r"^START_PRINT(?:\\s|$)", line, re.I):
             for kind, label in (("EXTRUDER_TEMP", "nozzle"), ("BED_TEMP", "bed")):
                 match = re.search(r"(?:^|\\s)" + kind + r"\\s*=\\s*(\\d+(?:\\.\\d+)?)", line, re.I)
