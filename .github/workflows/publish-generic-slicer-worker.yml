@@ -1,0 +1,74 @@
+name: Publish generic MakerVault Slicer worker
+
+# One worker image and container for all verified engines.
+# The initial build reuses our immutable patched OrcaSlicer 2.5.0 bootstrap.
+# Future engines are installed into the host-managed persistent engine volume.
+on:
+  workflow_dispatch:
+    inputs:
+      confirmation:
+        description: 'Type PUBLISH-MAKERVAULT-SLICER-0.1.0 after reviewing isolated tests'
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  packages: write
+
+concurrency:
+  group: generic-makervault-slicer-0.1.0
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    if: ${{ inputs.confirmation == 'PUBLISH-MAKERVAULT-SLICER-0.1.0' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 80
+    steps:
+      - name: Checkout reviewed slicer implementation
+        uses: actions/checkout@v4
+        with:
+          ref: feature/self-hosted-slicer-foundation
+
+      - name: Unit test persistent engine registry
+        run: python3 -m unittest slicer_worker.tests.test_engine_store -v
+
+      - name: Build generic single-worker image
+        run: docker build -f slicer_worker/Dockerfile.generic -t makervault-slicer-generic:acceptance .
+
+      - name: Offline runtime and authentic G-code acceptance
+        run: python3 scripts/test_published_slicer_worker.py --image makervault-slicer-generic:acceptance --skip-pull
+
+      - name: Configure Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Publish one generic AMD64 worker image
+        id: image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: slicer_worker/Dockerfile.generic
+          platforms: linux/amd64
+          push: true
+          tags: ghcr.io/gavrd7/makervault-slicer:0.1.0
+          provenance: true
+          sbom: true
+
+      - name: Record immutable release identity
+        env:
+          DIGEST: ${{ steps.image.outputs.digest }}
+        run: |
+          set -euo pipefail
+          [[ "$DIGEST" =~ ^sha256:[a-f0-9]{64}$ ]]
+          echo "### One-container MakerVault Slicer worker 0.1.0" >> "$GITHUB_STEP_SUMMARY"
+          echo "Image: \`ghcr.io/gavrd7/makervault-slicer@$DIGEST\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "Bundled approved engine: patched OrcaSlicer 2.5.0." >> "$GITHUB_STEP_SUMMARY"
+          echo "Persistent engine registry: /opt/engine-store/active.json (host-managed, read-only in worker)." >> "$GITHUB_STEP_SUMMARY"
+          echo "The image is not automatically activated in any running installation." >> "$GITHUB_STEP_SUMMARY"
