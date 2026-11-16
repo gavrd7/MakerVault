@@ -1246,9 +1246,9 @@ def official_profiles(request):
                 import hashlib
                 if existing.content_sha256 != hashlib.sha256(raw).hexdigest():
                     raise ValueError(
-                        "Native preset name conflicts with a different imported profile: "
-                        + native_name[:120] + ". Preserve both upstream profiles; "
-                        "this engine/version needs separately scoped parent identities."
+                        "An official native preset changed within the same pinned source: "
+                        + native_name[:120] + ". Existing imported files were preserved; "
+                        "review the conflicting upstream content before replacing anything."
                     )
                 continue
             asset = FileAsset(
