@@ -17,7 +17,7 @@ test("power button is absent until server confirms integration and assignment", 
   assert.match(button, /setPower\(data\.available \? data\.state : null\)/);
   assert.match(button, /if \(power == null\) return null/);
   assert.match(button, /window\.confirm\(/);
-  assert.match(button, /body: \{action\}/);
+  assert.match(button, /body: \{action, \.\.\.\(action === "off" \? \{confirm: true\}/);
   assert.match(button, /result\.state !== action/);
   assert.doesNotMatch(button, /setInterval\(/);
 });
