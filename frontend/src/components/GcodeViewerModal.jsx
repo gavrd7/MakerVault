@@ -125,17 +125,17 @@ export default function GcodeViewerModal({ file, canEdit = false, onClose, onSav
         <strong>Settings saved with this slicing job</strong>
         <p>These are the requested plate overrides from the saved draft, not independently measured values from the generated G-code. Compare with the per-object extrusion evidence in Complete G-code.</p>
         <div style={{ overflowX: "auto" }}>
-          <table className="dataTable" style={{ width: "100%" }}>
-            <thead><tr><th>Plate instance</th><th>Wall loops</th><th>Sparse infill</th><th>Additional overrides</th></tr></thead>
+          <table className="dataTable" style={{ width: "100%", textAlign: "left", tableLayout: "fixed" }}>
+            <thead><tr><th style={{textAlign:"left",width:"18%"}}>Plate instance</th><th style={{textAlign:"left",width:"21%"}}>Wall loops</th><th style={{textAlign:"left",width:"21%"}}>Sparse infill</th><th style={{textAlign:"left",width:"40%"}}>Additional overrides</th></tr></thead>
             <tbody>{objectSettings.map((item, index) => {
               const overrides = item.process_overrides || {};
               const global = globalProcessOverrides || {};
               const other = Object.entries(overrides).filter(([key]) => !["wall_loops", "sparse_infill_density"].includes(key));
               return <tr key={item.instance_id || index}>
-                <td>Object {index + 1}</td>
-                <td>{overrides.wall_loops ?? global.wall_loops ?? "Native profile"}</td>
-                <td>{overrides.sparse_infill_density ?? global.sparse_infill_density ?? "Native profile"}{(overrides.sparse_infill_density ?? global.sparse_infill_density) != null ? "%" : ""}</td>
-                <td>{other.length ? other.map(([key, value]) => `${key}: ${value}`).join(" · ") : "None"}</td>
+                <td style={{textAlign:"left",verticalAlign:"top",overflowWrap:"anywhere"}}>Object {index + 1}</td>
+                <td style={{textAlign:"left",verticalAlign:"top",overflowWrap:"anywhere"}}>{overrides.wall_loops ?? global.wall_loops ?? "Native profile"}</td>
+                <td style={{textAlign:"left",verticalAlign:"top",overflowWrap:"anywhere"}}>{overrides.sparse_infill_density ?? global.sparse_infill_density ?? "Native profile"}{(overrides.sparse_infill_density ?? global.sparse_infill_density) != null ? "%" : ""}</td>
+                <td style={{textAlign:"left",verticalAlign:"top",overflowWrap:"anywhere"}}>{other.length ? other.map(([key, value]) => `${key}: ${value}`).join(" · ") : "None"}</td>
               </tr>;
             })}</tbody>
           </table>
