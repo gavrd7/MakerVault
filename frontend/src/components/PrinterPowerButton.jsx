@@ -1,5 +1,6 @@
 import React, {useEffect, useState} from "react";
 import {apiFetch} from "../api";
+import "./homeAssistantPower.css";
 
 /** Intentionally renders nothing until a configured printer power entity is found.
  * No polling or automation; state is refreshed only after explicit interaction.
