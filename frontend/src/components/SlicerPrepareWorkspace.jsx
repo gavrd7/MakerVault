@@ -339,6 +339,69 @@ export default function SlicerPrepareWorkspace({
   currentPrinterIdRef.current = String(printerId || "");
   const lookupEngine = String(engine).split(" ")[0];
   const lookupVersion = String(engine).split(" ").slice(1).join(" ");
+  // Selections are durable material preferences, not just this draft's
+  // slot bindings. Never derive a native profile from a physical bay alone.
+  const touchedSlotsRef = useRef(new Set());
+  const [preferencesLoaded,setPreferencesLoaded] = useState(false);
+  useEffect(() => {
+    touchedSlotsRef.current.clear();
+    setPreferencesLoaded(false);
+  }, [printerId,lookupEngine,lookupVersion]);
+  useEffect(() => {
+    if (!printerId || !lookupEngine || !lookupVersion || !liveMaterials.length) {
+      setPreferencesLoaded(false);
+      return;
+    }
+    let cancelled=false;
+    setPreferencesLoaded(false);
+    const query=new URLSearchParams({
+      printer_id:String(printerId),engine:lookupEngine,version:lookupVersion,
+    });
+    apiFetch("/api/printing/slicer/material-profile-preferences/?"+query.toString())
+      .then(result=>{
+        if(cancelled)return;
+        const loaded=new Set(liveMaterials.map(slot=>String(slot.id)));
+        const recovered=(result.assignments||[]).filter(row=>
+          loaded.has(String(row.slot_id)) && !touchedSlotsRef.current.has(String(row.slot_id)) &&
+          filamentProfiles.some(profile=>String(profile.id)===String(row.profile_id)));
+        if(recovered.length)onSlotFilamentProfilesChange?.(current=>{
+          const already=new Set((current||[]).map(row=>String(row.slot_id)));
+          return [...(current||[]),...recovered.filter(row=>!already.has(String(row.slot_id)))];
+        });
+      })
+      .catch(err=>{if(!cancelled)setMaterialMessage(
+        "Couldn't restore remembered filament profiles: "+(err.message||"Please refresh."));})
+      .finally(()=>{if(!cancelled)setPreferencesLoaded(true);});
+    return ()=>{cancelled=true;};
+  },[printerId,lookupEngine,lookupVersion,liveMaterials,filamentProfiles,onSlotFilamentProfilesChange]);
+  const assignLoadedSlotProfile=async(slot,profileId)=>{
+    const slotId=String(slot.id);
+    touchedSlotsRef.current.add(slotId);
+    const previous=slotFilamentProfiles.find(row=>String(row.slot_id)===slotId);
+    onSlotFilamentProfilesChange?.(current=>[
+      ...(current||[]).filter(row=>String(row.slot_id)!==slotId),
+      ...(profileId?[{slot_id:slotId,profile_id:String(profileId)}]:[]),
+    ]);
+    if(profileId)setSuppressedSlotMatches(current=>current.filter(id=>id!==slotId));
+    else setSuppressedSlotMatches(current=>[...new Set([...current,slotId])]);
+    try {
+      await apiFetch("/api/printing/slicer/material-profile-preferences/",{
+        method:"POST",body:{printer_id:String(printerId),slot_id:slotId,
+          engine:lookupEngine,version:lookupVersion,profile_id:profileId||null},
+      });
+      setMaterialMessage(profileId?"Native filament preset remembered for "+slotName(slot)+"."
+        :"Remembered native profile cleared for "+slotName(slot)+".");
+    } catch(err) {
+      // Never claim persistence on a failed write. Restore the previous
+      // selection and surface a visible message with the real failure.
+      onSlotFilamentProfilesChange?.(current=>[
+        ...(current||[]).filter(row=>String(row.slot_id)!==slotId),
+        ...(previous?[previous]:[]),
+      ]);
+      setMaterialMessage("Could not save the filament profile assignment: "+
+        (err.message||"Unknown error"));
+    }
+  };
   const slotMatch = slot => matchLoadedSlotProfiles(resolveSlotLibrarySpool(slot,spools).slot, filamentProfiles, {
     engine: lookupEngine, version: lookupVersion, printer: printerDetails,
   });
@@ -425,10 +488,7 @@ export default function SlicerPrepareWorkspace({
       // imported preset just because it sorts after other installed parents.
       await onFilamentProfilesReload?.(imported);
       if (currentPrinterIdRef.current !== targetPrinterId) return;
-      onSlotFilamentProfilesChange?.(current => [
-        ...(current || []).filter(row => String(row.slot_id) !== String(slot.id)),
-        {slot_id: String(slot.id), profile_id: String(imported.id)},
-      ]);
+      await assignLoadedSlotProfile(slot,String(imported.id));
       setSuppressedSlotMatches(current => current.filter(id => id !== String(slot.id)));
       setSlotOfficialResults(current => ({...current, [String(slot.id)]: []}));
       setSlotOfficialSelections(current => ({...current, [String(slot.id)]: ""}));
@@ -478,7 +538,7 @@ export default function SlicerPrepareWorkspace({
   // existing selections. Stable objects and unchanged state do not trigger
   // a second profile assignment or a second printer refresh.
   useEffect(() => {
-    if (!canEdit || !liveMaterials.length || !filamentProfiles.length) return;
+    if (!canEdit || !preferencesLoaded || !liveMaterials.length || !filamentProfiles.length) return;
     const existing = new Set(slotFilamentProfiles.map(row => String(row.slot_id)));
     const inferred = liveMaterials.filter(slot => !existing.has(String(slot.id)) && !suppressedSlotMatches.includes(String(slot.id)))
       .map(slot => ({slot, match: matchLoadedSlotProfiles(resolveSlotLibrarySpool(slot,spools).slot, filamentProfiles, {
@@ -489,7 +549,7 @@ export default function SlicerPrepareWorkspace({
       .filter(({match}) => match.level === "exact")
       .map(({slot, match}) => ({slot_id: String(slot.id), profile_id: String(match.profile.id)}));
     if (inferred.length) onSlotFilamentProfilesChange?.([...slotFilamentProfiles, ...inferred]);
-  }, [canEdit, liveMaterials, filamentProfiles, slotFilamentProfiles, engine, printerDetails, onSlotFilamentProfilesChange, suppressedSlotMatches, spools]);
+  }, [canEdit, liveMaterials, filamentProfiles, slotFilamentProfiles, engine, printerDetails, onSlotFilamentProfilesChange, suppressedSlotMatches, spools, preferencesLoaded]);
   useEffect(() => {
     refreshPrinterMaterials();
     return () => { requestRef.current += 1; };
@@ -1561,11 +1621,7 @@ export default function SlicerPrepareWorkspace({
                   <select value="" disabled={!canEdit || busy} onChange={event => {
                     const id=event.target.value;
                     if (!id) return;
-                    setSuppressedSlotMatches(current => current.filter(row => row !== String(slot.id)));
-                    onSlotFilamentProfilesChange?.([
-                      ...slotFilamentProfiles.filter(row=>String(row.slot_id)!==String(slot.id)),
-                      {slot_id:String(slot.id),profile_id:id},
-                    ]);
+                    assignLoadedSlotProfile(slot,id);
                   }}>
                     <option value="">Review profile match…</option>
                     {suggestion.suggestions.map(row=><option key={row.id} value={row.id}>{row.name}</option>)}
@@ -1647,15 +1703,8 @@ export default function SlicerPrepareWorkspace({
                 <label>Native filament preset
                   <select value={slotFilamentProfiles.find(row=>row.slot_id===editingSlotProfile)?.profile_id||""}
                     onChange={e=>{
-                      const updated=slotFilamentProfiles.filter(row=>row.slot_id!==editingSlotProfile);
-                      if(e.target.value) {
-                        setSuppressedSlotMatches(current => current.filter(row => row !== editingSlotProfile));
-                        updated.push({slot_id:editingSlotProfile,profile_id:e.target.value});
-                      } else {
-                        // Respect an explicit clear; never silently reuse the main preset.
-                        setSuppressedSlotMatches(current => [...new Set([...current,editingSlotProfile])]);
-                      }
-                      onSlotFilamentProfilesChange?.(updated);
+                      const slot=liveMaterials.find(row=>String(row.id)===editingSlotProfile);
+                      if(slot)assignLoadedSlotProfile(slot,e.target.value);
                     }}>
                     <option value="">No slot profile selected · slicing blocked when this slot is assigned</option>
                     {filamentProfiles.map(profile=><option key={profile.id} value={profile.id}>
