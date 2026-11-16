@@ -23,6 +23,8 @@ import { clearPaintRegionOverlay } from "./slicerPaintRegionsPreview";
 import { filterSupportOverhangFaces } from "./slicerSupportOverhang";
 import {createSupportPaint,applySupportPaint} from "./slicerSupportPainting.js";
 import {supportPaintPreview,clearSupportPaintPreview} from "./slicerSupportPaintPreview.js";
+import {createSemanticPaint,applySemanticPaint} from "./slicerSemanticPainting.js";
+import {semanticPaintPreview,clearSemanticPaintPreview} from "./slicerSemanticPaintPreview.js";
 import { executeSolidOperation } from "./slicerSolidOperations";
 import { PRIMITIVE_TYPES, TEXT_FONTS, createPrimitiveMesh, createPrimitiveStl, createTextStl, createSvgStl } from "./slicerPrimitives";
 import { validateStackPlacement } from "./slicerStacking";
@@ -1937,7 +1939,7 @@ export default function SlicerPlateEditor({
         painting=null;
         const original=latestObjectsRef.current.find(item=>item.instance_id===stroke.instanceId);
         const mesh=meshes.get(stroke.instanceId);
-        if (original && mesh) {paintPreview(mesh, original);supportPaintPreview(mesh,original.support_paint);}
+        if (original && mesh) {paintPreview(mesh, original);supportPaintPreview(mesh,original.support_paint);semanticPaintPreview(mesh,original.seam_paint,"seam");semanticPaintPreview(mesh,original.fuzzy_skin_paint,"fuzzy");}
         if (renderer.domElement.hasPointerCapture?.(stroke.pointerId))
           renderer.domElement.releasePointerCapture(stroke.pointerId);
       }
@@ -1972,7 +1974,7 @@ export default function SlicerPlateEditor({
     let lastHoverHeight = null;
     function previewPaintGuide(hit) {
       hidePaintGuides();
-      if (!["paint_colour","paint_support"].includes(latestToolModeRef.current) || !hit?.face) return;
+      if (!["paint_colour","paint_support","paint_seam","paint_fuzzy"].includes(latestToolModeRef.current) || !hit?.face) return;
       const target = hit.object;
       const options = latestPaintOptionsRef.current;
       if (!options) return;
@@ -2046,16 +2048,24 @@ export default function SlicerPlateEditor({
       if (!faces.length) return;
       const original = latestObjectsRef.current.find(item => item.instance_id === pending.instanceId);
       if (!original) return;
-      if (pending.kind === "support") {
+      if (pending.kind === "support" || pending.kind === "seam" || pending.kind === "fuzzy") {
         const mode=options.mode==="height"?"height":
           ["brush","circle"].includes(options.mode)?"disc":
           options.mode==="sphere"?"sphere":"facet";
-        const next=applySupportPaint(pending.paint,paintMesh,{
+        const selection={
           mode,faces,centre:mesh.worldToLocal(hit.point.clone()).toArray(),
           normal:hit.face.normal.toArray(),radiusMm:options.radiusMm,
           minHeightMm:options.minHeightMm,maxHeightMm:options.maxHeightMm,
-        },pending.slot);
-        if(next!==pending.paint){pending.paint=next;supportPaintPreview(mesh,next);pending.changed=true;}
+        };
+        const next=pending.kind==="support"
+          ?applySupportPaint(pending.paint,paintMesh,selection,pending.slot)
+          :applySemanticPaint(pending.paint,paintMesh,pending.kind,selection,pending.slot);
+        if(next!==pending.paint){
+          pending.paint=next;
+          if(pending.kind==="support")supportPaintPreview(mesh,next);
+          else semanticPaintPreview(mesh,next,pending.kind);
+          pending.changed=true;
+        }
         return;
       }
       if (pending.paint?.version === 2) {
@@ -2134,7 +2144,7 @@ export default function SlicerPlateEditor({
         }
       }
       const hits = raycaster.intersectObjects([...meshes.values()], false);
-      if (["paint_colour","paint_support"].includes(latestToolModeRef.current)) {
+      if (["paint_colour","paint_support","paint_seam","paint_fuzzy"].includes(latestToolModeRef.current)) {
         if (!hits.length) return;
         const hit = hits[0];
         if (hit.object.userData.instanceId !== selectionRef.current[0]) {
@@ -2146,20 +2156,26 @@ export default function SlicerPlateEditor({
         const item = latestObjectsRef.current.find(row => row.instance_id === hit.object.userData.instanceId);
         if (!item) return;
         try {
-          const isSupport=latestToolModeRef.current==="paint_support";
-          const palette = isSupport ? null : (item.colour_paint?.palette || options.palette);
-          if (!isSupport && (!Array.isArray(palette) || !palette.length || palette.length > 64))
+          const tool=latestToolModeRef.current;
+          const kind=tool==="paint_support"?"support":tool==="paint_seam"?"seam":
+            tool==="paint_fuzzy"?"fuzzy":"colour";
+          const isColour=kind==="colour";
+          const palette=isColour ? (item.colour_paint?.palette || options.palette) : null;
+          if(isColour && (!Array.isArray(palette)||!palette.length||palette.length>64))
             throw new Error("Choose a valid filament preview palette first.");
-          const slot = options.slot;
-          if (slot !== null && (!Number.isInteger(slot) || slot < 0 || slot >= (isSupport?2:palette.length)))
-            throw new Error("The selected paint slot is no longer available.");
-          painting = { pointerId:event.pointerId, instanceId:item.instance_id,
-            slot, palette, kind:isSupport?"support":"colour",
-            paint:isSupport ? (item.support_paint || createSupportPaint(hit.object.userData.paintMesh ||
-              (hit.object.userData.paintMesh=createPaintMesh(hit.object.geometry)))) :
-              (item.colour_paint || {...createPaintRegions(hit.object.userData.paintMesh ||
-                (hit.object.userData.paintMesh=createPaintMesh(hit.object.geometry))),palette}),
-            touched:new Set(), initialised:false, changed:false };
+          const slot=options.slot;
+          const limit=kind==="support"||kind==="seam"?2:kind==="fuzzy"?1:palette.length;
+          if(slot!==null && (!Number.isInteger(slot)||slot<0||slot>=limit))
+            throw new Error("The selected paint action is no longer available.");
+          if(!hit.object.userData.paintMesh)
+            hit.object.userData.paintMesh=createPaintMesh(hit.object.geometry);
+          const paintMesh=hit.object.userData.paintMesh;
+          const field=kind==="support"?"support_paint":kind==="seam"?"seam_paint":
+            kind==="fuzzy"?"fuzzy_skin_paint":"colour_paint";
+          painting={pointerId:event.pointerId,instanceId:item.instance_id,slot,palette,kind,
+            paint:item[field] || (isColour?{...createPaintRegions(paintMesh),palette}:
+              kind==="support"?createSupportPaint(paintMesh):createSemanticPaint(paintMesh)),
+            touched:new Set(),initialised:false,changed:false};
           paintHit(hit, painting);
           controls.enabled = false;
           renderer.domElement.setPointerCapture?.(event.pointerId);
@@ -2316,7 +2332,7 @@ export default function SlicerPlateEditor({
 
     function pointerMove(event) {
       if (event.pointerType === "touch" && (touchNavigation || activeTouchPointers.size > 1)) return;
-      if (["paint_colour","paint_support"].includes(latestToolModeRef.current) && !painting &&
+      if (["paint_colour","paint_support","paint_seam","paint_fuzzy"].includes(latestToolModeRef.current) && !painting &&
           (event.buttons === 0 || event.pointerType === "touch")) {
         rayFromPointer(event);
         const hit=raycaster.intersectObjects([...meshes.values()],false)
@@ -2412,10 +2428,15 @@ export default function SlicerPlateEditor({
             if (event.type === "pointercancel") {
               paintPreview(meshes.get(stroke.instanceId), item);
               supportPaintPreview(meshes.get(stroke.instanceId),item.support_paint);
+              semanticPaintPreview(meshes.get(stroke.instanceId),item.seam_paint,"seam");
+              semanticPaintPreview(meshes.get(stroke.instanceId),item.fuzzy_skin_paint,"fuzzy");
             } else {
               latestOnChangeRef.current(current.map(row =>
                 row.instance_id === stroke.instanceId ?
-                  (stroke.kind==="support"?{...row,support_paint:stroke.paint}:{...row,colour_paint:stroke.paint}) : row));
+                  (stroke.kind==="support"?{...row,support_paint:stroke.paint}:
+                    stroke.kind==="seam"?{...row,seam_paint:stroke.paint}:
+                    stroke.kind==="fuzzy"?{...row,fuzzy_skin_paint:stroke.paint}:
+                    {...row,colour_paint:stroke.paint}) : row));
             }
           }
         }
@@ -2634,6 +2655,8 @@ export default function SlicerPlateEditor({
       for (const mesh of meshes.values()) {
         clearPaintRegionOverlay(mesh);
           clearSupportPaintPreview(mesh);
+          clearSemanticPaintPreview(mesh,"seam");
+          clearSemanticPaintPreview(mesh,"fuzzy");
         scene.remove(mesh);
         mesh.geometry.dispose();
         mesh.material.dispose();
@@ -2682,6 +2705,8 @@ export default function SlicerPlateEditor({
       if (keep.has(id) && String(mesh.userData.assetId||"")===String(currentItem?.asset_id||"")) continue;
       clearPaintRegionOverlay(mesh);
           clearSupportPaintPreview(mesh);
+          clearSemanticPaintPreview(mesh,"seam");
+          clearSemanticPaintPreview(mesh,"fuzzy");
       state.scene.remove(mesh);
       mesh.geometry.dispose();
       mesh.material.dispose();
@@ -2724,7 +2749,7 @@ export default function SlicerPlateEditor({
           mesh.userData.assetId = item.asset_id;
           const latest = latestObjectsRef.current.find(row => row.instance_id === item.instance_id) || item;
           positionOrientedMesh(mesh, latest);
-          try {paintPreview(mesh, latest, PALETTE[0]);supportPaintPreview(mesh,latest.support_paint);}
+          try {paintPreview(mesh, latest, PALETTE[0]);supportPaintPreview(mesh,latest.support_paint);semanticPaintPreview(mesh,latest.seam_paint,"seam");semanticPaintPreview(mesh,latest.fuzzy_skin_paint,"fuzzy");}
           catch (error) {latestPaintErrorRef.current?.(error.message || "Invalid saved colour painting.");}
           state.meshes.set(item.instance_id, mesh);
           state.scene.add(mesh);
@@ -2745,7 +2770,7 @@ export default function SlicerPlateEditor({
   useEffect(() => {
     const state = sceneRef.current;
     if (state && !state.transform.dragging) state.controls.enabled = true;
-    if (!["paint_colour","paint_support"].includes(toolMode)) state?.hidePaintGuides?.();
+    if (!["paint_colour","paint_support","paint_seam","paint_fuzzy"].includes(toolMode)) state?.hidePaintGuides?.();
   }, [toolMode, objectKey]);
 
   useEffect(() => {
@@ -2756,15 +2781,15 @@ export default function SlicerPlateEditor({
       if (!mesh) continue;
       positionOrientedMesh(mesh, item);
       // Position-only changes must never alter the displayed filament colour.
-      try {paintPreview(mesh, item, PALETTE[0]);supportPaintPreview(mesh,item.support_paint);}
+      try {paintPreview(mesh, item, PALETTE[0]);supportPaintPreview(mesh,item.support_paint);semanticPaintPreview(mesh,item.seam_paint,"seam");semanticPaintPreview(mesh,item.fuzzy_skin_paint,"fuzzy");}
       catch (error) {latestPaintErrorRef.current?.(error.message || "Invalid saved colour painting.");}
-      mesh.material.emissive.set(["paint_colour","paint_support"].includes(toolMode) ? "#000000" : conflictIds.has(item.instance_id) ? "#e84a53" :
+      mesh.material.emissive.set(["paint_colour","paint_support","paint_seam","paint_fuzzy"].includes(toolMode) ? "#000000" : conflictIds.has(item.instance_id) ? "#e84a53" :
         selection.includes(item.instance_id) ? "#168ab4" : "#000000");
-      mesh.material.emissiveIntensity = ["paint_colour","paint_support"].includes(toolMode) ? 0 : conflictIds.has(item.instance_id) ? 0.72 :
+      mesh.material.emissiveIntensity = ["paint_colour","paint_support","paint_seam","paint_fuzzy"].includes(toolMode) ? 0 : conflictIds.has(item.instance_id) ? 0.72 :
         selection.includes(item.instance_id) ? 0.32 : 0;
     }
     const selectedMesh = state.meshes.get(selected);
-    state.setSelectionOutlines(["paint_colour","paint_support"].includes(toolMode) ? [] : selection.map(id=>state.meshes.get(id)).filter(Boolean));
+    state.setSelectionOutlines(["paint_colour","paint_support","paint_seam","paint_fuzzy"].includes(toolMode) ? [] : selection.map(id=>state.meshes.get(id)).filter(Boolean));
     const singleEditable = canEdit && toolMode !== "paint_colour" && !solidDialog && selectedMesh && selection.length < 2;
     const groupEditable = canEdit && !solidDialog && selection.length > 1 &&
       ["move","rotate","scale"].includes(toolMode);
