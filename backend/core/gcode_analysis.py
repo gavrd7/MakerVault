@@ -40,29 +40,28 @@ def _requested_start_temperatures(text):
     """
     found = {}
     for raw in text.splitlines()[:4000]:
-        if re.match(r"^;\\s*(?:LAYER_CHANGE|LAYER:)", raw.strip(), re.I):
+        if re.match(r"^;\s*(?:LAYER_CHANGE|LAYER:)", raw.strip(), re.I):
             break
         line = raw.split(";", 1)[0].strip()
         if not line:
             continue
-        if re.match(r"^START_PRINT(?:\\s|$)", line, re.I):
+        if re.match(r"^START_PRINT(?:\s|$)", line, re.I):
             for kind, label in (("EXTRUDER_TEMP", "nozzle"), ("BED_TEMP", "bed")):
-                match = re.search(r"(?:^|\\s)" + kind + r"\\s*=\\s*(\\d+(?:\\.\\d+)?)", line, re.I)
+                match = re.search(r"(?:^|\s)" + kind + r"\s*=\s*(\d+(?:\.\d+)?)", line, re.I)
                 if match:
                     value = float(match.group(1))
                     if 0 < value <= (500 if label == "nozzle" else 200):
                         found[label] = value
-        command = re.match(r"^(M104|M109|M140|M190)(?:\\s|$)", line, re.I)
+        command = re.match(r"^(M104|M109|M140|M190)(?:\s|$)", line, re.I)
         if command:
             label = "nozzle" if command.group(1).upper() in ("M104", "M109") else "bed"
-            match = re.search(r"(?:^|\\s)S\\s*(\\d+(?:\\.\\d+)?)", line, re.I)
+            match = re.search(r"(?:^|\s)S\s*(\d+(?:\.\d+)?)", line, re.I)
             if match and label not in found:
                 value = float(match.group(1))
                 if 0 < value <= (500 if label == "nozzle" else 200):
                     found[label] = value
     return {"nozzle_c": found.get("nozzle"), "bed_c": found.get("bed"),
             "source": "requested_start_gcode" if found else None}
-
 
 def _print_setup(text):
     """Extract only explicit slicer-declared nozzle and build-plate metadata."""
