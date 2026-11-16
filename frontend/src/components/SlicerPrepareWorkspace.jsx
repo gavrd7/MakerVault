@@ -746,10 +746,11 @@ export default function SlicerPrepareWorkspace({
   // logical filament. Multiple model-assigned slots remain blocked.
   const activeSlotProfiles = slotFilamentProfiles.filter(row =>
     row.slot_id === assignedSlots[0]?.slot_id);
-  const singleSlotProfileMatches = activeSlotProfiles.length === 0
-    || (activeSlotProfiles.length === 1
-      && filamentProfiles.some(profile =>
-        String(profile.id) === String(activeSlotProfiles[0].profile_id)));
+  // A physical slot assignment must have an explicitly selected native
+  // filament preset. Never silently use the main PLA/other material preset.
+  const singleSlotProfileMatches = activeSlotProfiles.length === 1
+    && filamentProfiles.some(profile =>
+      String(profile.id) === String(activeSlotProfiles[0].profile_id));
   const materialRoutingPending = assignedSlots.length > 0
     ? !(hasSingleSlot && singleSlotProfileMatches)
     : false;
@@ -760,7 +761,7 @@ export default function SlicerPrepareWorkspace({
     (!activePlateReady ? "Select a plate containing models to slice." : "") ||
     (conflictsBlockSlice ? "Resolve build-plate conflicts or wait for models to finish loading before slicing." : "") ||
     (flushSettings != null ? "This draft contains flushing/prime-tower overrides, but the physical multi-material path is not yet enabled. Save the draft or reset flushing settings to slice a single-filament job." : "") ||
-    (materialRoutingPending ? "Multiple assigned slots or an unrelated/missing slot preset require verified multi-material routing. For a single-filament slice, assign the same physical slot to every model; its selected native filament preset is used automatically."
+    (materialRoutingPending ? "An assigned CFS/AMS slot requires an imported native filament preset for that slot. Select its Profile before slicing. Multiple assigned slots still need verified multi-material routing."
       : objectSettingsPending
       ? "Some Object settings are not yet verified for slicing. Wall loops and sparse infill density are supported; other Object overrides can be saved in drafts but cannot be sliced yet."
       : !workerConfigured
