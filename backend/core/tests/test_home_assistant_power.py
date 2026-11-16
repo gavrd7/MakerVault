@@ -23,9 +23,11 @@ class HomeAssistantPowerUnitTests(SimpleTestCase):
             decrypt_token({"encrypted_token": "corrupted"})
 
     def test_arbitrary_public_or_metadata_hosts_cannot_be_set(self):
-        for url in ("https://example.com", "http://169.254.169.254",
-                    "file:///etc/passwd", "http://user:pass@192.168.1.4:8123",
-                    "http://192.168.1.4:8123/api/", "http://192.168.1.4:8123/?token=x"):
+        for url in ("http://example.com", "https://203.0.113.10",
+                    "http://169.254.169.254", "file:///etc/passwd",
+                    "http://user:pass@192.168.1.4:8123",
+                    "http://192.168.1.4:8123/api/",
+                    "http://192.168.1.4:8123/?token=x"):
             with self.subTest(url=url):
                 with self.assertRaises(HomeAssistantPowerError):
                     validate_url(url)
@@ -33,6 +35,28 @@ class HomeAssistantPowerUnitTests(SimpleTestCase):
     def test_private_address_is_accepted(self):
         self.assertEqual(validate_url("http://192.168.1.4:8123"),
                          "http://192.168.1.4:8123")
+
+    @patch("core.home_assistant_power.socket.getaddrinfo")
+    def test_public_https_reverse_proxy_domain_is_accepted(self, dns):
+        dns.return_value = [
+            (2, 1, 6, "", ("104.21.70.99", 443)),
+            (2, 1, 6, "", ("172.67.215.116", 443)),
+        ]
+        self.assertEqual(
+            validate_url("https://hass.example.org/"),
+            "https://hass.example.org",
+        )
+        with self.assertRaisesRegex(HomeAssistantPowerError, "HTTPS"):
+            validate_url("http://hass.example.org")
+
+    @patch("core.home_assistant_power.socket.getaddrinfo")
+    def test_mixed_public_private_dns_is_refused(self, dns):
+        dns.return_value = [
+            (2, 1, 6, "", ("192.168.1.5", 443)),
+            (2, 1, 6, "", ("104.21.70.99", 443)),
+        ]
+        with self.assertRaisesRegex(HomeAssistantPowerError, "mixed"):
+            validate_url("https://hass.example.org")
 
     def test_live_active_print_prevents_power_off(self):
         printer = SimpleNamespace(
