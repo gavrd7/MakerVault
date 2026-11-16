@@ -344,7 +344,8 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
     // Flushing depends on the exact verified machine, filament and process
     // presets. Never silently reuse an old printer’s directional matrix.
     setFlushSettings(null);
-    if(kind==="printer" || kind==="filament")setSlotFilamentProfiles([]);
+    // Per-slot filament presets are independent of the selected default native
+    // profile. Do not discard their session bindings on profile changes.
     manuallyChosenProfiles.current.add(kind);
     const profile = profiles.find(item => item.id === id);
     setForm(current => ({
