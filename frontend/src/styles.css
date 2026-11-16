@@ -8414,3 +8414,35 @@ a:focus-visible,
 .slicerVariableLayerPanel button {
   min-height:32px;
 }
+
+
+/* Keep the shared height-range follow-pointer toggle and its caption together
+ * in every surface painting mode, including fuzzy skin on narrow screens.
+ * Override generic form control width/flex styles without touching sliders. */
+.slicerColourPaintPanel .slicerPaintHeightFollowRow {
+  display:inline-flex;
+  align-items:center;
+  justify-content:flex-start;
+  flex-wrap:nowrap;
+  gap:8px;
+  width:100%;
+  min-width:0;
+  margin:0;
+  font-size:.75rem;
+  line-height:1.4;
+  cursor:pointer;
+}
+.slicerColourPaintPanel .slicerPaintHeightFollowRow input[type="checkbox"] {
+  display:block;
+  box-sizing:border-box;
+  flex:0 0 16px;
+  width:16px;
+  min-width:16px;
+  height:16px;
+  margin:0;
+}
+.slicerColourPaintPanel .slicerPaintHeightFollowRow span {
+  flex:1 1 auto;
+  min-width:0;
+  text-align:left;
+}
