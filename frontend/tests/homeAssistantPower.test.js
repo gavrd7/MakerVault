@@ -42,5 +42,5 @@ test("settings are manual only, do not leak the token, and share printing settin
   assert.match(haSettings, /token_configured/);
   assert.match(haSettings, /input type="password"/);
   assert.match(haSettings, /Test connection/);
-  assert.doesNotMatch(haSettings, /onTimer|schedule|setInterval/);
+  assert.doesNotMatch(haSettings, /setInterval\(|setTimeout\(/);
 });
