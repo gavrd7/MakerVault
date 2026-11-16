@@ -117,6 +117,7 @@ export default function GcodeViewerModal({ file, canEdit = false, onClose, onSav
       {!embedded && printerCheck && <p role="status"><strong>{printerCheck.status === "mismatch" ? "Printer mismatch — block printing" : printerCheck.status === "metadata_match" ? "Printer metadata matches (not safety-verified)" : "Printer compatibility unknown — do not start"}:</strong> {printerCheck.reason}</p>}
       <p><strong>Intended printer:</strong> {analysis.printer_hints?.join(", ") || "Unknown — no verified printer metadata"}</p>
       {analysis.slicer_hints?.length > 0 && <p><strong>Slicer:</strong> {analysis.slicer_hints.join(", ")}</p>}
+      <p><strong>Requested start temperatures:</strong> Nozzle {analysis.print_setup?.temperatures_c?.nozzle_c != null ? analysis.print_setup.temperatures_c.nozzle_c + " °C" : "Not declared"} · Bed {analysis.print_setup?.temperatures_c?.bed_c != null ? analysis.print_setup.temperatures_c.bed_c + " °C" : "Not declared"} <small>(G-code targets, not live readings)</small></p>
       <p><strong>Sliced nozzle:</strong> {analysis.print_setup?.nozzle_diameters_mm?.length
         ? analysis.print_setup.nozzle_diameters_mm.map(size => `${size} mm`).join(", ")
         : "Not specified"} · <strong>Build plate:</strong> {analysis.print_setup?.bed_type || "Not specified"}</p>
@@ -144,7 +145,8 @@ export default function GcodeViewerModal({ file, canEdit = false, onClose, onSav
       {(analysis.warnings || []).map((warning, i) => <div className="projectUploadHint" key={i}>{warning}</div>)}
       {mode === "visual" && embedded && analysis.slicer_preview
         ? <SlicerGcodePreview fileId={file.id} preview={analysis.slicer_preview} bedSize={bedSize}
-            file={file} canEdit={canEdit} onSaved={onSaved} />
+            file={file} canEdit={canEdit} onSaved={onSaved}
+            startTemperatures={analysis.print_setup?.temperatures_c} />
         : mode === "visual" ? <div style={{ maxWidth: 600, margin: "12px auto" }}>
         {preview ? <svg viewBox="0 0 590 590" role="img" aria-label="Top-down XY toolpath preview; non-authoritative" style={{ width: "100%", background: "#101820", borderRadius: 10 }}>
           <polyline points={preview} fill="none" stroke="#b0a2ff" strokeWidth="1" vectorEffect="non-scaling-stroke" />
