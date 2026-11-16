@@ -9,6 +9,7 @@ import HttpsCertificatePanel from "./HttpsCertificatePanel";
 import ApiKeysPanel from "./ApiKeysPanel";
 import ConnectedDevicesPanel from "./ConnectedDevicesPanel";
 import CrealityMaterialDatabaseSettings from "./CrealityMaterialDatabaseSettings";
+import HomeAssistantSettings from "./HomeAssistantSettings";
 
 const EXPERIMENTAL_PRINTER_CAPABILITIES = {
   bambu_ams: {
@@ -517,7 +518,8 @@ export default function SettingsPage({ config, onBackupStarted, onOpenPrinterCon
         <div><h3>3D printing integrations</h3><p>Enable and configure the services used by the 3D Printing area. Connected services can be synchronised manually or on their own schedule.</p></div>
       </div>
       <div className="printingIntegrationGrid settingsIntegrationGrid">
-        {integrations.map(item => {
+        <HomeAssistantSettings />
+        {integrations.filter(item => item.provider !== "homeassistant").map(item => {
           const statusTone = item.status === "connected" ? "good" : item.status === "error" || item.status === "disconnected" ? "danger" : ["planned", "experimental"].includes(item.status) ? "accent" : "neutral";
           const supported = item.can_sync;
           const experimentalCapability = EXPERIMENTAL_PRINTER_CAPABILITIES[item.provider];
