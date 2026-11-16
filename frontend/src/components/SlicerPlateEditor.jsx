@@ -1948,7 +1948,7 @@ export default function SlicerPlateEditor({
         painting=null;
         const original=latestObjectsRef.current.find(item=>item.instance_id===stroke.instanceId);
         const mesh=meshes.get(stroke.instanceId);
-        if (original && mesh) {paintPreview(mesh, original);supportPaintPreview(mesh,original.support_paint);semanticPaintPreview(mesh,original.seam_paint,"seam");semanticPaintPreview(mesh,original.fuzzy_skin_paint,"fuzzy");}
+        if (original && mesh) {paintPreview(mesh, {...original,colour_paint:latestToolModeRef.current==="paint_colour"?original.colour_paint:null});supportPaintPreview(mesh,latestToolModeRef.current==="paint_support"?original.support_paint:null);semanticPaintPreview(mesh,latestToolModeRef.current==="paint_seam"?original.seam_paint:null,"seam");semanticPaintPreview(mesh,latestToolModeRef.current==="paint_fuzzy"?original.fuzzy_skin_paint:null,"fuzzy");}
         if (renderer.domElement.hasPointerCapture?.(stroke.pointerId))
           renderer.domElement.releasePointerCapture(stroke.pointerId);
       }
@@ -2498,10 +2498,10 @@ export default function SlicerPlateEditor({
           const item = current.find(row => row.instance_id === stroke.instanceId);
           if (item) {
             if (event.type === "pointercancel") {
-              paintPreview(meshes.get(stroke.instanceId), item);
-              supportPaintPreview(meshes.get(stroke.instanceId),item.support_paint);
-              semanticPaintPreview(meshes.get(stroke.instanceId),item.seam_paint,"seam");
-              semanticPaintPreview(meshes.get(stroke.instanceId),item.fuzzy_skin_paint,"fuzzy");
+              paintPreview(meshes.get(stroke.instanceId), {...item,colour_paint:latestToolModeRef.current==="paint_colour"?item.colour_paint:null});
+              supportPaintPreview(meshes.get(stroke.instanceId),latestToolModeRef.current==="paint_support"?item.support_paint:null);
+              semanticPaintPreview(meshes.get(stroke.instanceId),latestToolModeRef.current==="paint_seam"?item.seam_paint:null,"seam");
+              semanticPaintPreview(meshes.get(stroke.instanceId),latestToolModeRef.current==="paint_fuzzy"?item.fuzzy_skin_paint:null,"fuzzy");
             } else {
               latestOnChangeRef.current(current.map(row =>
                 row.instance_id === stroke.instanceId ?
@@ -2824,7 +2824,7 @@ export default function SlicerPlateEditor({
           mesh.userData.assetId = item.asset_id;
           const latest = latestObjectsRef.current.find(row => row.instance_id === item.instance_id) || item;
           positionOrientedMesh(mesh, latest);
-          try {paintPreview(mesh, latest, PALETTE[0]);supportPaintPreview(mesh,latest.support_paint);semanticPaintPreview(mesh,latest.seam_paint,"seam");semanticPaintPreview(mesh,latest.fuzzy_skin_paint,"fuzzy");}
+          try {paintPreview(mesh, {...latest,colour_paint:latestToolModeRef.current==="paint_colour"?latest.colour_paint:null}, PALETTE[0]);supportPaintPreview(mesh,latestToolModeRef.current==="paint_support"?latest.support_paint:null);semanticPaintPreview(mesh,latestToolModeRef.current==="paint_seam"?latest.seam_paint:null,"seam");semanticPaintPreview(mesh,latestToolModeRef.current==="paint_fuzzy"?latest.fuzzy_skin_paint:null,"fuzzy");}
           catch (error) {latestPaintErrorRef.current?.(error.message || "Invalid saved colour painting.");}
           state.meshes.set(item.instance_id, mesh);
           state.scene.add(mesh);
@@ -2856,7 +2856,7 @@ export default function SlicerPlateEditor({
       if (!mesh) continue;
       positionOrientedMesh(mesh, item);
       // Position-only changes must never alter the displayed filament colour.
-      try {paintPreview(mesh, item, PALETTE[0]);supportPaintPreview(mesh,item.support_paint);semanticPaintPreview(mesh,item.seam_paint,"seam");semanticPaintPreview(mesh,item.fuzzy_skin_paint,"fuzzy");}
+      try {paintPreview(mesh, {...item,colour_paint:toolMode==="paint_colour"?item.colour_paint:null}, PALETTE[0]);supportPaintPreview(mesh,toolMode==="paint_support"?item.support_paint:null);semanticPaintPreview(mesh,toolMode==="paint_seam"?item.seam_paint:null,"seam");semanticPaintPreview(mesh,toolMode==="paint_fuzzy"?item.fuzzy_skin_paint:null,"fuzzy");}
       catch (error) {latestPaintErrorRef.current?.(error.message || "Invalid saved colour painting.");}
       mesh.material.emissive.set(["paint_colour","paint_support","paint_seam","paint_fuzzy"].includes(toolMode) ? "#000000" : conflictIds.has(item.instance_id) ? "#e84a53" :
         selection.includes(item.instance_id) ? "#168ab4" : "#000000");
