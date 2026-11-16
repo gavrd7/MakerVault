@@ -1158,6 +1158,7 @@ class SlicerProfile(TimeStampedModel):
     status = models.CharField(max_length=16, choices=STATES, default="candidate")
     is_default = models.BooleanField(default=False, db_index=True)
     provenance = models.CharField(max_length=200, blank=True)
+    source_scope = models.CharField(max_length=200, blank=True, default="", db_index=True)
     verification_evidence = models.JSONField(default=dict, blank=True)
     verified_at = models.DateTimeField(null=True, blank=True)
 
@@ -1165,7 +1166,7 @@ class SlicerProfile(TimeStampedModel):
         ordering = ["engine", "kind", "name", "-created_at"]
         constraints = [
             models.UniqueConstraint(
-                fields=["owner", "engine", "engine_version", "kind", "name"],
+                fields=["owner", "engine", "engine_version", "kind", "name", "source_scope"],
                 name="unique_slicer_profile_identity",
             ),
             models.UniqueConstraint(
