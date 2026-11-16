@@ -16,6 +16,8 @@ test("single-slot UI accepts an imported slot filament different from main prese
   assert.match(clause, /filamentProfiles\.some\(profile =>/);
   assert.match(clause, /profile\.id\) === String\(activeSlotProfiles\[0\]\.profile_id\)/);
   assert.doesNotMatch(clause, /activeSlotProfiles\.length === 0/);
+  assert.match(clause, /profile\.engine === String\(engine\)\.split/);
+  assert.match(clause, /profile\.engine_version === String\(engine\)\.split/);
   assert.doesNotMatch(clause, /selectedProfiles\?\.filament_id/);
 });
 
