@@ -85,3 +85,64 @@ def fuzzy_name_match(name, query):
     # Exact token matching avoids treating K1 as K10 or K1 Max as K1.
     return all(term in words or (len(term) >= 4 and any(
         word.startswith(term) for word in words)) for term in terms)
+
+
+def slot_filament_catalogue(entries, printer_model, product="", material="", manufacturer=""):
+    """Rank user-selected printer filament candidates BEFORE truncating results.
+
+    This is discovery only. Do not misrepresent a similarly named preset as
+    compatible for printing. Internal @base/@BBL variants and other printer
+    families must never appear as direct slot import choices.
+    """
+    expected = _model_words(printer_model)
+    model = expected[0] if expected else ""
+    variant = set(expected[1:])
+    vendor = _words(manufacturer)
+    product_words = _words(product)
+    material_words = _words(material)
+    ranked = []
+    for name, path in entries:
+        raw = str(name or "")
+        if "@" not in raw:
+            continue  # A machine-unspecified root is not a direct filament preset.
+        title, qualifier = raw.rsplit("@", 1)
+        q = _words(qualifier)
+        if not q or q == ["base"] or path.split("/")[1:2] == ["base"]:
+            continue
+        # @System is a generic candidate; printer-specific profiles must
+        # reference the selected model and not an unrelated model variant.
+        if q != ["system"]:
+            if not model or model not in q:
+                continue
+            if model == "k2" and any(word in q for word in ("plus", "pro", "max")) and not variant.intersection({"plus", "pro", "max"}):
+                continue
+            if model == "k1" and any(word in q for word in ("plus", "max", "se", "cfs")) and not variant.intersection({"plus", "max", "se", "cfs"}):
+                continue
+        title_words = _words(title)
+        if material_words and not all(x in title_words for x in material_words):
+            continue
+        # Match an actual product name where possible, not merely PLA/ABS;
+        # generic same-family results remain lower-ranked suggestions.
+        matching_product = bool(product_words) and all(
+            word in title_words for word in product_words)
+        generic = "generic" in title_words
+        if vendor and any(word not in {"generic", "system"} for word in vendor):
+            manufacturer_match = all(word in title_words for word in vendor)
+        else:
+            manufacturer_match = False
+        # Exclude other branded materials unless the brand is identified in
+        # the user's own inventory. Don't recommend Bambu to a Creality slot.
+        prefix = title_words[:1]
+        if not matching_product and not generic and not manufacturer_match:
+            continue
+        rank = (
+            0 if matching_product and manufacturer_match and q != ["system"] else
+            1 if matching_product and manufacturer_match else
+            2 if matching_product and q != ["system"] else
+            3 if matching_product else
+            4 if generic and q != ["system"] else
+            5
+        )
+        ranked.append((rank, raw.casefold(), name, path))
+    ranked.sort()
+    return [(name, path) for _, _, name, path in ranked]
