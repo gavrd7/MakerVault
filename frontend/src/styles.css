@@ -8455,3 +8455,14 @@ a:focus-visible,
   min-width:0;
   text-align:left;
 }
+
+/* Variable layer height: compact without obscuring 3D preview controls. */
+.slicerVariableLayerPanel .slicerVariableLayerRange{display:grid;gap:6px;min-width:0}
+.slicerVariableLayerRange span{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.slicerVariableLayerRange input[type="range"]{width:100%;min-width:0}
+.slicerVariableLayerPanel .slicerVariableLayerPointerControls{display:grid;gap:5px}
+.slicerVariableLayerPanel .slicerVariableLayerBandGrid{grid-template-columns:repeat(2,minmax(0,1fr));gap:6px}
+.slicerVariableLayerPanel .slicerVariableLayerBandGrid label:last-child{grid-column:1/-1}
+@media(max-width:480px){
+  .slicerVariableLayerPanel .slicerVariableLayerBandGrid{grid-template-columns:repeat(2,minmax(0,1fr))}
+}
