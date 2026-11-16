@@ -115,6 +115,18 @@ def validate_worker_3mf(data, *, native_tool_count=None):
         if not vertices or not triangles:
             raise WorkerError("3MF build contains empty objects.")
         count += len(triangles)
+        for triangle in triangles:
+            attributes = set(triangle.attrib)
+            if not {"v1", "v2", "v3"} <= attributes or (
+                    attributes - {"v1", "v2", "v3", "paint_supports"}):
+                raise WorkerError("Unsupported native 3MF triangle attributes.")
+            if "paint_supports" in attributes:
+                # A plain leaf value only; arbitrary recursive paint bitstreams
+                # and unrelated slicer annotations cannot pass this boundary.
+                if (triangle.attrib["paint_supports"] not in ("4", "8")
+                        or len(objects) != 1 or native_tool_count is not None
+                        or layer_ranges is not None):
+                    raise WorkerError("Unsupported native support paint annotation.")
         if count > MAX_TRIANGLES:
             raise WorkerError("3MF triangle count exceeds worker limit.")
         if len(vertices) > MAX_VERTICES_PER_OBJECT:
