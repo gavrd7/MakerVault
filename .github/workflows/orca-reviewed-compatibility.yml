@@ -61,18 +61,39 @@ jobs:
         with:
           path: upstream-orca/deps/build/OrcaSlicer_dep
           key: orca-v2.5.0-40ecc66f-ubuntu2404-gcc-deps-v2
+      # Keep the source-built executable after compilation, not only after
+      # acceptance tests. This saves another >1h rebuild if a later gate fails.
+      # The key is specific to the pinned Orca source and reviewed patch v1.
+      - name: Restore reviewed Orca AppImage candidate
+        id: appimage-cache
+        uses: actions/cache/restore@v4
+        with:
+          path: upstream-orca/build/OrcaSlicer_Linux_V*.AppImage
+          key: orca-v2.5.0-40ecc66f-ubuntu2404-reviewed-appimage-v1
       - name: Compile isolated Orca AppImage from patched source
+        if: steps.appimage-cache.outputs.cache-hit != 'true'
         run: |
           cd upstream-orca
           # Dependency build is omitted intentionally: the exact-version
           # installed dependencies were either restored or compiled above.
           ./build_linux.sh -g -r -j 2 -si
+          # Upstream names the finished file OrcaSlicer_Linux_V*.AppImage.
+          # appimagetool.AppImage is only the packaging utility, not Orca.
+          find build -maxdepth 1 -type f -name 'OrcaSlicer_Linux_V*.AppImage' -size +100M -print -quit | grep -q .
+      - name: Preserve built Orca AppImage before acceptance tests
+        if: steps.appimage-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: upstream-orca/build/OrcaSlicer_Linux_V*.AppImage
+          key: orca-v2.5.0-40ecc66f-ubuntu2404-reviewed-appimage-v1
       - name: Find and checksum source-built AppImage
         id: built
         shell: bash
         run: |
           set -euo pipefail
-          mapfile -t assets < <(find upstream-orca/build -type f -name '*.AppImage' -size +10M)
+          # Do not include build/appimagetool.AppImage (a ~15 MB helper).
+          mapfile -t assets < <(find upstream-orca/build -maxdepth 1 -type f -name 'OrcaSlicer_Linux_V*.AppImage' -size +100M)
+          printf 'OrcaSlicer candidates: %s\n' "${assets[@]}"
           test "${#assets[@]}" -eq 1
           asset="${assets[0]}"
           sha=$(sha256sum "$asset" | cut -d ' ' -f 1)
