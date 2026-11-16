@@ -5,7 +5,7 @@ import {addVariableLayerBand} from "./slicerVariableLayers.js";
 import SlicerUiIcon from "./SlicerUiIcon";
 import SlicerFlushVolumes from "./SlicerFlushVolumes";
 import { apiFetch } from "../api";
-import { matchLoadedSlotProfiles, slotProfileSearchTerm } from "./slicerSlotProfileMatching.js";
+import { matchLoadedSlotProfiles, slotProfileSearchTerm, resolveSlotLibrarySpool } from "./slicerSlotProfileMatching.js";
 
 /**
  * Interactive Prepare shell. All slicing still goes through the existing
@@ -66,7 +66,7 @@ export default function SlicerPrepareWorkspace({
   selectedProfiles, workerConfigured, printerId,
   processOverrides = {}, onProcessOverridesChange, onSaveCustomProcessProfile,
   flushSettings = null, onFlushSettingsChange,
-  slotFilamentProfiles = [], onSlotFilamentProfilesChange, filamentProfiles = [], onFilamentProfilesReload,
+  slotFilamentProfiles = [], onSlotFilamentProfilesChange, filamentProfiles = [], onFilamentProfilesReload, spools = [],
   processProfiles = [], onSelectProcessProfile, onResetProcessSettings,
   printerDetails, nozzleMm, selectedPlateType = "Native / profile default",
   localAssets = [], onLocalAssetsChange, onPlateIssuesChange, plateIssues = null,
@@ -336,7 +336,7 @@ export default function SlicerPrepareWorkspace({
   currentPrinterIdRef.current = String(printerId || "");
   const lookupEngine = String(engine).split(" ")[0];
   const lookupVersion = String(engine).split(" ").slice(1).join(" ");
-  const slotMatch = slot => matchLoadedSlotProfiles(slot, filamentProfiles, {
+  const slotMatch = slot => matchLoadedSlotProfiles(resolveSlotLibrarySpool(slot,spools).slot, filamentProfiles, {
     engine: lookupEngine, version: lookupVersion, printer: printerDetails,
   });
   const findOfficialSlotProfiles = async slot => {
@@ -349,9 +349,11 @@ export default function SlicerPrepareWorkspace({
       if (lookupEngine !== "orcaslicer") {
         throw new Error("Direct slot profile search currently supports the pinned OrcaSlicer catalogue only.");
       }
-      const query = slotProfileSearchTerm(slot);
+      const linked = resolveSlotLibrarySpool(slot,spools);
+      const matchingSlot = linked.slot;
+      const query = slotProfileSearchTerm(matchingSlot);
       if (!query || query.length < 2) throw new Error("This slot has no recognisable filament material.");
-      const printerBrand = String([slot.manufacturer, slot.brand, printerDetails?.manufacturer,
+      const printerBrand = String([matchingSlot.manufacturer, matchingSlot.brand, printerDetails?.manufacturer,
         printerDetails?.brand].filter(Boolean).join(" "));
       const manufacturerCatalogue = /creality/i.test(printerBrand) ? "Creality"
         : /bambu/i.test(printerBrand) ? "BBL"
@@ -360,7 +362,9 @@ export default function SlicerPrepareWorkspace({
       const searches = await Promise.allSettled(vendors.map(async vendor => {
         const params = new URLSearchParams({
           engine: lookupEngine, version: lookupVersion, vendor,
-          kind: "filament", q: query,
+          kind: "filament", q: query, printer_id: String(printerId),
+          slot_discovery: "1", material: matchingSlot.material || "",
+          manufacturer: matchingSlot.manufacturer || matchingSlot.brand || "",
         });
         const result = await apiFetch("/api/printing/slicer/official-profiles/?" + params.toString());
         return (result.profiles || []).map(profile => ({...profile, vendor}));
@@ -374,7 +378,7 @@ export default function SlicerPrepareWorkspace({
       const distinct = new Map(candidates.map(profile =>
         [profile.vendor + ":" + profile.sub_path, profile]));
       if (currentPrinterIdRef.current !== targetPrinterId) return;
-      setSlotOfficialResults(current => ({...current, [id]: [...distinct.values()].slice(0, 20)}));
+      setSlotOfficialResults(current => ({...current, [id]: [...distinct.values()].slice(0, 12)}));
     } catch (err) {
       setSlotOfficialError(err.message || "Cannot search the official profile catalogue.");
     } finally {
@@ -450,7 +454,7 @@ export default function SlicerPrepareWorkspace({
     if (!canEdit || !liveMaterials.length || !filamentProfiles.length) return;
     const existing = new Set(slotFilamentProfiles.map(row => String(row.slot_id)));
     const inferred = liveMaterials.filter(slot => !existing.has(String(slot.id)) && !suppressedSlotMatches.includes(String(slot.id)))
-      .map(slot => ({slot, match: matchLoadedSlotProfiles(slot, filamentProfiles, {
+      .map(slot => ({slot, match: matchLoadedSlotProfiles(resolveSlotLibrarySpool(slot,spools).slot, filamentProfiles, {
         engine: String(engine).split(" ")[0],
         version: String(engine).split(" ").slice(1).join(" "),
         printer: printerDetails,
@@ -458,7 +462,7 @@ export default function SlicerPrepareWorkspace({
       .filter(({match}) => match.level === "exact")
       .map(({slot, match}) => ({slot_id: String(slot.id), profile_id: String(match.profile.id)}));
     if (inferred.length) onSlotFilamentProfilesChange?.([...slotFilamentProfiles, ...inferred]);
-  }, [canEdit, liveMaterials, filamentProfiles, slotFilamentProfiles, engine, printerDetails, onSlotFilamentProfilesChange, suppressedSlotMatches]);
+  }, [canEdit, liveMaterials, filamentProfiles, slotFilamentProfiles, engine, printerDetails, onSlotFilamentProfilesChange, suppressedSlotMatches, spools]);
   useEffect(() => {
     refreshPrinterMaterials();
     return () => { requestRef.current += 1; };
@@ -1482,6 +1486,7 @@ export default function SlicerPrepareWorkspace({
                 <strong title={slot.product_name || slot.material || "Unknown filament"}>
                   {slot.product_name || slot.material || "Unknown filament"}</strong>
                 <small>Slot {(slot.slot_index??0)+1} · {slot.material||"Unknown"}</small>
+                {resolveSlotLibrarySpool(slot,spools).spool && <small>Matched MakerVault spool · {resolveSlotLibrarySpool(slot,spools).spool.spool_id}</small>}
                 <small>{profile ? "Profile: " + profile.name
                   : suggestion.level === "exact" ? "Matching installed profile found"
                   : suggestion.level === "ambiguous" ? "Multiple matching profiles — choose one"
