@@ -1,5 +1,6 @@
 import React, {useEffect, useState} from "react";
 import {apiFetch} from "../api";
+import "./homeAssistantPower.css";
 
 /** Deliberately separate from printer-status sync integrations: no scheduler. */
 export default function HomeAssistantSettings() {
