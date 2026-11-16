@@ -698,14 +698,18 @@ export default function SlicerPrepareWorkspace({
   // The server inherits the explicitly assigned native filament for a
   // single-slot slice; it need not match the main profile shown in Setup.
   // An unrelated or missing native slot profile is still unsafe.
-  const singleSlotProfileMatches = slotFilamentProfiles.length === 0
-    || (slotFilamentProfiles.length === 1
-      && slotFilamentProfiles[0].slot_id === assignedSlots[0]?.slot_id
+  // Other loaded slots may have saved native presets without participating
+  // in this particular slice. Only the assigned slot selects the one native
+  // logical filament. Multiple model-assigned slots remain blocked.
+  const activeSlotProfiles = slotFilamentProfiles.filter(row =>
+    row.slot_id === assignedSlots[0]?.slot_id);
+  const singleSlotProfileMatches = activeSlotProfiles.length === 0
+    || (activeSlotProfiles.length === 1
       && filamentProfiles.some(profile =>
-        String(profile.id) === String(slotFilamentProfiles[0].profile_id)));
+        String(profile.id) === String(activeSlotProfiles[0].profile_id)));
   const materialRoutingPending = assignedSlots.length > 0
     ? !(hasSingleSlot && singleSlotProfileMatches)
-    : slotFilamentProfiles.length > 0;
+    : false;
   const projectRoutingPending = plates.some(plate =>
     (plate.objects || []).some(item => item.material_slot != null)
   ) || slotFilamentProfiles.length > 0;
