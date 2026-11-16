@@ -1059,6 +1059,7 @@ def _profile_summary(profile):
         "file_asset_id": str(profile.file_asset_id),
         "content_sha256": profile.content_sha256,
         "provenance": profile.provenance,
+        "source_scope": profile.source_scope,
     }
 
 
@@ -1226,11 +1227,17 @@ def official_profiles(request):
                  official_profile_chain(engine, kind, name, subpath, vendor, version=version)
                  if engine == "orcaslicer" and version != OFFICIAL_ORCA_VERSION else
                  official_profile_chain(engine, kind, name, subpath, vendor))
+        # Official source identity is pinned to an engine repository/tag and
+        # catalogue vendor, not merely to a potentially reused preset name.
+        source_scope = f"{source}@{ref}/{vendor}"
+        if len(source_scope) > 200:
+            raise ValueError("Official source scope is too long.")
         prepared = []
         for native_name, native_subpath, raw in chain:
             existing = SlicerProfile.objects.filter(
                 owner=request.user, engine=engine,
                 engine_version=version, kind=kind, name=native_name,
+                source_scope=source_scope,
             ).first()
             if existing:
                 # Different manufacturer catalogues can reuse a native parent
@@ -1263,12 +1270,14 @@ def official_profiles(request):
                 SlicerProfile.objects.create(
                     owner=request.user, file_asset=asset, engine=engine,
                     engine_version=version, kind=kind, name=native_name,
-                    provenance=provenance, content_sha256=digest, status="candidate",
+                    provenance=provenance, source_scope=source_scope,
+                    content_sha256=digest, status="candidate",
                 )
                 created_names.append(native_name)
             profile = SlicerProfile.objects.get(
                 owner=request.user, engine=engine,
                 engine_version=version, kind=kind, name=name,
+                source_scope=source_scope,
             )
             # Reusing an existing, byte-identical native preset is idempotent.
             # The UI still needs its ID to attach it to the selected CFS/AMS slot.
@@ -1291,7 +1300,7 @@ def _native_parent_ids(rows):
     are left visible for manual inspection, never treated as a valid parent.
     """
     by_identity = {(row.owner_id, row.engine, row.engine_version,
-                    row.kind, row.name): row.pk for row in rows}
+                    row.kind, row.name, row.source_scope): row.pk for row in rows}
     parent_ids = set()
     for row in rows:
         if row.engine not in {"orcaslicer", "crealityprint"}:
@@ -1309,7 +1318,7 @@ def _native_parent_ids(rows):
             parent = source.get("inherits")
             if isinstance(parent, str):
                 identity = (row.owner_id, row.engine, row.engine_version,
-                            row.kind, parent)
+                            row.kind, parent, row.source_scope)
                 found = by_identity.get(identity)
                 if found:
                     parent_ids.add(found)
@@ -1602,7 +1611,7 @@ def _profile_children(profile):
             raise SlicerProfileError(
                 "Cannot safely inspect all same-engine native profile dependencies."
             ) from None
-        if data.get("inherits") == profile.name:
+        if data.get("inherits") == profile.name and child.source_scope == profile.source_scope:
             children.append(child.name)
     return children
 
