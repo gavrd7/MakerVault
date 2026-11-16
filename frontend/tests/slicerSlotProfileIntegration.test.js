@@ -21,7 +21,7 @@ test("slot discovery filters before importing by authenticated printer and linke
   assert.match(scene,/resolveSlotLibrarySpool\(slot,spools\)/);
   assert.match(scene,/manufacturer: matchingSlot\.manufacturer/);
   assert.match(scene,/Official native filament candidates/);
-  assert.match(scene,/Import selected profile/);
+  assert.match(scene,/Import & assign/);
 });
 test("official catalogue search and import require an explicit slot selection",()=>{
   assert.match(scene,/findOfficialSlotProfiles = async slot/);
