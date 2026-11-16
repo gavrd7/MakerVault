@@ -24,7 +24,7 @@ const COLOUR_MODES = [
   { value: "acceleration", label: "Acceleration", supported: false },
 ];
 
-export default function SlicerGcodePreview({ fileId = null, preview, bedSize = null, file = null, canEdit = false, onSaved = null }) {
+export default function SlicerGcodePreview({ fileId = null, preview, bedSize = null, file = null, canEdit = false, onSaved = null, startTemperatures = null }) {
   const [layer, setLayer] = useState(null);
   const [step, setStep] = useState(null);
   const [colourMode, setColourMode] = useState("feature");
@@ -114,6 +114,8 @@ export default function SlicerGcodePreview({ fileId = null, preview, bedSize = n
       <div><small>Filament weight</small><strong>{metric(preview?.filament_g, "g")}</strong></div>
       <div><small>Filament volume</small><strong>{metric(preview?.filament_cm3, "cm³")}</strong></div>
       <div><small>Extrusion layers</small><strong>{preview?.layer_count ?? "Partial"}</strong></div>
+      <div><small>Requested nozzle · G-code</small><strong>{startTemperatures?.nozzle_c != null ? startTemperatures.nozzle_c + " °C" : "Not declared"}</strong></div>
+      <div><small>Requested bed · G-code</small><strong>{startTemperatures?.bed_c != null ? startTemperatures.bed_c + " °C" : "Not declared"}</strong></div>
     </div>
     {layers.length > 0 ? <>
       <div className="slicerResultModeRow">
