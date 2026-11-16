@@ -97,6 +97,31 @@ class Core3MFWorkerTests(TestCase):
         with self.assertRaises(WorkerError):
             validate_worker_3mf(self.with_variable_layer_range(valid), native_tool_count=2)
 
+    def test_native_support_facets_are_strictly_bounded(self):
+        original = self.package()
+        with zipfile.ZipFile(io.BytesIO(original)) as archive:
+            files = {name: archive.read(name) for name in archive.namelist()}
+        def with_state(value):
+            entries = dict(files)
+            entries["3D/3dmodel.model"] = entries["3D/3dmodel.model"].replace(
+                b'<triangle v1="0" v2="1" v3="2"/>',
+                b'<triangle v1="0" v2="1" v3="2" paint_supports="' +
+                value.encode() + b'"/>',
+            )
+            out = io.BytesIO()
+            with zipfile.ZipFile(out, "w", compression=zipfile.ZIP_DEFLATED) as archive:
+                for name, raw in entries.items():
+                    archive.writestr(name, raw)
+            return out.getvalue()
+        for state in ("4", "8"):
+            with self.subTest(state=state):
+                self.assertTrue(validate_worker_3mf(with_state(state)))
+        for unsafe in ("0", "C", "1234", "40", "4;M104 S300"):
+            with self.subTest(state=unsafe), self.assertRaises(WorkerError):
+                validate_worker_3mf(with_state(unsafe))
+        with self.assertRaises(WorkerError):
+            validate_worker_3mf(with_state("4"), native_tool_count=2)
+
     def test_safe_per_object_metadata_passes_worker_validation(self):
         self.assertTrue(validate_worker_3mf(self.with_object_metadata([
             ("wall_loops", "5"), ("sparse_infill_density", "37%"),
