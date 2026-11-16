@@ -1154,22 +1154,20 @@ export default function SlicerPrepareWorkspace({
         <strong>Variable layer height</strong>
         <button type="button" onClick={()=>{setToolMode("select");setPaintError("");}}>Done</button>
       </div>
-      <small>Only selected height bands override the process preset.</small>
-      <label style={{display:"grid",gap:4}}>
-         Band thickness · {(Math.max(0.5,Number(variableBandDraft.to_mm)-Number(variableBandDraft.from_mm))).toFixed(1)} mm
-         <input type="range" min="0.5" max="50" step="0.5"
-           aria-label="Variable layer height Z band thickness"
-           value={Math.max(0.5,Math.min(50,Number(variableBandDraft.to_mm)-Number(variableBandDraft.from_mm)))}
-           onChange={e=>setVariableBandDraft(current=>({
-             ...current,to_mm:Math.min(1000,Math.round((current.from_mm+Number(e.target.value))*2)/2)
-           }))}/>
-         <small>Choose thickness, then click or tap the model to position the band.</small>
-       </label>
+      <label className="slicerVariableLayerRange">
+        <span>Band thickness <strong>{(Math.max(.5,Number(variableBandDraft.to_mm)-Number(variableBandDraft.from_mm))).toFixed(1)} mm</strong></span>
+        <input type="range" min="0.5" max="50" step="0.5"
+          aria-label="Variable layer height Z band thickness"
+          value={Math.max(.5,Math.min(50,Number(variableBandDraft.to_mm)-Number(variableBandDraft.from_mm)))}
+          onChange={e=>setVariableBandDraft(current=>({
+            ...current,to_mm:Math.min(1000,Math.round((current.from_mm+Number(e.target.value))*2)/2)
+          }))}/>
+      </label>
        <div className="slicerVariableLayerPointerControls">
         <label className="checkRow" style={{display:"flex",gap:7,alignItems:"center"}}>
           <input type="checkbox" checked={variableBandFollow}
             onChange={event=>setVariableBandFollow(event.target.checked)} />
-          Position range on model
+          Pick Z on model
         </label>
         <label>Pointer adjusts
           <select aria-label="Variable layer height pointer target"
