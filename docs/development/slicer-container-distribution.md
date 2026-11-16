@@ -79,3 +79,68 @@ binary digest, base OS, and worker image digest traceable.
 - Keep the current staging installer as a development-only fallback.
 - Resolve native fuzzy skin painting, seam/support painting, variable-layer
   export, and full multi-material execution gates before advertising parity.
+
+## Verified 2.5.1 maintenance release investigation (16 November 2026)
+
+Upstream OrcaSlicer v2.5.1 was published 2026-11-14, tag
+`eef7710cb102fdb51a9bcdbd9efd61047f44774a`.
+We inspected the upstream tag's `src/libslic3r/PrintConfig.cpp` and
+confirmed the `retraction_distances_when_cut` definition STILL has
+`def->max = 18`. Its official Creality K2 profile requires 30 mm.
+This is not fixed in that hotfix; do not silently replace our validated
+patched 2.5.0 with unpatched upstream 2.5.1.
+
+## Initial GHCR publication workflow
+
+`.github/workflows/publish-orca-worker.yml` is an explicit,
+operator-approved release packaging path. It downloads ONLY the exact CI
+artifact from workflow run `43789319270` and requires executable SHA-256
+`b30b0ae933e653692cf85a493287a949215ae4c14d547a00203d16dfcadb8054`.
+It stages the engine with its manifest, builds a container, verifies the
+contained executable hash, then pushes a Linux AMD64-only GHCR image.
+The workflow never automatically starts or upgrades a worker.
+
+**Release blocker:** GitHub requires a `workflow_dispatch` workflow to be
+present on the repository's default branch for manual dispatch. Review and
+merge this *release workflow only* into main when ready, without merging
+unfinished slicer application changes. The workflow checks out the named
+slicer branch to build but the verified AppImage checksum remains fixed.
+The source artifact is retained for seven days; run the release build
+before its expiry (2026-11-23), or first publish the reviewed binary in
+an independently approved durable release with the same checksum.
+
+**Operator configuration after successful GHCR publication:**
+
+- Copy the image's **registry manifest digest** from the workflow summary.
+- Define `MAKERVAULT_SLICER_WORKER_IMAGE` as
+  `ghcr.io/gavrd7/makervault-slicer-orca@sha256:<approved-digest>`.
+- Define `MAKERVAULT_SLICER_ENGINE_IMAGE_DIGEST` as exactly
+  `sha256:<approved-digest>`.
+- Define `MAKERVAULT_SLICER_ENGINES_JSON` as
+  `{"orcaslicer":{"version":"2.5.0","binary_sha256":"b30b0ae933e653692cf85a493287a949215ae4c14d547a00203d16dfcadb8054"}}`.
+- Define `SLICER_ENGINES_JSON` as
+  `{"orcaslicer":{"binary":"/opt/engines/orcaslicer.AppImage","version":"2.5.0","binary_sha256":"b30b0ae933e653692cf85a493287a949215ae4c14d547a00203d16dfcadb8054"}}`.
+- Generate a unique cryptographically secure 32+-byte
+  `MAKERVAULT_SLICER_WORKER_TOKEN` and keep it in the host's restricted
+  environment, never in source control.
+- Set `MAKERVAULT_SLICER_EXECUTION_ENABLED=1` only after image approval,
+  matching engine hashes and a healthy worker.
+- Enable by selecting the optional overlay and `slicer` profile:
+  `sudo docker compose -f compose.yaml -f compose.slicer.yaml --profile slicer up -d`.
+  Avoid combining with the staging overlay; do not enable this experimental
+  release on a live production installation before clean-host validation.
+
+## Future in-app engine updates
+
+The UI should read a versioned, signed or trusted release index served by
+MakerVault, not an arbitrary `latest` tag. It must show current engine,
+available approved version, architecture support, release notes, binary and
+image digests, validation coverage and the previous rollback target.
+
+The administrator must explicitly approve **Download / Validate / Activate**.
+A separate host-side updater (not the web app and never a mounted Docker
+socket) performs GHCR pulls, digest verification, health checks and rollback.
+The app reports the outcome and blocks activation while jobs are running.
+An automated check for *available* releases can be enabled; automatic
+activation should remain opt-in and disabled by default until the full
+updater mechanism and safety gates are implemented.
