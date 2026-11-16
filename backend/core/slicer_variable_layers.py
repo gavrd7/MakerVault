@@ -1,5 +1,6 @@
-"""Safe draft storage for variable-layer height bands (not native G-code).
-Native Orca layer_height_profile data is different and needs a verified adapter.
+"""Validate universal layer height bands and translate exact Orca Z ranges.
+
+3MF range translation is engine-native input, not physical printer approval.
 """
 import math
 
@@ -29,3 +30,46 @@ def validate_variable_layer_profile(value):
     if any(b["from_mm"] < a["to_mm"] for a,b in zip(result,result[1:])):
         raise ValueError("Variable layer ranges overlap.")
     return {"version":1,"bands":result}
+
+
+def orca_layer_config_ranges(objects_with_stl):
+    """Encode exact per-object bands in Orca 2.5's native 3MF range XML.
+
+    Unlike its smoothed variable layer-height *profile*, layer_config_ranges
+    maps each interval directly to the native `layer_height` process setting.
+    The IDs follow 3MF resource order, including objects without a band.
+    Native part transformations are intentionally restricted here until a
+    rotated/scaled per-object real-binary fixture has been verified.
+    """
+    from xml.etree import ElementTree as ET
+
+    root = ET.Element("objects")
+    count = 0
+    for index, (item, _raw) in enumerate(objects_with_stl, start=1):
+        value = item.get("variable_layer_profile")
+        if not isinstance(value, dict) or not value.get("bands"):
+            continue
+        profile = validate_variable_layer_profile(value)
+        if any(abs(float(deg)) > 0.000001 for deg in
+               item.get("rotation_xyz_deg", [0, 0])) or (
+               abs(float(item.get("z_mm", 0))) > 0.000001):
+            raise ValueError(
+                "Variable layer ranges on tilted or elevated objects need native "
+                "geometry alignment verification before slicing.")
+        scales = item.get("scale_xyz_percent", [item.get("scale_percent", 100)] * 3)
+        if any(abs(float(scale) - 100) > 0.000001 for scale in scales):
+            raise ValueError(
+                "Variable layer ranges on scaled objects need native Z alignment "
+                "verification before slicing.")
+        node = ET.SubElement(root, "object", {"id": str(index)})
+        for band in profile["bands"]:
+            range_node = ET.SubElement(node, "range", {
+                "min_z": format(band["from_mm"], ".3f"),
+                "max_z": format(band["to_mm"], ".3f"),
+            })
+            option = ET.SubElement(range_node, "option", {"opt_key": "layer_height"})
+            option.text = format(band["layer_mm"], ".3f")
+            count += 1
+    if not count:
+        return None
+    return ET.tostring(root, encoding="utf-8", xml_declaration=True)
