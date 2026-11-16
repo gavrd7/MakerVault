@@ -136,6 +136,47 @@ class SingleMaterialSliceAnnotationTests(SimpleTestCase):
         self.assertEqual(result["logical_tool"], 0)
         self.assertEqual(result["slot_id"], "cfs-bay-4")
 
+    def test_one_assigned_material_is_independent_of_feeder_bay_index(self):
+        for topology in ("single_nozzle_changer", "independent_toolheads",
+                         "toolchanger", "idex", "manual_filament_change"):
+            with self.subTest(topology=topology):
+                # Single-filament slicing always uses the sole native palette
+                # entry (logical tool zero), never a physical bay/toolhead ID.
+                for physical_slot_index in (0, 1, 3, 15):
+                    objects = [
+                        {"instance_id": item["instance_id"],
+                         "material_slot": {**self.slot, "slot_index": physical_slot_index}}
+                        for item in self.models
+                    ]
+                    result = single_material_slice_assignment(
+                        objects, **self.options,
+                        slot_filament_profiles=[
+                            {"slot_id": "unassigned-bay", "profile_id": "other"},
+                            {"slot_id": "cfs-bay-4", "profile_id": "native-pla"},
+                        ])
+                    self.assertEqual(result["logical_tool"], 0)
+                    self.assertEqual(result["slot_index"], physical_slot_index)
+
+    def test_explicit_profile_must_match_selected_engine_resolved_preset(self):
+        for material in ("PLA", "ABS", "PETG", "TPU", "PA", "ASA"):
+            with self.subTest(material=material):
+                main = "main-" + material
+                slot = "slot-" + material
+                with self.assertRaisesRegex(MaterialRoutingError, "must match"):
+                    single_material_slice_assignment(
+                        self.models, printer_id="printer-1",
+                        selected_filament_profile_id=main,
+                        slot_filament_profiles=[
+                            {"slot_id": "cfs-bay-4", "profile_id": slot},
+                        ])
+                self.assertEqual(
+                    single_material_slice_assignment(
+                        self.models, printer_id="printer-1",
+                        selected_filament_profile_id=slot,
+                        slot_filament_profiles=[
+                            {"slot_id": "cfs-bay-4", "profile_id": slot},
+                        ])["logical_tool"], 0)
+
     def test_duplicate_loaded_slot_presets_still_fail_closed(self):
         with self.assertRaisesRegex(MaterialRoutingError, "duplicate"):
             single_material_slice_assignment(
