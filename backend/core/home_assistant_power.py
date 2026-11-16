@@ -52,31 +52,65 @@ def decrypt_token(config):
 
 
 def validate_url(value):
-    if not isinstance(value, str) or len(value) > 300:
-        raise HomeAssistantPowerError("Enter a local Home Assistant URL.")
+    """Accept private LAN endpoints or public HTTPS hostnames for HA.
+
+    Public IP literals, public plaintext HTTP, metadata/link-local targets,
+    credentials, redirects and arbitrary URL paths are deliberately refused.
+    External HTTPS domains are supported for trusted reverse-proxy installs.
+    """
+    if not isinstance(value, str) or not value.strip() or len(value) > 300:
+        raise HomeAssistantPowerError("Enter a Home Assistant server URL.")
+    normalized = value.strip()
     try:
-        parsed = urlsplit(value.strip())
-        host = parsed.hostname
-        port = parsed.port
+        parsed = urlsplit(normalized)
+        host, port = parsed.hostname, parsed.port
     except ValueError as exc:
-        raise HomeAssistantPowerError("Invalid Home Assistant URL.") from exc
-    if (parsed.scheme not in {"http", "https"} or not host or parsed.username
-            or parsed.password or parsed.query or parsed.fragment
-            or parsed.path not in {"", "/"} or not port and ":" in parsed.netloc and parsed.netloc.endswith(":")):
-        raise HomeAssistantPowerError("Use a Home Assistant HTTP(S) URL without credentials or paths.")
-    # HA is expected to be on an explicitly trusted private network. Prevent
-    # arbitrary requests to Internet services / cloud metadata endpoints.
+        raise HomeAssistantPowerError("Invalid Home Assistant URL or port.") from exc
+    if parsed.scheme not in {"http", "https"}:
+        raise HomeAssistantPowerError("Use an http:// or https:// Home Assistant URL.")
+    if not host:
+        raise HomeAssistantPowerError("Enter a Home Assistant server hostname or IP address.")
+    if parsed.username or parsed.password:
+        raise HomeAssistantPowerError("Put the access token in the token field, not the URL.")
+    if parsed.query or parsed.fragment or parsed.path not in {"", "/"}:
+        raise HomeAssistantPowerError("Use only the server address, without /api paths or query parameters.")
+    if parsed.netloc.endswith(":"):
+        raise HomeAssistantPowerError("Remove the empty port from the Home Assistant URL.")
+    # DNS names are allowed, including private reverse-proxy and public HTTPS
+    # virtual hosts. Never accept a public IP literal as the destination.
+    try:
+        literal = ipaddress.ip_address(host)
+    except ValueError:
+        literal = None
+    if literal is not None:
+        if not (literal.is_private or literal.is_loopback):
+            raise HomeAssistantPowerError("Use a private network IP, or a trusted HTTPS domain.")
+    elif "." not in host and host != "localhost":
+        # A single-label LAN hostname is still valid (Docker DNS, for example).
+        if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9-]{0,252}", host):
+            raise HomeAssistantPowerError("Invalid Home Assistant hostname.")
     try:
         addresses = socket.getaddrinfo(host, port or (443 if parsed.scheme == "https" else 80),
                                        type=socket.SOCK_STREAM)
         ips = {ipaddress.ip_address(row[4][0]) for row in addresses}
     except (OSError, ValueError) as exc:
-        raise HomeAssistantPowerError("Home Assistant host cannot be resolved.") from exc
-    if not ips or any(not (ip.is_private or ip.is_loopback) or ip.is_link_local
-                      or ip.is_multicast or ip.is_reserved and not ip.is_private
-                      for ip in ips):
-        raise HomeAssistantPowerError("Home Assistant must resolve to a private LAN address.")
-    return value.strip().rstrip("/")
+        raise HomeAssistantPowerError(
+            "Home Assistant hostname cannot be resolved by the MakerVault server."
+        ) from exc
+    if not ips:
+        raise HomeAssistantPowerError("Home Assistant hostname has no usable address.")
+    private = all((ip.is_private or ip.is_loopback) and not ip.is_link_local
+                  and not ip.is_multicast and not ip.is_unspecified for ip in ips)
+    public = all(ip.is_global for ip in ips)
+    if not private and not public:
+        raise HomeAssistantPowerError(
+            "Home Assistant DNS contains mixed or restricted network addresses."
+        )
+    if public and (parsed.scheme != "https" or literal is not None):
+        raise HomeAssistantPowerError(
+            "External Home Assistant addresses must use a trusted HTTPS hostname."
+        )
+    return normalized.rstrip("/")
 
 
 def ha_request(setting, method, endpoint, *, body=None):
