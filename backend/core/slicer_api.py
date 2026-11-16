@@ -1166,10 +1166,17 @@ def official_profiles(request):
                 request.GET.get("kind", "printer"),
                 request.GET.get("vendor", "Creality"),
             )
+            slot_discovery = request.GET.get("slot_discovery") == "1"
+            if slot_discovery and (selected != "orcaslicer" or not printer_id):
+                return _error("Slot profile discovery requires OrcaSlicer and a selected printer.")
+            material_query = request.GET.get("material", "")[:32]
+            manufacturer_query = request.GET.get("manufacturer", "")[:80]
             results = (search_official_profiles(*args, printer_model=printer_model, version=version,
-                           brand=request.GET.get("brand", ""))
+                           brand=request.GET.get("brand", ""),
+                           slot_discovery=slot_discovery, material=material_query,
+                           manufacturer=manufacturer_query)
                        if selected == "orcaslicer" and
-                          (version != OFFICIAL_ORCA_VERSION or request.GET.get("brand")) else
+                          (slot_discovery or version != OFFICIAL_ORCA_VERSION or request.GET.get("brand")) else
                        searcher(*args, printer_model=printer_model) if printer_model else searcher(*args))
             results["printer_model_filter"] = printer_model
         except OfficialProfileError as exc:
