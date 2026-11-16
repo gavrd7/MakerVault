@@ -1372,7 +1372,7 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
         </div>
         <p className="full slicerEngineStatus" role="status">
           {engines.find(engine => engine.key === form.engine)?.available
-            ? "The selected engine has passed worker identity checks. Compatible native profiles are still required for slicing."
+            ? "Engine installed and ready. Select matching native printer, filament and process profiles."
             : !workerDeploymentEnabled
               ? "Slicing execution is disabled in this deployment. The isolated slicer-worker Compose overlay must be included and execution enabled before slicing; native profiles alone do not enable an engine."
               : !workerConfigured
