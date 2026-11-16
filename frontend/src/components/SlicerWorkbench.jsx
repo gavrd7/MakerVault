@@ -723,8 +723,9 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
         "Add at least one STL to any plate before saving.");
       return;
     }
-    if (sliceNow && projectPlates.some(plate=>plate.objects.some(item=>item.support_paint?.regions?.length))) {
-      setError("Support painting is saved as an editable preview. Native support enforcer/blocker export has not been verified; slicing is blocked to avoid silently ignoring your annotations.");
+    if (sliceNow && projectPlates.some(plate=>plate.objects.some(item=>item.support_paint?.regions?.length)) &&
+        (form.engine!=="orcaslicer" || form.engine_version!=="2.5.0")) {
+      setError("Native painted-support test slicing requires OrcaSlicer 2.5.0. Other engines remain incompatible.");
       return;
     }
     if (sliceNow && projectPlates.some(plate=>plate.objects.some(item=>
@@ -772,7 +773,7 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
           };
           // Each plate is independently checked and admitted by the server.
           const {job}=await apiFetch("/api/printing/slicer/jobs/",{
-            method:"POST",body:payload,
+            method:"POST",body:payload,compressJson:true,
           });
           setJobs(current=>[job,...current]);
           const queued=await apiFetch("/api/printing/slicer/jobs/"+job.id+"/start/",{
@@ -796,7 +797,7 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
     let savedJob = null;
     try {
       const { job } = await apiFetch("/api/printing/slicer/jobs/", {
-        method: "POST",
+        method: "POST", compressJson:true,
         body: {
           ...form,
           input_asset_id: plateObjects[0]?.asset_id ||
