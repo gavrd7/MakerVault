@@ -99,7 +99,7 @@ class NativeSlicerProfileEditorTests(SimpleTestCase):
             file = SimpleNamespace(name=f"private/{pk}.json", storage=storage)
             return SimpleNamespace(
                 pk=pk, name=name, owner_id=7, engine="orcaslicer",
-                engine_version="2.4.2", kind="printer",
+                engine_version="2.4.2", kind="printer", source_scope="",
                 file_asset=SimpleNamespace(file=file, owner_id=7),
                 content_sha256=hashlib.sha256(raw).hexdigest(),
             )
@@ -116,7 +116,7 @@ class NativeSlicerProfileEditorTests(SimpleTestCase):
             "retraction_distances_when_cut": "30",
         })
         chain = MagicMock()
-        chain.first.return_value = parent
+        chain.__getitem__.return_value = [parent]
         with patch("core.slicer_native_resolution.SlicerProfile.objects.select_related") as source:
             source.return_value.filter.return_value = chain
             from core.slicer_native_resolution import resolved_native_profile
@@ -131,6 +131,53 @@ class NativeSlicerProfileEditorTests(SimpleTestCase):
         self.assertEqual(candidate["printable_height"], "260")
         self.assertEqual(candidate["bed_exclude_area"], ["0x0"])
         self.assertEqual(candidate["retraction_distances_when_cut"], "18")
+
+    def test_custom_filament_copy_preserves_any_material_inheritance(self):
+        """PETG and TPU use the same native resolution, not ABS-only logic."""
+        from io import BytesIO
+        from types import SimpleNamespace
+        from unittest.mock import MagicMock, patch
+        import hashlib
+        from core.slicer_native_resolution import resolved_native_profile
+
+        for material, temperature in (("PETG", "245"), ("TPU", "225")):
+            with self.subTest(material=material):
+                scope = "OrcaSlicer/OrcaSlicer@v2.5.0/Creality"
+                def record(name, data):
+                    raw = json.dumps(data).encode()
+                    storage = MagicMock()
+                    storage.open.side_effect = lambda _path, _mode: BytesIO(raw)
+                    return SimpleNamespace(
+                        pk=name, name=name, owner_id=7, engine="orcaslicer",
+                        engine_version="2.5.0", kind="filament", source_scope=scope,
+                        file_asset=SimpleNamespace(
+                            file=SimpleNamespace(name=name+".json", storage=storage),
+                            owner_id=7,
+                        ),
+                        content_sha256=hashlib.sha256(raw).hexdigest(),
+                    )
+                base = record("fdm_filament_common", {
+                    "name":"fdm_filament_common",
+                    "filament_diameter":["1.75"], "filament_flow_ratio":["0.96"],
+                })
+                leaf = record(material + " custom base", {
+                    "name":material + " custom base", "inherits":"fdm_filament_common",
+                    "filament_type":[material], "temperature":[temperature],
+                })
+                chain = MagicMock()
+                chain.__getitem__.return_value = [base]
+                with patch("core.slicer_native_resolution.SlicerProfile.objects.select_related") as source:
+                    source.return_value.filter.return_value = chain
+                    native = resolved_native_profile(leaf)
+                result = json.loads(customise_native_json(
+                    native, "filament", material + " edited standalone",
+                    {"filament_flow_ratio":1.0},
+                ))
+                self.assertNotIn("inherits", result)
+                self.assertEqual(result["filament_type"], [material])
+                self.assertEqual(result["temperature"], [temperature])
+                self.assertEqual(result["filament_diameter"], ["1.75"])
+                self.assertEqual(result["filament_flow_ratio"], ["1"])
 
     def test_dependency_profiles_are_identified_for_hidden_selectors(self):
         from io import BytesIO
