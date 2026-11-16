@@ -427,6 +427,8 @@ def update():
     _run(args + ["up", "-d", "--build", "makervault"])
     _run(args + ["ps", "makervault", "slicer-worker"])
     print("MakerVault updated. The isolated slicer image and approved engine hashes were not changed.")
+    print("NOTE: Worker Python changes are NOT included by update. When slicer_worker/ "
+          "has changed, run: sudo python3 scripts/install_slicer_staging.py refresh-worker")
 
 
 def enable():
