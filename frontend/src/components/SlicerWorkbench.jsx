@@ -1044,7 +1044,7 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
       // reapplying them as temporary overrides would be redundant.
       setProcessOverrides({});
       setNotice('Custom process profile "' + saved.name +
-        '" saved and selected. It must pass native profile verification before slicing.');
+        '" saved and selected. Its contents and parent profiles will be checked automatically when slicing.');
       return saved;
     } catch (err) {
       throw new Error(err?.message || "Could not save the custom process profile.");
@@ -1073,7 +1073,7 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
       });
       setProfiles(current => [result.profile, ...current]);
       setProfileModal("saved");
-      setNotice("Custom " + editingProfile.kind + " preset saved as an unverified copy. The original was preserved.");
+      setNotice("Custom " + editingProfile.kind + " preset saved. The original was preserved.");
       setEditingProfile(null);
     } catch (err) {
       setEditProfileError(err.message || "Could not save the custom profile.");
@@ -1655,8 +1655,8 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
       </div>
       <div className="printingActionGroup" aria-labelledby="slicer-official-profiles-heading">
         <h4 id="slicer-official-profiles-heading">Search official slicer profiles</h4>
-        <p>Search available pinned official manufacturer catalogues. Bambu Studio and PrusaSlicer currently offer printer-model artwork records only; other engines may offer printer, filament and process presets. An engine may not provide a profile for every printer. Imports remain unverified candidates; profiles cannot be shared between engines.</p>
-        {officialSourceInfo && !officialSourceInfo.official_search_available && <p role="status">This engine does not yet have a verified upstream catalogue browser in MakerVault. You can still import native {officialSourceInfo.native_profile_format} profiles as unverified candidates; slicing requires a separately validated engine and profile combination.</p>}
+        <p>Search available pinned official manufacturer catalogues. Bambu Studio and PrusaSlicer currently offer printer-model artwork records only; other engines may offer printer, filament and process presets. An engine may not provide a profile for every printer. Profiles are imported for your selected engine; profiles cannot be shared between engines.</p>
+        {officialSourceInfo && !officialSourceInfo.official_search_available && <p role="status">This engine does not yet have a verified upstream catalogue browser in MakerVault. You can still import native {officialSourceInfo.native_profile_format} profiles for this engine; the installed slicing engine must be available to run.</p>}
         <form className="formGrid" onSubmit={searchOfficialProfiles}>
           <label>Official source
             <select value={form.engine} disabled>
@@ -1738,7 +1738,7 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
           {officialResults.profiles.map(candidate => <div className="cameraSourceRow" key={candidate.sub_path}>
             <div className="cameraSourceIdentity">
               <strong>{candidate.name}</strong>
-              <small>{candidate.sub_path} · not verified</small>
+              <small>{candidate.sub_path}</small>
             </div>
             <div className="cameraSourceActions">
               <button type="button" onClick={() => importOfficialProfile(candidate)} disabled={!canPrepare || officialBusy}>
@@ -1763,7 +1763,7 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
           Back to selected profiles
         </button>
       </div>
-      <p>Import an engine-native profile as an unverified candidate. Existing originals are preserved.</p>
+      <p>Import an engine-native profile. Existing originals are preserved.</p>
       <h4>Import a local native profile file</h4>
       <form className="formGrid" onSubmit={importProfile}>
         <label>Profile type
@@ -1858,12 +1858,12 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
           <div className="cameraSourceRow" key={profile.id}>
             <div className="cameraSourceIdentity">
               <strong title={profile.name}>{readableNativeProfile(profile).name} · {profile.kind}{profile.is_default ? " · Default" : ""}</strong>
-              <small>{readableNativeProfile(profile).type} · {profile.engine} {profile.engine_version} · {profile.status}</small>
+              <small>{readableNativeProfile(profile).type} · {profile.engine} {profile.engine_version}</small>
               {managingSavedProfiles && <small title={profile.provenance || ""}>Native name: {profile.name} · {profile.provenance || "No source supplied"}</small>}
               {isInternalNativeProfile(profile) && <small role="note">Internal native parent — retained for inheritance, not selectable for slicing</small>}
               {profileLineages[profile.id] && <small role="status">
                 {profileLineages[profile.id].checking ? "Checking native parent presets…" :
-                  profileLineages[profile.id].status === "complete" ? "Parent chain present — still unverified for slicing" :
+                  profileLineages[profile.id].status === "complete" ? "Parent presets available" :
                   profileLineages[profile.id].status === "missing" ? "Missing native parent: " + profileLineages[profile.id].missing :
                   profileLineages[profile.id].status === "cycle" ? "Circular native parent reference detected" :
                   profileLineages[profile.id].status === "too_deep" ? "Parent chain exceeds allowed depth" :
