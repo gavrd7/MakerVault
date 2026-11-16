@@ -1331,6 +1331,15 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
       flushSettings={flushSettings} onFlushSettingsChange={setFlushSettings}
       slotFilamentProfiles={slotFilamentProfiles} onSlotFilamentProfilesChange={setSlotFilamentProfiles}
       filamentProfiles={slotFilamentChoices} spools={spools}
+      onRememberedProfiles={remembered => {
+        setProfiles(current => {
+          const byId = new Map((current||[]).map(row=>[String(row.id),row]));
+          for (const row of remembered||[]) {
+            if(row?.id && row.kind==="filament")byId.set(String(row.id),row);
+          }
+          return [...byId.values()];
+        });
+      }}
       onFilamentProfilesReload={async imported => {
         // The server returns the exact saved preset. Keep it visible even
         // when the general profile listing is capped or a refresh fails.
