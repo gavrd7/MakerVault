@@ -19,8 +19,9 @@ test("overhang eligibility follows the printed orientation, not STL local Z",()=
   // 180 degree rotation around X makes local top faces point downward.
   const flipX=[1,0,0,0,-1,0,0,0,-1];
   assert.deepEqual(filterSupportOverhangFaces([0,1,2],normals,flipX,45),[1]);
-  // 90 degree rotation around X puts local +/- Z faces on vertical walls.
-  const rotateX=[1,0,0,0,0,1,0,-1,0];
+  // -90 degree rotation around X puts local +/- Z faces on walls, and
+  // maps a local +Y wall into a downward-facing support surface.
+  const rotateX=[1,0,0,0,0,-1,0,1,0];
   assert.deepEqual(filterSupportOverhangFaces([0,1,2],normals,rotateX,45),[2]);
 });
 test("malformed and degenerate normals cannot accidentally receive support paint",()=>{
