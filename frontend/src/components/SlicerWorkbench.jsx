@@ -325,6 +325,19 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
     profile.engine === form.engine && profile.engine_version === form.engine_version &&
     profile.kind === kind && !isInternalNativeProfile(profile)
   );
+  // A named printer-specific filament may also be referenced as a native
+  // inheritance parent elsewhere. That does not make it unsuitable when
+  // the operator deliberately imports it for a physical feeder slot.
+  const slotFilamentChoices = profiles.filter(profile =>
+    profile.engine === form.engine && profile.engine_version === form.engine_version &&
+    profile.kind === "filament" && !/@\\s*.*\\bbase\\s*$/i.test(profile.name || ""));
+  const engineVersions = [...new Set([
+    ...engines.filter(item => item.key === form.engine).flatMap(item =>
+      [item.installed_version, ...(Array.isArray(item.installed_versions) ? item.installed_versions : [])]),
+    ...profiles.filter(item => item.engine === form.engine).map(item => item.engine_version),
+    form.engine_version,
+  ].filter(Boolean))].sort((a,b) => b.localeCompare(a,undefined,{numeric:true}));
+
   const selectNativeProfile = (kind, id) => {
     if (kind === "process") setProcessOverrides({});
     // Flushing depends on the exact verified machine, filament and process
@@ -1314,7 +1327,7 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
       processOverrides={processOverrides} onProcessOverridesChange={setProcessOverrides}
       flushSettings={flushSettings} onFlushSettingsChange={setFlushSettings}
       slotFilamentProfiles={slotFilamentProfiles} onSlotFilamentProfilesChange={setSlotFilamentProfiles}
-      filamentProfiles={forKind("filament")} spools={spools}
+      filamentProfiles={slotFilamentChoices} spools={spools}
       onFilamentProfilesReload={async () => {
         // Importing for a physical CFS/AMS bay must not switch the main
         // session filament preset through suggestion reconciliation.
@@ -1367,7 +1380,20 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
                 : "The selected engine/version is not among the verified worker engines. Choose an installed matching engine or restore its verified configuration."}
         </p>
         <label>Engine version
-          <input required maxLength="80" disabled={!canPrepare || busy} value={form.engine_version} onChange={e => { setFlushSettings(null); update("engine_version", e.target.value); }} placeholder="Exact installed/version-matched engine version" />
+          <select required disabled={!canPrepare || busy || !engineVersions.length}
+            value={form.engine_version} onChange={e => {
+              setFlushSettings(null);setSlotFilamentProfiles([]);
+              update("engine_version",e.target.value);
+            }}>
+            <option value="">Choose a slicer version</option>
+            {engineVersions.map(version => {
+              const installed = engines.some(item => item.key === form.engine &&
+                (item.installed_version === version || item.installed_versions?.includes(version)));
+              return <option key={version} value={version}>
+                {version}{installed ? " · Installed" : " · Profiles only"}
+              </option>;
+            })}
+          </select>
         </label>
         <label>Printer
           <select required disabled={!canPrepare || busy} value={form.printer_id}
