@@ -19,6 +19,7 @@ from django.views.decorators.http import require_http_methods
 
 from .models import FileAsset, Printer, PrinterConnection, SliceJob, Spool, SlicerProfile
 from .slicer_engines import engine_catalogue, get_engine
+from .slicer_capabilities import native_capabilities
 from .slicer_profiles import SlicerProfileError, inspect_native_profile
 from .slicer_profile_edit import SETTINGS as EDITABLE_PROFILE_SETTINGS, customise_native_json
 from .slicer_profile_lineage import inspect_orca_lineage
@@ -964,6 +965,12 @@ def engines(request):
     installed = verified_installation()
     rows = engine_catalogue()
     for row in rows:
+        row["feature_capabilities"] = {
+            "default": native_capabilities(row["key"], ""),
+            **({"2.4.2": native_capabilities(row["key"], "2.4.2"),
+                "2.5.0": native_capabilities(row["key"], "2.5.0")}
+               if row["key"] == "orcaslicer" else {}),
+        }
         if row["key"] in installed:
             row.update({"available": True, "enabled": True, "status": "validated",
                         "installed_version": installed[row["key"]]["version"]})
