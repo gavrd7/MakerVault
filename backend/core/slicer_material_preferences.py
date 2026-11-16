@@ -8,6 +8,7 @@ occupant's profile solely because it is in the same physical bay.
 import hashlib
 import json
 import re
+import uuid
 
 from django.contrib.auth.decorators import login_required
 from django.http import JsonResponse
@@ -72,7 +73,11 @@ def material_preferences(request):
             or not isinstance(version, str)
             or not re.fullmatch(r"[a-zA-Z0-9._-]{1,80}", version)):
         return _failure("Choose a valid slicer engine and version.")
-    printer = Printer.objects.filter(pk=payload.get("printer_id"),
+    try:
+        printer_id = uuid.UUID(str(payload.get("printer_id")))
+    except (ValueError, TypeError, AttributeError):
+        return _failure("Invalid printer identifier.")
+    printer = Printer.objects.filter(pk=printer_id,
                                      owner=request.user).first()
     if not printer:
         return _failure("Printer unavailable.", 404)
@@ -91,11 +96,31 @@ def material_preferences(request):
             ).select_related("profile")
         }
         return JsonResponse({"assignments": [
-            {"slot_id": slot_id, "profile_id": str(preferences[key].profile_id)}
+            {
+                "slot_id": slot_id,
+                "profile_id": str(preferences[key].profile_id),
+                "profile": {
+                    "id": str(preferences[key].profile_id),
+                    "engine": preferences[key].profile.engine,
+                    "engine_version": preferences[key].profile.engine_version,
+                    "kind": "filament",
+                    "name": preferences[key].profile.name,
+                    "status": preferences[key].profile.status,
+                    "is_default": preferences[key].profile.is_default,
+                    "file_asset_id": str(preferences[key].profile.file_asset_id),
+                    "content_sha256": preferences[key].profile.content_sha256,
+                    "provenance": preferences[key].profile.provenance,
+                    "source_scope": preferences[key].profile.source_scope,
+                },
+            }
             for slot_id, key in identities.items() if key in preferences
         ]})
+    try:
+        slot_id = uuid.UUID(str(payload.get("slot_id")))
+    except (ValueError, TypeError, AttributeError):
+        return _failure("Invalid filament slot identifier.")
     slot = PrinterFilamentSlot.objects.filter(
-        pk=payload.get("slot_id"), printer=printer, is_loaded=True
+        pk=slot_id, printer=printer, is_loaded=True
     ).select_related("spool", "spool__filament").first()
     if not slot:
         return _failure("Loaded printer filament slot unavailable.", 404)
@@ -104,6 +129,10 @@ def material_preferences(request):
         return _failure("Filament identification is insufficient to remember this profile.")
     profile_id = payload.get("profile_id")
     if profile_id is not None:
+        try:
+            profile_id = uuid.UUID(str(profile_id))
+        except (ValueError, TypeError, AttributeError):
+            return _failure("Invalid native filament profile identifier.")
         profile = SlicerProfile.objects.filter(
             pk=profile_id, owner=request.user, kind="filament",
             engine=engine, engine_version=version,
