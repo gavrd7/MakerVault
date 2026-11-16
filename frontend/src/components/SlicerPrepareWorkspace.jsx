@@ -371,10 +371,11 @@ export default function SlicerPrepareWorkspace({
         if(cancelled)return;
         if(recovered.length)onSlotFilamentProfilesChange?.(current=>{
           const already=new Set((current||[]).map(row=>String(row.slot_id)));
-          return [...(current||[]),...recovered
+          const additions=recovered
             .filter(row=>!already.has(String(row.slot_id)) &&
               !touchedSlotsRef.current.has(String(row.slot_id)))
-            .map(row=>({slot_id:String(row.slot_id),profile_id:String(row.profile_id)}))];
+            .map(row=>({slot_id:String(row.slot_id),profile_id:String(row.profile_id)}));
+          return additions.length ? [...(current||[]),...additions] : current;
         });
       })
       .catch(err=>{if(!cancelled)setMaterialMessage(
