@@ -8254,3 +8254,55 @@ a:focus-visible,
     flex:0 0 19px;
   }
 }
+
+
+/* Keep the text collapse control readable in Cut, Drill, Hollow and Boolean.
+ * The generic header selector intentionally sizes icon buttons at 36px. */
+.slicerSolidModal.slicerViewportAnchoredModal .slicerAutoOrientModalHeader > button.slicerSolidCollapseButton,
+.slicerPlatePanel .slicerViewportAnchoredModal .slicerAutoOrientModalHeader > button.slicerSolidCollapseButton,
+.slicerMobileGeometryDock .slicerAutoOrientModalHeader > button.slicerSolidCollapseButton {
+  flex:0 0 auto!important;
+  width:auto!important;
+  min-width:max-content!important;
+  max-width:none;
+  padding:6px 11px!important;
+  white-space:nowrap;
+  line-height:1.3;
+}
+
+/* Match Measure to the compact Move/Rotate/Scale inspectors: the readout and
+ * expanded bounds should not stretch into large empty vertical rows. */
+.slicerPlateCanvasColumn .slicerViewportMeasurement.slicerViewportToolDock:not(.slicerViewportTransform) {
+  display:flex;
+  flex-direction:column;
+  align-items:stretch;
+  justify-content:flex-start;
+  align-content:flex-start;
+  gap:7px;
+  height:max-content;
+  min-height:0;
+  padding:10px 12px;
+}
+.slicerViewportMeasurement.slicerViewportToolDock:not(.slicerViewportTransform) > * {
+  flex:0 0 auto;
+  margin-top:0;
+  margin-bottom:0;
+}
+.slicerViewportMeasurement.slicerViewportToolDock .slicerViewportMeasurementModel {
+  margin:0;
+  line-height:1.3;
+}
+.slicerViewportMeasurement.slicerViewportToolDock .slicerViewportMeasurementReadout {
+  margin:0;
+  padding:7px 9px;
+}
+.slicerViewportMeasurement.slicerViewportToolDock .slicerViewportMeasurementBounds,
+.slicerViewportMeasurement.slicerViewportToolDock .slicerViewportMeasurementPin {
+  margin:0;
+  line-height:1.4;
+}
+.slicerViewportMeasurement.slicerViewportToolDock .slicerViewportMeasurementHint {
+  margin:0;
+  font-size:.73rem;
+  line-height:1.4;
+}
