@@ -21,14 +21,14 @@ class NativeFile:
         return BytesIO(self.raw)
 
 
-def profile(name, *, parent=None, owner=1, engine_version="2.3", kind="filament", tamper=False):
+def profile(name, *, parent=None, owner=1, engine_version="2.3", kind="filament", tamper=False, scope=""):
     data = {"name": name, "filament_type": ["PLA"]}
     if parent is not None:
         data["inherits"] = parent
     raw = json.dumps(data).encode()
     return SimpleNamespace(
         pk=uuid.uuid4(), owner_id=owner, engine="orcaslicer",
-        engine_version=engine_version, kind=kind, name=name, status="candidate",
+        engine_version=engine_version, kind=kind, name=name, source_scope=scope, status="candidate",
         content_sha256=("0" * 64 if tamper else hashlib.sha256(raw).hexdigest()),
         file_asset=SimpleNamespace(file=NativeFile(raw)),
     )
@@ -52,6 +52,18 @@ class OrcaLineageTests(SimpleTestCase):
         result = inspect_orca_lineage(leaf, [leaf, foreign, wrong_version, wrong_kind])
         self.assertEqual(result["status"], "missing")
         self.assertEqual(result["missing"], "Generic PLA")
+
+    def test_same_named_parents_from_other_vendor_cannot_satisfy_lineage(self):
+        creality = "OrcaSlicer/OrcaSlicer@v2.5.0/Creality"
+        other = "OrcaSlicer/OrcaSlicer@v2.5.0/OrcaFilamentLibrary"
+        child = profile("CR-ABS", parent="fdm_filament_common", scope=creality)
+        wrong = profile("fdm_filament_common", scope=other)
+        self.assertEqual(inspect_orca_lineage(child, [child, wrong])["status"], "missing")
+        correct = profile("fdm_filament_common", scope=creality)
+        result = inspect_orca_lineage(child, [child, wrong, correct])
+        self.assertEqual(result["status"], "complete")
+        self.assertEqual([item["name"] for item in result["chain"]],
+                         ["CR-ABS", "fdm_filament_common"])
 
     def test_cycle_and_modified_source_fail_closed(self):
         a = profile("A", parent="B")
