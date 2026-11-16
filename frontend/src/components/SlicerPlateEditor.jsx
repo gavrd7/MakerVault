@@ -303,7 +303,8 @@ export default function SlicerPlateEditor({
   selectedInstanceId = null, onSelectedInstanceChange, selectedInstanceIds = [], onSelectModel, toolMode = "select",
   autoOrientGoal = "balanced", autoOrientRequest = 0, splitRequest = 0, solidRequest = null,
   measurementVisible = false, measureMode = "distance", measureUnit = "mm", measureSnapMode = "auto", measureClearVersion = 0,
-  onMeasurePinPlaced, colourPaintOptions = null, onColourPaintError, onColourPaintHeightPick,
+  onMeasurePinPlaced, onMeasureModeChange, onMeasureSnapModeChange, onMeasureUnitChange,
+  onMeasureClear, onMeasureFinish, colourPaintOptions = null, onColourPaintError, onColourPaintHeightPick,
   localAssets = [], onLocalAssetsChange, onExitToolMode, onPlateIssuesChange, toolbar = null, paintControls = null,
 }) {
   const hostRef = useRef(null);
@@ -3331,8 +3332,38 @@ export default function SlicerPlateEditor({
         <small className="slicerViewportMeasurementHint">
           {measureMode === "detect" ? "Click a mesh edge or face to detect a measurable feature" :
             <>Click the model to {measureMode === "circle" ? "set three circle points" : "place two pins"}</>}.
-          Options are in the Measure toolbar.
+          Use the controls below to change measurement mode, snapping and units.
         </small>
+        <div className="slicerViewportMeasureControls" role="group" aria-label="Measure tool options">
+          <label>Measurement mode
+            <select aria-label="Measurement mode" value={measureMode}
+              onChange={event => onMeasureModeChange?.(event.target.value)}>
+              <option value="distance">Two-point distance</option>
+              <option value="circle">Three-point circle</option>
+              <option value="detect">Auto-detect mesh edge / face</option>
+            </select>
+          </label>
+          <label>Snapping
+            <select aria-label="Measurement snapping" value={measureSnapMode}
+              onChange={event => onMeasureSnapModeChange?.(event.target.value)}>
+              <option value="auto">Automatic · nearby vertex or triangle edge</option>
+              <option value="vertex">Vertex only · otherwise surface</option>
+              <option value="edge">Triangle edge only · otherwise surface</option>
+              <option value="surface">Surface point · no snapping</option>
+            </select>
+          </label>
+          <label>Units
+            <select aria-label="Measurement units" value={measureUnit}
+              onChange={event => onMeasureUnitChange?.(event.target.value)}>
+              <option value="mm">Millimetres (mm)</option>
+              <option value="in">Inches (in)</option>
+            </select>
+          </label>
+          <div className="slicerViewportMeasureActions">
+            <button type="button" onClick={() => onMeasureClear?.()}>Clear pins</button>
+            <button type="button" onClick={() => onMeasureFinish?.()}>Finish measuring</button>
+          </div>
+        </div>
       </aside>}
       <div ref={setMobileMeshDock} className="slicerMobileGeometryDock"
         aria-label="On-plate geometry inspector" />
