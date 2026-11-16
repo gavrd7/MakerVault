@@ -404,8 +404,7 @@ export default function SlicerPrepareWorkspace({
   };
   const importOfficialSlotProfile = async (slot, candidate) => {
     if (!canEdit || slotImportBusy) return;
-    if (!window.confirm("Import " + candidate.name + " and its native parent presets for " +
-        slotName(slot) + "? The imported profile may still require slicing verification.")) return;
+    if (!window.confirm("Import " + candidate.name + " for " + slotName(slot) + "?")) return;
     const targetPrinterId = String(printerId || "");
     setSlotImportBusy(true);
     setSlotOfficialError("");
@@ -427,7 +426,7 @@ export default function SlicerPrepareWorkspace({
       setSlotOfficialResults(current => ({...current, [String(slot.id)]: []}));
       setSlotOfficialSelections(current => ({...current, [String(slot.id)]: ""}));
       setMaterialMessage("Imported " + imported.name + " for slot " +
-        ((slot.slot_index ?? 0) + 1) + ". Profile compatibility is checked when slicing.");
+        ((slot.slot_index ?? 0) + 1) + ". Ready to use for this slot.");
     } catch (err) {
       setSlotOfficialError(err.message || "Profile import failed.");
     } finally {
@@ -1600,7 +1599,7 @@ export default function SlicerPrepareWorkspace({
                     <p>{slot.spool_code||"Unlinked spool"}</p>
                     <p>Material: {slot.material||"Unknown"}</p>
                     <p>Remaining: {slot.remaining_percent==null?"Not reported":Math.round(slot.remaining_percent)+"%"}</p>
-                    <p>Filament profile: {profile?.name||"Main profile (not slot-specific)"}</p>
+                    <p>Filament profile: {profile?.name||"Not assigned"}</p>
                     <button type="button" onClick={()=>{setDetailsSlotId(null);setEditingSlotProfile(String(slot.id));}}>
                       Change filament profile</button>
                   </div>;
