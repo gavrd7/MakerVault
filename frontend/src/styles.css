@@ -6448,6 +6448,15 @@ a:focus-visible,
   width:100%;min-width:0;min-height:34px;margin:0;
   padding:5px 4px;font-size:.76rem;white-space:nowrap;
 }
+/* Native CFS/AMS profile suggestions stay below the two compact actions. */
+.slicerLiveMaterialSlotCompact .slicerSlotProfileSuggestions{
+  grid-column:2;min-width:0;width:100%;display:grid;gap:6px;
+}
+.slicerSlotProfileSuggestions label{display:grid;gap:4px;font-size:.75rem}
+.slicerSlotProfileSuggestions select{width:100%;min-width:0;max-width:100%}
+.slicerSlotProfileSuggestions > div{max-height:160px;overflow:auto;display:grid;gap:4px}
+.slicerSlotProfileSuggestions button{width:100%;max-width:100%;min-width:0;
+  text-align:left;white-space:normal;overflow-wrap:anywhere;font-size:.75rem}
 .slicerSlotDetails p{margin:6px 0}
 .slicerFlushModalBody .slicerFlushTableScroll{overflow:auto;max-width:100%;max-height:48dvh}
 .slicerFlushModal .slicerFlushMatrix{
