@@ -1184,6 +1184,35 @@ class SlicerProfile(TimeStampedModel):
 
 
 
+
+class SlicerMaterialProfilePreference(TimeStampedModel):
+    """Durable printer/material-to-native-preset choice, independent of drafts.
+
+    Keys describe the currently loaded material, not the physical slot
+    number: moving a spool to another bay must not lose its remembered preset.
+    Engine/version are isolated, and missing/stale presets cannot be applied.
+    """
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    printer = models.ForeignKey(
+        "Printer", on_delete=models.CASCADE, related_name="slicer_material_preferences"
+    )
+    material_key = models.CharField(max_length=64)
+    engine = models.CharField(max_length=32)
+    engine_version = models.CharField(max_length=80)
+    profile = models.ForeignKey(
+        "SlicerProfile", on_delete=models.CASCADE, related_name="material_preferences"
+    )
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["printer", "material_key", "engine", "engine_version"],
+                name="unique_slicer_material_preference",
+            ),
+        ]
+
+
 class SliceJob(TimeStampedModel):
     """Private slicer job specification; this model never executes anything.
 
