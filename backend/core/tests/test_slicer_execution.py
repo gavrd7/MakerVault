@@ -71,6 +71,22 @@ class IntendedMaterialSafetyTests(SimpleTestCase):
                 with self.assertRaisesRegex(SlicerExecutionError, "native region-to-tool"):
                     _validate_plate_execution(job)
 
+    def test_unexported_native_semantic_paint_and_variable_layers_fail_closed(self):
+        from types import SimpleNamespace
+        for field, value, error in (
+            ("seam_paint", {"version": 2, "regions": [{"slot": 0}]}, "Seam enforcer"),
+            ("fuzzy_skin_paint", {"version": 2, "regions": [{"slot": 0}]}, "Paint-on fuzzy"),
+            ("variable_layer_profile", {"version": 1, "bands": [
+                {"from_mm": 0, "to_mm": 10, "layer_mm": .12}]}, "Variable layer"),
+        ):
+            with self.subTest(field=field):
+                job = SimpleNamespace(
+                    settings={"plate_objects": [{"instance_id": "one", field: value}]},
+                    engine="orcaslicer",
+                )
+                with self.assertRaisesRegex(SlicerExecutionError, error):
+                    _validate_plate_execution(job)
+
     def test_unhandled_flush_matrix_cannot_be_silently_ignored(self):
         from types import SimpleNamespace
         for models in (None, [], [{"instance_id": "one"}]):
