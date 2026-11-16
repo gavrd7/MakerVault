@@ -31,7 +31,7 @@ class LargeSlicerJobPayloadTests(SimpleTestCase):
             "settings": {"plate_objects": [{"support_paint": {
                 "version": 2, "signature": "200000:ffffabcd",
                 "regions": [{"slot": 0, "patches": [
-                    {"face": index, "polygon": polygon} for index in range(35000)
+                    {"face": index, "polygon": polygon} for index in range(50000)
                 ]}],
             }}]},
         }
