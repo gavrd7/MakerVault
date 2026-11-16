@@ -3,6 +3,7 @@
 3MF range translation is engine-native input, not physical printer approval.
 """
 import math
+import re
 
 
 def validate_variable_layer_profile(value):
@@ -73,3 +74,57 @@ def orca_layer_config_ranges(objects_with_stl):
     if not count:
         return None
     return ET.tostring(root, encoding="utf-8", xml_declaration=True)
+
+
+_LAYER_Z = re.compile(r"^;Z:\\s*([0-9]+(?:\\.[0-9]+)?)\\s*$", re.I)
+
+
+def audit_orca_variable_layers(gcode, bands):
+    """Require actual Orca layer Z increments near each requested range.
+
+    This is observational evidence, not a printer-safety certification.
+    Match the slicer's ;LAYER_CHANGE / ;Z comments, never arbitrary travel
+    moves or Z-hop commands. A band too narrow to yield a measurable layer
+    remains unverified rather than receiving invented success.
+    """
+    if not isinstance(gcode, str) or len(gcode) > 90 * 1024 * 1024:
+        raise ValueError("Invalid native layer audit G-code.")
+    profile = validate_variable_layer_profile({"version": 1, "bands": bands})
+    positions = []
+    following = 0
+    for index, raw in enumerate(gcode.splitlines()):
+        if index >= 2_000_000:
+            raise ValueError("Native layer audit exceeds the line limit.")
+        line = raw.strip()
+        if line == ";LAYER_CHANGE":
+            following = 8
+            continue
+        if following <= 0:
+            continue
+        following -= 1
+        match = _LAYER_Z.fullmatch(line)
+        if match:
+            z = float(match.group(1))
+            if math.isfinite(z) and (not positions or z > positions[-1] + 0.00001):
+                positions.append(z)
+            following = 0
+    if len(positions) < 3:
+        raise ValueError("G-code has insufficient native layer-height markers.")
+    checks = []
+    for band in profile["bands"]:
+        begin, end, wanted = band["from_mm"], band["to_mm"], band["layer_mm"]
+        # Prefer a full interval away from transition boundaries.
+        central = [(lower, upper) for lower, upper in zip(positions, positions[1:])
+                   if lower >= begin + wanted and upper <= end - wanted]
+        samples = central or [(lower, upper) for lower, upper in zip(positions, positions[1:])
+                              if lower >= begin - 0.0001 and upper <= end + 0.0001]
+        observed = [round(upper-lower, 4) for lower, upper in samples]
+        tolerance = max(.018, wanted * .12)
+        matched = [delta for delta in observed if abs(delta - wanted) <= tolerance]
+        if not matched:
+            raise ValueError(
+                "Native Orca G-code did not demonstrate the requested variable "
+                "layer height in the %.3f-%.3f mm range." % (begin, end))
+        checks.append({"from_mm": begin, "to_mm": end,
+                       "target_layer_mm": wanted, "observed_layer_mm": matched[0]})
+    return {"verified_bands": checks, "layer_markers": len(positions)}
