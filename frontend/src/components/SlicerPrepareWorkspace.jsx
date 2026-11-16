@@ -1009,7 +1009,7 @@ export default function SlicerPrepareWorkspace({
         <strong>Variable layer height</strong>
         <button type="button" onClick={()=>{setToolMode("select");setPaintError("");}}>Done</button>
       </div>
-      <small>Specify Z ranges and their layer heights; other heights use the process preset.</small>
+      <small>Set Z ranges; other layers use the process preset.</small>
       <div className="slicerVariableLayerPointerControls">
         <label className="checkRow" style={{display:"flex",gap:7,alignItems:"center"}}>
           <input type="checkbox" checked={variableBandFollow}
@@ -1024,7 +1024,7 @@ export default function SlicerPrepareWorkspace({
             <option value="to">End of range (To Z)</option>
           </select>
         </label>
-        <small>Move the pointer over the model to position the chosen boundary; click or tap to keep it. The highlighted horizontal planes preview the range. You can still edit both values below.</small>
+        <small>Hover to preview Z; click or tap to set it.</small>
       </div>
       <div className="slicerVariableLayerBandGrid">
         {[
@@ -1039,6 +1039,7 @@ export default function SlicerPrepareWorkspace({
               [key]:Number(event.target.value)}))} />
         </label>)}
       </div>
+      <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
       <button type="button" disabled={!variableLayersSelected} onClick={()=>{
         try{
           const bands=addVariableLayerBand(variableLayerBands,
@@ -1048,6 +1049,12 @@ export default function SlicerPrepareWorkspace({
           setPaintError("");
         }catch(error){setPaintError(error.message||"Invalid variable layer range.");}
       }}>Add layer range</button>
+      <button type="button" disabled={!variableLayerBands.length} onClick={()=>{
+        updatePlate(latest.current.map(row=>row.instance_id===selectedId
+          ?(({variable_layer_profile:unused,...rest})=>rest)(row):row));
+        setPaintError("");
+      }}>Clear all</button>
+      </div>
       {variableLayerBands.map((band,i)=><div key={i} className="slicerVariableLayerBandRow">
         <span>{band.from_mm}–{band.to_mm} mm · {band.layer_mm} mm layers</span>
         <button type="button" aria-label={"Remove layer range "+(i+1)}
