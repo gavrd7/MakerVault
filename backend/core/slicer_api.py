@@ -2,6 +2,7 @@
 import json
 import io
 import zipfile
+import zlib
 import os
 import math
 import re
@@ -1011,6 +1012,37 @@ def approve_native_profiles(request):
     })
 
 
+# Keep the existing 8 MiB on-wire request limit. Painted polygons can be
+# losslessly compressed, but expansion remains bounded and is never trusted.
+MAX_SLICER_REQUEST_BYTES = 8 * 1024 * 1024
+MAX_SLICER_JSON_BYTES = 48 * 1024 * 1024
+
+
+def _slicer_request_json(request):
+    raw = request.body
+    if len(raw) > MAX_SLICER_REQUEST_BYTES:
+        raise ValueError("Slice configuration exceeds the 8 MiB transfer safety limit. Reduce the number of painted patches.")
+    encoding = request.headers.get("Content-Encoding", "").strip().lower()
+    if encoding == "gzip":
+        try:
+            decoder = zlib.decompressobj(wbits=16 + zlib.MAX_WBITS)
+            decoded = decoder.decompress(raw, MAX_SLICER_JSON_BYTES + 1)
+            if (len(decoded) > MAX_SLICER_JSON_BYTES or decoder.unconsumed_tail
+                    or not decoder.eof or decoder.unused_data):
+                raise ValueError("Compressed slicing project exceeded the expanded safety limit.")
+            decoded += decoder.flush(MAX_SLICER_JSON_BYTES + 1 - len(decoded))
+            if len(decoded) > MAX_SLICER_JSON_BYTES:
+                raise ValueError("Compressed slicing project exceeded the expanded safety limit.")
+            raw = decoded
+        except zlib.error:
+            raise ValueError("Invalid compressed slicing configuration.") from None
+    elif encoding:
+        raise ValueError("Unsupported slicing request encoding.")
+    if len(raw) > MAX_SLICER_JSON_BYTES:
+        raise ValueError("Slicing project exceeded the expanded safety limit.")
+    return json.loads(raw.decode("utf-8"))
+
+
 @login_required
 @require_http_methods(["GET", "POST"])
 def jobs(request):
@@ -1025,9 +1057,7 @@ def jobs(request):
     if not request.user.has_perm("core.add_fileasset"):
         return _error("You do not have permission to prepare slicing jobs.", 403)
     try:
-        if len(request.body) > 8 * 1024 * 1024:
-            return _error("Slice configuration exceeds the 8 MiB safety limit. Split very large projects across plates.", 413)
-        data = json.loads(request.body.decode("utf-8"))
+        data = _slicer_request_json(request)
         job = _draft(request.user, data)
     except (ValueError, TypeError, UnicodeDecodeError) as exc:
         return _error(str(exc) if isinstance(exc, ValueError) else "Invalid slice configuration.")
