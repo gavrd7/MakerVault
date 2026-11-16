@@ -1,7 +1,8 @@
-"""Validate draft-only support enforcer/blocker surface regions.
+"""Validate support enforcer/blocker surface regions.
 
 The stored 0/1 values are semantic actions, NEVER filament/tool identifiers.
-Native support painting export is not implemented yet.
+A separate Orca 2.5 adapter translates clipped patches for offline slicing
+only; these draft annotations are not yet approved for printer submission.
 """
 from .slicer_colour_painting import validate_colour_paint
 
