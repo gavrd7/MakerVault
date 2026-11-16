@@ -113,6 +113,37 @@ class IntendedMaterialSafetyTests(SimpleTestCase):
             with self.assertRaisesRegex(SlicerExecutionError, "upright|unscaled"):
                 _validate_plate_execution(job)
 
+    @patch("core.slicer_execution.trusted_plate_dimensions", return_value=(220, 220))
+    def test_native_support_paint_requires_offline_orca25_single_model(self, dimensions):
+        from types import SimpleNamespace
+        one = {
+            "instance_id": "one", "asset_id": "placeholder",
+            "x_mm": 0, "y_mm": 0, "z_mm": 0,
+            "rotation_deg": 0, "rotation_xyz_deg": [0,0],
+            "scale_percent": 100, "scale_xyz_percent": [100,100,100],
+            "support_paint": {"version":2, "signature":"2:abcdef01",
+                "regions":[{"slot":0,"patches":[{"face":0,"polygon":[
+                    [0.,0.,0.],[1.,0.,0.],[0.,1.,0.]]}]}]},
+        }
+        job = SimpleNamespace(settings={"plate_objects":[one]},
+                              engine="orcaslicer", engine_version="2.5.0",
+                              printer_id="printer", filament_profile_id="filament",
+                              printer_profile_id="printer-profile",
+                              printer_profile=SimpleNamespace())
+        self.assertTrue(_validate_plate_execution(job))
+        self.assertFalse(_single_unmodified_stl([one]))
+        job.engine_version = "2.4.2"
+        with self.assertRaisesRegex(SlicerExecutionError, "2.5.0"):
+            _validate_plate_execution(job)
+        job.engine_version = "2.5.0"
+        job.settings["plate_objects"] = [one, {**one,"instance_id":"two"}]
+        with self.assertRaisesRegex(SlicerExecutionError, "single-filament model"):
+            _validate_plate_execution(job)
+        for change in ({"z_mm":3},{"scale_percent":90},{"rotation_xyz_deg":[15,0]}):
+            job.settings["plate_objects"] = [{**one,**change}]
+            with self.assertRaisesRegex(SlicerExecutionError, "upright|unscaled"):
+                _validate_plate_execution(job)
+
     def test_unhandled_flush_matrix_cannot_be_silently_ignored(self):
         from types import SimpleNamespace
         for models in (None, [], [{"instance_id": "one"}]):
