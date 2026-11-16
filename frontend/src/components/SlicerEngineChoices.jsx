@@ -66,7 +66,9 @@ export default function SlicerEngineChoices({
         </label>
         : <div key={engine.key} role="listitem" className="slicerEngineChoice slicerEngineChoiceInfo">
           {body}
-          <small className="slicerEngineInstallHint">Installation not yet available</small>
+          <small className="slicerEngineInstallHint">{verified
+            ? "Installed and ready for slicing with compatible native profiles"
+            : "In-app installation not yet available"}</small>
         </div>;
     })}
   </div>;
