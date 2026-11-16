@@ -5,6 +5,7 @@ import {addVariableLayerBand} from "./slicerVariableLayers.js";
 import SlicerUiIcon from "./SlicerUiIcon";
 import SlicerFlushVolumes from "./SlicerFlushVolumes";
 import { apiFetch } from "../api";
+import { matchLoadedSlotProfiles, slotProfileSearchTerm } from "./slicerSlotProfileMatching.js";
 
 /**
  * Interactive Prepare shell. All slicing still goes through the existing
@@ -65,7 +66,7 @@ export default function SlicerPrepareWorkspace({
   selectedProfiles, workerConfigured, printerId,
   processOverrides = {}, onProcessOverridesChange, onSaveCustomProcessProfile,
   flushSettings = null, onFlushSettingsChange,
-  slotFilamentProfiles = [], onSlotFilamentProfilesChange, filamentProfiles = [],
+  slotFilamentProfiles = [], onSlotFilamentProfilesChange, filamentProfiles = [], onFilamentProfilesReload,
   processProfiles = [], onSelectProcessProfile, onResetProcessSettings,
   printerDetails, nozzleMm, selectedPlateType = "Native / profile default",
   localAssets = [], onLocalAssetsChange, onPlateIssuesChange, plateIssues = null,
@@ -279,6 +280,9 @@ export default function SlicerPrepareWorkspace({
       return rank(a) - rank(b) || a.localeCompare(b);
     });
   const [liveMaterials, setLiveMaterials] = useState([]);
+  const [slotOfficialResults, setSlotOfficialResults] = useState({});
+  const [slotOfficialBusy, setSlotOfficialBusy] = useState("");
+  const [slotOfficialError, setSlotOfficialError] = useState("");
   const [editingSlotProfile,setEditingSlotProfile] = useState(null);
   const [detailsSlotId,setDetailsSlotId] = useState(null);
   const [filamentPickerId, setFilamentPickerId] = useState("");
@@ -345,6 +349,16 @@ export default function SlicerPrepareWorkspace({
       const selectedPrinter = (data.printers || []).find(p => String(p.id) === String(printerId));
       const loaded = (selectedPrinter?.slots || []).filter(slot => slot.is_loaded);
       setLiveMaterials(loaded);
+      // Reconcile only unassigned slots; never overwrite manual choices.
+      const existing = new Set(slotFilamentProfiles.map(row => String(row.slot_id)));
+      const inferred = loaded.filter(slot => !existing.has(String(slot.id)))
+        .map(slot => ({slot, match: matchLoadedSlotProfiles(slot, filamentProfiles, {
+          engine: String(engine).split(" ")[0], version: String(engine).split(" ").slice(1).join(" "),
+          printer: printerDetails,
+        })}))
+        .filter(({match}) => match.level === "exact")
+        .map(({slot, match}) => ({slot_id: String(slot.id), profile_id: String(match.profile.id)}));
+      if (inferred.length) onSlotFilamentProfilesChange?.([...slotFilamentProfiles, ...inferred]);
       setMaterialMessage(loaded.length
         ? "Assigned slots use their selected native filament preset for a single-filament slice. Multiple slots still require verified tool routing."
         : "No loaded slots reported for this printer.");
@@ -355,7 +369,7 @@ export default function SlicerPrepareWorkspace({
     } finally {
       if (requestId === requestRef.current) setMaterialRefreshing(false);
     }
-  }, [printerId]);
+  }, [printerId, engine, filamentProfiles, slotFilamentProfiles, printerDetails, onSlotFilamentProfilesChange]);
   useEffect(() => {
     refreshPrinterMaterials();
     return () => { requestRef.current += 1; };
