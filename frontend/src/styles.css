@@ -8375,3 +8375,42 @@ a:focus-visible,
   padding:4px 7px;
   white-space:nowrap;
 }
+
+
+/* Variable layer-height band editor shares the established docked paint card.
+ * Keep editable ranges and remove actions usable on narrow touch screens. */
+.slicerVariableLayerPanel .slicerVariableLayerBandGrid {
+  display:grid;
+  grid-template-columns:minmax(0,1fr);
+  gap:7px;
+}
+.slicerVariableLayerPanel .slicerVariableLayerBandGrid label {
+  display:grid;
+  gap:4px;
+  min-width:0;
+  font-size:.75rem;
+  line-height:1.3;
+}
+.slicerVariableLayerPanel .slicerVariableLayerBandGrid input {
+  width:100%;
+  min-width:0;
+  box-sizing:border-box;
+}
+.slicerVariableLayerPanel .slicerVariableLayerBandRow {
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  flex-wrap:wrap;
+  gap:7px;
+  padding:7px;
+  border:1px solid #344b5d;
+  border-radius:6px;
+  font-size:.75rem;
+}
+.slicerVariableLayerPanel .slicerVariableLayerBandRow span {
+  min-width:0;
+  overflow-wrap:anywhere;
+}
+.slicerVariableLayerPanel button {
+  min-height:32px;
+}
