@@ -61,10 +61,16 @@ def _render_mesh(raw, element, support_paint=None):
     # Weld identical vertices to keep generated 3MF files compact.
     indexed = {}
     try:
-        tagged = native_support_triangles(triangles, support_paint)
+        # Preserve the existing low-overhead unpainted path: only allocate
+        # re-triangulated facets for a model with actual saved paint regions.
+        tagged = (native_support_triangles(triangles, support_paint)
+                  if support_paint and support_paint.get("regions")
+                  else ((tri, None) for tri in triangles))
     except ValueError as exc:
         raise SlicerProfileError(str(exc)) from exc
+    mesh_count = 0
     for tri, support_state in tagged:
+        mesh_count += 1
         ids = []
         for point in tri:
             centred = tuple(round(point[i] - origin[i], 6) for i in range(3))
@@ -79,7 +85,7 @@ def _render_mesh(raw, element, support_paint=None):
         if support_state is not None:
             attrs["paint_supports"] = support_state
         ET.SubElement(faces, f"{{{NS}}}triangle", attrs)
-    return len(tagged), maximum[0] - minimum[0], maximum[1] - minimum[1]
+    return mesh_count, maximum[0] - minimum[0], maximum[1] - minimum[1]
 
 
 def _axis_scales(item):
