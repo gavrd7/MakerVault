@@ -109,14 +109,23 @@ def native_support_triangles(triangles, paint):
     if not paint or not paint.get("regions"):
         return [(tri, None) for tri in triangles]
     data = validate_support_paint(paint)
-    if data["signature"] != _fingerprint(triangles):
+    # STLLoader's preview geometry is centred in X/Y and grounded at min Z
+    # BEFORE MakerVault computes the paint signature and local brush patches.
+    minimum = [min(p[axis] for face in triangles for p in face) for axis in range(3)]
+    maximum = [max(p[axis] for face in triangles for p in face) for axis in range(3)]
+    origin = ((minimum[0]+maximum[0]) / 2, (minimum[1]+maximum[1]) / 2, minimum[2])
+    local_triangles = [
+        [tuple(float(p[axis])-origin[axis] for axis in range(3)) for p in face]
+        for face in triangles
+    ]
+    if data["signature"] != _fingerprint(local_triangles):
         raise ValueError("Support painting mesh fingerprint no longer matches the source STL.")
     by_face = {}
     for region in data["regions"]:
         for patch in region["patches"]:
             by_face.setdefault(patch["face"], []).append((region["slot"],patch["polygon"]))
     output = []
-    for index, source in enumerate(triangles):
+    for index, source in enumerate(local_triangles):
         patches = by_face.get(index)
         if not patches:
             output.append((source, None))
@@ -160,4 +169,9 @@ def native_support_triangles(triangles, paint):
             raise ValueError("Native support painting exceeds the safe mesh triangle limit.")
     if not any(attr for _, attr in output):
         raise ValueError("Support painting did not produce any native annotated facets.")
-    return output
+    # Restore original STL-local coordinates. _render_mesh owns the one and
+    # only placement-centering pass used for native 3MF model geometry.
+    return [
+        (tuple(tuple(p[axis]+origin[axis] for axis in range(3)) for p in tri), state)
+        for tri, state in output
+    ]
