@@ -158,7 +158,9 @@ class OfficialProfileApiTests(TestCase):
         self.addCleanup(lambda asset=profile.file_asset: asset.file.delete(save=False))
         with patch("core.slicer_api.fetch_official_profile", return_value=self.native):
             duplicate = self.post()
-        self.assertEqual(duplicate.status_code, 409)
+        self.assertEqual(duplicate.status_code, 200)
+        self.assertEqual(duplicate.json()["profile"]["id"], str(profile.pk))
+        self.assertEqual(duplicate.json()["imported_profiles"], [])
 
     def test_cross_manufacturer_crealityprint_import_stays_native_and_unverified(self):
         self.client.force_login(self.user)
