@@ -259,8 +259,8 @@ CHOICE_FIELDS = {
         ("rectilinear", "Rectilinear"), ("concentric", "Concentric"),
     )),
     "fuzzy_skin": ("Others", "Fuzzy skin", (
-        ("none", "Off"), ("external", "External"), ("hole", "Holes"),
-        ("all", "All"), ("allwalls", "All walls"), ("disabled_fuzzy", "Disabled fuzzy"),
+        ("none", "Painted only"), ("external", "External"), ("hole", "Holes"),
+        ("all", "All"), ("allwalls", "All walls"), ("disabled_fuzzy", "Off"),
     )),
     "fuzzy_skin_mode": ("Others", "Fuzzy skin mode", (
         ("displacement", "Displacement"), ("extrusion", "Extrusion"),
@@ -658,7 +658,7 @@ def process_schema(raw):
                 if master == "wall_generator":
                     condition = {"key": master, "in": ["arachne"]}
                 elif master == "fuzzy_skin":
-                    condition = {"key": master, "in": ["external", "hole", "all", "allwalls"]}
+                    condition = {"key": master, "in": ["none", "external", "hole", "all", "allwalls"]}
                 else:
                     disabled = "no ironing" if master == "ironing_type" else "0"
                     condition = {"key": master, "not": disabled}
