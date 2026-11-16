@@ -750,7 +750,10 @@ export default function SlicerPrepareWorkspace({
   // filament preset. Never silently use the main PLA/other material preset.
   const singleSlotProfileMatches = activeSlotProfiles.length === 1
     && filamentProfiles.some(profile =>
-      String(profile.id) === String(activeSlotProfiles[0].profile_id));
+      String(profile.id) === String(activeSlotProfiles[0].profile_id)
+      && profile.kind === "filament"
+      && profile.engine === String(engine).split(" ")[0]
+      && profile.engine_version === String(engine).split(" ").slice(1).join(" "));
   const materialRoutingPending = assignedSlots.length > 0
     ? !(hasSingleSlot && singleSlotProfileMatches)
     : false;
