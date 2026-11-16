@@ -15,6 +15,14 @@ test("existing matching slot profiles are assigned only when an exact unique mat
   assert.match(scene,/!existing\.has\(String\(slot\.id\)\)/);
   assert.match(scene,/suppressedSlotMatches\.includes/);
 });
+test("slot discovery filters before importing by authenticated printer and linked library spool",()=>{
+  assert.match(scene,/slot_discovery: "1"/);
+  assert.match(scene,/printer_id: String\(printerId\)/);
+  assert.match(scene,/resolveSlotLibrarySpool\(slot,spools\)/);
+  assert.match(scene,/manufacturer: matchingSlot\.manufacturer/);
+  assert.match(scene,/Official native filament candidates/);
+  assert.match(scene,/Import selected profile/);
+});
 test("official catalogue search and import require an explicit slot selection",()=>{
   assert.match(scene,/findOfficialSlotProfiles = async slot/);
   assert.match(scene,/onClick=\{\(\) => findOfficialSlotProfiles\(slot\)\}/);
