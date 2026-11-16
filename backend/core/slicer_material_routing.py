@@ -138,7 +138,11 @@ def single_material_slice_assignment(objects, *, printer_id, selected_filament_p
         seen_profile_slots.add(entry["slot_id"])
         if entry["slot_id"] == slot_id:
             relevant.append(entry)
-    if relevant and str(relevant[0]["profile_id"]) != str(selected_filament_profile_id):
+    if len(relevant) != 1:
+        raise MaterialRoutingError(
+            "The assigned CFS/AMS slot has no native filament profile. "
+            "Select an imported preset for that physical slot before slicing.")
+    if str(relevant[0]["profile_id"]) != str(selected_filament_profile_id):
         raise MaterialRoutingError(
             "The assigned slot's native filament preset must match the resolved slicing preset.")
     return {"slot_id": slot_id, "slot_index": slot_index, "logical_tool": 0}
