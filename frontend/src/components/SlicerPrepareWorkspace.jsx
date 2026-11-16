@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import SlicerPlateEditor from "./SlicerPlateEditor";
+import {addVariableLayerBand} from "./slicerVariableLayers.js";
 import SlicerUiIcon from "./SlicerUiIcon";
 import SlicerFlushVolumes from "./SlicerFlushVolumes";
 import { apiFetch } from "../api";
@@ -32,7 +33,7 @@ const TOOLS = [
   { name: "Measure", target: "measure", icon: "measure", expandable: true, group: "inspect" },
   { name: "Support painting", target: "paint_support", icon: "paint-support", group: "paint" },
   { name: "Seam painting", target: "paint_seam", icon: "paint-seam", group: "paint" },
-  { name: "Variable layer height", icon: "layers", pending: "Native variable layer representation", group: "paint" },
+  { name: "Variable layer height", target: "variable_layers", icon: "layers", group: "paint" },
   { name: "Colour painting", target: "paint_colour", icon: "paint-colour", group: "paint" },
   { name: "Fuzzy skin painting", target: "paint_fuzzy", icon: "paint-fuzzy", group: "paint" },
 ];
@@ -123,6 +124,7 @@ export default function SlicerPrepareWorkspace({
   const [paintErase, setPaintErase] = useState(false);
   const [paintError, setPaintError] = useState("");
   const [paintMobileMinimised, setPaintMobileMinimised] = useState(false);
+  const [variableBandDraft,setVariableBandDraft] = useState({from_mm:0,to_mm:10,layer_mm:0.12});
   const [splitRequest, setSplitRequest] = useState(0);
   const [solidRequest, setSolidRequest] = useState(null);
   const [autoOrientMenuOpen, setAutoOrientMenuOpen] = useState(false);
@@ -509,6 +511,11 @@ export default function SlicerPrepareWorkspace({
       setToolMode(current => current === tool.target ? "select" : tool.target);
       setMobilePane("plate");
       return;
+    }
+    if (tool.target === "variable_layers") {
+      if (!selectedId && objects[0]?.instance_id) selectSingle(objects[0].instance_id);
+      setMeasurementVisible(false);setAutoOrientMenuOpen(false);
+      setToolMode("variable_layers");setMobilePane("plate");return;
     }
     if (tool.target === "measure") {
       if (!selectedId && objects[0]?.instance_id) setSelectedId(objects[0].instance_id);
@@ -985,6 +992,58 @@ export default function SlicerPrepareWorkspace({
       {paintError&&<small role="alert" style={{color:"#fca5a5"}}>{paintError}</small>}
     </section>
   );
+  const variableLayersSelected=objects.find(row=>row.instance_id===selectedId);
+  const variableLayerBands=variableLayersSelected?.variable_layer_profile?.bands || [];
+  const variableLayerPanel=toolMode==="variable_layers" && (
+    <section className="slicerColourPaintPanel slicerVariableLayerPanel"
+      aria-label="Variable layer height controls"
+      style={{position:"absolute",top:"var(--slicer-paint-top, 56px)",left:12,zIndex:20,
+        width:"min(310px, calc(100% - 74px))",maxHeight:"min(490px, calc(100% - 24px))",
+        overflowY:"auto",padding:10,border:"1px solid #476079",borderRadius:10,
+        background:"rgba(17,27,42,.96)",boxShadow:"0 8px 26px rgba(0,0,0,.4)",
+        display:"grid",gap:8}}>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:8}}>
+        <strong>Variable layer height</strong>
+        <button type="button" onClick={()=>{setToolMode("select");setPaintError("");}}>Done</button>
+      </div>
+      <small>Apply a different layer height within specified model Z ranges. Outside those bands, the normal process layer height applies.</small>
+      <div className="slicerVariableLayerBandGrid">
+        {[
+          ["from_mm","From Z (mm)",0.5],
+          ["to_mm","To Z (mm)",0.5],
+          ["layer_mm","Layer height (mm)",0.01],
+        ].map(([key,label,step])=><label key={key}>{label}
+          <input type="number" min={key==="layer_mm"?.05:0}
+            max={key==="layer_mm"?.5:1000} step={step}
+            value={variableBandDraft[key]}
+            onChange={event=>setVariableBandDraft(current=>({...current,
+              [key]:Number(event.target.value)}))} />
+        </label>)}
+      </div>
+      <button type="button" disabled={!variableLayersSelected} onClick={()=>{
+        try{
+          const bands=addVariableLayerBand(variableLayerBands,
+            variableBandDraft.from_mm,variableBandDraft.to_mm,variableBandDraft.layer_mm);
+          updatePlate(latest.current.map(row=>row.instance_id===selectedId
+            ?{...row,variable_layer_profile:{version:1,bands}}:row));
+          setPaintError("");
+        }catch(error){setPaintError(error.message||"Invalid variable layer range.");}
+      }}>Add layer range</button>
+      {variableLayerBands.map((band,i)=><div key={i} className="slicerVariableLayerBandRow">
+        <span>{band.from_mm}–{band.to_mm} mm · {band.layer_mm} mm layers</span>
+        <button type="button" aria-label={"Remove layer range "+(i+1)}
+          onClick={()=>{
+            const bands=variableLayerBands.filter((_,j)=>i!==j);
+            updatePlate(latest.current.map(row=>row.instance_id===selectedId
+              ?(bands.length?{...row,variable_layer_profile:{version:1,bands}}:
+                (({variable_layer_profile:unused,...rest})=>rest)(row)):row));
+            setPaintError("");
+          }}>Remove</button>
+      </div>)}
+      <small>Draft preview only. Native Orca layer-height profile conversion must be verified before these bands can change G-code.</small>
+      {paintError&&<small role="alert" style={{color:"#fca5a5"}}>{paintError}</small>}
+    </section>
+  );
   // Mobile toolbar scroll viewports clip all descendants, even position:fixed.
   // Portal the menu on phones; keep the desktop popover in its original place.
   const addModelMenu = (
@@ -1055,6 +1114,7 @@ export default function SlicerPrepareWorkspace({
             (tool.target === "paint_support" && toolMode === "paint_support") ||
             (tool.target === "paint_seam" && toolMode === "paint_seam") ||
             (tool.target === "paint_fuzzy" && toolMode === "paint_fuzzy") ||
+            (tool.target === "variable_layers" && toolMode === "variable_layers") ||
             (tool.target === "paint_colour" && toolMode === "paint_colour") ||
             (tool.target === "lay_face" && toolMode === "lay_face") ||
             (tool.target === "auto_orient" && autoOrientMenuOpen) ||
@@ -1430,7 +1490,7 @@ export default function SlicerPrepareWorkspace({
               </button>;
             })}
           </div>
-        </section> : <SlicerPlateEditor key={activePlateId} plateIndex={Math.max(0,plates.findIndex(item=>item.id===activePlateId))} plateCount={plates.length||1} toolbar={modelToolbar} paintControls={paintPanel} files={files} localAssets={localAssets}
+        </section> : <SlicerPlateEditor key={activePlateId} plateIndex={Math.max(0,plates.findIndex(item=>item.id===activePlateId))} plateCount={plates.length||1} toolbar={modelToolbar} paintControls={variableLayerPanel || paintPanel} files={files} localAssets={localAssets}
           onLocalAssetsChange={onLocalAssetsChange} onPlateIssuesChange={onPlateIssuesChange} objects={objects} onChange={updatePlate}
           colourPaintOptions={{mode:paintMode,slot:paintErase?null:(isSupportPainting?supportSlot:isSeamPainting?seamSlot:isFuzzyPainting?0:paintSlot),palette:paintPalette,
             radiusMm:paintBrushMm,angleDeg:paintAngle,minHeightMm:paintHeight[0],maxHeightMm:paintHeight[1],
