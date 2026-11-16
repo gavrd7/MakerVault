@@ -204,6 +204,43 @@ class BuildPlate3MFTests(SimpleTestCase):
         self.assertAlmostEqual(transform[1], 1, places=5)
         self.assertAlmostEqual(transform[3], -1, places=5)
 
+    def test_variable_layer_ranges_are_native_orca_3mf_per_object(self):
+        base = {"x_mm": 0, "y_mm": 0, "rotation_deg": 0,
+                "scale_percent": 100, "rotation_xyz_deg": [0, 0]}
+        model = fixture_stl()
+        plate = [
+            ({**base, "x_mm": -20}, model),
+            ({**base, "x_mm": 20, "variable_layer_profile": {"version": 1,
+                "bands": [{"from_mm": 1, "to_mm": 3, "layer_mm": .12},
+                          {"from_mm": 3, "to_mm": 5, "layer_mm": .16}]}}, model),
+        ]
+        result = build_plate_3mf(plate, bed_width=220, bed_depth=220)
+        with zipfile.ZipFile(io.BytesIO(result)) as archive:
+            ranges = ET.fromstring(archive.read("Metadata/layer_config_ranges.xml"))
+            native = ET.fromstring(archive.read("3D/3dmodel.model"))
+            self.assertIn("Metadata/model_settings.config", archive.namelist())
+        self.assertEqual([item.attrib["id"] for item in ranges.findall("object")], ["2"])
+        bands = ranges.findall("./object/range")
+        self.assertEqual([(b.attrib["min_z"], b.attrib["max_z"]) for b in bands],
+                         [("1.000", "3.000"), ("3.000", "5.000")])
+        self.assertEqual([b.find("option").attrib["opt_key"] for b in bands],
+                         ["layer_height", "layer_height"])
+        self.assertEqual([b.find("option").text for b in bands], ["0.120", "0.160"])
+        self.assertEqual(len(native.findall(".//{%s}object" % NS)), 2)
+
+    def test_variable_layer_range_export_rejects_tilt_and_scaling(self):
+        shape = fixture_stl()
+        base = {"x_mm": 0, "y_mm": 0, "rotation_deg": 0,
+                "scale_percent": 100,
+                "variable_layer_profile": {"version": 1, "bands": [
+                    {"from_mm": 0, "to_mm": 10, "layer_mm": .12}]}}
+        for change in ({"rotation_xyz_deg": [90, 0]},
+                       {"z_mm": 3}, {"scale_percent": 90}):
+            with self.subTest(change=change):
+                with self.assertRaisesRegex(SlicerProfileError, "Variable layer"):
+                    build_plate_3mf([({**base, **change}, shape)],
+                                     bed_width=220, bed_depth=220)
+
     def test_object_settings_metadata_preserves_distinct_native_object_ids(self):
         shape = fixture_stl()
         identity = {"x_mm": 0, "y_mm": 0,
