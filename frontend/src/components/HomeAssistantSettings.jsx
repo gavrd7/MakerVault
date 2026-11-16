@@ -1,6 +1,7 @@
 import React, {useEffect, useState} from "react";
 import {apiFetch} from "../api";
 import "./homeAssistantPower.css";
+import {Modal} from "./Common";
 
 /** Deliberately separate from printer-status sync integrations: no scheduler. */
 export default function HomeAssistantSettings() {
@@ -11,6 +12,7 @@ export default function HomeAssistantSettings() {
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState("");
   const [error, setError] = useState("");
+  const [showTokenHelp, setShowTokenHelp] = useState(false);
   useEffect(() => {
     let live = true;
     apiFetch("/api/settings/home-assistant/").then(({item}) => {
@@ -49,7 +51,12 @@ export default function HomeAssistantSettings() {
       <input type="url" placeholder="http://homeassistant.local:8123" value={endpoint}
         onChange={event => setEndpoint(event.target.value)} autoComplete="url"/>
     </label>
-    <label>Long-lived access token
+    <div className="homeAssistantTokenLabel">
+      <span>Long-lived access token</span>
+      <button type="button" className="homeAssistantHelpLink"
+        onClick={() => setShowTokenHelp(true)}>How do I get a token?</button>
+    </div>
+    <label className="homeAssistantTokenInput">
       <input type="password" value={token} onChange={event => setToken(event.target.value)}
         placeholder={saved?.token_configured ? "Token saved — enter only to replace" : "Paste Home Assistant token"}
         autoComplete="new-password"/>
@@ -61,5 +68,26 @@ export default function HomeAssistantSettings() {
     </div>
     {error && <div className="formError" role="alert">{error}</div>}
     {notice && <div className="notice" role="status">{notice}</div>}
+    {showTokenHelp && <Modal title="Home Assistant access token"
+      onClose={() => setShowTokenHelp(false)}>
+      <div className="homeAssistantHelpSteps">
+        <p>Generate a long-lived access token in your Home Assistant account:</p>
+        <ol>
+          <li>Open Home Assistant and select your user profile in the sidebar.</li>
+          <li>Open <strong>Security</strong>.</li>
+          <li>Find <strong>Long-lived access tokens</strong> and select <strong>Create token</strong>.</li>
+          <li>Name it <strong>MakerVault printer power</strong>, copy the token, and paste it into MakerVault.</li>
+          <li>Save your settings, then select <strong>Test connection</strong>.</li>
+        </ol>
+        <p>The token is displayed only when created. Keep it private; do not paste it into the Home Assistant URL.</p>
+        <a href="https://www.home-assistant.io/docs/authentication/"
+          target="_blank" rel="noopener noreferrer">
+          Full Home Assistant authentication guidance ↗
+        </a>
+        <div className="settingsActions">
+          <button type="button" onClick={() => setShowTokenHelp(false)}>Done</button>
+        </div>
+      </div>
+    </Modal>}
   </article>;
 }
