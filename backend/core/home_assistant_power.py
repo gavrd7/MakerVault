@@ -132,8 +132,10 @@ def printer_is_busy(printer):
         return True
     for connection in printer.live_connections.filter(enabled=True):
         snapshot = connection.last_snapshot or {}
-        states = [snapshot.get("state"), (snapshot.get("job") or {}).get("state"),
-                  (snapshot.get("job") or {}).get("status")]
+        job = snapshot.get("job")
+        if not isinstance(job, dict):
+            job = {}
+        states = [snapshot.get("state"), job.get("state"), job.get("status")]
         if any(str(state or "").strip().casefold().replace("_", "-") in BUSY_STATES for state in states):
             return True
     return False
