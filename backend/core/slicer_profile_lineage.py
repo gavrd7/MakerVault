@@ -44,12 +44,14 @@ def inspect_orca_lineage(start, candidates):
     if start.engine != "orcaslicer":
         raise SlicerProfileError("Only Orca profile inheritance can be inspected.")
     by_name = {}
+    scope = getattr(start, "source_scope", "")
     for candidate in candidates:
         if (
             candidate.owner_id != start.owner_id
             or candidate.engine != start.engine
             or candidate.engine_version != start.engine_version
             or candidate.kind != start.kind
+            or getattr(candidate, "source_scope", "") != scope
         ):
             continue
         if candidate.name in by_name:
