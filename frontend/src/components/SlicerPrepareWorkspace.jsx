@@ -111,6 +111,8 @@ export default function SlicerPrepareWorkspace({
   const [paintMode, setPaintMode] = useState("brush");
   const [paintSlot, setPaintSlot] = useState(0);
   const [supportSlot, setSupportSlot] = useState(0);
+  const [supportOverhangsOnly, setSupportOverhangsOnly] = useState(false);
+  const [supportOverhangAngle, setSupportOverhangAngle] = useState(45);
   const [paintBrushMm, setPaintBrushMm] = useState(3);
   const [paintAngle, setPaintAngle] = useState(30);
   const [paintHeight, setPaintHeight] = useState([0, 10]);
@@ -885,11 +887,24 @@ export default function SlicerPrepareWorkspace({
             color:materialTextColor(slot.color),fontWeight:700,fontSize:11}}>{index+1}</span>
         </button>)}
       </div>}
-      {isSupportPainting&&<div role="group" aria-label="Support painting action" style={{display:"flex",gap:5}}>
-        {[[0,"Enforce supports"],[1,"Block supports"]].map(([slot,label])=><button type="button" key={slot}
-          aria-pressed={!paintErase&&supportSlot===slot} className={!paintErase&&supportSlot===slot?"isActive":""}
-          onClick={()=>{setSupportSlot(slot);setPaintErase(false);}}>{label}</button>)}
-      </div>}
+      {isSupportPainting&&<>
+        <div role="group" aria-label="Support painting action" style={{display:"flex",gap:5}}>
+          {[[0,"Enforce supports"],[1,"Block supports"]].map(([slot,label])=><button type="button" key={slot}
+            aria-pressed={!paintErase&&supportSlot===slot} className={!paintErase&&supportSlot===slot?"isActive":""}
+            onClick={()=>{setSupportSlot(slot);setPaintErase(false);}}>{label}</button>)}
+        </div>
+        <label className="checkRow" style={{display:"flex",alignItems:"center",gap:7,fontSize:12}}>
+          <input type="checkbox" checked={supportOverhangsOnly}
+            onChange={event=>setSupportOverhangsOnly(event.target.checked)} />
+          <span>Overhangs only</span>
+        </label>
+        {supportOverhangsOnly&&<label style={{display:"grid",gap:3,fontSize:12}}>
+          Overhang angle · {supportOverhangAngle}° from vertical
+          <input type="range" min="10" max="80" step="5" aria-label="Support overhang angle"
+            value={supportOverhangAngle} onChange={event=>setSupportOverhangAngle(Number(event.target.value))} />
+          <small style={{opacity:.8}}>Restricts new support-enforcer strokes to downward-facing overhangs. Blockers and erasing remain unrestricted.</small>
+        </label>}
+      </>}
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:5}}>
         <small>{isSupportPainting ? `${paintSelected?.support_paint?.regions?.reduce((n,r)=>n+r.patches.length,0)||0} support patches` : paintSelected?.colour_paint?.version === 2 ? `${paintSelected.colour_paint.regions?.reduce((n,region)=>n+region.patches.length,0)||0} clipped patches` : `${paintSelected?.colour_paint ? Object.keys(paintSelected.colour_paint.faces||{}).length : 0} facets (legacy)`}</small>
         <div className="slicerPaintEditActions">
@@ -1400,7 +1415,8 @@ export default function SlicerPrepareWorkspace({
         </section> : <SlicerPlateEditor key={activePlateId} plateIndex={Math.max(0,plates.findIndex(item=>item.id===activePlateId))} plateCount={plates.length||1} toolbar={modelToolbar} paintControls={paintPanel} files={files} localAssets={localAssets}
           onLocalAssetsChange={onLocalAssetsChange} onPlateIssuesChange={onPlateIssuesChange} objects={objects} onChange={updatePlate}
           colourPaintOptions={{mode:paintMode,slot:paintErase?null:(isSupportPainting?supportSlot:paintSlot),palette:paintPalette,
-            radiusMm:paintBrushMm,angleDeg:paintAngle,minHeightMm:paintHeight[0],maxHeightMm:paintHeight[1]}}
+            radiusMm:paintBrushMm,angleDeg:paintAngle,minHeightMm:paintHeight[0],maxHeightMm:paintHeight[1],
+            supportOverhangsOnly:supportOverhangsOnly,supportOverhangAngle:supportOverhangAngle}}
           onColourPaintHeightPick={z=>{
             if(!paintHeightFollow)return;
             setPaintHeight(([lower,upper])=>{
