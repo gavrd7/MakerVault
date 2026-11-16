@@ -613,10 +613,14 @@ export default function SlicerPrepareWorkspace({
   const multiMaterialReadyForExport = assignedSlots.length === objects.length
     && new Set(assignedSlots.map(slot => slot.slot_id)).size >= 2
     && slotFilamentProfiles.length >= 2;
+  // The server inherits the explicitly assigned native filament for a
+  // single-slot slice; it need not match the main profile shown in Setup.
+  // An unrelated or missing native slot profile is still unsafe.
   const singleSlotProfileMatches = slotFilamentProfiles.length === 0
     || (slotFilamentProfiles.length === 1
       && slotFilamentProfiles[0].slot_id === assignedSlots[0]?.slot_id
-      && String(slotFilamentProfiles[0].profile_id) === String(selectedProfiles?.filament_id));
+      && filamentProfiles.some(profile =>
+        String(profile.id) === String(slotFilamentProfiles[0].profile_id)));
   const materialRoutingPending = assignedSlots.length > 0
     ? !(hasSingleSlot && singleSlotProfileMatches)
     : slotFilamentProfiles.length > 0;
@@ -627,7 +631,7 @@ export default function SlicerPrepareWorkspace({
     (!activePlateReady ? "Select a plate containing models to slice." : "") ||
     (conflictsBlockSlice ? "Resolve build-plate conflicts or wait for models to finish loading before slicing." : "") ||
     (flushSettings != null ? "This draft contains flushing/prime-tower overrides, but the physical multi-material path is not yet enabled. Save the draft or reset flushing settings to slice a single-filament job." : "") ||
-    (materialRoutingPending ? "Multiple assigned slots, nonzero logical tools or incompatible per-slot presets require verified multi-material tool mapping. For single-filament slicing, use the same physical slot on every model, logical tool 0 and the selected native filament preset."
+    (materialRoutingPending ? "Multiple assigned slots or an unrelated/missing slot preset require verified multi-material routing. For a single-filament slice, assign the same physical slot to every model; its selected native filament preset is used automatically."
       : objectSettingsPending
       ? "Some Object settings are not yet verified for slicing. Wall loops and sparse infill density are supported; other Object overrides can be saved in drafts but cannot be sliced yet."
       : !workerConfigured
