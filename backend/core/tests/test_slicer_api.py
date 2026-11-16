@@ -840,6 +840,60 @@ class SliceJobApiTests(TestCase):
         self.assertNotEqual(job.filament_profile_id, main.pk)
         self.assertEqual(job.settings["slot_filament_profiles"][0]["profile_id"], str(slot_abs.pk))
 
+    def test_slot_profile_inheritance_is_engine_agnostic_at_draft_creation(self):
+        source = FileAsset.objects.create(
+            owner=self.owner, name="Engine native profiles", category="source",
+            metadata={"extension": ".json"},
+        )
+        self.client.force_login(self.owner)
+        for engine, version in (
+            ("orcaslicer", "2.5.0"),
+            ("crealityprint", "7.3.0"),
+            ("prusaslicer", "2.9.4"),
+        ):
+            with self.subTest(engine=engine):
+                def make(kind, name):
+                    return SlicerProfile.objects.create(
+                        owner=self.owner, engine=engine, engine_version=version,
+                        kind=kind, name=name, file_asset=source,
+                        content_sha256="b" * 64,
+                    )
+                printer = make("printer", "Test " + engine)
+                process = make("process", "Standard " + engine)
+                main = make("filament", "Generic PLA " + engine)
+                slot = make("filament", "ABS " + engine)
+                assigned_id = "material-bay-2"
+                model = {
+                    "instance_id": str(uuid.uuid4()),
+                    "asset_id": str(self.input_asset.pk),
+                    "x_mm": 0, "y_mm": 0, "rotation_deg": 0,
+                    "scale_percent": 100, "color": "#121212",
+                    "material_slot": {
+                        "printer_id": str(self.printer.pk),
+                        "slot_id": assigned_id, "slot_index": 1,
+                    },
+                }
+                payload = {
+                    **self.payload, "engine": engine, "engine_version": version,
+                    "printer_preset": printer.name, "printer_profile_id": str(printer.pk),
+                    "filament_preset": main.name, "filament_profile_id": str(main.pk),
+                    "process_preset": process.name, "process_profile_id": str(process.pk),
+                    "settings": {
+                        "plate_objects": [model],
+                        "slot_filament_profiles": [
+                            {"slot_id": "unused-bay", "profile_id": str(main.pk)},
+                            {"slot_id": assigned_id, "profile_id": str(slot.pk)},
+                        ],
+                    },
+                }
+                response = self.post(payload)
+                self.assertEqual(response.status_code, 201, response.content)
+                job = SliceJob.objects.get(pk=response.json()["job"]["id"])
+                self.assertEqual(job.filament_profile_id, slot.pk)
+                self.assertEqual(job.filament_preset, slot.name)
+                self.assertNotEqual(job.filament_profile_id, main.pk)
+                self.assertEqual(job.settings["slot_filament_profiles"][1]["slot_id"], assigned_id)
+
     def test_rejects_untrusted_execution_fields_and_profile_paths(self):
         self.client.force_login(self.owner)
         for patch in (
