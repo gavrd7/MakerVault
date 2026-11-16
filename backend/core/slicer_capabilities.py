@@ -34,10 +34,15 @@ def native_capabilities(engine, version):
         reason = ("This engine/version has no verified native conversion for "
                   "these annotations. Try the OrcaSlicer editor for draft "
                   "work; native slicing is still pending.")
-    return {
-        key: {"status": state, "reason": reason}
-        for key in FEATURES
-    }
+    result = {key: {"status": state, "reason": reason} for key in FEATURES}
+    if engine == "orcaslicer" and version == "2.5.0":
+        result["variable_layer_profile"] = {
+            "status": "test_only",
+            "reason": ("Native Orca layer_config_ranges export is enabled for offline "
+                       "single-model test slices. Printer upload is disabled until "
+                       "real G-code layer transitions are verified."),
+        }
+    return result
 
 
 def annotated_features(plates):
