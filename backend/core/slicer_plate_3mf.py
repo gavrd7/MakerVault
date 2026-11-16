@@ -16,6 +16,7 @@ from .slicer_mesh import MeshInspectionError
 from .slicer_profiles import SlicerProfileError
 from .slicer_process_settings import PROCESS_FIELDS, validate_process_overrides
 from .slicer_variable_layers import orca_layer_config_ranges
+from .slicer_native_support_paint import native_support_triangles
 
 NS = "http://schemas.microsoft.com/3dmanufacturing/core/2015/02"
 # Match the validated source-STL limit. Generated XML/archive limits remain
@@ -44,7 +45,7 @@ def _triangles(raw):
                     current = []
 
 
-def _render_mesh(raw, element):
+def _render_mesh(raw, element, support_paint=None):
     triangles = list(_triangles(raw))
     if not triangles or len(triangles) > MAX_TRIANGLES:
         raise SlicerProfileError("STL triangle count exceeds the 3MF plate limit.")
@@ -59,7 +60,11 @@ def _render_mesh(raw, element):
     faces = ET.SubElement(mesh, f"{{{NS}}}triangles")
     # Weld identical vertices to keep generated 3MF files compact.
     indexed = {}
-    for tri in triangles:
+    try:
+        tagged = native_support_triangles(triangles, support_paint)
+    except ValueError as exc:
+        raise SlicerProfileError(str(exc)) from exc
+    for tri, support_state in tagged:
         ids = []
         for point in tri:
             centred = tuple(round(point[i] - origin[i], 6) for i in range(3))
@@ -70,9 +75,11 @@ def _render_mesh(raw, element):
                     k: format(value, ".6f") for k, value in zip(("x", "y", "z"), centred)
                 })
             ids.append(indexed[centred])
-        ET.SubElement(faces, f"{{{NS}}}triangle",
-                      {"v1": str(ids[0]), "v2": str(ids[1]), "v3": str(ids[2])})
-    return len(triangles), maximum[0] - minimum[0], maximum[1] - minimum[1]
+        attrs = {"v1": str(ids[0]), "v2": str(ids[1]), "v3": str(ids[2])}
+        if support_state is not None:
+            attrs["paint_supports"] = support_state
+        ET.SubElement(faces, f"{{{NS}}}triangle", attrs)
+    return len(tagged), maximum[0] - minimum[0], maximum[1] - minimum[1]
 
 
 def _axis_scales(item):
@@ -167,6 +174,7 @@ def build_plate_3mf(objects_with_stl, *, bed_width, bed_depth, native_tool_indic
         isinstance(entry[0], dict) and (
             bool(entry[0].get("process_overrides")) or
             bool((entry[0].get("variable_layer_profile") or {}).get("bands")) or
+            bool((entry[0].get("support_paint") or {}).get("regions")) or
             abs(float(entry[0].get("z_mm", 0))) > 1e-7 or
             any(abs(float(v)) > 1e-7 for v in entry[0].get("rotation_xyz_deg", [0, 0]))
         )
@@ -182,7 +190,7 @@ def build_plate_3mf(objects_with_stl, *, bed_width, bed_depth, native_tool_indic
         if total_bytes > MAX_SOURCE_TOTAL:
             raise SlicerProfileError("Total plate model size exceeds the limit.")
         obj = ET.SubElement(resources, f"{{{NS}}}object", {"id": str(index), "type": "model"})
-        count, width, depth = _render_mesh(raw, obj)
+        count, width, depth = _render_mesh(raw, obj, item.get("support_paint"))
         total_triangles += count
         # Transform the actual welded vertices, not only the original 2D
         # bounding rectangle: a tilted model has a different XY footprint.
