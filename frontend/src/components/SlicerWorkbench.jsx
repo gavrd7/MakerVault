@@ -47,7 +47,9 @@ function profileFacets(profile) {
   ) || "Not specified";
   const printerModel = label.match(/(?:^|[\s@-])((?:K[12](?:\s*(?:Max|Plus|SE|Combo))?|X1(?:C|E)?|P1[SP]?|A1(?:\s*Mini)?|MK[234](?:S)?|CORE\s*ONE|SV\d+))\b/i);
   const qualified = label.match(/@\s*([^@]+)$/);
-  const model = printerModel?.[1]?.toUpperCase().replace(/\s+/g, " ") ||
+  const model = isInternalNativeProfile(profile) ? "Internal parent" :
+    /@\s*System\s*$/i.test(label) ? "All printers" :
+    printerModel?.[1]?.toUpperCase().replace(/\s+/g, " ") ||
     (qualified ? qualified[1].replace(/\b(?:all|\d+(?:\.\d+)?\s*(?:mm\s*)?nozzle)\b/gi, "").replace(/[-\s]+$/g, "").trim() : "") ||
     "Not specified";
   return { vendor, model, material };
