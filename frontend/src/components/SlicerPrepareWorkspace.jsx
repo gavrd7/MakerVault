@@ -315,7 +315,7 @@ export default function SlicerPrepareWorkspace({
     if (hex) onManualColorChange?.(instanceId);
     setFilamentPickerId("");
     setFilamentNotice("Assigned " + slotName(slot) +
-      " to the project model. One-slot slicing retains the selected native filament; multi-slot printing requires verified tool routing.");
+      " to the project model. Single-slot slicing uses that slot's native filament preset when assigned; multi-slot printing still requires verified tool routing.");
   };
   const clearModelFilament = instanceId => {
     updatePlate(latest.current.map(item => {
@@ -346,7 +346,7 @@ export default function SlicerPrepareWorkspace({
       const loaded = (selectedPrinter?.slots || []).filter(slot => slot.is_loaded);
       setLiveMaterials(loaded);
       setMaterialMessage(loaded.length
-        ? "Loaded slots can now be assigned as project metadata; slicing still uses native filament presets."
+        ? "Assigned slots use their selected native filament preset for a single-filament slice. Multiple slots still require verified tool routing."
         : "No loaded slots reported for this printer.");
     } catch (err) {
       if (requestId !== requestRef.current) return;
@@ -1424,7 +1424,7 @@ export default function SlicerPrepareWorkspace({
               </header>
               <div className="slicerFlushModalBody">
                 <p className="projectUploadHint">Choose an imported native filament preset for this slot.
-                  This selection is saved with the draft; physical tool routing still requires validation.</p>
+                  A single assigned slot's native preset is used automatically when slicing. Physical multi-slot tool routing still requires validation.</p>
                 <label>Native filament preset
                   <select value={slotFilamentProfiles.find(row=>row.slot_id===editingSlotProfile)?.profile_id||""}
                     onChange={e=>{
