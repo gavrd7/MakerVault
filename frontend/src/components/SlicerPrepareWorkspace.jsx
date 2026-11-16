@@ -956,10 +956,10 @@ export default function SlicerPrepareWorkspace({
           value={paintAngle} onChange={e=>setPaintAngle(Number(e.target.value))}/>
       </label>}
       {paintMode==="height"&&<div style={{display:"grid",gap:5}}>
-        <label style={{display:"flex",alignItems:"center",gap:7,fontSize:12}}>
+        <label className="slicerPaintHeightFollowRow">
           <input type="checkbox" checked={paintHeightFollow}
             onChange={e=>setPaintHeightFollow(e.target.checked)}/>
-          Follow pointer to position band
+          <span>Follow pointer to position band</span>
         </label>
         <label style={{display:"grid",gap:2,fontSize:12}}>
           Range thickness · {paintHeightRange} mm
