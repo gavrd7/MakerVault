@@ -1021,6 +1021,11 @@ def submit(connection, user, payload):
                 "Multi-colour test G-code is not approved for printer upload or print start. "
                 "Complete manufacturer-specific toolchange verification first.", 409
             )
+        if (asset.metadata or {}).get("variable_layer_test") is True:
+            raise GcodeSubmissionError(
+                "Variable layer-height test G-code is not approved for printer upload "
+                "or print start. Verify the native Orca layer transitions first.", 409
+            )
         if asset.file.size > MAX_UPLOAD_BYTES:
             raise GcodeSubmissionError("This release supports printer transfers up to 64 MiB. Large files require the streaming transport.", 413)
         # Keep the original filename recognisable; suffix avoids overwrites.
