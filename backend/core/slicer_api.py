@@ -473,6 +473,29 @@ def _draft(user, data):
                 owner=user, pk=assigned["profile_id"], kind="filament",
                 engine=engine.key, engine_version=version).exists():
             raise ValueError("Per-slot filament profile does not match the current engine and version.")
+    # For one logical material on the active plate, the explicitly selected
+    # slot's verified native filament profile is authoritative. Keep slot IDs
+    # separate from logical tool indices and never guess a feeder mapping.
+    assigned_slots = [
+        item.get("material_slot", {}).get("slot_id")
+        for item in plate_models if isinstance(item.get("material_slot"), dict)
+    ]
+    if (plate_models and len(assigned_slots) == len(plate_models)
+            and len(set(assigned_slots)) == 1):
+        slot_id = assigned_slots[0]
+        matching = [
+            row for row in settings_data.get("slot_filament_profiles", [])
+            if row["slot_id"] == slot_id
+        ]
+        if len(matching) == 1:
+            chosen = SlicerProfile.objects.filter(
+                owner=user, pk=matching[0]["profile_id"], kind="filament",
+                engine=engine.key, engine_version=version,
+            ).first()
+            if not chosen:
+                raise ValueError("Assigned filament slot has no matching native profile.")
+            data = {**data, "filament_profile_id": str(chosen.pk),
+                    "filament_preset": chosen.name}
     native_profiles = {}
     native_labels = {}
     for kind in ("printer", "filament", "process"):
