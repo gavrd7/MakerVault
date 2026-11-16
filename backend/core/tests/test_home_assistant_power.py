@@ -148,6 +148,14 @@ class HomeAssistantPowerApiTests(TestCase):
         self.assertEqual(result.json()["state"], "on")
         switch.assert_called_once_with(self.integration, "switch.printer_a", "on")
 
+    @patch("core.home_assistant_api.switch_state", side_effect=HomeAssistantPowerError("HA unavailable"))
+    def test_unknown_switch_state_still_returns_assigned_control(self, state):
+        self.printer.profile_data = {"ha_power_entity": "switch.printer_a"}
+        self.printer.save()
+        result = self.client.get(self.power_url)
+        self.assertEqual(result.status_code, 200)
+        self.assertEqual(result.json(), {"available": True, "state": "unknown"})
+
     @patch("core.home_assistant_api.printer_is_busy", return_value=True)
     @patch("core.home_assistant_api.set_switch")
     def test_turn_off_blocked_when_busy(self, switch, busy):
