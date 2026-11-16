@@ -31,7 +31,7 @@ export default function PrinterPowerButton({printerId, compact = false}) {
     setError("");
     try {
       const result = await apiFetch("/api/printing/printers/" + printerId + "/power/", {
-        method: "POST", body: {action},
+        method: "POST", body: {action, ...(action === "off" ? {confirm: true} : {})},
       });
       if (!result.available || result.state !== action) {
         throw new Error("Home Assistant has not confirmed the requested switch state.");
