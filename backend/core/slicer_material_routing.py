@@ -101,8 +101,7 @@ def single_material_slice_assignment(objects, *, printer_id, selected_filament_p
     if not assigned:
         if material_tool_bindings:
             raise MaterialRoutingError("Remove unused native tool bindings before slicing.")
-        if slot_filament_profiles:
-            raise MaterialRoutingError("Remove unused slot-specific filament presets before slicing.")
+        # Profiles for loaded but unassigned slots are only saved metadata.
         return None
     if len(assigned) != len(slots):
         raise MaterialRoutingError("Assign the same filament slot to every model, or clear the assignments.")
@@ -125,16 +124,23 @@ def single_material_slice_assignment(objects, *, printer_id, selected_filament_p
             raise MaterialRoutingError(
                 "Single-filament slicing requires logical tool 0; other tool bindings need multi-material verification."
             )
-    if len(slot_filament_profiles) > 1:
-        raise MaterialRoutingError("Multi-filament native profile routing is not enabled.")
-    if slot_filament_profiles:
-        entry = slot_filament_profiles[0]
+    # Profiles may exist for every loaded bay; only the one assigned to
+    # the print must match the backend-resolved native filament preset.
+    seen_profile_slots = set()
+    relevant = []
+    for entry in slot_filament_profiles:
         if (not isinstance(entry, dict)
-                or entry.get("slot_id") != slot_id
-                or str(entry.get("profile_id")) != str(selected_filament_profile_id)):
-            raise MaterialRoutingError(
-                "The assigned slot's native filament preset must match the selected slicing preset."
-            )
+                or set(entry) != {"slot_id", "profile_id"}
+                or not isinstance(entry["slot_id"], str) or not entry["slot_id"]
+                or not isinstance(entry["profile_id"], str) or not entry["profile_id"]
+                or entry["slot_id"] in seen_profile_slots):
+            raise MaterialRoutingError("Invalid or duplicate slot native filament profile.")
+        seen_profile_slots.add(entry["slot_id"])
+        if entry["slot_id"] == slot_id:
+            relevant.append(entry)
+    if relevant and str(relevant[0]["profile_id"]) != str(selected_filament_profile_id):
+        raise MaterialRoutingError(
+            "The assigned slot's native filament preset must match the resolved slicing preset.")
     return {"slot_id": slot_id, "slot_index": slot_index, "logical_tool": 0}
 
 
