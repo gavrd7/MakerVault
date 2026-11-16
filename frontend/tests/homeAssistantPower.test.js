@@ -37,6 +37,14 @@ test("one reusable power control is used across printer views", () => {
   assert.match(button, /compact \? " isCompact"/);
 });
 
+test("token help opens a compact dialog with official Home Assistant guidance", () => {
+  assert.match(haSettings, /How do I get a token\?/);
+  assert.match(haSettings, /showTokenHelp && <Modal title="Home Assistant access token"/);
+  assert.match(haSettings, /User profile|your user profile/);
+  assert.match(haSettings, /https:\/\/www\.home-assistant\.io\/docs\/authentication\//);
+  assert.match(haSettings, /rel="noopener noreferrer"/);
+});
+
 test("settings are manual only, do not leak the token, and share printing settings", () => {
   assert.match(settings, /<HomeAssistantSettings \/>/);
   assert.match(haSettings, /token_configured/);
