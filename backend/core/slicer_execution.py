@@ -274,6 +274,23 @@ def _validate_plate_execution(job):
             "support painting export is not implemented. Keep the painting in a draft "
             "until the engine adapter supports these annotations."
         )
+    for field, label in (
+        ("seam_paint", "Seam enforcer/blocker painting"),
+        ("fuzzy_skin_paint", "Paint-on fuzzy skin"),
+    ):
+        if any(isinstance(item, dict) and isinstance(item.get(field), dict)
+               and item[field].get("regions") for item in objects):
+            raise SlicerExecutionError(
+                label + " is saved in this draft, but native Orca 3MF surface "
+                "annotations are not yet exported. Keep the draft; do not slice "
+                "until a verified native adapter can apply the painted regions."
+            )
+    if any(isinstance(item, dict) and isinstance(item.get("variable_layer_profile"), dict)
+           and item["variable_layer_profile"].get("bands") for item in objects):
+        raise SlicerExecutionError(
+            "Variable layer height bands are draft-only until native Orca "
+            "layer_height_profile export is validated. Keep the draft before slicing."
+        )
     if settings.get("multi_material_test") is True:
         # This permits *offline G-code generation* only. Uploaded or started
         # printer jobs are blocked by the submission API for these artifacts.
