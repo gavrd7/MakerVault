@@ -73,6 +73,33 @@ class MultiPlateProject3MFTests(SimpleTestCase):
             self.assertEqual(json.loads(package.read(stored_item["paint_sidecar"])), paint)
             self.assertEqual(metadata["plates"][0]["objects"][0]["colour_paint"], paint)
 
+    def test_semantic_paint_sidecars_and_variable_bands_survive_export(self):
+        shape = fixture_stl()
+        patch = {"face": 0, "polygon": [[0, 0, 0], [2, 0, 0], [0, 2, 0]]}
+        paint = {"version": 2, "signature": "1:abcdef01",
+                 "regions": [{"slot": 0, "patches": [patch]}]}
+        variable = {"version": 1, "bands": [
+            {"from_mm": 0, "to_mm": 10, "layer_mm": 0.12}
+        ]}
+        item = {"asset_id": str(uuid.uuid4()), "instance_id": str(uuid.uuid4()),
+                "x_mm": 0, "y_mm": 0, "rotation_deg": 0, "scale_percent": 100,
+                "color": "#123456", "seam_paint": paint,
+                "fuzzy_skin_paint": paint, "variable_layer_profile": variable}
+        metadata = {"format": "makervault-project-v1", "active_plate_id": "plate-1",
+                    "plates": [{"id": "plate-1", "name": "Plate 1", "objects": [item]}]}
+        data = build_makervault_project_3mf(
+            [("Plate 1", [(item, shape)])], bed_width=220, bed_depth=220,
+            metadata=metadata)
+        with zipfile.ZipFile(io.BytesIO(data)) as package:
+            exported = json.loads(package.read("Metadata/makervault-project.json"))
+            saved = exported["plates"][0]["objects"][0]
+            for field, prefix in (("seam_paint", "seam"), ("fuzzy_skin_paint", "fuzzy")):
+                self.assertNotIn(field, saved)
+                self.assertEqual(json.loads(package.read(saved[prefix + "_sidecar"])), paint)
+            self.assertEqual(saved["variable_layer_profile"], variable)
+            self.assertEqual(item["seam_paint"], paint)
+            self.assertEqual(item["fuzzy_skin_paint"], paint)
+
 
 class BuildPlate3MFTests(SimpleTestCase):
     def test_elevation_is_preserved_in_individual_and_compound_3mf(self):
