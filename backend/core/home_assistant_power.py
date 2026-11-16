@@ -8,11 +8,13 @@ import hashlib
 import ipaddress
 import re
 import socket
+from datetime import timedelta
 from urllib.parse import urlsplit
 
 import requests
 from cryptography.fernet import Fernet, InvalidToken
 from django.conf import settings
+from django.utils import timezone
 
 
 class HomeAssistantPowerError(ValueError):
@@ -176,19 +178,37 @@ def switch_state(setting, entity):
 
 
 def printer_is_busy(printer):
-    # If any live source indicates an active or uncertain job, fail closed.
-    if printer.print_jobs.filter(status="printing").exists():
-        return True
+    """Fail closed on active telemetry; don't let stale history block an idle printer.
+
+    A recently polled, connected, explicitly idle printer can override a
+    historical print record that was not marked complete. A stale, missing or
+    conflicting snapshot cannot override that record.
+    """
+    history_active = printer.print_jobs.filter(status="printing").exists()
+    now = timezone.now()
+    verified_idle = False
     for connection in printer.live_connections.filter(enabled=True):
         snapshot = connection.last_snapshot or {}
         job = snapshot.get("job")
         if not isinstance(job, dict):
             job = {}
         states = [snapshot.get("state"), job.get("state"), job.get("status")]
-        if any(str(state or "").strip().casefold().replace("_", "-") in BUSY_STATES for state in states):
+        normalized = {
+            str(state or "").strip().casefold().replace("_", "-")
+            for state in states if state is not None
+        }
+        # Even older telemetry indicating an active print is not proof it ended.
+        if normalized & BUSY_STATES:
             return True
-    return False
-
+        checked = getattr(connection, "last_checked_at", None)
+        interval = getattr(connection, "poll_interval_seconds", 30) or 30
+        max_age = timedelta(seconds=max(120, 2 * interval))
+        if (checked and now - checked <= max_age
+                and getattr(connection, "status", None) == "connected"
+                and str(snapshot.get("state") or "").strip().casefold()
+                in {"idle", "ready", "standby", "complete", "completed"}):
+            verified_idle = True
+    return history_active and not verified_idle
 
 def set_switch(setting, entity, desired):
     if desired not in {"on", "off"} or not valid_entity(entity):
