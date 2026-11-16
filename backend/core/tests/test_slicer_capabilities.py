@@ -11,7 +11,10 @@ class SlicerCapabilityTests(SimpleTestCase):
         for version in ("2.4.2", "2.5.0"):
             result = native_capabilities("orcaslicer", version)
             self.assertEqual(set(result), set(FEATURES))
-            self.assertTrue(all(item["status"] == "draft_only" for key, item in result.items()\n                                if key != "variable_layer_profile"))\n            self.assertEqual(result["variable_layer_profile"]["status"],\n                             "test_only" if version == "2.5.0" else "draft_only")
+            self.assertTrue(all(item["status"] == "draft_only" for key, item in result.items()
+                                if key != "variable_layer_profile"))
+            self.assertEqual(result["variable_layer_profile"]["status"],
+                             "test_only" if version == "2.5.0" else "draft_only")
 
     def test_unreviewed_versions_and_cura_are_not_executable(self):
         self.assertTrue(all(
