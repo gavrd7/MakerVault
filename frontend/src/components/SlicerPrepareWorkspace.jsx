@@ -1449,6 +1449,7 @@ export default function SlicerPrepareWorkspace({
           {liveMaterials.map(slot => {
             const chosen=slotFilamentProfiles.find(row=>row.slot_id===String(slot.id));
             const profile=filamentProfiles.find(row=>row.id===chosen?.profile_id);
+            const suggestion=slotMatch(slot);
             return <div className="slicerLiveMaterialSlot slicerLiveMaterialSlotCompact" key={slot.id}>
               <span className="slicerLiveMaterialSwatch slicerLiveMaterialSwatchRound"
                 style={{backgroundColor:validSlotColor(slot)||"#697b91"}} aria-hidden="true"/>
@@ -1456,6 +1457,11 @@ export default function SlicerPrepareWorkspace({
                 <strong title={slot.product_name || slot.material || "Unknown filament"}>
                   {slot.product_name || slot.material || "Unknown filament"}</strong>
                 <small>Slot {(slot.slot_index??0)+1} · {slot.material||"Unknown"}</small>
+                <small>{profile ? "Profile: " + profile.name
+                  : suggestion.level === "exact" ? "Matching installed profile found"
+                  : suggestion.level === "ambiguous" ? "Multiple matching profiles — choose one"
+                  : suggestion.level === "fallback" ? "Similar installed profiles available for review"
+                  : "No matching native profile installed"}</small>
               </div>
               <div className="slicerLiveMaterialActions">
                 <button type="button" onClick={()=>setDetailsSlotId(String(slot.id))}
@@ -1464,6 +1470,36 @@ export default function SlicerPrepareWorkspace({
                   onClick={()=>setEditingSlotProfile(String(slot.id))}
                   aria-label={"Choose filament profile for "+slotName(slot)}>Profile</button>
               </div>
+              {!profile && suggestion.suggestions.length > 0 && <div className="slicerSlotProfileSuggestions">
+                <label>Suggested native profile
+                  <select value="" disabled={!canEdit || busy} onChange={event => {
+                    const id=event.target.value;
+                    if (!id) return;
+                    setSuppressedSlotMatches(current => current.filter(row => row !== String(slot.id)));
+                    onSlotFilamentProfilesChange?.([
+                      ...slotFilamentProfiles.filter(row=>String(row.slot_id)!==String(slot.id)),
+                      {slot_id:String(slot.id),profile_id:id},
+                    ]);
+                  }}>
+                    <option value="">Review profile match…</option>
+                    {suggestion.suggestions.map(row=><option key={row.id} value={row.id}>{row.name}</option>)}
+                  </select>
+                </label>
+              </div>}
+              {!profile && lookupEngine === "orcaslicer" && <div className="slicerSlotProfileSuggestions">
+                <button type="button" disabled={slotOfficialBusy === String(slot.id) || slotImportBusy || !canEdit}
+                  onClick={() => findOfficialSlotProfiles(slot)}>
+                  {slotOfficialBusy === String(slot.id) ? "Searching…" : "Find official profiles"}
+                </button>
+                {(slotOfficialResults[String(slot.id)] || []).length > 0 && <div>
+                  <small>Upstream candidates — choose a compatible profile to import.</small>
+                  {(slotOfficialResults[String(slot.id)] || []).map(row =>
+                    <button type="button" key={row.sub_path} disabled={slotImportBusy}
+                      onClick={() => importOfficialSlotProfile(slot,row)}>
+                      Import {row.name}
+                    </button>)}
+                </div>}
+              </div>}
             </div>;
           })}
           {detailsSlotId && createPortal(<div className="slicerFlushModalBackdrop"
@@ -1511,7 +1547,13 @@ export default function SlicerPrepareWorkspace({
                   <select value={slotFilamentProfiles.find(row=>row.slot_id===editingSlotProfile)?.profile_id||""}
                     onChange={e=>{
                       const updated=slotFilamentProfiles.filter(row=>row.slot_id!==editingSlotProfile);
-                      if(e.target.value)updated.push({slot_id:editingSlotProfile,profile_id:e.target.value});
+                      if(e.target.value) {
+                        setSuppressedSlotMatches(current => current.filter(row => row !== editingSlotProfile));
+                        updated.push({slot_id:editingSlotProfile,profile_id:e.target.value});
+                      } else {
+                        // Respect an explicit "Use main filament preset" choice.
+                        setSuppressedSlotMatches(current => [...new Set([...current,editingSlotProfile])]);
+                      }
                       onSlotFilamentProfilesChange?.(updated);
                     }}>
                     <option value="">Use main filament preset</option>
@@ -1529,6 +1571,7 @@ export default function SlicerPrepareWorkspace({
             </section>
           </div>,document.body)}
           <p role="status">{materialMessage}</p>
+          {slotOfficialError && <p role="alert">{slotOfficialError}</p>}
           <SlicerFlushVolumes slots={liveMaterials} value={flushSettings}
             processProfileId={selectedProfiles?.process_id}
             onChange={onFlushSettingsChange} disabled={!canEdit || busy} />
