@@ -287,8 +287,9 @@ def _validate_plate_execution(job):
         if item.get("process_overrides"):
             raise SlicerExecutionError(
                 "Support painting with per-object overrides is not verified.")
-        if any(abs(float(value)) > 0.000001 for value in
-               item.get("rotation_xyz_deg", [0, 0])) or abs(float(item.get("z_mm", 0))) > 0.000001):
+        if (any(abs(float(value)) > 0.000001 for value in
+                item.get("rotation_xyz_deg", [0, 0]))
+                or abs(float(item.get("z_mm", 0))) > 0.000001):
             raise SlicerExecutionError(
                 "Support painting test requires an upright, non-elevated model.")
         if any(abs(float(value) - 100) > 0.000001 for value in
