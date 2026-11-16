@@ -55,6 +55,15 @@ jobs:
             --engine orcaslicer 2.5.0 reviewed-orca/reviewed.AppImage \
             b30b0ae933e653692cf85a493287a949215ae4c14d547a00203d16dfcadb8054
 
+      - name: Build and inspect the reviewed image before publication
+        run: |
+          set -euo pipefail
+          docker build -f slicer_worker/Dockerfile.bundle -t makervault-orca-reviewed:preflight .
+          docker run --rm --network none --read-only \
+            --tmpfs /tmp:rw,nosuid,size=1g \
+            makervault-orca-reviewed:preflight \
+            python3 -c 'import hashlib,json,pathlib; root=pathlib.Path("/opt/engines"); m=json.loads((root/"manifest.json").read_text()); e=m["engines"]["orcaslicer"]; p=root/"orcaslicer.AppImage"; assert e["version"]=="2.5.0"; assert hashlib.sha256(p.read_bytes()).hexdigest()=="b30b0ae933e653692cf85a493287a949215ae4c14d547a00203d16dfcadb8054"; assert (root/"squashfs-root/AppRun").exists()'
+
       - name: Configure Docker Buildx and GHCR
         uses: docker/setup-buildx-action@v3
       - name: Sign in to GitHub Container Registry
