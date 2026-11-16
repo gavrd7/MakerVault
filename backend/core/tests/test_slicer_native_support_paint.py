@@ -27,7 +27,8 @@ class NativeOrcaSupportPaintTests(SimpleTestCase):
     def test_small_enforcer_patch_splits_only_its_source_triangle(self):
         result = native_support_triangles(self.source, self.paint())
         self.assertGreater(len(result), 2)
-        self.assertEqual(result[-1], (self.source[1], None))
+        self.assertEqual(result[-1][0], tuple(self.source[1]))
+        self.assertIsNone(result[-1][1])
         self.assertIn("4", [value for _, value in result])
         self.assertTrue(any(value is None for _, value in result[:-1]))
         original_area = _area(self.source[0], (0., 0., 1.))
