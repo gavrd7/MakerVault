@@ -128,7 +128,6 @@ export default function SlicerPrepareWorkspace({
   const [autoOrientGoal, setAutoOrientGoal] = useState("balanced");
   const [autoOrientRequest, setAutoOrientRequest] = useState(0);
   const [measurementVisible, setMeasurementVisible] = useState(false);
-  const [measureOptionsOpen, setMeasureOptionsOpen] = useState(false);
   const [measureMode, setMeasureMode] = useState("distance");
   const [measureUnit, setMeasureUnit] = useState("mm");
   const [measureSnapMode, setMeasureSnapMode] = useState("auto");
@@ -355,7 +354,7 @@ export default function SlicerPrepareWorkspace({
   useEffect(()=>{
     undoRef.current=[];redoRef.current=[];
     setSelectedId("");setSelectedIds([]);setSolidRequest(null);setMovePlateTarget("");
-    setToolMode("select");setPaintError("");setMeasurementVisible(false);setMeasureOptionsOpen(false);
+    setToolMode("select");setPaintError("");setMeasurementVisible(false);
     setSplitRequest(0);setHistoryVersion(version=>version+1);
   },[activePlateId]);
   latest.current = objects;
@@ -468,7 +467,7 @@ export default function SlicerPrepareWorkspace({
   };
   function selectTool(tool, event) {
     // Keep each menu inside the bordered toolbar, even when icons wrap.
-    if (["import","auto_orient","measure"].includes(tool.target)) {
+    if (["import","auto_orient"].includes(tool.target)) {
       const anchor=event?.currentTarget?.closest(".slicerToolTooltip");
       const toolbar=anchor?.closest(".slicerPrepareTools");
       if (anchor && toolbar) {
@@ -479,25 +478,6 @@ export default function SlicerPrepareWorkspace({
           setToolPopupStyle({
             position:"fixed",left:Math.max(12,Math.min(button.left,window.innerWidth-width-12))+"px",
             top:Math.min(button.bottom+8,window.innerHeight-175)+"px",
-            right:"auto",transform:"none",width:width+"px",
-            maxHeight:"min(65dvh, 360px)",overflowY:"auto",
-          });
-        } else if (tool.target === "measure") {
-          // The measurement readout occupies the left of the plate. Place its
-          // options alongside that readout rather than covering the figures.
-          const viewport=document.querySelector(".slicerPlateCanvasViewport");
-          const plate=viewport?.getBoundingClientRect();
-          const readout=viewport?.querySelector(".slicerViewportMeasurement");
-          const card=readout?.getBoundingClientRect();
-          const width=260;
-          const desiredLeft=(card?.right ?? ((plate?.left ?? frame.left)+280))+12;
-          const left=Math.max(12,Math.min(desiredLeft,window.innerWidth-width-12));
-          const top=Math.max(12,Math.min(
-            (card?.top ?? plate?.top ?? button.bottom)+2,
-            window.innerHeight-390
-          ));
-          setToolPopupStyle({
-            position:"fixed",left:left+"px",top:top+"px",
             right:"auto",transform:"none",width:width+"px",
             maxHeight:"min(65dvh, 360px)",overflowY:"auto",
           });
@@ -513,7 +493,6 @@ export default function SlicerPrepareWorkspace({
       }
     }
     if (tool.target === "import") {
-      setMeasureOptionsOpen(false);
       setAutoOrientMenuOpen(false);
       setAddModelMenuOpen(open => !open);
       return;
@@ -521,7 +500,7 @@ export default function SlicerPrepareWorkspace({
     setAddModelMenuOpen(false);
     if (["paint_colour","paint_support"].includes(tool.target)) {
       if (!selectedId && objects[0]?.instance_id) selectSingle(objects[0].instance_id);
-      setMeasureOptionsOpen(false);setMeasurementVisible(false);setAutoOrientMenuOpen(false);
+      setMeasurementVisible(false);setAutoOrientMenuOpen(false);
       setPaintError("");
       setToolMode(current => current === tool.target ? "select" : tool.target);
       setMobilePane("plate");
@@ -530,16 +509,11 @@ export default function SlicerPrepareWorkspace({
     if (tool.target === "measure") {
       if (!selectedId && objects[0]?.instance_id) setSelectedId(objects[0].instance_id);
       setToolMode("select");
-      if (measurementVisible) {
-        setMeasureOptionsOpen(current => !current);
-      } else {
-        setMeasurementVisible(true);
-        setMeasureOptionsOpen(true);
-      }
+      setMeasurementVisible(true);
+      setMobilePane("plate");
       return;
     }
     setMeasurementVisible(false);
-    setMeasureOptionsOpen(false);
     if (tool.target === "add_plate") {
       setShowAllPlates(false);onAddPlate?.();setToolMode("select");setMobilePane("plate");return;
     }
@@ -1035,13 +1009,13 @@ export default function SlicerPrepareWorkspace({
         <button type="button" disabled={!redoRef.current.length || busy} onClick={redo}
           aria-label="Redo"><SlicerUiIcon name="redo" /><span className="slicerToolButtonLabel">Redo</span></button>
       </span>
-      {TOOLS.map((tool,index) => <div className={"slicerToolTooltip" + (index>0&&TOOLS[index-1].group!==tool.group?" slicerToolGroupStart":"") + (((tool.expandable && measureOptionsOpen) || (tool.target === "auto_orient" && autoOrientMenuOpen) || (tool.target === "import" && addModelMenuOpen)) ? " slicerToolOptionsOpen" : "")} key={tool.name}
+      {TOOLS.map((tool,index) => <div className={"slicerToolTooltip" + (index>0&&TOOLS[index-1].group!==tool.group?" slicerToolGroupStart":"") + (((tool.target === "auto_orient" && autoOrientMenuOpen) || (tool.target === "import" && addModelMenuOpen)) ? " slicerToolOptionsOpen" : "")} key={tool.name}
         onMouseEnter={() => setToolDescriptor(tool.pending ? tool.name + " · Not yet available: " + tool.pending : tool.name)}
         onMouseLeave={() => setToolDescriptor("")}
         onFocus={() => setToolDescriptor(tool.pending ? tool.name + " · Not yet available: " + tool.pending : tool.name)}
         onBlur={() => setToolDescriptor("")}
         data-tooltip={tool.pending ? tool.name + " · Not yet available: " + tool.pending
-          : tool.expandable ? tool.name + " · Click for measurement options" : tool.name}>
+          : tool.expandable ? tool.name + " · Options in the Measure panel" : tool.name}>
         <button type="button"
           className={((tool.target === "x_mm" && toolMode === "move") ||
             (tool.target === "rotation_deg" && toolMode === "rotate") ||
@@ -1059,8 +1033,8 @@ export default function SlicerPrepareWorkspace({
             ? (tool.target === "x_mm" ? toolMode === "move"
               : tool.target === "rotation_deg" ? toolMode === "rotate" : toolMode === "scale") : undefined}
           aria-label={tool.name}
-          aria-expanded={tool.target === "import" ? addModelMenuOpen : tool.target === "auto_orient" ? autoOrientMenuOpen : tool.expandable ? measureOptionsOpen : undefined}
-          aria-controls={tool.target === "import" ? "slicer-add-model-toolbar-options" : tool.target === "auto_orient" ? "slicer-auto-orient-toolbar-options" : tool.expandable ? "slicer-measure-toolbar-options" : undefined}
+          aria-expanded={tool.target === "import" ? addModelMenuOpen : tool.target === "auto_orient" ? autoOrientMenuOpen : undefined}
+          aria-controls={tool.target === "import" ? "slicer-add-model-toolbar-options" : tool.target === "auto_orient" ? "slicer-auto-orient-toolbar-options" : undefined}
           disabled={!!tool.pending || !canEdit || busy || (tool.target==="add_plate" && plates.length>=8) || (!["import","add_plate"].includes(tool.target) && !objects.length)}
           onClick={event => selectTool(tool,event)}><SlicerUiIcon name={tool.icon || "others"} size={22}/><span className="slicerToolButtonLabel">{TOOL_SHORT_LABELS[tool.name] || tool.name}</span></button>
         {tool.target === "import" && addModelMenuOpen && (
@@ -1086,40 +1060,6 @@ export default function SlicerPrepareWorkspace({
               setAutoOrientRequest(request => request + 1);
               setAutoOrientMenuOpen(false);
             }}><strong>{name}</strong><span aria-hidden="true">ⓘ</span></button>)}
-        </div>}
-        {tool.expandable && measureOptionsOpen && <div className="slicerToolOptions" style={toolPopupStyle} id="slicer-measure-toolbar-options"
-          role="group" aria-label="Measure tool options">
-          <div className="slicerToolOptionsHeader"><strong>Measure</strong>
-            <button type="button" aria-label="Hide Measure options" onClick={() => setMeasureOptionsOpen(false)}>Hide</button>
-          </div>
-          <label>Measurement mode
-            <select value={measureMode} onChange={event => setMeasureMode(event.target.value)}>
-              <option value="distance">Two-point distance</option>
-              <option value="circle">Three-point circle</option>
-              <option value="detect">Auto-detect mesh edge / face</option>
-            </select>
-          </label>
-          <label>Snapping
-            <select value={measureSnapMode} onChange={event => setMeasureSnapMode(event.target.value)}>
-              <option value="auto">Automatic · nearby vertex or triangle edge</option>
-              <option value="vertex">Vertex only · otherwise surface</option>
-              <option value="edge">Triangle edge only · otherwise surface</option>
-              <option value="surface">Surface point · no snapping</option>
-            </select>
-          </label>
-          <label>Units
-            <select value={measureUnit} onChange={event => setMeasureUnit(event.target.value)}>
-              <option value="mm">Millimetres (mm)</option>
-              <option value="in">Inches (in)</option>
-            </select>
-          </label>
-          <button type="button" className="slicerToolOptionsAction" onClick={() => setMeasureClearVersion(value => value + 1)}>
-            Clear pins
-          </button>
-          <button type="button" className="slicerToolOptionsAction" onClick={() => {
-            setMeasureOptionsOpen(false);
-            setMeasurementVisible(false);
-          }}>Finish measuring</button>
         </div>}
       </div>)}
       <div className="slicerToolbarDescriptor" role="status" aria-live="off">{toolDescriptor || "\u00a0"}</div>
@@ -1481,7 +1421,10 @@ export default function SlicerPrepareWorkspace({
           onSelectedInstanceChange={selectSingle} measurementVisible={measurementVisible}
           measureMode={measureMode} measureUnit={measureUnit} measureSnapMode={measureSnapMode}
           measureClearVersion={measureClearVersion}
-          onMeasurePinPlaced={() => setMeasureOptionsOpen(false)}
+          onMeasureModeChange={setMeasureMode} onMeasureSnapModeChange={setMeasureSnapMode}
+          onMeasureUnitChange={setMeasureUnit}
+          onMeasureClear={() => setMeasureClearVersion(value => value + 1)}
+          onMeasureFinish={() => setMeasurementVisible(false)}
           onExitToolMode={() => setToolMode("select")} />}
       </div>
       {settingsExpanded ? createPortal(
