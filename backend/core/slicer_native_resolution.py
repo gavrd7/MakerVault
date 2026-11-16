@@ -36,13 +36,18 @@ def resolved_native_profile(profile, *, depth=0, seen=None):
     if parent_name and (not isinstance(parent_name, str) or len(parent_name) > 200):
         raise SlicerProfileError("Native parent profile reference is invalid.")
     if parent_name:
-        parent = SlicerProfile.objects.select_related("file_asset").filter(
+        # Inheritance is resolved only inside the same exact upstream
+        # catalogue scope. Never splice another vendor's same-named parent.
+        parents = list(SlicerProfile.objects.select_related("file_asset").filter(
             owner_id=profile.owner_id, engine=profile.engine,
             engine_version=profile.engine_version, kind=profile.kind,
-            name=parent_name,
-        ).first()
-        if not parent:
-            raise SlicerProfileError("Native parent preset is missing: " + parent_name)
+            name=parent_name, source_scope=profile.source_scope,
+        )[:2])
+        if not parents:
+            raise SlicerProfileError("Native parent preset is missing in this source: " + parent_name)
+        if len(parents) != 1:
+            raise SlicerProfileError("Native parent preset identity is ambiguous.")
+        parent = parents[0]
         base = resolved_native_profile(parent, depth=depth + 1, seen=seen | {profile.pk})
         merged = json.loads(base)
         # The child overrides parent fields; no merging across native kinds.
