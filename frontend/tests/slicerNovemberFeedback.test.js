@@ -21,7 +21,7 @@ test("engine version is selected from known discovered versions, not typed", () 
 test("named imported material profile is available to assigned slot even when reused as parent", () => {
   assert.match(setup, /const slotFilamentChoices = profiles\.filter/);
   assert.match(setup, /filamentProfiles=\{slotFilamentChoices\}/);
-  assert.match(setup, /!\/@\\s\*\.\*\\bbase\\s\*\$\/i\.test\(profile\.name/);
+  assert.ok(setup.includes(String.raw`!/@\s*.*\bbase\s*$/i.test(profile.name`));
   assert.match(prepare, /onFilamentProfilesReload\?\.\(\)/);
   assert.match(prepare, /profile_id: String\(imported\.id\)/);
   assert.match(prepare, /Import & assign/);
