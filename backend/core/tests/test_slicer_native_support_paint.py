@@ -1,7 +1,7 @@
 """Native support-paint conversion must preserve clipped areas, not colour whole STL facets."""
 from django.test import SimpleTestCase
 
-from core.slicer_native_support_paint import native_support_triangles, _fingerprint, _normal, _area
+from core.slicer_native_support_paint import native_support_triangles, _fingerprint, _area
 
 
 class NativeOrcaSupportPaintTests(SimpleTestCase):
@@ -12,10 +12,16 @@ class NativeOrcaSupportPaintTests(SimpleTestCase):
         ]
 
     def paint(self, slot=0, patches=None):
-        return {"version": 2, "signature": _fingerprint(self.source),
+        # Browser STLLoader recentres XY (-2,-2) before painting.
+        local = [
+            [tuple(p[axis] - ([2., 2., 0.][axis]) for axis in range(3))
+             for p in tri]
+            for tri in self.source
+        ]
+        return {"version": 2, "signature": _fingerprint(local),
                 "regions": [{"slot": slot, "patches": patches or [{
                     "face": 0,
-                    "polygon": [[0., 0., 0.], [2., 0., 0.], [0., 2., 0.]],
+                    "polygon": [[-2., -2., 0.], [0., -2., 0.], [-2., 0., 0.]],
                 }]}]}
 
     def test_small_enforcer_patch_splits_only_its_source_triangle(self):
