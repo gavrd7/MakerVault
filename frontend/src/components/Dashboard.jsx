@@ -105,7 +105,7 @@ export default function Dashboard({ dashboard, inventory, onNavigate, onOpenLive
               {offline ? <div className="dashboardLiveOffline">
                 <span>Printer offline — live telemetry and camera unavailable.</span>
                 <button type="button" className="printerLiveOpen" onClick={() => onOpenLive(printer)}>Printer details</button>
-                <PrinterPowerButton printerId={printer.id} compact />
+                <PrinterPowerButton printerId={printer.id} compact connectionHint="off" />
               </div> : <>
               <div className="dashboardLivePrinterMeta">
                 <span>{printer.job?.file_name || printer.adapter_label}</span>
@@ -119,7 +119,7 @@ export default function Dashboard({ dashboard, inventory, onNavigate, onOpenLive
               {showProgress && <small className="dashboardLiveProgressLabel">{pct.toFixed(pct % 1 ? 1 : 0)}%</small>}
               <div className="printerLiveActions">
                 <PrinterJobControls printer={printer} connection={{ id: printer.connection_id, controls: printer.controls, snapshot: { job: printer.job } }} canControl={printer.can_control} onChanged={onChanged} />
-                <PrinterPowerButton printerId={printer.id} compact />
+                <PrinterPowerButton printerId={printer.id} compact connectionHint="on" />
                 <button type="button" className="printerLiveOpen" onClick={() => onOpenLive(printer)}>Open live</button>
               </div>
               <PrinterCameraPreview printer={printer} />
