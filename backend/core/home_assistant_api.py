@@ -168,8 +168,10 @@ def printer_power(request, printer_id):
     if request.method == "GET":
         try:
             state = switch_state(row, entity)
-        except HomeAssistantPowerError as exc:
-            return _error(exc, 502)
+        except HomeAssistantPowerError:
+            # Keep an assigned control visible when HA state telemetry is unavailable.
+            # The command endpoint still requires an actual successful HA response.
+            return JsonResponse({"available": True, "state": "unknown"})
         return JsonResponse({"available": True, "state": state})
     try:
         data = _body(request)
