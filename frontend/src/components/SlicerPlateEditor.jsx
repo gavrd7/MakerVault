@@ -308,6 +308,7 @@ export default function SlicerPlateEditor({
   measurementVisible = false, measureMode = "distance", measureUnit = "mm", measureSnapMode = "auto", measureClearVersion = 0,
   onMeasurePinPlaced, onMeasureModeChange, onMeasureSnapModeChange, onMeasureUnitChange,
   onMeasureClear, onMeasureFinish, colourPaintOptions = null, onColourPaintError, onColourPaintHeightPick,
+  variableLayerPreview = null, onVariableLayerHeightPick, onVariableLayerHeightCommit,
   localAssets = [], onLocalAssetsChange, onExitToolMode, onPlateIssuesChange, toolbar = null, paintControls = null,
 }) {
   const hostRef = useRef(null);
@@ -330,9 +331,11 @@ export default function SlicerPlateEditor({
   const latestPaintOptionsRef = useRef(colourPaintOptions);
   const latestPaintErrorRef = useRef(onColourPaintError);
   const latestPaintHeightPickRef = useRef(onColourPaintHeightPick);
+  const variableLayerRef=useRef({preview:variableLayerPreview,pick:onVariableLayerHeightPick,commit:onVariableLayerHeightCommit});
   latestPaintOptionsRef.current = colourPaintOptions;
   latestPaintErrorRef.current = onColourPaintError;
   latestPaintHeightPickRef.current = onColourPaintHeightPick;
+  variableLayerRef.current={preview:variableLayerPreview,pick:onVariableLayerHeightPick,commit:onVariableLayerHeightCommit};
   const [localSelected, setLocalSelected] = useState("");
   const [showNativeArtwork, setShowNativeArtwork] = useState(true);
   const [sectionPercent, setSectionPercent] = useState(100);
@@ -1966,12 +1969,43 @@ export default function SlicerPlateEditor({
       new THREE.MeshBasicMaterial({color:"#f9e65c",transparent:true,
         opacity:.22,depthTest:false,side:THREE.DoubleSide})));
     scene.add(brushGuide,sphereGuide,...heightGuide);
+    const variableGuide=[0,1].map(()=>new THREE.Mesh(new THREE.PlaneGeometry(1,1),
+      new THREE.MeshBasicMaterial({color:"#36e4d5",transparent:true,opacity:.24,
+        depthTest:false,side:THREE.DoubleSide})));
+    scene.add(...variableGuide);
     const hidePaintGuides = () => {
       brushGuide.visible=false;sphereGuide.visible=false;
       heightGuide.forEach(guide=>{guide.visible=false;});
     };
     hidePaintGuides();
     let lastHoverHeight = null;
+    let variableHeightPointerId=null;
+    const showVariableHeightGuide=(hit)=>{
+      variableGuide.forEach(guide=>{guide.visible=false;});
+      if(latestToolModeRef.current!=="variable_layers"||!hit?.face)return;
+      const preview=variableLayerRef.current.preview;
+      if(!preview)return;
+      const target=hit.object;
+      const box=target.geometry.boundingBox;
+      if(!box)return;
+      const centre=box.getCenter(new THREE.Vector3());
+      const worldScale=target.getWorldScale(new THREE.Vector3());
+      for(let i=0;i<2;i++){
+        const plane=variableGuide[i];
+        plane.position.copy(target.localToWorld(new THREE.Vector3(centre.x,centre.y,
+          i===0?preview.from_mm:preview.to_mm)));
+        plane.quaternion.copy(target.getWorldQuaternion(new THREE.Quaternion()));
+        plane.scale.set(Math.max(.1,box.max.x-box.min.x)*worldScale.x,
+          Math.max(.1,box.max.y-box.min.y)*worldScale.y,1);
+        plane.visible=true;
+      }
+    };
+    const pickVariableHeight=(hit)=>{
+      if(!hit?.face)return;
+      const height=Math.max(0,Math.round(hit.object.worldToLocal(hit.point.clone()).z*2)/2);
+      variableLayerRef.current.pick?.(height);
+      showVariableHeightGuide(hit);
+    };
     function previewPaintGuide(hit) {
       hidePaintGuides();
       if (!["paint_colour","paint_support","paint_seam","paint_fuzzy"].includes(latestToolModeRef.current) || !hit?.face) return;
@@ -2144,6 +2178,17 @@ export default function SlicerPlateEditor({
         }
       }
       const hits = raycaster.intersectObjects([...meshes.values()], false);
+      if(latestToolModeRef.current==="variable_layers"){
+        const hit=hits.find(row=>row.object.userData.instanceId===selectionRef.current[0]);
+        if(hit){
+          pickVariableHeight(hit);
+          variableHeightPointerId=event.pointerId;
+          controls.enabled=false;
+          renderer.domElement.setPointerCapture?.(event.pointerId);
+          event.preventDefault();
+        }
+        return;
+      }
       if (["paint_colour","paint_support","paint_seam","paint_fuzzy"].includes(latestToolModeRef.current)) {
         if (!hits.length) return;
         const hit = hits[0];
@@ -2332,6 +2377,16 @@ export default function SlicerPlateEditor({
 
     function pointerMove(event) {
       if (event.pointerType === "touch" && (touchNavigation || activeTouchPointers.size > 1)) return;
+      if(latestToolModeRef.current==="variable_layers"){
+        rayFromPointer(event);
+        const hit=raycaster.intersectObjects([...meshes.values()],false)
+          .find(row=>row.object.userData.instanceId===selectionRef.current[0]);
+        if(hit && (event.buttons===0||event.pointerType==="touch"||variableHeightPointerId===event.pointerId))
+          pickVariableHeight(hit);
+        showVariableHeightGuide(hit);
+        if(variableHeightPointerId===event.pointerId)event.preventDefault();
+        return;
+      }
       if (["paint_colour","paint_support","paint_seam","paint_fuzzy"].includes(latestToolModeRef.current) && !painting &&
           (event.buttons === 0 || event.pointerType === "touch")) {
         rayFromPointer(event);
@@ -2407,6 +2462,15 @@ export default function SlicerPlateEditor({
     }
 
     function pointerUp(event) {
+      if(variableHeightPointerId===event.pointerId){
+        variableHeightPointerId=null;
+        controls.enabled=true;
+        if(renderer.domElement.hasPointerCapture?.(event.pointerId))
+          renderer.domElement.releasePointerCapture(event.pointerId);
+        variableLayerRef.current.commit?.();
+        event.preventDefault();
+        return;
+      }
       if (event.pointerType === "touch") {
         activeTouchPointers.delete(event.pointerId);
         if (touchNavigation) {
@@ -2567,7 +2631,10 @@ export default function SlicerPlateEditor({
     renderer.domElement.addEventListener("pointermove", pointerMove);
     renderer.domElement.addEventListener("pointerup", pointerUp);
     renderer.domElement.addEventListener("pointercancel", pointerUp);
-    const pointerLeavePaint=()=>{if(!painting)hidePaintGuides();};
+    const pointerLeavePaint=()=>{
+      if(!painting)hidePaintGuides();
+      if(variableHeightPointerId===null)variableGuide.forEach(guide=>{guide.visible=false;});
+    };
     renderer.domElement.addEventListener("pointerleave",pointerLeavePaint);
     const resize = () => {
       if (!mount.clientWidth || !mount.clientHeight) return;
@@ -2631,7 +2698,7 @@ export default function SlicerPlateEditor({
       renderer.domElement.removeEventListener("pointerup", pointerUp);
       renderer.domElement.removeEventListener("pointercancel", pointerUp);
       renderer.domElement.removeEventListener("pointerleave",pointerLeavePaint);
-      for(const guide of [brushGuide,sphereGuide,...heightGuide]){
+      for(const guide of [brushGuide,sphereGuide,...heightGuide,...variableGuide]){
         scene.remove(guide);guide.geometry.dispose();guide.material.dispose();
       }
       renderer.setAnimationLoop(null);
