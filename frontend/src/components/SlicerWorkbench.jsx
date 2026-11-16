@@ -1341,7 +1341,10 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
         try {
           const loaded = await apiFetch("/api/printing/slicer/profiles/");
           setProfiles(current => {
-            const indexed = new Map((loaded.profiles || []).map(row => [String(row.id), row]));
+            // Preserve profiles explicitly imported/recovered this session
+            // even when the server's general listing is capped.
+            const indexed = new Map((current || []).map(row => [String(row.id), row]));
+            for(const row of loaded.profiles || [])indexed.set(String(row.id),row);
             if (imported?.id) indexed.set(String(imported.id), imported);
             return [...indexed.values()];
           });
