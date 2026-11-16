@@ -1018,8 +1018,8 @@ def jobs(request):
     if not request.user.has_perm("core.add_fileasset"):
         return _error("You do not have permission to prepare slicing jobs.", 403)
     try:
-        if len(request.body) > 131072:
-            return _error("Slice configuration exceeds the 128 KiB limit. Reduce painted regions or remove unused plates.", 413)
+        if len(request.body) > 8 * 1024 * 1024:
+            return _error("Slice configuration exceeds the 8 MiB safety limit. Split very large projects across plates.", 413)
         data = json.loads(request.body.decode("utf-8"))
         job = _draft(request.user, data)
     except (ValueError, TypeError, UnicodeDecodeError) as exc:
@@ -1270,8 +1270,8 @@ def official_profiles(request):
                 owner=request.user, engine=engine,
                 engine_version=version, kind=kind, name=name,
             )
-            if not created_names:
-                return _error("This official preset and its complete parent chain are already imported.", 409)
+            # Reusing an existing, byte-identical native preset is idempotent.
+            # The UI still needs its ID to attach it to the selected CFS/AMS slot.
     except (OfficialProfileError, ValueError, TypeError, UnicodeDecodeError, SlicerProfileError) as exc:
         return _error(str(exc))
     except IntegrityError:
@@ -1281,7 +1281,7 @@ def official_profiles(request):
         "imported_profiles": created_names, "parent_chain_length": len(chain),
         "execution_available": False,
         "warning": "Official profile and available parent chain imported as unverified candidates. A real engine fixture is still required.",
-    }, status=201)
+    }, status=201 if created_names else 200)
 
 
 def _native_parent_ids(rows):
