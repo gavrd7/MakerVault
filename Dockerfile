@@ -72,6 +72,8 @@ RUN groupadd --gid 911 makervault \
     && chown -R makervault:makervault /app/media /app/staticfiles /app/run
 
 COPY backend/ /app/backend/
+# Fail image builds on Python syntax errors instead of deploying a restart loop.
+RUN python -m compileall -q /app/backend
 COPY LICENSE THIRD_PARTY_NOTICES.md .env.example /app/
 COPY --from=frontend-builder /frontend/dist/ /app/backend/core/static/app/
 COPY docker/entrypoint.sh /usr/local/bin/makervault-entrypoint
