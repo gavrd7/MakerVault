@@ -36,7 +36,7 @@ export default function HomeAssistantSettings() {
       if (result.connected) setNotice("Home Assistant REST API is connected.");
     } catch (err) {setError(err.message);} finally {setBusy(false);}
   }
-  return <section className="settingsHomeAssistantIntegration" aria-label="Home Assistant printer power settings">
+  return <article className="settingsHomeAssistantIntegration" aria-label="Home Assistant printer power settings">
     <div className="settingsIntegrationHead"><strong>Home Assistant · printer power</strong>
       {saved?.enabled && <span className="status-pill status-on">Enabled</span>}
     </div>
@@ -61,5 +61,5 @@ export default function HomeAssistantSettings() {
     </div>
     {error && <div className="formError" role="alert">{error}</div>}
     {notice && <div className="notice" role="status">{notice}</div>}
-  </section>;
+  </article>;
 }
