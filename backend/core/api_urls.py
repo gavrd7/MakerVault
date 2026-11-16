@@ -1,5 +1,6 @@
 from django.urls import path
 from . import printer_gcode_api
+from . import home_assistant_api
 from . import slicer_api
 from . import api_views, printed_parts, camera_views, reusable_spools, reusable_spool_discovery, api_key_views, device_api_views, device_pairing, device_measurements, device_tag_registration, device_tag_lookup, weight_history_views, tag_ndef, device_ndef_write, device_cfs_lookup, device_makertag_operations, device_pending_work
 
@@ -126,6 +127,8 @@ urlpatterns = [
     path("printing/locations/<uuid:location_id>/", api_views.printing_location_detail, name="api-printing-location-detail"),
     path("printing/printers/", api_views.printing_printers, name="api-printing-printers"),
     path("printing/printers/<uuid:printer_id>/", api_views.printing_printer_detail, name="api-printing-printer-detail"),
+    path("printing/printers/<uuid:printer_id>/power/", home_assistant_api.printer_power, name="api-printer-power"),
+    path("printing/printers/<uuid:printer_id>/power/assignment/", home_assistant_api.printer_power_assignment, name="api-printer-power-assignment"),
     path("printing/printers/<uuid:printer_id>/connections/", api_views.printing_printer_connections, name="api-printing-printer-connections"),
     path("printing/printers/<uuid:printer_id>/connections/<uuid:connection_id>/", api_views.printing_printer_connection_detail, name="api-printing-printer-connection-detail"),
     path("printing/printers/<uuid:printer_id>/connections/<uuid:connection_id>/material-database/", api_views.printing_printer_material_database, name="api-printing-printer-material-database"),
@@ -187,6 +190,9 @@ urlpatterns = [
     path("config/", api_views.public_config, name="api-config"),
     path("attributions/", api_views.attributions, name="api-attributions"),
     path("settings/printing-integrations/", api_views.printing_integration_settings, name="api-printing-integration-settings"),
+    path("settings/home-assistant/", home_assistant_api.home_assistant_settings, name="api-home-assistant-settings"),
+    path("settings/home-assistant/test/", home_assistant_api.home_assistant_test, name="api-home-assistant-test"),
+    path("settings/home-assistant/switches/", home_assistant_api.home_assistant_switches, name="api-home-assistant-switches"),
     path("settings/printing-integrations/<str:provider>/", api_views.printing_integration_detail, name="api-printing-integration-detail"),
     path("settings/printing-integrations/<str:provider>/test/", api_views.printing_integration_test, name="api-printing-integration-test"),
     path("settings/printing-integrations/<str:provider>/sync/", api_views.printing_integration_sync_now, name="api-printing-integration-sync-now"),
