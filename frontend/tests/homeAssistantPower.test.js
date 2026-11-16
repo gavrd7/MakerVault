@@ -33,7 +33,7 @@ test("one reusable power control is used across printer views", () => {
   assert.match(dashboard, /<PrinterPowerButton printerId=\{printer\.id\}/);
   assert.match(printing, /<PrinterPowerButton printerId=\{printer\.id\}/);
   assert.match(printing, /<PrinterPowerAssignment printerId=\{printer\.id\}/);
-  assert.match(printing, /!addOnly && <div className="printerLiveActions"><PrinterPowerButton/);
+  assert.match(printing, /!addOnly && <PrinterPowerButton printerId=/);
   assert.match(button, /compact \? " isCompact"/);
 });
 
