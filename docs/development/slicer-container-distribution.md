@@ -20,9 +20,9 @@ binary digest, base OS, and worker image digest traceable.
 
 ## Recommended release architecture
 
-- Publish **two images**: `ghcr.io/gavrd7/makervault:<app-version>` and
+- Publish **two images for the initial bootstrap**: `ghcr.io/gavrd7/makervault:<app-version>` and
   `ghcr.io/gavrd7/makervault-slicer-orca:2.5.0-mv1` (example tag).
-  The web app image must not contain Orca or its heavy graphical dependencies.
+  The web app image must not contain Orca or its heavy graphical dependencies. **All slicer engines share one slicer-worker container**; this first Orca image is only the initial bootstrap of that single container, not a separate worker to be run alongside future engine containers.
 - Base the engine image on `slicer_worker/Dockerfile.bundle` and the
   independently checksum-verified AppImage. Preserve the original AppImage
   inside the image for the worker's runtime hash verification.
@@ -36,6 +36,7 @@ binary digest, base OS, and worker image digest traceable.
   registry; verify worker health identities before enabling execution.
 - Use a secure per-installation worker token. Supply it to only the main
   application and the worker through a restricted env/secret mechanism.
+- Keep exactly one optional `slicer-worker` service, regardless of how many engines are installed. As more engines are supported, install independently verified runtime bundles into a dedicated persistent engine volume (with atomic versioned directories, safe activation, and rollback). Do not use one long-running container per engine and do not install them only in the container writable layer.
 - Keep one operator-facing install command that composes the existing
   app, database, Redis and optional worker. Existing plain MakerVault
   installations must remain fully usable without a slicer worker.
@@ -132,7 +133,7 @@ an independently approved durable release with the same checksum.
 
 ## Future in-app engine updates
 
-The UI should read a versioned, signed or trusted release index served by
+The UI should manage multiple engine installations and versions **within one worker service**, not deploy new services per engine. The bootstrap Orca image is an intermediate distribution artifact; a future generic worker base plus volume-backed verified engine bundles will avoid rebuilding the image for every engine update. The UI should read a versioned, signed or trusted release index served by
 MakerVault, not an arbitrary `latest` tag. It must show current engine,
 available approved version, architecture support, release notes, binary and
 image digests, validation coverage and the previous rollback target.
