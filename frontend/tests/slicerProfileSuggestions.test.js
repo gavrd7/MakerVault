@@ -138,3 +138,36 @@ test("generic printer qualifier filtering prevents cross-brand process or filame
     engine:"crealityprint", version:"7.3.0", kind:"process", printer:{model:"Anycubic Kobra 2"},
   }), null);
 });
+
+test("Orca @System filament defaults apply to a K2 without a selected spool", () => {
+  const options = {
+    engine:"orcaslicer", version:"2.5.0", kind:"filament",
+    printer:{id:"k2",manufacturer:"Creality",model:"Creality K2 Combo"},
+  };
+  const profiles = [
+    make("default-pla","filament","Generic PLA Matte @System",{
+      engine:"orcaslicer",engine_version:"2.5.0",is_default:true,
+    }),
+    make("other-pla","filament","Generic PLA High Speed @System",{
+      engine:"orcaslicer",engine_version:"2.5.0",
+    }),
+  ];
+  assert.equal(chooseSuggestedProfile(profiles,[],options)?.profile.id,"default-pla");
+  assert.equal(chooseSuggestedProfile(profiles,[],{...options,material:"PLA"})?.profile.id,"default-pla");
+  assert.equal(chooseSuggestedProfile(profiles,[],{...options,material:"PETG"}),null);
+  assert.equal(chooseSuggestedProfile(profiles,[],{...options,version:"2.4.2"}),null);
+});
+
+test("generic @System remains eligible while mismatched machine qualifiers are rejected", () => {
+  const options={engine:"orcaslicer",version:"2.5.0",kind:"filament",
+    printer:{model:"Creality K2 Combo"},material:"PLA"};
+  const profiles=[
+    make("k1","filament","Generic PLA @Creality K1",{
+      engine:"orcaslicer",engine_version:"2.5.0",is_default:true,
+    }),
+    make("system","filament","Generic PLA @System",{
+      engine:"orcaslicer",engine_version:"2.5.0",
+    }),
+  ];
+  assert.equal(chooseSuggestedProfile(profiles,[],options)?.profile.id,"system");
+});
