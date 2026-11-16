@@ -1,6 +1,7 @@
 import { PrinterCameraPreview } from "./PrinterCameras";
 import React from "react";
 import PrinterJobControls from "./PrinterJobControls";
+import PrinterPowerButton from "./PrinterPowerButton";
 import StorageSummary from "./StorageSummary";
 import { Badge } from "./Common";
 import { isDashboardPrinterOffline } from "./dashboardPrinterStatus";
@@ -104,6 +105,7 @@ export default function Dashboard({ dashboard, inventory, onNavigate, onOpenLive
               {offline ? <div className="dashboardLiveOffline">
                 <span>Printer offline — live telemetry and camera unavailable.</span>
                 <button type="button" className="printerLiveOpen" onClick={() => onOpenLive(printer)}>Printer details</button>
+                <PrinterPowerButton printerId={printer.id} compact />
               </div> : <>
               <div className="dashboardLivePrinterMeta">
                 <span>{printer.job?.file_name || printer.adapter_label}</span>
