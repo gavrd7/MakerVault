@@ -1238,7 +1238,15 @@ export default function SlicerPrepareWorkspace({
           </label>
         </div>
       </div>}
-      <small style={{fontSize:11,opacity:.8}}>Left drag: paint · Right drag: rotate view · Wheel: zoom · Ctrl+Z / Ctrl+Y: undo / redo. Paint annotations are preview-only until native export is verified.</small>
+      <small style={{fontSize:11,opacity:.8}}>Left drag: paint · Right drag: rotate view · Wheel: zoom · Ctrl+Z / Ctrl+Y: undo / redo. {isSupportPainting && engineCapabilities.support_paint?.status==="test_only"
+        ? "Painted supports can be sliced for offline Orca 2.5 testing; printer submission remains blocked."
+        : "Paint annotations are draft-only until native export is verified."}</small>
+      {isSupportPainting && (paintSelected?.support_paint?.regions?.reduce((n,r)=>n+r.patches.length,0)||0)>10000 &&
+        <small className="slicerActionStatus" role="status">
+          This is a dense support mask. MakerVault will use lossless compression
+          when saving or slicing to preserve the painted boundaries. Native
+          remeshing and toolpath generation may take longer than usual.
+        </small>}
       {paintError&&<small role="alert" style={{color:"#fca5a5"}}>{paintError}</small>}
     </section>
   );
