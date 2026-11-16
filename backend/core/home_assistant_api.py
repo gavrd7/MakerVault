@@ -173,8 +173,10 @@ def printer_power(request, printer_id):
         return JsonResponse({"available": True, "state": state})
     try:
         data = _body(request)
-        if set(data) != {"action"} or data["action"] not in {"on", "off"}:
+        if set(data) - {"action", "confirm"} or data.get("action") not in {"on", "off"}:
             raise HomeAssistantPowerError("Choose power on or off.")
+        if data["action"] == "off" and data.get("confirm") is not True:
+            raise HomeAssistantPowerError("Explicit confirmation is required before cutting printer power.")
         if data["action"] == "off" and printer_is_busy(printer):
             return _error("Printer is active or cooling. Power off is blocked.", 409)
         state = set_switch(row, entity, data["action"])
