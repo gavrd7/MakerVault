@@ -7,7 +7,7 @@ Source authenticity is not execution approval: every import stays candidate.
 from functools import lru_cache
 from pathlib import PurePosixPath
 
-from .slicer_official_filter import narrow_catalogue, models_from_machines, fuzzy_name_match
+from .slicer_official_filter import narrow_catalogue, models_from_machines, fuzzy_name_match, slot_filament_catalogue
 
 import requests
 
@@ -127,7 +127,8 @@ def official_filament_brands(version=ENGINE_VERSION):
 
 
 def search_official_profiles(query, kind, vendor="Creality", printer_model=None,
-                             version=ENGINE_VERSION, brand=""):
+                             version=ENGINE_VERSION, brand="", slot_discovery=False,
+                             material="", manufacturer=""):
     if not isinstance(query, str) or not 2 <= len(query.strip()) <= 80:
         raise OfficialProfileError("Search using at least two characters.")
     if not isinstance(vendor, str) or vendor not in VENDORS:
@@ -140,7 +141,16 @@ def search_official_profiles(query, kind, vendor="Creality", printer_model=None,
     matches = [(name, subpath) for name, subpath in _entries(vendor, kind, version)
                if fuzzy_name_match(name, term) and
                (not brand or subpath.startswith("filament/" + brand + "/"))]
-    if printer_model:
+    if slot_discovery:
+        if kind != "filament" or not printer_model:
+            raise OfficialProfileError("Slot discovery requires an identified printer and filament kind.")
+        # Search by product name and material separately; otherwise catalogue
+        # truncation or a broad vendor token can hide the compatible result.
+        all_entries = _entries(vendor, kind, version)
+        matches = slot_filament_catalogue(
+            all_entries, printer_model, product=query, material=material,
+            manufacturer=manufacturer)
+    elif printer_model:
         matches = narrow_catalogue(matches, kind, printer_model)
     return {
         "engine": ENGINE, "engine_version": version, "vendor": vendor,
