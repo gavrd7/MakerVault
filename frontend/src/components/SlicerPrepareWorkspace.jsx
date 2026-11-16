@@ -67,7 +67,7 @@ export default function SlicerPrepareWorkspace({
   selectedProfiles, workerConfigured, engineCapabilities = {}, printerId,
   processOverrides = {}, onProcessOverridesChange, onSaveCustomProcessProfile,
   flushSettings = null, onFlushSettingsChange,
-  slotFilamentProfiles = [], onSlotFilamentProfilesChange, filamentProfiles = [], onFilamentProfilesReload, spools = [],
+  slotFilamentProfiles = [], onSlotFilamentProfilesChange, filamentProfiles = [], onFilamentProfilesReload, onRememberedProfiles, spools = [],
   processProfiles = [], onSelectProcessProfile, onResetProcessSettings,
   printerDetails, nozzleMm, selectedPlateType = "Native / profile default",
   localAssets = [], onLocalAssetsChange, onPlateIssuesChange, plateIssues = null,
@@ -367,10 +367,7 @@ export default function SlicerPrepareWorkspace({
         // profiles as well, otherwise the remembered IDs look unselected.
         const missing=recovered.filter(row=>row.profile &&
           !filamentProfiles.some(profile=>String(profile.id)===String(row.profile_id)));
-        for(const row of missing){
-          if(cancelled)return;
-          await onFilamentProfilesReload?.(row.profile);
-        }
+        if(missing.length)onRememberedProfiles?.(missing.map(row=>row.profile));
         if(cancelled)return;
         if(recovered.length)onSlotFilamentProfilesChange?.(current=>{
           const already=new Set((current||[]).map(row=>String(row.slot_id)));
@@ -402,6 +399,7 @@ export default function SlicerPrepareWorkspace({
       });
       setMaterialMessage(profileId?"Native filament preset remembered for "+slotName(slot)+"."
         :"Remembered native profile cleared for "+slotName(slot)+".");
+      return true;
     } catch(err) {
       // Never claim persistence on a failed write. Restore the previous
       // selection and surface a visible message with the real failure.
@@ -411,6 +409,7 @@ export default function SlicerPrepareWorkspace({
       ]);
       setMaterialMessage("Could not save the filament profile assignment: "+
         (err.message||"Unknown error"));
+      return false;
     }
   };
   const slotMatch = slot => matchLoadedSlotProfiles(resolveSlotLibrarySpool(slot,spools).slot, filamentProfiles, {
@@ -499,7 +498,8 @@ export default function SlicerPrepareWorkspace({
       // imported preset just because it sorts after other installed parents.
       await onFilamentProfilesReload?.(imported);
       if (currentPrinterIdRef.current !== targetPrinterId) return;
-      await assignLoadedSlotProfile(slot,String(imported.id));
+      if(!await assignLoadedSlotProfile(slot,String(imported.id)))
+        throw new Error("The native profile was imported, but its material association could not be saved.");
       setSuppressedSlotMatches(current => current.filter(id => id !== String(slot.id)));
       setSlotOfficialResults(current => ({...current, [String(slot.id)]: []}));
       setSlotOfficialSelections(current => ({...current, [String(slot.id)]: ""}));
