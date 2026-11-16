@@ -1649,7 +1649,7 @@ function PrinterConnectionsModal({ printer, onClose, onChanged, onAdded, onClaim
     {error && <div className="formError" role="alert">{error}</div>}
     {notice && <div className="notice">{notice}</div>}
     {!addOnly && <PrinterConfigurationBadges printer={printer} />}
-    {!addOnly && <div className="printerLiveActions"><PrinterPowerButton printerId={printer.id} /></div>}
+    {!addOnly && <PrinterPowerButton printerId={printer.id} />}
 
     {/* Use the same authenticated camera playback as the printer overview.
         When monitoring is open, the overview preview is suspended so only
