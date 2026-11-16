@@ -319,7 +319,7 @@ export default function SlicerPrepareWorkspace({
     if (hex) onManualColorChange?.(instanceId);
     setFilamentPickerId("");
     setFilamentNotice("Assigned " + slotName(slot) +
-      " to the project model. Single-slot slicing uses that slot's native filament preset when assigned; multi-slot printing still requires verified tool routing.");
+      " to the project model. Single-slot slicing uses that slot's native filament preset when assigned; multi-slot printing requires verified tool routing.");
   };
   const clearModelFilament = instanceId => {
     updatePlate(latest.current.map(item => {
