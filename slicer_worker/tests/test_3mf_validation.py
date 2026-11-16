@@ -59,6 +59,44 @@ class Core3MFWorkerTests(TestCase):
             zipfile_out.writestr("_rels/.rels", "<Relationships/>")
         return out.getvalue()
 
+    def with_variable_layer_range(self, xml):
+        """Wrap one real core model in MakerVault's bounded native metadata."""
+        original = self.package()
+        with zipfile.ZipFile(io.BytesIO(original)) as archive:
+            contents = {name: archive.read(name) for name in archive.namelist()}
+        contents["Metadata/model_settings.config"] = (
+            '<config><plate><metadata key="plater_id" value="1"/>'
+            '<model_instance><metadata key="object_id" value="1"/>'
+            '<metadata key="instance_id" value="0"/>'
+            '<metadata key="identify_id" value="1"/></model_instance>'
+            '</plate></config>'
+        ).encode()
+        contents["Metadata/layer_config_ranges.xml"] = xml.encode()
+        out = io.BytesIO()
+        with zipfile.ZipFile(out, "w", compression=zipfile.ZIP_DEFLATED) as archive:
+            for name, body in contents.items():
+                archive.writestr(name, body)
+        return out.getvalue()
+
+    def test_native_variable_height_ranges_accept_only_layer_height(self):
+        valid = ('<objects><object id="1">'
+                 '<range min_z="1" max_z="4"><option opt_key="layer_height">0.12</option></range>'
+                 '<range min_z="5" max_z="8"><option opt_key="layer_height">0.16</option></range>'
+                 '</object></objects>')
+        self.assertTrue(validate_worker_3mf(self.with_variable_layer_range(valid)))
+        for xml in (
+            valid.replace('opt_key="layer_height"', 'opt_key="machine_start_gcode"'),
+            valid.replace('id="1"', 'id="999"'),
+            valid.replace('max_z="4"', 'max_z="3000"'),
+            valid.replace('0.12', 'NaN'),
+            valid.replace('min_z="5"', 'min_z="3"'),
+            valid.replace('<objects>', '<script>'),
+        ):
+            with self.subTest(xml=xml), self.assertRaises(WorkerError):
+                validate_worker_3mf(self.with_variable_layer_range(xml))
+        with self.assertRaises(WorkerError):
+            validate_worker_3mf(self.with_variable_layer_range(valid), native_tool_count=2)
+
     def test_safe_per_object_metadata_passes_worker_validation(self):
         self.assertTrue(validate_worker_3mf(self.with_object_metadata([
             ("wall_loops", "5"), ("sparse_infill_density", "37%"),
