@@ -58,6 +58,19 @@ class HomeAssistantPowerUnitTests(SimpleTestCase):
         with self.assertRaisesRegex(HomeAssistantPowerError, "mixed"):
             validate_url("https://hass.example.org")
 
+    @patch("core.home_assistant_power.switch_state")
+    @patch("core.home_assistant_power.ha_request")
+    def test_successful_service_call_does_not_require_immediate_state_change(self, request, read_state):
+        from core.home_assistant_power import set_switch
+
+        setting = object()
+        self.assertEqual(set_switch(setting, "switch.printer_a", "off"), "off")
+        request.assert_called_once_with(
+            setting, "POST", "/api/services/switch/turn_off",
+            body={"entity_id": "switch.printer_a"},
+        )
+        read_state.assert_not_called()
+
     def test_live_active_print_prevents_power_off(self):
         printer = SimpleNamespace(
             print_jobs=SimpleNamespace(filter=lambda **kw: SimpleNamespace(exists=lambda: False)),
