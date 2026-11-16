@@ -349,16 +349,6 @@ export default function SlicerPrepareWorkspace({
       const selectedPrinter = (data.printers || []).find(p => String(p.id) === String(printerId));
       const loaded = (selectedPrinter?.slots || []).filter(slot => slot.is_loaded);
       setLiveMaterials(loaded);
-      // Reconcile only unassigned slots; never overwrite manual choices.
-      const existing = new Set(slotFilamentProfiles.map(row => String(row.slot_id)));
-      const inferred = loaded.filter(slot => !existing.has(String(slot.id)))
-        .map(slot => ({slot, match: matchLoadedSlotProfiles(slot, filamentProfiles, {
-          engine: String(engine).split(" ")[0], version: String(engine).split(" ").slice(1).join(" "),
-          printer: printerDetails,
-        })}))
-        .filter(({match}) => match.level === "exact")
-        .map(({slot, match}) => ({slot_id: String(slot.id), profile_id: String(match.profile.id)}));
-      if (inferred.length) onSlotFilamentProfilesChange?.([...slotFilamentProfiles, ...inferred]);
       setMaterialMessage(loaded.length
         ? "Assigned slots use their selected native filament preset for a single-filament slice. Multiple slots still require verified tool routing."
         : "No loaded slots reported for this printer.");
@@ -369,7 +359,23 @@ export default function SlicerPrepareWorkspace({
     } finally {
       if (requestId === requestRef.current) setMaterialRefreshing(false);
     }
-  }, [printerId, engine, filamentProfiles, slotFilamentProfiles, printerDetails, onSlotFilamentProfilesChange]);
+  }, [printerId]);
+  // Reconcile after slot inventory or imported presets change, never overwrite
+  // existing selections. Stable objects and unchanged state do not trigger
+  // a second profile assignment or a second printer refresh.
+  useEffect(() => {
+    if (!canEdit || !liveMaterials.length || !filamentProfiles.length) return;
+    const existing = new Set(slotFilamentProfiles.map(row => String(row.slot_id)));
+    const inferred = liveMaterials.filter(slot => !existing.has(String(slot.id)))
+      .map(slot => ({slot, match: matchLoadedSlotProfiles(slot, filamentProfiles, {
+        engine: String(engine).split(" ")[0],
+        version: String(engine).split(" ").slice(1).join(" "),
+        printer: printerDetails,
+      })}))
+      .filter(({match}) => match.level === "exact")
+      .map(({slot, match}) => ({slot_id: String(slot.id), profile_id: String(match.profile.id)}));
+    if (inferred.length) onSlotFilamentProfilesChange?.([...slotFilamentProfiles, ...inferred]);
+  }, [canEdit, liveMaterials, filamentProfiles, slotFilamentProfiles, engine, printerDetails, onSlotFilamentProfilesChange]);
   useEffect(() => {
     refreshPrinterMaterials();
     return () => { requestRef.current += 1; };
