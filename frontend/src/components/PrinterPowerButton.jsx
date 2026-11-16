@@ -11,13 +11,33 @@ export default function PrinterPowerButton({printerId, compact = false}) {
   const [error, setError] = useState("");
   useEffect(() => {
     let alive = true;
+    let generation = 0;
     setPower(null);
     setError("");
     if (!printerId) return () => { alive = false; };
-    apiFetch("/api/printing/printers/" + printerId + "/power/")
-      .then(data => { if (alive) setPower(data.available ? data.state : null); })
-      .catch(() => { if (alive) setPower(null); });
-    return () => { alive = false; };
+    const refresh = () => {
+      const request = ++generation;
+      apiFetch("/api/printing/printers/" + printerId + "/power/")
+        .then(data => {
+          if (alive && request === generation) setPower(data.available ? data.state : null);
+        })
+        .catch(() => {
+          if (alive && request === generation) setPower(null);
+        });
+    };
+    const onAssignmentChange = event => {
+      if (String(event.detail?.printerId) === String(printerId)) refresh();
+    };
+    const onFocus = () => refresh();
+    refresh();
+    window.addEventListener("makervault:printer-power-assignment-changed", onAssignmentChange);
+    // Resync external Home Assistant changes when returning to MakerVault.
+    window.addEventListener("focus", onFocus);
+    return () => {
+      alive = false;
+      window.removeEventListener("makervault:printer-power-assignment-changed", onAssignmentChange);
+      window.removeEventListener("focus", onFocus);
+    };
   }, [printerId]);
   if (power == null) return null;
   const available = power === "on" || power === "off";
@@ -47,9 +67,9 @@ export default function PrinterPowerButton({printerId, compact = false}) {
     <button type="button" className={"printerPowerButton state-" + power}
       disabled={busy || !available} onClick={turn}
       aria-label={busy ? "Switching printer power" : power === "on" ? "Turn printer power off" : "Turn printer power on"}
-      title={available ? "Home Assistant printer power: " + power : "Home Assistant switch unavailable"}>
+      title={available ? "Home Assistant reports power " + power + ". Click to turn " + (power === "on" ? "off" : "on") + "." : "Home Assistant switch unavailable"}>
       <span aria-hidden="true">⏻</span>
-      <span className="printerPowerLabel">{busy ? "Switching…" : power === "on" ? "Power on" : power === "off" ? "Power off" : "Unavailable"}</span>
+      <span className="printerPowerLabel">{busy ? "Switching…" : power === "on" ? "Turn off" : power === "off" ? "Turn on" : "Unavailable"}</span>
     </button>
     {error && <small className="printerPowerError" role="alert">{error}</small>}
   </span>;
