@@ -1314,7 +1314,7 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
       processOverrides={processOverrides} onProcessOverridesChange={setProcessOverrides}
       flushSettings={flushSettings} onFlushSettingsChange={setFlushSettings}
       slotFilamentProfiles={slotFilamentProfiles} onSlotFilamentProfilesChange={setSlotFilamentProfiles}
-      filamentProfiles={forKind("filament")}
+      filamentProfiles={forKind("filament")} spools={spools}
       onFilamentProfilesReload={async () => {
         // Importing for a physical CFS/AMS bay must not switch the main
         // session filament preset through suggestion reconciliation.
