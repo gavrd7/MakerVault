@@ -41,6 +41,11 @@ export default function PrinterPowerAssignment({printerId}) {
             method: "PATCH", body: {entity_id: next},
           });
           setEntity(result.entity_id || "");
+          // Notify every mounted printer control immediately after the server
+          // has saved the new mapping. No page reload or polling required.
+          window.dispatchEvent(new CustomEvent("makervault:printer-power-assignment-changed", {
+            detail: {printerId},
+          }));
         } catch (err) {
           setError(err.message || "Could not assign switch.");
         } finally {setBusy(false);}
