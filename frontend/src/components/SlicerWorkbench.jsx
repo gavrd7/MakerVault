@@ -7,6 +7,7 @@ import GcodeViewerModal from "./GcodeViewerModal";
 import SlicerPlateEditor from "./SlicerPlateEditor";
 import SlicerPrepareWorkspace from "./SlicerPrepareWorkspace";
 import SlicerEngineChoices from "./SlicerEngineChoices";
+import { engineCompatibilityIssues } from "./slicerEngineCompatibility";
 import { slicerSpoolHex, recolorUnmodifiedPlate } from "./slicerSpoolColour";
 import SlicerSpoolPicker from "./SlicerSpoolPicker";
 import { spoolMaterial, chooseSuggestedProfile, defaultOfficialSearch, suggestOfficialVendor } from "./slicerProfileSuggestions";
@@ -1324,6 +1325,7 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
       onChangeProfiles={() => setProfileModal("change")}
       selectedPlateType={plateOptions(form.engine).find(([id]) => id === form.plate)?.[1] || "Native / profile default"}
       workerConfigured={workerConfigured && engines.some(engine => engine.key === form.engine && engine.available)}
+      engineCapabilities={engines.find(item => item.key === form.engine)?.feature_capabilities?.[form.engine_version] || engines.find(item => item.key === form.engine)?.feature_capabilities?.default || {}}
       processOverrides={processOverrides} onProcessOverridesChange={setProcessOverrides}
       flushSettings={flushSettings} onFlushSettingsChange={setFlushSettings}
       slotFilamentProfiles={slotFilamentProfiles} onSlotFilamentProfilesChange={setSlotFilamentProfiles}
@@ -1367,15 +1369,23 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
              { key: "crealityprint", label: "Creality Print", available: false }]}
             selected={form.engine} disabled={!canPrepare || busy || loading}
             onSelect={key => {
+              const selectedEngine = engines.find(item => item.key === key);
+              const targetVersion = selectedEngine?.installed_version ||
+                profiles.find(profile => profile.engine === key)?.engine_version || "";
+              const issues = engineCompatibilityIssues(selectedEngine,targetVersion,projectPlates);
+              if (key !== form.engine && issues.length && !window.confirm(
+                "This project contains edits that cannot currently be sliced by " +
+                (selectedEngine?.label || key) + " " + (targetVersion || "") + ":\n\n" +
+                issues.map(item => "• " + item.label + " (" + item.status.replaceAll("_"," ") + ")").join("\n") +
+                "\n\nYour edits will be preserved. Switch engines anyway?"
+              )) return;
               manuallyChosenProfiles.current.clear();
               setFlushSettings(null);
               setSlotFilamentProfiles([]);
-              const selectedEngine = engines.find(item => item.key === key);
               setForm(current => ({
                 ...current, engine: key,
                 plate: key !== current.engine ? "default" : current.plate,
-                engine_version: selectedEngine?.installed_version ||
-                  profiles.find(profile => profile.engine === key)?.engine_version || "",
+                engine_version: targetVersion,
                 printer_profile_id: "", filament_profile_id: "", process_profile_id: "",
               }));
             }} />
