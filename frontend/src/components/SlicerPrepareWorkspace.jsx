@@ -518,6 +518,8 @@ export default function SlicerPrepareWorkspace({
   const [materialMessage, setMaterialMessage] = useState("Select Refresh to read current printer filament slots.");
   useEffect(() => { setSuppressedSlotMatches([]); setSlotOfficialResults({}); setSlotOfficialSelections({}); setSlotOfficialSearched({}); }, [printerId]);
   const requestRef = useRef(0);
+  const previousSlotMaterialsRef = useRef(new Map());
+  useEffect(()=>{previousSlotMaterialsRef.current.clear();},[printerId]);
   const refreshPrinterMaterials = useCallback(async () => {
     const requestId = ++requestRef.current;
     if (!printerId) {
@@ -533,6 +535,24 @@ export default function SlicerPrepareWorkspace({
       if (requestId !== requestRef.current) return;
       const selectedPrinter = (data.printers || []).find(p => String(p.id) === String(printerId));
       const loaded = (selectedPrinter?.slots || []).filter(slot => slot.is_loaded);
+      const signature=slot=>JSON.stringify([
+        slot.vendor||"",slot.product_name||"",slot.material||"",
+        slot.color_hex||slot.color_name||"",slot.material_code||"",
+        slot.spool_id||"",slot.rfid_uid||"",
+      ]);
+      const previous=previousSlotMaterialsRef.current;
+      const latest=new Map(loaded.map(slot=>[String(slot.id),signature(slot)]));
+      const changed=new Set([...previous].filter(([id,sig])=>
+        !latest.has(id) || latest.get(id)!==sig).map(([id])=>id));
+      if(changed.size){
+        // A CFS bay may now contain a completely different filament. Do not
+        // reuse that bay's previous session assignment while remembering a
+        // separate preference for the new material.
+        onSlotFilamentProfilesChange?.(current=>(current||[]).filter(row=>
+          !changed.has(String(row.slot_id))));
+        for(const id of changed)touchedSlotsRef.current.delete(id);
+      }
+      previousSlotMaterialsRef.current=latest;
       setLiveMaterials(loaded);
       setMaterialMessage(loaded.length
         ? "Assigned slots use their selected native filament preset for a single-filament slice. Multiple slots still require verified tool routing."
@@ -544,7 +564,7 @@ export default function SlicerPrepareWorkspace({
     } finally {
       if (requestId === requestRef.current) setMaterialRefreshing(false);
     }
-  }, [printerId]);
+  }, [printerId,onSlotFilamentProfilesChange]);
   // Reconcile after slot inventory or imported presets change, never overwrite
   // existing selections. Stable objects and unchanged state do not trigger
   // a second profile assignment or a second printer refresh.
