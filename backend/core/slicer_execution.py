@@ -214,7 +214,8 @@ def _plate_builder(objects_with_stl):
     Admission still rejects per-object jobs until real-binary proof exists.
     """
     return (build_plate_3mf if any(
-        isinstance(item, dict) and bool(item.get("process_overrides"))
+        isinstance(item, dict) and (bool(item.get("process_overrides")) or
+            bool((item.get("variable_layer_profile") or {}).get("bands")))
         for item, _raw in objects_with_stl
     ) else build_compound_plate_3mf)
 
@@ -287,10 +288,27 @@ def _validate_plate_execution(job):
             )
     if any(isinstance(item, dict) and isinstance(item.get("variable_layer_profile"), dict)
            and item["variable_layer_profile"].get("bands") for item in objects):
-        raise SlicerExecutionError(
-            "Variable layer height bands are draft-only until native Orca "
-            "layer_height_profile export is validated. Keep the draft before slicing."
-        )
+        # Native Orca layer_config_ranges.xml export is available for an
+        # explicitly offline, single upright model experiment only. Real
+        # G-code and firmware checks are still needed for print approval.
+        if job.engine != "orcaslicer" or job.engine_version != "2.5.0":
+            raise SlicerExecutionError(
+                "Variable layer test slicing currently requires OrcaSlicer 2.5.0.")
+        if len(objects) != 1 or settings.get("multi_material_test"):
+            raise SlicerExecutionError(
+                "Variable layer test slicing currently requires one single-material model.")
+        item = objects[0]
+        if any(abs(float(x)) > 0.000001 for x in
+               item.get("rotation_xyz_deg", [0, 0])) or abs(float(item.get("z_mm", 0))) > 0.000001:
+            raise SlicerExecutionError(
+                "Variable layer test slicing requires an upright, non-elevated model.")
+        if any(abs(float(x) - 100) > 0.000001 for x in
+               item.get("scale_xyz_percent", [item.get("scale_percent", 100)] * 3)):
+            raise SlicerExecutionError(
+                "Variable layer test slicing requires an unscaled model.")
+        if any(item.get("process_overrides") for item in objects):
+            raise SlicerExecutionError(
+                "Combine variable layer height with Object settings after the native test fixture.")
     if settings.get("multi_material_test") is True:
         # This permits *offline G-code generation* only. Uploaded or started
         # printer jobs are blocked by the submission API for these artifacts.
@@ -444,8 +462,8 @@ def _single_unmodified_stl(plate):
     if not isinstance(plate, list) or len(plate) != 1 or not isinstance(plate[0], dict):
         return False
     item = plate[0]
-    if item.get("process_overrides"):
-        return False  # A native object setting must never fall back to plain STL.
+    if item.get("process_overrides") or (item.get("variable_layer_profile") or {}).get("bands"):
+        return False  # Native object or variable-layer settings must never fall back to plain STL.
     try:
         if any(float(item.get(key, 0) if key == "z_mm" else item[key]) != expected for key, expected in (
             ("x_mm", 0), ("y_mm", 0), ("z_mm", 0), ("rotation_deg", 0),
