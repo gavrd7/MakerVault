@@ -1975,27 +1975,74 @@ export default function SlicerPlateEditor({
       new THREE.MeshBasicMaterial({color:"#f9e65c",transparent:true,
         opacity:.22,depthTest:false,side:THREE.DoubleSide})));
     scene.add(brushGuide,sphereGuide,...heightGuide);
-    const variableGuide=[0,1].map(()=>new THREE.Mesh(new THREE.PlaneGeometry(1,1),
-      new THREE.MeshBasicMaterial({color:"#36e4d5",transparent:true,opacity:.24,
-        depthTest:false,side:THREE.DoubleSide})));
-    scene.add(...variableGuide);
+    // Variable-layer bands are independent of the ordinary blue selection
+    // outline. Show horizontal lower/upper planes and the region between
+    // them, without tinting the whole STL or changing its native colour.
+    const variableGuide=[0,1].map(index=>{
+      const guide=new THREE.Mesh(new THREE.PlaneGeometry(1,1),
+        new THREE.MeshBasicMaterial({color:index===0?"#f6bd60":"#75e2c0",
+          transparent:true,opacity:.23,depthTest:false,depthWrite:false,
+          side:THREE.DoubleSide}));
+      const perimeter=new THREE.LineSegments(
+        new THREE.EdgesGeometry(guide.geometry),
+        new THREE.LineBasicMaterial({color:index===0?"#f6bd60":"#75e2c0",
+          transparent:true,opacity:1,depthTest:false,depthWrite:false}));
+      perimeter.renderOrder=101;
+      guide.add(perimeter);
+      guide.renderOrder=100;
+      scene.add(guide);
+      return guide;
+    });
+    const variableBandGuide=new THREE.Mesh(new THREE.BoxGeometry(1,1,1),
+      new THREE.MeshBasicMaterial({color:"#c4a5eb",transparent:true,opacity:.09,
+        depthTest:false,depthWrite:false,side:THREE.DoubleSide}));
+    variableBandGuide.renderOrder=99;
+    scene.add(variableBandGuide);
+    const hideVariableHeightGuide=()=>{
+      variableGuide.forEach(guide=>{guide.visible=false;});
+      variableBandGuide.visible=false;
+    };
     const hidePaintGuides = () => {
       brushGuide.visible=false;sphereGuide.visible=false;
       heightGuide.forEach(guide=>{guide.visible=false;});
+      hideVariableHeightGuide();
     };
     hidePaintGuides();
     let lastHoverHeight = null;
     let variableHeightPointerId=null;
-    // Height painting uses the Z position only. Leave the mesh and plate
-    // completely unobscured; the selected range is shown numerically.
     const showVariableHeightGuide=()=>{
-      variableGuide.forEach(guide=>{guide.visible=false;});
+      hideVariableHeightGuide();
+      if(latestToolModeRef.current!=="variable_layers")return;
+      const preview=variableLayerRef.current.preview;
+      const id=selectionRef.current[0];
+      const target=meshes.get(id);
+      if(!target || !preview)return;
+      const lower=Number(preview.from_mm);
+      const upper=Number(preview.to_mm);
+      if(!Number.isFinite(lower)||!Number.isFinite(upper)||upper<=lower)return;
+      target.updateMatrixWorld(true);
+      const bounds=new THREE.Box3().setFromObject(target);
+      if(bounds.isEmpty())return;
+      const from=Math.max(bounds.min.z,lower);
+      const to=Math.min(bounds.max.z,upper);
+      if(to<=from)return;
+      const centre=bounds.getCenter(new THREE.Vector3());
+      const width=Math.max(.5,bounds.max.x-bounds.min.x);
+      const depth=Math.max(.5,bounds.max.y-bounds.min.y);
+      variableGuide.forEach((guide,index)=>{
+        guide.position.set(centre.x,centre.y,index===0?from:to);
+        guide.scale.set(width,depth,1);
+        guide.visible=true;
+      });
+      variableBandGuide.position.set(centre.x,centre.y,(from+to)/2);
+      variableBandGuide.scale.set(width,depth,to-from);
+      variableBandGuide.visible=true;
     };
     const pickVariableHeight=(hit)=>{
       if(!hit?.face)return;
       const height=Math.max(0,Math.round(hit.point.z*2)/2);
       variableLayerRef.current.pick?.(height);
-      showVariableHeightGuide(hit);
+      showVariableHeightGuide();
     };
     function previewPaintGuide(hit) {
       hidePaintGuides();
@@ -2677,7 +2724,7 @@ export default function SlicerPlateEditor({
       orientationCube.render();
     });
     sceneRef.current = { scene, meshes, transform, rotationGizmo, camera, controls, bedX, bedY,
-      measurementOverlay, setSelectionOutlines, sectionPlane, groupProxy, hidePaintGuides };
+      measurementOverlay, setSelectionOutlines, sectionPlane, groupProxy, hidePaintGuides, showVariableHeightGuide };
     return () => {
       disposed = true;
       sceneRef.current = null;
@@ -2690,8 +2737,12 @@ export default function SlicerPlateEditor({
       renderer.domElement.removeEventListener("pointerup", pointerUp);
       renderer.domElement.removeEventListener("pointercancel", pointerUp);
       renderer.domElement.removeEventListener("pointerleave",pointerLeavePaint);
-      for(const guide of [brushGuide,sphereGuide,...heightGuide,...variableGuide]){
-        scene.remove(guide);guide.geometry.dispose();guide.material.dispose();
+      for(const guide of [brushGuide,sphereGuide,...heightGuide,...variableGuide,variableBandGuide]){
+        scene.remove(guide);
+        if(guide.children.length)guide.children.forEach(child=>{
+          child.geometry.dispose();child.material.dispose();
+        });
+        guide.geometry.dispose();guide.material.dispose();
       }
       renderer.setAnimationLoop(null);
       window.removeEventListener("keydown", onRotationKeyChange);
@@ -2812,6 +2863,7 @@ export default function SlicerPlateEditor({
           catch (error) {latestPaintErrorRef.current?.(error.message || "Invalid saved colour painting.");}
           state.meshes.set(item.instance_id, mesh);
           state.scene.add(mesh);
+          if (latestToolModeRef.current === "variable_layers") state.showVariableHeightGuide?.();
           if (latestToolModeRef.current !== "select" && item.instance_id === selectedInstanceId &&
               ["move", "scale"].includes(latestToolModeRef.current)) {
             state.transform.setMode(latestToolModeRef.current === "move" ? "translate" : "scale");
@@ -2823,6 +2875,16 @@ export default function SlicerPlateEditor({
     return () => { live = false; controller.abort(); };
   }, [objectKey, sourceFiles, bedX, bedY, plate?.polygon_mm, plate?.bounds_mm, plateType, printerLabel,
     showNativeArtwork, showOrientationLabels, showMachineLabel, showDimensionsLabel, showAxisLabels, plate?.bed_model_url, plate?.artwork_url]);
+
+  // Keep the visible Z band in sync with the number inputs, slider, model
+  // selection and tool changes, even before the pointer enters the canvas.
+  useEffect(() => {
+    const state=sceneRef.current;
+    if(!state)return;
+    if(toolMode==="variable_layers")state.showVariableHeightGuide?.();
+    else state.hidePaintGuides?.();
+  }, [variableLayerPreview?.from_mm,variableLayerPreview?.to_mm,
+    toolMode,selected,objectKey]);
 
   // Painting consumes pointer drags; OrbitControls must not rotate the camera
   // underneath a brush stroke. Selecting another toolbar tool restores orbit.
