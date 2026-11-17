@@ -1102,6 +1102,57 @@ def _reconcile_creality_processing(connection, snapshot):
     return result
 
 
+# Versioned, read-only capability report. Every supported live adapter writes
+# this on the next successful poll after an upgrade. Unknown is a valid result,
+# and must never silently imply a physical toolchange.
+MATERIAL_CAPABILITY_SCHEMA = 1
+AUTOMATIC_FEEDERS = {
+    "creality_local": "cfs_connected",
+    "bambu_local": "ams_connected",
+    "flashforge": "material_station_connected",
+    "anycubic": "ace_connected",
+}
+MULTI_TOOL_ADAPTERS = {
+    "moonraker", "prusa", "snapmaker", "elegoo", "qidi",
+    "sovol", "voron", "octoprint", "other",
+}
+
+
+def material_capability_report(connection, snapshot):
+    """Normalise material architecture evidence, never printer permissions."""
+    metadata = snapshot.get("source_metadata") or {}
+    metadata = metadata if isinstance(metadata, dict) else {}
+    materials = snapshot.get("materials") or []
+    materials = materials if isinstance(materials, list) else []
+    report = {
+        "schema_version": MATERIAL_CAPABILITY_SCHEMA,
+        "available": False,
+        "topology": "unknown",
+        "detection": "unknown",
+        "physical_toolchange_verified": False,
+    }
+    adapter = connection.adapter
+    feeder_key = AUTOMATIC_FEEDERS.get(adapter)
+    if feeder_key:
+        # Positive observations from the adapter or actual discovered bays.
+        # Do not infer from the printer model or an opt-in product flag.
+        if metadata.get(feeder_key) is True or bool(materials):
+            report.update(available=True, topology="single_nozzle_changer",
+                          detection="live_telemetry")
+        elif metadata.get(feeder_key) is False:
+            report["detection"] = "not_observed"
+        return report
+    if adapter in MULTI_TOOL_ADAPTERS:
+        tool_names = metadata.get("tool_names")
+        if isinstance(tool_names, dict) and len(tool_names) > 1:
+            # Multiple observable independent extruder heaters indicate a
+            # multi-tool printer, but not the type of motion arrangement.
+            report.update(available=True, topology="independent_toolheads",
+                          detection="live_tool_inventory")
+        return report
+    return report
+
+
 def poll_connection(connection) -> dict:
     definition = ADAPTERS.get(connection.adapter)
     if not definition:
@@ -1180,26 +1231,11 @@ def poll_connection(connection) -> dict:
         capabilities["materials"] = bool(
             metadata.get("ace_connected") or snapshot.get("materials")
         )
-    # Publish read-only material architecture evidence for the slicer adapter
-    # contract. These signals identify a supported automatic feeder, NOT
-    # verified firmware toolchange commands or permission to start prints.
-    feeder_flags = {
-        "creality_local": "cfs_connected",
-        "bambu_local": "ams_connected",
-        "flashforge": "material_station_connected",
-        "anycubic": "ace_connected",
-    }
-    feeder_flag = feeder_flags.get(connection.adapter)
-    if feeder_flag and metadata.get(feeder_flag) is True:
-        capabilities["material_system"] = {
-            "available": True,
-            "topology": "single_nozzle_changer",
-            "physical_toolchange_verified": False,
-        }
-    elif feeder_flag:
-        # Do not advertise an absent or stale system merely because the
-        # selected printer model may be capable of using one.
-        capabilities.pop("material_system", None)
+    # Always report a versioned capability, even when hardware details are
+    # unknown; never convert "unknown" into asserted multi-material support.
+    capabilities["material_system"] = material_capability_report(
+        connection, snapshot
+    )
     connection.capabilities = capabilities
     connection.last_snapshot = snapshot
     connection.save(update_fields=[
