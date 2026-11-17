@@ -19,6 +19,7 @@ export default function SlicerToolpath3D({
   const sceneRef = useRef(null);
   const [unavailable, setUnavailable] = useState(false);
   const [showBedGrid, setShowBedGrid] = useState(true);
+  const [mobileViewOpen, setMobileViewOpen] = useState(false);
   const [showBedSurface, setShowBedSurface] = useState(true);
   useEffect(() => {
     const mountPoint = mount.current;
@@ -340,6 +341,9 @@ export default function SlicerToolpath3D({
     </div> : <div className="slicerToolpath3DCanvas" ref={mount} role="img"
       aria-label="3D G-code toolpath preview. Drag to orbit, scroll to zoom and right-drag to pan." />}
     <div className="slicerToolpathViewBar" role="toolbar" aria-label="G-code preview camera and bed">
+      <button type="button" className="slicerMobileViewToggle" aria-expanded={mobileViewOpen}
+        onClick={() => setMobileViewOpen(value => !value)}>View · camera &amp; bed</button>
+      <div className={"slicerToolpathViewOptions" + (mobileViewOpen ? " mobileOpen" : "")}>
       <button type="button" onClick={() => setCameraView("iso")} title="Reset to isometric bed view">Isometric</button>
       <button type="button" onClick={() => setCameraView("top")} title="View build plate from above">Top</button>
       <button type="button" onClick={() => setCameraView("front")} title="View build plate from front">Front</button>
@@ -348,6 +352,7 @@ export default function SlicerToolpath3D({
         onChange={event => setShowBedGrid(event.target.checked)} /> Grid</label>
       <label><input type="checkbox" checked={showBedSurface}
         onChange={event => setShowBedSurface(event.target.checked)} /> Bed</label>
+      </div>
     </div>
     <small>Drag to orbit · Scroll to zoom · Right-drag to pan · Z is vertical ·
       {bedSize && Number(bedSize[0]) > 0 && Number(bedSize[1]) > 0
