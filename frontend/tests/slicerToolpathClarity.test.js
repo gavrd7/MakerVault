@@ -41,7 +41,7 @@ test("G-code preview defaults to complete-print overview while retaining layer d
 });
 
 test("complete model preview is not unnecessarily ghosted or labelled sampled", () => {
-  assert.match(preview, /Whole print · progressive full resolution/);
+  assert.match(preview, /Whole print · surface overview/);
   assert.match(preview, /previewSampled={false}/);
   assert.match(preview, /wholeModel.complete/);
   assert.match(preview, /Fade previous layers/);
