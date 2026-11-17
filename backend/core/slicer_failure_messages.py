@@ -6,6 +6,16 @@ alone as a definitive diagnosis, and never echo untrusted CLI output.
 """
 
 REASONS = {
+    "native-line-width-invalid": (
+        "OrcaSlicer rejected an effective extrusion line width as too small. "
+        "Review the nozzle, process layer height and line-width settings; "
+        "a CLI profile merge can differ from desktop slicing."
+    ),
+    "cli-print-validation-exit-205": (
+        "OrcaSlicer exited with code 205 during slicing. This has been observed "
+        "for print validation errors, but the specific rejected setting was "
+        "not identified. Compare an unchanged STL with the same native presets."
+    ),
     "cli-validation-exit-238": (
         "OrcaSlicer rejected native profile or project settings (CLI exit 238). "
         "Check the printer, filament and process values for settings outside "
