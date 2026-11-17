@@ -67,3 +67,40 @@ class MultiMaterialPreflightTests(SimpleTestCase):
         profiles.return_value = self.presets
         with self.assertRaisesRegex(MaterialRoutingError, "not verified"):
             plan_native_multimaterial(self.job)
+
+    @patch("core.slicer_multimaterial_execution.SlicerProfile.objects.filter")
+    @patch("core.slicer_multimaterial_execution.PrinterConnection.objects.filter")
+    def test_one_model_uses_base_slot_plus_surface_painted_slot(self, sources, profiles):
+        printer = "11111111-1111-4111-8111-111111111111"
+        self.job.printer_id = printer
+        self.settings["plate_objects"] = [{
+            "instance_id": "painted", "material_slot": {
+                "printer_id": printer, "slot_id": "cfs-bay-1", "slot_index": 0,
+            },
+            "colour_paint": {
+                "version": 2, "signature": "1:deadbeef",
+                "palette": [{
+                    "color": "#aabbcc", "label": "Blue", "printer_id": printer,
+                    "slot_id": "cfs-bay-4", "slot_index": 3,
+                }],
+                "regions": [{"slot": 0, "patches": [{
+                    "face": 0, "polygon": [[0, 0, 0], [1, 0, 0], [0, 1, 0]],
+                }]}],
+            },
+        }]
+        self.settings["slot_filament_profiles"].append({
+            "slot_id": "unused-bay", "profile_id": "unused"
+        })
+        sources.return_value = [self.connection]
+        profiles.return_value = self.presets
+        topology, bindings, palette = plan_native_multimaterial(self.job)
+        self.assertEqual(topology, "single_nozzle_changer")
+        self.assertEqual(bindings, {"cfs-bay-1": 0, "cfs-bay-4": 1})
+        self.assertEqual([preset.pk for preset in palette], ["red", "blue"])
+
+    @patch("core.slicer_multimaterial_execution.PrinterConnection.objects.filter")
+    def test_single_model_without_painted_second_tool_is_blocked(self, sources):
+        sources.return_value = [self.connection]
+        self.settings["plate_objects"] = [self.settings["plate_objects"][1]]
+        with self.assertRaisesRegex(MaterialRoutingError, "between two and sixteen"):
+            plan_native_multimaterial(self.job)
