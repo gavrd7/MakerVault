@@ -103,7 +103,7 @@ def _job_source_ids(job):
     return source_ids
 
 
-def serialise(job, installed=None, temp_assets=None):
+def serialise(job, installed=None, temp_assets=None, *, list_view=False):
     # The batch lookup is only used for the authenticated user's list view.
     # The single-job endpoint retains its owner-scoped database lookup.
     source_ids = _job_source_ids(job)
@@ -121,10 +121,17 @@ def serialise(job, installed=None, temp_assets=None):
     can_slice = False
     if (job.status == "draft" and installed
             and not (job.settings or {}).get("plate_conflicts")):
-        try:
-            can_slice = validate_scheduling(job, installed)
-        except (SlicerExecutionError, ValueError):
-            pass
+        if list_view:
+            # The list is refreshed on every active-job poll and may contain
+            # 100 drafts. Full validation includes paint asset expansion,
+            # imported profile inheritance and printer capability checks.
+            # The start endpoint independently validates under a row lock.
+            can_slice = True
+        else:
+            try:
+                can_slice = validate_scheduling(job, installed)
+            except (SlicerExecutionError, ValueError):
+                pass
     return {
         "id": str(job.id),
         "status": job.status,
@@ -1096,7 +1103,8 @@ def jobs(request):
             )
         } if all_source_ids else {}
         return JsonResponse({
-            "jobs": [serialise(job, installed, temp_assets=temporary_assets) for job in saved_jobs],
+            "jobs": [serialise(job, installed, temp_assets=temporary_assets,
+                               list_view=True) for job in saved_jobs],
             "worker_configured": bool(installed),
             "can_cancel": request.user.has_perm("core.change_slicejob"),
             "can_delete": request.user.has_perm("core.delete_slicejob"),
