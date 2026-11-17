@@ -62,6 +62,7 @@ const GROUPS = [["Quality", "quality"], ["Strength", "strength"], ["Speed", "spe
 export default function SlicerPrepareWorkspace({
   objects, onChange, files, plate, plateType = "default", plateLabel = "Plate 1",
   plates = [], activePlateId = "plate-1", onChoosePlate, onAddPlate, onRemovePlate, onMoveModelsToPlate,
+  primeTower = null, onPrimeTowerChange,
   onPlateLabelChange, onPrimaryChange, onFilesUploaded,
   defaultColor, onManualColorChange, canEdit, busy, error, notice,
   onChangeProfiles, onOpenDevice, onSaveDraft, onSaveProject, onExportNativeMaterials, onImportProject, onSlice, onSliceAll, engine, printer,
@@ -1979,6 +1980,12 @@ export default function SlicerPrepareWorkspace({
           </div>
         </section> : <SlicerPlateEditor key={activePlateId} plateIndex={Math.max(0,plates.findIndex(item=>item.id===activePlateId))} plateCount={plates.length||1} toolbar={modelToolbar} paintControls={variableLayerPanel || paintPanel} files={files} localAssets={localAssets}
           onLocalAssetsChange={onLocalAssetsChange} onPlateIssuesChange={onPlateIssuesChange} objects={objects} onChange={updatePlate}
+          primeTower={primeTower} onPrimeTowerChange={onPrimeTowerChange}
+          primeTowerEnabled={activeEngine==="orcaslicer" &&
+            (liveMaterials.length>=2 || objects.some(item=>item.material_slot||item.colour_paint)) &&
+            processOverrides.enable_prime_tower!=="0" && flushSettings?.prime_tower!=="disabled"}
+          primeTowerWidth={Number(processOverrides.prime_tower_width ??
+            nativeProcessFields.prime_tower_width?.current ?? 35) || 35}
           colourPaintOptions={{mode:paintMode,slot:paintErase?null:(isSupportPainting?supportSlot:isSeamPainting?seamSlot:isFuzzyPainting?0:paintSlot),palette:paintPalette,
             radiusMm:paintBrushMm,angleDeg:paintAngle,minHeightMm:paintHeight[0],maxHeightMm:paintHeight[1],
             supportOverhangsOnly:supportOverhangsOnly,supportOverhangAngle:supportOverhangAngle}}
