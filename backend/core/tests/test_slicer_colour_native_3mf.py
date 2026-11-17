@@ -6,6 +6,8 @@ from defusedxml import ElementTree as ET
 from django.test import SimpleTestCase
 
 from core.slicer_approval import fixture_stl
+
+PRINTER_ID = "11111111-1111-4111-8111-111111111111"
 from core.slicer_native_support_paint import _fingerprint
 from core.slicer_plate_3mf import NS, _triangles, build_plate_3mf
 from core.slicer_native_material_palette import native_colour_tool_maps
@@ -26,7 +28,7 @@ def fixture_paint():
     patch = [[(point[axis] + centre[axis]) / 2 for axis in range(3)]
              for point in face]
     swatches = [
-        {"color": "#111111", "label": "Black", "printer_id": "printer",
+        {"color": "#111111", "label": "Black", "printer_id": PRINTER_ID,
          "slot_id": "bay-1", "slot_index": 0},
         {"color": "#eeeeee", "label": "White", "printer_id": "printer",
          "slot_id": "bay-2", "slot_index": 1},
@@ -44,7 +46,7 @@ class NativeColourRegionTests(SimpleTestCase):
         raw, painting = fixture_paint()
         item = {"x_mm": 0, "y_mm": 0, "rotation_deg": 0,
                 "scale_percent": 100, "colour_paint": painting}
-        maps = native_colour_tool_maps([item], printer_id="printer",
+        maps = native_colour_tool_maps([item], printer_id=PRINTER_ID,
                                        tool_bindings={"bay-3": 2})
         self.assertEqual(maps, ({2: 2},))
         result = build_plate_3mf([(item, raw)], bed_width=220, bed_depth=220,
