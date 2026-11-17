@@ -114,8 +114,33 @@ export default function SlicerToolpath3D({
       bounds.expandByPoint(new THREE.Vector3(segment[2], segment[4], segment[3]));
       valid += 1;
     }
-    const centre = valid ? bounds.getCenter(new THREE.Vector3()) : new THREE.Vector3(110, 0, 110);
-    const size = valid ? bounds.getSize(new THREE.Vector3()) : new THREE.Vector3(120, 40, 120);
+    // Purge lines and skirt moves can span the bed and make the printed part
+    // tiny. For camera framing only, use the densest XY footprint rather than
+    // letting sparse outliers dictate the focal distance. Never alter toolpaths.
+    const xs = [], ys = [];
+    for (let i = 0; i < segments.length; i += Math.max(1, Math.floor(segments.length / 4000))) {
+      const line = segments[i];
+      if (Array.isArray(line) && line.length >= 5 && line.slice(0, 5).every(Number.isFinite)) {
+        xs.push(line[0], line[2]);
+        ys.push(line[1], line[3]);
+      }
+    }
+    const middleBounds = (values) => {
+      if (!values.length) return null;
+      values.sort((a,b) => a-b);
+      const low = values[Math.floor(values.length * 0.03)];
+      const high = values[Math.floor(values.length * 0.97)];
+      return [low, high];
+    };
+    const bx = middleBounds(xs), by = middleBounds(ys);
+    const rawCentre = valid ? bounds.getCenter(new THREE.Vector3()) : new THREE.Vector3(110, 0, 110);
+    const rawSize = valid ? bounds.getSize(new THREE.Vector3()) : new THREE.Vector3(120, 40, 120);
+    const centre = bx && by
+      ? new THREE.Vector3((bx[0] + bx[1]) / 2, rawCentre.y, (by[0] + by[1]) / 2)
+      : rawCentre;
+    const size = bx && by
+      ? new THREE.Vector3(Math.max(1, bx[1]-bx[0]), rawSize.y, Math.max(1, by[1]-by[0]))
+      : rawSize;
     // With known machine dimensions, preserve the printer's actual XY origin
     // at (0, 0). The sample may contain outlying purge/skirt moves and must
     // not change the relative position of the bed and model.
@@ -129,7 +154,7 @@ export default function SlicerToolpath3D({
     bed.position.z = bedCentre.z;
     // Frame the printed part rather than the full printer bed initially.
     // An overview is still available from the Isometric camera control.
-    const distance = Math.max(45, size.length() * 1.7);
+    const distance = Math.max(38, size.length() * 1.25);
     const target = valid ? centre : bedCentre;
     controls.target.copy(target);
     camera.position.copy(target).add(new THREE.Vector3(distance * 0.7, distance * 0.9, distance));
@@ -342,7 +367,7 @@ export default function SlicerToolpath3D({
       aria-label="3D G-code toolpath preview. Drag to orbit, scroll to zoom and right-drag to pan." />}
     <div className="slicerToolpathViewBar" role="toolbar" aria-label="G-code preview camera and bed">
       <button type="button" className="slicerMobileViewToggle" aria-expanded={mobileViewOpen}
-        onClick={() => setMobileViewOpen(value => !value)}>View · camera &amp; bed</button>
+        onClick={() => setMobileViewOpen(value => !value)}>View options</button>
       <div className={"slicerToolpathViewOptions" + (mobileViewOpen ? " mobileOpen" : "")}>
       <button type="button" onClick={() => setCameraView("iso")} title="Reset to isometric bed view">Isometric</button>
       <button type="button" onClick={() => setCameraView("top")} title="View build plate from above">Top</button>
