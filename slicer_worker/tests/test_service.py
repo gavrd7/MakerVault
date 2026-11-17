@@ -180,7 +180,7 @@ class NativeValidationReasonContractTests(TestCase):
         root = Path(__file__).resolve().parents[1]
         validator = root.joinpath("three_mf_validation.py").read_text()
         service = root.joinpath("service.py").read_text()
-        literals = set(re.findall(r'raise WorkerError\\(\\s*["\\\']([^"\\\']+)', validator))
+        literals = set(re.findall(r'raise WorkerError\(\s*"([^"]+)', validator))
         self.assertTrue(literals)
         for message in sorted(literals):
             with self.subTest(message=message):
