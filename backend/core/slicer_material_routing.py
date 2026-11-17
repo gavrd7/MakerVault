@@ -194,15 +194,16 @@ def detect_material_system(connections):
     return detected.pop()
 
 
-def derive_native_tool_order(objects, *, printer_id, topology, preferred_slot_id=None):
+def derive_native_tool_order(objects, *, printer_id, topology, preferred_slot_id=None,
+                             painted_slot_ids=()):
     """Assign logical Orca filament indices by first model use, not tray position.
 
     Adapter-specific hardware routing is intentionally not emitted here.
     """
     if topology not in TOPOLOGIES:
         raise MaterialRoutingError("Unsupported material changeover system.")
-    if not isinstance(objects, list) or not 2 <= len(objects) <= 200:
-        raise MaterialRoutingError("Multi-material assignment needs at least two models.")
+    if not isinstance(objects, list) or not 1 <= len(objects) <= 200:
+        raise MaterialRoutingError("Multi-material assignment needs at least one model.")
     unique_slots = []
     for item in objects:
         if not isinstance(item, dict) or not isinstance(item.get("material_slot"), dict):
@@ -216,6 +217,13 @@ def derive_native_tool_order(objects, *, printer_id, topology, preferred_slot_id
                 or not isinstance(slot_index, int) or isinstance(slot_index, bool)
                 or not 0 <= slot_index <= 63):
             raise MaterialRoutingError("Invalid filament slot assignment.")
+        if slot_id not in unique_slots:
+            unique_slots.append(slot_id)
+    if not isinstance(painted_slot_ids, (list, tuple)):
+        raise MaterialRoutingError("Invalid painted filament slot list.")
+    for slot_id in painted_slot_ids:
+        if not isinstance(slot_id, str) or not 1 <= len(slot_id) <= 128:
+            raise MaterialRoutingError("Invalid painted filament slot.")
         if slot_id not in unique_slots:
             unique_slots.append(slot_id)
     if not 2 <= len(unique_slots) <= 16:
