@@ -61,6 +61,10 @@ def resolve_native_material_palette(
         raise MaterialRoutingError("Multi-material preparation requires at least two used tools.")
     if any(route.tool_index >= len(native_filament_profiles) for route in routes):
         raise MaterialRoutingError("A model selects a native tool without a filament preset.")
+    if any(tool >= len(native_filament_profiles) for tool in painted_tools):
+        raise MaterialRoutingError("A painted region selects a tool without a native filament preset.")
+    if set(tool_bindings.values()) != set(range(len(native_filament_profiles))):
+        raise MaterialRoutingError("Every native tool must map to one verified filament preset.")
 
     resolved = []
     diameters = []
