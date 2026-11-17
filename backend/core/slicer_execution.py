@@ -235,7 +235,7 @@ VERIFIED_OBJECT_PROCESS_KEYS = frozenset({
 def _validate_plate_execution(job):
     """An untouched STL or a bounded native-bed-backed multi-object 3MF plate."""
     try:
-        settings=expand_painted_settings(job.owner, job.settings or {})
+        settings=expand_painted_settings(getattr(job, "owner", None), job.settings or {})
     except (ValueError, OSError) as exc:
         raise SlicerExecutionError("A referenced private painting asset is missing or invalid.") from exc
     # Do not silently discard native flush / prime-tower preferences when
