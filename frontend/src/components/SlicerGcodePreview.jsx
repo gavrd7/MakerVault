@@ -145,16 +145,16 @@ export default function SlicerGcodePreview({ fileId = null, preview, bedSize = n
       <div><small>Requested bed · G-code</small><strong>{startTemperatures?.bed_c != null ? startTemperatures.bed_c + " °C" : "Not declared"}</strong></div>
     </div>
     {layers.length > 0 ? <>
-      <div className="slicerMobileToolButtons" role="toolbar" aria-label="G-code display tools">
+      <div className="slicerPreviewToolButtons" role="toolbar" aria-label="G-code display tools">
         <button type="button" aria-expanded={mobilePanel === "display"} onClick={() => setMobilePanel("display")}>Display settings</button>
         <button type="button" aria-expanded={mobilePanel === "features"} onClick={() => setMobilePanel("features")}>Toolpaths</button>
       </div>
-      {mobilePanel && <div className="slicerMobileBackdrop" onClick={() => setMobilePanel(null)} aria-hidden="true" />}
-      <div className={"slicerResultModeRow" + (mobilePanel === "display" ? " mobileOpen" : "")}
+      {mobilePanel && <div className="slicerPreviewBackdrop" onClick={() => setMobilePanel(null)} aria-hidden="true" />}
+      <div className={"slicerResultModeRow slicerPreviewOptionsPanel" + (mobilePanel === "display" ? " mobileOpen" : "")}
         role={mobilePanel === "display" ? "dialog" : undefined}
         aria-modal={mobilePanel === "display" ? "true" : undefined}
         aria-label={mobilePanel === "display" ? "Display settings" : undefined}>
-        <div className="slicerMobilePanelHeader"><strong>Display settings</strong>
+        <div className="slicerPreviewPanelHeader"><strong>Display settings</strong>
           <button type="button" onClick={() => setMobilePanel(null)}>Close</button>
         </div>
         <label>Preview style
@@ -251,12 +251,12 @@ export default function SlicerGcodePreview({ fileId = null, preview, bedSize = n
         Current layer only retrieves precise geometry; missing small details do not imply missing G-code.
       </p>}
 
-      <fieldset className={"slicerResultVisibility" + (mobilePanel === "features" ? " mobileOpen" : "")}
+      <fieldset className={"slicerResultVisibility slicerPreviewOptionsPanel" + (mobilePanel === "features" ? " mobileOpen" : "")}
         role={mobilePanel === "features" ? "dialog" : undefined}
         aria-modal={mobilePanel === "features" ? "true" : undefined}
         aria-label={mobilePanel === "features" ? "Visible toolpaths" : undefined}>
-        <legend>Visible extrusion features</legend>
-        <div className="slicerMobilePanelHeader"><strong>Visible toolpaths</strong>
+        <legend>Visible toolpaths</legend>
+        <div className="slicerPreviewPanelHeader"><strong>Visible toolpaths</strong>
           <button type="button" onClick={() => setMobilePanel(null)}>Close</button>
         </div>
         {features.map(feature => <label className="checkRow" key={feature}>
