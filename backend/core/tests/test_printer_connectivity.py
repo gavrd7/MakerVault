@@ -33,6 +33,7 @@ from core.printer_connectivity import (
     normalise_creality_snapshot,
     normalise_moonraker_endpoint,
     poll_connection,
+    material_capability_report,
     poll_moonraker,
     poll_octoprint,
 )
@@ -1361,6 +1362,70 @@ class PrinterConnectivityApiTests(TestCase):
         with self.assertRaises(PrinterConnectionError):
             poll_connection(connection)
 
+
+    def test_every_supported_adapter_exposes_versioned_material_capability(self):
+        from core.printer_connectivity import ADAPTERS, POLLERS
+        snapshot = {"source_metadata": {}, "materials": []}
+        for adapter in POLLERS:
+            with self.subTest(adapter=adapter):
+                connection = PrinterConnection(printer=self.printer, adapter=adapter)
+                result = material_capability_report(connection, snapshot)
+                self.assertEqual(result["schema_version"], 1)
+                self.assertFalse(result["available"])
+                self.assertEqual(result["topology"], "unknown")
+                self.assertFalse(result["physical_toolchange_verified"])
+
+    def test_report_detects_live_feeders_not_model_assumptions(self):
+        for adapter, flag in (
+            ("creality_local", "cfs_connected"),
+            ("bambu_local", "ams_connected"),
+            ("flashforge", "material_station_connected"),
+            ("anycubic", "ace_connected"),
+        ):
+            with self.subTest(adapter=adapter):
+                connection = PrinterConnection(printer=self.printer, adapter=adapter)
+                result = material_capability_report(
+                    connection, {"source_metadata": {flag: True}, "materials": []})
+                self.assertTrue(result["available"])
+                self.assertEqual(result["topology"], "single_nozzle_changer")
+                self.assertEqual(result["detection"], "live_telemetry")
+                self.assertFalse(result["physical_toolchange_verified"])
+
+    def test_moonraker_multiple_heaters_reports_unknown_topology(self):
+        connection = PrinterConnection(printer=self.printer, adapter="moonraker")
+        result = material_capability_report(connection, {
+            "source_metadata": {"tool_names": {"tool0": "extruder", "tool1": "extruder1"}},
+            "materials": [],
+        })
+        self.assertTrue(result["available"])
+        self.assertEqual(result["topology"], "unknown")
+
+    @patch("core.tasks.live_printer_connection_poll_task.delay")
+    def test_upgrade_queues_read_only_capability_refresh_without_reconnect(self, delay_mock):
+        item = PrinterConnection.objects.create(
+            printer=self.printer, adapter="moonraker",
+            endpoint_url="http://printer.local:7125",
+            poll_interval_seconds=3600, status="connected",
+            last_checked_at=timezone.now() - timedelta(seconds=130),
+            capabilities={"job": True},
+        )
+        result = live_printer_connections_tick()
+        self.assertEqual(result["count"], 1)
+        delay_mock.assert_called_once_with(item.pk)
+        item.refresh_from_db()
+        self.assertEqual(item.status, "connecting")
+
+    @patch("core.tasks.live_printer_connection_poll_task.delay")
+    def test_upgrade_refresh_is_bounded_and_does_not_repeat_every_tick(self, delay_mock):
+        PrinterConnection.objects.create(
+            printer=self.printer, adapter="moonraker",
+            endpoint_url="http://printer.local:7125",
+            poll_interval_seconds=3600, status="connected",
+            last_checked_at=timezone.now() - timedelta(seconds=10),
+            capabilities={"job": True},
+        )
+        self.assertEqual(live_printer_connections_tick()["count"], 0)
+        delay_mock.assert_not_called()
 
     @patch("core.tasks.live_printer_connection_poll_task.delay")
     def test_scheduler_queues_only_due_supported_connections(self, delay_mock):
