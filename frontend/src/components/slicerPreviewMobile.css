@@ -209,3 +209,15 @@
     width: 5px; border: 0; background: transparent;
   }
 }
+
+/* Fit details to their content rather than a tall near-empty full-screen sheet. */
+@media (max-width: 700px) {
+  .slicerGcodeCompactLayout .slicerGcodeMetadata.mobileOpen {
+    inset: auto;
+    top: 50%; left: 50%;
+    transform: translate(-50%, -50%);
+    width: calc(100vw - 24px);
+    max-width: 580px; max-height: 82dvh;
+    height: auto; box-sizing: border-box;
+  }
+}
