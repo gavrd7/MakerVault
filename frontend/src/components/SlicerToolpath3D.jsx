@@ -9,7 +9,7 @@ import { featureMatchesFocus, featureFamily } from "./slicerToolpathFeatures";
  * Never imply a complete print simulation when sampled paths are missing.
  */
 export default function SlicerToolpath3D({
-  segments = [], framingSegments = [], layers = [], activeLayer, activeStep, visible = {},
+  segments = [], framingSegments = [], progressiveMode = false, layers = [], activeLayer, activeStep, visible = {},
   colourMode = "feature", colours = {}, filamentColours = {}, showToolhead = true, bedSize = null,
   renderMode = "solid", nozzleDiameter = 0.4,
   layerDisplay = "current", featureFocus = "all",
@@ -253,11 +253,24 @@ export default function SlicerToolpath3D({
     const view = sceneRef.current;
     if (!view) return;
     const { paths, marker } = view;
-    while (paths.children.length) {
-      const old = paths.children[0];
-      paths.remove(old);
-      old.geometry.dispose();
-      old.material.dispose();
+    // In whole-print mode, never re-tessellate hundreds of thousands of
+    // extrusion moves every time another batch finishes loading.
+    const styleKey = JSON.stringify([colourMode,colours,filamentColours,renderMode,
+      nozzleDiameter,visible,featureFocus,layerDisplay,previewSampled,
+      fadePrevious,outerContrast]);
+    const previous = view.geometryCache;
+    const canAppend = progressiveMode && previous?.styleKey === styleKey
+      && segments.length >= previous.count
+      && (previous.count === 0 ||
+        JSON.stringify(segments[previous.count-1]) === previous.lastSegment);
+    const startSegment = canAppend ? previous.count : 0;
+    if (!canAppend) {
+      while (paths.children.length) {
+        const old = paths.children[0];
+        paths.remove(old);
+        old.geometry.dispose();
+        old.material.dispose();
+      }
     }
     const activeZ = layers[activeLayer];
     const positions = [];
@@ -270,7 +283,8 @@ export default function SlicerToolpath3D({
     const activeIndex = Math.max(0, Number(activeLayer) || 0);
     const minVisibleIndex = layerDisplay === "current" ? activeIndex
       : layerDisplay === "context" ? Math.max(0, activeIndex - 8) : 0;
-    for (const segment of segments) {
+    for (let segmentIndex=startSegment;segmentIndex<segments.length;segmentIndex++) {
+      const segment=segments[segmentIndex];
       if (!Array.isArray(segment) || segment.length < 6 ||
           !segment.slice(0, 5).every(Number.isFinite)) continue;
       const [x1, y1, x2, y2, z, feature] = segment;
@@ -280,7 +294,7 @@ export default function SlicerToolpath3D({
       const isCurrent = segmentLayerIndex === activeIndex;
       if (isCurrent) {
         currentCount += 1;
-        if (currentCount > maxStep) continue;
+        if (!progressiveMode && currentCount > maxStep) continue;
         lastStep = [x2, z, y2];
       }
       if (visible[feature] === false || !featureMatchesFocus(feature, featureFocus)) continue;
@@ -396,11 +410,15 @@ export default function SlicerToolpath3D({
           })));
       }
     }
+    view.geometryCache = progressiveMode ? {
+      count:segments.length,styleKey,
+      lastSegment:segments.length?JSON.stringify(segments[segments.length-1]):null,
+    } : null;
     marker.visible = Boolean(showToolhead && lastStep);
     if (lastStep) marker.position.set(...lastStep);
   }, [segments, layers, activeLayer, activeStep, visible, colourMode, colours, showToolhead,
     renderMode, nozzleDiameter, filamentColours, layerDisplay, featureFocus, previewSampled,
-    fadePrevious, outerContrast, bedSize?.[0], bedSize?.[1]]);
+    fadePrevious, outerContrast, progressiveMode, bedSize?.[0], bedSize?.[1]]);
 
   return <div className="slicerToolpath3D">
     {unavailable ? <div role="status" className="projectUploadHint">
