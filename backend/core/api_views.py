@@ -2487,7 +2487,7 @@ def file_gcode_layers(request, asset_id):
         text = raw.decode("utf-8")
     except UnicodeDecodeError:
         return _error("Full-resolution preview requires UTF-8 G-code.", status=400)
-    result = layer_batch_toolpaths(text, heights)
+    result = layer_batch_toolpaths(text, heights, overview=request.GET.get("overview") == "1")
     response = JsonResponse(result)
     response["Cache-Control"] = "private, no-store"
     return response
