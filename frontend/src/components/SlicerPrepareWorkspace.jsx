@@ -1240,7 +1240,8 @@ export default function SlicerPrepareWorkspace({
         </div>
       </div>}
       <small style={{fontSize:11,opacity:.8}}>Left drag: paint · Right drag: rotate view · Wheel: zoom · Ctrl+Z / Ctrl+Y: undo / redo. {(isSupportPainting && engineCapabilities.support_paint?.status==="test_only") ||
-         (isSeamPainting && engineCapabilities.seam_paint?.status==="test_only")
+         (isSeamPainting && engineCapabilities.seam_paint?.status==="test_only") ||
+         (isFuzzySkinPainting && engineCapabilities.fuzzy_skin_paint?.status==="test_only")
         ? "This painting can be sliced for offline Orca 2.5 testing; printer submission remains blocked."
         : "Paint annotations are draft-only until native export is verified."}</small>
       {isSupportPainting && (paintSelected?.support_paint?.regions?.reduce((n,r)=>n+r.patches.length,0)||0)>10000 &&
@@ -1932,6 +1933,16 @@ export default function SlicerPrepareWorkspace({
     </div>
     <div className="slicerPrepareActions">
       <div aria-live="polite">
+        {objects.some(item => (item.fuzzy_skin_paint?.regions || []).length > 0) &&
+          engineCapabilities.fuzzy_skin_paint?.status === "test_only" &&
+          <p className="slicerActionStatus" role="status">
+            Selective fuzzy skin is an offline OrcaSlicer 2.5.0 test. Painted
+            areas use Orca's native Painted only mode with the chosen process
+            texture settings. Use one upright, unscaled model without other
+            painted features. Compare the actual outer-wall texture paths with
+            an unpainted baseline before considering this verified.
+            Printer upload and print start remain disabled for experimental G-code.
+          </p>}
         {objects.some(item => (item.seam_paint?.regions || []).length > 0) &&
           engineCapabilities.seam_paint?.status === "test_only" &&
           <p className="slicerActionStatus" role="status">
