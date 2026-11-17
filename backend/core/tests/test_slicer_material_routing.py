@@ -121,6 +121,13 @@ class OfflineK2MaterialTopologyTests(SimpleTestCase):
             "single_nozzle_changer",
         )
 
+    def test_k2_moonraker_connection_is_sufficient_for_offline_topology(self):
+        self.assertEqual(
+            offline_material_system([self._connection(adapter="moonraker")],
+                                    printer=self._printer()),
+            "single_nozzle_changer",
+        )
+
     def test_explicit_installed_k2_cfs_can_use_moonraker_offline(self):
         self.assertEqual(
             offline_material_system([self._connection(adapter="moonraker")],
@@ -142,7 +149,7 @@ class OfflineK2MaterialTopologyTests(SimpleTestCase):
             (self._printer("K1"), self._connection()),
             (self._printer("Unknown"), self._connection()),
             (self._printer("K2 Combo"), self._connection(enabled=False)),
-            (self._printer("K2 Combo"), self._connection("moonraker")),
+            (self._printer("K2 Combo"), self._connection("octoprint")),
         ]:
             with self.subTest(model=printer.model, adapter=connection.adapter):
                 with self.assertRaisesRegex(MaterialRoutingError, "No supported"):
