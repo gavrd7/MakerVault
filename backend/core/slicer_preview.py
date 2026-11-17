@@ -57,6 +57,7 @@ def generated_preview(text, *, truncated=False):
              "filament_g": None, "filament_cm3": None,
              "layer_count": None, "layers": [], "segments": [],
              "segment_count": 0, "sampled": False, "complete": not truncated,
+             "unresolved_arc_moves": 0,
              "feature_counts": {}}
     absolute_xyz = True
     absolute_e = True
@@ -124,6 +125,9 @@ def generated_preview(text, *, truncated=False):
                 moves = arc_points(x,y,z,nx,ny,nz,
                                    command in {"G2","G02"},params,
                                    absolute_centres=absolute_centres)
+                if moves is None and ne > e + 0.000001:
+                    stats["unresolved_arc_moves"] += 1
+                    stats["complete"] = False
             elif nx != x or ny != y:
                 moves = [(nx, ny, nz, 1.0)]
             if ne > e + 0.000001 and moves:
