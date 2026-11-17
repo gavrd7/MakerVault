@@ -704,3 +704,25 @@
   min-height:42px;
   margin:0!important;
 }
+
+/* Progressive full-resolution toolpaths: describe precisely how much original
+   extrusion data has loaded, instead of presenting a sparse sample as solid. */
+.slicerWholeModelProgress {
+  display:flex;
+  align-items:center;
+  flex-wrap:wrap;
+  gap:8px 14px;
+  padding:8px 2px 2px;
+  font-size:.81rem;
+  color:var(--muted,#a9bbcb);
+}
+.slicerWholeModelProgress progress {
+  flex:1 1 120px;
+  max-width:320px;
+  height:6px;
+  accent-color:#7258e8;
+}
+.slicerWholeModelProgress small {
+  flex-basis:100%;
+  line-height:1.4;
+}
