@@ -111,6 +111,19 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
   const [mayDeleteDraft, setMayDeleteDraft] = useState(false);
   const [printSelection, setPrintSelection] = useState(null);
   const [previewFile, setPreviewFile] = useState(null);
+  const projectFileRef=useRef(null);
+  const [projectName,setProjectName]=useState("MakerVault project");
+  const [projectNameAction,setProjectNameAction]=useState(null);
+  const [projectNameInput,setProjectNameInput]=useState("");
+  const openProjectNameDialog=mode=>{
+    setProjectNameInput(projectName||"MakerVault project");
+    setProjectNameAction(mode);
+  };
+  const projectFilename=name=>{
+    const safe=String(name||"MakerVault project").trim()
+      .replace(/[\\/:*?"<>|\x00-\x1f\x7f]/g,"-").replace(/\.+$/g,"").slice(0,80).trim();
+    return (safe||"MakerVault project")+".3mf";
+  };
   // Multi-plate project; existing code reads only the active plate.
   const [projectPlates,setProjectPlates] = useState([{id:"plate-1",name:"Plate 1",objects:[]}]);
   const [activePlateId,setActivePlateId] = useState("plate-1");
@@ -199,6 +212,7 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
       manuallyColouredModels.current=new Set(result.plates.flatMap(plate=>
         plate.objects.map(item=>item.instance_id)));
       const config=result.configuration||{};
+      setProjectName(config.project_name||"MakerVault project");
       const allProfiles=[...profiles];
       const profileAvailable=(id,kind)=>allProfiles.some(profile=>
         String(profile.id)===String(id)&&profile.kind===kind);
@@ -567,6 +581,7 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
       item.objects.map(model=>model.instance_id)));
     manuallyChosenProfiles.current = new Set(["printer", "filament", "process"]);
     setProjectPlates(restored);
+    setProjectName(job.settings?.project_name||"MakerVault project");
     setActivePlateId(restored.some(p=>p.id===job.settings?.active_plate_id)
       ?job.settings.active_plate_id:restored[0].id);
     setPlateValidation(null);
@@ -749,9 +764,10 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
     return painted || new Set(baseSlots).size > 1;
   }
 
-  async function saveDraft(mode = "draft") {
+  async function saveDraft(mode = "draft", namedProject = null) {
     if (busy || loading || !canPrepare) return;
-    const sliceNow = !["draft","project","native-material"].includes(mode);
+    const exportingProject=mode==="project"||mode==="export-project";
+    const sliceNow = !["draft","project","export-project","native-material"].includes(mode);
     const offlineMultiMaterial = sliceNow && mode !== "all" &&
       plateNeedsMultiMaterial(plateObjects);
     const saveOutput = mode === "save-and-slice";
@@ -858,6 +874,7 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
           spool_id: form.spool_id || null,
           settings: { ...(compactObjects.length ? { plate_objects: compactObjects } : {}),
             plate_label: plateLabel.trim() || "Plate 1",
+            ...(namedProject?{project_name:namedProject}:{}),
             plates:compactPlates.map(plate=>({
               id:plate.id,name:plate.name.trim()||"Untitled plate",objects:plate.objects,
               ...(plate.prime_tower?{prime_tower:plate.prime_tower}:{}),
@@ -873,7 +890,7 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
       savedJob = job;
       setJobs(current => [job, ...current]);
       if (!sliceNow) {
-        if(mode==="project" || mode==="native-material"){
+        if(exportingProject || mode==="native-material"){
           const response=await fetch("/api/printing/slicer/jobs/"+job.id+
             (mode==="native-material"?"/export-native-materials/":"/export-project/"),{credentials:"same-origin"});
           if(!response.ok){
@@ -884,10 +901,11 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
           const url=URL.createObjectURL(blob);
           try{
             const link=document.createElement("a");
-            link.href=url;link.download=mode==="native-material"?"MakerVault-native-material-test.3mf":"MakerVault-project.3mf";
+            link.href=url;link.download=mode==="native-material"?"MakerVault-native-material-test.3mf":projectFilename(namedProject||projectName);
             document.body.appendChild(link);link.click();link.remove();
           }finally{setTimeout(()=>URL.revokeObjectURL(url),1000);}
-          setNotice(mode==="native-material"?"Exported Orca-compatible multi-material 3MF for offline review. Physical printer tool changes are NOT verified or enabled.":"Saved multi-plate project as a .3mf file.");
+          if(exportingProject)setProjectName(namedProject||projectName);
+          setNotice(mode==="native-material"?"Exported Orca-compatible multi-material 3MF for offline review. Physical printer tool changes are NOT verified or enabled.":"Downloaded complete project "+projectFilename(namedProject||projectName)+".");
         }else{
           setNotice("Slicing configuration saved as a private draft. No slicer or printer command was run.");
           setShowDrafts(true);
@@ -1336,7 +1354,20 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
         <p>Choose a model, printer and filament, then configure the native slicing profiles. Prepare the build plate, save drafts, and slice when the selected engine is available.</p>
       </div>
       <div className="printingHeroActions slicerHeroActions">
-        {editorOpen && <button type="button" className="slicerHeroBack" onClick={() => setEditorOpen(false)}>← Slicer setup</button>}
+        {editorOpen && <div className="slicerHeroProjectNavigation">
+          <button type="button" className="slicerHeroBack" onClick={() => setEditorOpen(false)}>← Slicer setup</button>
+          <div className="slicerHeroProjectFileActions">
+            <button type="button" disabled={busy||loading||!canPrepare||!projectPlates.some(plate=>plate.objects.length)}
+              onClick={()=>openProjectNameDialog("project")}>Save project (.3mf)</button>
+            <button type="button" disabled={busy||loading||!canPrepare}
+              onClick={()=>projectFileRef.current?.click()}>Open project (.3mf)</button>
+          </div>
+          <input ref={projectFileRef} className="slicerProjectHiddenInput" type="file" accept=".3mf"
+            aria-label="Choose MakerVault project 3MF" onChange={event=>{
+              const file=event.target.files?.[0];event.target.value="";
+              if(file)importProjectFile(file);
+            }}/>
+        </div>}
         <button type="button" onClick={onBack}>← Printing overview</button>
         <button type="button" onClick={() => setShowDrafts(true)}>Saved drafts ({jobs.length})</button>
         {!editorOpen && <button type="button" className="primary slicerHeroInteractive"
@@ -1423,7 +1454,7 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
       }}
       onSaveCustomProcessProfile={saveInteractiveProcessProfile}
       onBackToSetup={() => setEditorOpen(false)} onSaveDraft={() => saveDraft("draft")}
-      onSaveProject={() => saveDraft("project")} onExportNativeMaterials={() => saveDraft("native-material")} onSliceAll={() => saveDraft("all")}
+      onSaveProject={()=>openProjectNameDialog("project")} onExportProject={()=>openProjectNameDialog("export-project")} onSliceAll={() => saveDraft("all")}
        onImportProject={importProjectFile}
       onSlice={() => saveDraft("slice")}
     /> : <>
@@ -2102,6 +2133,31 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
       </button>}
       </div> : <p>No slicing drafts saved yet.</p>}
       </>}
+    </Modal>}
+    {projectNameAction && <Modal title={projectNameAction==="project"?"Save project (.3mf)":"Export Project (.3mf)"}
+      subtitle="Name your complete MakerVault project. All build plates and saved model settings will be included."
+      onClose={()=>setProjectNameAction(null)}>
+      <form className="formGrid" onSubmit={event=>{
+        event.preventDefault();
+        const name=projectNameInput.trim();
+        if(!name||name.length>80||/[\\x00-\\x1f\\x7f]/.test(name))return;
+        const mode=projectNameAction;
+        setProjectNameAction(null);
+        saveDraft(mode,name);
+      }}>
+        <label className="full">Project name
+          <input type="text" required autoFocus maxLength={80} value={projectNameInput}
+            onChange={event=>setProjectNameInput(event.target.value)}
+            placeholder="e.g. Two-colour Benchy"/>
+        </label>
+        <small className="full">Downloads as {projectFilename(projectNameInput)}. The name is also saved inside the project archive.</small>
+        <div className="full settingsActions">
+          <button type="button" onClick={()=>setProjectNameAction(null)}>Cancel</button>
+          <button type="submit" className="primary" disabled={!projectNameInput.trim()||busy}>
+            {projectNameAction==="project"?"Save project":"Export project"}
+          </button>
+        </div>
+      </form>
     </Modal>}
     {previewFile && <FileModelViewerModal file={previewFile} onClose={() => setPreviewFile(null)} />}
     {printSelection?.choosing && <Modal title="Choose printer connection" subtitle={(printSelection.action === "upload" ? "Send " : "Print ") + (printSelection.job.output_asset?.filename || "sliced G-code") + " on " + printSelection.printer.name} onClose={() => setPrintSelection(null)}>
