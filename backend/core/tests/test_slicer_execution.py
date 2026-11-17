@@ -144,6 +144,42 @@ class IntendedMaterialSafetyTests(SimpleTestCase):
             with self.assertRaisesRegex(SlicerExecutionError, "upright|unscaled"):
                 _validate_plate_execution(job)
 
+    def test_native_seam_paint_requires_orca25_offline_single_model(self):
+        from types import SimpleNamespace
+        model = {
+            "instance_id": "one", "asset_id": "mesh",
+            "x_mm": 0, "y_mm": 0, "z_mm": 0,
+            "rotation_deg": 0, "rotation_xyz_deg": [0, 0],
+            "scale_percent": 100, "scale_xyz_percent": [100,100,100],
+            "seam_paint": {"version": 2, "signature": "2:abcdef01",
+                "regions": [{"slot": 0, "patches": [{
+                    "face": 0, "polygon": [[0.,0.,0.],[1.,0.,0.],[0.,1.,0.]]
+                }]}]},
+        }
+        job = SimpleNamespace(settings={"plate_objects": [model]},
+                              engine="orcaslicer", engine_version="2.5.0",
+                              printer_id="printer", filament_profile_id="filament",
+                              printer_profile_id="printer-profile",
+                              printer_profile=SimpleNamespace())
+        self.assertTrue(_validate_plate_execution(job))
+        self.assertFalse(_single_unmodified_stl([model]))
+        job.engine_version = "2.4.2"
+        with self.assertRaisesRegex(SlicerExecutionError, "2.5.0"):
+            _validate_plate_execution(job)
+        job.engine_version = "2.5.0"
+        job.settings["plate_objects"] = [model, {**model, "instance_id":"two"}]
+        with self.assertRaisesRegex(SlicerExecutionError, "single-filament model"):
+            _validate_plate_execution(job)
+        for change in ({"z_mm": 4}, {"scale_percent": 92},
+                       {"rotation_xyz_deg": [10,0]}):
+            job.settings["plate_objects"] = [{**model, **change}]
+            with self.assertRaisesRegex(SlicerExecutionError, "upright|unscaled"):
+                _validate_plate_execution(job)
+        job.settings["plate_objects"] = [
+            {**model, "support_paint": {"regions":[{"slot": 0}]}}]
+        with self.assertRaisesRegex(SlicerExecutionError, "Combining|combined"):
+            _validate_plate_execution(job)
+
     def test_unhandled_flush_matrix_cannot_be_silently_ignored(self):
         from types import SimpleNamespace
         for models in (None, [], [{"instance_id": "one"}]):
