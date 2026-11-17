@@ -65,7 +65,7 @@ export default function SlicerPrepareWorkspace({
   primeTower = null, onPrimeTowerChange,
   onPlateLabelChange, onPrimaryChange, onFilesUploaded,
   defaultColor, onManualColorChange, canEdit, busy, error, notice,
-  onChangeProfiles, onOpenDevice, onSaveDraft, onSaveProject, onExportNativeMaterials, onImportProject, onSlice, onSliceAll, engine, printer,
+  onChangeProfiles, onOpenDevice, onSaveDraft, onSaveProject, onExportProject, onImportProject, onSlice, onSliceAll, engine, printer,
   selectedProfiles, workerConfigured, engineCapabilities = {}, printerId,
   processOverrides = {}, onProcessOverridesChange, onSaveCustomProcessProfile,
   flushSettings = null, onFlushSettingsChange,
@@ -2130,22 +2130,11 @@ export default function SlicerPrepareWorkspace({
           Save draft and project export preserve all {plates.length} plates. The main Slice button uses <strong>{plateLabel}</strong>.
         </p>}
         <button type="button" disabled={!plateReady || !profilesReady} onClick={onSaveDraft}>Save draft</button>
-        <button type="button" disabled={!plateReady || !profilesReady} onClick={onSaveProject}>Save project (.3mf)</button>
-        {multiMaterialReadyForExport && <button type="button"
-          disabled={!activePlateReady || !profilesReady || busy}
-          onClick={onExportNativeMaterials}
-          title="Download an Orca-compatible 3MF; the backend detects the printer material system and derives tool order. Printing remains disabled until physical changeovers are verified.">
-          Export multi-material 3MF (offline)
-        </button>}
-        <label className="slicerProjectImportButton" aria-label="Open project from 3MF file">
-          Open project (.3mf)
-          <input type="file" accept=".3mf" disabled={!canEdit||busy}
-            onChange={event=>{
-              const file=event.target.files?.[0];
-              event.target.value="";
-              if(file)onImportProject?.(file);
-            }}/>
-        </label>
+        <button type="button" disabled={!plateReady || !profilesReady || busy}
+          onClick={onExportProject}
+          title="Download the complete MakerVault project, including every plate and its model settings.">
+          Export Project (.3mf)
+        </button>
         <div className="slicerSliceSplit">
           <button type="button" className="primary"
             disabled={!activePlateReady || !profilesReady || !workerConfigured || conflictsBlockSlice || objectSettingsPending || (hasPaintedColours && !paintedNativeReady) || (materialRoutingPending && !multiMaterialReadyForExport)}
