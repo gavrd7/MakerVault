@@ -1,7 +1,8 @@
 # MakerVault painting v2: surface regions rather than original STL faces
 
-Status: **Painting v2 interactive preview and MakerVault draft/project persistence
-implemented on the development branch; printer-native paint export remains blocked**.
+Status: **Painting v2 and draft/project persistence are implemented. Native OrcaSlicer
+2.5.0 colour facet conversion is available in the explicit offline multi-material
+test/export route. Physical printer submission remains blocked pending acceptance.**
 
 - New painting uses a versioned, mesh-fingerprinted, ordered clipped-polygon
   representation. Existing v1 face-colour drafts remain editable in legacy mode
@@ -14,20 +15,58 @@ implemented on the development branch; printer-native paint export remains block
 - Draft validation is implemented in both frontend and backend. MakerVault
   project 3MF export/import stores v2 regions as validated, bounded sidecars,
   preserving the real polygon coordinates across a round-trip.
-- These sidecars are **MakerVault-specific editable metadata**, not native
-  Orca/Bambu material painting, and are **not** interpreted as multicolour
-  G-code. The frontend and backend both block native slicing of painted regions.
+- These sidecars are **MakerVault-specific editable metadata**. The explicit
+  offline Orca multi-material test converts validated v2 patches into
+  `paint_color` annotations using a verified logical filament palette;
+  standard single-filament slicing does **not** compile the paint.
 - Shared support enforcer/blocker surface-region painting now uses the v2 selector and
   independent action annotations, with Erase, Clear all, brush, sphere, fill
   and height-range UI. MakerVault drafts and MakerVault project 3MF sidecars
   retain support regions; previews use separate green/red overlays.
-- Native support-paint export is deliberately blocked: previews and saved
-  annotations are not printable supports until engine-specific native support
-  metadata generation and slicing tests are verified.
+- Native support/seam/fuzzy facets have passed the separate single-filament
+  acceptance slice. Combined support + variable layering requires compatible
+  normal/manual supports. Cross-feature multi-material printing has **not**
+  been accepted for printer submission.
 - Remaining: staging acceptance tests, cross-engine native material export,
   proof of 200k+ facet responsiveness, spatial indexing/large-mesh latency,
   improved adaptive topology, geometry validation hardening and future
   support enforcer/blocker use.
+
+## Offline multi-colour acceptance, 17 November 2026
+
+The current dev branch offers a deliberately gated native Orca test for
+two-filament **single-model painted** or multiple assigned model plates.
+It is not an unrestricted printer-print workflow.
+
+1. Colour paint v2 polygons are clipped into native facet geometry; original
+   STL coordinates, fingerprint and unpainted surfaces are preserved.
+2. A colour palette swatch must explicitly reference a loaded slot on the
+   selected printer. The slot must have a verified engine/version-matched
+   native filament profile. Bay numbers and swatch RGB values do not imply
+   tool numbers. Other loaded but unused bays are ignored.
+3. Ordered native tool indices start at zero with the chosen main filament
+   preset. MakerVault emits Orca `paint_color` leaf states 4 / 8 / 0C / 1C
+   and an object default extruder. Legacy whole-face painting remains blocked
+   until converted explicitly. Editable MakerVault project sidecars are kept
+   independent of this conversion.
+4. The worker accepts only exact finite 3MF geometry and bounded paint codes
+   from the declared native palette. The generated G-code must contain
+   positive extrusion evidence and explicit selection for all intended tools.
+5. **Upload and start remain blocked** for test G-code, irrespective of
+   success. A visual match is not evidence of firmware slot mapping, purge
+   safety, material compatibility or a suitable prime tower.
+
+Next test on staging: paint one Benchy in two loaded K2 CFS colours, select
+matching native profiles for both slots and the main filament, run
+`Slice multi-colour (test)`, inspect full G-code and T0/T1 extrusion audit.
+If Orca's CLI rejects `paint_color` or omits a tool, do not disable the
+validator; investigate its native project metadata and pinned binary.
+Also verify mixed-colour per-object placement and geometry preservation.
+
+Remaining for release: stable real-engine acceptance, physical CFS slot→tool
+mapping verified at print submission, purge/flush and changeover sequencing,
+G-code colour preview, print permissions across adapters, and full
+cross-feature/regression tests. Do not mark these as implemented.
 
 ## Problem confirmed by staging (13 November 2026)
 
