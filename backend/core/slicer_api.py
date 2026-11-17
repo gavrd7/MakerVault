@@ -90,9 +90,8 @@ def _rows(user):
     )
 
 
-def serialise(job, installed=None):
-    # Private STL inputs are exposed only through this owner-scoped job, so a
-    # saved plate can be edited again without appearing in the Files library.
+def _job_source_ids(job):
+    """Owner-scoped list and detail lookups must use identical source IDs."""
     source_ids = {str(job.input_asset_id)}
     source_ids.update(str(item.get("asset_id")) for item in
                       (job.settings or {}).get("plate_objects", []) if isinstance(item, dict))
@@ -100,14 +99,27 @@ def serialise(job, installed=None):
         if isinstance(project_plate, dict):
             source_ids.update(str(row.get("asset_id")) for row in
                               project_plate.get("objects", []) if isinstance(row, dict))
+    return source_ids
+
+
+def serialise(job, installed=None, temp_assets=None):
+    # The batch lookup is only used for the authenticated user's list view.
+    # The single-job endpoint retains its owner-scoped database lookup.
+    source_ids = _job_source_ids(job)
+    temporary_rows = (
+        [temp_assets[asset_id] for asset_id in source_ids if asset_id in temp_assets]
+        if temp_assets is not None
+        else FileAsset.objects.filter(owner_id=job.owner_id, pk__in=source_ids,
+                                      metadata__slicer_temporary=True)
+    )
     temporary_inputs = [{
         "id": str(asset.pk), "name": asset.name,
         "filename": str((asset.metadata or {}).get("original_name") or asset.name),
         "category": "mesh", "url": asset.file.url if asset.file else "",
-    } for asset in FileAsset.objects.filter(owner=job.owner, pk__in=source_ids,
-                                              metadata__slicer_temporary=True)]
+    } for asset in temporary_rows]
     can_slice = False
-    if installed and not (job.settings or {}).get("plate_conflicts"):
+    if (job.status == "draft" and installed
+            and not (job.settings or {}).get("plate_conflicts")):
         try:
             can_slice = validate_scheduling(job, installed)
         except (SlicerExecutionError, ValueError):
@@ -1100,8 +1112,19 @@ def paint_asset_detail(request, asset_id):
 def jobs(request):
     if request.method == "GET":
         installed = verified_installation()
+        saved_jobs = list(_rows(request.user)[:100])
+        # Avoid an owner lookup and an asset query for every saved job on
+        # initial load and on the five-second active-job poll.
+        all_source_ids = set().union(*(_job_source_ids(job) for job in saved_jobs)) if saved_jobs else set()
+        temporary_assets = {
+            str(asset.pk): asset
+            for asset in FileAsset.objects.filter(
+                owner=request.user, pk__in=all_source_ids,
+                metadata__slicer_temporary=True
+            )
+        } if all_source_ids else {}
         return JsonResponse({
-            "jobs": [serialise(job, installed) for job in _rows(request.user)[:100]],
+            "jobs": [serialise(job, installed, temp_assets=temporary_assets) for job in saved_jobs],
             "worker_configured": bool(installed),
             "can_cancel": request.user.has_perm("core.change_slicejob"),
             "can_delete": request.user.has_perm("core.delete_slicejob"),
