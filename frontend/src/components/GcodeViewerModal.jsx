@@ -118,16 +118,16 @@ export default function GcodeViewerModal({ file, canEdit = false, onClose, onSav
         <a className="assetButton" href={`/api/files/${encodeURIComponent(file.id)}/gcode/source/?download=1`}>Download complete G-code</a>
       </div>
       {compact && mobileDetails && <div className="slicerMobileBackdrop" onClick={() => setMobileDetails(false)} aria-hidden="true" />}
-      <div className={"slicerGcodeMetadata" + (compact && mobileDetails ? " mobileOpen" : "")}
+      <div className={"slicerGcodeMetadata" + (compact ? " slicerGcodeDetailCards" : "") + (compact && mobileDetails ? " mobileOpen" : "")}
         role={compact && mobileDetails ? "dialog" : undefined}
         aria-modal={compact && mobileDetails ? "true" : undefined}
         aria-label={compact && mobileDetails ? "G-code job details" : undefined}>
         {compact && <div className="slicerMobilePanelHeader"><strong>G-code details</strong>
           <button type="button" onClick={() => setMobileDetails(false)}>Close</button>
         </div>}
-      <p><strong>Linked model:</strong> {report.linked_models?.length
+      <p className="slicerGcodeDetailRow"><strong>Linked model</strong><span> {report.linked_models?.length
         ? report.linked_models.map(link => <button key={link.revision_id} type="button" onClick={() => onOpenModel?.(link.model_id)} disabled={!onOpenModel}>{link.model_name} · revision {link.revision}</button>)
-        : "Not linked — attach this file to a model revision in Model Library."}</p>
+        : "Not linked"}</span></p>
       {!embedded && <label>Check against a MakerVault printer
         <select value={printerId} onChange={e => choosePrinter(e.target.value)}>
           <option value="">Choose printer for advisory compatibility check</option>
@@ -136,13 +136,13 @@ export default function GcodeViewerModal({ file, canEdit = false, onClose, onSav
       </label>}
       {!embedded && checkingPrinter && <p>Checking explicit printer metadata…</p>}
       {!embedded && printerCheck && <p role="status"><strong>{printerCheck.status === "mismatch" ? "Printer mismatch — block printing" : printerCheck.status === "metadata_match" ? "Printer metadata matches (not safety-verified)" : "Printer compatibility unknown — do not start"}:</strong> {printerCheck.reason}</p>}
-      <p><strong>Intended printer:</strong> {analysis.printer_hints?.join(", ") || "Unknown — no verified printer metadata"}</p>
-      {analysis.slicer_hints?.length > 0 && <p><strong>Slicer:</strong> {analysis.slicer_hints.join(", ")}</p>}
-      <p><strong>Requested start temperatures:</strong> Nozzle {analysis.print_setup?.temperatures_c?.nozzle_c != null ? analysis.print_setup.temperatures_c.nozzle_c + " °C" : "Not declared"} · Bed {analysis.print_setup?.temperatures_c?.bed_c != null ? analysis.print_setup.temperatures_c.bed_c + " °C" : "Not declared"} <small>(G-code targets, not live readings)</small></p>
-      <p><strong>Sliced nozzle:</strong> {analysis.print_setup?.nozzle_diameters_mm?.length
+      <p className="slicerGcodeDetailRow"><strong>Intended printer</strong><span>{analysis.printer_hints?.join(", ") || "Unknown — no verified printer metadata"}</span></p>
+      {analysis.slicer_hints?.length > 0 && <p className="slicerGcodeDetailRow"><strong>Slicer</strong><span>{analysis.slicer_hints.join(", ")}</span></p>}
+      <p className="slicerGcodeDetailRow"><strong>Requested start temperatures</strong><span>Nozzle {analysis.print_setup?.temperatures_c?.nozzle_c != null ? analysis.print_setup.temperatures_c.nozzle_c + " °C" : "Not declared"} · Bed {analysis.print_setup?.temperatures_c?.bed_c != null ? analysis.print_setup.temperatures_c.bed_c + " °C" : "Not declared"} <small>(G-code targets)</small></span></p>
+      <p className="slicerGcodeDetailRow"><strong>Sliced nozzle</strong><span> {analysis.print_setup?.nozzle_diameters_mm?.length
         ? analysis.print_setup.nozzle_diameters_mm.map(size => `${size} mm`).join(", ")
-        : "Not specified"} · <strong>Build plate:</strong> {analysis.print_setup?.bed_type || "Not specified"}</p>
-      <p><strong>XY moves:</strong> {analysis.xy_moves?.toLocaleString() || 0} · <strong>Coordinates:</strong> {["X", "Y", "Z"].map(axis => bounds[axis]?.[0] == null ? `${axis} unknown` : `${axis} ${bounds[axis][0].toFixed(1)}–${bounds[axis][1].toFixed(1)} mm`).join(" · ")}</p>
+        : "Not specified"} · <strong>Build plate:</strong> {analysis.print_setup?.bed_type || "Not specified"}</span></p>
+      <p className="slicerGcodeDetailRow"><strong>XY moves &amp; bounds</strong><span> {analysis.xy_moves?.toLocaleString() || 0} · <strong>Coordinates:</strong> {["X", "Y", "Z"].map(axis => bounds[axis]?.[0] == null ? `${axis} unknown` : `${axis} ${bounds[axis][0].toFixed(1)}–${bounds[axis][1].toFixed(1)} mm`).join(" · ")}</span></p>
       {Array.isArray(objectSettings) && objectSettings.length > 0 && <div className="settingsCallout">
         <strong>Settings saved with this slicing job</strong>
         <div style={{ overflowX: "auto" }}>
