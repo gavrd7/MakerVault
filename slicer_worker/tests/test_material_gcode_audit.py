@@ -20,6 +20,39 @@ class MaterialOutputVerificationTests(TestCase):
               </config>""")
         self.assertEqual(expected_native_tools(archive.getvalue()), {0, 3})
 
+    def test_one_colour_painted_model_requires_base_and_painted_tools(self):
+        archive = io.BytesIO()
+        with zipfile.ZipFile(archive, "w") as package:
+            package.writestr("Metadata/model_settings.config", """<config>
+              <object id="1"><metadata key="extruder" value="2"/></object>
+              </config>""")
+            package.writestr("3D/3dmodel.model", """<model
+                xmlns="http://schemas.microsoft.com/3dmanufacturing/core/2015/02">
+              <resources><object id="1" type="model"><mesh><triangles>
+                <triangle v1="0" v2="1" v3="2" paint_color="4"/>
+                <triangle v1="0" v2="2" v3="3"/>
+              </triangles></mesh></object></resources>
+              </model>""")
+        self.assertEqual(expected_native_tools(archive.getvalue()), {0, 1})
+        self.assertTrue(verify_multi_material_output(
+            b"M83\\nT0\\nG1 X10 E0.4\\nT1\\nG1 X20 E0.5\\n", {0, 1}))
+
+    def test_painted_third_and_fourth_native_tools_are_audited(self):
+        archive = io.BytesIO()
+        with zipfile.ZipFile(archive, "w") as package:
+            package.writestr("Metadata/model_settings.config", """<config>
+              <object id="1"><metadata key="extruder" value="1"/></object>
+              </config>""")
+            package.writestr("3D/3dmodel.model", """<model
+                xmlns="http://schemas.microsoft.com/3dmanufacturing/core/2015/02">
+              <resources><object id="1" type="model"><mesh><triangles>
+                <triangle v1="0" v2="1" v3="2" paint_color="8"/>
+                <triangle v1="0" v2="2" v3="3" paint_color="0C"/>
+                <triangle v1="0" v2="2" v3="4" paint_color="1C"/>
+              </triangles></mesh></object></resources>
+              </model>""")
+        self.assertEqual(expected_native_tools(archive.getvalue()), {0, 1, 2, 3})
+
     def test_two_native_tools_must_both_deposit_extrusion(self):
         self.assertTrue(verify_multi_material_output(
             b"M83\nT0\nG1 X10 E0.4\nT3\nG1 X20 E1.2\n", {0, 3}))
