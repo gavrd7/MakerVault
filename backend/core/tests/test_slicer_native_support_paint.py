@@ -60,6 +60,25 @@ class NativeOrcaSupportPaintTests(SimpleTestCase):
         with self.assertRaisesRegex(ValueError, "fingerprint"):
             native_support_triangles(self.source, paint, kind="seam")
 
+    def test_selective_fuzzy_skin_uses_only_orca_painted_state(self):
+        painted = native_support_triangles(self.source, self.paint(), kind="fuzzy")
+        self.assertGreater(len(painted), len(self.source))
+        self.assertIn("4", [state for _, state in painted])
+        self.assertNotIn("8", [state for _, state in painted])
+        self.assertEqual(painted[-1][0], tuple(self.source[1]))
+        self.assertIsNone(painted[-1][1])
+        painted_area = sum(_area(tri, (0., 0., 1.))
+                           for tri, state in painted if state == "4")
+        self.assertAlmostEqual(painted_area, 2., places=5)
+        with self.assertRaisesRegex(ValueError, "only the painted state"):
+            native_support_triangles(self.source, self.paint(slot=1), kind="fuzzy")
+
+    def test_selective_fuzzy_skin_rejects_stale_source_mesh(self):
+        stale = self.paint()
+        stale["signature"] = "outdated"
+        with self.assertRaisesRegex(ValueError, "fingerprint"):
+            native_support_triangles(self.source, stale, kind="fuzzy")
+
     def test_stale_or_off_face_patches_fail_closed(self):
         paint = self.paint()
         paint["signature"] = "2:abcdef01"
