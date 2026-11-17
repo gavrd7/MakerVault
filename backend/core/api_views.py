@@ -2481,7 +2481,7 @@ def file_gcode_layers(request, asset_id):
         return _error("Stored G-code could not be opened.", status=404)
     if len(raw) > MAX_LAYER_SOURCE_BYTES:
         return _error("Exact progressive preview is unavailable for G-code larger than 32 MiB.", status=413)
-    if b"\\x00" in raw:
+    if b"\x00" in raw:
         return _error("Binary G-code is not supported by this viewer.", status=400)
     try:
         text = raw.decode("utf-8")
