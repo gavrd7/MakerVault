@@ -157,9 +157,9 @@ export default function SlicerGcodePreview({ fileId = null, preview, bedSize = n
 
   // Grow the print from its actual loaded height. Otherwise a fully rendered
   // final-layer island floats above still-loading lower geometry.
-  const naturalLayer = wholeModel.loading
-    ? Math.max(0, wholeModel.loadedLayers - 1)
-    : Math.max(0, layers.length - 1);
+  const naturalLayer = wholeModel.complete
+    ? Math.max(0, layers.length - 1)
+    : Math.max(0, wholeModel.loadedLayers - 1);
   const currentLayer = Math.min(layer ?? naturalLayer, Math.max(0, layers.length - 1));
   const z = layers[currentLayer];
 
