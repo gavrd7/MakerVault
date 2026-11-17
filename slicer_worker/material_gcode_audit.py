@@ -17,16 +17,46 @@ XY = re.compile(r"(?:^|\s)[XY][-+]?(?:\d+(?:\.\d*)?|\.\d+)(?:\s|$)", re.I)
 
 
 def expected_native_tools(project_bytes):
+    """Derive every used tool, including colours painted onto a single object.
+
+    Native Orca object extruder metadata is one-based; 3MF paint_color facet
+    states identify zero-based palette slots: 4 -> 0, 8 -> 1, 0C -> 2, etc.
+    The worker has already validated the 3MF and its native tool palette
+    before this audit is called. An invalid or absent mapping still fails
+    closed rather than silently omitting a painted colour.
+    """
     with zipfile.ZipFile(io.BytesIO(project_bytes)) as archive:
-        root = ET.fromstring(archive.read("Metadata/model_settings.config"))
-    tools = []
-    for item in root.findall("object"):
-        entries = [e.attrib.get("value") for e in item.findall("metadata")
-                   if e.attrib.get("key") == "extruder"]
-        if len(entries) != 1 or not entries[0].isdecimal():
-            raise WorkerError("Multi-filament 3MF object lacks an extruder.")
-        tools.append(int(entries[0]) - 1)
-    return set(tools)
+        manifest = ET.fromstring(archive.read("Metadata/model_settings.config"))
+        tools = set()
+        for item in manifest.findall("object"):
+            entries = [e.attrib.get("value") for e in item.findall("metadata")
+                       if e.attrib.get("key") == "extruder"]
+            if len(entries) != 1 or not entries[0].isdecimal() or int(entries[0]) < 1:
+                raise WorkerError("Multi-filament 3MF object lacks an extruder.")
+            tools.add(int(entries[0]) - 1)
+        if "3D/3dmodel.model" in archive.namelist():
+            model = ET.fromstring(archive.read("3D/3dmodel.model"))
+            for triangle in model.iter():
+                if not triangle.tag.endswith("}triangle"):
+                    continue
+                colour = triangle.get("paint_color")
+                if colour is None:
+                    continue
+                if colour == "4":
+                    tools.add(0)
+                elif colour == "8":
+                    tools.add(1)
+                elif colour.endswith("C"):
+                    try:
+                        index = int(colour[:-1], 16) + 2
+                    except ValueError:
+                        raise WorkerError("Invalid native painted tool state.") from None
+                    if index > 15:
+                        raise WorkerError("Invalid native painted tool state.")
+                    tools.add(index)
+                else:
+                    raise WorkerError("Invalid native painted tool state.")
+    return tools
 
 
 def verify_multi_material_output(raw_gcode, expected):
