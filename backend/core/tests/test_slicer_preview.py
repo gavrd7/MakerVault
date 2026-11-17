@@ -107,3 +107,16 @@ G1 X10 Y20 E2.0
         result = generated_preview("G1 X2 Y3 E1\n", truncated=True)
         self.assertIsNone(result["layer_count"])
         self.assertTrue(result["sampled"])
+
+    def test_explicit_tool_changes_are_preserved_for_multicolour_review(self):
+        raw = ("G90\nM83\nG1 X0 Y0 Z0.2\n"
+               "T0\nG1 X10 Y0 E1\n"
+               "T1\nG1 X10 Y10 E1\n")
+        output = generated_preview(raw)
+        self.assertEqual(output["observed_tools"], [0, 1])
+        self.assertEqual([segment[7] for segment in output["segments"]], [0, 1])
+
+    def test_missing_tool_identity_is_not_inferred_from_colour_or_moves(self):
+        output = generated_preview("G90\nM83\nG1 X0 Y0 Z0.2\nG1 X10 Y0 E1\n")
+        self.assertEqual(output["observed_tools"], [])
+        self.assertEqual(output["segments"][0][7], None)
