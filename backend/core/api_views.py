@@ -2448,6 +2448,53 @@ def file_gcode_layer(request, asset_id):
 
 @login_required
 @require_http_methods(["GET"])
+def file_gcode_layers(request, asset_id):
+    """Fetch a bounded batch of exact layers for progressive, engine-neutral preview.
+
+    Uses the same ownership, plain-text and source-size safeguards as the
+    single-layer endpoint. Empty/oversized batches are rejected before I/O.
+    """
+    from .slicer_layer_preview import (
+        MAX_LAYER_SOURCE_BYTES, MAX_BATCH_LAYERS, layer_batch_toolpaths,
+    )
+
+    asset = FileAsset.objects.filter(owner=request.user, pk=asset_id).first()
+    if asset is None:
+        return _error("G-code file not found.", status=404)
+    filename = str((asset.metadata or {}).get("original_name") or asset.name or "")
+    if (asset.metadata or {}).get("extension") != ".gcode" and not filename.lower().endswith(".gcode"):
+        return _error("Only plain-text G-code can be inspected.", status=400)
+    raw_heights = request.GET.get("zs", "").split(",")
+    if not 1 <= len(raw_heights) <= MAX_BATCH_LAYERS:
+        return _error("Choose between 1 and 12 extrusion layers.", status=400)
+    try:
+        heights = [float(part) for part in raw_heights]
+        if (any(not math.isfinite(z) or not 0 <= z <= 2000 for z in heights)
+                or len(set(round(z, 3) for z in heights)) != len(heights)):
+            raise ValueError()
+    except (ValueError, TypeError):
+        return _error("Invalid or duplicate layer Z coordinate.", status=400)
+    try:
+        with asset.file.storage.open(asset.file.name, "rb") as handle:
+            raw = handle.read(MAX_LAYER_SOURCE_BYTES + 1)
+    except (OSError, ValueError):
+        return _error("Stored G-code could not be opened.", status=404)
+    if len(raw) > MAX_LAYER_SOURCE_BYTES:
+        return _error("Exact progressive preview is unavailable for G-code larger than 32 MiB.", status=413)
+    if b"\\x00" in raw:
+        return _error("Binary G-code is not supported by this viewer.", status=400)
+    try:
+        text = raw.decode("utf-8")
+    except UnicodeDecodeError:
+        return _error("Full-resolution preview requires UTF-8 G-code.", status=400)
+    result = layer_batch_toolpaths(text, heights)
+    response = JsonResponse(result)
+    response["Cache-Control"] = "private, no-store"
+    return response
+
+
+@login_required
+@require_http_methods(["GET"])
 def file_gcode_source(request, asset_id):
     """Stream the owner's complete original G-code, never the bounded inspection sample."""
     asset = FileAsset.objects.filter(owner=request.user, pk=asset_id).first()
