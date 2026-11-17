@@ -219,7 +219,8 @@ def _plate_builder(objects_with_stl):
         isinstance(item, dict) and (bool(item.get("process_overrides")) or
             bool((item.get("variable_layer_profile") or {}).get("bands")) or
             bool((item.get("support_paint") or {}).get("regions")) or
-            bool((item.get("seam_paint") or {}).get("regions")))
+            bool((item.get("seam_paint") or {}).get("regions")) or
+            bool((item.get("fuzzy_skin_paint") or {}).get("regions")))
         for item, _raw in objects_with_stl
     ) else build_compound_plate_3mf)
 
