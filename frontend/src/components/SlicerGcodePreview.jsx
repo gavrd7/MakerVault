@@ -15,7 +15,7 @@ const COLOUR_MODES = [
   { value: "feature", label: "Line type", supported: true },
   { value: "layer", label: "Layer height / Z", supported: true },
   { value: "solid", label: "Solid print (single preview colour)", supported: true },
-  { value: "filament", label: "Filament", supported: false },
+  { value: "filament", label: "Logical filament / tool", supported: false },
   { value: "speed", label: "Speed", supported: false },
   { value: "line-width", label: "Line width", supported: false },
   { value: "flow", label: "Flow", supported: false },
@@ -162,8 +162,13 @@ export default function SlicerGcodePreview({ fileId = null, preview, bedSize = n
         </label>
         <label>Colour by
           <select value={colourMode} onChange={e => setColourMode(e.target.value)}>
-            {COLOUR_MODES.map(mode => <option key={mode.value} value={mode.value}
-              disabled={!mode.supported}>{mode.label}{mode.supported ? "" : " · unavailable"}</option>)}
+            {COLOUR_MODES.map(mode => {
+              const available = mode.value === "filament"
+                ? (preview?.observed_tools?.length || 0) > 0
+                : mode.supported;
+              return <option key={mode.value} value={mode.value}
+                disabled={!available}>{mode.label}{available ? "" : " · unavailable"}</option>;
+            })}
           </select>
         </label>
         <label>Layer visibility
@@ -197,6 +202,11 @@ export default function SlicerGcodePreview({ fileId = null, preview, bedSize = n
         <label className="checkRow"><input type="checkbox" checked={showToolhead}
           onChange={e => setShowToolhead(e.target.checked)} /> Show toolhead marker</label>
       </div>
+      {colourMode === "filament" && <small role="status">
+        Logical tool colours are illustrative. They do not confirm physical
+        CFS/AMS bay mapping or actual filament colour. Recorded tools:
+        {" "}{(preview?.observed_tools || []).map(tool => "T"+tool).join(", ") || "unknown"}.
+      </small>}
       <div className="slicerResultLayerLayout">
         <div className="slicerResultViewport">
           <SlicerToolpath3D segments={displaySegments} layers={layers}
