@@ -145,10 +145,7 @@ export default function SlicerGcodePreview({ fileId = null, preview, bedSize = n
       <div><small>Requested bed · G-code</small><strong>{startTemperatures?.bed_c != null ? startTemperatures.bed_c + " °C" : "Not declared"}</strong></div>
     </div>
     {layers.length > 0 ? <>
-      <div className="slicerPreviewToolButtons" role="toolbar" aria-label="G-code display tools">
-        <button type="button" aria-expanded={mobilePanel === "display"} onClick={() => setMobilePanel("display")}>Display settings</button>
-        <button type="button" aria-expanded={mobilePanel === "features"} onClick={() => setMobilePanel("features")}>Toolpaths</button>
-      </div>
+
       {mobilePanel && <div className="slicerPreviewBackdrop" onClick={() => setMobilePanel(null)} aria-hidden="true" />}
       <div className={"slicerResultModeRow slicerPreviewOptionsPanel" + (mobilePanel === "display" ? " mobileOpen" : "")}
         role={mobilePanel === "display" ? "dialog" : undefined}
@@ -207,17 +204,18 @@ export default function SlicerGcodePreview({ fileId = null, preview, bedSize = n
             colourMode={colourMode} colours={colours} showToolhead={showToolhead} bedSize={bedSize}
             renderMode={renderMode} layerDisplay={layerDisplay}
             previewSampled={!!preview?.sampled || preview?.complete === false} fadePrevious={highlightCurrent}
-            featureFocus={featureFocus} outerContrast={outerContrast} />
+            featureFocus={featureFocus} outerContrast={outerContrast}
+            toolbarActions={<>
+              <button type="button" aria-expanded={mobilePanel === "display"}
+                onClick={() => setMobilePanel("display")}>Display settings</button>
+              <button type="button" aria-expanded={mobilePanel === "features"}
+                onClick={() => setMobilePanel("features")}>Toolpaths</button>
+            </>} />
           <div className="slicerResultSteps">
             <label htmlFor="slice-step-slider">{exactLayer && !exactLayer.limited ? "Full-resolution" : "Available"} layer move {finalStep} / {layerSegments.length}</label>
             <input id="slice-step-slider" className="slicerFullRange" type="range" min="0" max={layerSegments.length}
               step="1" value={finalStep} onChange={e => setStep(Number(e.target.value))} />
             <div className="settingsActions">
-              <button type="button" disabled={finalStep <= 0} onClick={() => setStep(Math.max(0, finalStep - 1))}
-                aria-label="Previous sampled toolhead step">◀</button>
-              <button type="button" disabled={finalStep >= layerSegments.length}
-                onClick={() => setStep(Math.min(layerSegments.length, finalStep + 1))}
-                aria-label="Next sampled toolhead step">▶</button>
               <button type="button" onClick={() => setStep(null)}>Show entire selected layer</button>
             </div>
           </div>
