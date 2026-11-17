@@ -26,6 +26,7 @@ from .slicer_profile_edit import SETTINGS as EDITABLE_PROFILE_SETTINGS, customis
 from .slicer_profile_lineage import inspect_orca_lineage
 from .slicer_native_resolution import resolved_native_profile
 from .slicer_native_overrides import ORCA_PLATES
+from .slicer_plate_types import inspect_native_plates
 from .slicer_process_settings import process_schema, validate_process_overrides, apply_process_overrides
 from .slicer_flush_settings import validate_flush_settings
 from .slicer_colour_painting import validate_colour_paint
@@ -1771,6 +1772,12 @@ def profile_plate(request, profile_id):
         # The frontend may display approved artwork against the configured
         # printer dimensions, but this never changes slice-fit validation.
         geometry = {"status": "unavailable", "reason": "Use printer build dimensions."}
+    if profile.engine == "orcaslicer":
+        try:
+            geometry["bed_types"] = inspect_native_plates(profile)
+        except (SlicerProfileError, ValueError, OSError, TypeError):
+            geometry["bed_types"] = {"default": None, "supported": [],
+                                     "default_source": "not declared"}
     if official_artwork_source(profile):
         geometry["artwork_url"] = reverse(
             "api-slicer-profile-artwork", kwargs={"profile_id": profile.pk}
