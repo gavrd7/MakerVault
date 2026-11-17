@@ -86,6 +86,12 @@ export default function SlicerPrepareWorkspace({
   const [sliceMenuOpen,setSliceMenuOpen]=useState(false);
   const [showAllPlates,setShowAllPlates]=useState(false);
   const selectSingle = id => { setSelectedId(id); setSelectedIds(id ? [id] : []); };
+  const finishPainting = () => {
+    setToolMode("select");
+    setPaintError("");
+    setSelectedId("");
+    setSelectedIds([]);
+  };
   const selectMultiple = (id, additive = false, partOnly = false) => {
     const item = objects.find(row => row.instance_id === id);
     if (!item) return;
@@ -1126,7 +1132,7 @@ export default function SlicerPrepareWorkspace({
             onClick={()=>setPaintMobileMinimised(v=>!v)}>
             {paintMobileMinimised?"Tools":"Minimise"}
           </button>
-        <button type="button" onClick={()=>{setToolMode("select");setPaintError("");}}
+        <button type="button" onClick={finishPainting}
           aria-label="Close painting">Done</button>
         </div>
       </div>
@@ -1267,7 +1273,7 @@ export default function SlicerPrepareWorkspace({
         display:"grid",gap:8}}>
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:8}}>
         <strong>Variable layer height</strong>
-        <button type="button" onClick={()=>{setToolMode("select");setPaintError("");}}>Done</button>
+        <button type="button" onClick={finishPainting}>Done</button>
       </div>
       <label className="slicerVariableLayerRange">
         <span>Band thickness <strong>{(Math.max(.5,Number(variableBandDraft.to_mm)-Number(variableBandDraft.from_mm))).toFixed(1)} mm</strong></span>
