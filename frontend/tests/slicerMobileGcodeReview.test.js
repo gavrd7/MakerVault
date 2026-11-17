@@ -83,7 +83,9 @@ test("mobile action row, slider and settings dialog remain compact", () => {
 test("iOS ranges preserve endpoint travel while aligning thumb centres", () => {
   assert.match(mobileCss, /\.slicerResultSteps input\.slicerFullRange::-webkit-slider-thumb\s*\{\s*transform: translateY\(-11px\)/);
   assert.match(mobileCss, /\.slicerResultLayerSlider input\.slicerFullRange::-webkit-slider-thumb\s*\{\s*transform: translateX\(-11px\)/);
-  assert.match(mobileCss, /height: calc\(clamp\(290px, 43dvh, 450px\) \+ 150px\)/);
+  assert.match(mobileCss, /\.slicerResultLayerLayout \{\s*align-items: stretch/);
+  assert.match(mobileCss, /\.slicerResultLayerLayout > \.slicerResultLayerSlider \{\s*align-self: stretch;\s*height: auto/);
+  assert.doesNotMatch(mobileCss, /height: calc\(clamp\(290px, 43dvh, 450px\) \+ 150px\)/);
   assert.match(preview, /id="slice-step-slider"/);
   assert.match(preview, /id="slice-layer-slider"/);
 });
