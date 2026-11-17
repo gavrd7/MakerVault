@@ -57,11 +57,20 @@ It is not an unrestricted printer-print workflow.
    safety, material compatibility or a suitable prime tower.
 
 Next test on staging: paint one Benchy in two loaded K2 CFS colours, select
-matching native profiles for both slots and the main filament, run
-`Slice multi-colour (test)`, inspect full G-code and T0/T1 extrusion audit.
+matching native profiles for both slots and the main filament, press **Slice**. MakerVault automatically selects the offline multi-material route,
+then inspect the G-code and T0/T1 extrusion audit.
 If Orca's CLI rejects `paint_color` or omits a tool, do not disable the
 validator; investigate its native project metadata and pinned binary.
 Also verify mixed-colour per-object placement and geometry preservation.
+
+Flushing configuration: single-nozzle native multi-material tests may carry
+a validated custom flush multiplier while retaining Orca's original native
+matrix. Directional volume overrides require a verified tool-indexed matrix
+or complete explicit transitions; no zero-volume defaults are invented. The
+3MF geometry-only export does not carry process flushing changes. The
+single **Slice** action selects the offline test route automatically when
+two distinct native filaments are used (including one colour-painted model).
+The model's colour overlay remains visible outside painting mode.
 
 Remaining for release: stable real-engine acceptance, physical CFS slot→tool
 mapping verified at print submission, purge/flush and changeover sequencing,
