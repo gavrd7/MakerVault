@@ -202,11 +202,11 @@ export default function SlicerGcodePreview({ fileId = null, preview, bedSize = n
         <label className="checkRow"><input type="checkbox" checked={showToolhead}
           onChange={e => setShowToolhead(e.target.checked)} /> Show toolhead marker</label>
       </div>
-      {colourMode === "filament" && <small role="status">
+      {colourMode === "filament" && <div className="slicerLogicalToolNotice" role="status">
         Logical tool colours are illustrative. They do not confirm physical
         CFS/AMS bay mapping or actual filament colour. Recorded tools:
         {" "}{(preview?.observed_tools || []).map(tool => "T"+tool).join(", ") || "unknown"}.
-      </small>}
+      </div>}
       <div className="slicerResultLayerLayout">
         <div className="slicerResultViewport">
           <SlicerToolpath3D segments={displaySegments} layers={layers}
