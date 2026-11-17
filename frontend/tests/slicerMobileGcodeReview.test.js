@@ -25,8 +25,11 @@ test("mobile detail and settings panels have explicit close controls", () => {
   assert.match(preview, /setMobilePanel\(null\)/);
   assert.match(preview, /Display settings/);
   assert.match(preview, /Extrusion features/);
-  assert.match(viewport, /View · camera &amp; bed/);
+  assert.match(viewport, /View options/);
   assert.match(viewport, /setMobileViewOpen/);
+  assert.match(preview, /Visible toolpaths/);
+  assert.match(preview, /className="slicerResultSteps"/);
+  assert.doesNotMatch(preview, /Inspect individual moves/);
 });
 
 test("upload and start retain existing conditions behind a mobile action toggle", () => {
@@ -44,4 +47,10 @@ test("desktop retains controls without verbose instruction paragraphs", () => {
   assert.doesNotMatch(preview, /To compare fuzzy skin, enable/);
   assert.doesNotMatch(viewport, /Drag to orbit · Scroll to zoom/);
   assert.match(mobileCss, /@media \(max-width: 700px\)/);
+});
+
+test("download button is consistent in file actions and desktop viewer", () => {
+  assert.match(workbench, /slicerGcodeDownloadAction/);
+  assert.match(viewer, /slicerGcodeDownloadAction/);
+  assert.match(mobileCss, /\.slicerGcodeDownloadAction/);
 });
