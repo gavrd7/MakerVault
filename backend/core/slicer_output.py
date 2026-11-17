@@ -110,6 +110,8 @@ def store_generated_gcode(job_id, raw: bytes):
                 job.owner, job.settings or {}, "seam_paint")
             fuzzy_test = settings_use_paint_field(
                 job.owner, job.settings or {}, "fuzzy_skin_paint")
+            combined_native_test = sum(bool(flag) for flag in
+                (variable_test, support_test, seam_test, fuzzy_test)) > 1
             stored = FileAsset(
                 owner=job.owner,
                 project=job.input_asset.project,
@@ -148,6 +150,8 @@ def store_generated_gcode(job_id, raw: bytes):
                 "Multi-colour G-code test completed and tool extrusion audited. "
                 "Printer upload and print start remain disabled."
                 if (job.settings or {}).get("multi_material_test") is True
+                else "Combined native painting/layer test slice completed. Inspect every requested toolpath effect; printer upload remains disabled."
+                if combined_native_test
                 else "Variable layer-height test slice completed. Verify generated layer transitions; printer upload remains disabled."
                 if variable_test
                 else "Support painting test slice completed. Inspect native support paths; printer upload remains disabled."
