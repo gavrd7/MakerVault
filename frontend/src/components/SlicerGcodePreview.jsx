@@ -282,8 +282,9 @@ export default function SlicerGcodePreview({ fileId = null, preview, bedSize = n
           onChange={e => setShowToolhead(e.target.checked)} /> Show toolhead marker</label>
       </div>
       {colourMode === "filament" && <div className="slicerLogicalToolNotice" role="status">
-        Logical tool colours are illustrative. They do not confirm physical
-        CFS/AMS bay mapping or actual filament colour. Recorded tools:
+        Tool colours use the slicer's declared filament colours when available,
+        with illustrative fallbacks otherwise. These declarations do not confirm
+        physical CFS/AMS bay mapping. Recorded tools:
         {" "}{(preview?.observed_tools || []).map(tool => "T"+tool).join(", ") || "unknown"}.
       </div>}
       <div className="slicerResultLayerLayout">
