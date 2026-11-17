@@ -7,6 +7,7 @@ native profiles with validated content and intact inheritance chains.
 import hashlib
 import json
 import logging
+import math
 import uuid
 import os
 from datetime import timedelta
