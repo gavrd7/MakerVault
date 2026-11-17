@@ -2487,7 +2487,12 @@ def file_gcode_layers(request, asset_id):
         text = raw.decode("utf-8")
     except UnicodeDecodeError:
         return _error("Full-resolution preview requires UTF-8 G-code.", status=400)
-    result = layer_batch_toolpaths(text, heights, overview=request.GET.get("overview") == "1")
+    overview = request.GET.get("overview") == "1"
+    try:
+        detail = int(request.GET.get("detail", "350")) if overview else 350
+        result = layer_batch_toolpaths(text, heights, overview=overview, overview_limit=detail)
+    except (ValueError, TypeError):
+        return _error("Invalid preview detail level.", status=400)
     response = JsonResponse(result)
     response["Cache-Control"] = "private, no-store"
     return response
