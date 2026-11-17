@@ -100,6 +100,18 @@ REASONS = {
     "native-plate-instance-invalid": (
         "The 3MF contains an invalid native plate instance mapping."
     ),
+    "native-multimaterial-variable-layers-unsupported": (
+        "The saved project combines native multi-colour tools with variable "
+        "layer-height ranges. This combination is not yet accepted by the "
+        "isolated worker. Both edits remain preserved in the draft."
+    ),
+    "invalid-native-layer-ranges": (
+        "The native variable-layer metadata failed validation. Review the "
+        "saved height bands and the selected model."
+    ),
+    "invalid-native-plate": (
+        "The generated 3MF plate membership or native plate metadata failed validation."
+    ),
     "validation-error": "The worker rejected an input or generated result. Check model and profile integrity.",
     "engine-exited": (
         "OrcaSlicer exited without a recognised diagnostic. "
