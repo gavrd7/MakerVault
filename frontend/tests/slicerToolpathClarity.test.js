@@ -21,6 +21,15 @@ test("feature colours are stable regardless of sample order or printer", () => {
   assert.ok(hasFeatureFocus(["Inner wall", "Support material"], "support"));
 });
 
+test("shell detail hides internal infill without deleting outer-wall moves", () => {
+  assert.ok(featureMatchesFocus("Outer wall", "shell"));
+  assert.ok(featureMatchesFocus("Inner wall", "shell"));
+  assert.ok(featureMatchesFocus("Top surface", "shell"));
+  assert.ok(!featureMatchesFocus("Sparse infill", "shell"));
+  assert.ok(!featureMatchesFocus("Support material", "shell"));
+  assert.match(preview, /Shell detail · hide internal infill/);
+});
+
 test("G-code preview defaults to complete-print overview while retaining layer detail", () => {
   assert.match(preview, /const \[layerDisplay, setLayerDisplay\] = useState\("all"\)/);
   assert.match(preview, /Layer visibility/);
