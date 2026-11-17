@@ -748,8 +748,9 @@ def import_project_3mf(request):
             active_id = metadata.get("active_plate_id")
             ids, source_names, total = set(), set(), 0
             for plate in plates:
-                if not isinstance(plate, dict) or set(plate) != {"id", "name", "objects"}:
+                if not isinstance(plate, dict) or set(plate) not in ({"id", "name", "objects"}, {"id", "name", "objects", "prime_tower"}):
                     raise ValueError("Invalid project plate.")
+                _validate_prime_tower_position(plate.get("prime_tower"))
                 pid, name, objects = plate["id"], plate["name"], plate["objects"]
                 if (not isinstance(pid, str) or not re.fullmatch(r"plate-[A-Za-z0-9-]{1,80}", pid)
                         or pid in ids):
@@ -811,7 +812,8 @@ def import_project_3mf(request):
                         "plate_label":plate["name"],"plate_objects":rows,
                     })
                     rows=checked["plate_objects"]
-                restored.append({"id":plate["id"],"name":plate["name"],"objects":rows})
+                restored.append({"id":plate["id"],"name":plate["name"],"objects":rows,
+                                 **({"prime_tower":plate["prime_tower"]} if plate.get("prime_tower") is not None else {})})
         except Exception:
             for asset in created:
                 if asset.file:
