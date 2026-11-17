@@ -83,11 +83,24 @@ def plan_native_multimaterial(job, *, settings=None):
     if len(by_id) != len(set(str(pk) for pk in profile_ids)):
         raise MaterialRoutingError("One or more native material presets were removed.")
     palette = tuple(by_id[str(profile_id)] for profile_id in profile_ids)
-    if any(profile.status != "verified"
+    if any(profile.kind != "filament"
+           or profile.status not in {"candidate", "verified"}
            or profile.engine != job.engine
            or profile.engine_version != job.engine_version
            for profile in palette):
-        raise MaterialRoutingError("An assigned native filament preset is not verified for Orca.")
+        raise MaterialRoutingError("An assigned filament preset is incompatible with the selected Orca engine.")
+    # Manual worker fixture approval is not required. Resolve each candidate
+    # from its owned, hash-checked source and complete parent lineage before
+    # it reaches the isolated native tool palette.
+    from .slicer_native_resolution import resolved_native_profile
+    from .slicer_profiles import SlicerProfileError
+    try:
+        for profile in palette:
+            resolved_native_profile(profile)
+    except (SlicerProfileError, ValueError, OSError) as exc:
+        raise MaterialRoutingError(
+            "An assigned filament preset is invalid, has changed or is missing native parents: "
+            + str(exc)) from exc
     return topology, bindings, palette
 
 
