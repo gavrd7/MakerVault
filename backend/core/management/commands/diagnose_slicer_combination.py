@@ -71,6 +71,26 @@ def range_probe_variants(original):
     return tuple(test_bands)
 
 
+def layer_thickness_probe_variants(original):
+    """Read-only probes at the same Z range using alternate layer heights."""
+    profile = original.get("variable_layer_profile")
+    bands = (profile or {}).get("bands") if isinstance(profile, dict) else None
+    if not isinstance(bands, list) or len(bands) != 1:
+        return ()
+    band = bands[0]
+    try:
+        lower, upper, original_height = (float(band[key]) for key in
+                                         ("from_mm", "to_mm", "layer_mm"))
+    except (ValueError, TypeError, KeyError):
+        return ()
+    if not 0 <= lower < upper <= 1000:
+        return ()
+    return tuple((
+        "layer-height-" + format(height, ".2f") + "mm",
+        [{"from_mm": lower, "to_mm": upper, "layer_mm": height}],
+    ) for height in (0.16, 0.20, 0.24)
+      if abs(height - original_height) > 0.0001)
+
 
 def selected_variant(original, fields):
     """Make a detached variant without modifying persisted paint references."""
@@ -87,6 +107,8 @@ class Command(BaseCommand):
         parser.add_argument("--continue-on-failure", action="store_true",
                             help="Run later variants even after a failure.")
         parser.add_argument("--max-cases", type=int, default=len(CASES))
+        parser.add_argument("--probe-layer-heights", action="store_true",
+                            help="Compare 0.16, 0.20 and 0.24mm native ranges.")
         parser.add_argument("--probe-layer-ranges", action="store_true",
                             help="Compare copies of the saved Z band at several heights.")
         parser.add_argument("--acknowledge-offline-test", action="store_true",
@@ -163,6 +185,11 @@ class Command(BaseCommand):
                 variants.append((label, updated, ("variable_layer_profile",)))
             self.stdout.write("Saved layer ranges: " +
                 json.dumps(original["variable_layer_profile"]["bands"], sort_keys=True))
+        if options["probe_layer_heights"] and "variable_layer_profile" in available:
+            for label, bands in layer_thickness_probe_variants(original):
+                updated = selected_variant(original, ("variable_layer_profile",))
+                updated["variable_layer_profile"] = {"version": 1, "bands": bands}
+                variants.append((label, updated, ("variable_layer_profile",)))
         for label, item, fields in variants:
             try:
                 model = build_plate_3mf([(item, raw)], bed_width=width, bed_depth=depth)
