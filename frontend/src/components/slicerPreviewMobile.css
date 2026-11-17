@@ -518,15 +518,21 @@
     transform: translateX(-11px);
   }
 
-  /* The layer rail used to stretch to the entire viewport column (including
-     the bottom whitespace). End the rail near the horizontal move control
-     instead; Z and Add G-code remain inside the compact slider panel. */
+  /* Size both columns from the same CSS grid row. The left column's
+     actual viewport + view controls + move slider determines the height;
+     the right layer-slider border must end at that exact bottom edge.
+     Avoid a viewport-dependent guessed height, which drifted on iOS. */
   .slicerResultLayerLayout {
-    align-items: start;
+    align-items: stretch;
+  }
+  .slicerResultLayerLayout > .slicerResultViewport {
+    min-width: 0;
+    align-self: stretch;
   }
   .slicerResultLayerLayout > .slicerResultLayerSlider {
-    align-self: start;
-    height: calc(clamp(290px, 43dvh, 450px) + 150px);
+    align-self: stretch;
+    height: auto;
+    min-height: 0;
     max-height: none;
     box-sizing: border-box;
   }
