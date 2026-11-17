@@ -502,7 +502,8 @@ def _draft(user, data):
                 engine=engine.key, engine_version=version).exists():
             raise ValueError("Per-slot filament profile does not match the current engine and version.")
     # For one logical material on the active plate, the explicitly selected
-    # slot's verified native filament profile is authoritative. Keep slot IDs
+    # slot's native filament profile is authoritative; file integrity and
+    # inheritance are checked before execution without manual approval. Keep slot IDs
     # separate from logical tool indices and never guess a feeder mapping.
     assigned_slots = [
         item.get("material_slot", {}).get("slot_id")
