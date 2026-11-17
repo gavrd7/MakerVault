@@ -102,12 +102,12 @@ export default function GcodeViewerModal({ file, canEdit = false, onClose, onSav
     {embedded && <h3>G-code preview · {file.name}</h3>}
     {error && <div className="formError">{error}</div>}
     {loading ? <p>Inspecting G-code…</p> : report && <>
-      {compact && <div className="slicerMobileNav" role="toolbar" aria-label="G-code preview sections">
+      {compact && <div className="slicerPreviewNav" role="toolbar" aria-label="G-code preview sections">
         <button type="button" className={mode === "visual" ? "primary" : ""} onClick={() => setMode("visual")}>Preview</button>
         <button type="button" aria-expanded={mobileDetails} onClick={() => setMobileDetails(true)}>Details</button>
         <button type="button" className={mode === "code" ? "primary" : ""} onClick={() => setMode("code")}>G-code</button>
       </div>}
-      {compact && <div className="slicerGcodeMobileSummary" role="status">
+      {compact && <div className="slicerGcodeQuickSummary" role="status">
         <span>{analysis.printer_hints?.join(", ") || "Printer unknown"}</span>
         <span>Nozzle {analysis.print_setup?.temperatures_c?.nozzle_c != null ? analysis.print_setup.temperatures_c.nozzle_c + " °C" : "—"}</span>
         <span>Bed {analysis.print_setup?.temperatures_c?.bed_c != null ? analysis.print_setup.temperatures_c.bed_c + " °C" : "—"}</span>
@@ -117,12 +117,12 @@ export default function GcodeViewerModal({ file, canEdit = false, onClose, onSav
         <button type="button" className={mode === "code" ? "primary" : ""} onClick={() => setMode("code")}>G-code text</button>
         <a className="assetButton slicerGcodeDownloadAction" href={`/api/files/${encodeURIComponent(file.id)}/gcode/source/?download=1`}>Download complete G-code</a>
       </div>
-      {compact && mobileDetails && <div className="slicerMobileBackdrop" onClick={() => setMobileDetails(false)} aria-hidden="true" />}
+      {compact && mobileDetails && <div className="slicerPreviewBackdrop" onClick={() => setMobileDetails(false)} aria-hidden="true" />}
       <div className={"slicerGcodeMetadata" + (compact ? " slicerGcodeDetailCards" : "") + (compact && mobileDetails ? " mobileOpen" : "")}
         role={compact && mobileDetails ? "dialog" : undefined}
         aria-modal={compact && mobileDetails ? "true" : undefined}
         aria-label={compact && mobileDetails ? "G-code job details" : undefined}>
-        {compact && <div className="slicerMobilePanelHeader"><strong>G-code details</strong>
+        {compact && <div className="slicerPreviewPanelHeader"><strong>G-code details</strong>
           <button type="button" onClick={() => setMobileDetails(false)}>Close</button>
         </div>}
       <p className="slicerGcodeDetailRow"><strong>Linked model</strong><span> {report.linked_models?.length
