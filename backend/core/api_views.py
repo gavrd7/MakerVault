@@ -5573,7 +5573,16 @@ def printing_printer_connections(request, printer_id):
             enabled=payload.get("enabled") is not False,
             endpoint_url=endpoint_url,
             poll_interval_seconds=interval,
-            capabilities=dict(definition.capabilities),
+            capabilities={
+                **definition.capabilities,
+                # New connections expose the contract immediately. Polling
+                # replaces unknown with adapter-observed capability evidence.
+                "material_system": {
+                    "schema_version": 1, "available": False,
+                    "topology": "unknown", "detection": "unknown",
+                    "physical_toolchange_verified": False,
+                },
+            },
             config=config,
         )
         if not item.enabled:
