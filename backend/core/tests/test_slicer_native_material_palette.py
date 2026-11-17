@@ -57,9 +57,9 @@ class NativeMaterialPaletteTests(SimpleTestCase):
             resolver=self.resolve)
         self.assertEqual(data["native_tool_indices"], (1, 0))
 
-    def test_rejects_unverified_foreign_or_wrong_engine_profiles(self):
+    def test_rejects_foreign_unknown_status_or_wrong_engine_profiles(self):
         cases = [
-            {"status": "candidate"},
+            {"status": "revoked"},
             {"owner_id": "someone-else"},
             {"engine": "crealityprint"},
             {"engine_version": "2.4.1"},
@@ -73,6 +73,18 @@ class NativeMaterialPaletteTests(SimpleTestCase):
                     resolve_native_material_palette(
                         self.objects, **{**self.payload, "native_filament_profiles": changed},
                         resolver=self.resolve)
+
+    def test_imported_candidates_resolve_by_original_native_content(self):
+        candidates = [
+            SimpleNamespace(**{**vars(profile), "status": "candidate"})
+            for profile in self.profiles
+        ]
+        data = resolve_native_material_palette(
+            self.objects, **{**self.payload, "native_filament_profiles": candidates},
+            resolver=self.resolve,
+        )
+        self.assertEqual(data["expected_tools"], (0, 1))
+        self.assertEqual(len(data["filament_profiles"]), 2)
 
     def test_rejects_missing_tool_profile_and_nonmatching_diameter(self):
         for bindings in ({"cfs-4": 3, "cfs-1": 0}, {"cfs-4": 0, "cfs-1": 0}):
