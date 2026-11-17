@@ -91,6 +91,12 @@ export default function GcodeViewerModal({ file, canEdit = false, onClose, onSav
 
   const analysis = report?.analysis || {};
   const bounds = analysis.bounds_mm || {};
+  const startTemps=analysis.print_setup?.temperatures_c || {};
+  const requestedTemperature=key=>startTemps[key]!=null?startTemps[key]+" °C":"Not declared";
+  // A Creality compatibility/header marker may coexist with the Orca
+  // generator header. Display the primary generator, not both as engines.
+  const slicerGenerator=(analysis.slicer_hints||[]).find(label=>/OrcaSlicer/i.test(label))
+    ||analysis.slicer_hints?.[0]||null;
   if (transfer && !embedded) return <PrinterStartGcodeModal
     printer={transfer.printer} connection={transfer.connection} canEdit
     initialAsset={file}
@@ -110,7 +116,8 @@ export default function GcodeViewerModal({ file, canEdit = false, onClose, onSav
       {compact && <div className="slicerGcodeQuickSummary" role="status">
         <span>{analysis.printer_hints?.join(", ") || "Printer unknown"}</span>
         <span>Nozzle {analysis.print_setup?.temperatures_c?.nozzle_c != null ? analysis.print_setup.temperatures_c.nozzle_c + " °C" : "—"}</span>
-        <span>Bed {analysis.print_setup?.temperatures_c?.bed_c != null ? analysis.print_setup.temperatures_c.bed_c + " °C" : "—"}</span>
+        <span>Bed {startTemps.bed_c!=null?startTemps.bed_c+" °C":"—"}</span>
+        <span>Chamber {startTemps.chamber_c!=null?startTemps.chamber_c+" °C":"—"}</span>
       </div>}
       <div className={"formActions" + (compact ? " slicerGcodeDesktopActions" : "")} style={{ justifyContent: "flex-start" }}>
         <button type="button" className={mode === "visual" ? "primary" : ""} onClick={() => setMode("visual")}>Visual toolpath</button>
@@ -137,11 +144,18 @@ export default function GcodeViewerModal({ file, canEdit = false, onClose, onSav
       {!embedded && checkingPrinter && <p>Checking explicit printer metadata…</p>}
       {!embedded && printerCheck && <p role="status"><strong>{printerCheck.status === "mismatch" ? "Printer mismatch — block printing" : printerCheck.status === "metadata_match" ? "Printer metadata matches (not safety-verified)" : "Printer compatibility unknown — do not start"}:</strong> {printerCheck.reason}</p>}
       <p className="slicerGcodeDetailRow"><strong>Intended printer</strong><span>{analysis.printer_hints?.join(", ") || "Unknown — no verified printer metadata"}</span></p>
-      {analysis.slicer_hints?.length > 0 && <p className="slicerGcodeDetailRow"><strong>Slicer</strong><span>{analysis.slicer_hints.join(", ")}</span></p>}
-      <p className="slicerGcodeDetailRow"><strong>Requested start temperatures</strong><span>Nozzle {analysis.print_setup?.temperatures_c?.nozzle_c != null ? analysis.print_setup.temperatures_c.nozzle_c + " °C" : "Not declared"} · Bed {analysis.print_setup?.temperatures_c?.bed_c != null ? analysis.print_setup.temperatures_c.bed_c + " °C" : "Not declared"} <small>(G-code targets)</small></span></p>
-      <p className="slicerGcodeDetailRow"><strong>Sliced nozzle</strong><span> {analysis.print_setup?.nozzle_diameters_mm?.length
-        ? analysis.print_setup.nozzle_diameters_mm.map(size => `${size} mm`).join(", ")
-        : "Not specified"} · <strong>Build plate:</strong> {analysis.print_setup?.bed_type || "Not specified"}</span></p>
+      {slicerGenerator && <p className="slicerGcodeDetailRow"><strong>Slicer</strong><span>{slicerGenerator}</span></p>}
+      <p className="slicerGcodeDetailRow"><strong>Requested start temperatures</strong>
+        <span>Nozzle {requestedTemperature("nozzle_c")} · Bed {requestedTemperature("bed_c")} · Chamber {requestedTemperature("chamber_c")} <small>(G-code targets)</small></span>
+      </p>
+      <p className="slicerGcodeDetailRow"><strong>Sliced nozzle</strong>
+        <span>{analysis.print_setup?.nozzle_diameters_mm?.length
+          ? analysis.print_setup.nozzle_diameters_mm.map(size=>size+" mm").join(", ")
+          : "Not specified"}</span>
+      </p>
+      <p className="slicerGcodeDetailRow"><strong>Build plate</strong>
+        <span>{analysis.print_setup?.bed_type||"Not specified"}</span>
+      </p>
       {analysis.slicer_preview && <p className="slicerGcodeDetailRow"><strong>Material and layer totals</strong><span>
         {analysis.slicer_preview.filament_mm != null ? `${Number(analysis.slicer_preview.filament_mm).toLocaleString()} mm filament` : "Length unavailable"}
         {" · "}
@@ -150,25 +164,26 @@ export default function GcodeViewerModal({ file, canEdit = false, onClose, onSav
         {analysis.slicer_preview.layer_count ?? "Unknown"} layers
       </span></p>}
       <p className="slicerGcodeDetailRow"><strong>XY moves &amp; bounds</strong><span> {analysis.xy_moves?.toLocaleString() || 0} · <strong>Coordinates:</strong> {["X", "Y", "Z"].map(axis => bounds[axis]?.[0] == null ? `${axis} unknown` : `${axis} ${bounds[axis][0].toFixed(1)}–${bounds[axis][1].toFixed(1)} mm`).join(" · ")}</span></p>
-      {Array.isArray(objectSettings) && objectSettings.length > 0 && <div className="settingsCallout">
-        <strong>Settings saved with this slicing job</strong>
-        <div style={{ overflowX: "auto" }}>
-          <table className="dataTable" style={{ width: "100%", textAlign: "left", tableLayout: "fixed" }}>
-            <thead><tr><th style={{textAlign:"left",width:"18%"}}>Plate instance</th><th style={{textAlign:"left",width:"21%"}}>Wall loops</th><th style={{textAlign:"left",width:"21%"}}>Sparse infill</th><th style={{textAlign:"left",width:"40%"}}>Additional overrides</th></tr></thead>
-            <tbody>{objectSettings.map((item, index) => {
-              const overrides = item.process_overrides || {};
-              const global = globalProcessOverrides || {};
-              const other = Object.entries(overrides).filter(([key]) => !["wall_loops", "sparse_infill_density"].includes(key));
-              return <tr key={item.instance_id || index}>
-                <td style={{textAlign:"left",verticalAlign:"top",overflowWrap:"anywhere"}}>Object {index + 1}</td>
-                <td style={{textAlign:"left",verticalAlign:"top",overflowWrap:"anywhere"}}>{overrides.wall_loops ?? global.wall_loops ?? "Native profile"}</td>
-                <td style={{textAlign:"left",verticalAlign:"top",overflowWrap:"anywhere"}}>{overrides.sparse_infill_density ?? global.sparse_infill_density ?? "Native profile"}{(overrides.sparse_infill_density ?? global.sparse_infill_density) != null ? "%" : ""}</td>
-                <td style={{textAlign:"left",verticalAlign:"top",overflowWrap:"anywhere"}}>{other.length ? other.map(([key, value]) => `${key}: ${value}`).join(" · ") : "None"}</td>
+      {Array.isArray(objectSettings) && objectSettings.length > 0 && <section className="slicerGcodeSavedSettings">
+        <h4>Settings saved with this slicing job</h4>
+        <div className="slicerGcodeSavedSettingsScroll">
+          <table className="dataTable">
+            <thead><tr><th>Plate instance</th><th>Wall loops</th><th>Sparse infill</th><th>Additional overrides</th></tr></thead>
+            <tbody>{objectSettings.map((item,index)=>{
+              const overrides=item.process_overrides||{};
+              const global=globalProcessOverrides||{};
+              const other=Object.entries(overrides).filter(([key])=>!["wall_loops","sparse_infill_density"].includes(key));
+              const infill=overrides.sparse_infill_density??global.sparse_infill_density;
+              return <tr key={item.instance_id||index}>
+                <td>Object {index+1}</td>
+                <td>{overrides.wall_loops??global.wall_loops??"Native profile"}</td>
+                <td>{infill==null?"Native profile":infill+"%"}</td>
+                <td>{other.length?other.map(([key,value])=>key+": "+value).join(" · "):"None"}</td>
               </tr>;
             })}</tbody>
           </table>
         </div>
-      </div>}
+      </section>}
       {(analysis.warnings || []).map((warning, i) => <div className="projectUploadHint" key={i}>{warning}</div>)}
       </div>
       {mode === "visual" && embedded && analysis.slicer_preview
@@ -180,8 +195,8 @@ export default function GcodeViewerModal({ file, canEdit = false, onClose, onSav
           <polyline points={preview} fill="none" stroke="#b0a2ff" strokeWidth="1" vectorEffect="non-scaling-stroke" />
         </svg> : <p>No XY movements found.</p>}
         <small>Top-down XY trajectory only; not a validated print preview. {analysis.xy_preview_sampled ? "Only the first 3,000 moves are shown." : ""} Extrusion, machine-specific instructions and clearance are not fully simulated.</small>
-      </div> : <div>
-        <div className="formActions" style={{ justifyContent: "flex-start" }}>
+      </div> : <div className="slicerGcodeSourceView">
+        <div className="slicerGcodeSourceModeActions">
           <button type="button" className={!fullSource ? "primary" : ""} onClick={() => setFullSource(false)}>Quick inspection</button>
           <button type="button" className={fullSource ? "primary" : ""} onClick={() => setFullSource(true)}>Complete G-code</button>
         </div>
