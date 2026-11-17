@@ -5375,6 +5375,40 @@ a:focus-visible,
 .slicerWorkbenchRoot .slicerHeroActions > .slicerHeroBack {
   grid-column: 1 / -1;
 }
+/* Project navigation remains beside Slicer setup, with native button
+   styling rather than the file-input label's separate appearance. */
+.slicerWorkbenchRoot .slicerHeroActions > .slicerHeroProjectNavigation {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: minmax(0,1fr) minmax(0,1fr);
+  gap: 9px;
+  align-items: stretch;
+}
+.slicerWorkbenchRoot .slicerHeroProjectNavigation > .slicerHeroBack {
+  min-height: 43px;
+  width: 100%;
+}
+.slicerWorkbenchRoot .slicerHeroProjectFileActions {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 9px;
+}
+.slicerWorkbenchRoot .slicerHeroProjectFileActions button {
+  width: 100%;
+  min-height: 43px;
+  white-space: normal;
+  padding: 9px 12px;
+}
+.slicerProjectHiddenInput { display:none; }
+@media (max-width: 480px) {
+  .slicerWorkbenchRoot .slicerHeroProjectNavigation {
+    grid-template-columns: 1fr;
+  }
+  .slicerWorkbenchRoot .slicerHeroProjectFileActions {
+    grid-template-columns: repeat(2,minmax(0,1fr));
+  }
+}
+
 @media (max-width: 900px) {
   .slicerWorkbenchRoot .printingHero { display: grid; }
   .slicerWorkbenchRoot .slicerHeroActions {
