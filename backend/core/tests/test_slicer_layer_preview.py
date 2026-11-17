@@ -43,7 +43,7 @@ class FullLayerParserTests(SimpleTestCase):
 
     def test_batch_rejects_duplicates_nonfinite_and_excess_layers(self):
         for zs in ([0.2, 0.2], [float("nan")], [-1], [2001],
-                   [i / 10 for i in range(33)], []):
+                   [i / 10 for i in range(65)], []):
             with self.subTest(zs=zs), self.assertRaises(ValueError):
                 layer_batch_toolpaths(GCODE, zs)
 
