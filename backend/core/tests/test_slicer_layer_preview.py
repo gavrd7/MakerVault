@@ -39,6 +39,26 @@ class FullLayerParserTests(SimpleTestCase):
         )
         self.assertEqual(exact_layer_toolpaths(text, 0.25)["segment_count"], 3)
 
+    def test_exact_layer_restores_smokestack_arc_extrusions(self):
+        import math
+        gcode=("G90\\nM83\\nG1 X10 Y0 Z20\\n"
+               ";TYPE:Outer wall\\nG3 X0 Y10 I-10 J0 E0.5\\n"
+               "G3 X-10 Y0 I0 J-10 E0.5\\n")
+        result=exact_layer_toolpaths(gcode,20)
+        self.assertGreater(result["segment_count"], 40)
+        self.assertTrue(result["complete"])
+        self.assertEqual(result["segments"][-1][2:4],[-10.0,0.0])
+        self.assertTrue(all(abs(math.hypot(a[2],a[3])-10)<0.01
+                            for a in result["segments"]))
+
+    def test_preview_preserves_unextruded_travel_arc_without_fake_strand(self):
+        gcode=("G90\\nM83\\nG1 X10 Y0 Z0.2\\n"
+               "G3 X0 Y10 I-10 J0\\n"
+               "G1 X0 Y20 E0.5\\n")
+        result=exact_layer_toolpaths(gcode,0.2)
+        self.assertEqual(result["segment_count"],1)
+        self.assertEqual(result["segments"][0][:4],[0.0,10.0,0.0,20.0])
+
     def test_unsafe_nonfinite_z_is_rejected(self):
         for value in ("nan", "inf", -1, 2001):
             with self.subTest(value=value), self.assertRaises(ValueError):
