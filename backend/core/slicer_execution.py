@@ -22,7 +22,7 @@ from .slicer_material_routing import single_material_slice_assignment, MaterialR
 from .slicer_multimaterial_execution import plan_native_multimaterial, prepare_job_multimaterial
 from .slicer_material_gcode_audit import audit_native_tool_usage, MaterialGcodeAuditError
 from .slicer_native_overrides import apply_orca_job_overrides
-from .slicer_variable_layers import audit_orca_variable_layers
+from .slicer_variable_layers import audit_orca_variable_layers, validate_orca_variable_support_compatibility
 from .slicer_paint_assets import expand_painted_settings
 from .slicer_process_settings import apply_process_overrides
 from .slicer_plate_3mf import build_plate_3mf, build_compound_plate_3mf
@@ -638,6 +638,17 @@ def process_queued_job(job_id):
             profiles[2] = apply_process_overrides(
                 profiles[2], (job.settings or {}).get("process_overrides") or {},
             )
+            # Orca CLI otherwise exits 205 without identifying the conflicting
+            # process setting. Keep the user's preset and requested paint intact.
+            has_variable = any(
+                isinstance(obj, dict) and
+                bool((obj.get("variable_layer_profile") or {}).get("bands"))
+                for obj in ((job.settings or {}).get("plate_objects") or [])
+            )
+            try:
+                validate_orca_variable_support_compatibility(profiles[2], has_variable)
+            except ValueError as exc:
+                raise SlicerExecutionError(str(exc)) from exc
             if material_result is not None:
                 # The worker protocol checks byte equality between the legacy
                 # first preset and the first member of the ordered palette.
