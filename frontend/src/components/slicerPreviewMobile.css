@@ -89,24 +89,21 @@
 }
 
 .slicerMobileJobActions { display: contents; }
-.slicerMobileJobActions > summary { display: none; }
+.slicerMobileActionsToggle { display: none; }
 
 @media (max-width: 700px) {
-  .slicerMobileJobActions {
-    display: block; margin: 3px 0 10px;
+  .slicerMobileJobActions { display: block; margin: 3px 0 10px; }
+  .slicerMobileActionsToggle {
+    display: block; width: 100%; text-align: center; padding: 9px;
+    border: 1px solid var(--border,#394958);
+    background: var(--surface,#172331); border-radius: 9px; font-weight: 600;
   }
-  .slicerMobileJobActions > summary {
-    display: block; cursor: pointer; text-align: center;
-    padding: 9px; border: 1px solid var(--border,#394958);
-    background: var(--surface,#172331); border-radius: 9px;
-    font-weight: 600; list-style: none;
+  .slicerMobileActionsToggle::after { content: "  ▾"; }
+  .slicerMobileActionsToggle[aria-expanded="true"]::after { content: "  ▴"; }
+  .slicerMobileActionContents { display: none !important; }
+  .slicerMobileActionContents.mobileOpen {
+    display: flex !important; flex-direction: column; gap: 8px; margin-top: 8px;
   }
-  .slicerMobileJobActions > summary::after { content: "  ▾"; }
-  .slicerMobileJobActions[open] > summary::after { content: "  ▴"; }
-  .slicerMobileJobActions > summary::-webkit-details-marker { display: none; }
-  .slicerMobileJobActions > .formActions {
-    display: flex; flex-direction: column; gap: 8px; margin-top: 8px;
-  }
-  .slicerMobileJobActions > .formActions > * { width: 100%; text-align: center; }
+  .slicerMobileActionContents > * { width: 100%; text-align: center; }
   .slicerPreviewModal .slicerGcodeCompactLayout { min-width: 0; }
 }
