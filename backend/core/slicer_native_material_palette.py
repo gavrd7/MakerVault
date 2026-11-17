@@ -128,6 +128,45 @@ def ordered_material_profile_ids(bindings, slot_profiles, *, main_profile_id):
     return ordered
 
 
+def native_colour_tool_maps(objects, *, printer_id, tool_bindings):
+    """Bind logical paint palette entries to explicit, verified slot→tool IDs.
+
+    Swatch colours and physical slot indices must never imply tool IDs. A
+    saved paint entry must reference the selected printer and an assigned,
+    available slot; no fallback to a similarly coloured filament is safe.
+    """
+    from .slicer_colour_painting import validate_colour_paint
+    maps = []
+    for item in objects:
+        painting = item.get("colour_paint")
+        if not painting or not (painting.get("regions") or painting.get("faces")):
+            maps.append({})
+            continue
+        data = validate_colour_paint(painting)
+        if data["version"] != 2:
+            raise MaterialRoutingError(
+                "Convert legacy face colour painting to surface-region painting before native slicing.")
+        used = {region["slot"] for region in data["regions"]}
+        if not used:
+            maps.append({})
+            continue
+        mapping = {}
+        for index in used:
+            swatch = data["palette"][index]
+            if str(swatch.get("printer_id")) != str(printer_id):
+                raise MaterialRoutingError("Assign every painted colour to a filament on this printer.")
+            slot_id = swatch.get("slot_id")
+            tool = tool_bindings.get(slot_id)
+            if tool is None:
+                raise MaterialRoutingError(
+                    "Painted colour slot has no verified native filament/tool binding.")
+            if isinstance(tool, bool) or not isinstance(tool, int) or not 0 <= tool < 16:
+                raise MaterialRoutingError("Painted colour references an invalid native tool.")
+            mapping[index] = tool
+        maps.append(mapping)
+    return tuple(maps)
+
+
 def prepare_multimaterial_plate(
     objects_with_stl, *, bed_width, bed_depth, printer_id, owner_id,
     engine, engine_version, topology, tool_bindings, native_filament_profiles,
@@ -157,9 +196,12 @@ def prepare_multimaterial_plate(
         native_filament_profiles=native_filament_profiles,
         resolver=resolver,
     )
+    colour_tools = native_colour_tool_maps(
+        objects, printer_id=printer_id, tool_bindings=tool_bindings)
     project = build_plate_3mf(
         objects_with_stl, bed_width=bed_width, bed_depth=bed_depth,
         native_tool_indices=result["native_tool_indices"],
+        native_colour_tools=colour_tools,
     )
     return {
         "model_3mf": project,
