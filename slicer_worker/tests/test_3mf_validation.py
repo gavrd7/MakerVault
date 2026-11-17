@@ -244,6 +244,45 @@ class Core3MFWorkerTests(TestCase):
         with self.assertRaisesRegex(WorkerError, "Every native object"):
             validate_worker_3mf(archive(changed), native_tool_count=2)
 
+    def test_single_painted_model_requires_two_real_native_tools(self):
+        original = self.package()
+        with zipfile.ZipFile(io.BytesIO(original)) as archive:
+            parts = {name: archive.read(name) for name in archive.namelist()}
+        parts["Metadata/model_settings.config"] = (
+            '<config><object id="1"><metadata key="extruder" value="1"/></object>'
+            '<plate><metadata key="plater_id" value="1"/>'
+            '<model_instance><metadata key="object_id" value="1"/>'
+            '<metadata key="instance_id" value="0"/>'
+            '<metadata key="identify_id" value="1"/></model_instance>'
+            '</plate></config>'
+        ).encode()
+        target = b'<triangle v1="0" v2="1" v3="2"/>'
+
+        def painted(state):
+            data = dict(parts)
+            data["3D/3dmodel.model"] = data["3D/3dmodel.model"].replace(
+                target, b'<triangle v1="0" v2="1" v3="2" paint_color="' +
+                state.encode() + b'"/>'
+            )
+            out = io.BytesIO()
+            with zipfile.ZipFile(out, "w") as package:
+                for name, contents in data.items():
+                    package.writestr(name, contents)
+            return out.getvalue()
+
+        self.assertTrue(validate_worker_3mf(painted("8"), native_tool_count=2))
+        self.assertTrue(validate_worker_3mf(painted("0C"), native_tool_count=3))
+        for payload, tools in (
+            (painted("8"), None),
+            (painted("4"), 2),
+            (painted("0C"), 2),
+            (painted("3C"), 3),
+            (painted("40"), 2),
+            (painted("4;M104 S300"), 2),
+        ):
+            with self.subTest(tools=tools), self.assertRaises(WorkerError):
+                validate_worker_3mf(payload, native_tool_count=tools)
+
     def test_valid_core_model_is_admitted(self):
         self.assertTrue(validate_worker_3mf(self.package()))
 
