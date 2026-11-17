@@ -13,6 +13,7 @@ export default function SlicerToolpath3D({
   colourMode = "feature", colours = {}, showToolhead = true, bedSize = null,
   renderMode = "solid", nozzleDiameter = 0.4,
   layerDisplay = "current", featureFocus = "all",
+  previewSampled = false, fadePrevious = false,
 }) {
   const mount = useRef(null);
   const sceneRef = useRef(null);
@@ -39,8 +40,12 @@ export default function SlicerToolpath3D({
     mountPoint.appendChild(renderer.domElement);
     const scene = new THREE.Scene();
     scene.background = new THREE.Color(0x111b27);
-    scene.add(new THREE.AmbientLight(0xffffff, 1.25));
-    const directional = new THREE.DirectionalLight(0xffffff, 1.7);
+    // Ambient-only lighting flattens the small ridges and support contacts.
+    // Balanced directional and hemispheric light makes individual beads legible
+    // without changing native G-code geometry or its feature colours.
+    scene.add(new THREE.AmbientLight(0xffffff, 0.72));
+    scene.add(new THREE.HemisphereLight(0xddefff, 0x2b3240, 0.54));
+    const directional = new THREE.DirectionalLight(0xffffff, 1.38);
     directional.position.set(120, 250, 140);
     scene.add(directional);
     const camera = new THREE.PerspectiveCamera(45, 1, 0.1, 10000);
@@ -251,9 +256,16 @@ export default function SlicerToolpath3D({
         ? new THREE.Color().setHSL(0.56 - 0.44 * (layers.length > 1
           ? Math.max(0, (layerIndexByHeight.get(z.toFixed(3)) ?? -1)) / (layers.length - 1) : 0), 0.85, 0.64)
         : new THREE.Color(colourMode === "solid" ? "#f09a4b" : (colours[feature] || "#b8d4e5"));
-      // Render only selected layers by default. Optional previous layers
-      // provide subtle context without overwhelming fine surface detail.
-      if (!isCurrent) hex.multiplyScalar(layerDisplay === "context" ? 0.24 : 0.33);
+      // A full indexed model is *not* a ghost backdrop: darkening every
+      // earlier layer made thin walls and painted-support contacts appear
+      // absent. Only intentionally fade them, or show a weaker context when
+      // the overview is genuinely sampled/incomplete.
+      if (!isCurrent) {
+        const factor = layerDisplay === "context" ? 0.32
+          : fadePrevious ? 0.38
+          : previewSampled ? 0.82 : 1;
+        hex.multiplyScalar(factor);
+      }
       if (renderMode === "lines") {
         positions.push(x1, z, y1, x2, z, y2);
         for (let index = 0; index < 2; index++) coloursArray.push(hex.r, hex.g, hex.b);
@@ -309,7 +321,8 @@ export default function SlicerToolpath3D({
     marker.visible = Boolean(showToolhead && lastStep);
     if (lastStep) marker.position.set(...lastStep);
   }, [segments, layers, activeLayer, activeStep, visible, colourMode, colours, showToolhead,
-    renderMode, nozzleDiameter, layerDisplay, featureFocus, bedSize?.[0], bedSize?.[1]]);
+    renderMode, nozzleDiameter, layerDisplay, featureFocus, previewSampled,
+    fadePrevious, bedSize?.[0], bedSize?.[1]]);
 
   return <div className="slicerToolpath3D">
     {unavailable ? <div role="status" className="projectUploadHint">
