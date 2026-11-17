@@ -194,6 +194,38 @@ def detect_material_system(connections):
     return detected.pop()
 
 
+def offline_material_system(connections, *, printer=None):
+    """Resolve an offline slicing topology without authorising hardware commands.
+
+    Prefer adapter-reported capabilities. Some existing K2 Creality LAN
+    connections predate the material_system capability schema even though
+    MakerVault already knows the printer model and has loaded CFS bays.
+    A narrowly scoped K2 fallback may generate *offline* native G-code,
+    but it never establishes slot -> firmware tool-command authority.
+    """
+    connections = list(connections)
+    try:
+        return detect_material_system(connections)
+    except MaterialRoutingError:
+        pass
+    model = str(getattr(printer, "model", "") or "").strip().lower()
+    # K2 family is single-nozzle; this is a slicer-only assumption, not a
+    # machine probe or proof of a working/connected feeder.
+    is_k2 = model == "k2" or model.startswith(("k2 ", "k2-", "k2_"))
+    has_creality_adapter = any(
+        connection.enabled and connection.adapter == "creality_local"
+        and str(connection.printer_id) == str(getattr(printer, "pk", None))
+        for connection in connections
+    )
+    if is_k2 and has_creality_adapter:
+        return "single_nozzle_changer"
+    raise MaterialRoutingError(
+        "No supported multi-material topology is available for this printer. "
+        "Offline slicing needs an adapter-declared material system, or a known "
+        "Creality K2 model with an enabled Creality local connection."
+    )
+
+
 def derive_native_tool_order(objects, *, printer_id, topology, preferred_slot_id=None,
                              painted_slot_ids=()):
     """Assign logical Orca filament indices by first model use, not tray position.
