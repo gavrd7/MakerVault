@@ -204,6 +204,38 @@ class BuildPlate3MFTests(SimpleTestCase):
         self.assertAlmostEqual(transform[1], 1, places=5)
         self.assertAlmostEqual(transform[3], -1, places=5)
 
+    def test_native_seam_facets_are_emitted_without_support_annotations(self):
+        from core.slicer_plate_3mf import _triangles
+        from core.slicer_native_support_paint import _fingerprint
+        shape = fixture_stl()
+        source = list(_triangles(shape))
+        bottom = [min(p[i] for tri in source for p in tri) for i in range(3)]
+        top = [max(p[i] for tri in source for p in tri) for i in range(3)]
+        offset = ((bottom[0] + top[0]) / 2,
+                  (bottom[1] + top[1]) / 2, bottom[2])
+        local = [[tuple(p[i]-offset[i] for i in range(3)) for p in face]
+                 for face in source]
+        first=local[0]
+        centre=[sum(p[i] for p in first)/3 for i in range(3)]
+        patch=[[(p[i]+centre[i])/2 for i in range(3)] for p in first]
+        for slot, expected in ((0, "4"), (1, "8")):
+            with self.subTest(slot=slot):
+                model = {"x_mm": 0, "y_mm": 0, "rotation_deg": 0,
+                         "rotation_xyz_deg": [0,0], "scale_percent": 100,
+                         "seam_paint": {"version": 2,
+                             "signature": _fingerprint(local),
+                             "regions": [{"slot":slot, "patches":[
+                                 {"face":0, "polygon":patch}]}]}}
+                packed=build_plate_3mf([(model,shape)],bed_width=220,bed_depth=220)
+                with zipfile.ZipFile(io.BytesIO(packed)) as archive:
+                    mesh=ET.fromstring(archive.read("3D/3dmodel.model"))
+                triangles=mesh.findall(".//{%s}triangle" % NS)
+                self.assertGreater(len(triangles),len(source))
+                self.assertTrue(any(row.attrib.get("paint_seam")==expected
+                                    for row in triangles))
+                self.assertTrue(all("paint_supports" not in row.attrib
+                                    for row in triangles))
+
     def test_native_support_paint_subdivides_facets_without_changing_mesh_area(self):
         from core.slicer_plate_3mf import _triangles
         from core.slicer_native_support_paint import _fingerprint
