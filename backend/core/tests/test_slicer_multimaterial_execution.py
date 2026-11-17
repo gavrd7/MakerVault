@@ -10,6 +10,11 @@ from core.slicer_multimaterial_execution import plan_native_multimaterial
 
 class MultiMaterialPreflightTests(SimpleTestCase):
     def setUp(self):
+        # Native source and inheritance checks are tested independently.
+        native = patch("core.slicer_native_resolution.resolved_native_profile",
+                       return_value=b'{"filament_diameter":["1.75"]}')
+        native.start()
+        self.addCleanup(native.stop)
         self.slots = [
             {"printer_id": "printer", "slot_id": "cfs-bay-4", "slot_index": 3},
             {"printer_id": "printer", "slot_id": "cfs-bay-1", "slot_index": 0},
@@ -61,12 +66,35 @@ class MultiMaterialPreflightTests(SimpleTestCase):
 
     @patch("core.slicer_multimaterial_execution.SlicerProfile.objects.filter")
     @patch("core.slicer_multimaterial_execution.PrinterConnection.objects.filter")
-    def test_unverified_filament_preset_fails_closed(self, sources, profiles):
+    def test_unknown_filament_preset_state_fails_closed(self, sources, profiles):
         sources.return_value = [self.connection]
         self.presets[1].status = "draft"
         profiles.return_value = self.presets
-        with self.assertRaisesRegex(MaterialRoutingError, "not verified"):
+        with self.assertRaisesRegex(MaterialRoutingError, "incompatible"):
             plan_native_multimaterial(self.job)
+
+    @patch("core.slicer_multimaterial_execution.SlicerProfile.objects.filter")
+    @patch("core.slicer_multimaterial_execution.PrinterConnection.objects.filter")
+    def test_imported_candidate_profiles_need_no_manual_approval(self, sources, profiles):
+        sources.return_value = [self.connection]
+        self.presets[0].status = "candidate"
+        self.presets[1].status = "candidate"
+        profiles.return_value = self.presets
+        _topology, bindings, palette = plan_native_multimaterial(self.job)
+        self.assertEqual(bindings["cfs-bay-1"], 0)
+        self.assertEqual([p.status for p in palette], ["candidate", "candidate"])
+
+    @patch("core.slicer_multimaterial_execution.SlicerProfile.objects.filter")
+    @patch("core.slicer_multimaterial_execution.PrinterConnection.objects.filter")
+    def test_unresolvable_imported_parent_still_fails_closed(self, sources, profiles):
+        from core.slicer_profiles import SlicerProfileError
+        sources.return_value = [self.connection]
+        profiles.return_value = self.presets
+        self.presets[0].status = "candidate"
+        with patch("core.slicer_native_resolution.resolved_native_profile",
+                   side_effect=SlicerProfileError("Missing required parent")):
+            with self.assertRaisesRegex(MaterialRoutingError, "missing native parents"):
+                plan_native_multimaterial(self.job)
 
     @patch("core.slicer_multimaterial_execution.SlicerProfile.objects.filter")
     @patch("core.slicer_multimaterial_execution.PrinterConnection.objects.filter")
