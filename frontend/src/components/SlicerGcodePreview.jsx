@@ -66,7 +66,86 @@ export default function SlicerGcodePreview({ fileId = null, preview, bedSize = n
   const [showLayerInsert, setShowLayerInsert] = useState(false);
   const fullLayerCache = useRef(new Map());
   const layers = preview?.layers || [];
-  const allSegments = preview?.segments || [];
+  // Never draw sparse global samples as though they were a complete print.
+  // Fetch consecutive full-resolution layers from the original file instead.
+  const [wholeModel, setWholeModel] = useState({
+    segments: [], loadedLayers: 0, complete: false, limited: false,
+    loading: false, message: "",
+  });
+  const sourceLayerHeights = layers.join(",");
+  useEffect(() => {
+    if (!fileId || !layers.length) return undefined;
+    const controller = new AbortController();
+    const mobile = typeof window !== "undefined" && window.matchMedia?.("(max-width: 700px)").matches;
+    const maxMoves = mobile ? 160000 : 480000;
+    let cancelled = false;
+    setWholeModel({segments:[],loadedLayers:0,complete:false,limited:false,loading:true,message:""});
+    const load = async () => {
+      const accumulated = [];
+      let used = 0;
+      let completed = 0;
+      let limited = false;
+      let pendingLayers = 0;
+      try {
+        for (let offset = 0; offset < layers.length && !cancelled; offset += 12) {
+          const requested = layers.slice(offset, offset + 12);
+          const url = "/api/files/" + encodeURIComponent(fileId) +
+            "/gcode/layers/?zs=" + encodeURIComponent(requested.join(","));
+          const response = await fetch(url, {credentials:"same-origin",signal:controller.signal});
+          if (!response.ok) {
+            const detail = await response.json().catch(()=>({}));
+            throw new Error(detail.error || "Full-resolution preview unavailable (HTTP " + response.status + ").");
+          }
+          const data = await response.json();
+          if (!Array.isArray(data.layers) || data.layers.length !== requested.length)
+            throw new Error("Invalid full-resolution layer response.");
+          if (data.complete === false) limited = true;
+          for (const item of data.layers) {
+            if (!item.complete) limited = true;
+            if (!Array.isArray(item.segments)) throw new Error("Invalid layer geometry.");
+            if (used + item.segments.length > maxMoves) {
+              limited = true;
+              break;
+            }
+            accumulated.push(...item.segments);
+            used += item.segments.length;
+            completed++;
+            pendingLayers++;
+          }
+          if (cancelled) return;
+          // Publish in coherent chunks, not after every layer. Retain all
+          // previously loaded moves as exact contiguous geometry.
+          if (pendingLayers >= 36 || completed === layers.length || limited) {
+            setWholeModel({segments:accumulated.slice(),loadedLayers:completed,
+              complete:completed===layers.length&&!limited,limited,
+              loading:!limited&&completed<layers.length,message:""});
+            pendingLayers = 0;
+          }
+          if (limited) break;
+          // Let camera controls and touch gestures run between large batches.
+          await new Promise(resolve=>setTimeout(resolve, 12));
+        }
+        if (!cancelled) setWholeModel({
+          segments:accumulated,loadedLayers:completed,
+          complete:completed===layers.length&&!limited,
+          limited,loading:false,message:"",
+        });
+      } catch (error) {
+        if (!cancelled && error.name!=="AbortError") {
+          setWholeModel({
+            segments:accumulated,loadedLayers:completed,complete:false,
+            limited:true,loading:false,message:error.message,
+          });
+        }
+      }
+    };
+    load();
+    return () => {cancelled=true;controller.abort();};
+  // The layer list is stable for an inspected file; avoid restarting when a
+  // user changes camera, rendering style, or selected layer.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [fileId, sourceLayerHeights]);
+
   const currentLayer = Math.min(layer ?? Math.max(0, layers.length - 1), Math.max(0, layers.length - 1));
   const z = layers[currentLayer];
 
@@ -122,10 +201,11 @@ export default function SlicerGcodePreview({ fileId = null, preview, bedSize = n
   const displaySegments = useMemo(() => {
     const current = layerSegments;
     if (layerDisplay === "current") return current;
-    const previous = allSegments.filter(segment =>
-      Math.abs(segment[4] - z) > 0.0005 && segment[4] <= z);
+    const startZ = layerDisplay === "context" ? layers[Math.max(0,currentLayer-8)] : -Infinity;
+    const previous = wholeModel.segments.filter(segment =>
+      segment[4] >= startZ - 0.0005 && segment[4] < z - 0.0005);
     return [...previous, ...current];
-  }, [allSegments, layerSegments, layerDisplay, z]);
+  }, [wholeModel.segments,layerSegments,layerDisplay,layers,currentLayer,z]);
   const finalStep = Math.min(step ?? layerSegments.length, layerSegments.length);
   const formatTime = seconds => {
     if (seconds == null) return "Not declared";
@@ -210,7 +290,7 @@ export default function SlicerGcodePreview({ fileId = null, preview, bedSize = n
       </div>}
       <div className="slicerResultLayerLayout">
         <div className="slicerResultViewport">
-          <SlicerToolpath3D segments={displaySegments} layers={layers}
+          <SlicerToolpath3D segments={displaySegments} framingSegments={preview?.segments || []} layers={layers}
             activeLayer={currentLayer} activeStep={finalStep} visible={visible}
             colourMode={colourMode} colours={colours} showToolhead={showToolhead} bedSize={bedSize}
             renderMode={renderMode} layerDisplay={layerDisplay}
@@ -240,6 +320,18 @@ export default function SlicerGcodePreview({ fileId = null, preview, bedSize = n
             + G-code
           </button>}
         </label>
+      </div>
+      <div className="slicerWholeModelProgress" role="status">
+        <span>{wholeModel.complete
+          ? "Full-resolution preview · all "+layers.length.toLocaleString()+" layers"
+          : wholeModel.loading
+          ? "Building exact toolpaths · "+wholeModel.loadedLayers.toLocaleString()+" / "+layers.length.toLocaleString()+" layers"
+          : "Partial full-resolution preview · "+wholeModel.loadedLayers.toLocaleString()+" / "+layers.length.toLocaleString()+" layers"}
+        </span>
+        {wholeModel.loading && <progress value={wholeModel.loadedLayers} max={layers.length} />}
+        {(wholeModel.limited || wholeModel.message) && <small>
+          {wholeModel.message || "Whole-model geometry reached the device preview budget. Individual selected layers remain available at full resolution; the G-code is unchanged."}
+        </small>}
       </div>
       {showLayerInsert && canEdit && fileId && file && <GcodeLayerInsert
         key={String(currentLayer) + ":" + String(fileId)}
