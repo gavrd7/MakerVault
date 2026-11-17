@@ -5382,11 +5382,15 @@ a:focus-visible,
   display: grid;
   grid-template-columns: minmax(0,1fr) minmax(0,1fr);
   gap: 9px;
-  align-items: stretch;
+  align-items: start;
 }
 .slicerWorkbenchRoot .slicerHeroProjectNavigation > .slicerHeroBack {
   min-height: 43px;
+  height: 43px;
   width: 100%;
+  align-self: start;
+  grid-row: 1;
+  margin: 0;
 }
 .slicerWorkbenchRoot .slicerHeroProjectFileActions {
   display: grid;
