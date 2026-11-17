@@ -313,6 +313,12 @@ class Handler(BaseHTTPRequestHandler):
                 "Invalid 3MF native plate instance.": "native-plate-instance-invalid",
                 "Unsafe 3MF plate metadata.": "invalid-native-plate",
                 "3MF transform is unsafe.": "invalid-3mf",
+                "Multi-filament 3MF object lacks an extruder.": "native-object-tool-missing",
+                "Invalid native painted tool state.": "native-paint-tool-out-of-range",
+                "Invalid multi-material output.": "invalid-gcode",
+                "Missing multi-material verification targets.": "native-tool-use-mismatch",
+                "Multi-material G-code is not valid UTF-8.": "invalid-gcode",
+                "Native output lacks required filament changes and deposited extrusion.": "native-gcode-tools-missing",
                 "Native object percent unit is missing.": "native-object-settings-invalid",
             }
             if str(exc).startswith("OrcaSlicer CLI exited: "):
