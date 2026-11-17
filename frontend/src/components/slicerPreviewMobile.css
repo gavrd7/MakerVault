@@ -31,12 +31,13 @@
   .slicerResultStats { order: 1; display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 7px; margin: 0 0 6px; }
   .slicerResultStats > div { padding: 9px 10px; gap: 3px; }
   .slicerResultStats > div:nth-child(2), .slicerResultStats > div:nth-child(4),
-  .slicerResultStats > div:nth-child(5) { display: none; }
+  .slicerResultStats > div:nth-child(5), .slicerResultStats > div:nth-child(6),
+  .slicerResultStats > div:nth-child(7) { display: none; }
   .slicerResultStats strong { font-size: 1.06rem; }
   .slicerResultStats small { font-size: .72rem; }
-  .slicerResultLayerLayout { order: 2; margin: 0; gap: 7px; grid-template-columns: minmax(0,1fr) 48px; }
+  .slicerResultLayerLayout { order: 2; margin: 0; width: 100%; max-width: none; gap: 7px; grid-template-columns: minmax(0,1fr) 54px; }
   .slicerToolpath3DCanvas, .slicerPreviewModal .slicerToolpath3DCanvas {
-    height: min(52dvh, 520px); min-height: 300px;
+    height: clamp(290px, 43dvh, 450px); width: 100%;
   }
   .slicerResultLayerSlider { padding: 5px 2px; font-size: .72rem; }
   .slicerResultLayerSlider input[type="range"] { min-height: 260px; }
@@ -59,15 +60,14 @@
   .slicerResultModeRow.mobileOpen > label { display: flex !important; flex-direction: column; align-items: stretch !important; width: 100%; }
   .slicerResultModeRow.mobileOpen > label.checkRow { flex-direction: row; align-items: center !important; }
   .slicerResultModeRow.mobileOpen select { width: 100%; max-width: none; }
-  .slicerResultVisibility.mobileOpen label { display: flex; padding: 6px 0; }
-  .slicerMobileStepsToggle { display: block; width: 100%; padding: 7px; }
-  .slicerResultSteps { display: none; }
-  .slicerResultSteps.mobileOpen { display: block; padding: 8px 2px; }
-  .slicerToolpathViewBar { display: block; }
+  .slicerResultVisibility.mobileOpen label { display: flex; padding: 2px 0; min-height: 32px; align-items: center; gap: 9px; }
+  .slicerResultSteps { display: block; padding: 6px 2px; }
+  .slicerResultSteps .settingsActions { display: none; }
+  .slicerToolpathViewBar { display: block; text-align: center; }
   .slicerMobileViewToggle { display: inline-flex; margin: 7px 0; padding: 8px 14px; }
   .slicerToolpathViewBar .slicerToolpathViewOptions { display: none; }
   .slicerToolpathViewBar .slicerToolpathViewOptions.mobileOpen {
-    display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 8px;
+    display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 8px; justify-items: stretch; align-items: center;
   }
   .slicerToolpathViewOptions label { justify-content: center; }
   .slicerToolpath3D > small, .slicerResultPreview > small,
@@ -106,4 +106,38 @@
   }
   .slicerMobileActionContents > * { width: 100%; text-align: center; }
   .slicerPreviewModal .slicerGcodeCompactLayout { min-width: 0; }
+}
+
+/* Range thumb centres must sit at the real zero/max track endpoints on iOS. */
+.slicerResultPreview .slicerFullRange {
+  box-sizing: border-box;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  margin-inline: 0;
+}
+.slicerResultLayerSlider input.slicerFullRange {
+  width: 28px;
+  height: 100%;
+  min-height: 0;
+  margin: 0 auto;
+  flex: 1 1 0;
+}
+.slicerResultSteps input.slicerFullRange { width: 100%; margin: 8px 0; }
+@media (max-width: 700px) {
+  .slicerResultLayerSlider {
+    display: flex; flex-direction: column; justify-content: stretch;
+    padding: 8px 1px; gap: 5px;
+  }
+  .slicerResultLayerSlider span { flex: 0 0 auto; }
+  .slicerResultLayerSlider input.slicerFullRange {
+    writing-mode: vertical-lr; direction: rtl;
+    min-height: 0; height: 100%; flex: 1 1 0;
+    touch-action: none;
+  }
+  .slicerResultSteps input.slicerFullRange { touch-action: pan-y; }
+  .slicerResultVisibility.mobileOpen { padding: 9px 12px; }
+  .slicerResultVisibility.mobileOpen legend { display: none; }
+  .slicerResultVisibility.mobileOpen .slicerMobilePanelHeader { margin-bottom: 8px; }
+  .slicerToolpathViewOptions.mobileOpen label { justify-content: center; }
 }
