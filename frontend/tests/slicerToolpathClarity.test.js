@@ -31,6 +31,16 @@ test("G-code preview defaults to complete-print overview while retaining layer d
   assert.match(preview, /featureColour\(feature\)/);
 });
 
+test("complete model preview is not unnecessarily ghosted or labelled sampled", () => {
+  assert.match(preview, /preview\?\.sampled/);
+  assert.match(preview, /Complete model · all extrusion paths/);
+  assert.match(preview, /Fade previous layers/);
+  assert.match(preview, /fadePrevious=\{highlightCurrent\}/);
+  assert.match(renderer, /previewSampled = false, fadePrevious = false/);
+  assert.match(renderer, /previewSampled \? 0\.82 : 1/);
+  assert.match(renderer, /new THREE\.HemisphereLight/);
+});
+
 test("3D preview filters by selected layers and uses shaded bead geometry", () => {
   assert.match(renderer, /layerDisplay === "current"/);
   assert.match(renderer, /segmentLayerIndex < minVisibleIndex/);
