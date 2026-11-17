@@ -1128,8 +1128,8 @@ def job_detail(request, job_id):
                 return _error("Slice job not found.", 404)
             if not request.user.has_perm("core.delete_slicejob"):
                 return _error("You do not have permission to delete slicing jobs.", 403)
-            if job.status not in {"draft", "failed", "cancelled", "stale"}:
-                return _error("Only drafts and inactive failed/cancelled jobs can be deleted.", 409)
+            if job.status not in {"draft", "failed", "cancelled", "stale", "completed"}:
+                return _error("Active queued or running slicing jobs cannot be deleted. Cancel them first.", 409)
             job.delete()
             _cleanup_temporary_job_sources(job)
         return JsonResponse({"deleted": True})
