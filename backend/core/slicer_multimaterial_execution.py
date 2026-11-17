@@ -5,6 +5,7 @@ This intentionally does NOT establish firmware changeover support or allow
 printer transfer. Preview/painted facets require an independent integration.
 """
 from .models import PrinterConnection, SlicerProfile
+from .slicer_colour_painting import validate_colour_paint
 from .slicer_material_routing import (
     MaterialRoutingError, detect_material_system, derive_native_tool_order,
 )
@@ -16,8 +17,8 @@ from .slicer_native_material_palette import (
 def plan_native_multimaterial(job):
     settings = job.settings or {}
     objects = settings.get("plate_objects") or []
-    if job.engine != "orcaslicer" or not 2 <= len(objects) <= 12:
-        raise MaterialRoutingError("Multi-colour test slicing requires two or more Orca models.")
+    if job.engine != "orcaslicer" or not 1 <= len(objects) <= 12:
+        raise MaterialRoutingError("Multi-colour test slicing requires an Orca model.")
     if settings.get("flush_settings") is not None:
         raise MaterialRoutingError(
             "Custom purge settings are not verified for multi-colour test slicing."
@@ -27,6 +28,23 @@ def plan_native_multimaterial(job):
     # Colour painting is now converted to Orca's native per-triangle
     # paint_color states by prepare_multimaterial_plate. This remains an
     # offline test; no G-code may be submitted to a printer.
+    painted_slot_ids = []
+    for item in objects:
+        painting = item.get("colour_paint") or {}
+        if not (painting.get("regions") or painting.get("faces")):
+            continue
+        validated = validate_colour_paint(painting)
+        if validated["version"] != 2:
+            raise MaterialRoutingError(
+                "Legacy whole-face colour painting needs surface-region conversion.")
+        for region in validated["regions"]:
+            swatch = validated["palette"][region["slot"]]
+            slot_id = swatch.get("slot_id")
+            if str(swatch.get("printer_id")) != str(job.printer_id) or not slot_id:
+                raise MaterialRoutingError(
+                    "Each painted colour must be assigned to a slot on the selected printer.")
+            if slot_id not in painted_slot_ids:
+                painted_slot_ids.append(slot_id)
     connections = PrinterConnection.objects.filter(
         printer_id=job.printer_id, enabled=True,
     )
@@ -50,6 +68,7 @@ def plan_native_multimaterial(job):
     bindings = derive_native_tool_order(
         objects, printer_id=job.printer_id, topology=topology,
         preferred_slot_id=sorted(preferred)[0],
+        painted_slot_ids=painted_slot_ids,
     )
     rows = [{"slot_id": slot_id, "tool_index": index}
             for slot_id, index in bindings.items()]
