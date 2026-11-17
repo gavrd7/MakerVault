@@ -42,7 +42,8 @@ test("profiled loaded bays are not mistaken for an assigned model base", () => {
   assert.match(workspace, /baseCandidates\.length === 1/);
   assert.match(workspace, /Model base filament slot/);
   assert.match(workspace, /Use matching base profile:/);
-  assert.match(workspace, /worker-verified Orca 2\.5\.0 native profile/);
-  assert.match(workspace, /profile\.status === "verified" \? " · Worker verified"/);
-  assert.match(workspace, /baseProfileMismatch/);
+  assert.match(workspace, /const compatibleSlotProfile = slotId/);
+  assert.match(workspace, /\["candidate", "verified"\]\.includes\(profile\.status\)/);
+  assert.match(workspace, /The server derives the main filament profile/);
+  assert.doesNotMatch(workspace, /baseProfileMismatch/);
 });
