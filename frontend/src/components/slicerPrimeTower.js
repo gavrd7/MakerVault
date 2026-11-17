@@ -1,4 +1,4 @@
-import {plateEnvelope} from "./slicerPlateGeometry";
+import {plateEnvelope} from "./slicerPlateGeometry.js";
 
 /** Preview-only footprint: Orca computes the exact depth after slicing.
  * XY are native Orca lower-left anchors in millimetres, not bed-centred model coordinates.
