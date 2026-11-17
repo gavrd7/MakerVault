@@ -7,7 +7,7 @@ printer transfer. Preview/painted facets require an independent integration.
 from .models import PrinterConnection, SlicerProfile
 from .slicer_colour_painting import validate_colour_paint
 from .slicer_material_routing import (
-    MaterialRoutingError, detect_material_system, derive_native_tool_order,
+    MaterialRoutingError, offline_material_system, derive_native_tool_order,
 )
 from .slicer_native_material_palette import (
     ordered_material_profile_ids, prepare_multimaterial_plate,
@@ -44,7 +44,7 @@ def plan_native_multimaterial(job, *, settings=None):
     connections = PrinterConnection.objects.filter(
         printer_id=job.printer_id, enabled=True,
     )
-    topology = detect_material_system(connections)
+    topology = offline_material_system(connections, printer=job.printer)
     profile_rows = settings.get("slot_filament_profiles") or []
     primary_slots = {
         row.get("slot_id") for row in profile_rows
