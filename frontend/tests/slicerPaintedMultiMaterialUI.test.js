@@ -22,9 +22,17 @@ test("painted swatches can be rebound to loaded slots without changing region in
   assert.match(workspace, /reassignPaintSwatch\(paintSlot,event\.target\.value\)/);
 });
 
-test("ordinary slicing remains blocked; native colour is explicit offline test only", () => {
-  assert.match(workbench, /mode !== "multi-material-test" && projectPlates/);
-  assert.match(workbench, /multi_material_test:true/);
+test("single Slice action chooses offline multi-colour automatically", () => {
+  assert.match(workbench, /function plateNeedsMultiMaterial\(objects\)/);
+  assert.match(workbench, /offlineMultiMaterial \? \{multi_material_test:true\}/);
   assert.match(workbench, /printer upload and start are blocked/);
-  assert.match(workspace, /Slice multi-colour \(test\)/);
+  assert.match(workspace, /onClick=\{onSlice\}>Slice/);
+  assert.doesNotMatch(workspace, /Slice multi-colour \(test\)/);
+});
+
+test("painted colour remains visible in build plate selection and transform modes", () => {
+  const editor = read("SlicerPlateEditor.jsx");
+  assert.match(editor, /colour_paint:item\.colour_paint/);
+  assert.match(editor, /colour_paint:original\.colour_paint/);
+  assert.doesNotMatch(editor, /colour_paint:toolMode==="paint_colour"\?item\.colour_paint:null/);
 });
