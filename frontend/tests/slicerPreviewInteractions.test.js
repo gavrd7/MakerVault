@@ -20,17 +20,17 @@ test("post-slice preview exposes vertical layer and full-resolution layer-step c
 });
 
 test("feature visibility is configurable while unavailable numeric modes remain disabled", () => {
-  assert.match(source, /Visible extrusion features/);
+  assert.match(source, /Visible toolpaths/);
   assert.match(source, /visible\[feature\] !== false/);
-  assert.match(source, /disabled=\{!mode\.supported\}/);
+  assert.match(source, /disabled=\{!available\}/);
   for (const mode of ["Speed", "Flow", "Temperature", "Acceleration", "Line width"])
     assert.match(source, new RegExp('label: "' + mode + '", supported: false'));
 });
 
 test("bounded path sample is never represented as complete G-code execution", () => {
-  assert.match(source, /Earlier layers are still a sampled orientation reference/);
-  assert.match(source, /Partial samples can still omit fine toolpaths/);
-  assert.match(source, /not a complete/);
+  assert.match(source, /previewSampled=/);
+  assert.match(source, /layerDisplay === "current"/);
+  assert.match(source, /exactLayer\.segments/);
   assert.match(source, /estimates/);
 });
 
