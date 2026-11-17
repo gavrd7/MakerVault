@@ -59,11 +59,23 @@ test("desktop review keeps preview visible and collapses secondary controls", ()
   assert.match(viewer, /slicerPreviewNav/);
   assert.match(viewer, /slicerGcodeMetadata/);
   assert.match(viewer, /setMobileDetails\(true\)/);
-  assert.match(preview, /slicerPreviewToolButtons/);
+  assert.match(preview, /toolbarActions=\{<>/);
+  assert.match(viewport, /slicerUnifiedViewActions/);
   assert.match(preview, /slicerPreviewOptionsPanel/);
   assert.match(mobileCss, /\.slicerPreviewOptionsPanel:not\(\.mobileOpen\)/);
   assert.match(mobileCss, /\.slicerGcodeCompactLayout \.slicerGcodeDesktopActions/);
   assert.match(mobileCss, /@media \(min-width: 701px\)/);
   assert.match(mobileCss, /\.slicerMobileActionContents\.mobileOpen/);
   assert.match(viewer, /Material and layer totals/);
+});
+
+test("mobile action row, slider and settings dialog remain compact", () => {
+  assert.match(viewport, /slicerUnifiedViewActions/);
+  assert.match(preview, /toolbarActions=\{<>/);
+  assert.doesNotMatch(preview, /Previous sampled toolhead step/);
+  assert.doesNotMatch(preview, /Next sampled toolhead step/);
+  assert.match(mobileCss, /\.slicerUnifiedViewActions/);
+  assert.match(mobileCss, /flex-direction: column !important/);
+  assert.match(mobileCss, /\.slicerResultSteps input\.slicerFullRange::-webkit-slider-runnable-track/);
+  assert.match(mobileCss, /\.slicerResultLayerSlider input\.slicerFullRange::-webkit-slider-runnable-track/);
 });
