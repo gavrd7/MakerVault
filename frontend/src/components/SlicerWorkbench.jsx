@@ -2041,7 +2041,7 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
         <div className={"formActions slicerMobileActionContents" + (mobileActionsOpen ? " mobileOpen" : "")}
           style={{ justifyContent: "flex-start" }}>
           <button type="button" onClick={() => setPreviewJobId(null)}>← Back to slicing jobs</button>
-          <a className="assetButton slicerGcodeDownloadAction" href={`/api/files/${encodeURIComponent(previewJob.output_asset.id)}/gcode/source/?download=1`}>Download G-code</a>
+          <a className="buttonLink slicerGcodeDownloadAction" href={`/api/files/${encodeURIComponent(previewJob.output_asset.id)}/gcode/source/?download=1`}>Download G-code</a>
           {previewJob.settings?.workflow !== "quick" && !previewJob.gcode_in_library && <button type="button" disabled={busy}
             onClick={() => saveOutputToLibrary(previewJob)}>Add G-code to library</button>}
           {previewJob.settings?.workflow !== "quick" && previewJob.gcode_in_library && <button type="button" onClick={onOpenGcode}>Open G-code library</button>}
