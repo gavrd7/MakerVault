@@ -1,21 +1,21 @@
 /* Mobile-specific G-code review. Desktop layout is deliberately unchanged. */
-.slicerMobileNav, .slicerMobilePanelHeader, .slicerMobileToolButtons,
-.slicerMobileViewToggle, .slicerMobileStepsToggle, .slicerGcodeMobileSummary { display: none; }
+.slicerPreviewNav, .slicerPreviewPanelHeader, .slicerPreviewToolButtons,
+.slicerMobileViewToggle, .slicerMobileStepsToggle, .slicerGcodeQuickSummary { display: none; }
 .slicerToolpathViewOptions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
 .slicerToolpathViewOptions button { flex: 0 1 auto; }
 
 @media (max-width: 700px) {
   .slicerPreviewModal .modalBody { padding: 10px 12px; }
   .slicerPreviewModal h3 { margin: 4px 0 10px; font-size: 1rem; overflow-wrap: anywhere; }
-  .slicerMobileNav { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 7px; margin: 6px 0 10px; }
-  .slicerMobileNav button { padding: 9px 4px; min-width: 0; font-size: .88rem; }
+  .slicerPreviewNav { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 7px; margin: 6px 0 10px; }
+  .slicerPreviewNav button { padding: 9px 4px; min-width: 0; font-size: .88rem; }
   .slicerMobileDownload { display: flex; justify-content: center; align-items: center; padding: 8px 3px; min-width: 0; text-align: center; font-size: .82rem; }
   .slicerGcodeDesktopActions { display: none !important; }
-  .slicerGcodeMobileSummary {
+  .slicerGcodeQuickSummary {
     display: flex; flex-wrap: wrap; gap: 7px; font-size: .85rem;
     margin: 0 0 10px; align-items: center;
   }
-  .slicerGcodeMobileSummary span { background: var(--surface,#162333); border: 1px solid var(--border,#394958); border-radius: 7px; padding: 5px 8px; }
+  .slicerGcodeQuickSummary span { background: var(--surface,#162333); border: 1px solid var(--border,#394958); border-radius: 7px; padding: 5px 8px; }
   .slicerGcodeCompactLayout .slicerGcodeMetadata { display: none; }
   .slicerGcodeCompactLayout .slicerGcodeMetadata.mobileOpen {
     display: block; position: fixed; z-index: 10050; inset: 5dvh 8px 4dvh;
@@ -23,10 +23,10 @@
     background: var(--panel,#101923); border-radius: 14px;
     box-shadow: 0 15px 50px #000b;
   }
-  .slicerMobilePanelHeader { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 14px; }
-  .slicerMobilePanelHeader strong { font-size: 1.05rem; }
-  .slicerMobilePanelHeader button { flex: 0 0 auto; }
-  .slicerMobileBackdrop { display: block; position: fixed; z-index: 10040; inset: 0; background: #0009; }
+  .slicerPreviewPanelHeader { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 14px; }
+  .slicerPreviewPanelHeader strong { font-size: 1.05rem; }
+  .slicerPreviewPanelHeader button { flex: 0 0 auto; }
+  .slicerPreviewBackdrop { display: block; position: fixed; z-index: 10040; inset: 0; background: #0009; }
   .slicerResultPreview { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
   .slicerResultStats { order: 1; display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 7px; margin: 0 0 6px; }
   .slicerResultStats > div { padding: 9px 10px; gap: 3px; }
@@ -42,9 +42,9 @@
   .slicerResultLayerSlider { padding: 5px 2px; font-size: .72rem; }
   .slicerResultLayerSlider input[type="range"] { min-height: 260px; }
   .slicerResultViewport { min-width: 0; }
-  .slicerMobileToolButtons { display: grid; order: 3; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 7px; }
-  .slicerMobileToolButtons button { padding: 9px 4px; font-size: .86rem; }
-  .slicerMobileToolButtons button[aria-expanded="true"] { border-color: var(--accent,#7859ee); }
+  .slicerPreviewToolButtons { display: grid; order: 3; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 7px; }
+  .slicerPreviewToolButtons button { padding: 9px 4px; font-size: .86rem; }
+  .slicerPreviewToolButtons button[aria-expanded="true"] { border-color: var(--accent,#7859ee); }
   .slicerResultModeRow, .slicerResultVisibility {
     display: none !important;
   }
@@ -73,10 +73,10 @@
   .slicerToolpath3D > small, .slicerResultPreview > small,
   .slicerResultPreview > .projectUploadHint, .slicerResultPreview > .slicerPreviewCoverage,
   .slicerResultPreview > p.slicerPreviewCoverage { display: none; }
-  .slicerResultPreview > .slicerMobileBackdrop { display: block; }
+  .slicerResultPreview > .slicerPreviewBackdrop { display: block; }
   .slicerResultPreview > .slicerResultVisibility { order: 5; }
   .slicerResultPreview > .slicerResultModeRow { order: 4; }
-  .slicerResultPreview > .slicerMobileToolButtons { order: 3; }
+  .slicerResultPreview > .slicerPreviewToolButtons { order: 3; }
   .slicerResultLayerLayout .slicerResultSteps { margin: 0; }
 }
 
@@ -85,7 +85,7 @@
   .slicerGcodeCompactLayout > h3 { display: none; }
   .slicerGcodeCompactLayout > .slicerGcodeMetadata.mobileOpen p { margin: 10px 0; }
   .slicerGcodeCompactLayout > .slicerGcodeMetadata.mobileOpen .dataTable { font-size: .83rem; }
-  .slicerGcodeCompactLayout .slicerGcodeMobileSummary { order: 0; }
+  .slicerGcodeCompactLayout .slicerGcodeQuickSummary { order: 0; }
 }
 
 .slicerMobileJobActions { display: contents; }
@@ -138,7 +138,7 @@
   .slicerResultSteps input.slicerFullRange { touch-action: pan-y; }
   .slicerResultVisibility.mobileOpen { padding: 9px 12px; }
   .slicerResultVisibility.mobileOpen legend { display: none; }
-  .slicerResultVisibility.mobileOpen .slicerMobilePanelHeader { margin-bottom: 8px; }
+  .slicerResultVisibility.mobileOpen .slicerPreviewPanelHeader { margin-bottom: 8px; }
   .slicerToolpathViewOptions.mobileOpen label { justify-content: center; }
 }
 
@@ -220,4 +220,109 @@
     max-width: 580px; max-height: 82dvh;
     height: auto; box-sizing: border-box;
   }
+}
+
+/* Desktop and mobile share an uncluttered G-code inspection hierarchy.
+   The selected-layer viewport, movement slider and print summary stay primary. */
+.slicerPreviewNav {
+  display: flex; align-items: center; justify-content: flex-start; gap: 8px;
+  margin: 4px 0 10px;
+}
+.slicerPreviewNav button { min-width: 110px; }
+.slicerGcodeQuickSummary {
+  display: flex; flex-wrap: wrap; gap: 8px; margin: 6px 0 10px;
+}
+.slicerGcodeQuickSummary span {
+  border: 1px solid var(--border,#394958);
+  background: var(--surface,#162333);
+  border-radius: 8px; padding: 6px 11px;
+}
+.slicerGcodeCompactLayout .slicerGcodeDesktopActions { display: none !important; }
+.slicerGcodeCompactLayout .slicerGcodeMetadata:not(.mobileOpen) { display: none; }
+.slicerPreviewToolButtons {
+  display: flex; align-items: center; justify-content: flex-end;
+  gap: 10px; margin: 0 0 4px;
+}
+.slicerPreviewToolButtons button { min-width: 140px; }
+.slicerPreviewBackdrop {
+  display: block; position: fixed; z-index: 10040; inset: 0;
+  background: #0009;
+}
+.slicerPreviewPanelHeader {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 12px; margin-bottom: 12px;
+}
+.slicerPreviewPanelHeader strong { font-size: 1.06rem; }
+.slicerPreviewOptionsPanel:not(.mobileOpen) { display: none !important; }
+.slicerPreviewOptionsPanel.mobileOpen,
+.slicerGcodeCompactLayout .slicerGcodeMetadata.mobileOpen {
+  display: flex !important; flex-direction: column; gap: 10px;
+  position: fixed; z-index: 10050;
+  left: 50%; top: 50%; transform: translate(-50%,-50%);
+  width: min(560px,calc(100vw - 28px)); max-height: 82dvh;
+  box-sizing: border-box; overflow-y: auto;
+  padding: 18px; margin: 0;
+  background: var(--panel,#101923);
+  border: 1px solid var(--border,#394958); border-radius: 14px;
+  box-shadow: 0 18px 60px #000a;
+}
+.slicerResultVisibility.slicerPreviewOptionsPanel.mobileOpen { display: block !important; }
+.slicerResultVisibility.slicerPreviewOptionsPanel.mobileOpen legend { display: none; }
+.slicerResultVisibility.slicerPreviewOptionsPanel.mobileOpen label {
+  display: flex; align-items: center; gap: 9px; padding: 3px 0;
+  min-height: 30px; width: 100%; white-space: normal;
+}
+.slicerResultModeRow.slicerPreviewOptionsPanel.mobileOpen > label {
+  display: flex; flex-direction: column; align-items: stretch; gap: 6px;
+}
+.slicerResultModeRow.slicerPreviewOptionsPanel.mobileOpen > label.checkRow {
+  flex-direction: row; align-items: center; justify-content: flex-start;
+}
+.slicerResultModeRow.slicerPreviewOptionsPanel.mobileOpen select {
+  width: 100%; max-width: none;
+}
+.slicerGcodeDetailCards.mobileOpen .slicerGcodeDetailRow {
+  display: flex; flex-direction: column; gap: 5px;
+  padding: 10px 12px; margin: 0;
+  border: 1px solid var(--border,#394958);
+  border-radius: 9px; background: var(--surface,#172331);
+}
+.slicerGcodeDetailCards.mobileOpen .slicerGcodeDetailRow > strong {
+  color: var(--muted,#9aacbc); font-size: .81rem;
+}
+.slicerGcodeDetailCards.mobileOpen .slicerGcodeDetailRow > span {
+  overflow-wrap: anywhere;
+}
+.slicerResultPreview > .slicerResultStats {
+  display: grid; grid-template-columns: repeat(4,minmax(0,1fr));
+  gap: 9px; margin: 6px 0 8px;
+}
+.slicerResultPreview > .slicerResultStats > div:nth-child(2),
+.slicerResultPreview > .slicerResultStats > div:nth-child(4),
+.slicerResultPreview > .slicerResultStats > div:nth-child(5) { display: none; }
+/* Top-level camera and bed choices can be revealed without occupying a row
+   permanently under a large 3D viewport. */
+.slicerToolpathViewBar { display: flex; justify-content: center; flex-direction: column; }
+.slicerMobileViewToggle { display: inline-flex; align-self: center; }
+.slicerToolpathViewBar .slicerToolpathViewOptions { display: none; }
+.slicerToolpathViewBar .slicerToolpathViewOptions.mobileOpen {
+  display: flex; justify-content: center; align-items: center;
+  flex-wrap: wrap; gap: 8px;
+}
+.slicerToolpathViewBar .slicerToolpathViewOptions.mobileOpen label { justify-content: center; }
+.slicerMobileJobActions { display: block; margin: 4px 0 12px; }
+.slicerMobileActionsToggle {
+  display: block; min-width: 210px; margin: 0;
+  text-align: center; font-weight: 600;
+}
+.slicerMobileActionContents { display: none !important; }
+.slicerMobileActionContents.mobileOpen {
+  display: flex !important; justify-content: flex-start;
+  align-items: center; gap: 8px; flex-wrap: wrap; margin-top: 9px;
+}
+@media (min-width: 701px) {
+  .slicerPreviewModal .slicerResultLayerLayout { max-width: none; }
+  .slicerPreviewModal .slicerResultViewport .slicerResultToolpath { width: 100%; max-width: none; }
+  .slicerPreviewModal .slicerResultLayerLayout { grid-template-columns: minmax(0,1fr) 82px; }
+  .slicerPreviewModal .slicerGcodeDetailCards.mobileOpen { width: min(700px,calc(100vw - 32px)); }
 }
