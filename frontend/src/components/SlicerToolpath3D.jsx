@@ -9,7 +9,7 @@ import { featureMatchesFocus, featureFamily } from "./slicerToolpathFeatures";
  * Never imply a complete print simulation when sampled paths are missing.
  */
 export default function SlicerToolpath3D({
-  segments = [], layers = [], activeLayer, activeStep, visible = {},
+  segments = [], framingSegments = [], layers = [], activeLayer, activeStep, visible = {},
   colourMode = "feature", colours = {}, showToolhead = true, bedSize = null,
   renderMode = "solid", nozzleDiameter = 0.4,
   layerDisplay = "current", featureFocus = "all",
@@ -107,9 +107,12 @@ export default function SlicerToolpath3D({
     );
     marker.renderOrder = 10;
     scene.add(marker);
+    // Use the small, bounded summary only to frame the camera. Never draw it
+    // as completed extrusion geometry; progressive exact layers render below.
+    const cameraSource = framingSegments.length ? framingSegments : segments;
     const bounds = new THREE.Box3();
     let valid = 0;
-    for (const segment of segments) {
+    for (const segment of cameraSource) {
       if (!Array.isArray(segment) || segment.length < 5 ||
           !segment.slice(0, 5).every(Number.isFinite)) continue;
       bounds.expandByPoint(new THREE.Vector3(segment[0], segment[4], segment[1]));
@@ -120,8 +123,8 @@ export default function SlicerToolpath3D({
     // tiny. For camera framing only, use the densest XY footprint rather than
     // letting sparse outliers dictate the focal distance. Never alter toolpaths.
     const xs = [], ys = [];
-    for (let i = 0; i < segments.length; i += Math.max(1, Math.floor(segments.length / 4000))) {
-      const line = segments[i];
+    for (let i = 0; i < cameraSource.length; i += Math.max(1, Math.floor(cameraSource.length / 4000))) {
+      const line = cameraSource[i];
       if (Array.isArray(line) && line.length >= 5 && line.slice(0, 5).every(Number.isFinite)) {
         xs.push(line[0], line[2]);
         ys.push(line[1], line[3]);
@@ -209,9 +212,9 @@ export default function SlicerToolpath3D({
       renderer.dispose();
       renderer.domElement.remove();
     };
-  // Mount once per preview; geometry is replaced independently below.
+  // Framing sample is file-specific, but geometry updates independently.
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [bedSize?.[0], bedSize?.[1]]);
+  }, [bedSize?.[0], bedSize?.[1], framingSegments]);
 
   const setCameraView = (viewName) => {
     const view = sceneRef.current;
