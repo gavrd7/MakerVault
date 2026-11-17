@@ -748,7 +748,7 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
       setError("Native painted-support test slicing requires OrcaSlicer 2.5.0. Other engines remain incompatible.");
       return;
     }
-    if (sliceNow && projectPlates.some(plate=>plate.objects.some(item=>
+    if (sliceNow && mode !== "multi-material-test" && projectPlates.some(plate=>plate.objects.some(item=>
       (Object.keys(item.colour_paint?.faces || {}).length || item.colour_paint?.regions?.length)))) {
       setError("This project has painted colour regions. Save the draft; native painted-toolpath slicing is not yet enabled.");
       return;
