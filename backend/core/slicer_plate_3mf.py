@@ -45,7 +45,7 @@ def _triangles(raw):
                     current = []
 
 
-def _render_mesh(raw, element, support_paint=None, seam_paint=None):
+def _render_mesh(raw, element, support_paint=None, seam_paint=None, fuzzy_skin_paint=None):
     triangles = list(_triangles(raw))
     if not triangles or len(triangles) > MAX_TRIANGLES:
         raise SlicerProfileError("STL triangle count exceeds the 3MF plate limit.")
@@ -61,9 +61,10 @@ def _render_mesh(raw, element, support_paint=None, seam_paint=None):
     # Weld identical vertices to keep generated 3MF files compact.
     indexed = {}
     try:
-        if (support_paint and support_paint.get("regions")
-                and seam_paint and seam_paint.get("regions")):
-            raise ValueError("Combined support and seam painting requires a verified native adapter.")
+        active = sum(bool(paint and paint.get("regions")) for paint in
+                     (support_paint, seam_paint, fuzzy_skin_paint))
+        if active > 1:
+            raise ValueError("Combining different painted surface modes needs a verified native adapter.")
         # Keep the original fast path for unpainted geometry. Exactly one
         # native annotation channel is emitted per test model.
         if support_paint and support_paint.get("regions"):
@@ -72,6 +73,9 @@ def _render_mesh(raw, element, support_paint=None, seam_paint=None):
         elif seam_paint and seam_paint.get("regions"):
             tagged = native_support_triangles(triangles, seam_paint, kind="seam")
             paint_attribute = "paint_seam"
+        elif fuzzy_skin_paint and fuzzy_skin_paint.get("regions"):
+            tagged = native_support_triangles(triangles, fuzzy_skin_paint, kind="fuzzy")
+            paint_attribute = "paint_fuzzy_skin"
         else:
             tagged = ((tri, None) for tri in triangles)
             paint_attribute = None
@@ -191,6 +195,7 @@ def build_plate_3mf(objects_with_stl, *, bed_width, bed_depth, native_tool_indic
             bool((entry[0].get("variable_layer_profile") or {}).get("bands")) or
             bool((entry[0].get("support_paint") or {}).get("regions")) or
             bool((entry[0].get("seam_paint") or {}).get("regions")) or
+            bool((entry[0].get("fuzzy_skin_paint") or {}).get("regions")) or
             abs(float(entry[0].get("z_mm", 0))) > 1e-7 or
             any(abs(float(v)) > 1e-7 for v in entry[0].get("rotation_xyz_deg", [0, 0]))
         )
@@ -206,7 +211,9 @@ def build_plate_3mf(objects_with_stl, *, bed_width, bed_depth, native_tool_indic
         if total_bytes > MAX_SOURCE_TOTAL:
             raise SlicerProfileError("Total plate model size exceeds the limit.")
         obj = ET.SubElement(resources, f"{{{NS}}}object", {"id": str(index), "type": "model"})
-        count, width, depth = _render_mesh(raw, obj, item.get("support_paint"), item.get("seam_paint"))
+        count, width, depth = _render_mesh(
+            raw, obj, item.get("support_paint"), item.get("seam_paint"),
+            item.get("fuzzy_skin_paint"))
         total_triangles += count
         # Transform the actual welded vertices, not only the original 2D
         # bounding rectangle: a tilted model has a different XY footprint.
