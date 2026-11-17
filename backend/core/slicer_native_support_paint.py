@@ -109,10 +109,10 @@ def native_support_triangles(triangles, paint, *, kind="support"):
     """
     if not paint or not paint.get("regions"):
         return [(tri, None) for tri in triangles]
-    if kind not in ("support", "seam"):
+    if kind not in ("support", "seam", "fuzzy"):
         raise ValueError("Unsupported native painted facet type.")
     data = (validate_support_paint(paint) if kind == "support"
-            else validate_semantic_paint(paint, "seam"))
+            else validate_semantic_paint(paint, kind))
     # STLLoader's preview geometry is centred in X/Y and grounded at min Z
     # BEFORE MakerVault computes the paint signature and local brush patches.
     minimum = [min(p[axis] for face in triangles for p in face) for axis in range(3)]
@@ -142,6 +142,8 @@ def native_support_triangles(triangles, paint, *, kind="support"):
         free = [source]
         painted = []
         for slot, polygon in patches:
+            if kind == "fuzzy" and slot != 0:
+                raise ValueError("Native fuzzy skin painting supports only the painted state.")
             cutter = [tuple(float(v) for v in point) for point in polygon]
             if _dot(_normal(cutter[:3]), unit) < 0:
                 cutter.reverse()
