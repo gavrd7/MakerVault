@@ -19,10 +19,6 @@ def plan_native_multimaterial(job, *, settings=None):
     objects = settings.get("plate_objects") or []
     if job.engine != "orcaslicer" or not 1 <= len(objects) <= 12:
         raise MaterialRoutingError("Multi-colour test slicing requires an Orca model.")
-    if settings.get("flush_settings") is not None:
-        raise MaterialRoutingError(
-            "Custom purge settings are not verified for multi-colour test slicing."
-        )
     if any(not isinstance(item, dict) for item in objects):
         raise MaterialRoutingError("Multi-colour models are invalid.")
     # Colour painting is now converted to Orca's native per-triangle
