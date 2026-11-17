@@ -1081,6 +1081,9 @@ class PrinterConnectivityApiTests(TestCase):
         item = response.json()["item"]
         self.assertEqual(item["adapter"], "moonraker")
         self.assertEqual(item["endpoint_url"], "http://192.168.1.44:7125")
+        self.assertEqual(item["capabilities"]["material_system"]["schema_version"], 1)
+        self.assertEqual(item["capabilities"]["material_system"]["topology"], "unknown")
+        self.assertFalse(item["capabilities"]["material_system"]["available"])
         self.assertEqual(item["status"], "disconnected")
         self.assertTrue(item["supported"])
         self.assertTrue(item["local_first"])
