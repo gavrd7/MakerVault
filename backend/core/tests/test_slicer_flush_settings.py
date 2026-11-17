@@ -57,6 +57,24 @@ class FlushSettingsTests(SimpleTestCase):
         data = self.apply(settings=complete, native=no_matrix)
         self.assertEqual(data["flush_volumes_matrix"], ["0", "220", "370", "0"])
 
+    def test_multiplier_only_preserves_missing_native_matrix(self):
+        original = b'{"flush_multiplier":["0.65"],"enable_prime_tower":"1"}'
+        data = self.apply(
+            settings={"multiplier": 1.4, "prime_tower": "native",
+                      "transitions": []},
+            native=original,
+        )
+        self.assertEqual(data["flush_multiplier"], ["1.4"])
+        self.assertNotIn("flush_volumes_matrix", data)
+        self.assertEqual(data["enable_prime_tower"], "1")
+
+    def test_multiplier_only_preserves_inherited_native_matrix_unchanged(self):
+        data = self.apply(
+            settings={"multiplier": 1.3, "prime_tower": "native",
+                      "transitions": []})
+        self.assertEqual(data["flush_multiplier"], ["1.3"])
+        self.assertEqual(data["flush_volumes_matrix"], [0, 215, 330, 0])
+
     def test_no_cfs_flushing_on_independent_toolheads(self):
         with self.assertRaisesRegex(MaterialRoutingError, "independent toolheads"):
             self.apply(topology="independent_toolheads")
