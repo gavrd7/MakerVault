@@ -75,7 +75,7 @@ class IntendedMaterialSafetyTests(SimpleTestCase):
         from types import SimpleNamespace
         for field, value, error in (
             ("seam_paint", {"version": 2, "regions": [{"slot": 0}]}, "Native seam painting test"),
-            ("fuzzy_skin_paint", {"version": 2, "regions": [{"slot": 0}]}, "Paint-on fuzzy"),
+            ("fuzzy_skin_paint", {"version": 2, "regions": [{"slot": 0}]}, "Native fuzzy skin painting test"),
             ("variable_layer_profile", {"version": 1, "bands": [
                 {"from_mm": 0, "to_mm": 10, "layer_mm": .12}]}, "Variable layer"),
         ):
