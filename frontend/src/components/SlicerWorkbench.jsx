@@ -95,6 +95,7 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
   const [editProfileBusy, setEditProfileBusy] = useState(false);
   const [editProfileError, setEditProfileError] = useState("");
   const [showDrafts, setShowDrafts] = useState(false);
+  const [mobileActionsOpen, setMobileActionsOpen] = useState(false);
   const [previewJobId, setPreviewJobId] = useState(null);
   const awaitingSlicePreviewRef = useRef(null);
   const [customBed, setCustomBed] = useState({ enabled: false, x: "220", y: "220" });
@@ -1979,9 +1980,11 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
     {showDrafts && <Modal className={previewJob ? "slicerPreviewModal" : ""} title={previewJob ? "Sliced G-code preview" : "Saved slicing drafts"}
       onClose={() => { setShowDrafts(false); setPreviewJobId(null); }} wide>
       {previewJob ? <>
-        <details className="slicerMobileJobActions">
-          <summary>File &amp; printer actions</summary>
-        <div className="formActions" style={{ justifyContent: "flex-start" }}>
+        <div className="slicerMobileJobActions">
+          <button type="button" className="slicerMobileActionsToggle" aria-expanded={mobileActionsOpen}
+            onClick={() => setMobileActionsOpen(value => !value)}>File &amp; printer actions</button>
+        <div className={"formActions slicerMobileActionContents" + (mobileActionsOpen ? " mobileOpen" : "")}
+          style={{ justifyContent: "flex-start" }}>
           <button type="button" onClick={() => setPreviewJobId(null)}>← Back to slicing jobs</button>
           <a className="assetButton" href={`/api/files/${encodeURIComponent(previewJob.output_asset.id)}/gcode/source/?download=1`}>Download G-code</a>
           {previewJob.settings?.workflow !== "quick" && !previewJob.gcode_in_library && <button type="button" disabled={busy}
@@ -1994,7 +1997,7 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
               onClick={() => requestPrint(previewJob, "print")}>Upload and start print</button>
           </>}
         </div>
-        </details>
+        </div>
         {error && <p className="integrationError" role="alert">{error}</p>}
         {notice && <p role="status">{notice}</p>}
         <GcodeViewerModal key={previewJob.output_asset.id} embedded
