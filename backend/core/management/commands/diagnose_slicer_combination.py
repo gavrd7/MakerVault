@@ -37,6 +37,40 @@ CASES = (
     ("all-four", FEATURES),
 )
 
+def range_probe_variants(original):
+    """Pure copy-on-write comparison for saved native layer-height bands.
+
+    Keep original thickness and duration. The relocated probes have deliberately
+    simple, non-overlapping Z ranges and do not affect the saved draft.
+    """
+    profile = original.get("variable_layer_profile")
+    bands = (profile or {}).get("bands") if isinstance(profile, dict) else None
+    if not isinstance(bands, list) or len(bands) != 1:
+        return ()
+    band = bands[0]
+    try:
+        original_from = float(band["from_mm"])
+        original_to = float(band["to_mm"])
+        thickness = float(band["layer_mm"])
+    except (KeyError, TypeError, ValueError):
+        return ()
+    span = original_to - original_from
+    if not 0 < span <= 50:
+        return ()
+    # Compare the same height and duration with shifted intervals. A position
+    # effect (such as narrow tip geometry) can then be distinguished from a
+    # fundamentally unsupported profile or malformed 3MF.
+    test_bands = []
+    for lower in (5.0, 12.0, 22.0, 32.0):
+        if abs(lower - original_from) < 0.0005 or lower + span > 47:
+            continue
+        test_bands.append((
+            "range-at-" + str(int(lower)) + "mm",
+            [{"from_mm": lower, "to_mm": lower + span, "layer_mm": thickness}],
+        ))
+    return tuple(test_bands)
+
+
 
 def selected_variant(original, fields):
     """Make a detached variant without modifying persisted paint references."""
@@ -53,6 +87,8 @@ class Command(BaseCommand):
         parser.add_argument("--continue-on-failure", action="store_true",
                             help="Run later variants even after a failure.")
         parser.add_argument("--max-cases", type=int, default=len(CASES))
+        parser.add_argument("--probe-layer-ranges", action="store_true",
+                            help="Compare copies of the saved Z band at several heights.")
         parser.add_argument("--acknowledge-offline-test", action="store_true",
                             help="Explicitly allow isolated, non-printing worker probes.")
 
@@ -114,11 +150,20 @@ class Command(BaseCommand):
         if not available:
             raise CommandError("The selected draft contains no advanced painting or layer ranges.")
         failed = False
+        variants = []
         for label, fields in CASES[:options["max_cases"]]:
             if not set(fields) <= available:
                 self.stdout.write(label + ": SKIP (feature absent from draft)")
                 continue
-            item = selected_variant(original, fields)
+            variants.append((label, selected_variant(original, fields), fields))
+        if options["probe_layer_ranges"] and "variable_layer_profile" in available:
+            for label, bands in range_probe_variants(original):
+                updated = selected_variant(original, ("variable_layer_profile",))
+                updated["variable_layer_profile"] = {"version": 1, "bands": bands}
+                variants.append((label, updated, ("variable_layer_profile",)))
+            self.stdout.write("Saved layer ranges: " +
+                json.dumps(original["variable_layer_profile"]["bands"], sort_keys=True))
+        for label, item, fields in variants:
             try:
                 model = build_plate_3mf([(item, raw)], bed_width=width, bed_depth=depth)
                 process, filament = apply_orca_job_overrides(
