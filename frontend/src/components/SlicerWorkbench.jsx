@@ -117,6 +117,11 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
   const activePlate=projectPlates.find(item=>item.id===activePlateId)||projectPlates[0];
   const plateObjects=activePlate?.objects||[];
   const plateLabel=activePlate?.name??"Plate 1";
+  const primeTower=activePlate?.prime_tower||null;
+  const setPrimeTower=useCallback(position=>{
+    setProjectPlates(current=>current.map(plate=>plate.id===activePlateId
+      ?{...plate,...(position?{prime_tower:position}:{prime_tower:undefined})}:plate));
+  },[activePlateId]);
   const setPlateObjects=useCallback(updater=>{
     setProjectPlates(current=>current.map(item=>item.id===activePlateId
       ?{...item,objects:typeof updater==="function"?updater(item.objects):updater}:item));
@@ -550,7 +555,7 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
     const savedObjects = job.settings?.plate_objects || [];
     const savedPlates=job.settings?.plates;
     let restored=Array.isArray(savedPlates)&&savedPlates.length
-      ?savedPlates.map(item=>({id:item.id,name:item.name,objects:item.objects||[]}))
+      ?savedPlates.map(item=>({id:item.id,name:item.name,objects:item.objects||[],...(item.prime_tower?{prime_tower:item.prime_tower}:{})}))
       :[{id:"plate-1",name:job.settings?.plate_label||"Plate 1",objects:savedObjects}];
     try {
       restored=await restorePaintedPlates(restored);
@@ -809,7 +814,9 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
               plate_objects:target.objects,plate_label:target.name.trim()||"Untitled plate",
               plates:compactPlates.map(plate=>({
                 id:plate.id,name:plate.name.trim()||"Untitled plate",objects:plate.objects,
+                ...(plate.prime_tower?{prime_tower:plate.prime_tower}:{}),
               })),
+              ...(target.prime_tower?{prime_tower:target.prime_tower}:{}),
               active_plate_id:target.id,workflow:"interactive",
               save_gcode_to_library:false,
               ...(flushSettings ? {flush_settings:flushSettings} : {}),
@@ -853,7 +860,9 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
             plate_label: plateLabel.trim() || "Plate 1",
             plates:compactPlates.map(plate=>({
               id:plate.id,name:plate.name.trim()||"Untitled plate",objects:plate.objects,
+              ...(plate.prime_tower?{prime_tower:plate.prime_tower}:{}),
             })),active_plate_id:activePlateId,
+            ...(primeTower?{prime_tower:primeTower}:{}),
             save_gcode_to_library: saveOutput, workflow,
             ...(offlineMultiMaterial ? {multi_material_test:true} : {}),
             ...(flushSettings ? { flush_settings: flushSettings } : {}),
@@ -1341,6 +1350,7 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
     {editorOpen ? <SlicerPrepareWorkspace
       plateLabel={plateLabel} onPlateLabelChange={setPlateLabel}
       plates={projectPlates} activePlateId={activePlateId}
+      primeTower={primeTower} onPrimeTowerChange={setPrimeTower}
       onChoosePlate={chooseProjectPlate} onAddPlate={addProjectPlate} onRemovePlate={removeProjectPlate}
        onMoveModelsToPlate={moveProjectModels}
       objects={plateObjects} onChange={setPlateObjects} files={stlFiles}
