@@ -14,6 +14,7 @@ export default function SlicerToolpath3D({
   renderMode = "solid", nozzleDiameter = 0.4,
   layerDisplay = "current", featureFocus = "all",
   previewSampled = false, fadePrevious = false, outerContrast = false,
+  toolbarActions = null,
 }) {
   const mount = useRef(null);
   const sceneRef = useRef(null);
@@ -396,8 +397,11 @@ export default function SlicerToolpath3D({
     </div> : <div className="slicerToolpath3DCanvas" ref={mount} role="img"
       aria-label="3D G-code toolpath preview. Drag to orbit, scroll to zoom and right-drag to pan." />}
     <div className="slicerToolpathViewBar" role="toolbar" aria-label="G-code preview camera and bed">
-      <button type="button" className="slicerMobileViewToggle" aria-expanded={mobileViewOpen}
-        onClick={() => setMobileViewOpen(value => !value)}>View options</button>
+      <div className="slicerUnifiedViewActions">
+        <button type="button" className="slicerMobileViewToggle" aria-expanded={mobileViewOpen}
+          onClick={() => setMobileViewOpen(value => !value)}>View options</button>
+        {toolbarActions}
+      </div>
       <div className={"slicerToolpathViewOptions" + (mobileViewOpen ? " mobileOpen" : "")}>
       <button type="button" onClick={() => setCameraView("iso")} title="Reset to isometric bed view">Isometric</button>
       <button type="button" onClick={() => setCameraView("top")} title="View build plate from above">Top</button>
