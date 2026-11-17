@@ -81,6 +81,7 @@ export default function SlicerPrepareWorkspace({
   const [, setHistoryVersion] = useState(0);
   const [selectedId, setSelectedId] = useState("");
   const [selectedIds, setSelectedIds] = useState([]);
+  const [selectionClearVersion, setSelectionClearVersion] = useState(0);
   const [expandedAssemblies, setExpandedAssemblies] = useState([]);
   const [movePlateTarget,setMovePlateTarget]=useState("");
   const [sliceMenuOpen,setSliceMenuOpen]=useState(false);
@@ -91,6 +92,9 @@ export default function SlicerPrepareWorkspace({
     setPaintError("");
     setSelectedId("");
     setSelectedIds([]);
+    // Clearing the selection state alone can leave Three.js helpers from the
+    // previous frame visible. Explicitly clear transient viewport decoration.
+    setSelectionClearVersion(version => version + 1);
   };
   const selectMultiple = (id, additive = false, partOnly = false) => {
     const item = objects.find(row => row.instance_id === id);
@@ -1917,7 +1921,7 @@ export default function SlicerPrepareWorkspace({
           onPlateLabelChange={onPlateLabelChange} canEdit={canEdit && !busy} toolMode={toolMode} selectedInstanceId={selectedId}
           autoOrientGoal={autoOrientGoal} autoOrientRequest={autoOrientRequest}
           splitRequest={splitRequest} solidRequest={solidRequest}
-          selectedInstanceIds={validSelection} onSelectModel={selectMultiple}
+          selectedInstanceIds={validSelection} selectionClearVersion={selectionClearVersion} onSelectModel={selectMultiple}
           onSelectedInstanceChange={selectSingle} measurementVisible={measurementVisible}
           measureMode={measureMode} measureUnit={measureUnit} measureSnapMode={measureSnapMode}
           measureClearVersion={measureClearVersion}
