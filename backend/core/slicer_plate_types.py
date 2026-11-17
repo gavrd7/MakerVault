@@ -107,10 +107,15 @@ def effective_orca_plate(plate_type, process, printer_profile=None):
         metadata = inspect_native_plates(printer_profile)
         if metadata["default"]:
             return metadata["default"]
-        raise ValueError(
-            "The imported printer's default build plate could not be identified. "
-            "Select a known plate explicitly instead of using the process fallback."
-        )
+        # Official machine presets must not silently inherit a stale process
+        # bed type when their machine-model lookup failed. Locally imported
+        # custom presets can explicitly declare a process bed type.
+        if str(getattr(printer_profile, "provenance", "")).startswith(
+                "OrcaSlicer/OrcaSlicer@"):
+            raise ValueError(
+                "The imported printer's default build plate could not be identified. "
+                "Select a known plate explicitly instead of using the process fallback."
+            )
     current = native_plate_key(process.get("curr_bed_type"))
     if current:
         return current
