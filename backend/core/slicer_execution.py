@@ -286,9 +286,6 @@ def _validate_plate_execution(job):
             raise SlicerExecutionError(
                 "Support painting test requires one single-filament model.")
         item = objects[0]
-        if (item.get("variable_layer_profile") or {}).get("bands"):
-            raise SlicerExecutionError(
-                "Combine support painting and variable layer ranges after independent native validation.")
         if item.get("process_overrides"):
             raise SlicerExecutionError(
                 "Support painting with per-object overrides is not verified.")
@@ -308,11 +305,6 @@ def _validate_plate_execution(job):
         if len(objects) != 1 or settings.get("multi_material_test"):
             raise SlicerExecutionError("Seam painting test requires one single-filament model.")
         item = objects[0]
-        if any((item.get(field) or {}).get("regions") for field in
-               ("support_paint", "fuzzy_skin_paint", "colour_paint")) or (
-               item.get("variable_layer_profile") or {}).get("bands"):
-            raise SlicerExecutionError(
-                "Combining seam painting with other painted features is not yet verified.")
         if item.get("process_overrides"):
             raise SlicerExecutionError("Seam painting with per-object overrides is not yet verified.")
         if (any(abs(float(value)) > 0.000001 for value in
@@ -333,11 +325,6 @@ def _validate_plate_execution(job):
             raise SlicerExecutionError(
                 "Selective fuzzy skin test requires one single-filament model.")
         item = objects[0]
-        if (any((item.get(field) or {}).get("regions") for field in
-                ("support_paint", "seam_paint", "colour_paint"))
-                or (item.get("variable_layer_profile") or {}).get("bands")):
-            raise SlicerExecutionError(
-                "Combining fuzzy skin painting with other painted features is not yet verified.")
         if item.get("process_overrides"):
             raise SlicerExecutionError(
                 "Fuzzy skin painting with per-object overrides is not verified.")
