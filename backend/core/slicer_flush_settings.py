@@ -76,6 +76,19 @@ def apply_orca_flush_settings(process_bytes, settings, *, routes, tool_count, to
         raise MaterialRoutingError("Invalid native process profile for flushing.") from exc
     if not isinstance(process, dict):
         raise MaterialRoutingError("Invalid native process profile.")
+    # A multiplier-only or native prime-tower toggle changes no individual
+    # tool-to-tool flush volume. Let Orca retain the original native profile
+    # matrix/default instead of inventing an all-pairs replacement.
+    if not approved["transitions"]:
+        if approved["multiplier"] is not None:
+            process["flush_multiplier"] = [str(approved["multiplier"])]
+        if approved["prime_tower"] != "native":
+            process["enable_prime_tower"] = (
+                "1" if approved["prime_tower"] == "enabled" else "0")
+        output = json.dumps(process, ensure_ascii=False, separators=(",", ":")).encode()
+        if len(output) > 1024 * 1024:
+            raise MaterialRoutingError("Native flushing settings exceed the profile size limit.")
+        return output
     native = process.get("flush_volumes_matrix")
     if native is None:
         matrix = [None] * (tool_count * tool_count)
