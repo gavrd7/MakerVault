@@ -14,7 +14,7 @@ const LABELS = {
   supertack:"SuperTack Plate",
 };
 
-function BedIllustration({type}){
+export function BedIllustration({type,small=false}){
   const colors = {
     default:["#334155","#94a3b8"],
     cool:["#517895","#cce7f2"],
@@ -27,7 +27,7 @@ function BedIllustration({type}){
   const [base,highlight]=colors[type]||colors.default;
   const texture=["textured_pei","textured_cool"].includes(type);
   const textureId="plate-"+type;
-  return <svg viewBox="0 0 104 70" width="76" height="51" aria-hidden="true" focusable="false">
+  return <svg viewBox="0 0 104 70" width={small?45:76} height={small?30:51} aria-hidden="true" focusable="false">
     <defs>
       <pattern id={textureId} width={texture?5:24} height={texture?5:24}
         patternUnits="userSpaceOnUse">
