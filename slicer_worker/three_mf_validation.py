@@ -118,9 +118,10 @@ def validate_worker_3mf(data, *, native_tool_count=None):
         count += len(triangles)
         for triangle in triangles:
             attributes = set(triangle.attrib)
-            paint_attrs = attributes & {"paint_supports", "paint_seam"}
+            paint_attrs = attributes & {"paint_supports", "paint_seam", "paint_fuzzy_skin"}
             if not {"v1", "v2", "v3"} <= attributes or (
-                    attributes - {"v1", "v2", "v3", "paint_supports", "paint_seam"}):
+                    attributes - {"v1", "v2", "v3", "paint_supports", "paint_seam",
+                                  "paint_fuzzy_skin"}):
                 raise WorkerError("Unsupported native 3MF triangle attributes.")
             if len(paint_attrs) > 1:
                 raise WorkerError("Combined native painting is not verified.")
@@ -131,8 +132,9 @@ def validate_worker_3mf(data, *, native_tool_count=None):
                 channel = next(iter(paint_attrs))
                 used_native_paint_channels.add(channel)
                 if len(used_native_paint_channels) > 1:
-                    raise WorkerError("Combining seam and support paint is not verified.")
-                if (triangle.attrib[channel] not in ("4", "8")
+                    raise WorkerError("Combining different native painting channels is not verified.")
+                expected_states = ("4",) if channel == "paint_fuzzy_skin" else ("4", "8")
+                if (triangle.attrib[channel] not in expected_states
                         or len(objects) != 1 or native_tool_count is not None
                         or layer_ranges is not None):
                     raise WorkerError("Unsupported native painted facet annotation.")
