@@ -255,10 +255,7 @@ export default function SlicerGcodePreview({ fileId = null, preview, bedSize = n
         This overview is incomplete because the toolpath exceeds the preview budget.
         Current layer only retrieves precise geometry; missing small details do not imply missing G-code.
       </p>}
-      {layerDisplay === "all" && !preview?.sampled && preview?.complete !== false && <p className="projectUploadHint">
-        Full-resolution overview: all indexed extrusion paths are displayed, including
-        fine support contacts. Switch to Current layer only to examine individual moves.
-      </p>}
+
       <fieldset className={"slicerResultVisibility" + (mobilePanel === "features" ? " mobileOpen" : "")}
         role={mobilePanel === "features" ? "dialog" : undefined}
         aria-modal={mobilePanel === "features" ? "true" : undefined}
@@ -274,23 +271,13 @@ export default function SlicerGcodePreview({ fileId = null, preview, bedSize = n
           {feature} ({preview.feature_counts[feature]?.toLocaleString() || 0})
         </label>)}
       </fieldset>
-      <p className="projectUploadHint">To compare fuzzy skin, enable Inspect outer walls (clean lines) and select the same Z layer in each slice. The inspection colour is visual only; painted regions are not independently identified by G-code feature labels.</p>
-      <p className="projectUploadHint">For detailed inspection, isolate the current layer or focus on support, wall or infill paths. Feature colours stay consistent across different G-code files in normal mode. Partial samples can still omit fine toolpaths.</p>
-      <p className="projectUploadHint">Travel, retract, wipe, speed, flow, per-tool colour mapping and other
-        native preview modes require a complete indexed toolpath. They are not represented by this extrusion-only sample.</p>
+
     </> : <p>No extrusion paths were available for the preview.</p>}
-    <small>Print time comes from the generated G-code and depends on the selected printer and native profiles; it is not a manually editable value. Times and material are slicer-declared estimates. Layer selection and horizontal steps operate on full-resolution extrusion moves when available. The earlier-layer overview remains sampled, and very large or unsupported G-code may be incomplete. This is not a complete
-      OrcaSlicer simulation or printer-safety check.</small>
-    <p className="slicerPreviewCoverage" role="status">
-      Overall index: {allSegments.length.toLocaleString()} of {(preview?.segment_count ?? allSegments.length).toLocaleString()} deposited moves
-      {preview?.sampled || preview?.complete === false ? " · partial toolpath index" : " · all indexed extrusion moves"}.
-      Solid preview draws bead-width geometry; it does not simulate the complete native slicer.
-    </p>
+
     {(preview?.unresolved_arc_moves || 0) > 0 && <p className="projectUploadHint" role="status">
       {preview.unresolved_arc_moves.toLocaleString()} unsupported curved extrusion move(s)
       could not be drawn faithfully. The original G-code has not been altered.
     </p>}
-    {preview?.sampled && <p className="projectUploadHint">The full-model overview is partial.
-      Selected-layer toolpaths are retrieved separately from the original stored file.</p>}
+
   </div>;
 }
