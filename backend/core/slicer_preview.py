@@ -10,7 +10,7 @@ import re
 from collections import Counter
 from .slicer_preview_arcs import arc_points
 
-ARC_PARAM = re.compile(r"([IJR])\\s*([-+]?(?:\\d+(?:\\.\\d*)?|\\.\\d+))", re.I)
+ARC_PARAM = re.compile(r"([IJR])\s*([-+]?(?:\d+(?:\.\d*)?|\.\d+))", re.I)
 MOVE = re.compile(r"([XYZEF])\s*([-+]?(?:\d+(?:\.\d*)?|\.\d+))", re.I)
 DURATION = re.compile(r"^;\s*(?:estimated printing time(?: \(normal mode\))?|"
                       r"total estimated time|print time|printing time)\s*[:=]\s*(.+)$", re.I)
