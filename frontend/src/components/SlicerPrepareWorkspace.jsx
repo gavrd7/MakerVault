@@ -905,7 +905,7 @@ export default function SlicerPrepareWorkspace({
     ? "To slice painted colours, assign a base filament to each model and a verified Orca 2.5.0 native profile to every used CFS/AMS slot."
     : "";
   const incompatibleEdits = usedNativeFeatures([{objects}]).filter(
-    key => !(key === "colour_paint" && paintedNativeReady) &&
+    key => key !== "colour_paint" &&
       !["verified","test_only"].includes(engineCapabilities[key]?.status));
   const nativeEditReason = incompatibleEdits.length
     ? "Native export not yet verified for " + incompatibleEdits.map(key=>FEATURE_NAMES[key]).join(", ") +
@@ -2085,7 +2085,7 @@ export default function SlicerPrepareWorkspace({
         </label>
         <div className="slicerSliceSplit">
           <button type="button" className="primary"
-            disabled={!activePlateReady || !profilesReady || !workerConfigured || conflictsBlockSlice || objectSettingsPending || (materialRoutingPending && !multiMaterialReadyForExport)}
+            disabled={!activePlateReady || !profilesReady || !workerConfigured || conflictsBlockSlice || objectSettingsPending || (hasPaintedColours && !paintedNativeReady) || (materialRoutingPending && !multiMaterialReadyForExport)}
             onClick={onSlice}>Slice</button>
           <button type="button" aria-label="More slicing options"
             aria-haspopup="menu" aria-expanded={sliceMenuOpen}
@@ -2093,7 +2093,7 @@ export default function SlicerPrepareWorkspace({
             onClick={()=>setSliceMenuOpen(value=>!value)}>▾</button>
           {sliceMenuOpen && <div className="slicerSliceMenu" role="menu">
             <button type="button" role="menuitem"
-              disabled={!activePlateReady || conflictsBlockSlice || objectSettingsPending || (materialRoutingPending && !multiMaterialReadyForExport)}
+              disabled={!activePlateReady || conflictsBlockSlice || objectSettingsPending || (hasPaintedColours && !paintedNativeReady) || (materialRoutingPending && !multiMaterialReadyForExport)}
               onClick={()=>{setSliceMenuOpen(false);onSlice?.();}}>Slice active plate</button>
             <button type="button" role="menuitem"
               disabled={!projectHasModels || objectSettingsPending || projectRoutingPending}
