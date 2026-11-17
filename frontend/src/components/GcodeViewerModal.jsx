@@ -189,7 +189,10 @@ export default function GcodeViewerModal({ file, canEdit = false, onClose, onSav
       {mode === "visual" && embedded && analysis.slicer_preview
         ? <SlicerGcodePreview fileId={file.id} preview={analysis.slicer_preview} bedSize={bedSize}
             file={file} canEdit={canEdit} onSaved={onSaved}
-            startTemperatures={analysis.print_setup?.temperatures_c} />
+            startTemperatures={analysis.print_setup?.temperatures_c}
+            filamentColours={Object.fromEntries((analysis.filaments?.requirements||[])
+              .filter(row=>/^#[0-9a-f]{6}$/i.test(row.color_hex||""))
+              .map((row,index)=>[row.tool_index??index,row.color_hex]))} />
         : mode === "visual" ? <div style={{ maxWidth: 600, margin: "12px auto" }}>
         {preview ? <svg viewBox="0 0 590 590" role="img" aria-label="Top-down XY toolpath preview; non-authoritative" style={{ width: "100%", background: "#101820", borderRadius: 10 }}>
           <polyline points={preview} fill="none" stroke="#b0a2ff" strokeWidth="1" vectorEffect="non-scaling-stroke" />
