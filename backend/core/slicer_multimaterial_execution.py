@@ -14,8 +14,8 @@ from .slicer_native_material_palette import (
 )
 
 
-def plan_native_multimaterial(job):
-    settings = job.settings or {}
+def plan_native_multimaterial(job, *, settings=None):
+    settings = (job.settings or {}) if settings is None else settings
     objects = settings.get("plate_objects") or []
     if job.engine != "orcaslicer" or not 1 <= len(objects) <= 12:
         raise MaterialRoutingError("Multi-colour test slicing requires an Orca model.")
@@ -60,7 +60,7 @@ def plan_native_multimaterial(job):
         for item in objects if isinstance(item.get("material_slot"), dict)
         and isinstance(item["material_slot"].get("slot_id"), str)
     }
-    preferred = primary_slots & assigned
+    preferred = primary_slots & (assigned | set(painted_slot_ids))
     if not preferred:
         raise MaterialRoutingError(
             "Assign your main native filament preset to at least one selected model."
@@ -72,8 +72,13 @@ def plan_native_multimaterial(job):
     )
     rows = [{"slot_id": slot_id, "tool_index": index}
             for slot_id, index in bindings.items()]
+    # The printer may have 4+ loaded filaments while a plate uses only two.
+    # Demand a profile for every used tool but do not confuse unrelated
+    # installed bay presets with slicer-native tools.
+    used_profile_rows = [row for row in profile_rows
+                         if isinstance(row, dict) and row.get("slot_id") in bindings]
     profile_ids = ordered_material_profile_ids(
-        rows, profile_rows, main_profile_id=job.filament_profile_id,
+        rows, used_profile_rows, main_profile_id=job.filament_profile_id,
     )
     profiles = SlicerProfile.objects.filter(
         owner_id=job.owner_id, pk__in=profile_ids, kind="filament",
