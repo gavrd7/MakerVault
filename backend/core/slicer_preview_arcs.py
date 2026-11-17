@@ -36,7 +36,7 @@ def arc_points(x, y, z, nx, ny, nz, clockwise, args, *, absolute_centres=False):
         if chord < EPSILON or chord > 2*rr + 1e-5:
             return None
         height = math.sqrt(max(0.0, rr*rr - (chord/2)**2))
-        side = 1 if clockwise else -1
+        side = -1 if clockwise else 1
         if radius < 0:
             side = -side
         cx = (x+nx)/2 + side*(-dy/chord)*height
