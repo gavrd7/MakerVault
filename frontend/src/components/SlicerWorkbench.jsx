@@ -8,6 +8,7 @@ import SlicerPlateEditor from "./SlicerPlateEditor";
 import SlicerPrepareWorkspace from "./SlicerPrepareWorkspace";
 import SlicerEngineChoices from "./SlicerEngineChoices";
 import SlicerBedTypePicker from "./SlicerBedTypePicker";
+import {ORCA_PLATE_TYPES,plateOptions} from "./slicerPlateOptions";
 import { engineCompatibilityIssues } from "./slicerEngineCompatibility";
 import { slicerSpoolHex, recolorUnmodifiedPlate } from "./slicerSpoolColour";
 import SlicerSpoolPicker from "./SlicerSpoolPicker";
@@ -60,24 +61,7 @@ const profileFilterValues = (items, key) =>
   [...new Set(items.map(item => profileFacets(item)[key]))]
     .sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
 
-const ORCA_PLATE_TYPES = [
-  ["default", "Native / profile default"],
-  ["cool", "Smooth Cool Plate"],
-  ["engineering", "Engineering Plate"],
-  ["high_temp", "Smooth High Temp Plate"],
-  ["textured_pei", "Textured PEI Plate"],
-  ["textured_cool", "Textured Cool Plate"],
-  ["supertack", "SuperTack Plate"],
-];
-const plateOptions = (engine, bedTypes) => {
-  if (engine !== "orcaslicer") return ORCA_PLATE_TYPES.slice(0, 1);
-  const available = Array.isArray(bedTypes?.supported) ? bedTypes.supported : null;
-  if (available && available.length)
-    return ORCA_PLATE_TYPES.filter(([key]) => available.includes(key));
-  // No confirmed imported native printer capabilities: do not advertise
-  // the full Orca plate catalogue as compatible with this printer.
-  return ORCA_PLATE_TYPES.slice(0, 1);
-};
+
 
 const initialForm = {
   engine: "orcaslicer", engine_version: "", input_asset_id: "", printer_id: "",
