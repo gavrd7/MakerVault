@@ -408,8 +408,13 @@ def _draft_plate_settings(user, input_asset, settings):
 
 
 def _draft(user, data):
-    if not isinstance(data, dict) or len(json.dumps(data)) > 131072:
-        raise ValueError("Slice configuration must be a small JSON object.")
+    # The HTTP boundary already limits compressed wire bytes and expanded JSON
+    # to MAX_SLICER_JSON_BYTES. Keep the same bound for internal callers, not
+    # the obsolete 128 KiB cap which rejected valid support-paint projects.
+    if not isinstance(data, dict):
+        raise ValueError("Slice configuration must be a JSON object.")
+    if len(json.dumps(data, ensure_ascii=False, separators=(",", ":")).encode("utf-8")) > MAX_SLICER_JSON_BYTES:
+        raise ValueError("Slice configuration exceeds the expanded 48 MiB safety limit.")
     allowed = {"engine", "engine_version", "input_asset_id", "printer_id", "spool_id", "printer_preset", "filament_preset", "process_preset", "nozzle_mm", "plate", "settings", "printer_profile_id", "filament_profile_id", "process_profile_id"}
     if set(data) - allowed:
         raise ValueError("Unknown slicing configuration fields.")
