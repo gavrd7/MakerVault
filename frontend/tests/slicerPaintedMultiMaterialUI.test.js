@@ -10,7 +10,7 @@ test("single painted model can resolve multiple explicit filament slots", () => 
   assert.match(workspace, /const paintedSlotRefs = objects\.flatMap/);
   assert.match(workspace, /\.palette\?\.\[region\.slot\]/);
   assert.match(workspace, /requiredMultiSlots\.length >= 2/);
-  assert.match(workspace, /slotFilamentProfiles\.some/);
+  assert.match(workspace, /const compatibleSlotProfile = slotId/);
   assert.match(workspace, /painted colour/i);
 });
 
