@@ -23,10 +23,10 @@ test("preview retrieves exact selected layer from stored original G-code", () =>
 
 test("progressive geometry uses exact layers and explicitly reports partial loads", () => {
   assert.match(preview, /gcode\/layers\/\?zs=/);
-  assert.match(preview, /Whole print · progressive full resolution/);
+  assert.match(preview, /Whole print · surface overview/);
   assert.match(preview, /slicerWholeModelProgress/);
   assert.match(preview, /wholeModel\.loadedLayers/);
-  assert.match(preview, /Whole-model geometry reached the device preview budget/);
+  assert.match(preview, /The overview could not cover all layers/);
   assert.match(preview, /const previous = wholeModel\.segments\.filter/);
   assert.match(preview, /framingSegments=/);
   assert.match(toolpath, /cameraSource = framingSegments\.length/);
@@ -38,7 +38,8 @@ test("progressive geometry uses exact layers and explicitly reports partial load
 
 test("progressive large prints append geometry and reuse already fetched layers", () => {
   assert.match(preview, /offset \+= 64/);
-  assert.match(preview, /fullLayerCache\.current\.set\(key,item\)/);
+  assert.match(preview, /overview=1&detail=/);
+  assert.doesNotMatch(preview, /fullLayerCache\.current\.set\(key,item\)/);
   assert.match(preview, /progressiveMode=\{progressiveMode\}/);
   assert.match(preview, /return wholeModel\.segments/);
   assert.match(toolpath, /canAppend/);
