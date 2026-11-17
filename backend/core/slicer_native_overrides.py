@@ -8,6 +8,8 @@ This is not multi-material painting or a CFS/AMS tool-to-slot assignment.
 import json
 import re
 
+from .slicer_plate_types import effective_orca_plate, validate_plate_temperature
+
 
 ORCA_PLATES = {
     "default": None,
@@ -21,7 +23,7 @@ ORCA_PLATES = {
 _HEX = re.compile(r"^#[0-9A-Fa-f]{6}$")
 
 
-def apply_orca_job_overrides(process_bytes, filament_bytes, plate_type, plate_objects):
+def apply_orca_job_overrides(process_bytes, filament_bytes, plate_type, plate_objects, printer_profile=None):
     """Return (process, filament) bytes with bounded job-specific native overrides.
 
     The worker still validates both native JSON documents. The selected bed
@@ -38,9 +40,11 @@ def apply_orca_job_overrides(process_bytes, filament_bytes, plate_type, plate_ob
     if not isinstance(process, dict) or not isinstance(filament, dict):
         raise ValueError("Native process and filament profiles must be objects.")
 
-    if ORCA_PLATES[plate_type] is not None:
-        process["curr_bed_type"] = ORCA_PLATES[plate_type]
-    # The original native process default is left intact when 'default' is chosen.
+    effective = effective_orca_plate(plate_type, process, printer_profile)
+    process["curr_bed_type"] = ORCA_PLATES[effective]
+    # The bed heater vector is a filament-native setting. Fail explicitly
+    # rather than borrow a cold/smooth plate's value for a textured sheet.
+    validate_plate_temperature(filament, effective)
     if plate_objects:
         colours = {item.get("color", "").upper() for item in plate_objects
                    if isinstance(item, dict)}
