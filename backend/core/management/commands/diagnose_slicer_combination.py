@@ -8,7 +8,6 @@ import hashlib
 import json
 import uuid
 
-from django.conf import settings
 from django.core.management.base import BaseCommand, CommandError
 
 from core.models import FileAsset, SliceJob
@@ -45,14 +44,15 @@ class Command(BaseCommand):
         parser.add_argument("--continue-on-failure", action="store_true",
                             help="Run later variants even after a failure.")
         parser.add_argument("--max-cases", type=int, default=len(CASES))
+        parser.add_argument("--acknowledge-offline-test", action="store_true",
+                            help="Explicitly allow isolated, non-printing worker probes.")
 
     def handle(self, *args, **options):
-        # This command intentionally cannot be used to bypass production
-        # admission or independently approve printer submission.
-        if not settings.DEBUG and not getattr(settings, "SLICER_STAGING_DIAGNOSTICS", False):
-            # Require an explicit staging opt-in if DEBUG is disabled.
-            # Staging users can set this in Django settings when appropriate.
-            raise CommandError("Offline diagnostics require staging opt-in.")
+        # This operator-only command never stores a job result, sends G-code
+        # to a printer or updates a draft. Require an explicit acknowledgment
+        # even on development systems.
+        if not options["acknowledge_offline_test"]:
+            raise CommandError("Pass --acknowledge-offline-test to run isolated slices.")
         job = SliceJob.objects.select_related(
             "owner", "printer", "input_asset", "printer_profile",
             "filament_profile", "process_profile",
@@ -61,7 +61,7 @@ class Command(BaseCommand):
             raise CommandError("Saved slicing job not found.")
         if job.engine != "orcaslicer" or job.engine_version != "2.5.0":
             raise CommandError("This diagnostic requires OrcaSlicer 2.5.0.")
-        if job.settings.get("multi_material_test") or job.settings.get("flush_settings"):
+        if (job.settings or {}).get("multi_material_test") or (job.settings or {}).get("flush_settings"):
             raise CommandError("Multi-material and flushing jobs are not supported.")
         if not 1 <= options["max_cases"] <= len(CASES):
             raise CommandError("--max-cases must be between 1 and %s." % len(CASES))
@@ -71,7 +71,7 @@ class Command(BaseCommand):
             if len(models) != 1:
                 raise CommandError("Select a saved draft with exactly one plate model.")
             original = models[0]
-            if original.get("colour_paint", {}).get("regions"):
+            if isinstance(original.get("colour_paint"), dict) and (original["colour_paint"].get("regions") or original["colour_paint"].get("faces")):
                 raise CommandError("Colour-painted drafts are not supported by this probe.")
             source = FileAsset.objects.filter(
                 pk=original["asset_id"], owner_id=job.owner_id,
