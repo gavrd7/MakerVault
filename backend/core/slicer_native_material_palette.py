@@ -41,7 +41,7 @@ def resolve_native_material_palette(
     physical bay positions or colours, determine model-to-tool assignments.
 
     All selected native profiles must be owner-scoped, engine/version-matched,
-    and already verified. The resolved byte blobs are never persisted here.
+    and structurally valid. Manual approval is not required. The resolved byte blobs are never persisted here.
     No assumption is made that the worker accepts more than one filament.
     """
     if engine != "orcaslicer":
@@ -64,7 +64,7 @@ def resolve_native_material_palette(
     if any(tool >= len(native_filament_profiles) for tool in painted_tools):
         raise MaterialRoutingError("A painted region selects a tool without a native filament preset.")
     if set(tool_bindings.values()) != set(range(len(native_filament_profiles))):
-        raise MaterialRoutingError("Every native tool must map to one verified filament preset.")
+        raise MaterialRoutingError("Every native tool must map to a compatible filament preset.")
 
     resolved = []
     diameters = []
@@ -74,8 +74,8 @@ def resolve_native_material_palette(
                 or getattr(profile, "engine", None) != engine
                 or getattr(profile, "engine_version", None) != engine_version
                 or getattr(profile, "kind", None) != "filament"
-                or getattr(profile, "status", None) != "verified"):
-            raise MaterialRoutingError("A native filament preset is unverified or incompatible.")
+                or getattr(profile, "status", None) not in {"candidate", "verified"}):
+            raise MaterialRoutingError("A native filament preset is incompatible or missing.")
         try:
             raw = resolver(profile)
             obj = json.loads(raw)
