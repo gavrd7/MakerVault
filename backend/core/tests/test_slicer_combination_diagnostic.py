@@ -4,6 +4,7 @@ from django.test import SimpleTestCase
 
 from core.management.commands.diagnose_slicer_combination import (
     CASES, FEATURES, selected_variant, range_probe_variants,
+    layer_thickness_probe_variants,
 )
 
 
@@ -62,3 +63,17 @@ class OfflineCombinedPaintDiagnosticTests(SimpleTestCase):
         self.assertEqual(range_probe_variants({"variable_layer_profile":
             {"bands": [{"from_mm": 1, "to_mm": 3, "layer_mm": .12},
                        {"from_mm": 4, "to_mm": 6, "layer_mm": .12}]}}), ())
+
+    def test_layer_height_probes_do_not_change_saved_draft(self):
+        saved = {"variable_layer_profile": {"version": 1, "bands": [
+            {"from_mm": 36.5, "to_mm": 46.5, "layer_mm": 0.12}]}}
+        original = copy.deepcopy(saved)
+        variants = layer_thickness_probe_variants(saved)
+        self.assertEqual([name for name, _ in variants],
+                         ["layer-height-0.16mm", "layer-height-0.20mm",
+                          "layer-height-0.24mm"])
+        self.assertEqual([bands[0]["layer_mm"] for _, bands in variants],
+                         [0.16, 0.20, 0.24])
+        for _, bands in variants:
+            self.assertEqual((bands[0]["from_mm"], bands[0]["to_mm"]), (36.5, 46.5))
+        self.assertEqual(saved, original)
