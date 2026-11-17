@@ -171,6 +171,21 @@ class WorkerHttpConnectionLimitTests(TestCase):
             self.assertEqual(closed, ["overflow"])
 
 class NativeValidationReasonContractTests(TestCase):
+    def test_static_native_validator_rejections_are_safely_categorised(self):
+        # When a worker rejects a structurally invalid 3MF, its exact static
+        # refusal must be mapped to a bounded client-visible reason, not the
+        # unhelpful catch-all validation-error.
+        import re
+        from pathlib import Path
+        root = Path(__file__).resolve().parents[1]
+        validator = root.joinpath("three_mf_validation.py").read_text()
+        service = root.joinpath("service.py").read_text()
+        literals = set(re.findall(r'raise WorkerError\\(\\s*["\\\']([^"\\\']+)', validator))
+        self.assertTrue(literals)
+        for message in sorted(literals):
+            with self.subTest(message=message):
+                self.assertIn('"' + message + '":', service)
+
     def test_all_native_multicolour_reasons_have_safe_client_explanations(self):
         # Keep worker refusal categories and backend-readable explanations in
         # lockstep, never forwarding arbitrary profile or 3MF strings.
