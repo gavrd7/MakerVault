@@ -19,8 +19,12 @@ class OfflineCombinedPaintDiagnosticTests(SimpleTestCase):
         }
         saved = copy.deepcopy(original)
         expected = (
-            set(), {"fuzzy_skin_paint"},
+            set(),
+            {"variable_layer_profile"},
+            {"fuzzy_skin_paint"},
+            {"fuzzy_skin_paint", "variable_layer_profile"},
             {"fuzzy_skin_paint", "seam_paint"},
+            {"fuzzy_skin_paint", "seam_paint", "variable_layer_profile"},
             {"fuzzy_skin_paint", "seam_paint", "support_paint"},
             set(FEATURES),
         )
