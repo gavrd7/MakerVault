@@ -146,6 +146,7 @@ export default function SlicerGcodePreview({ fileId = null, preview, bedSize = n
             <option value="all">All extrusion types</option>
             <option value="support" disabled={!hasFeatureFocus(features, "support")}>Support + interface</option>
             <option value="walls" disabled={!hasFeatureFocus(features, "walls")}>Walls / perimeters</option>
+            <option value="shell" disabled={!hasFeatureFocus(features, "shell")}>Shell detail · hide internal infill</option>
             <option value="infill" disabled={!hasFeatureFocus(features, "infill")}>Infill / solid / bridge</option>
           </select>
         </label>
