@@ -87,8 +87,8 @@ export default function SlicerGcodePreview({ fileId = null, preview, bedSize = n
       let limited = false;
       let pendingLayers = 0;
       try {
-        for (let offset = 0; offset < layers.length && !cancelled; offset += 32) {
-          const requested = layers.slice(offset, offset + 32);
+        for (let offset = 0; offset < layers.length && !cancelled; offset += 64) {
+          const requested = layers.slice(offset, offset + 64);
           const url = "/api/files/" + encodeURIComponent(fileId) +
             "/gcode/layers/?zs=" + encodeURIComponent(requested.join(","));
           const response = await fetch(url, {credentials:"same-origin",signal:controller.signal});
@@ -115,7 +115,7 @@ export default function SlicerGcodePreview({ fileId = null, preview, bedSize = n
           if (cancelled) return;
           // Publish in coherent chunks, not after every layer. Retain all
           // previously loaded moves as exact contiguous geometry.
-          if (pendingLayers >= 32 || completed === layers.length || limited) {
+          if (pendingLayers >= 64 || completed === layers.length || limited) {
             setWholeModel({segments:accumulated.slice(),loadedLayers:completed,
               complete:completed===layers.length&&!limited,limited,
               loading:!limited&&completed<layers.length,message:""});
@@ -146,7 +146,12 @@ export default function SlicerGcodePreview({ fileId = null, preview, bedSize = n
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [fileId, sourceLayerHeights]);
 
-  const currentLayer = Math.min(layer ?? Math.max(0, layers.length - 1), Math.max(0, layers.length - 1));
+  // Grow the print from its actual loaded height. Otherwise a fully rendered
+  // final-layer island floats above still-loading lower geometry.
+  const naturalLayer = wholeModel.loading
+    ? Math.max(0, wholeModel.loadedLayers - 1)
+    : Math.max(0, layers.length - 1);
+  const currentLayer = Math.min(layer ?? naturalLayer, Math.max(0, layers.length - 1));
   const z = layers[currentLayer];
 
   const features = Object.keys(preview?.feature_counts || {});
