@@ -318,7 +318,8 @@ def _validate_plate_execution(job):
     if any(isinstance(item, dict) and isinstance(item.get("fuzzy_skin_paint"), dict)
            and item["fuzzy_skin_paint"].get("regions") for item in objects):
         # Orca 2.5 saves painted fuzzy regions in paint_fuzzy_skin and uses
-        # fuzzy_skin=disabled_fuzzy ("Painted only") to activate them.
+        # fuzzy_skin=none ("Painted only") to activate them. The distinct
+        # disabled_fuzzy value turns the effect off entirely.
         if job.engine != "orcaslicer" or job.engine_version != "2.5.0":
             raise SlicerExecutionError(
                 "Native fuzzy skin painting test requires OrcaSlicer 2.5.0.")
