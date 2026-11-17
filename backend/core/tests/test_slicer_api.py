@@ -105,6 +105,23 @@ class SliceJobApiTests(TestCase):
         })
         self.assertNotIn("multi_material_test", result)
 
+    def test_saved_draft_list_skips_repeated_full_slicing_preflight(self):
+        from unittest.mock import patch
+        self.client.force_login(self.owner)
+        for _ in range(3):
+            created = self.post()
+            self.assertEqual(created.status_code, 201, created.content)
+        # Detailed start and single-job requests still validate fully. The
+        # repeated list/poll endpoint must not expand every paint asset or
+        # resolve every native parent profile on each refresh.
+        with patch("core.slicer_api.verified_installation",
+                   return_value={"prusaslicer": {"enabled": True}}), \
+             patch("core.slicer_api.validate_scheduling",
+                   side_effect=AssertionError("full preflight during list")):
+            response = self.client.get(self.url)
+        self.assertEqual(response.status_code, 200, response.content)
+        self.assertGreaterEqual(len(response.json()["jobs"]), 3)
+
     def test_multi_plate_draft_preserves_empty_and_populated_plates(self):
         from core.slicer_api import _draft_plate_settings
 
