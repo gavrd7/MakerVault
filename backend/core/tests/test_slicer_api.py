@@ -124,6 +124,27 @@ class SliceJobApiTests(TestCase):
             _draft_plate_settings(self.owner, self.input_asset,
                                   {**base, "prime_tower": {"x": 80, "y": 180}})
 
+    def test_project_name_is_saved_and_validated(self):
+        from core.slicer_api import _draft_plate_settings
+        model = {
+            "instance_id": str(uuid.uuid4()),
+            "asset_id": str(self.input_asset.pk),
+            "x_mm": 0, "y_mm": 0, "rotation_deg": 0,
+            "scale_percent": 100, "color": "#abcdef",
+        }
+        settings = {
+            "plate_objects": [model], "plate_label": "Plate 1",
+            "project_name": "  Two-colour Benchy  ",
+            "plates": [{"id": "plate-1", "name": "Plate 1", "objects": [model]}],
+            "active_plate_id": "plate-1",
+        }
+        saved = _draft_plate_settings(self.owner, self.input_asset, settings)
+        self.assertEqual(saved["project_name"], "Two-colour Benchy")
+        for invalid in ("", " ", "x" * 81, "Bad\\nName", 123):
+            with self.subTest(invalid=invalid), self.assertRaises(ValueError):
+                _draft_plate_settings(self.owner, self.input_asset,
+                                      {**settings, "project_name": invalid})
+
     def test_multi_material_mode_is_not_enabled_by_default(self):
         from core.slicer_api import _draft_plate_settings
         model = {
