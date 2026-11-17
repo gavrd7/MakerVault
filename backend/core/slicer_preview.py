@@ -58,7 +58,7 @@ def generated_preview(text, *, truncated=False):
              "layer_count": None, "layers": [], "segments": [],
              "segment_count": 0, "sampled": False, "complete": not truncated,
              "unresolved_arc_moves": 0,
-             "feature_counts": {}}
+             "feature_counts": {}, "observed_tools": []}
     absolute_xyz = True
     absolute_e = True
     absolute_centres = False
@@ -69,6 +69,8 @@ def generated_preview(text, *, truncated=False):
     stride = 1
     heights = set()
     counts = Counter()
+    tool = None
+    observed_tools = set()
     for raw in text.splitlines():
         if len(raw) > 4096:
             continue
@@ -94,6 +96,12 @@ def generated_preview(text, *, truncated=False):
             continue
         line = line.split(";", 1)[0].strip().upper()
         command = line.split(None, 1)[0] if line else ""
+        if len(command) in (2, 3) and command.startswith("T") and command[1:].isdigit():
+            candidate = int(command[1:])
+            if command == "T" + str(candidate) and candidate < 16 and line == command:
+                tool = candidate
+                observed_tools.add(tool)
+                continue
         if command in {"G90", "G91"}:
             absolute_xyz = command == "G90"
         elif command in {"M82", "M83"}:
@@ -143,7 +151,7 @@ def generated_preview(text, *, truncated=False):
                     if total % stride == 0:
                         segments.append([round(px,3),round(py,3),
                                          round(ax,3),round(ay,3),
-                                         round(az,3),feature,width])
+                                         round(az,3),feature,width,tool])
                     if len(segments) > MAX_SEGMENTS:
                         stride *= 2
                         segments = segments[::2]
@@ -155,6 +163,7 @@ def generated_preview(text, *, truncated=False):
     # is reported only when declared in G-code, never invented server-side.
     stats["segment_count"] = sum(counts.values())
     stats["feature_counts"] = dict(counts.most_common(12))
+    stats["observed_tools"] = sorted(observed_tools)
     stats["layers"] = sorted(heights)
     if len(heights) < MAX_LAYERS and not truncated:
         stats["layer_count"] = len(heights)
