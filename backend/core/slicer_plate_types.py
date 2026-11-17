@@ -31,6 +31,8 @@ ORCA_BED_ENUM = {
 
 
 def native_plate_key(value):
+    if type(value) is int:
+        value = str(value)
     if not isinstance(value, str):
         return None
     key = value.strip().casefold()
