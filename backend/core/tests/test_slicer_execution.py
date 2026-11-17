@@ -255,7 +255,7 @@ class IntendedMaterialSafetyTests(SimpleTestCase):
                     }},
                     engine="orcaslicer",
                 )
-                with self.assertRaisesRegex(SlicerExecutionError, "flushing/prime-tower"):
+                with self.assertRaisesRegex(SlicerExecutionError, "Custom flushing"):
                     _validate_plate_execution(job)
 
 
@@ -578,19 +578,29 @@ class MultiMaterialTestAdmissionTests(SimpleTestCase):
     @patch("core.slicer_execution.plan_native_multimaterial")
     def test_native_multicolour_test_is_admitted_without_enabling_print(self, plan, bed):
         self.assertTrue(_validate_plate_execution(self.job))
-        plan.assert_called_once_with(self.job)
+        plan.assert_called_once_with(self.job, settings=self.job.settings)
         bed.assert_called_once_with(self.job.printer_profile)
 
     @patch("core.slicer_execution.trusted_plate_dimensions", return_value=(260, 260))
     @patch("core.slicer_execution.plan_native_multimaterial")
-    def test_painting_and_flush_override_still_fail_closed(self, plan, bed):
+    def test_multicolour_paint_and_flush_reach_verified_offline_preflight(self, plan, bed):
         self.job.settings["plate_objects"][0]["colour_paint"] = {
             "version": 2, "regions": [{"slot": 1, "patches": []}],
         }
-        with self.assertRaisesRegex(SlicerExecutionError, "painted colour regions"):
-            _validate_plate_execution(self.job)
-        self.job.settings["plate_objects"][0].pop("colour_paint")
-        self.job.settings["flush_settings"] = {"some": "custom"}
-        with self.assertRaisesRegex(SlicerExecutionError, "flushing"):
+        self.job.settings["flush_settings"] = {
+            "multiplier": 1.2, "prime_tower": "native", "transitions": [],
+        }
+        self.assertTrue(_validate_plate_execution(self.job))
+        plan.assert_called_once_with(self.job, settings=self.job.settings)
+        bed.assert_called_once_with(self.job.printer_profile)
+
+    @patch("core.slicer_execution.trusted_plate_dimensions", return_value=(260, 260))
+    @patch("core.slicer_execution.plan_native_multimaterial")
+    def test_flush_requires_explicit_multi_material_test_route(self, plan, bed):
+        self.job.settings["multi_material_test"] = False
+        self.job.settings["flush_settings"] = {
+            "multiplier": 1.2, "prime_tower": "native", "transitions": [],
+        }
+        with self.assertRaisesRegex(SlicerExecutionError, "Custom flushing"):
             _validate_plate_execution(self.job)
         plan.assert_not_called()
