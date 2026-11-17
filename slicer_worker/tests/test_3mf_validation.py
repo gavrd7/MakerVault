@@ -154,6 +154,40 @@ class Core3MFWorkerTests(TestCase):
         with self.assertRaises(WorkerError):
             validate_worker_3mf(with_seam("4", "paint_fuzzy_skin"), native_tool_count=2)
 
+    def test_combined_native_paint_and_variable_layers_are_accepted(self):
+        base = self.with_variable_layer_range(
+            '<objects><object id="1"><range min_z="1" max_z="4">'
+            '<option opt_key="layer_height">0.12</option>'
+            '</range></object></objects>')
+        with zipfile.ZipFile(io.BytesIO(base)) as package:
+            parts = {entry: package.read(entry) for entry in package.namelist()}
+        original = b'<triangle v1="0" v2="1" v3="2"/>'
+        def repack(attributes):
+            payloads = dict(parts)
+            payloads["3D/3dmodel.model"] = payloads["3D/3dmodel.model"].replace(
+                original, b'<triangle v1="0" v2="1" v3="2" ' + attributes + b'/>')
+            output = io.BytesIO()
+            with zipfile.ZipFile(output, "w", compression=zipfile.ZIP_DEFLATED) as package:
+                for path, payload in payloads.items():
+                    package.writestr(path, payload)
+            return output.getvalue()
+
+        combined = (b'paint_supports="4" paint_seam="8" '
+                    b'paint_fuzzy_skin="4"')
+        self.assertTrue(validate_worker_3mf(repack(combined)))
+        self.assertTrue(validate_worker_3mf(repack(
+            b'paint_supports="4" paint_fuzzy_skin="4"')))
+        for invalid in (
+            b'paint_supports="40" paint_seam="8" paint_fuzzy_skin="4"',
+            b'paint_supports="4" paint_seam="0" paint_fuzzy_skin="4"',
+            b'paint_supports="4" paint_seam="8" paint_fuzzy_skin="8"',
+            b'paint_supports="4" paint_seam="8" machine_start_gcode="M104"',
+        ):
+            with self.subTest(invalid=invalid), self.assertRaises(WorkerError):
+                validate_worker_3mf(repack(invalid))
+        with self.assertRaises(WorkerError):
+            validate_worker_3mf(repack(combined), native_tool_count=2)
+
     def test_safe_per_object_metadata_passes_worker_validation(self):
         self.assertTrue(validate_worker_3mf(self.with_object_metadata([
             ("wall_loops", "5"), ("sparse_infill_density", "37%"),
