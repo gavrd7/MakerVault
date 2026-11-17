@@ -3,11 +3,13 @@ import { apiFetch } from "../api";
 import { Modal } from "./Common";
 import PrinterStartGcodeModal from "./PrinterStartGcodeModal";
 import SlicerGcodePreview from "./SlicerGcodePreview";
+import "./slicerPreviewMobile.css";
 import GcodeFullSource from "./GcodeFullSource";
 
 // Read-only analysis is evidence, not proof of safe G-code or firmware compatibility.
 export default function GcodeViewerModal({ file, canEdit = false, onClose, onSaved, onOpenModel, embedded = false, bedSize = null, objectSettings = null, globalProcessOverrides = null }) {
   const [report, setReport] = useState(null);
+  const [mobileDetails, setMobileDetails] = useState(false);
   const [text, setText] = useState("");
   const [mode, setMode] = useState("visual");
   const [fullSource, setFullSource] = useState(false);
@@ -95,15 +97,34 @@ export default function GcodeViewerModal({ file, canEdit = false, onClose, onSav
     onClose={() => setTransfer(null)}
   />;
 
-  const content = <>
+  const compact = embedded && !!analysis.slicer_preview;
+  const content = <div className={compact ? "slicerGcodeCompactLayout" : undefined}>
     {embedded && <h3>G-code preview · {file.name}</h3>}
     {error && <div className="formError">{error}</div>}
     {loading ? <p>Inspecting G-code…</p> : report && <>
-      <div className="formActions" style={{ justifyContent: "flex-start" }}>
+      {compact && <div className="slicerMobileNav" role="toolbar" aria-label="G-code preview sections">
+        <button type="button" className={mode === "visual" ? "primary" : ""} onClick={() => setMode("visual")}>Preview</button>
+        <button type="button" aria-expanded={mobileDetails} onClick={() => setMobileDetails(true)}>Details</button>
+        <button type="button" className={mode === "code" ? "primary" : ""} onClick={() => setMode("code")}>G-code</button>
+      </div>}
+      {compact && <div className="slicerGcodeMobileSummary" role="status">
+        <span>{analysis.printer_hints?.join(", ") || "Printer unknown"}</span>
+        <span>Nozzle {analysis.print_setup?.temperatures_c?.nozzle_c != null ? analysis.print_setup.temperatures_c.nozzle_c + " °C" : "—"}</span>
+        <span>Bed {analysis.print_setup?.temperatures_c?.bed_c != null ? analysis.print_setup.temperatures_c.bed_c + " °C" : "—"}</span>
+      </div>}
+      <div className={"formActions" + (compact ? " slicerGcodeDesktopActions" : "")} style={{ justifyContent: "flex-start" }}>
         <button type="button" className={mode === "visual" ? "primary" : ""} onClick={() => setMode("visual")}>Visual toolpath</button>
         <button type="button" className={mode === "code" ? "primary" : ""} onClick={() => setMode("code")}>G-code text</button>
         <a className="assetButton" href={`/api/files/${encodeURIComponent(file.id)}/gcode/source/?download=1`}>Download complete G-code</a>
       </div>
+      {compact && mobileDetails && <div className="slicerMobileBackdrop" onClick={() => setMobileDetails(false)} aria-hidden="true" />}
+      <div className={"slicerGcodeMetadata" + (compact && mobileDetails ? " mobileOpen" : "")}
+        role={compact && mobileDetails ? "dialog" : undefined}
+        aria-modal={compact && mobileDetails ? "true" : undefined}
+        aria-label={compact && mobileDetails ? "G-code job details" : undefined}>
+        {compact && <div className="slicerMobilePanelHeader"><strong>G-code details</strong>
+          <button type="button" onClick={() => setMobileDetails(false)}>Close</button>
+        </div>}
       <p><strong>Linked model:</strong> {report.linked_models?.length
         ? report.linked_models.map(link => <button key={link.revision_id} type="button" onClick={() => onOpenModel?.(link.model_id)} disabled={!onOpenModel}>{link.model_name} · revision {link.revision}</button>)
         : "Not linked — attach this file to a model revision in Model Library."}</p>
@@ -143,6 +164,7 @@ export default function GcodeViewerModal({ file, canEdit = false, onClose, onSav
         </div>
       </div>}
       {(analysis.warnings || []).map((warning, i) => <div className="projectUploadHint" key={i}>{warning}</div>)}
+      </div>
       {mode === "visual" && embedded && analysis.slicer_preview
         ? <SlicerGcodePreview fileId={file.id} preview={analysis.slicer_preview} bedSize={bedSize}
             file={file} canEdit={canEdit} onSaved={onSaved}
@@ -175,7 +197,7 @@ export default function GcodeViewerModal({ file, canEdit = false, onClose, onSav
       </div>}
     </>}
     {!embedded && <div className="formActions"><button type="button" onClick={onClose}>Close</button></div>}
-  </>;
+  </div>;
   return embedded ? content : <Modal title={`G-code · ${file.name}`}
     subtitle="Read-only analysis. A matching printer must be verified separately before uploading or printing."
     onClose={onClose} wide className={mode === "visual" && analysis.slicer_preview ? "slicerPreviewModal" : ""}>{content}</Modal>;
