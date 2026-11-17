@@ -14,7 +14,7 @@ from .slicer_preview_arcs import arc_points
 MAX_LAYER_SOURCE_BYTES = 32 * 1024 * 1024
 MAX_LAYER_SEGMENTS = 75000
 MAX_BATCH_SEGMENTS = 180000
-MAX_BATCH_LAYERS = 12
+MAX_BATCH_LAYERS = 32
 
 
 def layer_batch_toolpaths(text, target_zs):
@@ -25,7 +25,7 @@ def layer_batch_toolpaths(text, target_zs):
     clearly flagged incomplete layer instead of a visually misleading fill.
     """
     if not isinstance(target_zs, (list, tuple)) or not 1 <= len(target_zs) <= MAX_BATCH_LAYERS:
-        raise ValueError("Choose between 1 and 12 layers.")
+        raise ValueError("Choose between 1 and 32 layers.")
     targets = []
     for value in target_zs:
         height = float(value)
