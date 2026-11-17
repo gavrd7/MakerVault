@@ -800,18 +800,20 @@ test("slicer engine status differentiates deployment and worker verification", (
 });
 
 
-test("offline multi-material export preserves physical mapping without enabling direct prints", () => {
+test("project actions export a named complete 3MF rather than an offline material test", () => {
   const workbench = read("SlicerWorkbench.jsx");
   const prepare = read("SlicerPrepareWorkspace.jsx");
-  assert.match(workbench, /onExportNativeMaterials=\{\(\) => saveDraft\("native-material"\)\}/);
-  assert.match(workbench, /mode==="native-material"\?"\/export-native-materials\/"\:"\/export-project\/"/);
+  assert.match(workbench, /openProjectNameDialog\("project"\)/);
+  assert.match(workbench, /onExportProject/);
+  assert.match(workbench, /projectFilename\(namedProject\|\|projectName\)/);
+  assert.match(workbench, /projectFileRef\.current\?\.click\(\)/);
+  assert.match(workbench, /project_name:namedProject/);
+  assert.match(prepare, /Export Project \(\.3mf\)/);
+  assert.doesNotMatch(prepare, /Export multi-material 3MF \(offline\)/);
+  assert.doesNotMatch(prepare, /slicerProjectImportButton/);
   assert.doesNotMatch(workbench, /material_tool_bindings:materialToolBindings/);
   assert.doesNotMatch(workbench, /material_topology:materialTopology/);
-  assert.match(prepare, /Export multi-material 3MF \(offline\)/);
-  assert.match(prepare, /multiMaterialReadyForExport/);
-  assert.match(prepare, /slotFilamentProfiles\.length >= 2/);
 });
-
 
 test("explicit multicolour test slices use the isolated worker and do not activate printer upload", () => {
   const workbench = read("SlicerWorkbench.jsx");
