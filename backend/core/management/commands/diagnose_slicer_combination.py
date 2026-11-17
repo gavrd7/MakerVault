@@ -107,6 +107,8 @@ class Command(BaseCommand):
         parser.add_argument("--continue-on-failure", action="store_true",
                             help="Run later variants even after a failure.")
         parser.add_argument("--max-cases", type=int, default=len(CASES))
+        parser.add_argument("--probe-support-mode", action="store_true",
+                            help="Probe custom layering with supports off and normal/manual supports.")
         parser.add_argument("--probe-layer-heights", action="store_true",
                             help="Compare 0.16, 0.20 and 0.24mm native ranges.")
         parser.add_argument("--probe-layer-ranges", action="store_true",
@@ -178,7 +180,8 @@ class Command(BaseCommand):
         for source, preset, keys in (
             ("process", effective_process, ("layer_height", "initial_layer_print_height",
                 "line_width", "outer_wall_line_width", "inner_wall_line_width",
-                "top_surface_line_width")),
+                "top_surface_line_width", "enable_support", "support_type",
+                "support_style", "independent_support_layer_height")),
             ("printer", effective_printer, ("min_layer_height", "max_layer_height",
                 "nozzle_diameter")),
         ):
@@ -209,7 +212,17 @@ class Command(BaseCommand):
                 updated = selected_variant(original, ("variable_layer_profile",))
                 updated["variable_layer_profile"] = {"version": 1, "bands": bands}
                 variants.append((label, updated, ("variable_layer_profile",)))
-        for label, item, fields in variants:
+        if options["probe_support_mode"] and "variable_layer_profile" in available:
+            base = selected_variant(original, ("variable_layer_profile",))
+            variants.extend((
+                ("variable-supports-off", base, ("variable_layer_profile",), "off"),
+                ("variable-normal-manual", base, ("variable_layer_profile",), "normal"),
+                ("all-four-normal-manual", selected_variant(original, FEATURES),
+                 FEATURES, "normal"),
+            ))
+        for variant in variants:
+            label, item, fields = variant[:3]
+            support_probe = variant[3] if len(variant) > 3 else None
             try:
                 model = build_plate_3mf([(item, raw)], bed_width=width, bed_depth=depth)
                 process, filament = apply_orca_job_overrides(
@@ -217,6 +230,18 @@ class Command(BaseCommand):
                     [item], printer_profile=job.printer_profile)
                 process = apply_process_overrides(
                     process, saved.get("process_overrides") or {})
+                if support_probe:
+                    # Temporary isolated config ONLY: do not alter user presets
+                    # or original paint annotations. Native support validity
+                    # is still enforced by the actual Orca CLI.
+                    process_data = json.loads(process)
+                    if support_probe == "off":
+                        process_data["enable_support"] = "0"
+                    elif support_probe == "normal":
+                        process_data["enable_support"] = "1"
+                        process_data["support_type"] = "normal(manual)"
+                        process_data["support_style"] = "default"
+                    process = json.dumps(process_data, separators=(",", ":")).encode()
                 fuzzy_mode = str(json.loads(process).get("fuzzy_skin", "<missing>"))
                 # Use new temporary request IDs. The worker never stores these
                 # as persistent MakerVault jobs or returns G-code to a printer.
