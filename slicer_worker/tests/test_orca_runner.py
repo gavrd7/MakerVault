@@ -6,7 +6,7 @@ from tempfile import TemporaryDirectory
 from unittest import TestCase
 from unittest.mock import patch
 
-from slicer_worker.orca_runner import orca_command, run_orca, _safe_out_of_range_options
+from slicer_worker.orca_runner import orca_command, run_orca, _safe_out_of_range_options, _engine_exit_reason
 from slicer_worker.runner import WorkerError
 
 
@@ -321,3 +321,10 @@ class OrcaRunnerTests(TestCase):
                 run_orca(self.binary, self.root)
         self.assertEqual(str(error.exception), "OrcaSlicer CLI exited: engine-exited.")
         self.assertNotIn("not-for-logs", str(error.exception))
+
+    def test_exit_205_diagnostic_patterns(self):
+        self.assertEqual(_engine_exit_reason(
+            b"got error when validate: Too small line width"),
+            "native-line-width-invalid")
+        self.assertEqual(_engine_exit_reason(b"unrecognised print failure"),
+                         "engine-exited")
