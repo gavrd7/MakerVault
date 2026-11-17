@@ -131,7 +131,8 @@ def expand_painted_item(owner, item):
         raise ValueError("A paint asset reference cannot also contain inline painting.")
     # Expanded working copies contain inline masks only. Keeping the ID too
     # would make subsequent validation think the client submitted both forms.
-    { "paint_asset_id": reference, **plain } = item
+    reference = item["paint_asset_id"]
+    plain = {key: value for key, value in item.items() if key != "paint_asset_id"}
     return {**plain, **load_paint(owner, reference, item.get("asset_id"))}
 
 
