@@ -631,8 +631,8 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
   }, [running]);
 
   async function deleteSavedDraft(job) {
-    if (!["draft", "failed", "cancelled", "stale"].includes(job.status) || !mayDeleteDraft || busy) return;
-    const label = job.status === "draft" ? "saved slicing draft" : "inactive slicing job";
+    if (!["draft", "failed", "cancelled", "stale", "completed"].includes(job.status) || !mayDeleteDraft || busy) return;
+    const label = job.status === "draft" ? "saved slicing draft" : job.status === "completed" ? "completed slicing result" : "inactive slicing job";
     if (!window.confirm("Delete this " + label + " for " +
       (job.input_asset?.name || "this model") +
       "? This removes its job history and configuration, but preserves files saved separately to MakerVault.")) return;
@@ -2049,7 +2049,7 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
               <button type="button" disabled={busy} onClick={() => loadSavedDraft(job)}>
                 {job.status === "draft" ? "Edit draft" : "Repair / retry setup"}
               </button>}
-            {mayDeleteDraft && ["draft", "failed", "cancelled", "stale"].includes(job.status) &&
+            {mayDeleteDraft && ["draft", "failed", "cancelled", "stale", "completed"].includes(job.status) &&
               <button type="button" disabled={busy} onClick={() => deleteSavedDraft(job)}>
                 {job.status === "draft" ? "Delete draft" : "Delete"}
               </button>}
