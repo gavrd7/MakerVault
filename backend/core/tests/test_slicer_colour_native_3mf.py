@@ -98,7 +98,7 @@ class NativeColourRegionTests(SimpleTestCase):
     def test_fails_closed_when_painted_swatch_has_no_tool(self):
         _raw, painting = fixture_paint()
         with self.assertRaisesRegex(MaterialRoutingError, "no verified native"):
-            native_colour_tool_maps([{"colour_paint": painting}], printer_id="printer",
+            native_colour_tool_maps([{"colour_paint": painting}], printer_id=PRINTER_ID,
                                     tool_bindings={"bay-1": 0, "bay-2": 1})
 
     def test_fails_closed_on_wrong_printer(self):
@@ -114,7 +114,7 @@ class NativeColourRegionTests(SimpleTestCase):
         item = {"x_mm": 0, "y_mm": 0, "rotation_deg": 0,
                 "scale_percent": 100, "colour_paint": legacy}
         with self.assertRaisesRegex(MaterialRoutingError, "legacy"):
-            native_colour_tool_maps([item], printer_id="printer",
+            native_colour_tool_maps([item], printer_id=PRINTER_ID,
                                     tool_bindings={"bay-3": 2})
 
     def test_non_native_plate_never_silently_compiles_preview_colours(self):
