@@ -57,12 +57,28 @@ class GcodeAnalysisTests(SimpleTestCase):
         result = analyse_text(gcode)["print_setup"]["temperatures_c"]
         self.assertEqual(result["nozzle_c"], 260.0)
         self.assertEqual(result["bed_c"], 100.0)
+        self.assertEqual(result["chamber_c"], 60.0)
         self.assertEqual(result["source"], "requested_start_gcode")
 
     def test_unknown_and_reset_only_temperatures_are_not_invented(self):
         report = analyse_text("M104 S0\\nM140 S0\\nG28\\n")
         self.assertIsNone(report["print_setup"]["temperatures_c"]["nozzle_c"])
         self.assertIsNone(report["print_setup"]["temperatures_c"]["bed_c"])
+
+    def test_chamber_start_target_is_read_without_guessing_telemetry(self):
+        with_macro = analyse_text(
+            "START_PRINT EXTRUDER_TEMP=255 BED_TEMP=95 CHAMBER_TEMP=55\n"
+            ";LAYER_CHANGE\nM141 S80\n"
+        )["print_setup"]["temperatures_c"]
+        self.assertEqual(with_macro["nozzle_c"], 255)
+        self.assertEqual(with_macro["bed_c"], 95)
+        self.assertEqual(with_macro["chamber_c"], 55)
+        with_commands = analyse_text(
+            "M141 S0\nM191 S45\n;LAYER_CHANGE\nM141 S95\n"
+        )["print_setup"]["temperatures_c"]
+        self.assertEqual(with_commands["chamber_c"], 45)
+        self.assertIsNone(analyse_text("M104 S220\nG28\n")[
+            "print_setup"]["temperatures_c"]["chamber_c"])
 
     def test_creality_sliced_filament_vectors_for_cfs_review(self):
         report = analyse_text(
