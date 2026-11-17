@@ -158,6 +158,19 @@ class FullLayerEndpointTests(TestCase):
         self.assertEqual(self.client.get(
             f"/api/files/{self.asset.pk}/gcode/layers/?zs=nan").status_code, 400)
 
+    def test_surface_overview_endpoint_does_not_change_exact_layer_api(self):
+        self.client.force_login(self.owner)
+        overview_url=f"/api/files/{self.asset.pk}/gcode/layers/?zs=0.2,0.4&overview=1&detail=80"
+        response=self.client.get(overview_url)
+        self.assertEqual(response.status_code, 200, response.content)
+        self.assertTrue(response.json()["overview"])
+        self.assertEqual(len(response.json()["layers"]), 2)
+        self.assertEqual(self.client.get(overview_url.replace("detail=80", "detail=900")).status_code, 400)
+        exact=self.client.get(self.url)
+        self.assertEqual(exact.status_code, 200)
+        self.assertEqual(exact.json()["segment_count"], 3)
+        self.assertFalse(exact.json()["sampled"])
+
     def test_other_user_cannot_inspect_unpublished_output(self):
         self.client.force_login(self.other)
         self.assertEqual(self.client.get(self.url).status_code, 404)
