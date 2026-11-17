@@ -1477,9 +1477,11 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
           <SlicerBedTypePicker value={form.plate} onChange={choosePlate}
             disabled={!canPrepare||busy} options={availablePlateOptions} compact/>
           {bedTypes?.default && <small>Printer's native default: {ORCA_PLATE_TYPES.find(([key])=>key===bedTypes.default)?.[1]||bedTypes.default}.</small>}
-          {form.engine==="orcaslicer" && !bedTypes?.default && <small>
-            The imported printer has no confirmed default plate. Select a supported
-            native profile or explicitly configure its bed type before slicing.
+          {form.engine==="orcaslicer" && bedTypes && !bedTypes.default && <small>
+            This printer profile does not declare a reliable default plate.
+            Choose the actual fitted surface manually. These generic illustrations
+            do not confirm physical compatibility; the selected filament must
+            declare temperatures for that surface.
           </small>}
         </div>
       {["orcaslicer", "crealityprint"].includes(form.engine) && nativePlate?.id === form.printer_profile_id &&
