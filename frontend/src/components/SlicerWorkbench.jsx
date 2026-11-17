@@ -1979,6 +1979,8 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
     {showDrafts && <Modal className={previewJob ? "slicerPreviewModal" : ""} title={previewJob ? "Sliced G-code preview" : "Saved slicing drafts"}
       onClose={() => { setShowDrafts(false); setPreviewJobId(null); }} wide>
       {previewJob ? <>
+        <details className="slicerMobileJobActions">
+          <summary>File &amp; printer actions</summary>
         <div className="formActions" style={{ justifyContent: "flex-start" }}>
           <button type="button" onClick={() => setPreviewJobId(null)}>← Back to slicing jobs</button>
           {previewJob.settings?.workflow !== "quick" && !previewJob.gcode_in_library && <button type="button" disabled={busy}
@@ -1991,6 +1993,7 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
               onClick={() => requestPrint(previewJob, "print")}>Upload and start print</button>
           </>}
         </div>
+        </details>
         {error && <p className="integrationError" role="alert">{error}</p>}
         {notice && <p role="status">{notice}</p>}
         <GcodeViewerModal key={previewJob.output_asset.id} embedded
