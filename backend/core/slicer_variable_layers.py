@@ -6,6 +6,38 @@ import math
 import re
 
 
+
+def validate_orca_variable_support_compatibility(process_bytes, has_variable_layers):
+    """Reject known incompatible Orca tree/organic support combinations.
+
+    Evaluate the *effective* process after user overrides, not the original
+    native preset. No support type or user's settings are silently changed.
+    """
+    if not has_variable_layers:
+        return
+    import json
+    try:
+        process = json.loads(process_bytes)
+    except (TypeError, ValueError, UnicodeDecodeError):
+        raise ValueError("Native Orca process settings could not be read.") from None
+    if not isinstance(process, dict):
+        raise ValueError("Native Orca process settings could not be read.")
+
+    def value(key):
+        setting = process.get(key, "")
+        return str(setting[0] if isinstance(setting, list) and setting else setting).strip().lower()
+
+    if value("enable_support") not in ("1", "true"):
+        return
+    support_type = value("support_type")
+    support_style = value("support_style")
+    if support_type.startswith("tree(") or support_style == "organic":
+        raise ValueError(
+            "Variable layer height is incompatible with the selected tree/organic "
+            "support configuration in OrcaSlicer 2.5. Use normal/manual supports "
+            "with support painting, or disable supports, before slicing."
+        )
+
 def validate_variable_layer_profile(value):
     if not isinstance(value, dict) or set(value) != {"version", "bands"} or (
         type(value.get("version")) is not int or value["version"] != 1
