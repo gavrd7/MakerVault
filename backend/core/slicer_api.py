@@ -424,7 +424,9 @@ def _draft_plate_settings(user, input_asset, settings):
         raise ValueError("The first plate model must match the selected primary STL.")
     return {"plate_objects": saved, "plate_label": label, "save_gcode_to_library": save_to_library,
             "workflow": workflow, "process_overrides": process_overrides,
-                **({"flush_settings": flush_settings} if flush_settings is not None else {}), **slot_fields, **routing_fields, **project_fields}
+            **({"multi_material_test": True} if multi_material_test else {}),
+            **({"flush_settings": flush_settings} if flush_settings is not None else {}),
+            **slot_fields, **routing_fields, **project_fields}
 
 
 def _draft(user, data):
