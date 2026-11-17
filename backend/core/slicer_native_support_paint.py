@@ -10,6 +10,7 @@ This is OFFLINE TEST input, never a printer authorisation.
 import math
 
 from .slicer_support_painting import validate_support_paint
+from .slicer_semantic_painting import validate_semantic_paint
 
 MAX_NATIVE_PAINT_TRIANGLES = 500_000
 EPS = 1e-8
@@ -100,7 +101,7 @@ def _fingerprint(triangles):
     return str(len(triangles)) + ":" + format(h, "x")
 
 
-def native_support_triangles(triangles, paint):
+def native_support_triangles(triangles, paint, *, kind="support"):
     """Yield (STL-order triangle, native annotation or None).
 
     Fail closed if the mesh changed, a patch lies off-face, paints overlap,
@@ -108,7 +109,10 @@ def native_support_triangles(triangles, paint):
     """
     if not paint or not paint.get("regions"):
         return [(tri, None) for tri in triangles]
-    data = validate_support_paint(paint)
+    if kind not in ("support", "seam"):
+        raise ValueError("Unsupported native painted facet type.")
+    data = (validate_support_paint(paint) if kind == "support"
+            else validate_semantic_paint(paint, "seam"))
     # STLLoader's preview geometry is centred in X/Y and grounded at min Z
     # BEFORE MakerVault computes the paint signature and local brush patches.
     minimum = [min(p[axis] for face in triangles for p in face) for axis in range(3)]
@@ -173,7 +177,7 @@ def native_support_triangles(triangles, paint):
         if len(output)>MAX_NATIVE_PAINT_TRIANGLES:
             raise ValueError("Native support painting exceeds the safe mesh triangle limit.")
     if not any(attr for _, attr in output):
-        raise ValueError("Support painting did not produce any native annotated facets.")
+        raise ValueError("Native "+kind+" painting did not produce any annotated facets.")
     # Restore original STL-local coordinates. _render_mesh owns the one and
     # only placement-centering pass used for native 3MF model geometry.
     return [
