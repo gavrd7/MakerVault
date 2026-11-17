@@ -85,6 +85,25 @@ class GeneratedSlicerFileTests(TestCase):
         with self.assertRaises(SlicerOutputError):
             store_generated_gcode(self.job.pk, b"G1 X2 Y2\n")
 
+    def test_gcode_download_preserves_extension_for_mobile_clients(self):
+        from django.core.files.base import ContentFile
+        output = store_generated_gcode(
+            self.job.pk, b"; generated\\nG1 X1 Y1 E0.5\\n")
+        output.file.save("shape.gcode", ContentFile(
+            b"; generated\\nG1 X1 Y1 E0.5\\n"), save=True)
+        self.client.force_login(self.owner)
+        url = "/api/files/" + str(output.pk) + "/gcode/source/"
+        response = self.client.get(url + "?download=1")
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response["Content-Type"], "application/octet-stream")
+        self.assertIn('filename="shape.gcode"', response["Content-Disposition"])
+        self.assertIn("attachment", response["Content-Disposition"])
+        response.close()
+        inline = self.client.get(url)
+        self.assertEqual(inline.status_code, 200)
+        self.assertTrue(inline["Content-Type"].startswith("text/plain"))
+        inline.close()
+
     def test_multicolour_test_output_is_marked_unapproved_for_printer_submission(self):
         self.job.settings = {"multi_material_test": True}
         self.job.save(update_fields=["settings"])
