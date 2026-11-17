@@ -3,6 +3,7 @@ import { createPortal } from "react-dom";
 import SlicerPlateEditor from "./SlicerPlateEditor";
 import {addVariableLayerBand} from "./slicerVariableLayers.js";
 import SlicerUiIcon from "./SlicerUiIcon";
+import {BedIllustration} from "./SlicerBedTypePicker";
 import {NATIVE_TOOL_FEATURES, FEATURE_NAMES, usedNativeFeatures} from "./slicerEngineCompatibility";
 import SlicerFlushVolumes from "./SlicerFlushVolumes";
 import { apiFetch } from "../api";
@@ -1504,7 +1505,10 @@ export default function SlicerPrepareWorkspace({
           </div>
           <div className="slicerPreparePrinterMeta">
             <span>Nozzle: {nozzleMm ? Number(nozzleMm).toFixed(2) + " mm" : "Not selected"}</span>
-            <span>Build plate: {selectedPlateType}</span>
+            <span style={{display:"inline-flex",alignItems:"center",gap:5}}>
+              <BedIllustration type={plateType} small/>
+              Build plate: {selectedPlateType}
+            </span>
             <span>Build area: {Array.isArray(plate?.size_mm)
               ? plate.size_mm.slice(0, 2).join(" × ") + " mm" : "Unknown"}</span>
           </div>
