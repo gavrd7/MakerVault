@@ -122,6 +122,34 @@ class Core3MFWorkerTests(TestCase):
         with self.assertRaises(WorkerError):
             validate_worker_3mf(with_state("4"), native_tool_count=2)
 
+    def test_seam_paint_facets_allow_only_exact_native_states(self):
+        original = self.package()
+        with zipfile.ZipFile(io.BytesIO(original)) as archive:
+            members = {name: archive.read(name) for name in archive.namelist()}
+        self.assertIn(b'<triangle v1="0" v2="1" v3="2"/>',
+                      members["3D/3dmodel.model"])
+        def with_seam(value, name="paint_seam"):
+            contents = dict(members)
+            contents["3D/3dmodel.model"] = contents["3D/3dmodel.model"].replace(
+                b'<triangle v1="0" v2="1" v3="2"/>',
+                b'<triangle v1="0" v2="1" v3="2" ' + name.encode() +
+                b'="' + value.encode() + b'"/>')
+            output = io.BytesIO()
+            with zipfile.ZipFile(output, "w", compression=zipfile.ZIP_DEFLATED) as archive:
+                for filename, payload in contents.items():
+                    archive.writestr(filename, payload)
+            return output.getvalue()
+        for value in ("4", "8"):
+            with self.subTest(value=value):
+                self.assertTrue(validate_worker_3mf(with_seam(value)))
+        for value in ("0", "4 8", "40", "evil", "4;M104"):
+            with self.subTest(value=value), self.assertRaises(WorkerError):
+                validate_worker_3mf(with_seam(value))
+        with self.assertRaises(WorkerError):
+            validate_worker_3mf(with_seam("4"), native_tool_count=2)
+        with self.assertRaises(WorkerError):
+            validate_worker_3mf(with_seam("4", "paint_fuzzy_skin"))
+
     def test_safe_per_object_metadata_passes_worker_validation(self):
         self.assertTrue(validate_worker_3mf(self.with_object_metadata([
             ("wall_loops", "5"), ("sparse_infill_density", "37%"),
