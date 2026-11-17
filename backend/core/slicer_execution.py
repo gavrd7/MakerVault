@@ -322,16 +322,34 @@ def _validate_plate_execution(job):
         if any(abs(float(value)-100) > 0.000001 for value in
                item.get("scale_xyz_percent", [item.get("scale_percent", 100)] * 3)):
             raise SlicerExecutionError("Seam painting test requires an unscaled model.")
-    for field, label in (
-        ("fuzzy_skin_paint", "Paint-on fuzzy skin"),
-    ):
-        if any(isinstance(item, dict) and isinstance(item.get(field), dict)
-               and item[field].get("regions") for item in objects):
+    if any(isinstance(item, dict) and isinstance(item.get("fuzzy_skin_paint"), dict)
+           and item["fuzzy_skin_paint"].get("regions") for item in objects):
+        # Orca 2.5 saves painted fuzzy regions in paint_fuzzy_skin and uses
+        # fuzzy_skin=disabled_fuzzy ("Painted only") to activate them.
+        if job.engine != "orcaslicer" or job.engine_version != "2.5.0":
             raise SlicerExecutionError(
-                label + " is saved in this draft, but native Orca 3MF surface "
-                "annotations are not yet exported. Keep the draft; do not slice "
-                "until a verified native adapter can apply the painted regions."
-            )
+                "Native fuzzy skin painting test requires OrcaSlicer 2.5.0.")
+        if len(objects) != 1 or settings.get("multi_material_test"):
+            raise SlicerExecutionError(
+                "Selective fuzzy skin test requires one single-filament model.")
+        item = objects[0]
+        if (any((item.get(field) or {}).get("regions") for field in
+                ("support_paint", "seam_paint", "colour_paint"))
+                or (item.get("variable_layer_profile") or {}).get("bands")):
+            raise SlicerExecutionError(
+                "Combining fuzzy skin painting with other painted features is not yet verified.")
+        if item.get("process_overrides"):
+            raise SlicerExecutionError(
+                "Fuzzy skin painting with per-object overrides is not verified.")
+        if (any(abs(float(value)) > 0.000001 for value in
+                item.get("rotation_xyz_deg", [0, 0]))
+                or abs(float(item.get("z_mm", 0))) > 0.000001):
+            raise SlicerExecutionError(
+                "Fuzzy skin painting test requires an upright, non-elevated model.")
+        if any(abs(float(value) - 100) > 0.000001 for value in
+               item.get("scale_xyz_percent", [item.get("scale_percent", 100)] * 3)):
+            raise SlicerExecutionError(
+                "Fuzzy skin painting test requires an unscaled model.")
     if any(isinstance(item, dict) and isinstance(item.get("variable_layer_profile"), dict)
            and item["variable_layer_profile"].get("bands") for item in objects):
         # Native Orca layer_config_ranges.xml export is available for an
@@ -510,7 +528,8 @@ def _single_unmodified_stl(plate):
     item = plate[0]
     if (item.get("process_overrides") or (item.get("variable_layer_profile") or {}).get("bands")
             or (item.get("support_paint") or {}).get("regions")
-            or (item.get("seam_paint") or {}).get("regions")):
+            or (item.get("seam_paint") or {}).get("regions")
+            or (item.get("fuzzy_skin_paint") or {}).get("regions")):
         return False  # Native object or variable-layer settings must never fall back to plain STL.
     try:
         if any(float(item.get(key, 0) if key == "z_mm" else item[key]) != expected for key, expected in (
