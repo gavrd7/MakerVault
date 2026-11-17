@@ -52,10 +52,10 @@ def apply_orca_job_overrides(process_bytes, filament_bytes, plate_type, plate_ob
         for item in plate_objects
     )
     if painted_fuzzy:
-        # Orca's native enum is "disabled_fuzzy" for its Painted Only mode.
-        # A saved process could be "none" (disables all painted skin) or
-        # "all" (textures the entire model). Override this job only.
-        process["fuzzy_skin"] = "disabled_fuzzy"
+        # Orca's native enum is "none" for Painted only; "disabled_fuzzy"
+        # disables ALL fuzzy skin, including painted regions. Activate the
+        # painted regions for this job copy without modifying stored presets.
+        process["fuzzy_skin"] = "none"
     if plate_objects:
         colours = {item.get("color", "").upper() for item in plate_objects
                    if isinstance(item, dict)}
