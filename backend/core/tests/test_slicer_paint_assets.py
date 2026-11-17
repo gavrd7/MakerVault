@@ -68,6 +68,23 @@ class PrivateSlicerPaintAssetTests(TestCase):
         self.assertEqual(FileAsset.objects.filter(metadata__slicer_paint=True).count(),1)
 
     @patch("core.slicer_api.ensure_storage_capacity")
+    def test_draft_settings_store_only_asset_reference_not_mask(self, quota):
+        from core.slicer_api import _draft_plate_settings
+        ref=store_paint(self.owner,self.mesh.pk,self.paint)
+        item={"instance_id":str(uuid.uuid4()),"asset_id":str(self.mesh.pk),
+              "x_mm":0,"y_mm":0,"rotation_deg":0,"scale_percent":100,
+              "color":"#ABCDEF","paint_asset_id":str(ref.pk)}
+        saved=_draft_plate_settings(self.owner,self.mesh,{
+            "plate_label":"Test plate","plate_objects":[item]})
+        self.assertEqual(saved["plate_objects"][0]["paint_asset_id"],str(ref.pk))
+        self.assertNotIn("variable_layer_profile",saved["plate_objects"][0])
+        self.assertLess(len(json.dumps(saved)),2048)
+        with self.assertRaisesRegex(ValueError,"cannot also contain inline"):
+            _draft_plate_settings(self.owner,self.mesh,{
+                "plate_objects":[{**item,"variable_layer_profile":
+                                 self.paint["variable_layer_profile"]}]})
+
+    @patch("core.slicer_api.ensure_storage_capacity")
     def test_versions_and_cross_owner_references(self, quota):
         payload={"mesh_asset_id":str(self.mesh.pk),"paint":self.paint}
         response=self.client.post(self.url,json.dumps(payload),
