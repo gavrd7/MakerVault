@@ -55,6 +55,40 @@ G1 X10 Y20 E2.0
         )
         self.assertEqual(result["segment_count"], 3)
 
+    def test_native_arc_extrusion_is_rendered_as_curved_path_not_chord(self):
+        import math
+        result=generated_preview(
+            "G90\\nM83\\nG1 X10 Y0 Z0.2\\n"
+            ";TYPE:Outer wall\\nG3 X0 Y10 I-10 J0 E1\\n"
+        )
+        self.assertGreater(result["segment_count"], 20)
+        self.assertFalse(result["sampled"])
+        self.assertEqual(result["layers"],[0.2])
+        path=result["segments"]
+        self.assertEqual(path[0][:2],[10.0,0.0])
+        self.assertEqual(path[-1][2:4],[0.0,10.0])
+        self.assertTrue(all(abs(math.hypot(point[2],point[3])-10)<0.01
+                            for point in path))
+        self.assertEqual(result["feature_counts"]["Outer wall"],len(path))
+
+    def test_non_extruding_arcs_do_not_create_false_bridges(self):
+        result=generated_preview(
+            "G90\\nM83\\nG1 X10 Y0 Z0.2\\n"
+            "G3 X0 Y10 I-10 J0\\n"
+            "G1 X0 Y15 E1\\n"
+        )
+        self.assertEqual(result["segment_count"],1)
+        self.assertEqual(result["segments"][0][:4],[0.0,10.0,0.0,15.0])
+
+    def test_malformed_arc_never_creates_straight_extrusion_chord(self):
+        result=generated_preview(
+            "G90\\nM83\\nG1 X10 Y0 Z0.2\\n"
+            "G2 X30 Y10 R1 E1\\n"
+            "G1 X32 Y10 E1\\n"
+        )
+        self.assertEqual(result["segment_count"],1)
+        self.assertEqual(result["segments"][0][:4],[30.0,10.0,32.0,10.0])
+
     def test_truncated_scan_never_claims_complete_layer_count(self):
         result = generated_preview("G1 X2 Y3 E1\n", truncated=True)
         self.assertIsNone(result["layer_count"])
