@@ -59,6 +59,14 @@ class FullLayerParserTests(SimpleTestCase):
         self.assertEqual(result["segment_count"],1)
         self.assertEqual(result["segments"][0][:4],[0.0,10.0,0.0,20.0])
 
+    def test_exact_layer_preserves_native_filament_tool_sequence(self):
+        text = ("G90\nM83\nG1 X0 Y0 Z0.2\n"
+                "T0\nG1 X10 Y0 E1\n"
+                "T1\nG1 X10 Y10 E1\n")
+        result = exact_layer_toolpaths(text, 0.2)
+        self.assertEqual(result["segment_count"], 2)
+        self.assertEqual([row[7] for row in result["segments"]], [0, 1])
+
     def test_unsafe_nonfinite_z_is_rejected(self):
         for value in ("nan", "inf", -1, 2001):
             with self.subTest(value=value), self.assertRaises(ValueError):
