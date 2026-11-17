@@ -22,11 +22,11 @@ def plan_native_multimaterial(job):
         raise MaterialRoutingError(
             "Custom purge settings are not verified for multi-colour test slicing."
         )
-    if any(not isinstance(item, dict) or (item.get("colour_paint") or {}).get("faces")
-           or (item.get("colour_paint") or {}).get("regions") for item in objects):
-        raise MaterialRoutingError(
-            "Painted surfaces require native Orca facet conversion; test with separate models first."
-        )
+    if any(not isinstance(item, dict) for item in objects):
+        raise MaterialRoutingError("Multi-colour models are invalid.")
+    # Colour painting is now converted to Orca's native per-triangle
+    # paint_color states by prepare_multimaterial_plate. This remains an
+    # offline test; no G-code may be submitted to a printer.
     connections = PrinterConnection.objects.filter(
         printer_id=job.printer_id, enabled=True,
     )
