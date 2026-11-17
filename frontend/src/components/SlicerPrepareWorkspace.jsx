@@ -888,6 +888,7 @@ export default function SlicerPrepareWorkspace({
   const multiMaterialReadyForExport = activeEngine === "orcaslicer"
     && activeEngineVersion === "2.5.0"
     && assignedSlots.length === objects.length
+    && !baseProfileMismatch
     && assignedSlots.every(slot => String(slot.printer_id) === String(printerId))
     && requiredMultiSlots.length >= 2
     && requiredMultiSlots.length <= 16
