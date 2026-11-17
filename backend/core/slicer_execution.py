@@ -21,6 +21,7 @@ from .slicer_bed_dimensions import trusted_plate_dimensions
 from .slicer_material_routing import single_material_slice_assignment, MaterialRoutingError
 from .slicer_multimaterial_execution import plan_native_multimaterial, prepare_job_multimaterial
 from .slicer_material_gcode_audit import audit_native_tool_usage, MaterialGcodeAuditError
+from .slicer_flush_settings import apply_orca_flush_settings
 from .slicer_native_overrides import apply_orca_job_overrides
 from .slicer_variable_layers import audit_orca_variable_layers, validate_orca_variable_support_compatibility
 from .slicer_paint_assets import expand_painted_settings
@@ -243,11 +244,12 @@ def _validate_plate_execution(job):
     # Do not silently discard native flush / prime-tower preferences when
     # admitting an otherwise single-filament job. They require the future
     # exact-printer, multi-tool worker route and verified CFS bindings.
-    if settings.get("flush_settings") is not None:
+    if (settings.get("flush_settings") is not None and
+            settings.get("multi_material_test") is not True):
         raise SlicerExecutionError(
-            "This draft has flushing/prime-tower overrides, but the physical "
-            "multi-material slicing path is not yet verified. Save the draft; "
-            "reset flushing settings for the proven single-filament path."
+            "Custom flushing settings require verified native multi-material tool "
+            "routing. Assign multiple filaments and use Slice; physical printer "
+            "submission remains blocked for this offline test."
         )
     objects=settings.get("plate_objects")
     project=settings.get("plates")
@@ -650,6 +652,25 @@ def process_queued_job(job_id):
                 validate_orca_variable_support_compatibility(profiles[2], has_variable)
             except ValueError as exc:
                 raise SlicerExecutionError(str(exc)) from exc
+            if material_result is not None and (job.settings or {}).get("flush_settings") is not None:
+                # Validated native process derivation, never a printer macro.
+                # Painted regions can select a tool not used as the model's
+                # default extruder, so the full ordered palette must supply
+                # the physical slot-to-logical-tool mapping.
+                from types import SimpleNamespace
+                try:
+                    ordered_routes = [
+                        SimpleNamespace(slot_id=slot, tool_index=tool)
+                        for slot, tool in material_result["tool_bindings"].items()
+                    ]
+                    profiles[2] = apply_orca_flush_settings(
+                        profiles[2], job.settings["flush_settings"],
+                        routes=ordered_routes,
+                        tool_count=len(material_result["filament_profiles"]),
+                        topology=material_result["topology"],
+                    )
+                except (MaterialRoutingError, ValueError) as exc:
+                    raise SlicerExecutionError(str(exc)) from exc
             if material_result is not None:
                 # The worker protocol checks byte equality between the legacy
                 # first preset and the first member of the ordered palette.
