@@ -58,9 +58,9 @@ class FullLayerParserTests(SimpleTestCase):
         self.assertTrue(result["layers"][1]["limited"])
 
     def test_overview_keeps_full_height_without_claiming_full_resolution(self):
-        gcode = ("G90\\nM83\\n" +
-                 "".join(f";TYPE:Outer wall\\nG1 Z{z:.1f} X0 Y0\\n"
-                         + "".join(f"G1 X{i+1} Y0 E0.1\\n" for i in range(20))
+        gcode = ("G90\nM83\n" +
+                 "".join(f";TYPE:Outer wall\nG1 Z{z:.1f} X0 Y0\n"
+                         + "".join(f"G1 X{i+1} Y0 E0.1\n" for i in range(20))
                          for z in (0.2, 0.4, 0.6)))
         result = layer_batch_toolpaths(gcode, [0.2, 0.4, 0.6],
                                        overview=True, overview_limit=80)
