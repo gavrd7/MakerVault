@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import SlicerToolpath3D from "./SlicerToolpath3D";
+import "./slicerPreviewMobile.css";
 import GcodeLayerInsert from "./GcodeLayerInsert";
 import { featureColour, hasFeatureFocus } from "./slicerToolpathFeatures";
 
@@ -25,6 +26,8 @@ const COLOUR_MODES = [
 ];
 
 export default function SlicerGcodePreview({ fileId = null, preview, bedSize = null, file = null, canEdit = false, onSaved = null, startTemperatures = null }) {
+  const [mobilePanel, setMobilePanel] = useState(null);
+  const [showMobileSteps, setShowMobileSteps] = useState(false);
   const [layer, setLayer] = useState(null);
   const [step, setStep] = useState(null);
   const [colourMode, setColourMode] = useState("feature");
@@ -143,7 +146,18 @@ export default function SlicerGcodePreview({ fileId = null, preview, bedSize = n
       <div><small>Requested bed · G-code</small><strong>{startTemperatures?.bed_c != null ? startTemperatures.bed_c + " °C" : "Not declared"}</strong></div>
     </div>
     {layers.length > 0 ? <>
-      <div className="slicerResultModeRow">
+      <div className="slicerMobileToolButtons" role="toolbar" aria-label="G-code display tools">
+        <button type="button" aria-expanded={mobilePanel === "display"} onClick={() => setMobilePanel("display")}>Display settings</button>
+        <button type="button" aria-expanded={mobilePanel === "features"} onClick={() => setMobilePanel("features")}>Features</button>
+      </div>
+      {mobilePanel && <div className="slicerMobileBackdrop" onClick={() => setMobilePanel(null)} aria-hidden="true" />}
+      <div className={"slicerResultModeRow" + (mobilePanel === "display" ? " mobileOpen" : "")}
+        role={mobilePanel === "display" ? "dialog" : undefined}
+        aria-modal={mobilePanel === "display" ? "true" : undefined}
+        aria-label={mobilePanel === "display" ? "Display settings" : undefined}>
+        <div className="slicerMobilePanelHeader"><strong>Display settings</strong>
+          <button type="button" onClick={() => setMobilePanel(null)}>Close</button>
+        </div>
         <label>Preview style
           <select value={renderMode} onChange={e => setRenderMode(e.target.value)}>
             <option value="solid">Solid filament paths</option>
@@ -195,7 +209,11 @@ export default function SlicerGcodePreview({ fileId = null, preview, bedSize = n
             renderMode={renderMode} layerDisplay={layerDisplay}
             previewSampled={!!preview?.sampled || preview?.complete === false} fadePrevious={highlightCurrent}
             featureFocus={featureFocus} outerContrast={outerContrast} />
-          <div className="slicerResultSteps">
+          <button type="button" className="slicerMobileStepsToggle"
+            aria-expanded={showMobileSteps} onClick={() => setShowMobileSteps(value => !value)}>
+            {showMobileSteps ? "Hide move controls" : "Inspect individual moves"}
+          </button>
+          <div className={"slicerResultSteps" + (showMobileSteps ? " mobileOpen" : "")}>
             <label htmlFor="slice-step-slider">{exactLayer && !exactLayer.limited ? "Full-resolution" : "Available"} layer move {finalStep} / {layerSegments.length}</label>
             <input id="slice-step-slider" type="range" min="0" max={layerSegments.length}
               step="1" value={finalStep} onChange={e => setStep(Number(e.target.value))} />
@@ -241,8 +259,14 @@ export default function SlicerGcodePreview({ fileId = null, preview, bedSize = n
         Full-resolution overview: all indexed extrusion paths are displayed, including
         fine support contacts. Switch to Current layer only to examine individual moves.
       </p>}
-      <fieldset className="slicerResultVisibility">
+      <fieldset className={"slicerResultVisibility" + (mobilePanel === "features" ? " mobileOpen" : "")}
+        role={mobilePanel === "features" ? "dialog" : undefined}
+        aria-modal={mobilePanel === "features" ? "true" : undefined}
+        aria-label={mobilePanel === "features" ? "Visible extrusion features" : undefined}>
         <legend>Visible extrusion features</legend>
+        <div className="slicerMobilePanelHeader"><strong>Extrusion features</strong>
+          <button type="button" onClick={() => setMobilePanel(null)}>Close</button>
+        </div>
         {features.map(feature => <label className="checkRow" key={feature}>
           <input type="checkbox" checked={visible[feature] !== false}
             onChange={e => setVisible(state => ({ ...state, [feature]: e.target.checked }))} />
