@@ -45,6 +45,17 @@ def apply_orca_job_overrides(process_bytes, filament_bytes, plate_type, plate_ob
     # The bed heater vector is a filament-native setting. Fail explicitly
     # rather than borrow a cold/smooth plate's value for a textured sheet.
     validate_plate_temperature(filament, effective)
+    painted_fuzzy = any(
+        isinstance(item, dict) and
+        isinstance(item.get("fuzzy_skin_paint"), dict) and
+        bool(item["fuzzy_skin_paint"].get("regions"))
+        for item in plate_objects
+    )
+    if painted_fuzzy:
+        # Orca's native enum is "disabled_fuzzy" for its Painted Only mode.
+        # A saved process could be "none" (disables all painted skin) or
+        # "all" (textures the entire model). Override this job only.
+        process["fuzzy_skin"] = "disabled_fuzzy"
     if plate_objects:
         colours = {item.get("color", "").upper() for item in plate_objects
                    if isinstance(item, dict)}
