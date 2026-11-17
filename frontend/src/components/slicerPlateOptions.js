@@ -1,0 +1,19 @@
+/** Engine-native plate families; availability is always printer-profile scoped. */
+export const ORCA_PLATE_TYPES = [
+  ["default", "Native / profile default"],
+  ["cool", "Smooth Cool Plate"],
+  ["engineering", "Engineering Plate"],
+  ["high_temp", "Smooth High Temp Plate"],
+  ["textured_pei", "Textured PEI Plate"],
+  ["textured_cool", "Textured Cool Plate"],
+  ["supertack", "SuperTack Plate"],
+];
+
+/** Never advertise unknown plate types as supported by a selected printer. */
+export function plateOptions(engine, bedTypes) {
+  if (engine !== "orcaslicer") return ORCA_PLATE_TYPES.slice(0, 1);
+  const supported = Array.isArray(bedTypes?.supported) ? bedTypes.supported : null;
+  if (supported?.length)
+    return ORCA_PLATE_TYPES.filter(([key]) => supported.includes(key));
+  return ORCA_PLATE_TYPES.slice(0, 1);
+}
