@@ -811,8 +811,9 @@ def export_native_multimaterial_3mf(request, job_id):
     This is never printer submission and does not allow queued multi-material
     execution. Each selected filament must already be a verified native profile.
     """
-    from .slicer_native_material_palette import prepare_multimaterial_plate, ordered_material_profile_ids
-    from .slicer_material_routing import (MaterialRoutingError, detect_material_system, derive_native_tool_order)
+    from .slicer_native_material_palette import prepare_multimaterial_plate
+    from .slicer_multimaterial_execution import plan_native_multimaterial
+    from .slicer_material_routing import MaterialRoutingError
     from .slicer_execution import _read_owned_file, MAX_INPUT
     from .slicer_bed_dimensions import trusted_plate_dimensions
 
@@ -827,11 +828,9 @@ def export_native_multimaterial_3mf(request, job_id):
         return _error("A private painting asset is missing or invalid.", 422)
     objects = settings.get("plate_objects") or []
     profile_rows = settings.get("slot_filament_profiles") or []
-    if (job.engine != "orcaslicer" or not 2 <= len(objects) <= 12
+    if (job.engine != "orcaslicer" or not 1 <= len(objects) <= 12
             or not isinstance(profile_rows, list)):
-        return _error("Choose a saved Orca draft with two or more assigned model filaments.", 409)
-    if any(item.get("colour_paint") for item in objects):
-        return _error("Per-face colour painting is not yet supported in native multi-material export.", 409)
+        return _error("Choose a saved Orca draft with verified multi-filament assignments.", 409)
     if any(item.get("support_paint", {}).get("regions") for item in objects):
         return _error("Support painting needs verified native enforcer/blocker export before slicing.", 409)
     if any(item.get("seam_paint", {}).get("regions") for item in objects):
@@ -843,42 +842,11 @@ def export_native_multimaterial_3mf(request, job_id):
     if settings.get("flush_settings") is not None:
         return _error("Custom flushing settings require separate native validation.", 409)
     try:
-        # Printer adapters identify the material system; the slicer assigns
-        # logical tool indices. User-supplied tool maps/topology are not trusted.
-        connections = PrinterConnection.objects.filter(printer=job.printer, enabled=True)
-        topology = detect_material_system(connections)
-        primary_slots = {
-            row.get("slot_id") for row in profile_rows
-            if isinstance(row, dict)
-            and str(row.get("profile_id")) == str(job.filament_profile_id)
-        }
-        assigned_ids = {
-            item.get("material_slot", {}).get("slot_id")
-            for item in objects if isinstance(item, dict)
-            and isinstance(item.get("material_slot"), dict)
-        }
-        primary_slots &= assigned_ids
-        if not primary_slots:
-            raise MaterialRoutingError(
-                "The selected main filament preset is not assigned to any model."
-            )
-        tool_bindings = derive_native_tool_order(
-            objects, printer_id=job.printer_id, topology=topology,
-            preferred_slot_id=sorted(primary_slots)[0],
-        )
-        binding_rows = [
-            {"slot_id": slot_id, "tool_index": index}
-            for slot_id, index in tool_bindings.items()
-        ]
-        ordered_ids = ordered_material_profile_ids(
-            binding_rows, profile_rows, main_profile_id=job.filament_profile_id,
-        )
-        by_id = {str(p.pk): p for p in SlicerProfile.objects.filter(
-            owner=request.user, pk__in=ordered_ids, kind="filament"
-        )}
-        if len(by_id) != len(set(str(value) for value in ordered_ids)):
-            raise MaterialRoutingError("One or more native filament profiles are unavailable.")
-        profiles = [by_id[str(profile_id)] for profile_id in ordered_ids]
+        # Exactly the same owner-scoped palette and material topology
+        # validation as the isolated offline slicing route. Single-model
+        # painted 3MFs and multi-model parts share one audited mapper.
+        topology, tool_bindings, profiles = plan_native_multimaterial(
+            job, settings=settings)
         width, depth = trusted_plate_dimensions(job.printer_profile)
         source_models = []
         for item in objects:
