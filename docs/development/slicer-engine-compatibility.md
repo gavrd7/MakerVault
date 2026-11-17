@@ -41,7 +41,15 @@ Native slicing engines are output adapters, not the source of truth.
   Generated G-code is marked `support_paint_test=true` and is denied upload/
   print start; actual support generation still needs a pinned-binary
   comparison before declaring the adapter verified.
-  Colour, seam and selective fuzzy skin painting remain `draft_only`.
+  Seam painting is now separately `test_only` for the same bounded Orca 2.5
+  single-object scenario. The adapter uses the same lossless clipped-polygon
+  triangulation but writes `paint_seam=4/8` for enforcer/blocker instead of
+  `paint_supports`. Combination with support painting, variable layers,
+  fuzzy skin and colour painting remains blocked pending dedicated fixtures.
+  Experimental output carries `seam_paint_test=true`, disallowing printer
+  upload and print start. Native 3MF import and actual seam G-code location
+  still require a real pinned-worker check against a no-paint baseline.
+  Colour and selective fuzzy skin painting remain `draft_only`.
 - Cura: no accurate native translation is currently implemented;
   `incompatible` disables those editor tools while preserving saved edits.
 - Other engines and unreviewed versions: `unverified` (fail closed).
