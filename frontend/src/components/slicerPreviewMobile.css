@@ -173,3 +173,39 @@
     width: 100%; font-size: 1rem; min-height: 44px;
   }
 }
+
+/* iOS WebKit's native range track extends beyond where a thumb can reach.
+   Draw both rails with the same half-thumb inset so max/min visually align. */
+.slicerResultPreview input.slicerFullRange {
+  -webkit-appearance: none;
+  appearance: none;
+  background: transparent;
+}
+.slicerResultSteps input.slicerFullRange {
+  height: 26px;
+  background: linear-gradient(90deg, transparent 11px, #1688ee 11px,
+    #1688ee calc(100% - 11px), transparent calc(100% - 11px)) center / 100% 5px no-repeat;
+}
+.slicerResultPreview input.slicerFullRange::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 22px; height: 22px;
+  border: 2px solid #fff; border-radius: 9px;
+  background: #fff; box-shadow: 0 0 0 1px #243548;
+}
+.slicerResultSteps input.slicerFullRange::-webkit-slider-runnable-track {
+  -webkit-appearance: none; appearance: none;
+  height: 5px; border: 0; background: transparent;
+}
+@media (max-width: 700px) {
+  .slicerResultLayerSlider input.slicerFullRange {
+    width: 28px; min-height: 230px;
+    background: linear-gradient(180deg, transparent 11px, #1688ee 11px,
+      #1688ee calc(100% - 11px), transparent calc(100% - 11px))
+      center / 5px 100% no-repeat;
+  }
+  .slicerResultLayerSlider input.slicerFullRange::-webkit-slider-runnable-track {
+    -webkit-appearance: none; appearance: none;
+    width: 5px; border: 0; background: transparent;
+  }
+}
