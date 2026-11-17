@@ -13,27 +13,38 @@ from .slicer_preview_arcs import arc_points
 
 MAX_LAYER_SOURCE_BYTES = 32 * 1024 * 1024
 MAX_LAYER_SEGMENTS = 75000
+MAX_BATCH_SEGMENTS = 180000
+MAX_BATCH_LAYERS = 12
 
 
-def exact_layer_toolpaths(text, target_z):
+def layer_batch_toolpaths(text, target_zs):
     """Return actual, ordered G0/G1 extrusion segments at target Z.
 
     Coordinates use [X1,Y1,X2,Y2,Z,feature,width,logical_tool] as the existing renderer
     expects. Never subsample a layer: if the bound is exceeded, return a
     clearly flagged incomplete layer instead of a visually misleading fill.
     """
-    z_target = float(target_z)
-    if not math.isfinite(z_target) or not 0 <= z_target <= 2000:
-        raise ValueError("Invalid G-code layer Z.")
+    if not isinstance(target_zs, (list, tuple)) or not 1 <= len(target_zs) <= MAX_BATCH_LAYERS:
+        raise ValueError("Choose between 1 and 12 layers.")
+    targets = []
+    for value in target_zs:
+        height = float(value)
+        if not math.isfinite(height) or not 0 <= height <= 2000:
+            raise ValueError("Invalid G-code layer Z.")
+        height = round(height, 3)
+        if height in targets:
+            raise ValueError("Duplicate G-code layer Z.")
+        targets.append(height)
+    selected = set(targets)
+    by_height = {height: {"z": height, "segments": [], "segment_count": 0,
+                         "feature_counts": Counter()} for height in targets}
     absolute_xyz = True
     absolute_e = True
     absolute_centres = False
     x = y = z = e = 0.0
     role = "Other"
     width = None
-    segments = []
-    counts = Counter()
-    total = 0
+    stored_count = 0
     tool = None
 
     for raw in text.splitlines():
@@ -96,23 +107,30 @@ def exact_layer_toolpaths(text, target_z):
             if ne>e+1e-6 and moves:
                 px,py,pz=x,y,z
                 for ax,ay,az,_ in moves:
-                    if (math.hypot(ax-px,ay-py)>1e-6 and
-                            abs(az-z_target)<=0.0005):
-                        total+=1
-                        counts[role]+=1
-                        if len(segments)<MAX_LAYER_SEGMENTS:
-                            segments.append([round(px,3),round(py,3),
-                                             round(ax,3),round(ay,3),
-                                             round(az,3),role,width,tool])
+                    key = round(az, 3)
+                    if math.hypot(ax-px,ay-py)>1e-6 and key in selected:
+                        layer = by_height[key]
+                        layer["segment_count"] += 1
+                        layer["feature_counts"][role] += 1
+                        if (len(layer["segments"]) < MAX_LAYER_SEGMENTS and
+                                stored_count < MAX_BATCH_SEGMENTS):
+                            layer["segments"].append([round(px,3),round(py,3),
+                                                       round(ax,3),round(ay,3),
+                                                       key,role,width,tool])
+                            stored_count += 1
                     px,py,pz=ax,ay,az
             x,y,z,e=nx,ny,nz,ne
 
-    return {
-        "z": round(z_target, 3),
-        "segments": segments,
-        "segment_count": total,
-        "feature_counts": dict(counts),
-        "complete": total <= MAX_LAYER_SEGMENTS,
-        "sampled": False,
-        "limited": total > MAX_LAYER_SEGMENTS,
-    }
+    for layer in by_height.values():
+        layer["feature_counts"] = dict(layer["feature_counts"])
+        layer["complete"] = len(layer["segments"]) == layer["segment_count"]
+        layer["sampled"] = False
+        layer["limited"] = not layer["complete"]
+    return {"layers": [by_height[height] for height in targets],
+            "complete": all(layer["complete"] for layer in by_height.values()),
+            "sampled": False}
+
+
+def exact_layer_toolpaths(text, target_z):
+    """Maintain the original single-layer API for precise movement inspection."""
+    return layer_batch_toolpaths(text, [target_z])["layers"][0]
