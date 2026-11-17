@@ -44,6 +44,23 @@ class LargeSlicerJobPayloadTests(SimpleTestCase):
         self.assertEqual(decoded["settings"]["plate_objects"][0]["support_paint"]["regions"][0]
                          ["patches"][0]["polygon"], polygon)
 
+    def test_draft_accepts_large_valid_json_past_obsolete_128k_limit(self):
+        from unittest.mock import patch
+        from core.slicer_api import _draft
+        # Structural validation should run on expanded JSON, rather than
+        # rejecting it unconditionally at 128 KiB before checking the engine.
+        large = {"engine": "orcaslicer",
+                 "settings": {"support_paint": "x" * (256 * 1024)}}
+        with patch("core.slicer_api.get_engine",
+                   side_effect=ValueError("Reached native engine validation")):
+            with self.assertRaisesRegex(ValueError, "Reached native engine validation"):
+                _draft(None, large)
+
+    def test_internal_draft_still_rejects_unbounded_expanded_json(self):
+        from core.slicer_api import _draft
+        with self.assertRaisesRegex(ValueError, "48 MiB"):
+            _draft(None, {"settings": {"support_paint": "x" * (MAX_SLICER_JSON_BYTES + 1)}})
+
     def test_normal_json_remains_accepted(self):
         data = {"engine": "orcaslicer", "settings": {"plate_objects": []}}
         decoded = _slicer_request_json(self.request(json.dumps(data).encode()))
