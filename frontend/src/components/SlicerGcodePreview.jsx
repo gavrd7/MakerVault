@@ -143,6 +143,7 @@ export default function SlicerGcodePreview({ fileId = null, preview, bedSize = n
       <div><small>Extrusion layers</small><strong>{preview?.layer_count ?? "Partial"}</strong></div>
       <div><small>Requested nozzle · G-code</small><strong>{startTemperatures?.nozzle_c != null ? startTemperatures.nozzle_c + " °C" : "Not declared"}</strong></div>
       <div><small>Requested bed · G-code</small><strong>{startTemperatures?.bed_c != null ? startTemperatures.bed_c + " °C" : "Not declared"}</strong></div>
+      <div><small>Requested chamber · G-code</small><strong>{startTemperatures?.chamber_c != null ? startTemperatures.chamber_c + " °C" : "Not declared"}</strong></div>
     </div>
     {layers.length > 0 ? <>
 
@@ -225,9 +226,6 @@ export default function SlicerGcodePreview({ fileId = null, preview, bedSize = n
             <label htmlFor="slice-step-slider">{exactLayer && !exactLayer.limited ? "Full-resolution" : "Available"} layer move {finalStep} / {layerSegments.length}</label>
             <input id="slice-step-slider" className="slicerFullRange" type="range" min="0" max={layerSegments.length}
               step="1" value={finalStep} onChange={e => setStep(Number(e.target.value))} />
-            <div className="settingsActions">
-              <button type="button" onClick={() => setStep(null)}>Show entire selected layer</button>
-            </div>
           </div>
         </div>
         <label className="slicerResultLayerSlider" htmlFor="slice-layer-slider">
@@ -247,18 +245,6 @@ export default function SlicerGcodePreview({ fileId = null, preview, bedSize = n
         key={String(currentLayer) + ":" + String(fileId)}
         file={file} selectedZ={z} nextZ={layers[currentLayer + 1]}
         onSaved={onSaved} onCancel={() => setShowLayerInsert(false)} />}
-      <div className="slicerPreviewCoverage" role="status">
-        {layerBusy ? "Loading complete toolpaths for the selected layer…" :
-          layerError ? "Full-resolution layer unavailable: " + layerError :
-          exactLayer?.limited ? `Layer contains ${exactLayer.segment_count.toLocaleString()} moves; only the first ${exactLayer.segments.length.toLocaleString()} are shown. Reduce model complexity or increase the server limit.` :
-          exactLayer ? `Full-resolution layer: ${exactLayer.segments.length.toLocaleString()} consecutive extrusion moves at Z ${z?.toFixed(3)} mm.` :
-          "Select a G-code layer to inspect its complete extrusion paths."}
-      </div>
-      {layerDisplay !== "current" && (preview?.sampled || preview?.complete === false) && <p className="projectUploadHint">
-        This overview is incomplete because the toolpath exceeds the preview budget.
-        Current layer only retrieves precise geometry; missing small details do not imply missing G-code.
-      </p>}
-
       <fieldset className={"slicerResultVisibility slicerPreviewOptionsPanel" + (mobilePanel === "features" ? " mobileOpen" : "")}
         role={mobilePanel === "features" ? "dialog" : undefined}
         aria-modal={mobilePanel === "features" ? "true" : undefined}
