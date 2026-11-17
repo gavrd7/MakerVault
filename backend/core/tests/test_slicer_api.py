@@ -65,6 +65,46 @@ class SliceJobApiTests(TestCase):
         # The temporary source remains private for any live unsaved editor session.
         self.assertNotIn(str(asset.pk), str(self.client.get("/api/files/").json()))
 
+    def test_multi_material_painted_plate_keeps_offline_flag_and_flush_settings(self):
+        """One painted model using two filaments must not become a single-material job."""
+        from core.slicer_api import _draft_plate_settings
+
+        model = {
+            "instance_id": str(uuid.uuid4()),
+            "asset_id": str(self.input_asset.pk),
+            "x_mm": 0, "y_mm": 0, "rotation_deg": 0,
+            "scale_percent": 100, "color": "#abcdef",
+        }
+        supplied = {
+            "plate_objects": [model], "plate_label": "Painted Benchy",
+            "multi_material_test": True,
+            "plates": [{"id": "plate-1", "name": "Painted Benchy", "objects": [model]}],
+            "active_plate_id": "plate-1",
+        }
+        saved = _draft_plate_settings(self.owner, self.input_asset, supplied)
+        self.assertIs(saved.get("multi_material_test"), True)
+        self.assertEqual(len(saved["plate_objects"]), 1)
+        self.assertEqual(saved["plate_objects"], saved["plates"][0]["objects"])
+        self.client.force_login(self.owner)
+        response = self.post({**self.payload, "settings": supplied})
+        self.assertEqual(response.status_code, 201, response.content)
+        job = SliceJob.objects.get(pk=response.json()["job"]["id"])
+        self.assertIs(job.settings.get("multi_material_test"), True)
+        self.assertEqual(len(job.settings["plate_objects"]), 1)
+
+    def test_multi_material_mode_is_not_enabled_by_default(self):
+        from core.slicer_api import _draft_plate_settings
+        model = {
+            "instance_id": str(uuid.uuid4()),
+            "asset_id": str(self.input_asset.pk),
+            "x_mm": 0, "y_mm": 0, "rotation_deg": 0,
+            "scale_percent": 100, "color": "#abcdef",
+        }
+        result = _draft_plate_settings(self.owner, self.input_asset, {
+            "plate_objects": [model], "plate_label": "Plain",
+        })
+        self.assertNotIn("multi_material_test", result)
+
     def test_multi_plate_draft_preserves_empty_and_populated_plates(self):
         from core.slicer_api import _draft_plate_settings
 
