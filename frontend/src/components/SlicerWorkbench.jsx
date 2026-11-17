@@ -2140,7 +2140,7 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
       <form className="formGrid" onSubmit={event=>{
         event.preventDefault();
         const name=projectNameInput.trim();
-        if(!name||name.length>80||/[\\x00-\\x1f\\x7f]/.test(name))return;
+        if(!name||name.length>80||Array.from(name).some(char=>char.charCodeAt(0)<32||char.charCodeAt(0)===127))return;
         const mode=projectNameAction;
         setProjectNameAction(null);
         saveDraft(mode,name);
