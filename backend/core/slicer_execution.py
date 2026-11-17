@@ -23,6 +23,7 @@ from .slicer_multimaterial_execution import plan_native_multimaterial, prepare_j
 from .slicer_material_gcode_audit import audit_native_tool_usage, MaterialGcodeAuditError
 from .slicer_native_overrides import apply_orca_job_overrides
 from .slicer_variable_layers import audit_orca_variable_layers
+from .slicer_paint_assets import expand_painted_settings
 from .slicer_process_settings import apply_process_overrides
 from .slicer_plate_3mf import build_plate_3mf, build_compound_plate_3mf
 from .slicer_plate_validation import validate_plate_collisions, PlateCollisionError
@@ -233,7 +234,10 @@ VERIFIED_OBJECT_PROCESS_KEYS = frozenset({
 
 def _validate_plate_execution(job):
     """An untouched STL or a bounded native-bed-backed multi-object 3MF plate."""
-    settings=job.settings or {}
+    try:
+        settings=expand_painted_settings(job.owner, job.settings or {})
+    except (ValueError, OSError) as exc:
+        raise SlicerExecutionError("A referenced private painting asset is missing or invalid.") from exc
     # Do not silently discard native flush / prime-tower preferences when
     # admitting an otherwise single-filament job. They require the future
     # exact-printer, multi-tool worker route and verified CFS bindings.
@@ -525,6 +529,9 @@ def process_queued_job(job_id):
         job.save(update_fields=["status", "progress", "message", "updated_at"])
     stage = "reading the source STL"
     try:
+        # Decode immutable private paint assets in memory only. The database
+        # job retains compact references and is never overwritten with masks.
+        job.settings = expand_painted_settings(job.owner, job.settings or {})
         model = _read_owned_file(job.input_asset, job.owner_id, MAX_INPUT, "Model")
         model_format = "stl"
         material_result = None
