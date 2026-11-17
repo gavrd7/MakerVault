@@ -671,7 +671,7 @@ def process_queued_job(job_id):
             try:
                 audit_native_tool_usage(
                     output.decode("utf-8"),
-                    expected_tools=set(material_result["native_tool_indices"]),
+                    expected_tools=set(material_result["expected_tools"]),
                 )
             except (UnicodeDecodeError, MaterialGcodeAuditError) as exc:
                 raise SlicerExecutionError(
