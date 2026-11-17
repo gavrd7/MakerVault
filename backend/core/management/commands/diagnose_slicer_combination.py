@@ -35,6 +35,12 @@ CASES = (
 )
 
 
+def selected_variant(original, fields):
+    """Make a detached variant without modifying persisted paint references."""
+    return {key: value for key, value in original.items()
+            if key not in FEATURES or key in fields}
+
+
 class Command(BaseCommand):
     help = ("Safely probe saved Orca 2.5 painting combinations using temporary "
             "worker jobs. No G-code or draft changes are saved.")
@@ -109,10 +115,7 @@ class Command(BaseCommand):
             if not set(fields) <= available:
                 self.stdout.write(label + ": SKIP (feature absent from draft)")
                 continue
-            item = {key: value for key, value in original.items()
-                    if key not in FEATURES}
-            for key in fields:
-                item[key] = original[key]
+            item = selected_variant(original, fields)
             try:
                 model = build_plate_3mf([(item, raw)], bed_width=width, bed_depth=depth)
                 process, filament = apply_orca_job_overrides(
