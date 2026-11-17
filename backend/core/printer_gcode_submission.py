@@ -1031,6 +1031,11 @@ def submit(connection, user, payload):
                 "Painted-support test G-code is not approved for printer upload "
                 "or print start. Verify native support paths first.", 409
             )
+        if (asset.metadata or {}).get("seam_paint_test") is True:
+            raise GcodeSubmissionError(
+                "Painted-seam test G-code is not approved for printer upload "
+                "or print start. Verify native seam placement first.", 409
+            )
         if asset.file.size > MAX_UPLOAD_BYTES:
             raise GcodeSubmissionError("This release supports printer transfers up to 64 MiB. Large files require the streaming transport.", 413)
         # Keep the original filename recognisable; suffix avoids overwrites.
