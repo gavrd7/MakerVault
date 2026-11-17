@@ -19,5 +19,5 @@ test("unknown or unrelated engines do not claim support for every plate",()=>{
   }).map(([key])=>key),["default"]);
   assert.deepEqual(plateOptions("orcaslicer",{
     supported:[],
-  }).map(([key])=>key),["default"]);
+  }).map(([key])=>key),["cool","engineering","high_temp","textured_pei","textured_cool","supertack"]);
 });
