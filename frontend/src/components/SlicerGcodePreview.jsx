@@ -30,6 +30,7 @@ export default function SlicerGcodePreview({ fileId = null, preview, bedSize = n
   const [colourMode, setColourMode] = useState("feature");
   const [renderMode, setRenderMode] = useState("solid");
   const [layerDisplay, setLayerDisplay] = useState("all");
+  const [highlightCurrent, setHighlightCurrent] = useState(false);
   const [featureFocus, setFeatureFocus] = useState("all");
   const [visible, setVisible] = useState({});
   const [showToolhead, setShowToolhead] = useState(false);
@@ -135,7 +136,9 @@ export default function SlicerGcodePreview({ fileId = null, preview, bedSize = n
           <select value={layerDisplay} onChange={event => setLayerDisplay(event.target.value)}>
             <option value="current">Current layer only · detail</option>
             <option value="context">Current + 8 faded layers</option>
-            <option value="all">All earlier layers · sampled overview</option>
+            <option value="all">{preview?.sampled
+              ? "All earlier layers · sampled overview"
+              : "Complete model · all extrusion paths"}</option>
           </select>
         </label>
         <label>Feature focus
@@ -146,6 +149,11 @@ export default function SlicerGcodePreview({ fileId = null, preview, bedSize = n
             <option value="infill" disabled={!hasFeatureFocus(features, "infill")}>Infill / solid / bridge</option>
           </select>
         </label>
+        <label className="checkRow"><input type="checkbox" checked={highlightCurrent}
+          disabled={layerDisplay==="current"}
+          onChange={e => setHighlightCurrent(e.target.checked)} />
+          Fade previous layers
+        </label>
         <label className="checkRow"><input type="checkbox" checked={showToolhead}
           onChange={e => setShowToolhead(e.target.checked)} /> Show toolhead marker</label>
       </div>
@@ -154,7 +162,9 @@ export default function SlicerGcodePreview({ fileId = null, preview, bedSize = n
           <SlicerToolpath3D segments={displaySegments} layers={layers}
             activeLayer={currentLayer} activeStep={finalStep} visible={visible}
             colourMode={colourMode} colours={colours} showToolhead={showToolhead} bedSize={bedSize}
-            renderMode={renderMode} layerDisplay={layerDisplay} featureFocus={featureFocus} />
+            renderMode={renderMode} layerDisplay={layerDisplay}
+            previewSampled={!!preview?.sampled} fadePrevious={highlightCurrent}
+            featureFocus={featureFocus} />
           <div className="slicerResultSteps">
             <label htmlFor="slice-step-slider">{exactLayer && !exactLayer.limited ? "Full-resolution" : "Available"} layer move {finalStep} / {layerSegments.length}</label>
             <input id="slice-step-slider" type="range" min="0" max={layerSegments.length}
@@ -193,10 +203,14 @@ export default function SlicerGcodePreview({ fileId = null, preview, bedSize = n
           exactLayer ? `Full-resolution layer: ${exactLayer.segments.length.toLocaleString()} consecutive extrusion moves at Z ${z?.toFixed(3)} mm.` :
           "Select a G-code layer to inspect its complete extrusion paths."}
       </div>
-      {layerDisplay !== "current" && <p className="projectUploadHint">
-        Earlier layers are still a sampled orientation reference, not a continuous solid model.
-        Switch to Current layer only for accurate walls, support details and full-resolution paths.
+      {layerDisplay !== "current" && preview?.sampled && <p className="projectUploadHint">
+        This overview is incomplete because the toolpath exceeds the preview budget.
+        Current layer only retrieves precise geometry; missing small details do not imply missing G-code.
       </p>}
+      {layerDisplay === "all" && !preview?.sampled && <p className="projectUploadHint">
+        Full-resolution overview: all indexed extrusion paths are displayed, including
+        fine support contacts. Switch to Current layer only to examine individual moves.
+      </p>
       <fieldset className="slicerResultVisibility">
         <legend>Visible extrusion features</legend>
         {features.map(feature => <label className="checkRow" key={feature}>
