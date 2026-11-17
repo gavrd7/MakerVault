@@ -77,6 +77,10 @@ export default function SlicerGcodePreview({ fileId = null, preview, bedSize = n
     if (!fileId || !layers.length) return undefined;
     const controller = new AbortController();
     const mobile = typeof window !== "undefined" && window.matchMedia?.("(max-width: 700px)").matches;
+    // Overview geometry is deliberately bounded per layer on the server.
+    // 700 layers at these limits fit within the appropriate browser budget,
+    // rather than stopping partway through the model.
+    const overviewDetail = mobile ? 140 : 350;
     const maxMoves = mobile ? 160000 : 480000;
     let cancelled = false;
     setWholeModel({segments:[],loadedLayers:0,complete:false,limited:false,loading:true,message:""});
@@ -90,7 +94,7 @@ export default function SlicerGcodePreview({ fileId = null, preview, bedSize = n
         for (let offset = 0; offset < layers.length && !cancelled; offset += 64) {
           const requested = layers.slice(offset, offset + 64);
           const url = "/api/files/" + encodeURIComponent(fileId) +
-            "/gcode/layers/?zs=" + encodeURIComponent(requested.join(","));
+            "/gcode/layers/?overview=1&detail=" + overviewDetail + "&zs=" + encodeURIComponent(requested.join(","));
           const response = await fetch(url, {credentials:"same-origin",signal:controller.signal});
           if (!response.ok) {
             const detail = await response.json().catch(()=>({}));
@@ -111,15 +115,8 @@ export default function SlicerGcodePreview({ fileId = null, preview, bedSize = n
             used += item.segments.length;
             completed++;
             pendingLayers++;
-            // The current-layer movement slider can reuse the exact geometry
-            // already returned by this batch instead of initiating another
-            // expensive complete-file scan for the same Z.
-            if (item.z != null) {
-              const key=String(fileId)+":"+Number(item.z).toFixed(3);
-              fullLayerCache.current.set(key,item);
-              if (fullLayerCache.current.size>12)
-                fullLayerCache.current.delete(fullLayerCache.current.keys().next().value);
-            }
+            // The simplified whole-print overview must never contaminate
+            // the exact movement-slider cache: its omitted moves are intentional.
           }
           if (cancelled) return;
           // Publish in coherent chunks, not after every layer. Retain all
@@ -168,7 +165,7 @@ export default function SlicerGcodePreview({ fileId = null, preview, bedSize = n
   // Query original stored G-code for this exact layer. Global 80k-move
   // samples are not sufficient for continuous wall and support geometry.
   useEffect(() => {
-    if (!fileId || !Number.isFinite(z)) return undefined;
+    if (!fileId || !Number.isFinite(z) || (layer === null && step === null)) return undefined;
     const key = String(fileId) + ":" + Number(z).toFixed(3);
     const cached = fullLayerCache.current.get(key);
     if (cached) {
@@ -204,7 +201,7 @@ export default function SlicerGcodePreview({ fileId = null, preview, bedSize = n
       if (live && error.name !== "AbortError") setLayerError(error.message);
     }).finally(() => { if (live) setLayerBusy(false); });
     return () => { live = false; controller.abort(); };
-  }, [fileId, z]);
+  }, [fileId, z, layer, step]);
 
   const layerSegments = useMemo(() => {
     if (exactLayer?.z != null && Math.abs(exactLayer.z - z) < 0.0005)
@@ -275,7 +272,7 @@ export default function SlicerGcodePreview({ fileId = null, preview, bedSize = n
           <select value={layerDisplay} onChange={event => setLayerDisplay(event.target.value)}>
             <option value="current">Current layer only · detail</option>
             <option value="context">Current + 8 faded layers</option>
-            <option value="all">Whole print · progressive full resolution</option>
+            <option value="all">Whole print · surface overview</option>
           </select>
         </label>
         <label>Feature focus
@@ -341,16 +338,19 @@ export default function SlicerGcodePreview({ fileId = null, preview, bedSize = n
       </div>
       <div className="slicerWholeModelProgress" role="status">
         <span>{wholeModel.complete
-          ? "Full-resolution preview · all "+layers.length.toLocaleString()+" layers"
+          ? "Complete-height surface overview · "+layers.length.toLocaleString()+" layers"
           : wholeModel.loading
-          ? "Building exact toolpaths · "+wholeModel.loadedLayers.toLocaleString()+" / "+layers.length.toLocaleString()+" layers"
-          : "Partial full-resolution preview · "+wholeModel.loadedLayers.toLocaleString()+" / "+layers.length.toLocaleString()+" layers"}
+          ? "Building surface overview · "+wholeModel.loadedLayers.toLocaleString()+" / "+layers.length.toLocaleString()+" layers"
+          : "Incomplete surface overview · "+wholeModel.loadedLayers.toLocaleString()+" / "+layers.length.toLocaleString()+" layers"}
         </span>
         {wholeModel.loading && <progress value={wholeModel.loadedLayers} max={layers.length} />}
         {(wholeModel.limited || wholeModel.message) && <small>
-          {wholeModel.message || "Whole-model geometry reached the device preview budget. Individual selected layers remain available at full resolution; the G-code is unchanged."}
+          {wholeModel.message || "The overview could not cover all layers. Select any layer for complete G-code toolpath inspection."}
         </small>}
       </div>
+      {wholeModel.complete && <small className="slicerPreviewAccuracyNote">
+        Surface overview prioritises shells and supports for performance. Select a layer to inspect every original extrusion move.
+      </small>}
       {showLayerInsert && canEdit && fileId && file && <GcodeLayerInsert
         key={String(currentLayer) + ":" + String(fileId)}
         file={file} selectedZ={z} nextZ={layers[currentLayer + 1]}
