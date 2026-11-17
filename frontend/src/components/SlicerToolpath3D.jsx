@@ -284,7 +284,12 @@ export default function SlicerToolpath3D({
       // Inspection means *isolation*, not amber paint over dimmed green paths.
       // Skip internal segments entirely when comparing outer perimeters.
       if (outerContrast && featureFamily(feature) !== "outer") continue;
-      const hex = colourMode === "layer"
+      const logicalTool = segment[7];
+      const hex = colourMode === "filament"
+        ? (Number.isInteger(logicalTool) && logicalTool >= 0 && logicalTool < 16
+          ? new THREE.Color().setHSL((0.06 + logicalTool * 0.618034) % 1, 0.76, 0.61)
+          : new THREE.Color("#718096"))
+        : colourMode === "layer"
         ? new THREE.Color().setHSL(0.56 - 0.44 * (layers.length > 1
           ? Math.max(0, (layerIndexByHeight.get(z.toFixed(3)) ?? -1)) / (layers.length - 1) : 0), 0.85, 0.64)
         : new THREE.Color(colourMode === "solid" ? "#f09a4b" : (colours[feature] || "#b8d4e5"));
