@@ -106,6 +106,8 @@ def store_generated_gcode(job_id, raw: bytes):
                 job.owner, job.settings or {}, "variable_layer_profile")
             support_test = settings_use_paint_field(
                 job.owner, job.settings or {}, "support_paint")
+            seam_test = settings_use_paint_field(
+                job.owner, job.settings or {}, "seam_paint")
             stored = FileAsset(
                 owner=job.owner,
                 project=job.input_asset.project,
@@ -128,6 +130,8 @@ def store_generated_gcode(job_id, raw: bytes):
                        if variable_test else {}),
                     **({"support_paint_test": True, "printer_submission_verified": False}
                        if support_test else {}),
+                    **({"seam_paint_test": True, "printer_submission_verified": False}
+                       if seam_test else {}),
                 },
             )
             stored.file = ContentFile(raw, name=output_name)
@@ -144,6 +148,8 @@ def store_generated_gcode(job_id, raw: bytes):
                 if variable_test
                 else "Support painting test slice completed. Inspect native support paths; printer upload remains disabled."
                 if support_test
+                else "Seam painting test slice completed. Inspect G-code seam placement; printer upload remains disabled."
+                if seam_test
                 else ("G-code saved to MakerVault library. Inspect before printing."
                       if keep_in_library else
                       "G-code retained with slice job; add it to the library when ready.")
