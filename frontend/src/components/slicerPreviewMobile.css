@@ -506,3 +506,33 @@
     border-radius: 5px;
   }
 }
+
+/* Finish iOS range geometry. WebKit aligns the native thumb's top/left edge
+   with the rail in writing-mode: vertical-lr rather than its centre. Correct
+   ONLY the cross-axis; leave native min/max travel untouched. */
+@media (max-width: 700px) {
+  .slicerResultSteps input.slicerFullRange::-webkit-slider-thumb {
+    transform: translateY(-11px);
+  }
+  .slicerResultLayerSlider input.slicerFullRange::-webkit-slider-thumb {
+    transform: translateX(-11px);
+  }
+
+  /* The layer rail used to stretch to the entire viewport column (including
+     the bottom whitespace). End the rail near the horizontal move control
+     instead; Z and Add G-code remain inside the compact slider panel. */
+  .slicerResultLayerLayout {
+    align-items: start;
+  }
+  .slicerResultLayerLayout > .slicerResultLayerSlider {
+    align-self: start;
+    height: calc(clamp(290px, 43dvh, 450px) + 150px);
+    max-height: none;
+    box-sizing: border-box;
+  }
+  .slicerResultLayerSlider input.slicerFullRange {
+    height: auto;
+    min-height: 0;
+    flex: 1 1 0;
+  }
+}
