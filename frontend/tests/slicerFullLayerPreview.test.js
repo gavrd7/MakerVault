@@ -21,8 +21,8 @@ test("preview retrieves exact selected layer from stored original G-code", () =>
   assert.match(preview, /setLayerBusy\(true\)/);
 });
 
-test("progressive geometry uses exact layers and explicitly reports partial loads", () => {
-  assert.match(preview, /gcode\/layers\/\?zs=/);
+test("progressive surface overview reports incomplete loads separately from exact layer inspection", () => {
+  assert.match(preview, /gcode\/layers\/\?overview=1&detail=/);
   assert.match(preview, /Whole print · surface overview/);
   assert.match(preview, /slicerWholeModelProgress/);
   assert.match(preview, /wholeModel\.loadedLayers/);
@@ -36,7 +36,7 @@ test("progressive geometry uses exact layers and explicitly reports partial load
 });
 
 
-test("progressive large prints append geometry and reuse already fetched layers", () => {
+test("progressive large prints append surface geometry without polluting exact-layer cache", () => {
   assert.match(preview, /offset \+= 64/);
   assert.match(preview, /overview=1&detail=/);
   assert.doesNotMatch(preview, /fullLayerCache\.current\.set\(key,item\)/);
