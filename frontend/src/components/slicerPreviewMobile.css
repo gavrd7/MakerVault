@@ -649,3 +649,58 @@
      statistics strip hides the duplicate temperature detail cards. */
   .slicerResultPreview > .slicerResultStats > div:nth-child(8) {display:none}
 }
+
+/* Correct the display-panel regression: its labels were flex items with a
+   190px flex basis in a COLUMN, producing enormous vertical blank space. */
+.slicerResultModeRow.slicerPreviewOptionsPanel.mobileOpen {
+  display:flex!important;
+  flex-direction:column!important;
+  flex-wrap:nowrap!important;
+  align-items:stretch!important;
+  justify-content:flex-start!important;
+  align-content:start!important;
+  height:max-content!important;
+  min-height:0!important;
+  max-height:min(82dvh,760px)!important;
+  gap:11px!important;
+}
+.slicerResultModeRow.slicerPreviewOptionsPanel.mobileOpen > label {
+  flex:0 0 auto!important;
+  width:100%!important;
+  height:auto!important;
+  min-height:0!important;
+  margin:0!important;
+  display:flex!important;
+  flex-direction:column!important;
+  justify-content:flex-start!important;
+  align-items:stretch!important;
+  gap:5px!important;
+  text-align:left!important;
+}
+.slicerResultModeRow.slicerPreviewOptionsPanel.mobileOpen > label.checkRow {
+  flex:0 0 auto!important;
+  flex-direction:row!important;
+  align-items:center!important;
+  justify-content:flex-start!important;
+  gap:9px!important;
+}
+.slicerResultModeRow.slicerPreviewOptionsPanel.mobileOpen > label.checkRow input {
+  flex:0 0 auto!important;
+  width:auto!important;
+  margin:0!important;
+}
+.slicerResultModeRow.slicerPreviewOptionsPanel.mobileOpen > .slicerPreviewPanelHeader {
+  display:flex!important;
+  flex:0 0 auto!important;
+  flex-direction:row!important;
+  justify-content:space-between!important;
+  align-items:center!important;
+  gap:12px!important;
+  margin:0 0 4px!important;
+}
+.slicerResultModeRow.slicerPreviewOptionsPanel.mobileOpen select {
+  width:100%!important;
+  flex:none!important;
+  min-height:42px;
+  margin:0!important;
+}
