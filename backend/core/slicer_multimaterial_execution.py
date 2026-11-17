@@ -44,7 +44,7 @@ def plan_native_multimaterial(job, *, settings=None):
     connections = PrinterConnection.objects.filter(
         printer_id=job.printer_id, enabled=True,
     )
-    topology = offline_material_system(connections, printer=job.printer)
+    topology = offline_material_system(connections, printer=getattr(job, "printer", None))
     profile_rows = settings.get("slot_filament_profiles") or []
     primary_slots = {
         row.get("slot_id") for row in profile_rows
