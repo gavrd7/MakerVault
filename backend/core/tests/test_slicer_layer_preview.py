@@ -47,6 +47,16 @@ class FullLayerParserTests(SimpleTestCase):
             with self.subTest(zs=zs), self.assertRaises(ValueError):
                 layer_batch_toolpaths(GCODE, zs)
 
+    def test_batch_limit_never_claims_missing_paths_are_complete(self):
+        from unittest.mock import patch
+        with patch("core.slicer_layer_preview.MAX_BATCH_SEGMENTS", 2):
+            result = layer_batch_toolpaths(GCODE, [0.2, 0.4])
+        self.assertFalse(result["complete"])
+        self.assertEqual(len(result["layers"][0]["segments"]), 2)
+        self.assertEqual(result["layers"][0]["segment_count"], 3)
+        self.assertTrue(result["layers"][0]["limited"])
+        self.assertTrue(result["layers"][1]["limited"])
+
     def test_relative_extrusion_and_g92_are_supported(self):
         text = (
             "G90\nM83\nG1 Z0.25 X0 Y0\n"
