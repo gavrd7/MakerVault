@@ -53,8 +53,12 @@ def resolve_native_material_palette(
         objects, printer_id=printer_id, topology=topology,
         tool_bindings=tool_bindings,
     )
-    if not routes or len({route.tool_index for route in routes}) < 2:
-        raise MaterialRoutingError("Multi-material preparation requires two distinct assigned tools.")
+    colour_maps = native_colour_tool_maps(
+        objects, printer_id=printer_id, tool_bindings=tool_bindings)
+    painted_tools = {tool for mapping in colour_maps for tool in mapping.values()}
+    all_used_tools = {route.tool_index for route in routes} | painted_tools
+    if not routes or len(all_used_tools) < 2:
+        raise MaterialRoutingError("Multi-material preparation requires at least two used tools.")
     if any(route.tool_index >= len(native_filament_profiles) for route in routes):
         raise MaterialRoutingError("A model selects a native tool without a filament preset.")
 
@@ -89,6 +93,7 @@ def resolve_native_material_palette(
     return {
         "routes": tuple(routes),
         "native_tool_indices": tuple(route.tool_index for route in routes),
+        "expected_tools": tuple(sorted(all_used_tools)),
         "filament_profiles": tuple(resolved),
         "topology": topology,
     }
@@ -207,6 +212,7 @@ def prepare_multimaterial_plate(
         "model_3mf": project,
         "filament_profiles": result["filament_profiles"],
         "native_tool_indices": result["native_tool_indices"],
+        "expected_tools": result["expected_tools"],
         "topology": result["topology"],
         "printer_submission_verified": False,
     }
