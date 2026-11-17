@@ -123,21 +123,19 @@ def validate_worker_3mf(data, *, native_tool_count=None):
                     attributes - {"v1", "v2", "v3", "paint_supports", "paint_seam",
                                   "paint_fuzzy_skin"}):
                 raise WorkerError("Unsupported native 3MF triangle attributes.")
-            if len(paint_attrs) > 1:
-                raise WorkerError("Combined native painting is not verified.")
             if paint_attrs:
-                # Accept only Orca's exact unsplit-leaf state encodings.
-                # Foreign 3MF metadata, nested bitstreams, and combinations
-                # remain blocked at the isolated worker boundary.
-                channel = next(iter(paint_attrs))
-                used_native_paint_channels.add(channel)
-                if len(used_native_paint_channels) > 1:
-                    raise WorkerError("Combining different native painting channels is not verified.")
-                expected_states = ("4",) if channel == "paint_fuzzy_skin" else ("4", "8")
-                if (triangle.attrib[channel] not in expected_states
-                        or len(objects) != 1 or native_tool_count is not None
-                        or layer_ranges is not None):
+                # Permit multiple independent native annotations on the same
+                # facet, including with bounded layer-height ranges. The
+                # combined path remains single-model and single-filament only.
+                # Reject arbitrary bitstreams, foreign attributes, and unsafe
+                # states for every channel independently.
+                if len(objects) != 1 or native_tool_count is not None:
                     raise WorkerError("Unsupported native painted facet annotation.")
+                for channel in paint_attrs:
+                    used_native_paint_channels.add(channel)
+                    expected_states = ("4",) if channel == "paint_fuzzy_skin" else ("4", "8")
+                    if triangle.attrib[channel] not in expected_states:
+                        raise WorkerError("Unsupported native painted facet annotation.")
         if count > MAX_TRIANGLES:
             raise WorkerError("3MF triangle count exceeds worker limit.")
         if len(vertices) > MAX_VERTICES_PER_OBJECT:
