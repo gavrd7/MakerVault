@@ -247,9 +247,10 @@ def _validate_plate_execution(job):
     if (settings.get("flush_settings") is not None and
             settings.get("multi_material_test") is not True):
         raise SlicerExecutionError(
-            "Custom flushing settings require verified native multi-material tool "
-            "routing. Assign multiple filaments and use Slice; physical printer "
-            "submission remains blocked for this offline test."
+            "This saved job contains flushing changes but was not marked for native "
+            "multi-material slicing. Create a new slice from the draft using Slice "
+            "with at least two mapped filaments. Printer submission remains "
+            "disabled for offline multi-material test G-code."
         )
     objects=settings.get("plate_objects")
     project=settings.get("plates")
@@ -275,9 +276,10 @@ def _validate_plate_execution(job):
                 and (item["colour_paint"].get("faces") or item["colour_paint"].get("regions"))
                 for item in objects)):
         raise SlicerExecutionError(
-            "Colour-painted regions require the offline multi-material test path "
-            "with two or more assigned models and verified native filament presets. "
-            "Single-filament slicing cannot silently discard painted colours."
+            "This saved job contains colour painting but was not marked for native "
+            "multi-material slicing. Create a new slice from the painted draft using "
+            "Slice; one model with two mapped filaments is supported. "
+            "Painted colours cannot be discarded by the single-material engine."
         )
     if any(isinstance(item, dict) and isinstance(item.get("support_paint"), dict)
            and item["support_paint"].get("regions") for item in objects):
