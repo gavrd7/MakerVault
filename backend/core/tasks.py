@@ -438,6 +438,17 @@ def live_printer_connections_tick():
                     if item.last_checked_at + timedelta(seconds=lease_seconds) > now:
                         continue
                 next_due = item.last_checked_at + timedelta(seconds=item.poll_interval_seconds)
+                report = (item.capabilities or {}).get("material_system")
+                schema_old = not isinstance(report, dict) or report.get("schema_version") != 1
+                if schema_old:
+                    # A once-per-upgrade read-only poll refreshes legacy
+                    # capability data without a reconnect or manual action.
+                    # Bound retries on unreachable printers to >=120 seconds
+                    # instead of polling them on every scheduler tick.
+                    refresh_due = item.last_checked_at + timedelta(
+                        seconds=min(item.poll_interval_seconds, 120))
+                    if refresh_due <= now:
+                        next_due = refresh_due
                 if next_due > now:
                     continue
             # Reserve the poll window before queueing so a 10-second beat does
