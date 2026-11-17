@@ -10,7 +10,7 @@ from core.slicer_approval import fixture_stl
 PRINTER_ID = "11111111-1111-4111-8111-111111111111"
 from core.slicer_native_support_paint import _fingerprint
 from core.slicer_plate_3mf import NS, _triangles, build_plate_3mf
-from core.slicer_native_material_palette import native_colour_tool_maps
+from core.slicer_native_material_palette import native_colour_tool_maps, prepare_multimaterial_plate
 from core.slicer_material_routing import MaterialRoutingError
 from core.slicer_profiles import SlicerProfileError
 
@@ -57,6 +57,43 @@ class NativeColourRegionTests(SimpleTestCase):
         self.assertGreater(len(faces), len(list(_triangles(raw))))
         self.assertTrue(any(face.attrib.get("paint_color") == "0C" for face in faces))
         self.assertTrue(any("paint_color" not in face.attrib for face in faces))
+
+    def test_single_painted_model_builds_two_tool_offline_palette(self):
+        import json
+        from types import SimpleNamespace
+        raw, painting = fixture_paint()
+        item = {"instance_id": "painted", "x_mm": 0, "y_mm": 0,
+                "rotation_deg": 0, "scale_percent": 100, "colour_paint": painting,
+                "material_slot": {"printer_id": PRINTER_ID,
+                                  "slot_id": "bay-1", "slot_index": 0}}
+        profiles = [
+            SimpleNamespace(owner_id="owner", engine="orcaslicer",
+                            engine_version="2.5.0", kind="filament",
+                            status="verified", name=name)
+            for name in ("Black", "White")
+        ]
+        result = prepare_multimaterial_plate(
+            [(item, raw)], bed_width=220, bed_depth=220,
+            printer_id=PRINTER_ID, owner_id="owner", engine="orcaslicer",
+            engine_version="2.5.0", topology="single_nozzle_changer",
+            tool_bindings={"bay-1": 0, "bay-3": 1},
+            native_filament_profiles=profiles,
+            resolver=lambda profile: json.dumps({
+                "filament_diameter": ["1.75"], "name": profile.name,
+            }).encode(),
+        )
+        self.assertEqual(result["native_tool_indices"], (0,))
+        self.assertEqual(result["expected_tools"], (0, 1))
+        self.assertFalse(result["printer_submission_verified"])
+        with zipfile.ZipFile(io.BytesIO(result["model_3mf"])) as archive:
+            model = ET.fromstring(archive.read("3D/3dmodel.model"))
+            manifest = ET.fromstring(archive.read("Metadata/model_settings.config"))
+        self.assertTrue(any(face.attrib.get("paint_color") == "8"
+                            for face in model.findall(".//{%s}triangle" % NS)))
+        self.assertEqual(
+            manifest.find("object/metadata").attrib,
+            {"key": "extruder", "value": "1"},
+        )
 
     def test_fails_closed_when_painted_swatch_has_no_tool(self):
         _raw, painting = fixture_paint()
