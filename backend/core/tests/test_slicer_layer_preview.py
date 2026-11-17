@@ -4,7 +4,7 @@ from django.core.files.base import ContentFile
 from django.test import SimpleTestCase, TestCase
 
 from core.models import FileAsset
-from core.slicer_layer_preview import exact_layer_toolpaths
+from core.slicer_layer_preview import exact_layer_toolpaths, layer_batch_toolpaths
 
 
 GCODE = (
@@ -30,6 +30,22 @@ class FullLayerParserTests(SimpleTestCase):
         self.assertTrue(result["complete"])
         self.assertFalse(result["sampled"])
         self.assertEqual(exact_layer_toolpaths(GCODE, 0.4)["segment_count"], 1)
+
+    def test_batched_layers_are_exact_and_ordered(self):
+        result = layer_batch_toolpaths(GCODE, [0.2, 0.4])
+        self.assertTrue(result["complete"])
+        self.assertEqual([layer["z"] for layer in result["layers"]], [0.2, 0.4])
+        self.assertEqual([layer["segment_count"] for layer in result["layers"]], [3, 1])
+        self.assertEqual(result["layers"][0]["segments"],
+                         exact_layer_toolpaths(GCODE, 0.2)["segments"])
+        self.assertEqual(result["layers"][1]["segments"],
+                         exact_layer_toolpaths(GCODE, 0.4)["segments"])
+
+    def test_batch_rejects_duplicates_nonfinite_and_excess_layers(self):
+        for zs in ([0.2, 0.2], [float("nan")], [-1], [2001],
+                   [i / 10 for i in range(13)], []):
+            with self.subTest(zs=zs), self.assertRaises(ValueError):
+                layer_batch_toolpaths(GCODE, zs)
 
     def test_relative_extrusion_and_g92_are_supported(self):
         text = (
@@ -94,9 +110,24 @@ class FullLayerEndpointTests(TestCase):
         self.assertEqual(response.json()["segment_count"], 3)
         self.assertEqual(response.json()["feature_counts"]["Support material"], 1)
 
+    def test_batch_endpoint_preserves_original_and_owner_scope(self):
+        self.client.force_login(self.owner)
+        response = self.client.get(
+            f"/api/files/{self.asset.pk}/gcode/layers/?zs=0.2,0.4")
+        self.assertEqual(response.status_code, 200, response.content)
+        self.assertTrue(response.json()["complete"])
+        self.assertEqual([row["segment_count"] for row in response.json()["layers"]], [3, 1])
+        self.assertEqual(response["Cache-Control"], "private, no-store")
+        self.assertEqual(self.client.get(
+            f"/api/files/{self.asset.pk}/gcode/layers/?zs=0.2,0.2").status_code, 400)
+        self.assertEqual(self.client.get(
+            f"/api/files/{self.asset.pk}/gcode/layers/?zs=nan").status_code, 400)
+
     def test_other_user_cannot_inspect_unpublished_output(self):
         self.client.force_login(self.other)
         self.assertEqual(self.client.get(self.url).status_code, 404)
+        self.assertEqual(self.client.get(
+            f"/api/files/{self.asset.pk}/gcode/layers/?zs=0.2").status_code, 404)
 
     def test_invalid_layer_and_binary_are_rejected(self):
         self.client.force_login(self.owner)
