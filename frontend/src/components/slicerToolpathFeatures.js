@@ -39,6 +39,7 @@ export function featureMatchesFocus(feature, focus = "all") {
   const family = featureFamily(feature);
   if (focus === "support") return family === "support" || family === "interface";
   if (focus === "walls") return family === "outer" || family === "inner";
+  if (focus === "shell") return ["outer", "inner", "top", "bridge"].includes(family);
   if (focus === "infill") return ["infill", "solid", "top", "bridge"].includes(family);
   return true;
 }
