@@ -122,7 +122,7 @@ export default function GcodeViewerModal({ file, canEdit = false, onClose, onSav
       <div className={"formActions" + (compact ? " slicerGcodeDesktopActions" : "")} style={{ justifyContent: "flex-start" }}>
         <button type="button" className={mode === "visual" ? "primary" : ""} onClick={() => setMode("visual")}>Visual toolpath</button>
         <button type="button" className={mode === "code" ? "primary" : ""} onClick={() => setMode("code")}>G-code text</button>
-        <a className="assetButton slicerGcodeDownloadAction" href={`/api/files/${encodeURIComponent(file.id)}/gcode/source/?download=1`}>Download complete G-code</a>
+        <a className="buttonLink slicerGcodeDownloadAction" href={`/api/files/${encodeURIComponent(file.id)}/gcode/source/?download=1`}>Download complete G-code</a>
       </div>
       {compact && mobileDetails && <div className="slicerPreviewBackdrop" onClick={() => setMobileDetails(false)} aria-hidden="true" />}
       <div className={"slicerGcodeMetadata" + (compact ? " slicerGcodeDetailCards" : "") + (compact && mobileDetails ? " mobileOpen" : "")}
