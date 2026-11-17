@@ -28,8 +28,11 @@ FEATURES = ("fuzzy_skin_paint", "seam_paint", "support_paint",
             "variable_layer_profile")
 CASES = (
     ("plain-3mf", ()),
+    ("variable-only", ("variable_layer_profile",)),
     ("fuzzy", ("fuzzy_skin_paint",)),
+    ("fuzzy+variable", ("fuzzy_skin_paint", "variable_layer_profile")),
     ("fuzzy+seam", ("fuzzy_skin_paint", "seam_paint")),
+    ("fuzzy+seam+variable", ("fuzzy_skin_paint", "seam_paint", "variable_layer_profile")),
     ("fuzzy+seam+support", ("fuzzy_skin_paint", "seam_paint", "support_paint")),
     ("all-four", FEATURES),
 )
