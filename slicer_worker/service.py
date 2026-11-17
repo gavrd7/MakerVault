@@ -258,6 +258,19 @@ class Handler(BaseHTTPRequestHandler):
                 "Multi-object 3MF requires explicit native plate membership.": "invalid-3mf",
                 "3MF plate membership does not match mesh objects.": "invalid-3mf",
                 "3MF transform is missing or invalid.": "invalid-3mf",
+                "Every native object must select a tool and two native tools must be used.": "native-tool-use-mismatch",
+                "Painted colour refers to an unavailable native filament.": "native-paint-tool-out-of-range",
+                "Colour painting requires verified native multi-tool slicing.": "native-paint-channel-conflict",
+                "Native object extruder.": "native-object-tool-invalid",
+                "Invalid native object extruder.": "native-object-tool-invalid",
+                "Multi-filament 3MF requires native object assignments.": "native-object-tool-missing",
+                "Native filament palette does not match its first preset.": "native-filament-palette-mismatch",
+                "Multi-filament palette does not match the native 3MF job.": "native-filament-palette-mismatch",
+                "Non-contiguous native filament palette.": "native-filament-palette-mismatch",
+                "Invalid native object value.": "native-object-settings-invalid",
+                "Unsupported per-object slicer setting.": "native-object-settings-invalid",
+                "Invalid native plate instance identity.": "native-plate-instance-invalid",
+                "Native object percent unit is missing.": "native-object-settings-invalid",
             }
             if str(exc).startswith("OrcaSlicer CLI exited: "):
                 candidate = str(exc).removeprefix("OrcaSlicer CLI exited: ").removesuffix(".")
