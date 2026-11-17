@@ -10,7 +10,7 @@ import { featureMatchesFocus, featureFamily } from "./slicerToolpathFeatures";
  */
 export default function SlicerToolpath3D({
   segments = [], framingSegments = [], layers = [], activeLayer, activeStep, visible = {},
-  colourMode = "feature", colours = {}, showToolhead = true, bedSize = null,
+  colourMode = "feature", colours = {}, filamentColours = {}, showToolhead = true, bedSize = null,
   renderMode = "solid", nozzleDiameter = 0.4,
   layerDisplay = "current", featureFocus = "all",
   previewSampled = false, fadePrevious = false, outerContrast = false,
@@ -288,8 +288,11 @@ export default function SlicerToolpath3D({
       // Skip internal segments entirely when comparing outer perimeters.
       if (outerContrast && featureFamily(feature) !== "outer") continue;
       const logicalTool = segment[7];
+      const declaredColour=Number.isInteger(logicalTool) ? filamentColours[logicalTool] : null;
+      const hasDeclaredColour=typeof declaredColour==="string" && /^#[0-9a-f]{6}$/i.test(declaredColour);
       const hex = colourMode === "filament"
-        ? (Number.isInteger(logicalTool) && logicalTool >= 0 && logicalTool < 16
+        ? (hasDeclaredColour ? new THREE.Color(declaredColour)
+          : Number.isInteger(logicalTool) && logicalTool >= 0 && logicalTool < 16
           ? new THREE.Color().setHSL((0.06 + logicalTool * 0.618034) % 1, 0.76, 0.61)
           : new THREE.Color("#718096"))
         : colourMode === "layer"
@@ -396,7 +399,7 @@ export default function SlicerToolpath3D({
     marker.visible = Boolean(showToolhead && lastStep);
     if (lastStep) marker.position.set(...lastStep);
   }, [segments, layers, activeLayer, activeStep, visible, colourMode, colours, showToolhead,
-    renderMode, nozzleDiameter, layerDisplay, featureFocus, previewSampled,
+    renderMode, nozzleDiameter, filamentColours, layerDisplay, featureFocus, previewSampled,
     fadePrevious, outerContrast, bedSize?.[0], bedSize?.[1]]);
 
   return <div className="slicerToolpath3D">
