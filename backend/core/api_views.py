@@ -2466,7 +2466,7 @@ def file_gcode_layers(request, asset_id):
         return _error("Only plain-text G-code can be inspected.", status=400)
     raw_heights = request.GET.get("zs", "").split(",")
     if not 1 <= len(raw_heights) <= MAX_BATCH_LAYERS:
-        return _error("Choose between 1 and 32 extrusion layers.", status=400)
+        return _error("Choose between 1 and 64 extrusion layers.", status=400)
     try:
         heights = [float(part) for part in raw_heights]
         if (any(not math.isfinite(z) or not 0 <= z <= 2000 for z in heights)
