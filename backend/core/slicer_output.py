@@ -11,6 +11,7 @@ import re
 
 from .gcode_analysis import MAX_SCAN_BYTES, analyse_text, compare_printer_metadata
 from .models import FileAsset, SliceJob
+from .slicer_paint_assets import settings_use_paint_field
 from .storage_usage import ensure_storage_capacity
 
 
@@ -101,14 +102,10 @@ def store_generated_gcode(job_id, raw: bytes):
             ensure_storage_capacity(job.owner, len(raw))
             output_name = generated_slice_name(job)
             keep_in_library = (job.settings or {}).get("save_gcode_to_library") is True
-            variable_test = any(
-                isinstance(item, dict) and (item.get("variable_layer_profile") or {}).get("bands")
-                for item in (job.settings or {}).get("plate_objects", [])
-            )
-            support_test = any(
-                isinstance(item, dict) and (item.get("support_paint") or {}).get("regions")
-                for item in (job.settings or {}).get("plate_objects", [])
-            )
+            variable_test = settings_use_paint_field(
+                job.owner, job.settings or {}, "variable_layer_profile")
+            support_test = settings_use_paint_field(
+                job.owner, job.settings or {}, "support_paint")
             stored = FileAsset(
                 owner=job.owner,
                 project=job.input_asset.project,
