@@ -34,3 +34,15 @@ test("progressive geometry uses exact layers and explicitly reports partial load
   assert.match(toolpath, /featureMatchesFocus\(feature, featureFocus\)/);
 
 });
+
+
+test("progressive large prints append geometry and reuse already fetched layers", () => {
+  assert.match(preview, /offset \+= 64/);
+  assert.match(preview, /fullLayerCache\.current\.set\(key,item\)/);
+  assert.match(preview, /progressiveMode=\{progressiveMode\}/);
+  assert.match(preview, /return wholeModel\.segments/);
+  assert.match(toolpath, /canAppend/);
+  assert.match(toolpath, /startSegment = canAppend \? previous\.count : 0/);
+  assert.match(toolpath, /view\.geometryCache = progressiveMode/);
+  assert.match(preview, /const naturalLayer = wholeModel\.complete/);
+});
