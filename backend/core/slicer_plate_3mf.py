@@ -45,7 +45,7 @@ def _triangles(raw):
                     current = []
 
 
-def _render_mesh(raw, element, support_paint=None):
+def _render_mesh(raw, element, support_paint=None, seam_paint=None):
     triangles = list(_triangles(raw))
     if not triangles or len(triangles) > MAX_TRIANGLES:
         raise SlicerProfileError("STL triangle count exceeds the 3MF plate limit.")
@@ -61,11 +61,20 @@ def _render_mesh(raw, element, support_paint=None):
     # Weld identical vertices to keep generated 3MF files compact.
     indexed = {}
     try:
-        # Preserve the existing low-overhead unpainted path: only allocate
-        # re-triangulated facets for a model with actual saved paint regions.
-        tagged = (native_support_triangles(triangles, support_paint)
-                  if support_paint and support_paint.get("regions")
-                  else ((tri, None) for tri in triangles))
+        if (support_paint and support_paint.get("regions")
+                and seam_paint and seam_paint.get("regions")):
+            raise ValueError("Combined support and seam painting requires a verified native adapter.")
+        # Keep the original fast path for unpainted geometry. Exactly one
+        # native annotation channel is emitted per test model.
+        if support_paint and support_paint.get("regions"):
+            tagged = native_support_triangles(triangles, support_paint, kind="support")
+            paint_attribute = "paint_supports"
+        elif seam_paint and seam_paint.get("regions"):
+            tagged = native_support_triangles(triangles, seam_paint, kind="seam")
+            paint_attribute = "paint_seam"
+        else:
+            tagged = ((tri, None) for tri in triangles)
+            paint_attribute = None
     except ValueError as exc:
         raise SlicerProfileError(str(exc)) from exc
     mesh_count = 0
@@ -83,7 +92,7 @@ def _render_mesh(raw, element, support_paint=None):
             ids.append(indexed[centred])
         attrs = {"v1": str(ids[0]), "v2": str(ids[1]), "v3": str(ids[2])}
         if support_state is not None:
-            attrs["paint_supports"] = support_state
+            attrs[paint_attribute] = support_state
         ET.SubElement(faces, f"{{{NS}}}triangle", attrs)
     return mesh_count, maximum[0] - minimum[0], maximum[1] - minimum[1]
 
@@ -181,6 +190,7 @@ def build_plate_3mf(objects_with_stl, *, bed_width, bed_depth, native_tool_indic
             bool(entry[0].get("process_overrides")) or
             bool((entry[0].get("variable_layer_profile") or {}).get("bands")) or
             bool((entry[0].get("support_paint") or {}).get("regions")) or
+            bool((entry[0].get("seam_paint") or {}).get("regions")) or
             abs(float(entry[0].get("z_mm", 0))) > 1e-7 or
             any(abs(float(v)) > 1e-7 for v in entry[0].get("rotation_xyz_deg", [0, 0]))
         )
@@ -196,7 +206,7 @@ def build_plate_3mf(objects_with_stl, *, bed_width, bed_depth, native_tool_indic
         if total_bytes > MAX_SOURCE_TOTAL:
             raise SlicerProfileError("Total plate model size exceeds the limit.")
         obj = ET.SubElement(resources, f"{{{NS}}}object", {"id": str(index), "type": "model"})
-        count, width, depth = _render_mesh(raw, obj, item.get("support_paint"))
+        count, width, depth = _render_mesh(raw, obj, item.get("support_paint"), item.get("seam_paint"))
         total_triangles += count
         # Transform the actual welded vertices, not only the original 2D
         # bounding rectangle: a tilted model has a different XY footprint.
