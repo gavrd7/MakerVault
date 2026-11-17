@@ -8,6 +8,7 @@ import SlicerPlateEditor from "./SlicerPlateEditor";
 import SlicerPrepareWorkspace from "./SlicerPrepareWorkspace";
 import SlicerEngineChoices from "./SlicerEngineChoices";
 import SlicerBedTypePicker from "./SlicerBedTypePicker";
+import {separatePaintedPlates, restorePaintedPlates} from "./slicerPaintAssets.js";
 import {ORCA_PLATE_TYPES,plateOptions} from "./slicerPlateOptions";
 import { engineCompatibilityIssues } from "./slicerEngineCompatibility";
 import { slicerSpoolHex, recolorUnmodifiedPlate } from "./slicerSpoolColour";
@@ -536,7 +537,7 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
     }
   }
 
-  function loadSavedDraft(job) {
+  async function loadSavedDraft(job) {
     if (!job) return;
     setShowDrafts(false);
     if (!["draft", "failed", "cancelled", "stale"].includes(job.status)) {
@@ -546,9 +547,15 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
     }
     const savedObjects = job.settings?.plate_objects || [];
     const savedPlates=job.settings?.plates;
-    const restored=Array.isArray(savedPlates)&&savedPlates.length
+    let restored=Array.isArray(savedPlates)&&savedPlates.length
       ?savedPlates.map(item=>({id:item.id,name:item.name,objects:item.objects||[]}))
       :[{id:"plate-1",name:job.settings?.plate_label||"Plate 1",objects:savedObjects}];
+    try {
+      restored=await restorePaintedPlates(restored);
+    } catch (err) {
+      setError("Could not reopen the saved private painting: "+(err.message||"Missing mask asset."));
+      return;
+    }
     manuallyColouredModels.current = new Set(restored.flatMap(item=>
       item.objects.map(model=>model.instance_id)));
     manuallyChosenProfiles.current = new Set(["printer", "filament", "process"]);
@@ -762,8 +769,20 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
       setError("Select a native printer, filament and process profile before saving or slicing.");
       return;
     }
+    // Keep mesh and paint separate: large brush masks are uploaded as private
+    // versioned assets first, and every job sends only compact references.
+    setBusy(true);
+    let compactPlates;
+    try {
+      compactPlates=await separatePaintedPlates(projectPlates);
+    } catch (err) {
+      setBusy(false);
+      setError("Could not store private model painting: "+(err.message||"Unknown error"));
+      return;
+    }
+    const compactObjects=compactPlates.find(plate=>plate.id===activePlateId)?.objects||[];
     if(mode==="all"){
-      const targets=projectPlates.filter(plate=>plate.objects.length);
+      const targets=compactPlates.filter(plate=>plate.objects.length);
       setBusy(true);
       const queuedJobs=[];
       try{
@@ -773,7 +792,7 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
             spool_id:form.spool_id||null,
             settings:{
               plate_objects:target.objects,plate_label:target.name.trim()||"Untitled plate",
-              plates:projectPlates.map(plate=>({
+              plates:compactPlates.map(plate=>({
                 id:plate.id,name:plate.name.trim()||"Untitled plate",objects:plate.objects,
               })),
               active_plate_id:target.id,workflow:"interactive",
@@ -812,12 +831,12 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
         method: "POST", compressJson:true,
         body: {
           ...form,
-          input_asset_id: plateObjects[0]?.asset_id ||
-            projectPlates.find(item=>item.objects.length)?.objects[0]?.asset_id,
+          input_asset_id: compactObjects[0]?.asset_id ||
+            compactPlates.find(item=>item.objects.length)?.objects[0]?.asset_id,
           spool_id: form.spool_id || null,
-          settings: { ...(plateObjects.length ? { plate_objects: plateObjects } : {}),
+          settings: { ...(compactObjects.length ? { plate_objects: compactObjects } : {}),
             plate_label: plateLabel.trim() || "Plate 1",
-            plates:projectPlates.map(plate=>({
+            plates:compactPlates.map(plate=>({
               id:plate.id,name:plate.name.trim()||"Untitled plate",objects:plate.objects,
             })),active_plate_id:activePlateId,
             save_gcode_to_library: saveOutput, workflow,
