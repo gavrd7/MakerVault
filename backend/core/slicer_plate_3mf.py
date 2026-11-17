@@ -232,7 +232,11 @@ def build_plate_3mf(objects_with_stl, *, bed_width, bed_depth, native_tool_indic
         count, width, depth = _render_mesh(
             raw, obj, item.get("support_paint"), item.get("seam_paint"),
             item.get("fuzzy_skin_paint"),
-            colour_paint=item.get("colour_paint"),
+            # Ordinary MakerVault project exports preserve paint in their
+            # validated sidecars; only a verified native palette may compile
+            # it into print-tool annotations.
+            colour_paint=(item.get("colour_paint")
+                          if native_colour_tools is not None else None),
             colour_tool_indices=(native_colour_tools[index - 1]
                                  if native_colour_tools is not None else None))
         total_triangles += count
