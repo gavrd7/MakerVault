@@ -208,21 +208,23 @@ def offline_material_system(connections, *, printer=None):
         return detect_material_system(connections)
     except MaterialRoutingError:
         pass
+    import re
     model = str(getattr(printer, "model", "") or "").strip().lower()
     # K2 family is single-nozzle; this is a slicer-only assumption, not a
     # machine probe or proof of a working/connected feeder.
-    is_k2 = model == "k2" or model.startswith(("k2 ", "k2-", "k2_"))
+    is_k2 = bool(re.match(r"^(?:creality[ -]+)?k2(?:$|[ _-])", model))
     has_creality_adapter = any(
         connection.enabled and connection.adapter == "creality_local"
         and str(connection.printer_id) == str(getattr(printer, "pk", None))
         for connection in connections
     )
-    if is_k2 and has_creality_adapter:
+    if is_k2 and (has_creality_adapter or getattr(printer, "multi_material_installed", False) is True):
         return "single_nozzle_changer"
     raise MaterialRoutingError(
         "No supported multi-material topology is available for this printer. "
         "Offline slicing needs an adapter-declared material system, or a known "
-        "Creality K2 model with an enabled Creality local connection."
+        "Creality K2 model with an enabled Creality local connection or an "
+        "explicitly installed multi-material system."
     )
 
 
