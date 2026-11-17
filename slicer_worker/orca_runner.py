@@ -64,6 +64,8 @@ def _engine_exit_reason(stderr):
         "unrecognized argument",
     )):
         return "unsupported-cli-option"
+    if "too small line width" in message:
+        return "native-line-width-invalid"
     if any(term in message for term in (
         "param values in 3mf/config error", "not in range",
         "out of range", "config option value",
@@ -319,7 +321,11 @@ def run_orca(binary: Path, workdir: Path, *, timeout_seconds: int = DEFAULT_TIME
                                "unrecognised keys omitted", ",".join(keys) if keys else "none")
             # Orca's CLI uses 238 for some project/config validation exits.
             # Preserve this as a diagnostic class, not a claim about the cause.
-            if reason == "engine-exited" and proc.returncode == 238:
+            if reason == "engine-exited" and proc.returncode == 205:
+                # Exit 205 can be a Print::validate rejection. Never infer
+                # the specific setting unless the captured output names it.
+                reason = "cli-print-validation-exit-205"
+            elif reason == "engine-exited" and proc.returncode == 238:
                 reason = "cli-validation-exit-238"
             elif reason == "engine-exited" and proc.returncode == 239:
                 # Preserve the CLI status without assuming the precise cause:
