@@ -1176,7 +1176,9 @@ export default function SlicerPrepareWorkspace({
           aria-pressed={!paintErase&&seamSlot===slot} className={!paintErase&&seamSlot===slot?"isActive":""}
           onClick={()=>{setSeamSlot(slot);setPaintErase(false);}}>{label}</button>)}
       </div>}
-      {isFuzzyPainting&&<small>Enable native fuzzy skin in Print Settings before slicing. Painted masks are currently draft-only.</small>}
+      {isFuzzyPainting&&<small>{engineCapabilities.fuzzy_skin_paint?.status==="test_only"
+        ? "Orca 2.5 uses Painted only mode automatically for the offline fuzzy test; texture thickness and point spacing come from the process profile."
+        : "Painted fuzzy skin remains draft-only for this engine."}</small>}
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:5}}>
         <small>{isSupportPainting ? `${paintSelected?.support_paint?.regions?.reduce((n,r)=>n+r.patches.length,0)||0} support patches` : isSemanticPainting ? `${activePaintState?.regions?.reduce((n,r)=>n+r.patches.length,0)||0} ${isSeamPainting?"seam":"fuzzy skin"} patches` : paintSelected?.colour_paint?.version === 2 ? `${paintSelected.colour_paint.regions?.reduce((n,region)=>n+region.patches.length,0)||0} clipped patches` : `${paintSelected?.colour_paint ? Object.keys(paintSelected.colour_paint.faces||{}).length : 0} facets (legacy)`}</small>
         <div className="slicerPaintEditActions">
@@ -1241,7 +1243,7 @@ export default function SlicerPrepareWorkspace({
       </div>}
       <small style={{fontSize:11,opacity:.8}}>Left drag: paint · Right drag: rotate view · Wheel: zoom · Ctrl+Z / Ctrl+Y: undo / redo. {(isSupportPainting && engineCapabilities.support_paint?.status==="test_only") ||
          (isSeamPainting && engineCapabilities.seam_paint?.status==="test_only") ||
-         (isFuzzySkinPainting && engineCapabilities.fuzzy_skin_paint?.status==="test_only")
+         (isFuzzyPainting && engineCapabilities.fuzzy_skin_paint?.status==="test_only")
         ? "This painting can be sliced for offline Orca 2.5 testing; printer submission remains blocked."
         : "Paint annotations are draft-only until native export is verified."}</small>
       {isSupportPainting && (paintSelected?.support_paint?.regions?.reduce((n,r)=>n+r.patches.length,0)||0)>10000 &&
