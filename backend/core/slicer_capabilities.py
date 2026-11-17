@@ -36,6 +36,12 @@ def native_capabilities(engine, version):
                   "work; native slicing is still pending.")
     result = {key: {"status": state, "reason": reason} for key in FEATURES}
     if engine == "orcaslicer" and version == "2.5.0":
+        result["fuzzy_skin_paint"] = {
+            "status": "test_only",
+            "reason": ("Painted-only fuzzy skin facets can be tested offline on a "
+                       "single upright Orca 2.5.0 object. Inspect texture paths "
+                       "before any printer submission."),
+        }
         result["seam_paint"] = {
             "status": "test_only",
             "reason": ("Native seam enforcer/blocker facets are available for offline "
