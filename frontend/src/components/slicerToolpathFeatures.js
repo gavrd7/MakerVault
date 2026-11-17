@@ -4,16 +4,18 @@
  * for the legend. Unknown types remain visible, not silently discarded.
  */
 export const FEATURE_COLOURS = Object.freeze({
-  support: "#f59e0b",
-  interface: "#fbbf24",
-  outer: "#5eead4",
-  inner: "#14b8a6",
-  infill: "#60a5fa",
-  solid: "#818cf8",
-  top: "#c4b5fd",
-  bridge: "#fb7185",
-  skirt: "#9ca3af",
-  other: "#cbd5e1",
+  // High-contrast native-slicer-like palette, independent of engine labels.
+  // Structural supports are green, shell walls warm orange, upper skin red.
+  support: "#2fd442",
+  interface: "#80e75a",
+  outer: "#f47a36",
+  inner: "#f4bf4d",
+  infill: "#cf6799",
+  solid: "#8164c9",
+  top: "#e94c52",
+  bridge: "#4baadf",
+  skirt: "#4e84c6",
+  other: "#b7c7d7",
 });
 
 export function featureFamily(feature = "") {
