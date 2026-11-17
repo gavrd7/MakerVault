@@ -112,6 +112,24 @@ REASONS = {
     "invalid-native-plate": (
         "The generated 3MF plate membership or native plate metadata failed validation."
     ),
+    "invalid-job-payload": "The worker rejected the slicing request envelope before inspecting its model.",
+    "unsupported-input-format": "The worker did not accept the supplied model format.",
+    "input-size-invalid": "A model or native profile exceeds the isolated worker input limit.",
+    "input-encoding-invalid": "A model or native profile was not validly encoded for the worker.",
+    "native-palette-contract-invalid": (
+        "The isolated worker did not receive a valid Orca multi-material 3MF request "
+        "with two to sixteen native filament presets."
+    ),
+    "native-palette-entry-invalid": (
+        "One of the native filament presets in the multi-material palette is missing "
+        "or is not a correctly encoded profile entry."
+    ),
+    "native-palette-encoding-invalid": (
+        "A native filament preset in the multi-material palette has invalid transport encoding."
+    ),
+    "native-palette-size-invalid": (
+        "A native filament preset in the multi-material palette is empty or exceeds the worker size limit."
+    ),
     "validation-error": "The worker rejected an input or generated result. Check model and profile integrity.",
     "engine-exited": (
         "OrcaSlicer exited without a recognised diagnostic. "
