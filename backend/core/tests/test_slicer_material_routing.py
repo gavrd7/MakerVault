@@ -8,7 +8,7 @@ from types import SimpleNamespace
 from core.slicer_approval import fixture_stl
 from core.slicer_material_routing import (
     MaterialRoutingError, plan_material_routes, single_material_slice_assignment,
-    detect_material_system, derive_native_tool_order,
+    detect_material_system, offline_material_system, derive_native_tool_order,
 )
 from core.slicer_plate_3mf import build_plate_3mf, NS
 from core.slicer_profiles import SlicerProfileError
@@ -94,6 +94,59 @@ class MaterialRoutingTests(SimpleTestCase):
                 with self.assertRaises(SlicerProfileError):
                     build_plate_3mf(items, bed_width=220, bed_depth=220,
                                     native_tool_indices=invalid)
+
+
+class OfflineK2MaterialTopologyTests(SimpleTestCase):
+    def _printer(self, model="K2 Combo", installed=False):
+        return SimpleNamespace(pk="printer-1", model=model,
+                               multi_material_installed=installed)
+
+    def _connection(self, adapter="creality_local", *, enabled=True,
+                    status="connected", topology=None):
+        capabilities = ({"material_system": {"available": True,
+                         "topology": topology}} if topology else {})
+        return SimpleNamespace(
+            printer_id="printer-1", adapter=adapter,
+            enabled=enabled, status=status, capabilities=capabilities,
+        )
+
+    def test_existing_k2_creality_connection_without_capability_can_slice_offline(self):
+        self.assertEqual(
+            offline_material_system([self._connection()], printer=self._printer()),
+            "single_nozzle_changer",
+        )
+        self.assertEqual(
+            offline_material_system([self._connection(status="disconnected")],
+                                    printer=self._printer()),
+            "single_nozzle_changer",
+        )
+
+    def test_explicit_installed_k2_cfs_can_use_moonraker_offline(self):
+        self.assertEqual(
+            offline_material_system([self._connection(adapter="moonraker")],
+                                    printer=self._printer(installed=True)),
+            "single_nozzle_changer",
+        )
+
+    def test_adapter_reported_material_system_takes_priority(self):
+        printer = self._printer("Other Printer")
+        self.assertEqual(
+            offline_material_system(
+                [self._connection("moonraker", topology="toolchanger")],
+                printer=printer),
+            "toolchanger",
+        )
+
+    def test_unknown_or_disabled_machine_is_not_guessed(self):
+        for printer, connection in [
+            (self._printer("K1"), self._connection()),
+            (self._printer("Unknown"), self._connection()),
+            (self._printer("K2 Combo"), self._connection(enabled=False)),
+            (self._printer("K2 Combo"), self._connection("moonraker")),
+        ]:
+            with self.subTest(model=printer.model, adapter=connection.adapter):
+                with self.assertRaisesRegex(MaterialRoutingError, "No supported"):
+                    offline_material_system([connection], printer=printer)
 
 
 class SingleMaterialSliceAnnotationTests(SimpleTestCase):
