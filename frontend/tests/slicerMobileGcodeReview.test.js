@@ -23,7 +23,7 @@ test("review layout keeps temperatures, detail table and source reader responsiv
   const source = read("../src/components/GcodeFullSource.jsx");
   assert.match(preview, /Requested chamber/);
   assert.match(viewer, /Chamber /);
-  assert.match(viewer, /<strong>Build plate<\\/strong>/);
+  assert.ok(viewer.includes("<strong>Build plate</strong>"));
   assert.match(viewer, /slicerGenerator/);
   assert.match(viewer, /slicerGcodeSavedSettingsScroll/);
   assert.match(viewer, /slicerGcodeSourceModeActions/);
