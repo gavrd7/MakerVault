@@ -354,10 +354,6 @@ export default function SlicerToolpath3D({
         onChange={event => setShowBedSurface(event.target.checked)} /> Bed</label>
       </div>
     </div>
-    <small>Drag to orbit · Scroll to zoom · Right-drag to pan · Z is vertical ·
-      {bedSize && Number(bedSize[0]) > 0 && Number(bedSize[1]) > 0
-        ? " Bed origin (0, 0) · red X axis · blue Y axis."
-        : " Bed is an approximate reference grid, not verified printer dimensions."}
-    </small>
+
   </div>;
 }
