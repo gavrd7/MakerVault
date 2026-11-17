@@ -106,3 +106,29 @@ The current application has no automatic backfill of preferences from old
 drafts. Existing manually chosen profiles need to be selected once after
 this migration, after which their associations are remembered. A missing
 material fingerprint is reported rather than persisted ambiguously.
+
+## Independent geometry and painting storage (private assets)
+
+STL geometry remains in the existing owner-scoped `mesh` FileAsset. Large
+painting masks (colour, support, seam, fuzzy skin and variable-layer metadata)
+are stored as immutable gzip-compressed `slicer` FileAssets, with:
+- exact STL asset UUID binding, owner-scoped visibility, SHA-256 integrity;
+- server-side semantic polygon validation before storage and on every decode;
+- bounded 8 MiB compressed / 48 MiB expanded mask sizes;
+- deduplication for exact same mesh and mask, with new immutable asset IDs on
+  edits; unverified native export remains gated as before.
+
+The editor sends `paint_asset_id` in each model instance instead of repeating
+the mask in every plate and job. Saving, native slicing, 3MF export and opening
+a saved draft each restore the original mask by checking the owner and exact
+STL identity. Native worker/3MF translators receive the same validated
+canonical annotations, not a rasterised or simplified approximation.
+
+Existing inline-paint drafts remain readable without migration. Small masks
+may remain inline for compatibility. Private mask assets are not shown in the
+general Files library. They are retained after deleting jobs because an
+unsaved browser session may still reference them; a future explicit reference-
+aware garbage collector will handle orphaned temporary data.
+
+The companion build-plate selector uses a top-down square MakerVault sheet
+illustration with distinct generic finishes rather than angled diamond plates.
