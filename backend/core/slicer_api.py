@@ -185,12 +185,30 @@ def _preset(data, key, max_length=200):
     return value
 
 
+def _validate_prime_tower_position(value):
+    """Bounded XY preference for a plate, never executable profile content."""
+    if value is None:
+        return None
+    if not isinstance(value, dict) or set(value) != {"x", "y"}:
+        raise ValueError("Invalid prime tower position.")
+    result = {}
+    for axis in ("x", "y"):
+        coordinate = value[axis]
+        if (isinstance(coordinate, bool) or not isinstance(coordinate, (int, float))
+                or not math.isfinite(coordinate) or not 0 <= coordinate <= 1000):
+            raise ValueError("Prime tower coordinates must be finite millimetres within 0–1000.")
+        result[axis] = round(float(coordinate), 3)
+    return result
+
+
 def _draft_plate_settings(user, input_asset, settings):
     """Persist preview-only plate geometry; never compile it into slicer flags."""
     if settings is None:
         settings = {}
-    if not isinstance(settings, dict) or set(settings) - {"plate_objects", "plate_label", "plates", "active_plate_id", "save_gcode_to_library", "workflow", "process_overrides", "flush_settings", "slot_filament_profiles", "material_tool_bindings", "material_topology", "multi_material_test"}:
+    if not isinstance(settings, dict) or set(settings) - {"plate_objects", "plate_label", "plates", "active_plate_id", "save_gcode_to_library", "workflow", "process_overrides", "flush_settings", "slot_filament_profiles", "material_tool_bindings", "material_topology", "multi_material_test", "prime_tower"}:
         raise ValueError("Unsupported slicer plate settings.")
+    prime_tower = _validate_prime_tower_position(settings.get("prime_tower"))
+    tower_field = {"prime_tower": prime_tower} if prime_tower is not None else {}
     process_overrides = validate_process_overrides(settings.get("process_overrides"))
     flush_settings = validate_flush_settings(settings.get("flush_settings"))
     # Independent per-bay filament presets are draft annotations only until
@@ -265,7 +283,7 @@ def _draft_plate_settings(user, input_asset, settings):
         ids, validated, total = set(), [], 0
         raw_by_id = {}
         for plate in project:
-            if not isinstance(plate, dict) or set(plate) != {"id", "name", "objects"}:
+            if not isinstance(plate, dict) or set(plate) not in ({"id", "name", "objects"}, {"id", "name", "objects", "prime_tower"}):
                 raise ValueError("Invalid build plate entry.")
             plate_id, name, instances = plate["id"], plate["name"], plate["objects"]
             if (not isinstance(plate_id, str) or
@@ -291,12 +309,17 @@ def _draft_plate_settings(user, input_asset, settings):
                     "plate_objects": instances, "plate_label": name.strip()
                 })
                 instances = checked["plate_objects"]
-            validated.append({"id": plate_id, "name": name.strip(), "objects": instances})
+            position = _validate_prime_tower_position(plate.get("prime_tower"))
+            validated.append({"id": plate_id, "name": name.strip(), "objects": instances,
+                              **({"prime_tower": position} if position is not None else {})})
         active_id = settings.get("active_plate_id")
         if active_id not in ids:
             raise ValueError("Choose an active build plate.")
         if raw_by_id[active_id] != settings.get("plate_objects", []):
             raise ValueError("The active plate must match its submitted model list.")
+        active_position = next((p.get("prime_tower") for p in validated if p["id"] == active_id), None)
+        if active_position != prime_tower:
+            raise ValueError("The active prime tower position must match its build plate.")
         project_fields = {"plates": validated, "active_plate_id": active_id}
     elif "active_plate_id" in settings:
         raise ValueError("An active plate requires a multi-plate project.")
@@ -304,7 +327,7 @@ def _draft_plate_settings(user, input_asset, settings):
         return {"plate_label": label, "save_gcode_to_library": save_to_library,
                 "workflow": workflow, "process_overrides": process_overrides,
             **({"multi_material_test": True} if multi_material_test else {}),
-                **({"flush_settings": flush_settings} if flush_settings is not None else {}), **slot_fields, **routing_fields, **project_fields}
+                **({"flush_settings": flush_settings} if flush_settings is not None else {}), **tower_field, **slot_fields, **routing_fields, **project_fields}
     objects = settings["plate_objects"]
     if not isinstance(objects, list) or not 1 <= len(objects) <= 200:
         raise ValueError("The visual build plate supports up to 200 model instances.")
@@ -433,7 +456,7 @@ def _draft_plate_settings(user, input_asset, settings):
             "workflow": workflow, "process_overrides": process_overrides,
             **({"multi_material_test": True} if multi_material_test else {}),
             **({"flush_settings": flush_settings} if flush_settings is not None else {}),
-            **slot_fields, **routing_fields, **project_fields}
+            **tower_field, **slot_fields, **routing_fields, **project_fields}
 
 
 def _draft(user, data):
