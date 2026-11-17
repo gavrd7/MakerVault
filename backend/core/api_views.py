@@ -2461,11 +2461,16 @@ def file_gcode_source(request, asset_id):
     except (OSError, ValueError):
         return _error("Stored G-code could not be opened.", status=404)
     # Django constructs and escapes Content-Disposition, preserving the source name.
+    # Safari/iOS may append .txt to unknown filename extensions when a
+    # text/plain attachment is saved. Use an opaque binary media type for
+    # downloads while retaining text/plain for deliberate inline inspection.
+    download = request.GET.get("download") == "1"
     response = FileResponse(
         handle,
-        as_attachment=request.GET.get("download") == "1",
+        as_attachment=download,
         filename=Path(filename).name,
-        content_type="text/plain; charset=utf-8",
+        content_type=("application/octet-stream" if download
+                      else "text/plain; charset=utf-8"),
     )
     response["Cache-Control"] = "private, no-store"
     response["X-Content-Type-Options"] = "nosniff"
