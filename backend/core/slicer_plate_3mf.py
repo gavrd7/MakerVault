@@ -45,7 +45,8 @@ def _triangles(raw):
                     current = []
 
 
-def _render_mesh(raw, element, support_paint=None, seam_paint=None, fuzzy_skin_paint=None):
+def _render_mesh(raw, element, support_paint=None, seam_paint=None, fuzzy_skin_paint=None, *,
+                 colour_paint=None, colour_tool_indices=None):
     triangles = list(_triangles(raw))
     if not triangles or len(triangles) > MAX_TRIANGLES:
         raise SlicerProfileError("STL triangle count exceeds the 3MF plate limit.")
@@ -62,13 +63,18 @@ def _render_mesh(raw, element, support_paint=None, seam_paint=None, fuzzy_skin_p
     indexed = {}
     try:
         active = sum(bool(paint and paint.get("regions")) for paint in
-                     (support_paint, seam_paint, fuzzy_skin_paint))
+                     (support_paint, seam_paint, fuzzy_skin_paint, colour_paint))
         # Preserve the previously verified fast path for zero/one annotation
         # modes. Combined modes split original facets into disjoint cells,
         # each of which can carry multiple native Orca paint attributes.
         if active > 1:
             tagged = native_combined_paint_triangles(
-                triangles, support_paint, seam_paint, fuzzy_skin_paint)
+                triangles, support_paint, seam_paint, fuzzy_skin_paint,
+                colour=colour_paint, colour_tool_indices=colour_tool_indices)
+            paint_attribute = None
+        elif colour_paint and colour_paint.get("regions"):
+            tagged = native_combined_paint_triangles(
+                triangles, colour=colour_paint, colour_tool_indices=colour_tool_indices)
             paint_attribute = None
         elif support_paint and support_paint.get("regions"):
             tagged = native_support_triangles(triangles, support_paint, kind="support")
@@ -164,7 +170,8 @@ def _bake_native_instance_transform(obj, transform):
             vertex.set(axis, format(value, ".6f"))
 
 
-def build_plate_3mf(objects_with_stl, *, bed_width, bed_depth, native_tool_indices=None):
+def build_plate_3mf(objects_with_stl, *, bed_width, bed_depth, native_tool_indices=None,
+                    native_colour_tools=None):
     """Render [(validated_plate_item_dict, owned_STL_bytes)] as one core 3MF.
 
     Preview coordinates are centred around the bed. Shift all instances by the
@@ -181,6 +188,11 @@ def build_plate_3mf(objects_with_stl, *, bed_width, bed_depth, native_tool_indic
             any(isinstance(tool, bool) or not isinstance(tool, int)
                 or not 0 <= tool <= 63 for tool in native_tool_indices)):
         raise SlicerProfileError("Invalid verified native extruder indices.")
+    if native_colour_tools is not None and (
+            not isinstance(native_colour_tools, (list, tuple)) or
+            len(native_colour_tools) != len(objects_with_stl) or
+            any(not isinstance(mapping, dict) for mapping in native_colour_tools)):
+        raise SlicerProfileError("Native colour-to-tool maps must match the plate objects.")
     if (not all(isinstance(v, (int, float)) and not isinstance(v, bool)
                 and math.isfinite(v) and 1 <= v <= 1000
                 for v in (bed_width, bed_depth))):
@@ -201,6 +213,7 @@ def build_plate_3mf(objects_with_stl, *, bed_width, bed_depth, native_tool_indic
             bool((entry[0].get("support_paint") or {}).get("regions")) or
             bool((entry[0].get("seam_paint") or {}).get("regions")) or
             bool((entry[0].get("fuzzy_skin_paint") or {}).get("regions")) or
+            bool((entry[0].get("colour_paint") or {}).get("regions")) or
             abs(float(entry[0].get("z_mm", 0))) > 1e-7 or
             any(abs(float(v)) > 1e-7 for v in entry[0].get("rotation_xyz_deg", [0, 0]))
         )
@@ -218,7 +231,10 @@ def build_plate_3mf(objects_with_stl, *, bed_width, bed_depth, native_tool_indic
         obj = ET.SubElement(resources, f"{{{NS}}}object", {"id": str(index), "type": "model"})
         count, width, depth = _render_mesh(
             raw, obj, item.get("support_paint"), item.get("seam_paint"),
-            item.get("fuzzy_skin_paint"))
+            item.get("fuzzy_skin_paint"),
+            colour_paint=item.get("colour_paint"),
+            colour_tool_indices=(native_colour_tools[index - 1]
+                                 if native_colour_tools is not None else None))
         total_triangles += count
         # Transform the actual welded vertices, not only the original 2D
         # bounding rectangle: a tilted model has a different XY footprint.
