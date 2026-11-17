@@ -252,6 +252,9 @@ export default function SlicerToolpath3D({
         lastStep = [x2, z, y2];
       }
       if (visible[feature] === false || !featureMatchesFocus(feature, featureFocus)) continue;
+      // Inspection means *isolation*, not amber paint over dimmed green paths.
+      // Skip internal segments entirely when comparing outer perimeters.
+      if (outerContrast && featureFamily(feature) !== "outer") continue;
       const hex = colourMode === "layer"
         ? new THREE.Color().setHSL(0.56 - 0.44 * (layers.length > 1
           ? Math.max(0, (layerIndexByHeight.get(z.toFixed(3)) ?? -1)) / (layers.length - 1) : 0), 0.85, 0.64)
