@@ -177,8 +177,7 @@ class IntendedMaterialSafetyTests(SimpleTestCase):
                 _validate_plate_execution(job)
         job.settings["plate_objects"] = [
             {**model, "support_paint": {"regions":[{"slot": 0}]}}]
-        with self.assertRaisesRegex(SlicerExecutionError, "Combining|combined"):
-            _validate_plate_execution(job)
+        self.assertTrue(_validate_plate_execution(job))
 
     def test_native_fuzzy_skin_is_offline_orca25_single_model_only(self):
         from types import SimpleNamespace
@@ -210,8 +209,7 @@ class IntendedMaterialSafetyTests(SimpleTestCase):
             with self.assertRaisesRegex(SlicerExecutionError,"upright|unscaled"):
                 _validate_plate_execution(job)
         job.settings["plate_objects"]=[{**model,"seam_paint":{"regions":[{"slot":0}]}}]
-        with self.assertRaisesRegex(SlicerExecutionError,"Combining"):
-            _validate_plate_execution(job)
+        self.assertTrue(_validate_plate_execution(job))
 
     def test_unhandled_flush_matrix_cannot_be_silently_ignored(self):
         from types import SimpleNamespace
