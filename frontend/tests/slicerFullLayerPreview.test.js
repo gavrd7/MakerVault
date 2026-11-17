@@ -21,11 +21,16 @@ test("preview retrieves exact selected layer from stored original G-code", () =>
   assert.match(preview, /setLayerBusy\(true\)/);
 });
 
-test("sampling and full-layer limitations are labelled separately", () => {
-  assert.match(preview, /Full-resolution layer:/);
-  assert.match(preview, /Earlier layers are still a sampled orientation reference/);
-  assert.match(preview, /only the first/);
-  assert.match(preview, /All earlier layers · sampled overview/);
+test("progressive geometry uses exact layers and explicitly reports partial loads", () => {
+  assert.match(preview, /gcode\/layers\/\?zs=/);
+  assert.match(preview, /Whole print · progressive full resolution/);
+  assert.match(preview, /slicerWholeModelProgress/);
+  assert.match(preview, /wholeModel\.loadedLayers/);
+  assert.match(preview, /Whole-model geometry reached the device preview budget/);
+  assert.match(preview, /const previous = wholeModel\.segments\.filter/);
+  assert.match(preview, /framingSegments=/);
+  assert.match(toolpath, /cameraSource = framingSegments\.length/);
   assert.match(toolpath, /layerDisplay = "current"/);
   assert.match(toolpath, /featureMatchesFocus\(feature, featureFocus\)/);
+
 });
