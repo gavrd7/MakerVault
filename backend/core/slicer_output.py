@@ -108,6 +108,8 @@ def store_generated_gcode(job_id, raw: bytes):
                 job.owner, job.settings or {}, "support_paint")
             seam_test = settings_use_paint_field(
                 job.owner, job.settings or {}, "seam_paint")
+            fuzzy_test = settings_use_paint_field(
+                job.owner, job.settings or {}, "fuzzy_skin_paint")
             stored = FileAsset(
                 owner=job.owner,
                 project=job.input_asset.project,
@@ -132,6 +134,8 @@ def store_generated_gcode(job_id, raw: bytes):
                        if support_test else {}),
                     **({"seam_paint_test": True, "printer_submission_verified": False}
                        if seam_test else {}),
+                    **({"fuzzy_skin_paint_test": True, "printer_submission_verified": False}
+                       if fuzzy_test else {}),
                 },
             )
             stored.file = ContentFile(raw, name=output_name)
@@ -150,6 +154,8 @@ def store_generated_gcode(job_id, raw: bytes):
                 if support_test
                 else "Seam painting test slice completed. Inspect G-code seam placement; printer upload remains disabled."
                 if seam_test
+                else "Painted fuzzy skin test completed. Inspect actual texture paths; printer upload remains disabled."
+                if fuzzy_test
                 else ("G-code saved to MakerVault library. Inspect before printing."
                       if keep_in_library else
                       "G-code retained with slice job; add it to the library when ready.")
