@@ -15,9 +15,41 @@ MAX_LAYER_SOURCE_BYTES = 32 * 1024 * 1024
 MAX_LAYER_SEGMENTS = 75000
 MAX_BATCH_SEGMENTS = 180000
 MAX_BATCH_LAYERS = 64
+MAX_OVERVIEW_SEGMENTS_PER_LAYER = 450
 
 
-def layer_batch_toolpaths(text, target_zs):
+def _overview_segments(segments, per_layer_limit=MAX_OVERVIEW_SEGMENTS_PER_LAYER):
+    """Bound the 3D overview by feature while preserving original move geometry.
+
+    Prioritise visible shells, interfaces and supports. Never claim the
+    reduced overview is an exact toolpath; exact-layer inspection is separate.
+    """
+    from .slicer_preview_features import overview_priority
+    if len(segments) <= per_layer_limit:
+        return segments
+    groups = {}
+    for index, segment in enumerate(segments):
+        priority = overview_priority(segment[5])
+        groups.setdefault(priority, []).append(index)
+    kept = []
+    for priority in sorted(groups):
+        indices = groups[priority]
+        space = per_layer_limit - len(kept)
+        if space <= 0:
+            break
+        if len(indices) <= space:
+            kept.extend(indices)
+        else:
+            # Uniformly distributed endpoints avoid retaining only the first
+            # portion of a shell when it exceeds the per-layer budget.
+            count = max(1, space)
+            kept.extend(indices[min(len(indices)-1, (i * len(indices)) // count)]
+                        for i in range(count))
+            break
+    return [segments[index] for index in sorted(kept)]
+
+
+def layer_batch_toolpaths(text, target_zs, *, overview=False):
     """Return actual, ordered G0/G1 extrusion segments at target Z.
 
     Coordinates use [X1,Y1,X2,Y2,Z,feature,width,logical_tool] as the existing renderer
@@ -122,13 +154,21 @@ def layer_batch_toolpaths(text, target_zs):
             x,y,z,e=nx,ny,nz,ne
 
     for layer in by_height.values():
+        original = layer["segment_count"]
+        if overview:
+            layer["segments"] = _overview_segments(layer["segments"])
+            layer["overview_reduced"] = len(layer["segments"]) < original
         layer["feature_counts"] = dict(layer["feature_counts"])
-        layer["complete"] = len(layer["segments"]) == layer["segment_count"]
-        layer["sampled"] = False
+        layer["complete"] = (len(layer["segments"]) == layer["segment_count"]) if not overview else (
+            original <= MAX_LAYER_SEGMENTS and not (
+                stored_count >= MAX_BATCH_SEGMENTS and
+                len(layer["segments"]) == 0 and original > 0))
+        layer["sampled"] = bool(overview and layer.get("overview_reduced"))
         layer["limited"] = not layer["complete"]
     return {"layers": [by_height[height] for height in targets],
             "complete": all(layer["complete"] for layer in by_height.values()),
-            "sampled": False}
+            "sampled": overview,
+            "overview": overview}
 
 
 def exact_layer_toolpaths(text, target_z):
