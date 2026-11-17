@@ -73,6 +73,33 @@ REASONS = {
     "unsafe-profile-settings": "The native profile contains a blocked command or network setting.",
     "invalid-profile-json": "A native profile contains invalid JSON. Re-import the original preset.",
     "invalid-profile-structure": "The native profile structure exceeds the supported worker limits.",
+    "native-tool-use-mismatch": (
+        "The 3MF colour painting and model base assignment do not use two distinct "
+        "native tools. Review the painted colour-to-slot mappings and base filament."
+    ),
+    "native-paint-tool-out-of-range": (
+        "A painted region refers to a native tool outside the supplied filament palette."
+    ),
+    "native-paint-channel-conflict": (
+        "The 3MF combines native colour and other facet-paint attributes in a way "
+        "the isolated worker has not yet validated."
+    ),
+    "native-object-tool-invalid": (
+        "A 3MF model specifies an extruder outside the validated filament palette."
+    ),
+    "native-object-tool-missing": (
+        "The multi-material 3MF is missing an explicit native extruder assignment."
+    ),
+    "native-filament-palette-mismatch": (
+        "The native filament presets do not match the 3MF tool order. "
+        "Check the mapped CFS slots and assigned profiles."
+    ),
+    "native-object-settings-invalid": (
+        "The generated 3MF contains an unsupported or invalid per-object slicer setting."
+    ),
+    "native-plate-instance-invalid": (
+        "The 3MF contains an invalid native plate instance mapping."
+    ),
     "validation-error": "The worker rejected an input or generated result. Check model and profile integrity.",
     "engine-exited": (
         "OrcaSlicer exited without a recognised diagnostic. "
