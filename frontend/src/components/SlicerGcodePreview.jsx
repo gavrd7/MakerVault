@@ -256,9 +256,7 @@ export default function SlicerGcodePreview({ fileId = null, preview, bedSize = n
           <select value={layerDisplay} onChange={event => setLayerDisplay(event.target.value)}>
             <option value="current">Current layer only · detail</option>
             <option value="context">Current + 8 faded layers</option>
-            <option value="all">{preview?.sampled || preview?.complete === false
-              ? "All earlier layers · sampled overview"
-              : "Complete model · all extrusion paths"}</option>
+            <option value="all">Whole print · progressive full resolution</option>
           </select>
         </label>
         <label>Feature focus
@@ -294,7 +292,7 @@ export default function SlicerGcodePreview({ fileId = null, preview, bedSize = n
             activeLayer={currentLayer} activeStep={finalStep} visible={visible}
             colourMode={colourMode} colours={colours} showToolhead={showToolhead} bedSize={bedSize}
             renderMode={renderMode} layerDisplay={layerDisplay}
-            previewSampled={!!preview?.sampled || preview?.complete === false} fadePrevious={highlightCurrent}
+            previewSampled={false} fadePrevious={highlightCurrent}
             featureFocus={featureFocus} outerContrast={outerContrast}
             toolbarActions={<>
               <button type="button" aria-expanded={mobilePanel === "display"}
