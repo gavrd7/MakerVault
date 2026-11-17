@@ -37,6 +37,7 @@ export function featureColour(feature) {
 export function featureMatchesFocus(feature, focus = "all") {
   if (focus === "all") return true;
   const family = featureFamily(feature);
+  if (focus === "outer") return family === "outer";
   if (focus === "support") return family === "support" || family === "interface";
   if (focus === "walls") return family === "outer" || family === "inner";
   if (focus === "shell") return ["outer", "inner", "top", "bridge"].includes(family);
