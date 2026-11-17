@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from "react";
 import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
-import { featureMatchesFocus } from "./slicerToolpathFeatures";
+import { featureMatchesFocus, featureFamily } from "./slicerToolpathFeatures";
 
 /**
  * Three-dimensional, read-only visualisation of the worker's bounded
@@ -13,7 +13,7 @@ export default function SlicerToolpath3D({
   colourMode = "feature", colours = {}, showToolhead = true, bedSize = null,
   renderMode = "solid", nozzleDiameter = 0.4,
   layerDisplay = "current", featureFocus = "all",
-  previewSampled = false, fadePrevious = false,
+  previewSampled = false, fadePrevious = false, outerContrast = false,
 }) {
   const mount = useRef(null);
   const sceneRef = useRef(null);
@@ -256,6 +256,13 @@ export default function SlicerToolpath3D({
         ? new THREE.Color().setHSL(0.56 - 0.44 * (layers.length > 1
           ? Math.max(0, (layerIndexByHeight.get(z.toFixed(3)) ?? -1)) / (layers.length - 1) : 0), 0.85, 0.64)
         : new THREE.Color(colourMode === "solid" ? "#f09a4b" : (colours[feature] || "#b8d4e5"));
+      // Inspection contrast is a display-only change. Don't alter or classify
+      // native toolpaths as fuzzy; highlight outer-wall geometry while dimming
+      // neighbouring deposited features for easier side-by-side comparison.
+      if (outerContrast) {
+        if (featureFamily(feature) === "outer") hex.set("#ffd166");
+        else hex.multiplyScalar(0.20);
+      }
       // A full indexed model is *not* a ghost backdrop: darkening every
       // earlier layer made thin walls and painted-support contacts appear
       // absent. Only intentionally fade them, or show a weaker context when
@@ -322,7 +329,7 @@ export default function SlicerToolpath3D({
     if (lastStep) marker.position.set(...lastStep);
   }, [segments, layers, activeLayer, activeStep, visible, colourMode, colours, showToolhead,
     renderMode, nozzleDiameter, layerDisplay, featureFocus, previewSampled,
-    fadePrevious, bedSize?.[0], bedSize?.[1]]);
+    fadePrevious, outerContrast, bedSize?.[0], bedSize?.[1]]);
 
   return <div className="slicerToolpath3D">
     {unavailable ? <div role="status" className="projectUploadHint">
