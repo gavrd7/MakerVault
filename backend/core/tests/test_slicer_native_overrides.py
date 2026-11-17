@@ -86,6 +86,21 @@ class NativeSlicerPlateAndColourTests(SimpleTestCase):
         self.assertEqual(json.loads(p)["filament_colour"], ["#FFFFFF"])
         self.assertEqual(json.loads(f)["default_filament_colour"], ["#FFFFFF"])
 
+    def test_selective_fuzzy_skin_activates_painted_only_on_job_copy(self):
+        process=json.dumps({"name":"Standard","fuzzy_skin":"none",
+                            "fuzzy_skin_thickness":"0.25",
+                            "fuzzy_skin_point_distance":"0.7"}).encode()
+        filament=json.dumps(self.temperatures).encode()
+        model={"fuzzy_skin_paint":{"version":2,"regions":[{"slot":0}]}}
+        selected,_=apply_orca_job_overrides(process,filament,"textured_pei",[model])
+        native=json.loads(selected)
+        self.assertEqual(native["fuzzy_skin"],"disabled_fuzzy")
+        self.assertEqual(native["fuzzy_skin_thickness"],"0.25")
+        self.assertEqual(native["fuzzy_skin_point_distance"],"0.7")
+        self.assertEqual(json.loads(process)["fuzzy_skin"],"none")
+        regular,_=apply_orca_job_overrides(process,filament,"textured_pei",[{}])
+        self.assertEqual(json.loads(regular)["fuzzy_skin"],"none")
+
     def test_multiple_colours_do_not_invent_multimaterial_mappings(self):
         p, f = apply_orca_job_overrides(
             b'{"name":"Standard","curr_bed_type":"Textured PEI Plate"}',
