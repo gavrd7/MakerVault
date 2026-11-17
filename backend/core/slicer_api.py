@@ -808,7 +808,7 @@ def export_native_multimaterial_3mf(request, job_id):
     ).first()
     if not job:
         return _error("Slicer draft not found.", 404)
-    settings = job.settings or {}
+    settings = expand_painted_settings(request.user, job.settings or {})
     objects = settings.get("plate_objects") or []
     profile_rows = settings.get("slot_filament_profiles") or []
     if (job.engine != "orcaslicer" or not 2 <= len(objects) <= 12
@@ -901,7 +901,7 @@ def export_project_3mf(request, job_id):
         "printer_profile").first()
     if not job:
         return _error("Slicer draft not found.", 404)
-    settings = job.settings or {}
+    settings = expand_painted_settings(request.user, job.settings or {})
     plates = settings.get("plates") or [{
         "id": "plate-1",
         "name": settings.get("plate_label", "Plate 1"),
