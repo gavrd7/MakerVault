@@ -74,7 +74,7 @@ class IntendedMaterialSafetyTests(SimpleTestCase):
     def test_unexported_native_semantic_paint_and_variable_layers_fail_closed(self):
         from types import SimpleNamespace
         for field, value, error in (
-            ("seam_paint", {"version": 2, "regions": [{"slot": 0}]}, "Seam enforcer"),
+            ("seam_paint", {"version": 2, "regions": [{"slot": 0}]}, "Native seam painting test"),
             ("fuzzy_skin_paint", {"version": 2, "regions": [{"slot": 0}]}, "Paint-on fuzzy"),
             ("variable_layer_profile", {"version": 1, "bands": [
                 {"from_mm": 0, "to_mm": 10, "layer_mm": .12}]}, "Variable layer"),
