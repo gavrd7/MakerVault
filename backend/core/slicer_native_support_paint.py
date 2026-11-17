@@ -11,6 +11,7 @@ import math
 
 from .slicer_support_painting import validate_support_paint
 from .slicer_semantic_painting import validate_semantic_paint
+from .slicer_colour_painting import validate_colour_paint
 
 MAX_NATIVE_PAINT_TRIANGLES = 500_000
 EPS = 1e-8
@@ -195,7 +196,8 @@ PAINT_CHANNELS = (
 )
 
 
-def native_combined_paint_triangles(triangles, support=None, seam=None, fuzzy=None):
+def native_combined_paint_triangles(triangles, support=None, seam=None, fuzzy=None, *,
+                                    colour=None, colour_tool_indices=None):
     """Split each *original* STL facet once into disjoint cells carrying all
     native paint attributes. Overlap between different painting modes is legal;
     overlap within one mode is rejected. No channel may silently disappear.
@@ -205,8 +207,12 @@ def native_combined_paint_triangles(triangles, support=None, seam=None, fuzzy=No
     active = [(kind, attribute, paint) for (kind, _field, attribute), paint
               in zip(PAINT_CHANNELS, paints)
               if isinstance(paint, dict) and paint.get("regions")]
-    if len(active) < 2:
-        raise ValueError("Combined painting requires at least two active channels.")
+    if colour and (colour.get("regions") or colour.get("faces")):
+        if not isinstance(colour_tool_indices, dict):
+            raise ValueError("Colour painting requires verified native tool assignments.")
+        active.append(("colour", "paint_color", colour))
+    if not active:
+        raise ValueError("Native painting requires at least one active channel.")
     if not triangles:
         raise ValueError("Painted mesh is empty.")
     minimum = [min(p[axis] for face in triangles for p in face) for axis in range(3)]
@@ -220,12 +226,17 @@ def native_combined_paint_triangles(triangles, support=None, seam=None, fuzzy=No
     channel_faces = {}
     for kind, attribute, paint in active:
         validated = (validate_support_paint(paint) if kind == "support"
+                     else validate_colour_paint(paint) if kind == "colour"
                      else validate_semantic_paint(paint, kind))
         if validated["signature"] != signature:
             raise ValueError(kind + " painting mesh fingerprint no longer matches the source STL.")
         indexed = {}
+        if kind == "colour" and validated["version"] != 2:
+            raise ValueError("Legacy whole-face colour painting must be upgraded to surface regions before native slicing.")
         for region in validated["regions"]:
             slot = region["slot"]
+            if kind == "colour" and slot not in colour_tool_indices:
+                raise ValueError("Painted colour is not assigned to a verified native filament tool.")
             if kind == "fuzzy" and slot != 0:
                 raise ValueError("Native fuzzy skin only accepts painted facets.")
             for patch in region["patches"]:
@@ -277,7 +288,18 @@ def native_combined_paint_triangles(triangles, support=None, seam=None, fuzzy=No
                     if inside:
                         if attribute in attributes:
                             raise ValueError("Overlapping " + kind + " patches must be resolved in the editor.")
-                        next_cells.append((inside, {**attributes, attribute: "4" if slot == 0 else "8"}))
+                        if kind == "colour":
+                            tool = colour_tool_indices[slot]
+                            if (isinstance(tool, bool) or not isinstance(tool, int)
+                                    or not 0 <= tool < 16):
+                                raise ValueError("Colour painting references an invalid native tool.")
+                            # Orca TriangleSelector leaf state: tool 0→4, tool
+                            # 1→8, tool 2→0C, tool 3→1C, etc.
+                            state = ("4" if tool == 0 else "8" if tool == 1
+                                     else format(tool - 2, "X") + "C")
+                        else:
+                            state = "4" if slot == 0 else "8"
+                        next_cells.append((inside, {**attributes, attribute: state}))
                 cells = next_cells
                 if len(cells) + len(output) > MAX_NATIVE_PAINT_TRIANGLES:
                     raise ValueError("Combined native painting exceeds the safe mesh limit.")
