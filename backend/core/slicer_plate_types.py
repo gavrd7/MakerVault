@@ -91,13 +91,15 @@ def effective_orca_plate(plate_type, process, printer_profile=None):
         raise ValueError("Unsupported native Orca build plate.")
     if plate_type != "default":
         return plate_type
-    current = native_plate_key(process.get("curr_bed_type"))
-    if current:
-        return current
+    # 'Native / profile default' refers to the printer's declared machine
+    # plate, not a process preset's potentially stale curr_bed_type.
     if printer_profile is not None:
         metadata = inspect_native_plates(printer_profile)
         if metadata["default"]:
             return metadata["default"]
+    current = native_plate_key(process.get("curr_bed_type"))
+    if current:
+        return current
     raise ValueError(
         "The native printer default build plate is unknown. Select an explicit "
         "build plate before slicing; no cool-plate fallback will be used."
