@@ -64,7 +64,7 @@ export default function SlicerPrepareWorkspace({
   plates = [], activePlateId = "plate-1", onChoosePlate, onAddPlate, onRemovePlate, onMoveModelsToPlate,
   onPlateLabelChange, onPrimaryChange, onFilesUploaded,
   defaultColor, onManualColorChange, canEdit, busy, error, notice,
-  onChangeProfiles, onOpenDevice, onSaveDraft, onSaveProject, onExportNativeMaterials, onSliceMultimaterialTest, onImportProject, onSlice, onSliceAll, engine, printer,
+  onChangeProfiles, onOpenDevice, onSaveDraft, onSaveProject, onExportNativeMaterials, onImportProject, onSlice, onSliceAll, engine, printer,
   selectedProfiles, workerConfigured, engineCapabilities = {}, printerId,
   processOverrides = {}, onProcessOverridesChange, onSaveCustomProcessProfile,
   flushSettings = null, onFlushSettingsChange,
@@ -893,8 +893,11 @@ export default function SlicerPrepareWorkspace({
   const projectRoutingPending = plates.some(plate =>
     (plate.objects || []).some(item => item.material_slot != null)
   ) || slotFilamentProfiles.length > 0;
+  const paintedNativeReady = String(engine) === "orcaslicer 2.5.0" &&
+    multiMaterialReadyForExport;
   const incompatibleEdits = usedNativeFeatures([{objects}]).filter(
-    key => !["verified","test_only"].includes(engineCapabilities[key]?.status));
+    key => !(key === "colour_paint" && paintedNativeReady) &&
+      !["verified","test_only"].includes(engineCapabilities[key]?.status));
   const nativeEditReason = incompatibleEdits.length
     ? "Native export not yet verified for " + incompatibleEdits.map(key=>FEATURE_NAMES[key]).join(", ") +
       ". The project is preserved; choose an engine with verified native support before slicing."
@@ -903,8 +906,8 @@ export default function SlicerPrepareWorkspace({
     nativeEditReason ||
     (!activePlateReady ? "Select a plate containing models to slice." : "") ||
     (conflictsBlockSlice ? "Resolve build-plate conflicts or wait for models to finish loading before slicing." : "") ||
-    (flushSettings != null ? "This draft contains flushing/prime-tower overrides, but the physical multi-material path is not yet enabled. Save the draft or reset flushing settings to slice a single-filament job." : "") ||
-    (materialRoutingPending ? "An assigned CFS/AMS slot requires an imported native filament preset for that slot. Select its Profile before slicing. Multiple assigned slots still need verified multi-material routing."
+    (flushSettings != null && !multiMaterialReadyForExport ? "Custom flushing requires at least two assigned filaments with matching native profiles. Configure the loaded slot profiles before slicing." : "") ||
+    (materialRoutingPending && !multiMaterialReadyForExport ? "An assigned CFS/AMS slot requires an imported native filament preset for that slot. Select its Profile before slicing."
       : objectSettingsPending
       ? "Some Object settings are not yet verified for slicing. Wall loops and sparse infill density are supported; other Object overrides can be saved in drafts but cannot be sliced yet."
       : !workerConfigured
@@ -2061,13 +2064,6 @@ export default function SlicerPrepareWorkspace({
           title="Download an Orca-compatible 3MF; the backend detects the printer material system and derives tool order. Printing remains disabled until physical changeovers are verified.">
           Export multi-material 3MF (offline)
         </button>}
-        {multiMaterialReadyForExport && <button type="button"
-          disabled={!activePlateReady || !profilesReady || !workerConfigured || busy ||
-                    conflictsBlockSlice || objectSettingsPending}
-          onClick={onSliceMultimaterialTest}
-          title="Generate an audited multi-colour Orca G-code test. Printer upload and print start are intentionally blocked.">
-          Slice multi-colour (test)
-        </button>}
         <label className="slicerProjectImportButton" aria-label="Open project from 3MF file">
           Open project (.3mf)
           <input type="file" accept=".3mf" disabled={!canEdit||busy}
@@ -2079,7 +2075,7 @@ export default function SlicerPrepareWorkspace({
         </label>
         <div className="slicerSliceSplit">
           <button type="button" className="primary"
-            disabled={!activePlateReady || !profilesReady || !workerConfigured || conflictsBlockSlice || objectSettingsPending || materialRoutingPending}
+            disabled={!activePlateReady || !profilesReady || !workerConfigured || conflictsBlockSlice || objectSettingsPending || (materialRoutingPending && !multiMaterialReadyForExport)}
             onClick={onSlice}>Slice</button>
           <button type="button" aria-label="More slicing options"
             aria-haspopup="menu" aria-expanded={sliceMenuOpen}
@@ -2087,7 +2083,7 @@ export default function SlicerPrepareWorkspace({
             onClick={()=>setSliceMenuOpen(value=>!value)}>▾</button>
           {sliceMenuOpen && <div className="slicerSliceMenu" role="menu">
             <button type="button" role="menuitem"
-              disabled={!activePlateReady || conflictsBlockSlice || objectSettingsPending || materialRoutingPending}
+              disabled={!activePlateReady || conflictsBlockSlice || objectSettingsPending || (materialRoutingPending && !multiMaterialReadyForExport)}
               onClick={()=>{setSliceMenuOpen(false);onSlice?.();}}>Slice active plate</button>
             <button type="button" role="menuitem"
               disabled={!projectHasModels || objectSettingsPending || projectRoutingPending}
