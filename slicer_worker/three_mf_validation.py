@@ -119,16 +119,14 @@ def validate_worker_3mf(data, *, native_tool_count=None):
         for triangle in triangles:
             attributes = set(triangle.attrib)
             paint_attrs = attributes & {"paint_supports", "paint_seam", "paint_fuzzy_skin"}
+            colour = triangle.attrib.get("paint_color")
             if not {"v1", "v2", "v3"} <= attributes or (
                     attributes - {"v1", "v2", "v3", "paint_supports", "paint_seam",
-                                  "paint_fuzzy_skin"}):
+                                  "paint_fuzzy_skin", "paint_color"}):
                 raise WorkerError("Unsupported native 3MF triangle attributes.")
             if paint_attrs:
-                # Permit multiple independent native annotations on the same
-                # facet, including with bounded layer-height ranges. The
-                # combined path remains single-model and single-filament only.
-                # Reject arbitrary bitstreams, foreign attributes, and unsafe
-                # states for every channel independently.
+                # Semantic paint remains independently constrained to a
+                # single filament until joint material/tool verification.
                 if len(objects) != 1 or native_tool_count is not None:
                     raise WorkerError("Unsupported native painted facet annotation.")
                 for channel in paint_attrs:
@@ -136,6 +134,17 @@ def validate_worker_3mf(data, *, native_tool_count=None):
                     expected_states = ("4",) if channel == "paint_fuzzy_skin" else ("4", "8")
                     if triangle.attrib[channel] not in expected_states:
                         raise WorkerError("Unsupported native painted facet annotation.")
+            if colour is not None:
+                # One unsplit TriangleSelector leaf per generated triangle.
+                # No arbitrary nibble streams or unverified colour→tool
+                # remapping are permitted. The server clips exact polygons.
+                if native_tool_count is None or paint_attrs:
+                    raise WorkerError("Colour painting requires verified native multi-tool slicing.")
+                native_states = ("4", "8") + tuple(
+                    format(tool - 2, "X") + "C" for tool in range(2, native_tool_count))
+                if colour not in native_states:
+                    raise WorkerError("Painted colour refers to an unavailable native filament.")
+                used_native_paint_channels.add("paint_color")
         if count > MAX_TRIANGLES:
             raise WorkerError("3MF triangle count exceeds worker limit.")
         if len(vertices) > MAX_VERTICES_PER_OBJECT:
