@@ -1145,9 +1145,10 @@ def material_capability_report(connection, snapshot):
     if adapter in MULTI_TOOL_ADAPTERS:
         tool_names = metadata.get("tool_names")
         if isinstance(tool_names, dict) and len(tool_names) > 1:
-            # Multiple observable independent extruder heaters indicate a
-            # multi-tool printer, but not the type of motion arrangement.
-            report.update(available=True, topology="independent_toolheads",
+            # Multiple observed extruders prove multiple available tools,
+            # but cannot distinguish IDEX from a toolchanger. Defer topology
+            # selection to a capable adapter rather than guessing commands.
+            report.update(available=True, topology="unknown",
                           detection="live_tool_inventory")
         return report
     return report
