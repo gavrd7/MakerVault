@@ -71,6 +71,18 @@ test("download button is consistent in file actions and desktop viewer", () => {
   assert.match(mobileCss, /\.slicerGcodeDownloadAction/);
 });
 
+test("download uses ordinary buttons and settings labels cannot vertically stretch", () => {
+  const reader=read("../src/components/GcodeFullSource.jsx");
+  const styles=read("../src/styles.css");
+  assert.match(workbench, /className="buttonLink slicerGcodeDownloadAction"/);
+  assert.match(viewer, /className="buttonLink slicerGcodeDownloadAction"/);
+  assert.match(reader, /className="buttonLink slicerGcodeDownloadAction"/);
+  assert.match(mobileCss, /slicerResultModeRow\\.slicerPreviewOptionsPanel\\.mobileOpen > label \\{/);
+  assert.match(mobileCss, /flex:0 0 auto!important/);
+  assert.match(styles, /slicerHeroProjectNavigation > \\.slicerHeroBack/);
+  assert.match(styles, /height: 43px/);
+});
+
 test("desktop review keeps preview visible and collapses secondary controls", () => {
   assert.match(viewer, /slicerPreviewNav/);
   assert.match(viewer, /slicerGcodeMetadata/);
