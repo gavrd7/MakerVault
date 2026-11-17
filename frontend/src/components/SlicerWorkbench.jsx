@@ -95,6 +95,7 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
   const [editProfileBusy, setEditProfileBusy] = useState(false);
   const [editProfileError, setEditProfileError] = useState("");
   const [showDrafts, setShowDrafts] = useState(false);
+  const [visibleDraftCount, setVisibleDraftCount] = useState(15);
   const [mobileActionsOpen, setMobileActionsOpen] = useState(false);
   const [previewJobId, setPreviewJobId] = useState(null);
   const awaitingSlicePreviewRef = useRef(null);
@@ -2029,7 +2030,7 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
       {notice && <p role="status">{notice}</p>}
       <button type="button" disabled={loading} onClick={refresh}>Refresh drafts</button>
       <h3>Saved slicing drafts</h3>
-      {jobs.length ? <div className="printingStack">{jobs.map(job =>
+      {jobs.length ? <div className="printingStack">{jobs.slice(0, visibleDraftCount).map(job =>
         <div key={job.id} className="cameraSourceRow">
           <div className="cameraSourceIdentity">
             <strong>{job.input_asset?.name || "Model"} · {job.printer?.name || "Printer"}</strong>
@@ -2084,7 +2085,12 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
               <button type="button" onClick={onOpenGcode}>Open G-code library</button>}
           </div>
         </div>
-      )}</div> : <p>No slicing drafts saved yet.</p>}
+      )}
+      {jobs.length > visibleDraftCount && <button type="button"
+        onClick={() => setVisibleDraftCount(count => count + 15)}>
+        Show older drafts ({jobs.length - visibleDraftCount} remaining)
+      </button>}
+      </div> : <p>No slicing drafts saved yet.</p>}
       </>}
     </Modal>}
     {previewFile && <FileModelViewerModal file={previewFile} onClose={() => setPreviewFile(null)} />}
