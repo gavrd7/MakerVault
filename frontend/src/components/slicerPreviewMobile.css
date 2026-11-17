@@ -1,0 +1,74 @@
+/* Mobile-specific G-code review. Desktop layout is deliberately unchanged. */
+.slicerMobileNav, .slicerMobilePanelHeader, .slicerMobileToolButtons,
+.slicerMobileViewToggle, .slicerMobileStepsToggle { display: none; }
+
+@media (max-width: 700px) {
+  .slicerPreviewModal .modalBody { padding: 10px 12px; }
+  .slicerPreviewModal h3 { margin: 4px 0 10px; font-size: 1rem; overflow-wrap: anywhere; }
+  .slicerMobileNav { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 7px; margin: 6px 0 10px; }
+  .slicerMobileNav button { padding: 9px 4px; min-width: 0; font-size: .88rem; }
+  .slicerMobileDownload { display: flex; justify-content: center; align-items: center; padding: 8px 3px; min-width: 0; text-align: center; font-size: .82rem; }
+  .slicerGcodeDesktopActions { display: none !important; }
+  .slicerGcodeCompactLayout .slicerGcodeMetadata { display: none; }
+  .slicerGcodeCompactLayout .slicerGcodeMetadata.mobileOpen {
+    display: block; position: fixed; z-index: 10050; inset: 5dvh 8px 4dvh;
+    overflow-y: auto; padding: 14px; border: 1px solid var(--border,#394958);
+    background: var(--panel,#101923); border-radius: 14px;
+    box-shadow: 0 15px 50px #000b;
+  }
+  .slicerMobilePanelHeader { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 14px; }
+  .slicerMobilePanelHeader strong { font-size: 1.05rem; }
+  .slicerMobilePanelHeader button { flex: 0 0 auto; }
+  .slicerMobileBackdrop { display: block; position: fixed; z-index: 10040; inset: 0; background: #0009; }
+  .slicerResultPreview { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+  .slicerResultStats { order: 1; display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 7px; margin: 0 0 6px; }
+  .slicerResultStats > div { padding: 9px 10px; gap: 3px; }
+  .slicerResultStats > div:nth-child(2), .slicerResultStats > div:nth-child(4),
+  .slicerResultStats > div:nth-child(5) { display: none; }
+  .slicerResultStats strong { font-size: 1.06rem; }
+  .slicerResultStats small { font-size: .72rem; }
+  .slicerResultLayerLayout { order: 2; margin: 0; gap: 7px; grid-template-columns: minmax(0,1fr) 48px; }
+  .slicerToolpath3DCanvas, .slicerPreviewModal .slicerToolpath3DCanvas {
+    height: min(52dvh, 520px); min-height: 300px;
+  }
+  .slicerResultLayerSlider { padding: 5px 2px; font-size: .72rem; }
+  .slicerResultLayerSlider input[type="range"] { min-height: 260px; }
+  .slicerResultViewport { min-width: 0; }
+  .slicerMobileToolButtons { display: grid; order: 3; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 7px; }
+  .slicerMobileToolButtons button { padding: 9px 4px; font-size: .86rem; }
+  .slicerMobileToolButtons button[aria-expanded="true"] { border-color: var(--accent,#7859ee); }
+  .slicerResultModeRow, .slicerResultVisibility {
+    display: none !important;
+  }
+  .slicerResultModeRow.mobileOpen, .slicerResultVisibility.mobileOpen {
+    display: flex !important; position: fixed; z-index: 10050;
+    inset: 8dvh 10px 5dvh; padding: 16px;
+    overflow-y: auto; background: var(--panel,#101923);
+    border: 1px solid var(--border,#394958); border-radius: 14px;
+    align-content: flex-start; align-items: stretch; flex-direction: column; flex-wrap: nowrap;
+    gap: 13px; margin: 0;
+  }
+  .slicerResultVisibility.mobileOpen { display: block !important; }
+  .slicerResultModeRow.mobileOpen > label { display: flex !important; flex-direction: column; align-items: stretch !important; width: 100%; }
+  .slicerResultModeRow.mobileOpen > label.checkRow { flex-direction: row; align-items: center !important; }
+  .slicerResultModeRow.mobileOpen select { width: 100%; max-width: none; }
+  .slicerResultVisibility.mobileOpen label { display: flex; padding: 6px 0; }
+  .slicerMobileStepsToggle { display: block; width: 100%; padding: 7px; }
+  .slicerResultSteps { display: none; }
+  .slicerResultSteps.mobileOpen { display: block; padding: 8px 2px; }
+  .slicerToolpathViewBar { display: block; }
+  .slicerMobileViewToggle { display: inline-flex; margin: 7px 0; padding: 8px 14px; }
+  .slicerToolpathViewBar .slicerToolpathViewOptions { display: none; }
+  .slicerToolpathViewBar .slicerToolpathViewOptions.mobileOpen {
+    display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 8px;
+  }
+  .slicerToolpathViewOptions label { justify-content: center; }
+  .slicerToolpath3D > small, .slicerResultPreview > small,
+  .slicerResultPreview > .projectUploadHint, .slicerResultPreview > .slicerPreviewCoverage,
+  .slicerResultPreview > p.slicerPreviewCoverage { display: none; }
+  .slicerResultPreview > .slicerMobileBackdrop { display: block; }
+  .slicerResultPreview > .slicerResultVisibility { order: 5; }
+  .slicerResultPreview > .slicerResultModeRow { order: 4; }
+  .slicerResultPreview > .slicerMobileToolButtons { order: 3; }
+  .slicerResultLayerLayout .slicerResultSteps { margin: 0; }
+}
