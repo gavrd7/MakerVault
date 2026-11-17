@@ -8,7 +8,8 @@ import math
 import re
 from collections import Counter
 
-from .slicer_preview import MOVE, TYPE, WIDTH
+from .slicer_preview import MOVE, TYPE, WIDTH, ARC_PARAM
+from .slicer_preview_arcs import arc_points
 
 MAX_LAYER_SOURCE_BYTES = 32 * 1024 * 1024
 MAX_LAYER_SEGMENTS = 75000
@@ -26,6 +27,7 @@ def exact_layer_toolpaths(text, target_z):
         raise ValueError("Invalid G-code layer Z.")
     absolute_xyz = True
     absolute_e = True
+    absolute_centres = False
     x = y = z = e = 0.0
     role = "Other"
     width = None
@@ -57,6 +59,8 @@ def exact_layer_toolpaths(text, target_z):
             absolute_e = True
         elif cmd == "M83":
             absolute_e = False
+        elif cmd in {"G90.1","G91.1"}:
+            absolute_centres = cmd == "G90.1"
         elif cmd == "G92":
             for key, raw_value in MOVE.findall(line[3:]):
                 value = float(raw_value)
@@ -66,30 +70,36 @@ def exact_layer_toolpaths(text, target_z):
                 elif key == "X": x = value
                 elif key == "Y": y = value
                 elif key == "Z": z = value
-        elif cmd in {"G0", "G00", "G1", "G01"}:
-            nx, ny, nz, ne = x, y, z, e
-            for key, raw_value in MOVE.findall(line[len(cmd):]):
-                value = float(raw_value)
-                if not math.isfinite(value) or abs(value) > 1000000:
+        elif cmd in {"G0","G00","G1","G01","G2","G02","G3","G03"}:
+            nx,ny,nz,ne=x,y,z,e
+            for key,raw_value in MOVE.findall(line[len(cmd):]):
+                value=float(raw_value)
+                if not math.isfinite(value) or abs(value)>1000000:
                     continue
-                if key == "X":
-                    nx = value if absolute_xyz else x + value
-                elif key == "Y":
-                    ny = value if absolute_xyz else y + value
-                elif key == "Z":
-                    nz = value if absolute_xyz else z + value
-                elif key == "E":
-                    ne = value if absolute_e else e + value
-            if (ne > e + 1e-6 and (nx != x or ny != y) and
-                    math.isfinite(nz) and abs(nz - z_target) <= 0.0005):
-                total += 1
-                counts[role] += 1
-                if len(segments) < MAX_LAYER_SEGMENTS:
-                    segments.append([
-                        round(x, 3), round(y, 3), round(nx, 3),
-                        round(ny, 3), round(nz, 3), role, width,
-                    ])
-            x, y, z, e = nx, ny, nz, ne
+                if key=="X": nx=value if absolute_xyz else x+value
+                elif key=="Y": ny=value if absolute_xyz else y+value
+                elif key=="Z": nz=value if absolute_xyz else z+value
+                elif key=="E": ne=value if absolute_e else e+value
+            is_arc=cmd in {"G2","G02","G3","G03"}
+            if is_arc:
+                args={key.upper():float(v) for key,v in ARC_PARAM.findall(line[len(cmd):])}
+                moves=arc_points(x,y,z,nx,ny,nz,cmd in {"G2","G02"},args,
+                                 absolute_centres=absolute_centres)
+            else:
+                moves=[(nx,ny,nz,1.0)] if nx!=x or ny!=y else None
+            if ne>e+1e-6 and moves:
+                px,py,pz=x,y,z
+                for ax,ay,az,_ in moves:
+                    if (math.hypot(ax-px,ay-py)>1e-6 and
+                            abs(az-z_target)<=0.0005):
+                        total+=1
+                        counts[role]+=1
+                        if len(segments)<MAX_LAYER_SEGMENTS:
+                            segments.append([round(px,3),round(py,3),
+                                             round(ax,3),round(ay,3),
+                                             round(az,3),role,width])
+                    px,py,pz=ax,ay,az
+            x,y,z,e=nx,ny,nz,ne
 
     return {
         "z": round(z_target, 3),
