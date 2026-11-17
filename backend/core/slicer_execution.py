@@ -673,6 +673,34 @@ def process_queued_job(job_id):
                     )
                 except (MaterialRoutingError, ValueError) as exc:
                     raise SlicerExecutionError(str(exc)) from exc
+            # Orca 2.5 accepts one X/Y value per plate. Apply the user's
+            # placement after native process and flushing overrides.
+            tower = (job.settings or {}).get("prime_tower")
+            if tower is not None:
+                try:
+                    if not isinstance(tower, dict) or set(tower) != {"x", "y"}:
+                        raise ValueError("Invalid position")
+                    x, y = (tower[axis] for axis in ("x", "y"))
+                    if any(isinstance(v, bool) or not isinstance(v, (int, float))
+                           or not math.isfinite(v) for v in (x, y)):
+                        raise ValueError("Invalid coordinate")
+                    width, depth = trusted_plate_dimensions(job.printer_profile)
+                    native = json.loads(profiles[2])
+                    raw_width = native.get("prime_tower_width", "35")
+                    native_width = float(raw_width[0] if isinstance(raw_width, list) else raw_width)
+                    if not math.isfinite(native_width) or native_width <= 0:
+                        raise ValueError("Invalid native tower width")
+                    # The tower's exact depth is engine-computed after slice.
+                    # The preview is explicitly approximate; use conservative
+                    # border bounds here and retain Orca's own final checks.
+                    if not (0 <= x <= width - native_width and 0 <= y < depth):
+                        raise ValueError("Tower lies beyond the printable bed")
+                    native["wipe_tower_x"] = [str(round(x, 3))]
+                    native["wipe_tower_y"] = [str(round(y, 3))]
+                    profiles[2] = json.dumps(native, ensure_ascii=False,
+                                              separators=(",", ":")).encode("utf-8")
+                except (ValueError, TypeError, KeyError, UnicodeDecodeError) as exc:
+                    raise SlicerExecutionError("Invalid prime tower position for this printer.") from exc
             if material_result is not None:
                 # The worker protocol checks byte equality between the legacy
                 # first preset and the first member of the ordered palette.
