@@ -159,6 +159,10 @@ class Command(BaseCommand):
             profiles["printer"] = _execution_printer_profile(
                 job.printer_profile, profiles["printer"], profiles["process"])
             width, depth = trusted_plate_dimensions(job.printer_profile)
+            effective_process = json.loads(profiles["process"])
+            effective_printer = json.loads(profiles["printer"])
+            if not isinstance(effective_process, dict) or not isinstance(effective_printer, dict):
+                raise CommandError("Resolved native preset is not an object.")
         except (ValueError, OSError, KeyError, TypeError) as exc:
             raise CommandError("Draft validation failed: " + str(exc)) from exc
 
@@ -169,6 +173,21 @@ class Command(BaseCommand):
         self.stdout.write("Read-only diagnostic. Stored draft, painting and G-code "
                           "library will not be modified.")
         self.stdout.write("Available: " + ", ".join(sorted(available)))
+        # A small allowlist of numeric native settings is safe to display.
+        # Never print arbitrary user profile fields or scripts.
+        for source, preset, keys in (
+            ("process", effective_process, ("layer_height", "initial_layer_print_height",
+                "line_width", "outer_wall_line_width", "inner_wall_line_width",
+                "top_surface_line_width")),
+            ("printer", effective_printer, ("min_layer_height", "max_layer_height",
+                "nozzle_diameter")),
+        ):
+            summary = {key: preset[key] for key in keys
+                       if key in preset and isinstance(preset[key], (int, float, list, str))
+                       and len(str(preset[key])) < 100}
+            self.stdout.write("Effective " + source + " numeric settings: " +
+                              json.dumps(summary, sort_keys=True))
+
         if not available:
             raise CommandError("The selected draft contains no advanced painting or layer ranges.")
         failed = False
@@ -207,9 +226,19 @@ class Command(BaseCommand):
                 if "variable_layer_profile" in fields:
                     audit_orca_variable_layers(
                         result.decode("utf-8"), item["variable_layer_profile"]["bands"])
-                self.stdout.write(self.style.SUCCESS(
-                    label + ": PASS (fuzzy=" + fuzzy_mode + ", G-code bytes=" +
-                    str(len(result)) + ")"))
+                profile_height = effective_process.get("layer_height")
+                target_bands = (item.get("variable_layer_profile") or {}).get("bands", [])
+                if target_bands and len(target_bands) == 1 and (
+                    isinstance(profile_height, (int, float))
+                    and abs(float(profile_height) - float(target_bands[0]["layer_mm"])) < .0001
+                ):
+                    self.stdout.write(self.style.WARNING(
+                        label + ": INCONCLUSIVE — target layer height equals native "
+                        "process baseline; success does not prove the override was applied."))
+                else:
+                    self.stdout.write(self.style.SUCCESS(
+                        label + ": PASS (fuzzy=" + fuzzy_mode + ", G-code bytes=" +
+                        str(len(result)) + ")"))
             except (ValueError, OSError, SlicerWorkerError) as exc:
                 failed = True
                 self.stdout.write(self.style.ERROR(
