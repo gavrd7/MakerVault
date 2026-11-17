@@ -367,7 +367,7 @@ def _validate_plate_execution(job):
         # This permits *offline G-code generation* only. Uploaded or started
         # printer jobs are blocked by the submission API for these artifacts.
         try:
-            plan_native_multimaterial(job)
+            plan_native_multimaterial(job, settings=settings)
             trusted_plate_dimensions(job.printer_profile)
         except (MaterialRoutingError, ValueError) as exc:
             raise SlicerExecutionError(str(exc)) from exc
