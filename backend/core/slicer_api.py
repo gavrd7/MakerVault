@@ -336,7 +336,7 @@ def _draft_plate_settings(user, input_asset, settings):
         return {"plate_label": label, "save_gcode_to_library": save_to_library,
                 "workflow": workflow, "process_overrides": process_overrides,
             **({"multi_material_test": True} if multi_material_test else {}),
-                **({"flush_settings": flush_settings} if flush_settings is not None else {}), **name_field, **name_field, **tower_field, **slot_fields, **routing_fields, **project_fields}
+                **({"flush_settings": flush_settings} if flush_settings is not None else {}), **name_field, **tower_field, **slot_fields, **routing_fields, **project_fields}
     objects = settings["plate_objects"]
     if not isinstance(objects, list) or not 1 <= len(objects) <= 200:
         raise ValueError("The visual build plate supports up to 200 model instances.")
@@ -465,7 +465,7 @@ def _draft_plate_settings(user, input_asset, settings):
             "workflow": workflow, "process_overrides": process_overrides,
             **({"multi_material_test": True} if multi_material_test else {}),
             **({"flush_settings": flush_settings} if flush_settings is not None else {}),
-            **tower_field, **slot_fields, **routing_fields, **project_fields}
+            **name_field, **tower_field, **slot_fields, **routing_fields, **project_fields}
 
 
 def _draft(user, data):
@@ -841,6 +841,7 @@ def import_project_3mf(request):
     return JsonResponse({
         "plates":restored,"active_plate_id":active_id,
         "configuration":{
+            "project_name":metadata.get("project_name"),
             "engine":metadata.get("engine"),"engine_version":metadata.get("engine_version"),
             "printer":metadata.get("printer"),"filament":metadata.get("filament"),
             "process":metadata.get("process"),"nozzle_mm":metadata.get("nozzle_mm"),
