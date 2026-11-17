@@ -46,21 +46,23 @@ def _requested_start_temperatures(text):
         if not line:
             continue
         if re.match(r"^START_PRINT(?:\s|$)", line, re.I):
-            for kind, label in (("EXTRUDER_TEMP", "nozzle"), ("BED_TEMP", "bed")):
+            for kind, label in (("EXTRUDER_TEMP", "nozzle"), ("BED_TEMP", "bed"), ("CHAMBER_TEMP", "chamber")):
                 match = re.search(r"(?:^|\s)" + kind + r"\s*=\s*(\d+(?:\.\d+)?)", line, re.I)
                 if match:
                     value = float(match.group(1))
-                    if 0 < value <= (500 if label == "nozzle" else 200):
+                    if 0 < value <= (500 if label == "nozzle" else 120 if label == "chamber" else 200):
                         found[label] = value
-        command = re.match(r"^(M104|M109|M140|M190)(?:\s|$)", line, re.I)
+        command = re.match(r"^(M104|M109|M140|M190|M141|M191)(?:\s|$)", line, re.I)
         if command:
-            label = "nozzle" if command.group(1).upper() in ("M104", "M109") else "bed"
+            label = ("nozzle" if command.group(1).upper() in ("M104", "M109")
+                     else "chamber" if command.group(1).upper() in ("M141", "M191") else "bed")
             match = re.search(r"(?:^|\s)S\s*(\d+(?:\.\d+)?)", line, re.I)
             if match and label not in found:
                 value = float(match.group(1))
-                if 0 < value <= (500 if label == "nozzle" else 200):
+                if 0 < value <= (500 if label == "nozzle" else 120 if label == "chamber" else 200):
                     found[label] = value
     return {"nozzle_c": found.get("nozzle"), "bed_c": found.get("bed"),
+            "chamber_c": found.get("chamber"),
             "source": "requested_start_gcode" if found else None}
 
 def _print_setup(text):
