@@ -36,3 +36,13 @@ test("painted colour remains visible in build plate selection and transform mode
   assert.match(editor, /colour_paint:original\.colour_paint/);
   assert.doesNotMatch(editor, /colour_paint:toolMode==="paint_colour"\?item\.colour_paint:null/);
 });
+
+test("profiled loaded bays are not mistaken for an assigned model base", () => {
+  assert.match(workspace, /paintedObjectsWithoutBase = objects\.filter/);
+  assert.match(workspace, /baseCandidates\.length === 1/);
+  assert.match(workspace, /Model base filament slot/);
+  assert.match(workspace, /Use matching base profile:/);
+  assert.match(workspace, /worker-verified Orca 2\.5\.0 native profile/);
+  assert.match(workspace, /profile\.status === "verified" \? " · Worker verified"/);
+  assert.match(workspace, /baseProfileMismatch/);
+});
