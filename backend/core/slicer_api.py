@@ -401,8 +401,8 @@ def _draft_plate_settings(user, input_asset, settings):
         # Validate the untrusted referenced contents above, but keep only
         # its immutable ID in the job JSON. Existing inline drafts remain
         # supported without a migration.
-        if "paint_asset_id" in item:
-            paint_fields = {"paint_asset_id": str(_uuid(item["paint_asset_id"]))}
+        if "paint_asset_id" in original_item:
+            paint_fields = {"paint_asset_id": str(_uuid(original_item["paint_asset_id"]))}
         saved.append({"instance_id": instance_id, "asset_id": str(asset_id),
                       **({"assembly_id": assembly_id} if assembly_id is not None else {}),
                       **values, "color": color.lower(), **text_fields, **material_fields, **paint_fields,
