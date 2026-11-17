@@ -185,6 +185,13 @@ def _preset(data, key, max_length=200):
     return value
 
 
+def _validate_project_name(name):
+    if (not isinstance(name, str) or not 1 <= len(name.strip()) <= 80
+            or any(ord(char) < 32 or ord(char) == 127 for char in name)):
+        raise ValueError("Project name must be 1–80 printable characters.")
+    return name.strip()
+
+
 def _validate_prime_tower_position(value):
     """Bounded XY preference for a plate, never executable profile content."""
     if value is None:
@@ -205,8 +212,10 @@ def _draft_plate_settings(user, input_asset, settings):
     """Persist preview-only plate geometry; never compile it into slicer flags."""
     if settings is None:
         settings = {}
-    if not isinstance(settings, dict) or set(settings) - {"plate_objects", "plate_label", "plates", "active_plate_id", "save_gcode_to_library", "workflow", "process_overrides", "flush_settings", "slot_filament_profiles", "material_tool_bindings", "material_topology", "multi_material_test", "prime_tower"}:
+    if not isinstance(settings, dict) or set(settings) - {"plate_objects", "plate_label", "plates", "active_plate_id", "save_gcode_to_library", "workflow", "process_overrides", "flush_settings", "slot_filament_profiles", "material_tool_bindings", "material_topology", "multi_material_test", "prime_tower", "project_name"}:
         raise ValueError("Unsupported slicer plate settings.")
+    project_name = settings.get("project_name")
+    name_field = {"project_name": _validate_project_name(project_name)} if project_name is not None else {}
     prime_tower = _validate_prime_tower_position(settings.get("prime_tower"))
     tower_field = {"prime_tower": prime_tower} if prime_tower is not None else {}
     process_overrides = validate_process_overrides(settings.get("process_overrides"))
@@ -327,7 +336,7 @@ def _draft_plate_settings(user, input_asset, settings):
         return {"plate_label": label, "save_gcode_to_library": save_to_library,
                 "workflow": workflow, "process_overrides": process_overrides,
             **({"multi_material_test": True} if multi_material_test else {}),
-                **({"flush_settings": flush_settings} if flush_settings is not None else {}), **tower_field, **slot_fields, **routing_fields, **project_fields}
+                **({"flush_settings": flush_settings} if flush_settings is not None else {}), **name_field, **name_field, **tower_field, **slot_fields, **routing_fields, **project_fields}
     objects = settings["plate_objects"]
     if not isinstance(objects, list) or not 1 <= len(objects) <= 200:
         raise ValueError("The visual build plate supports up to 200 model instances.")
@@ -676,6 +685,8 @@ def import_project_3mf(request):
             metadata = json.loads(archive.read(manifest_info).decode("utf-8"))
             if not isinstance(metadata, dict) or metadata.get("format") != "makervault-project-v1":
                 raise ValueError("This is not a MakerVault project 3MF.")
+            if "project_name" in metadata:
+                _validate_project_name(metadata["project_name"])
             plates = metadata.get("plates")
             if not isinstance(plates, list) or not 1 <= len(plates) <= 8:
                 raise ValueError("Invalid project plate list.")
@@ -946,6 +957,7 @@ def export_project_3mf(request, job_id):
         config = {
             "format": "makervault-project-v1",
             "active_plate_id": settings.get("active_plate_id", plates[0]["id"]),
+            "project_name": settings.get("project_name", "MakerVault project"),
             "plates": plates,
             "printer": {"id": str(job.printer_id),
                         "profile_id": str(job.printer_profile_id or ""),
