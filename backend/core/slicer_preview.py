@@ -8,7 +8,9 @@ replacement for the slicer's native layer-by-layer simulation.
 import math
 import re
 from collections import Counter
+from .slicer_preview_arcs import arc_points
 
+ARC_PARAM = re.compile(r"([IJR])\\s*([-+]?(?:\\d+(?:\\.\\d*)?|\\.\\d+))", re.I)
 MOVE = re.compile(r"([XYZEF])\s*([-+]?(?:\d+(?:\.\d*)?|\.\d+))", re.I)
 DURATION = re.compile(r"^;\s*(?:estimated printing time(?: \(normal mode\))?|"
                       r"total estimated time|print time|printing time)\s*[:=]\s*(.+)$", re.I)
@@ -58,6 +60,7 @@ def generated_preview(text, *, truncated=False):
              "feature_counts": {}}
     absolute_xyz = True
     absolute_e = True
+    absolute_centres = False
     x = y = z = e = 0.0
     feature = "Other"
     width = None  # Slicer-declared per-path bead width, when available.
@@ -94,6 +97,8 @@ def generated_preview(text, *, truncated=False):
             absolute_xyz = command == "G90"
         elif command in {"M82", "M83"}:
             absolute_e = command == "M82"
+        elif command in {"G90.1", "G91.1"}:
+            absolute_centres = command == "G90.1"
         elif command == "G92":
             for key, raw_value in MOVE.findall(line[3:]):
                 v = float(raw_value)
@@ -101,11 +106,9 @@ def generated_preview(text, *, truncated=False):
                 if key == "X": x = v
                 if key == "Y": y = v
                 if key == "Z": z = v
-        elif command in {"G0", "G00", "G1", "G01"}:
+        elif command in {"G0", "G00", "G1", "G01", "G2", "G02", "G3", "G03"}:
             nx, ny, nz, ne = x, y, z, e
-            supplied = set()
             for key, raw_value in MOVE.findall(line[len(command):]):
-                supplied.add(key.upper())
                 v = float(raw_value)
                 if not math.isfinite(v) or abs(v) > 1000000:
                     continue
@@ -113,22 +116,35 @@ def generated_preview(text, *, truncated=False):
                 if key.upper() == "Y": ny = v if absolute_xyz else y + v
                 if key.upper() == "Z": nz = v if absolute_xyz else z + v
                 if key.upper() == "E": ne = v if absolute_e else e + v
-            delta = (ne - e if absolute_e else ne - e)
-            if delta > 0.000001 and (nx != x or ny != y) and math.isfinite(nz):
-                counts[feature] += 1
-                if len(heights) < MAX_LAYERS:
-                    heights.add(round(nz, 3))
-                # Maintain a bounded sample across the entire print rather
-                # than displaying only the first layers of a large job.
-                total = sum(counts.values())
-                if total % stride == 0:
-                    segments.append([round(x, 3), round(y, 3), round(nx, 3),
-                                     round(ny, 3), round(nz, 3), feature,
-                                     width])
-                if len(segments) > MAX_SEGMENTS:
-                    stride *= 2
-                    segments = segments[::2]
-                    stats["sampled"] = True
+            is_arc = command in {"G2", "G02", "G3", "G03"}
+            moves = None
+            if is_arc:
+                params = {key.upper(): float(raw_value)
+                          for key,raw_value in ARC_PARAM.findall(line[len(command):])}
+                moves = arc_points(x,y,z,nx,ny,nz,
+                                   command in {"G2","G02"},params,
+                                   absolute_centres=absolute_centres)
+            elif nx != x or ny != y:
+                moves = [(nx, ny, nz, 1.0)]
+            if ne > e + 0.000001 and moves:
+                px,py,pz = x,y,z
+                for ax,ay,az,_ in moves:
+                    if math.hypot(ax-px,ay-py) < 0.000001:
+                        px,py,pz=ax,ay,az
+                        continue
+                    counts[feature] += 1
+                    if len(heights) < MAX_LAYERS:
+                        heights.add(round(az, 3))
+                    total = sum(counts.values())
+                    if total % stride == 0:
+                        segments.append([round(px,3),round(py,3),
+                                         round(ax,3),round(ay,3),
+                                         round(az,3),feature,width])
+                    if len(segments) > MAX_SEGMENTS:
+                        stride *= 2
+                        segments = segments[::2]
+                        stats["sampled"] = True
+                    px,py,pz=ax,ay,az
             x, y, z, e = nx, ny, nz, ne
     stats["segments"] = segments
     # Segments are exact native XY/Z moves within the bounded sample. Width
