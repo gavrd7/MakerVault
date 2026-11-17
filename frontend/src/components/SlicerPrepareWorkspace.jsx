@@ -863,16 +863,19 @@ export default function SlicerPrepareWorkspace({
     const row = slotFilamentProfiles.find(entry => String(entry.slot_id) === String(slotId));
     return row && filamentProfiles.find(profile => String(profile.id) === String(row.profile_id));
   };
-  const verifiedSlot = slotId => {
+  const compatibleSlotProfile = slotId => {
     const profile = slotWithProfile(slotId);
+    // Import approval is optional: the native profile is revalidated during
+    // slicing, including ownership, content hash and inherited parents.
     return profile?.kind === "filament" && profile.engine === activeEngine &&
-      profile.engine_version === activeEngineVersion && profile.status === "verified";
+      profile.engine_version === activeEngineVersion &&
+      ["candidate", "verified"].includes(profile.status);
   };
   const paintedObjectsWithoutBase = objects.filter(item =>
     (item.colour_paint?.regions?.length || Object.keys(item.colour_paint?.faces || {}).length) &&
     !item.material_slot);
   const baseCandidates = liveMaterials.filter(slot =>
-    verifiedSlot(slot.id) &&
+    compatibleSlotProfile(slot.id) &&
     String(slotWithProfile(slot.id)?.id) === String(selectedProfiles?.filament_id));
   // Do not guess when several bays share a native filament preset.
   // The colour of a filament or model alone is not a safe physical tool ID.
@@ -880,19 +883,16 @@ export default function SlicerPrepareWorkspace({
   const incompletePaintSlot = objects.flatMap(item =>
     (item.colour_paint?.regions || []).map(region => item.colour_paint?.palette?.[region.slot]))
     .find(swatch => !swatch?.slot_id || String(swatch.printer_id) !== String(printerId));
-  const missingToolProfile = requiredMultiSlots.find(slotId => !verifiedSlot(slotId));
-  const baseProfileMismatch = assignedSlots.length === objects.length &&
-    assignedSlots.length > 0 && !assignedSlots.some(slot =>
-      String(slotWithProfile(slot.slot_id)?.id) === String(selectedProfiles?.filament_id));
-
+  const missingToolProfile = requiredMultiSlots.find(slotId => !compatibleSlotProfile(slotId));
+  // The server derives the main filament profile from the selected model's
+  // assigned base CFS slot. Setup need not independently match that profile.
   const multiMaterialReadyForExport = activeEngine === "orcaslicer"
     && activeEngineVersion === "2.5.0"
     && assignedSlots.length === objects.length
-    && !baseProfileMismatch
     && assignedSlots.every(slot => String(slot.printer_id) === String(printerId))
     && requiredMultiSlots.length >= 2
     && requiredMultiSlots.length <= 16
-    && requiredMultiSlots.every(verifiedSlot)
+    && requiredMultiSlots.every(compatibleSlotProfile)
     && objects.every(item => (item.colour_paint?.regions || []).every(region => {
       const swatch = item.colour_paint?.palette?.[region.slot];
       return swatch && String(swatch.printer_id) === String(printerId)
@@ -930,9 +930,7 @@ export default function SlicerPrepareWorkspace({
         : incompletePaintSlot
           ? "One painted colour is a preview-only swatch. Link it to a loaded CFS slot in Colour painting."
           : missingToolProfile
-            ? "A filament slot used by this model has no worker-verified Orca 2.5.0 native profile. Check that slot's Profile selection."
-            : baseProfileMismatch
-              ? "The model's base filament profile does not match the main filament preset selected in Slicer setup. Choose the same verified profile or change the model's base slot."
+            ? "A painted or base filament slot is missing a compatible Orca 2.5.0 native profile. Select its Profile above."
             : requiredMultiSlots.length < 2
               ? "At least two different filament slots are needed for native multi-colour slicing."
               : "The saved model and painted slot assignments need checking before native multi-colour slicing."
@@ -1755,7 +1753,7 @@ export default function SlicerPrepareWorkspace({
                 <small>Slot {(slot.slot_index??0)+1} · {slot.material||"Unknown"}</small>
                 {resolveSlotLibrarySpool(slot,spools).spool && <small>Matched MakerVault spool · {resolveSlotLibrarySpool(slot,spools).spool.spool_id}</small>}
                 <small>{profile ? "Profile: " + profile.name +
-                  (profile.status === "verified" ? " · Worker verified" : " · Not worker verified")
+                  (profile.status === "verified" ? " · Worker verified" : " · Imported")
                   : suggestion.level === "exact" ? "Matching installed profile found"
                   : suggestion.level === "ambiguous" ? "Multiple matching profiles — choose one"
                   : suggestion.level === "fallback" ? "Similar installed profiles available for review"
@@ -2096,7 +2094,7 @@ export default function SlicerPrepareWorkspace({
                   changeModelPreviewFilament(model.instance_id, slot));
               }}>
               <option value="">Choose a CFS slot for the model's unpainted areas</option>
-              {liveMaterials.filter(slot => verifiedSlot(slot.id)).map(slot =>
+              {liveMaterials.filter(slot => compatibleSlotProfile(slot.id)).map(slot =>
                 <option key={slot.id} value={String(slot.id)}>
                   {slotName(slot)} · {slotWithProfile(slot.id)?.name}
                 </option>)}
@@ -2107,7 +2105,7 @@ export default function SlicerPrepareWorkspace({
                 changeModelPreviewFilament(model.instance_id, suggestedBaseSlot))}>
               Use matching base profile: {slotName(suggestedBaseSlot)}
             </button>}
-            <small>The base slot uses the main filament preset selected in Slicer setup.
+            <small>The base slot selects the main native filament preset when a job is saved.
               Different loaded slots can share a preset; select the intended physical bay.</small>
           </div>}
         {!draftBlockReason && sliceBlockReason && <p className="slicerActionStatus" role="status">
