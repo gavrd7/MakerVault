@@ -49,7 +49,7 @@ def _overview_segments(segments, per_layer_limit=MAX_OVERVIEW_SEGMENTS_PER_LAYER
     return [segments[index] for index in sorted(kept)]
 
 
-def layer_batch_toolpaths(text, target_zs, *, overview=False):
+def layer_batch_toolpaths(text, target_zs, *, overview=False, overview_limit=350):
     """Return actual, ordered G0/G1 extrusion segments at target Z.
 
     Coordinates use [X1,Y1,X2,Y2,Z,feature,width,logical_tool] as the existing renderer
@@ -58,6 +58,9 @@ def layer_batch_toolpaths(text, target_zs, *, overview=False):
     """
     if not isinstance(target_zs, (list, tuple)) or not 1 <= len(target_zs) <= MAX_BATCH_LAYERS:
         raise ValueError("Choose between 1 and 64 layers.")
+    if (overview and (isinstance(overview_limit, bool) or not isinstance(overview_limit, int)
+                     or not 80 <= overview_limit <= MAX_OVERVIEW_SEGMENTS_PER_LAYER)):
+        raise ValueError("Invalid preview detail level.")
     targets = []
     for value in target_zs:
         height = float(value)
@@ -69,7 +72,7 @@ def layer_batch_toolpaths(text, target_zs, *, overview=False):
         targets.append(height)
     selected = set(targets)
     by_height = {height: {"z": height, "segments": [], "segment_count": 0,
-                         "feature_counts": Counter()} for height in targets}
+                         "feature_counts": Counter(), "captured_count": 0} for height in targets}
     absolute_xyz = True
     absolute_e = True
     absolute_centres = False
@@ -150,19 +153,18 @@ def layer_batch_toolpaths(text, target_zs, *, overview=False):
                                                        round(ax,3),round(ay,3),
                                                        key,role,width,tool])
                             stored_count += 1
+                            layer["captured_count"] += 1
                     px,py,pz=ax,ay,az
             x,y,z,e=nx,ny,nz,ne
 
     for layer in by_height.values():
         original = layer["segment_count"]
+        original_captured=layer.pop("captured_count")
         if overview:
-            layer["segments"] = _overview_segments(layer["segments"])
+            layer["segments"] = _overview_segments(layer["segments"], overview_limit)
             layer["overview_reduced"] = len(layer["segments"]) < original
         layer["feature_counts"] = dict(layer["feature_counts"])
-        layer["complete"] = (len(layer["segments"]) == layer["segment_count"]) if not overview else (
-            original <= MAX_LAYER_SEGMENTS and not (
-                stored_count >= MAX_BATCH_SEGMENTS and
-                len(layer["segments"]) == 0 and original > 0))
+        layer["complete"] = original_captured == original
         layer["sampled"] = bool(overview and layer.get("overview_reduced"))
         layer["limited"] = not layer["complete"]
     return {"layers": [by_height[height] for height in targets],
