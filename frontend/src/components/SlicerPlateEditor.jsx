@@ -13,6 +13,7 @@ import { plateExtentWarning, plateEnvelope, plateFootprintsOverlap, autoArrangeP
   measurementDistance, measurementCircle, measurementFormat,
   findFreeDuplicatePosition } from "./slicerPlateGeometry";
 import { nativeBedArtwork } from "./slicerNativePlateArt";
+import {autoPrimeTowerPosition,towerFits} from "./slicerPrimeTower";
 import { detectMeshMeasurement, formatDetectedMeasurement } from "./slicerAutoMeasure";
 import { evaluateAutoOrient, AUTO_ORIENT_GOALS } from "./slicerAutoOrient";
 import { splitDisconnectedMesh } from "./slicerSplitObjects";
@@ -310,10 +311,13 @@ export default function SlicerPlateEditor({
   onMeasureClear, onMeasureFinish, colourPaintOptions = null, onColourPaintError, onColourPaintHeightPick,
   variableLayerPreview = null, onVariableLayerHeightPick, onVariableLayerHeightCommit,
   localAssets = [], onLocalAssetsChange, onExitToolMode, onPlateIssuesChange, toolbar = null, paintControls = null,
+  primeTower = null, onPrimeTowerChange, primeTowerEnabled = false, primeTowerWidth = 35,
 }) {
   const hostRef = useRef(null);
   const sceneRef = useRef(null);
   const latestObjectsRef = useRef(objects);
+  const latestPrimeTowerRef=useRef({position:primeTower,change:onPrimeTowerChange,enabled:primeTowerEnabled,width:primeTowerWidth});
+  latestPrimeTowerRef.current={position:primeTower,change:onPrimeTowerChange,enabled:primeTowerEnabled,width:primeTowerWidth};
   const latestOnChangeRef = useRef(onChange);
   const latestToolModeRef = useRef(toolMode);
   const measurePinPlacedRef = useRef(onMeasurePinPlaced);
@@ -430,6 +434,17 @@ export default function SlicerPlateEditor({
   ], [files, localAssets]);
   const bedX = Number(plate?.size_mm?.[0]) >= 1 && Number(plate?.size_mm?.[0]) <= 1000 ? Number(plate.size_mm[0]) : 220;
   const bedY = Number(plate?.size_mm?.[1]) >= 1 && Number(plate?.size_mm?.[1]) <= 1000 ? Number(plate.size_mm[1]) : 220;
+  const previewTowerWidth=Number.isFinite(Number(primeTowerWidth))?
+    Math.max(10,Math.min(120,Number(primeTowerWidth))):35;
+  // Orca computes actual tower depth from flushing and the selected profile.
+  const previewTowerDepth=Math.max(25,previewTowerWidth);
+  const towerPlacementValid=!primeTowerEnabled||!primeTower||
+    towerFits(primeTower,objects,dimensions,bedX,bedY,previewTowerWidth,previewTowerDepth);
+  useEffect(()=>{
+    if(!primeTowerEnabled||primeTower||!objects.length||!onPrimeTowerChange)return;
+    const candidate=autoPrimeTowerPosition(objects,dimensions,bedX,bedY,previewTowerWidth,previewTowerDepth);
+    if(candidate)onPrimeTowerChange(candidate);
+  },[primeTowerEnabled,primeTower,objects,dimensions,bedX,bedY,previewTowerWidth,previewTowerDepth,onPrimeTowerChange]);
   // The controls show the first model by default; only an explicitly selected
   // mesh should receive a visual highlight.
   const chosen = objects.find(item => item.instance_id === selected) || objects[0] || null;
@@ -1563,6 +1578,29 @@ export default function SlicerPlateEditor({
     mount.replaceChildren(renderer.domElement);
 
     const scene = new THREE.Scene();
+    const towerProxy=new THREE.Group();
+    const towerBody=new THREE.Mesh(new THREE.BoxGeometry(1,1,1),
+      new THREE.MeshBasicMaterial({color:0x77d7f8,transparent:true,opacity:0.22,
+        depthWrite:false,side:THREE.DoubleSide}));
+    const towerCore=new THREE.Mesh(new THREE.BoxGeometry(1,1,1),
+      new THREE.MeshBasicMaterial({color:0x5bbfe9,transparent:true,opacity:0.62,
+        depthWrite:false}));
+    towerProxy.add(towerBody,towerCore);
+    scene.add(towerProxy);
+    const syncTowerProxy=()=>{
+      const state=latestPrimeTowerRef.current;
+      towerProxy.visible=!!state.enabled&&!!state.position;
+      if(!towerProxy.visible)return;
+      const width=Math.max(10,Math.min(120,Number(state.width)||35));
+      const depth=Math.max(25,width);
+      towerProxy.position.set(state.position.x+width/2-bedX/2,
+        state.position.y+depth/2-bedY/2,0);
+      towerBody.scale.set(width,depth,14);
+      towerBody.position.z=7;
+      towerCore.scale.set(Math.min(10,width/3),Math.min(10,depth/3),10);
+      towerCore.position.z=5;
+      towerProxy.updateMatrixWorld(true);
+    };
     scene.background = new THREE.Color("#0f1720");
     scene.add(new THREE.HemisphereLight(0xffffff, 0x26384b, 2.6));
     const sun = new THREE.DirectionalLight(0xffffff, 2.2);
@@ -1933,6 +1971,7 @@ export default function SlicerPlateEditor({
     const raycaster = new THREE.Raycaster();
     const bedPlane = new THREE.Plane(new THREE.Vector3(0, 0, 1), 0);
     let dragging = null;
+    let towerDragging = null;
     let painting = null;
     const activeTouchPointers = new Set();
     let touchNavigation = false;
@@ -2215,6 +2254,22 @@ export default function SlicerPlateEditor({
           return;
         }
       }
+      if(latestPrimeTowerRef.current.enabled && latestPrimeTowerRef.current.position &&
+          ["select","move"].includes(latestToolModeRef.current)){
+        syncTowerProxy();
+        if(raycaster.intersectObject(towerProxy,true).length){
+          const location=new THREE.Vector3();
+          if(raycaster.ray.intersectPlane(bedPlane,location)){
+            const pos=latestPrimeTowerRef.current.position;
+            towerDragging={pointerId:event.pointerId,
+              offsetX:pos.x-location.x,offsetY:pos.y-location.y};
+            controls.enabled=false;
+            renderer.domElement.setPointerCapture?.(event.pointerId);
+            event.preventDefault();
+            return;
+          }
+        }
+      }
       const hits = raycaster.intersectObjects([...meshes.values()], false);
       if(latestToolModeRef.current==="variable_layers"){
         const hit=hits.find(row=>row.object.userData.instanceId===selectionRef.current[0]);
@@ -2414,6 +2469,20 @@ export default function SlicerPlateEditor({
     }
 
     function pointerMove(event) {
+      if(towerDragging?.pointerId===event.pointerId){
+        rayFromPointer(event);
+        const location=new THREE.Vector3();
+        if(raycaster.ray.intersectPlane(bedPlane,location)){
+          const next={x:Math.round((location.x+towerDragging.offsetX)*2)/2,
+            y:Math.round((location.y+towerDragging.offsetY)*2)/2};
+          const state=latestPrimeTowerRef.current;
+          const width=Math.max(10,Math.min(120,Number(state.width)||35));
+          if(towerFits(next,latestObjectsRef.current,dimensionsRef.current,
+              bedX,bedY,width,Math.max(25,width)))state.change?.(next);
+        }
+        event.preventDefault();
+        return;
+      }
       if (event.pointerType === "touch" && (touchNavigation || activeTouchPointers.size > 1)) return;
       if(latestToolModeRef.current==="variable_layers"){
         rayFromPointer(event);
@@ -2500,6 +2569,15 @@ export default function SlicerPlateEditor({
     }
 
     function pointerUp(event) {
+      if(towerDragging?.pointerId===event.pointerId){
+        towerDragging=null;
+        activeTouchPointers.delete(event.pointerId);
+        controls.enabled=true;
+        if(renderer.domElement.hasPointerCapture?.(event.pointerId))
+          renderer.domElement.releasePointerCapture(event.pointerId);
+        event.preventDefault();
+        return;
+      }
       if(variableHeightPointerId===event.pointerId){
         activeTouchPointers.delete(event.pointerId);
         variableHeightPointerId=null;
@@ -2716,6 +2794,7 @@ export default function SlicerPlateEditor({
     };
     renderer.setAnimationLoop(() => {
       controls.update();
+      syncTowerProxy();
       updateBedAppearance();
       // Update continuously during gizmo and pointer drags, which can happen
       // between React object-state commits.
@@ -2753,6 +2832,9 @@ export default function SlicerPlateEditor({
       scene.remove(transform.getHelper());
       transform.dispose();
       scene.remove(groupProxy);
+      scene.remove(towerProxy);
+      towerBody.geometry.dispose();towerBody.material.dispose();
+      towerCore.geometry.dispose();towerCore.material.dispose();
       rotationGizmo.dispose();
       setSelectionOutlines([]);
       for (const item of [...measurementOverlay.children]) {
@@ -3599,7 +3681,31 @@ export default function SlicerPlateEditor({
       </p>}
     <p className="slicerPlateHint"><strong>Selected surface:</strong> {PLATE_SURFACE[plateType]?.label || "Native default"} · Physical plate not detected. {!showNativeArtwork || !(plate?.artwork_url || plate?.bed_model_url || nativeBedArtwork(printerLabel, bedX, bedY)) ? "MakerVault 3D build plate." : ""} {showNativeArtwork && (plate?.artwork_url || nativeBedArtwork(printerLabel, bedX, bedY)) &&
       <small>Native artwork: {plate?.artwork_url ? "Imported official OrcaSlicer profile" : "OrcaSlicer v2.4.2"} (AGPL-3.0)</small>}</p>
-    <p className="slicerPlateHint"><strong>Build plate volume:</strong> {pretty(bedX)} × {pretty(bedY)} mm (X × Y). Drag in 0.5 mm steps or enter coordinates below.</p>
+    {primeTowerEnabled && <section className="slicerPlateControlsGroup" aria-label="Prime tower placement">
+       <strong>Prime tower placement</strong>
+       <span className="slicerPlateHint">The translucent tower is a footprint estimate. Drag it on the plate, or enter its X/Y anchor (mm). Orca calculates final height and depth during slicing.</span>
+       <div className="slicerPlateDisplayOptionsRow">
+         {["x","y"].map(axis=><label key={axis}>Tower {axis.toUpperCase()} (mm)
+           <input type="number" min="0" max={axis==="x"?bedX:bedY} step="0.5"
+             value={primeTower?.[axis]??""} disabled={!canEdit}
+             onChange={event=>{
+               const value=Number(event.target.value);
+               if(event.target.value===""||!Number.isFinite(value))return;
+               const next={x:primeTower?.x??5,y:primeTower?.y??5,[axis]:value};
+               if(towerFits(next,objects,dimensions,bedX,bedY,
+                   previewTowerWidth,previewTowerDepth))onPrimeTowerChange?.(next);
+             }}/>
+         </label>)}
+         <button type="button" disabled={!canEdit} onClick={()=>{
+           const position=autoPrimeTowerPosition(objects,dimensions,bedX,bedY,
+             previewTowerWidth,previewTowerDepth);
+           if(position)onPrimeTowerChange?.(position);
+           else setError("No safe prime tower location found. Move models to free plate space.");
+         }}>Auto-position tower</button>
+       </div>
+       {!towerPlacementValid&&<p role="alert">Tower overlaps a model or the estimated plate margin. Reposition it before slicing.</p>}
+     </section>}
+     <p className="slicerPlateHint"><strong>Build plate volume:</strong> {pretty(bedX)} × {pretty(bedY)} mm (X × Y). Drag in 0.5 mm steps or enter coordinates below.</p>
     {arrangeNotice && <p role="status" className="slicerPlateHint">{arrangeNotice}</p>}
     {extentWarnings.length > 0 && <div role="status" className="integrationError">
       <strong>Preliminary plate-fit warnings</strong>
