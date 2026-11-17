@@ -211,6 +211,39 @@ class IntendedMaterialSafetyTests(SimpleTestCase):
         job.settings["plate_objects"]=[{**model,"seam_paint":{"regions":[{"slot":0}]}}]
         self.assertTrue(_validate_plate_execution(job))
 
+
+    def test_combined_offline_orca25_paints_and_layers_admitted(self):
+        from types import SimpleNamespace
+        painted = {"version": 2, "signature": "2:abcdef01",
+                   "regions": [{"slot": 0, "patches": [{
+                       "face": 0, "polygon": [[0., 0., 0.], [1., 0., 0.], [0., 1., 0.]]
+                   }]}]}
+        model = {
+            "instance_id": "one", "asset_id": "source",
+            "x_mm": 0, "y_mm": 0, "rotation_deg": 0,
+            "rotation_xyz_deg": [0, 0], "scale_percent": 100,
+            "scale_xyz_percent": [100, 100, 100],
+            "support_paint": painted, "seam_paint": painted,
+            "fuzzy_skin_paint": painted,
+            "variable_layer_profile": {"version": 1, "bands": [
+                {"from_mm": 4, "to_mm": 10, "layer_mm": .12}]},
+        }
+        job = SimpleNamespace(
+            settings={"plate_objects": [model]},
+            engine="orcaslicer", engine_version="2.5.0",
+            printer_id="printer", filament_profile_id="filament",
+            printer_profile_id="profile",
+        )
+        self.assertTrue(_validate_plate_execution(job))
+        self.assertFalse(_single_unmodified_stl([model]))
+        job.engine_version = "2.4.2"
+        with self.assertRaisesRegex(SlicerExecutionError, "2.5.0"):
+            _validate_plate_execution(job)
+        job.engine_version = "2.5.0"
+        job.settings["plate_objects"] = [model, {**model, "instance_id": "two"}]
+        with self.assertRaisesRegex(SlicerExecutionError, "single-filament"):
+            _validate_plate_execution(job)
+
     def test_unhandled_flush_matrix_cannot_be_silently_ignored(self):
         from types import SimpleNamespace
         for models in (None, [], [{"instance_id": "one"}]):
