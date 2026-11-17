@@ -111,6 +111,15 @@ export default function SlicerGcodePreview({ fileId = null, preview, bedSize = n
             used += item.segments.length;
             completed++;
             pendingLayers++;
+            // The current-layer movement slider can reuse the exact geometry
+            // already returned by this batch instead of initiating another
+            // expensive complete-file scan for the same Z.
+            if (item.z != null) {
+              const key=String(fileId)+":"+Number(item.z).toFixed(3);
+              fullLayerCache.current.set(key,item);
+              if (fullLayerCache.current.size>12)
+                fullLayerCache.current.delete(fullLayerCache.current.keys().next().value);
+            }
           }
           if (cancelled) return;
           // Publish in coherent chunks, not after every layer. Retain all
