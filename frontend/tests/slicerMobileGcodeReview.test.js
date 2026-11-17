@@ -19,6 +19,22 @@ test("mobile preview retains the toolpath, temperatures and primary figures", ()
   assert.match(mobileCss, /\.slicerResultLayerLayout/);
 });
 
+test("review layout keeps temperatures, detail table and source reader responsive", () => {
+  const source = read("../src/components/GcodeFullSource.jsx");
+  assert.match(preview, /Requested chamber/);
+  assert.match(viewer, /Chamber /);
+  assert.match(viewer, /<strong>Build plate<\\/strong>/);
+  assert.match(viewer, /slicerGenerator/);
+  assert.match(viewer, /slicerGcodeSavedSettingsScroll/);
+  assert.match(viewer, /slicerGcodeSourceModeActions/);
+  assert.match(source, /slicerFullSourceSearch/);
+  assert.match(source, /slicerFullSourcePagination/);
+  assert.doesNotMatch(source, /Jump to object/);
+  assert.doesNotMatch(source, /Per-object toolpath evidence/);
+  assert.doesNotMatch(preview, /Show entire selected layer/);
+  assert.doesNotMatch(preview, /slicerPreviewCoverage/);
+});
+
 test("mobile detail and settings panels have explicit close controls", () => {
   assert.match(viewer, /setMobileDetails\(false\)/);
   assert.match(viewer, /G-code details/);
