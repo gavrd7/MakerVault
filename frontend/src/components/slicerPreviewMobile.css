@@ -344,3 +344,165 @@
   }
   .slicerPreviewToolButtons button { min-width: 0; }
 }
+
+/* 2026-11-17 mobile review consolidation. Override legacy row layouts within
+   the floating dialog only; never affect the ordinary slicer settings page. */
+@media (max-width: 700px) {
+  .slicerPreviewNav {
+    width: 100%;
+    display: flex !important;
+    align-items: stretch;
+    justify-content: center;
+    gap: 8px;
+    margin: 8px auto 12px;
+  }
+  .slicerPreviewNav button {
+    flex: 0 1 150px;
+    min-width: 0;
+    text-align: center;
+    margin: 0;
+    padding: 9px 6px;
+  }
+  .slicerGcodeQuickSummary {
+    justify-content: center;
+    align-items: center;
+    margin: 4px auto 10px;
+  }
+  .slicerUnifiedViewActions {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 7px;
+    width: 100%;
+    margin: 8px auto 4px;
+  }
+  .slicerUnifiedViewActions > button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex: 1 1 0;
+    min-width: 0;
+    max-width: 170px;
+    padding: 9px 5px;
+    margin: 0;
+    font-size: .82rem;
+    white-space: nowrap;
+  }
+  .slicerResultModeRow.slicerPreviewOptionsPanel.mobileOpen {
+    display: flex !important;
+    flex-direction: column !important;
+    flex-wrap: nowrap !important;
+    align-items: stretch !important;
+    justify-content: flex-start !important;
+    gap: 12px !important;
+    inset: auto !important;
+    top: 50% !important;
+    left: 50% !important;
+    right: auto !important;
+    bottom: auto !important;
+    transform: translate(-50%, -50%) !important;
+    width: min(540px, calc(100vw - 24px)) !important;
+    min-width: 0 !important;
+    max-width: calc(100vw - 24px) !important;
+    max-height: 82dvh !important;
+    box-sizing: border-box !important;
+    overflow-x: hidden !important;
+    overflow-y: auto !important;
+    padding: 16px !important;
+  }
+  .slicerResultModeRow.slicerPreviewOptionsPanel.mobileOpen > label {
+    display: flex !important;
+    flex-direction: column !important;
+    flex: none !important;
+    flex-wrap: nowrap !important;
+    align-items: stretch !important;
+    justify-content: flex-start !important;
+    gap: 5px !important;
+    min-width: 0 !important;
+    width: 100% !important;
+    margin: 0 !important;
+  }
+  .slicerResultModeRow.slicerPreviewOptionsPanel.mobileOpen > label.checkRow {
+    flex-direction: row !important;
+    align-items: center !important;
+  }
+  .slicerResultModeRow.slicerPreviewOptionsPanel.mobileOpen select {
+    display: block;
+    width: 100% !important;
+    min-width: 0 !important;
+    max-width: 100% !important;
+    box-sizing: border-box;
+  }
+  .slicerPreviewOptionsPanel .slicerPreviewPanelHeader {
+    position: relative;
+    display: flex !important;
+    flex-direction: row !important;
+    align-items: center !important;
+    justify-content: space-between !important;
+    flex: none !important;
+    width: 100% !important;
+    gap: 10px;
+    margin: 0 0 8px;
+  }
+  .slicerPreviewOptionsPanel .slicerPreviewPanelHeader button {
+    margin-left: auto;
+    flex: 0 0 auto;
+  }
+  .slicerPreviewOptionsPanel.mobileOpen > .slicerPreviewPanelHeader {
+    order: -1;
+  }
+  .slicerToolpathViewBar .slicerToolpathViewOptions.mobileOpen {
+    display: grid;
+    width: min(360px,100%);
+    margin: 4px auto 0;
+    justify-content: center;
+    justify-items: stretch;
+    gap: 8px;
+  }
+  .slicerToolpathViewBar .slicerToolpathViewOptions.mobileOpen button,
+  .slicerToolpathViewBar .slicerToolpathViewOptions.mobileOpen label {
+    text-align: center;
+    justify-content: center;
+    width: 100%;
+  }
+  .slicerResultSteps .settingsActions { display: none !important; }
+  .slicerResultSteps input.slicerFullRange {
+    width: 100%;
+    box-sizing: border-box;
+  }
+  .slicerResultLayerSlider input.slicerFullRange {
+    box-sizing: border-box;
+    margin-inline: auto !important;
+  }
+}
+/* The rails are painted on the range's native track rather than on the input
+   background. Avoid dual inset gradients which misalign with WebKit thumbs. */
+.slicerResultSteps input.slicerFullRange {
+  background: transparent !important;
+}
+.slicerResultSteps input.slicerFullRange::-webkit-slider-runnable-track {
+  height: 5px;
+  background: #1688ee;
+  border-radius: 5px;
+}
+.slicerResultSteps input.slicerFullRange::-moz-range-track {
+  height: 5px;
+  background: #1688ee;
+  border-radius: 5px;
+}
+@media (max-width: 700px) {
+  .slicerResultLayerSlider input.slicerFullRange {
+    background: transparent !important;
+  }
+  .slicerResultLayerSlider input.slicerFullRange::-webkit-slider-runnable-track {
+    width: 5px;
+    background: #1688ee;
+    border-radius: 5px;
+  }
+  .slicerResultLayerSlider input.slicerFullRange::-moz-range-track {
+    width: 5px;
+    background: #1688ee;
+    border-radius: 5px;
+  }
+}
