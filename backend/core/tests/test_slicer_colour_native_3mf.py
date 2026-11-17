@@ -117,9 +117,13 @@ class NativeColourRegionTests(SimpleTestCase):
             native_colour_tool_maps([item], printer_id="printer",
                                     tool_bindings={"bay-3": 2})
 
-    def test_annotated_model_rejects_unverified_paint_palette(self):
+    def test_non_native_plate_never_silently_compiles_preview_colours(self):
         raw, painting = fixture_paint()
         item = {"x_mm": 0, "y_mm": 0, "rotation_deg": 0,
                 "scale_percent": 100, "colour_paint": painting}
-        with self.assertRaisesRegex(SlicerProfileError, "verified native"):
-            build_plate_3mf([(item, raw)], bed_width=220, bed_depth=220)
+        project = build_plate_3mf([(item, raw)], bed_width=220, bed_depth=220)
+        with zipfile.ZipFile(io.BytesIO(project)) as archive:
+            model = ET.fromstring(archive.read("3D/3dmodel.model"))
+        faces = model.findall(".//{%s}triangle" % NS)
+        self.assertEqual(len(faces), len(list(_triangles(raw))))
+        self.assertFalse(any("paint_color" in face.attrib for face in faces))
