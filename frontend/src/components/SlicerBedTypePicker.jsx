@@ -56,14 +56,14 @@ export default function SlicerBedTypePicker({value,onChange,options,disabled=fal
     {entries.map(([key,label])=><button key={key} type="button" disabled={disabled}
       aria-pressed={value===key} title={label||LABELS[key]}
       onClick={()=>onChange(key)}
-      style={{flex:"0 0 auto",minWidth:compact?114:125,maxWidth:compact?135:155,
-        padding:"8px 9px",display:"flex",alignItems:"center",flexDirection:"column",gap:4,
+      style={{flex:"0 0 auto",minWidth:compact?168:182,maxWidth:compact?185:206,
+        padding:"7px 9px",display:"flex",alignItems:"center",flexDirection:"row",gap:8,
         border:"1px solid "+(value===key?"#9685f5":"var(--border, #374151)"),
         borderRadius:10,background:value===key?"rgba(120,100,235,.12)":"transparent",
         color:"inherit",cursor:disabled?"not-allowed":"pointer",
         boxShadow:value===key?"inset 0 0 0 1px #9685f5":"none"}}>
       <BedIllustration type={key}/>
-      <span style={{fontSize:11,lineHeight:1.25,textAlign:"center"}}>{label||LABELS[key]}</span>
+      <span style={{fontSize:11,lineHeight:1.3,textAlign:"left",flex:1}}>{label||LABELS[key]}</span>
     </button>)}
   </div>;
 }
