@@ -858,14 +858,20 @@ export default function SlicerPrepareWorkspace({
   const requiredMultiSlots = [...new Set([
     ...assignedSlots.map(slot => String(slot.slot_id)), ...paintedSlotRefs,
   ])];
-  const multiMaterialReadyForExport = assignedSlots.length === objects.length
+  const [activeEngine, activeEngineVersion] = String(engine || "").split(" ");
+  const multiMaterialReadyForExport = activeEngine === "orcaslicer"
+    && activeEngineVersion === "2.5.0"
+    && assignedSlots.length === objects.length
     && assignedSlots.every(slot => String(slot.printer_id) === String(printerId))
     && requiredMultiSlots.length >= 2
     && requiredMultiSlots.length <= 16
     && requiredMultiSlots.every(slotId =>
       slotFilamentProfiles.some(row => String(row.slot_id) === slotId
         && filamentProfiles.some(profile => String(profile.id) === String(row.profile_id)
-          && profile.kind === "filament")))
+          && profile.kind === "filament"
+          && profile.engine === activeEngine
+          && profile.engine_version === activeEngineVersion
+          && profile.status === "verified")))
     && objects.every(item => (item.colour_paint?.regions || []).every(region => {
       const swatch = item.colour_paint?.palette?.[region.slot];
       return swatch && String(swatch.printer_id) === String(printerId)
@@ -893,8 +899,11 @@ export default function SlicerPrepareWorkspace({
   const projectRoutingPending = plates.some(plate =>
     (plate.objects || []).some(item => item.material_slot != null)
   ) || slotFilamentProfiles.length > 0;
-  const paintedNativeReady = String(engine) === "orcaslicer 2.5.0" &&
-    multiMaterialReadyForExport;
+  const paintedNativeReady = multiMaterialReadyForExport;
+  const hasPaintedColours = usedNativeFeatures([{objects}]).includes("colour_paint");
+  const paintingRoutingNotice = hasPaintedColours && !paintedNativeReady
+    ? "To slice painted colours, assign a base filament to each model and a verified Orca 2.5.0 native profile to every used CFS/AMS slot."
+    : "";
   const incompatibleEdits = usedNativeFeatures([{objects}]).filter(
     key => !(key === "colour_paint" && paintedNativeReady) &&
       !["verified","test_only"].includes(engineCapabilities[key]?.status));
@@ -903,6 +912,7 @@ export default function SlicerPrepareWorkspace({
       ". The project is preserved; choose an engine with verified native support before slicing."
     : "";
   const sliceBlockReason = draftBlockReason ||
+    paintingRoutingNotice ||
     nativeEditReason ||
     (!activePlateReady ? "Select a plate containing models to slice." : "") ||
     (conflictsBlockSlice ? "Resolve build-plate conflicts or wait for models to finish loading before slicing." : "") ||
