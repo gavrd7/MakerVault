@@ -17,6 +17,7 @@ export default function SlicerToolpath3D({
 }) {
   const mount = useRef(null);
   const sceneRef = useRef(null);
+  const framedInitialGeometry = useRef(false);
   const [unavailable, setUnavailable] = useState(false);
   const [showBedGrid, setShowBedGrid] = useState(true);
   const [mobileViewOpen, setMobileViewOpen] = useState(false);
@@ -141,6 +142,7 @@ export default function SlicerToolpath3D({
     const size = bx && by
       ? new THREE.Vector3(Math.max(1, bx[1]-bx[0]), rawSize.y, Math.max(1, by[1]-by[0]))
       : rawSize;
+    framedInitialGeometry.current = valid > 0;
     // With known machine dimensions, preserve the printer's actual XY origin
     // at (0, 0). The sample may contain outlying purge/skirt moves and must
     // not change the relative position of the bed and model.
@@ -336,6 +338,34 @@ export default function SlicerToolpath3D({
       pushTri(leftA, leftB, leftA, top, bottom, bottom);
       pushTri(rightA, rightB, rightB, top, bottom, top);
       pushTri(rightA, rightB, rightA, top, bottom, bottom);
+    }
+    // On iOS the WebGL surface may mount before the async indexed layer is
+    // populated. The initial camera would then target fallback dimensions,
+    // leaving a tiny print until opening another modal caused a reflow.
+    // Reframe once when first real extrusion geometry arrives, never on every
+    // layer or during the user's manual camera interactions.
+    if (!framedInitialGeometry.current && positions.length && segments.length) {
+      const bounds = new THREE.Box3();
+      for (const row of segments) {
+        if (!Array.isArray(row) || row.length < 5 ||
+            !row.slice(0, 5).every(Number.isFinite)) continue;
+        bounds.expandByPoint(new THREE.Vector3(row[0], row[4], row[1]));
+        bounds.expandByPoint(new THREE.Vector3(row[2], row[4], row[3]));
+      }
+      if (!bounds.isEmpty()) {
+        const modelCentre = bounds.getCenter(new THREE.Vector3());
+        const modelSize = bounds.getSize(new THREE.Vector3());
+        view.modelCentre.copy(modelCentre);
+        view.modelSize.copy(modelSize);
+        const distance = Math.max(38, modelSize.length() * 1.25);
+        view.controls.target.copy(modelCentre);
+        view.camera.position.copy(modelCentre).add(
+          new THREE.Vector3(distance * .7, distance * .9, distance)
+        );
+        view.camera.lookAt(modelCentre);
+        view.controls.update();
+        framedInitialGeometry.current = true;
+      }
     }
     if (positions.length) {
       const geometry = new THREE.BufferGeometry();
