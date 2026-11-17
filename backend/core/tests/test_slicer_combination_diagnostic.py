@@ -3,7 +3,7 @@ import copy
 from django.test import SimpleTestCase
 
 from core.management.commands.diagnose_slicer_combination import (
-    CASES, FEATURES, selected_variant,
+    CASES, FEATURES, selected_variant, range_probe_variants,
 )
 
 
@@ -41,3 +41,24 @@ class OfflineCombinedPaintDiagnosticTests(SimpleTestCase):
                   "variable_layer_profile": {"bands": [1]}}
         baseline = selected_variant(source, ())
         self.assertEqual(baseline, {"asset_id": "source"})
+
+    def test_range_relocation_preserves_original_band_and_settings(self):
+        original = {"variable_layer_profile": {"version": 1, "bands": [
+            {"from_mm": 36.5, "to_mm": 46.5, "layer_mm": .12}
+        ]}}
+        before = copy.deepcopy(original)
+        variants = range_probe_variants(original)
+        self.assertEqual(len(variants), 4)
+        self.assertEqual([label for label, _ in variants],
+                         ["range-at-5mm", "range-at-12mm",
+                          "range-at-22mm", "range-at-32mm"])
+        for label, bands in variants:
+            self.assertEqual(len(bands), 1)
+            self.assertAlmostEqual(bands[0]["to_mm"] - bands[0]["from_mm"], 10)
+            self.assertEqual(bands[0]["layer_mm"], .12)
+        self.assertEqual(original, before)
+
+    def test_range_probes_decline_ambiguous_multi_band_draft(self):
+        self.assertEqual(range_probe_variants({"variable_layer_profile":
+            {"bands": [{"from_mm": 1, "to_mm": 3, "layer_mm": .12},
+                       {"from_mm": 4, "to_mm": 6, "layer_mm": .12}]}}), ())
