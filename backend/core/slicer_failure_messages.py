@@ -130,6 +130,11 @@ REASONS = {
     "native-palette-size-invalid": (
         "A native filament preset in the multi-material palette is empty or exceeds the worker size limit."
     ),
+    "native-gcode-tools-missing": (
+        "The native slice did not contain tool selections and deposited extrusion "
+        "for every assigned base or painted filament. Review the generated "
+        "multi-material tool routing before printer submission."
+    ),
     "validation-error": "The worker rejected an input or generated result. Check model and profile integrity.",
     "engine-exited": (
         "OrcaSlicer exited without a recognised diagnostic. "
