@@ -76,7 +76,7 @@ export default function GcodeFullSource({ fileId }) {
         <p role="status"><strong>Complete stored G-code</strong> · {lines.length.toLocaleString()} lines · {formatSize(source.bytes)}</p>
         <div className="slicerFullSourceFileActions">
           <button type="button" onClick={copyEntireFile}>Copy entire G-code</button>
-          <a className="assetButton slicerGcodeDownloadAction" href={url + "?download=1"}>Download complete G-code</a>
+          <a className="buttonLink slicerGcodeDownloadAction" href={url + "?download=1"}>Download complete G-code</a>
         </div>
       </div>
       <div className="slicerFullSourceSearch" role="search" aria-label="Search complete G-code">
