@@ -25,7 +25,7 @@ const COLOUR_MODES = [
   { value: "acceleration", label: "Acceleration", supported: false },
 ];
 
-export default function SlicerGcodePreview({ fileId = null, preview, bedSize = null, file = null, canEdit = false, onSaved = null, startTemperatures = null }) {
+export default function SlicerGcodePreview({ fileId = null, preview, bedSize = null, file = null, canEdit = false, onSaved = null, startTemperatures = null, filamentColours = {} }) {
   const [mobilePanel, setMobilePanel] = useState(null);
   const [layer, setLayer] = useState(null);
   const [step, setStep] = useState(null);
@@ -288,7 +288,7 @@ export default function SlicerGcodePreview({ fileId = null, preview, bedSize = n
       </div>}
       <div className="slicerResultLayerLayout">
         <div className="slicerResultViewport">
-          <SlicerToolpath3D segments={displaySegments} framingSegments={preview?.segments || []} layers={layers}
+          <SlicerToolpath3D segments={displaySegments} framingSegments={preview?.segments || []} filamentColours={filamentColours} layers={layers}
             activeLayer={currentLayer} activeStep={finalStep} visible={visible}
             colourMode={colourMode} colours={colours} showToolhead={showToolhead} bedSize={bedSize}
             renderMode={renderMode} layerDisplay={layerDisplay}
