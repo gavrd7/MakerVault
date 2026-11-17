@@ -15,36 +15,46 @@ const LABELS = {
 };
 
 export function BedIllustration({type,small=false}){
-  const colors = {
-    default:["#334155","#94a3b8"],
-    cool:["#517895","#cce7f2"],
-    engineering:["#424850","#c5cbd0"],
-    high_temp:["#777b82","#efefed"],
-    textured_pei:["#574f47","#e7b66b"],
-    textured_cool:["#46687a","#a7d9e6"],
-    supertack:["#625c45","#d4ba68"],
+  // Orthographic top-down plate. Shared geometry echoes MakerVault's
+  // fallback bed: square steel sheet, thin border, understated grid,
+  // and a small integrated lower-edge brand mark (not a pull tab).
+  const coating = {
+    default: ["#293543", "#8196a5", "plain"],
+    cool: ["#58758a", "#c5e5ef", "smooth"],
+    engineering: ["#454b50", "#a9bac2", "satin"],
+    high_temp: ["#72777b", "#e4e5e2", "smooth"],
+    textured_pei: ["#645847", "#d5aa6c", "grain"],
+    textured_cool: ["#4a6976", "#add2df", "grain"],
+    supertack: ["#6e6445", "#dccb74", "adhesive"],
   };
-  const [base,highlight]=colors[type]||colors.default;
-  const texture=["textured_pei","textured_cool"].includes(type);
-  const textureId="plate-"+type;
-  return <svg viewBox="0 0 104 70" width={small?45:76} height={small?30:51} aria-hidden="true" focusable="false">
+  const [base,accent,finish]=coating[type]||coating.default;
+  const id="bed-finish-"+type;
+  return <svg viewBox="0 0 80 80" width={small?39:60} height={small?39:60}
+    role="img" aria-label={type.replaceAll("_"," ")+" build plate illustration"}>
     <defs>
-      <pattern id={textureId} width={texture?5:24} height={texture?5:24}
+      <pattern id={id} width={finish==="grain"?4:12} height={finish==="grain"?4:12}
         patternUnits="userSpaceOnUse">
-        {texture?<><circle cx="1.2" cy="1.2" r=".65" fill={highlight} opacity=".65"/>
-          <circle cx="3.7" cy="3.7" r=".55" fill={highlight} opacity=".5"/></>:
-          <path d="M 0 0 L 24 24 M 24 0 L 0 24" stroke={highlight} opacity=".12" strokeWidth=".7"/>}
+        {finish==="grain" ?
+          <><circle cx="1.2" cy="1.2" r=".55" fill={accent} opacity=".75"/>
+            <circle cx="3" cy="3" r=".35" fill={accent} opacity=".5"/></>
+          : finish==="satin" ?
+          <path d="M0 4 H12 M0 8 H12" stroke={accent} strokeWidth=".55" opacity=".2"/>
+          : finish==="adhesive" ?
+          <path d="M0 0 L12 12 M12 0 L0 12" stroke={accent} strokeWidth=".65" opacity=".17"/>
+          : <path d="M0 0 H12 V12" stroke={accent} fill="none" strokeWidth=".6" opacity=".09"/>}
       </pattern>
     </defs>
-    <path d="M 9 49 L 75 13 L 96 30 L 29 65 Z" fill="#121820" opacity=".7"/>
-    <path d="M 9 43 L 74 8 L 95 26 L 29 61 Z" fill={base} stroke={highlight} strokeWidth="1.4"/>
-    <path d="M 9 43 L 74 8 L 95 26 L 29 61 Z" fill={"url(#"+textureId+")"}/>
-    <path d="M 9 43 L 29 61 L 29 65 L 9 47 Z" fill="#202a31"/>
-    <path d="M 29 61 L 95 26 L 95 30 L 29 65 Z" fill="#35414b"/>
-    {type==="supertack"&&<path d="M 21 43 L 74 14 L 83 23 L 30 52 Z"
-      stroke={highlight} strokeWidth="2" fill="none" opacity=".75"/>}
-    {type==="engineering"&&<path d="M 24 40 L 73 14 M 30 48 L 79 22"
-      stroke={highlight} strokeWidth=".7" opacity=".6"/>}
+    <rect x="4" y="4" width="72" height="72" rx="3" fill="#17212c" stroke="#5c7081" strokeWidth="1.4"/>
+    <rect x="7" y="7" width="66" height="66" rx="1.8" fill={base} stroke={accent} strokeWidth="1.15"/>
+    <rect x="7" y="7" width="66" height="66" rx="1.8" fill={"url(#"+id+")"}/>
+    <g stroke={accent} strokeWidth=".6" opacity=".23">
+      <path d="M23 8 V72 M40 8 V72 M57 8 V72 M8 23 H72 M8 40 H72 M8 57 H72"/>
+    </g>
+    <path d="M8 14 V8 H14 M66 8 H72 V14 M72 66 V72 H66 M14 72 H8 V66"
+      stroke={accent} strokeWidth="1.35" fill="none"/>
+    <path d="M23 62 H57" stroke={accent} opacity=".4" strokeWidth=".6"/>
+    <text x="40" y="68.5" fill={accent} fontSize="5.2" fontWeight="600"
+      letterSpacing=".65" textAnchor="middle">MAKERVAULT</text>
   </svg>;
 }
 
