@@ -14,8 +14,8 @@ test("mobile preview retains the toolpath, temperatures and primary figures", ()
   assert.match(preview, /Estimated print time/);
   assert.match(preview, /Requested nozzle/);
   assert.match(preview, /Requested bed/);
-  assert.match(viewer, /slicerGcodeMobileSummary/);
-  assert.match(mobileCss, /\.slicerGcodeMobileSummary/);
+  assert.match(viewer, /slicerGcodeQuickSummary/);
+  assert.match(mobileCss, /\.slicerGcodeQuickSummary/);
   assert.match(mobileCss, /\.slicerResultLayerLayout/);
 });
 
@@ -24,7 +24,7 @@ test("mobile detail and settings panels have explicit close controls", () => {
   assert.match(viewer, /G-code details/);
   assert.match(preview, /setMobilePanel\(null\)/);
   assert.match(preview, /Display settings/);
-  assert.match(preview, /Extrusion features/);
+  assert.match(preview, /Visible toolpaths/);
   assert.match(viewport, /View options/);
   assert.match(viewport, /setMobileViewOpen/);
   assert.match(preview, /Visible toolpaths/);
@@ -53,4 +53,17 @@ test("download button is consistent in file actions and desktop viewer", () => {
   assert.match(workbench, /slicerGcodeDownloadAction/);
   assert.match(viewer, /slicerGcodeDownloadAction/);
   assert.match(mobileCss, /\.slicerGcodeDownloadAction/);
+});
+
+test("desktop review keeps preview visible and collapses secondary controls", () => {
+  assert.match(viewer, /slicerPreviewNav/);
+  assert.match(viewer, /slicerGcodeMetadata/);
+  assert.match(viewer, /setMobileDetails\(true\)/);
+  assert.match(preview, /slicerPreviewToolButtons/);
+  assert.match(preview, /slicerPreviewOptionsPanel/);
+  assert.match(mobileCss, /\.slicerPreviewOptionsPanel:not\(\.mobileOpen\)/);
+  assert.match(mobileCss, /\.slicerGcodeCompactLayout \.slicerGcodeDesktopActions/);
+  assert.match(mobileCss, /@media \(min-width: 701px\)/);
+  assert.match(mobileCss, /\.slicerMobileActionContents\.mobileOpen/);
+  assert.match(viewer, /Material and layer totals/);
 });
