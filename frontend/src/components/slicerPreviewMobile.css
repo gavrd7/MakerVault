@@ -293,13 +293,14 @@
 .slicerGcodeDetailCards.mobileOpen .slicerGcodeDetailRow > span {
   overflow-wrap: anywhere;
 }
-.slicerResultPreview > .slicerResultStats {
-  display: grid; grid-template-columns: repeat(4,minmax(0,1fr));
+ .slicerResultPreview > .slicerResultStats {
+  display: grid; grid-template-columns: repeat(3,minmax(0,1fr));
   gap: 9px; margin: 6px 0 8px;
 }
 .slicerResultPreview > .slicerResultStats > div:nth-child(2),
 .slicerResultPreview > .slicerResultStats > div:nth-child(4),
-.slicerResultPreview > .slicerResultStats > div:nth-child(5) { display: none; }
+.slicerResultPreview > .slicerResultStats > div:nth-child(6),
+.slicerResultPreview > .slicerResultStats > div:nth-child(7) { display: none; }
 /* Top-level camera and bed choices can be revealed without occupying a row
    permanently under a large 3D viewport. */
 .slicerToolpathViewBar { display: flex; justify-content: center; flex-direction: column; }
@@ -325,4 +326,21 @@
   .slicerPreviewModal .slicerResultViewport .slicerResultToolpath { width: 100%; max-width: none; }
   .slicerPreviewModal .slicerResultLayerLayout { grid-template-columns: minmax(0,1fr) 82px; }
   .slicerPreviewModal .slicerGcodeDetailCards.mobileOpen { width: min(700px,calc(100vw - 32px)); }
+}
+
+@media (max-width: 700px) {
+  .slicerPreviewNav {
+    display: grid; grid-template-columns: repeat(3,minmax(0,1fr));
+    gap: 7px; margin: 6px 0 10px;
+  }
+  .slicerPreviewNav button { min-width: 0; padding: 9px 4px; }
+  .slicerResultPreview > .slicerResultStats {
+    grid-template-columns: repeat(2,minmax(0,1fr));
+  }
+  .slicerResultPreview > .slicerResultStats > div:nth-child(5) { display: none; }
+  .slicerPreviewToolButtons {
+    display: grid; grid-template-columns: repeat(2,minmax(0,1fr));
+    gap: 7px; justify-content: stretch;
+  }
+  .slicerPreviewToolButtons button { min-width: 0; }
 }
