@@ -145,7 +145,6 @@ export default function GcodeViewerModal({ file, canEdit = false, onClose, onSav
       <p><strong>XY moves:</strong> {analysis.xy_moves?.toLocaleString() || 0} · <strong>Coordinates:</strong> {["X", "Y", "Z"].map(axis => bounds[axis]?.[0] == null ? `${axis} unknown` : `${axis} ${bounds[axis][0].toFixed(1)}–${bounds[axis][1].toFixed(1)} mm`).join(" · ")}</p>
       {Array.isArray(objectSettings) && objectSettings.length > 0 && <div className="settingsCallout">
         <strong>Settings saved with this slicing job</strong>
-        <p>These are the requested plate overrides from the saved draft, not independently measured values from the generated G-code. Compare with the per-object extrusion evidence in Complete G-code.</p>
         <div style={{ overflowX: "auto" }}>
           <table className="dataTable" style={{ width: "100%", textAlign: "left", tableLayout: "fixed" }}>
             <thead><tr><th style={{textAlign:"left",width:"18%"}}>Plate instance</th><th style={{textAlign:"left",width:"21%"}}>Wall loops</th><th style={{textAlign:"left",width:"21%"}}>Sparse infill</th><th style={{textAlign:"left",width:"40%"}}>Additional overrides</th></tr></thead>
