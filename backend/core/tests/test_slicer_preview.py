@@ -71,6 +71,20 @@ G1 X10 Y20 E2.0
                             for point in path))
         self.assertEqual(result["feature_counts"]["Outer wall"],len(path))
 
+    def test_radius_format_arc_and_absolute_arc_centres(self):
+        radius=generated_preview(
+            "G90\\nM83\\nG1 X10 Y0 Z0.2\\n"
+            "G3 X0 Y10 R10 E1\\n"
+        )
+        self.assertGreater(len(radius["segments"]),20)
+        absolute=generated_preview(
+            "G90\\nG90.1\\nM83\\nG1 X10 Y0 Z0.2\\n"
+            "G3 X0 Y10 I0 J0 E1\\n"
+        )
+        self.assertGreater(len(absolute["segments"]),20)
+        self.assertEqual(radius["unresolved_arc_moves"],0)
+        self.assertEqual(absolute["unresolved_arc_moves"],0)
+
     def test_non_extruding_arcs_do_not_create_false_bridges(self):
         result=generated_preview(
             "G90\\nM83\\nG1 X10 Y0 Z0.2\\n"
