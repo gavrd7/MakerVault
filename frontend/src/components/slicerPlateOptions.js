@@ -15,5 +15,10 @@ export function plateOptions(engine, bedTypes) {
   const supported = Array.isArray(bedTypes?.supported) ? bedTypes.supported : null;
   if (supported?.length)
     return ORCA_PLATE_TYPES.filter(([key]) => supported.includes(key));
+  // Explicitly loaded but incomplete/custom profile: expose manual choices,
+  // never describe them as confirmed physical hardware capabilities. The
+  // backend still validates the selected filament's bed temperature.
+  if (bedTypes && !bedTypes.default)
+    return ORCA_PLATE_TYPES.slice(1);
   return ORCA_PLATE_TYPES.slice(0, 1);
 }
