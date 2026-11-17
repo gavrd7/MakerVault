@@ -49,7 +49,18 @@ Native slicing engines are output adapters, not the source of truth.
   Experimental output carries `seam_paint_test=true`, disallowing printer
   upload and print start. Native 3MF import and actual seam G-code location
   still require a real pinned-worker check against a no-paint baseline.
-  Colour and selective fuzzy skin painting remain `draft_only`.
+  Selective fuzzy skin painting is independently `test_only` on Orca 2.5:
+  the editor's clipped fuzzy brush regions are subdivided into native facets
+  with `paint_fuzzy_skin="4"` (Orca's sole FUZZY_SKIN state). The per-job
+  process JSON explicitly sets `fuzzy_skin="disabled_fuzzy"`, Orca's native
+  **Painted only** option; existing thickness and point-spacing settings
+  are preserved, and the saved process preset stays unchanged.
+  The isolated worker allows only that exact native fuzzy state, with no
+  mixed paint channels or native multi-tool metadata. Its G-code is marked
+  `fuzzy_skin_paint_test=true` and blocked from printer upload/start.
+  Real pinned-Orca output still needs a selective wall-path comparison
+  against an otherwise identical unpainted slice.
+  Colour painting remains `draft_only` in this adapter.
 - Cura: no accurate native translation is currently implemented;
   `incompatible` disables those editor tools while preserving saved edits.
 - Other engines and unreviewed versions: `unverified` (fail closed).
