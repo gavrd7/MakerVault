@@ -16,7 +16,7 @@ from .slicer_mesh import MeshInspectionError
 from .slicer_profiles import SlicerProfileError
 from .slicer_process_settings import PROCESS_FIELDS, validate_process_overrides
 from .slicer_variable_layers import orca_layer_config_ranges
-from .slicer_native_support_paint import native_support_triangles
+from .slicer_native_support_paint import native_support_triangles, native_combined_paint_triangles
 
 NS = "http://schemas.microsoft.com/3dmanufacturing/core/2015/02"
 # Match the validated source-STL limit. Generated XML/archive limits remain
@@ -63,11 +63,14 @@ def _render_mesh(raw, element, support_paint=None, seam_paint=None, fuzzy_skin_p
     try:
         active = sum(bool(paint and paint.get("regions")) for paint in
                      (support_paint, seam_paint, fuzzy_skin_paint))
+        # Preserve the previously verified fast path for zero/one annotation
+        # modes. Combined modes split original facets into disjoint cells,
+        # each of which can carry multiple native Orca paint attributes.
         if active > 1:
-            raise ValueError("Combining different painted surface modes needs a verified native adapter.")
-        # Keep the original fast path for unpainted geometry. Exactly one
-        # native annotation channel is emitted per test model.
-        if support_paint and support_paint.get("regions"):
+            tagged = native_combined_paint_triangles(
+                triangles, support_paint, seam_paint, fuzzy_skin_paint)
+            paint_attribute = None
+        elif support_paint and support_paint.get("regions"):
             tagged = native_support_triangles(triangles, support_paint, kind="support")
             paint_attribute = "paint_supports"
         elif seam_paint and seam_paint.get("regions"):
@@ -95,7 +98,9 @@ def _render_mesh(raw, element, support_paint=None, seam_paint=None, fuzzy_skin_p
                 })
             ids.append(indexed[centred])
         attrs = {"v1": str(ids[0]), "v2": str(ids[1]), "v3": str(ids[2])}
-        if support_state is not None:
+        if isinstance(support_state, dict):
+            attrs.update(support_state)
+        elif support_state is not None:
             attrs[paint_attribute] = support_state
         ET.SubElement(faces, f"{{{NS}}}triangle", attrs)
     return mesh_count, maximum[0] - minimum[0], maximum[1] - minimum[1]
