@@ -236,6 +236,33 @@ class BuildPlate3MFTests(SimpleTestCase):
                 self.assertTrue(all("paint_supports" not in row.attrib
                                     for row in triangles))
 
+    def test_native_fuzzy_skin_exports_only_painted_facet_state(self):
+        from core.slicer_plate_3mf import _triangles
+        from core.slicer_native_support_paint import _fingerprint
+        shape = fixture_stl()
+        source = list(_triangles(shape))
+        low = [min(p[i] for face in source for p in face) for i in range(3)]
+        high = [max(p[i] for face in source for p in face) for i in range(3)]
+        origin = ((low[0]+high[0])/2, (low[1]+high[1])/2, low[2])
+        local = [[tuple(p[i]-origin[i] for i in range(3)) for p in face]
+                 for face in source]
+        face = local[0]
+        midpoint = [sum(p[i] for p in face)/3 for i in range(3)]
+        patch = [[(p[i]+midpoint[i])/2 for i in range(3)] for p in face]
+        item = {"x_mm":0, "y_mm":0, "rotation_deg":0,
+                "rotation_xyz_deg":[0,0], "scale_percent":100,
+                "fuzzy_skin_paint":{"version":2,"signature":_fingerprint(local),
+                    "regions":[{"slot":0,"patches":[{"face":0,"polygon":patch}]}]}}
+        packed = build_plate_3mf([(item,shape)],bed_width=220,bed_depth=220)
+        with zipfile.ZipFile(io.BytesIO(packed)) as archive:
+            root = ET.fromstring(archive.read("3D/3dmodel.model"))
+        facets = root.findall(".//{%s}triangle" % NS)
+        self.assertGreater(len(facets),len(source))
+        self.assertTrue(any(f.attrib.get("paint_fuzzy_skin")=="4" for f in facets))
+        self.assertTrue(any("paint_fuzzy_skin" not in f.attrib for f in facets))
+        self.assertTrue(all("paint_seam" not in f.attrib and "paint_supports" not in f.attrib
+                            for f in facets))
+
     def test_native_support_paint_subdivides_facets_without_changing_mesh_area(self):
         from core.slicer_plate_3mf import _triangles
         from core.slicer_native_support_paint import _fingerprint
