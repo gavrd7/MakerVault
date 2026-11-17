@@ -10,7 +10,7 @@ import re
 from .slicer_profiles import SlicerProfileError
 from .slicer_native_resolution import resolved_native_profile
 from .slicer_bed_artwork import (
-    SOURCES, _VERSION, _official_machine_model, _owned_profile_data,
+    SOURCES, _VERSION, _official_machine_model,
 )
 
 PLATES = {
@@ -61,13 +61,12 @@ def inspect_native_plates(profile):
     native = json.loads(resolved_native_profile(profile))
     if not isinstance(native, dict):
         raise SlicerProfileError("Native printer profile is not an object.")
-    supported = list(PLATES)
     multi = native.get("support_multi_bed_types")
     if isinstance(multi, list):
         multi = multi[0] if multi else None
-    if multi is not None and str(multi).lower() in ("0", "false"):
-        # Single-bed profiles may still declare their physical default.
-        supported = []
+    # Only a positive explicit native capability enables the multi-bed
+    # catalogue. Missing flags must not imply every possible plate fits.
+    supported = list(PLATES) if str(multi).lower() in ("1", "true") else []
     unsupported = native.get("not_support_bed_types")
     if isinstance(unsupported, str):
         unsupported = re.split(r"[;,]", unsupported)
@@ -90,6 +89,10 @@ def effective_orca_plate(plate_type, process, printer_profile=None):
     if plate_type not in ("default", *PLATES):
         raise ValueError("Unsupported native Orca build plate.")
     if plate_type != "default":
+        if printer_profile is not None:
+            supported = inspect_native_plates(printer_profile)["supported"]
+            if supported and plate_type not in supported:
+                raise ValueError("Selected build plate is not supported by the imported printer profile.")
         return plate_type
     # 'Native / profile default' refers to the printer's declared machine
     # plate, not a process preset's potentially stale curr_bed_type.
