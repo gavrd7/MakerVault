@@ -142,6 +142,13 @@ export default function GcodeViewerModal({ file, canEdit = false, onClose, onSav
       <p className="slicerGcodeDetailRow"><strong>Sliced nozzle</strong><span> {analysis.print_setup?.nozzle_diameters_mm?.length
         ? analysis.print_setup.nozzle_diameters_mm.map(size => `${size} mm`).join(", ")
         : "Not specified"} · <strong>Build plate:</strong> {analysis.print_setup?.bed_type || "Not specified"}</span></p>
+      {analysis.slicer_preview && <p className="slicerGcodeDetailRow"><strong>Material and layer totals</strong><span>
+        {analysis.slicer_preview.filament_mm != null ? `${Number(analysis.slicer_preview.filament_mm).toLocaleString()} mm filament` : "Length unavailable"}
+        {" · "}
+        {analysis.slicer_preview.filament_cm3 != null ? `${Number(analysis.slicer_preview.filament_cm3).toLocaleString()} cm³` : "Volume unavailable"}
+        {" · "}
+        {analysis.slicer_preview.layer_count ?? "Unknown"} layers
+      </span></p>}
       <p className="slicerGcodeDetailRow"><strong>XY moves &amp; bounds</strong><span> {analysis.xy_moves?.toLocaleString() || 0} · <strong>Coordinates:</strong> {["X", "Y", "Z"].map(axis => bounds[axis]?.[0] == null ? `${axis} unknown` : `${axis} ${bounds[axis][0].toFixed(1)}–${bounds[axis][1].toFixed(1)} mm`).join(" · ")}</span></p>
       {Array.isArray(objectSettings) && objectSettings.length > 0 && <div className="settingsCallout">
         <strong>Settings saved with this slicing job</strong>
