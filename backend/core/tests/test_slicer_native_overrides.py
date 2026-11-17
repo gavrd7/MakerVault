@@ -5,7 +5,7 @@ from unittest.mock import patch
 from django.test import SimpleTestCase
 
 from core.slicer_native_overrides import apply_orca_job_overrides, ORCA_PLATES
-from core.slicer_plate_types import inspect_native_plates, effective_orca_plate
+from core.slicer_plate_types import inspect_native_plates, effective_orca_plate, native_plate_key
 
 
 class NativeSlicerPlateAndColourTests(SimpleTestCase):
@@ -61,6 +61,19 @@ class NativeSlicerPlateAndColourTests(SimpleTestCase):
         self.assertIn("textured_pei",metadata["supported"])
         self.assertEqual(resolved,"textured_pei")
         self.assertGreaterEqual(fetch.call_count,1)
+
+    def test_numeric_native_default_and_excluded_bed_types(self):
+        self.assertEqual(native_plate_key("4"), "textured_pei")
+        self.assertEqual(native_plate_key(4), "textured_pei")
+        self.assertIsNone(native_plate_key("0"))
+        source=SimpleNamespace(engine="orcaslicer", engine_version="2.5.0", provenance="")
+        with patch("core.slicer_plate_types.resolved_native_profile",
+                   return_value=b'{"default_bed_type":"4","support_multi_bed_types":"1","not_support_bed_types":[1,2]}'):
+            metadata=inspect_native_plates(source)
+        self.assertEqual(metadata["default"], "textured_pei")
+        self.assertNotIn("cool", metadata["supported"])
+        self.assertNotIn("engineering", metadata["supported"])
+        self.assertIn("textured_pei", metadata["supported"])
 
     def test_single_model_selected_white_is_sent_to_native_filament(self):
         process = b'{"name":"Standard"}'
