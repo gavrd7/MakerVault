@@ -87,8 +87,8 @@ export default function SlicerGcodePreview({ fileId = null, preview, bedSize = n
       let limited = false;
       let pendingLayers = 0;
       try {
-        for (let offset = 0; offset < layers.length && !cancelled; offset += 12) {
-          const requested = layers.slice(offset, offset + 12);
+        for (let offset = 0; offset < layers.length && !cancelled; offset += 32) {
+          const requested = layers.slice(offset, offset + 32);
           const url = "/api/files/" + encodeURIComponent(fileId) +
             "/gcode/layers/?zs=" + encodeURIComponent(requested.join(","));
           const response = await fetch(url, {credentials:"same-origin",signal:controller.signal});
@@ -115,7 +115,7 @@ export default function SlicerGcodePreview({ fileId = null, preview, bedSize = n
           if (cancelled) return;
           // Publish in coherent chunks, not after every layer. Retain all
           // previously loaded moves as exact contiguous geometry.
-          if (pendingLayers >= 36 || completed === layers.length || limited) {
+          if (pendingLayers >= 32 || completed === layers.length || limited) {
             setWholeModel({segments:accumulated.slice(),loadedLayers:completed,
               complete:completed===layers.length&&!limited,limited,
               loading:!limited&&completed<layers.length,message:""});
