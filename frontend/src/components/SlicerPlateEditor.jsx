@@ -303,7 +303,7 @@ export default function SlicerPlateEditor({
   files = [], objects = [], onChange, onPrimaryChange, plate = null, plateType = "default",
   plateLabel = "Plate 1", onPlateLabelChange, plateIndex = 0, plateCount = 1, printerLabel = "",
   canEdit = false, onFilesUploaded, defaultColor = null, onManualColorChange, footer = null,
-  selectedInstanceId = null, onSelectedInstanceChange, selectedInstanceIds = [], onSelectModel, toolMode = "select",
+  selectedInstanceId = null, onSelectedInstanceChange, selectedInstanceIds = [], selectionClearVersion = 0, onSelectModel, toolMode = "select",
   autoOrientGoal = "balanced", autoOrientRequest = 0, splitRequest = 0, solidRequest = null,
   measurementVisible = false, measureMode = "distance", measureUnit = "mm", measureSnapMode = "auto", measureClearVersion = 0,
   onMeasurePinPlaced, onMeasureModeChange, onMeasureSnapModeChange, onMeasureUnitChange,
@@ -2948,6 +2948,22 @@ export default function SlicerPlateEditor({
       }
     }
   }, [objects, selected, selectedInstanceIds, toolMode, canEdit, dimensions, issueKey, solidDialog]);
+
+  // Done on a paint or variable-layer panel must remove the *rendered* selection
+  // as well as clearing React selection state. These helpers live in Three.js
+  // and are not managed by React's DOM reconciler.
+  useEffect(() => {
+    if (!selectionClearVersion) return;
+    const state = sceneRef.current;
+    if (!state) return;
+    state.setSelectionOutlines([]);
+    state.transform.detach();
+    state.rotationGizmo?.update(null);
+    for (const mesh of state.meshes.values()) {
+      mesh.material.emissive?.set("#000000");
+      mesh.material.emissiveIntensity = 0;
+    }
+  }, [selectionClearVersion]);
 
   const sectionBounds = (() => {
     if (sectionAxis === "z") return {min:0,max:Math.max(1,...objects.map(row => {
