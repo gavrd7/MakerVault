@@ -213,7 +213,6 @@ def build_plate_3mf(objects_with_stl, *, bed_width, bed_depth, native_tool_indic
             bool((entry[0].get("support_paint") or {}).get("regions")) or
             bool((entry[0].get("seam_paint") or {}).get("regions")) or
             bool((entry[0].get("fuzzy_skin_paint") or {}).get("regions")) or
-            bool((entry[0].get("colour_paint") or {}).get("regions")) or
             abs(float(entry[0].get("z_mm", 0))) > 1e-7 or
             any(abs(float(v)) > 1e-7 for v in entry[0].get("rotation_xyz_deg", [0, 0]))
         )
