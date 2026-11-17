@@ -1982,7 +1982,7 @@ export default function SlicerPrepareWorkspace({
           onLocalAssetsChange={onLocalAssetsChange} onPlateIssuesChange={onPlateIssuesChange} objects={objects} onChange={updatePlate}
           primeTower={primeTower} onPrimeTowerChange={onPrimeTowerChange}
           primeTowerEnabled={activeEngine==="orcaslicer" &&
-            (liveMaterials.length>=2 || objects.some(item=>item.material_slot||item.colour_paint)) &&
+            requiredMultiSlots.length>1 &&
             processOverrides.enable_prime_tower!=="0" && flushSettings?.prime_tower!=="disabled"}
           primeTowerWidth={Number(processOverrides.prime_tower_width ??
             nativeProcessFields.prime_tower_width?.current ?? 35) || 35}
