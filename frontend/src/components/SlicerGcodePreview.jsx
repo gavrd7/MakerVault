@@ -136,7 +136,7 @@ export default function SlicerGcodePreview({ fileId = null, preview, bedSize = n
           <select value={layerDisplay} onChange={event => setLayerDisplay(event.target.value)}>
             <option value="current">Current layer only · detail</option>
             <option value="context">Current + 8 faded layers</option>
-            <option value="all">{preview?.sampled
+            <option value="all">{preview?.sampled || preview?.complete === false
               ? "All earlier layers · sampled overview"
               : "Complete model · all extrusion paths"}</option>
           </select>
@@ -164,7 +164,7 @@ export default function SlicerGcodePreview({ fileId = null, preview, bedSize = n
             activeLayer={currentLayer} activeStep={finalStep} visible={visible}
             colourMode={colourMode} colours={colours} showToolhead={showToolhead} bedSize={bedSize}
             renderMode={renderMode} layerDisplay={layerDisplay}
-            previewSampled={!!preview?.sampled} fadePrevious={highlightCurrent}
+            previewSampled={!!preview?.sampled || preview?.complete === false} fadePrevious={highlightCurrent}
             featureFocus={featureFocus} />
           <div className="slicerResultSteps">
             <label htmlFor="slice-step-slider">{exactLayer && !exactLayer.limited ? "Full-resolution" : "Available"} layer move {finalStep} / {layerSegments.length}</label>
@@ -204,11 +204,11 @@ export default function SlicerGcodePreview({ fileId = null, preview, bedSize = n
           exactLayer ? `Full-resolution layer: ${exactLayer.segments.length.toLocaleString()} consecutive extrusion moves at Z ${z?.toFixed(3)} mm.` :
           "Select a G-code layer to inspect its complete extrusion paths."}
       </div>
-      {layerDisplay !== "current" && preview?.sampled && <p className="projectUploadHint">
+      {layerDisplay !== "current" && (preview?.sampled || preview?.complete === false) && <p className="projectUploadHint">
         This overview is incomplete because the toolpath exceeds the preview budget.
         Current layer only retrieves precise geometry; missing small details do not imply missing G-code.
       </p>}
-      {layerDisplay === "all" && !preview?.sampled && <p className="projectUploadHint">
+      {layerDisplay === "all" && !preview?.sampled && preview?.complete !== false && <p className="projectUploadHint">
         Full-resolution overview: all indexed extrusion paths are displayed, including
         fine support contacts. Switch to Current layer only to examine individual moves.
       </p>}
@@ -229,9 +229,13 @@ export default function SlicerGcodePreview({ fileId = null, preview, bedSize = n
       OrcaSlicer simulation or printer-safety check.</small>
     <p className="slicerPreviewCoverage" role="status">
       Overall index: {allSegments.length.toLocaleString()} of {(preview?.segment_count ?? allSegments.length).toLocaleString()} deposited moves
-      {preview?.sampled ? " · partial toolpath sample" : " · all indexed extrusion moves"}.
+      {preview?.sampled || preview?.complete === false ? " · partial toolpath index" : " · all indexed extrusion moves"}.
       Solid preview draws bead-width geometry; it does not simulate the complete native slicer.
     </p>
+    {(preview?.unresolved_arc_moves || 0) > 0 && <p className="projectUploadHint" role="status">
+      {preview.unresolved_arc_moves.toLocaleString()} unsupported curved extrusion move(s)
+      could not be drawn faithfully. The original G-code has not been altered.
+    </p>}
     {preview?.sampled && <p className="projectUploadHint">The full-model overview is partial.
       Selected-layer toolpaths are retrieved separately from the original stored file.</p>}
   </div>;
