@@ -1239,8 +1239,9 @@ export default function SlicerPrepareWorkspace({
           </label>
         </div>
       </div>}
-      <small style={{fontSize:11,opacity:.8}}>Left drag: paint · Right drag: rotate view · Wheel: zoom · Ctrl+Z / Ctrl+Y: undo / redo. {isSupportPainting && engineCapabilities.support_paint?.status==="test_only"
-        ? "Painted supports can be sliced for offline Orca 2.5 testing; printer submission remains blocked."
+      <small style={{fontSize:11,opacity:.8}}>Left drag: paint · Right drag: rotate view · Wheel: zoom · Ctrl+Z / Ctrl+Y: undo / redo. {(isSupportPainting && engineCapabilities.support_paint?.status==="test_only") ||
+         (isSeamPainting && engineCapabilities.seam_paint?.status==="test_only")
+        ? "This painting can be sliced for offline Orca 2.5 testing; printer submission remains blocked."
         : "Paint annotations are draft-only until native export is verified."}</small>
       {isSupportPainting && (paintSelected?.support_paint?.regions?.reduce((n,r)=>n+r.patches.length,0)||0)>10000 &&
         <small className="slicerActionStatus" role="status">
@@ -1931,6 +1932,14 @@ export default function SlicerPrepareWorkspace({
     </div>
     <div className="slicerPrepareActions">
       <div aria-live="polite">
+        {objects.some(item => (item.seam_paint?.regions || []).length > 0) &&
+          engineCapabilities.seam_paint?.status === "test_only" &&
+          <p className="slicerActionStatus" role="status">
+            Seam painting is an offline OrcaSlicer 2.5.0 test. Use one upright,
+            unscaled model with no other painted features. Verify that the actual
+            start/end extrusion moves follow enforcer/blocker regions in G-code.
+            Printer upload and print start remain disabled for these test files.
+          </p>}
         {objects.some(item => (item.support_paint?.regions || []).length > 0) &&
           engineCapabilities.support_paint?.status === "test_only" &&
           <p className="slicerActionStatus" role="status">
