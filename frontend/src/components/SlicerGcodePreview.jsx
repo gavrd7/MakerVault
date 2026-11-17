@@ -33,6 +33,29 @@ export default function SlicerGcodePreview({ fileId = null, preview, bedSize = n
   const [highlightCurrent, setHighlightCurrent] = useState(false);
   const [featureFocus, setFeatureFocus] = useState("all");
   const [outerContrast, setOuterContrast] = useState(false);
+  const previousInspectionSettings = useRef(null);
+  const toggleOuterInspection = (enabled) => {
+    if (enabled) {
+      previousInspectionSettings.current = {
+        renderMode, layerDisplay, featureFocus, highlightCurrent,
+      };
+      // A sampled all-layer solid model visually piles disconnected bead
+      // rectangles on top of one another. Use exact selected-layer centreline
+      // geometry when inspecting fuzzy-skin displacement.
+      setRenderMode("lines");
+      setLayerDisplay("current");
+      setFeatureFocus("outer");
+      setHighlightCurrent(false);
+    } else if (previousInspectionSettings.current) {
+      const previous = previousInspectionSettings.current;
+      setRenderMode(previous.renderMode);
+      setLayerDisplay(previous.layerDisplay);
+      setFeatureFocus(previous.featureFocus);
+      setHighlightCurrent(previous.highlightCurrent);
+      previousInspectionSettings.current = null;
+    }
+    setOuterContrast(enabled);
+  };
   const [visible, setVisible] = useState({});
   const [showToolhead, setShowToolhead] = useState(false);
   const [exactLayer, setExactLayer] = useState(null);
@@ -153,8 +176,8 @@ export default function SlicerGcodePreview({ fileId = null, preview, bedSize = n
           </select>
         </label>
         <label className="checkRow"><input type="checkbox" checked={outerContrast}
-          onChange={e => setOuterContrast(e.target.checked)} />
-          High contrast outer walls
+          onChange={e => toggleOuterInspection(e.target.checked)} />
+          Inspect outer walls (clean lines)
         </label>
         <label className="checkRow"><input type="checkbox" checked={highlightCurrent}
           disabled={layerDisplay==="current"}
@@ -227,7 +250,7 @@ export default function SlicerGcodePreview({ fileId = null, preview, bedSize = n
           {feature} ({preview.feature_counts[feature]?.toLocaleString() || 0})
         </label>)}
       </fieldset>
-      <p className="projectUploadHint">To compare fuzzy skin, choose Current layer only · detail, select Outer walls only, and enable High contrast outer walls. The inspection colour is visual only; painted regions are not independently identified by G-code feature labels.</p>
+      <p className="projectUploadHint">To compare fuzzy skin, enable Inspect outer walls (clean lines) and select the same Z layer in each slice. The inspection colour is visual only; painted regions are not independently identified by G-code feature labels.</p>
       <p className="projectUploadHint">For detailed inspection, isolate the current layer or focus on support, wall or infill paths. Feature colours stay consistent across different G-code files in normal mode. Partial samples can still omit fine toolpaths.</p>
       <p className="projectUploadHint">Travel, retract, wipe, speed, flow, per-tool colour mapping and other
         native preview modes require a complete indexed toolpath. They are not represented by this extrusion-only sample.</p>
