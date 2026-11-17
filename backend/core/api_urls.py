@@ -168,6 +168,7 @@ urlpatterns = [
     path("files/", api_views.files_lookup, name="api-files"),
     path("files/<uuid:asset_id>/gcode/inspect/", api_views.file_gcode_inspect, name="api-file-gcode-inspect"),
     path("files/<uuid:asset_id>/gcode/layer/", api_views.file_gcode_layer, name="api-file-gcode-layer"),
+    path("files/<uuid:asset_id>/gcode/layers/", api_views.file_gcode_layers, name="api-file-gcode-layers"),
     path("files/<uuid:asset_id>/gcode/source/", api_views.file_gcode_source, name="api-file-gcode-source"),
     path("files/<uuid:asset_id>/", api_views.file_detail, name="api-file-detail"),
     path("files/<uuid:asset_id>/versions/", api_views.file_versions, name="api-file-versions"),
