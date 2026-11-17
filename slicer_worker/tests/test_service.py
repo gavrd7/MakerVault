@@ -169,3 +169,21 @@ class WorkerHttpConnectionLimitTests(TestCase):
             self.assertEqual(dispatch.call_count, MAX_WORKER_CONNECTIONS)
             server.process_request("overflow", ("127.0.0.1", 1234))
             self.assertEqual(closed, ["overflow"])
+
+class NativeValidationReasonContractTests(TestCase):
+    def test_all_native_multicolour_reasons_have_safe_client_explanations(self):
+        # Keep worker refusal categories and backend-readable explanations in
+        # lockstep, never forwarding arbitrary profile or 3MF strings.
+        from pathlib import Path
+        source = Path(__file__).resolve().parents[1].joinpath("service.py").read_text()
+        for raw, reason in (
+            ("Every native object must select a tool and two native tools must be used.", "native-tool-use-mismatch"),
+            ("Painted colour refers to an unavailable native filament.", "native-paint-tool-out-of-range"),
+            ("Colour painting requires verified native multi-tool slicing.", "native-paint-channel-conflict"),
+            ("Invalid native object extruder.", "native-object-tool-invalid"),
+            ("Multi-filament 3MF requires native object assignments.", "native-object-tool-missing"),
+            ("Native filament palette does not match its first preset.", "native-filament-palette-mismatch"),
+        ):
+            with self.subTest(reason=reason):
+                self.assertIn(raw, source)
+                self.assertIn('"' + reason + '"', source)
