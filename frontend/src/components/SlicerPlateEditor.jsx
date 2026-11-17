@@ -488,7 +488,11 @@ export default function SlicerPlateEditor({
   const dimensionWarnings = objects.filter(item => !dimensions[item.instance_id]).map(item => ({
     id: item.instance_id, message: "A model is still loading its dimensions.",
   }));
-  const plateIssues = [...dimensionWarnings, ...extentWarnings, ...overlapWarnings];
+  const towerWarnings=primeTowerEnabled && objects.length && (!primeTower || !towerPlacementValid)
+    ? [{id:"prime-tower",message:primeTower
+      ?"Prime tower placement conflicts with a model or estimated plate clearance."
+      :"No safe prime tower position is available yet."}] : [];
+  const plateIssues = [...dimensionWarnings, ...extentWarnings, ...overlapWarnings, ...towerWarnings];
   const conflictIds = new Set(overlapWarnings.flatMap(row => row.id.split(":")));
   const issueSignature = JSON.stringify(objects);
   const issueKey = JSON.stringify(plateIssues.map(row => [row.id, row.message]));
