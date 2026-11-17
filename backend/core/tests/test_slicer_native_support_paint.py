@@ -42,6 +42,24 @@ class NativeOrcaSupportPaintTests(SimpleTestCase):
         self.assertIn("8", [value for _, value in result])
         self.assertNotIn("4", [value for _, value in result])
 
+    def test_native_seam_facets_preserve_clipped_enforcer_and_blocker(self):
+        for slot, state in ((0, "4"), (1, "8")):
+            with self.subTest(slot=slot):
+                result = native_support_triangles(
+                    self.source, self.paint(slot=slot), kind="seam")
+                self.assertIn(state, [value for _, value in result])
+                self.assertEqual(result[-1][0], tuple(self.source[1]))
+                self.assertIsNone(result[-1][1])
+                area = sum(_area(tri, (0., 0., 1.))
+                           for tri, value in result if value == state)
+                self.assertAlmostEqual(area, 2., places=5)
+
+    def test_stale_seam_mask_cannot_export(self):
+        paint = self.paint()
+        paint["signature"] = "changed"
+        with self.assertRaisesRegex(ValueError, "fingerprint"):
+            native_support_triangles(self.source, paint, kind="seam")
+
     def test_stale_or_off_face_patches_fail_closed(self):
         paint = self.paint()
         paint["signature"] = "2:abcdef01"
