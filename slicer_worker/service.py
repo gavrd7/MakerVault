@@ -266,6 +266,7 @@ class Handler(BaseHTTPRequestHandler):
                     "unsupported-cli-option", "native-profile-load-failed", "engine-exited",
                     "native-project-settings-invalid", "native-project-load-failed",
                     "cli-validation-exit-238", "cli-validation-exit-239",
+                    "cli-print-validation-exit-205", "native-line-width-invalid",
                 }
                 reason = candidate if candidate in categories else "engine-exited"
             else:
