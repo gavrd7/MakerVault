@@ -16,6 +16,7 @@ from django.http import JsonResponse, HttpResponse
 from django.urls import reverse
 from django.db import IntegrityError, transaction
 from django.db.models.deletion import ProtectedError
+from django.core.cache import cache
 from django.views.decorators.http import require_http_methods
 
 from .models import FileAsset, Printer, PrinterConnection, SliceJob, Spool, SlicerProfile
@@ -1411,6 +1412,19 @@ def _native_parent_ids(rows):
     Only a verified source hash can declare a dependency. Malformed sources
     are left visible for manual inspection, never treated as a valid parent.
     """
+    # Reading hundreds of native JSON files at every slicer entry was
+    # dominating profile-list latency. Cached results are keyed by the user's
+    # exact imported profile identities and content hashes. Changing any
+    # registered parent/child profile automatically produces a different key.
+    fingerprint = json.dumps(sorted((
+        str(row.pk), str(row.owner_id), row.engine, row.engine_version,
+        row.kind, row.name, row.source_scope, row.content_sha256,
+        str(row.file_asset_id)
+    ) for row in rows), separators=(",", ":"), ensure_ascii=False)
+    cache_key = "slicer-profile-parents-v2:" + hashlib.sha256(fingerprint.encode()).hexdigest()
+    cached = cache.get(cache_key)
+    if isinstance(cached, list):
+        return {uuid.UUID(identifier) for identifier in cached}
     by_identity = {(row.owner_id, row.engine, row.engine_version,
                     row.kind, row.name, row.source_scope): row.pk for row in rows}
     parent_ids = set()
@@ -1436,6 +1450,7 @@ def _native_parent_ids(rows):
                     parent_ids.add(found)
         except (OSError, ValueError, UnicodeError, AttributeError):
             continue
+    cache.set(cache_key, [str(identifier) for identifier in parent_ids], timeout=300)
     return parent_ids
 
 
