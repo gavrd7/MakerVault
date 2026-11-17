@@ -109,6 +109,7 @@ def validate_worker_3mf(data, *, native_tool_count=None):
                 raise WorkerError("Unsafe native variable layer range.")
             previous_max = upper
     count = 0
+    used_native_paint_channels = set()
     for obj in objects:
         vertices = obj.findall("./{%s}mesh/{%s}vertices/{%s}vertex" % (CORE_NS, CORE_NS, CORE_NS))
         triangles = obj.findall("./{%s}mesh/{%s}triangles/{%s}triangle" % (CORE_NS, CORE_NS, CORE_NS))
@@ -128,6 +129,9 @@ def validate_worker_3mf(data, *, native_tool_count=None):
                 # Foreign 3MF metadata, nested bitstreams, and combinations
                 # remain blocked at the isolated worker boundary.
                 channel = next(iter(paint_attrs))
+                used_native_paint_channels.add(channel)
+                if len(used_native_paint_channels) > 1:
+                    raise WorkerError("Combining seam and support paint is not verified.")
                 if (triangle.attrib[channel] not in ("4", "8")
                         or len(objects) != 1 or native_tool_count is not None
                         or layer_ranges is not None):
