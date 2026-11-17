@@ -203,14 +203,19 @@ export default function SlicerGcodePreview({ fileId = null, preview, bedSize = n
     // While loading, do not pretend that the sparse global sample is exact.
     return [];
   }, [exactLayer, z]);
+  const progressiveMode=layer===null && step===null && layerDisplay==="all" && !highlightCurrent && !outerContrast;
   const displaySegments = useMemo(() => {
+    // Complete, ordered batches share their original segment references.
+    // Avoid replacing the last batch with an independently fetched exact
+    // layer, which would force the GPU to rebuild all earlier geometry.
+    if (progressiveMode) return wholeModel.segments;
     const current = layerSegments;
     if (layerDisplay === "current") return current;
     const startZ = layerDisplay === "context" ? layers[Math.max(0,currentLayer-8)] : -Infinity;
     const previous = wholeModel.segments.filter(segment =>
       segment[4] >= startZ - 0.0005 && segment[4] < z - 0.0005);
     return [...previous, ...current];
-  }, [wholeModel.segments,layerSegments,layerDisplay,layers,currentLayer,z]);
+  }, [wholeModel.segments,layerSegments,layerDisplay,layers,currentLayer,z,progressiveMode]);
   const finalStep = Math.min(step ?? layerSegments.length, layerSegments.length);
   const formatTime = seconds => {
     if (seconds == null) return "Not declared";
@@ -294,7 +299,7 @@ export default function SlicerGcodePreview({ fileId = null, preview, bedSize = n
       </div>}
       <div className="slicerResultLayerLayout">
         <div className="slicerResultViewport">
-          <SlicerToolpath3D segments={displaySegments} framingSegments={preview?.segments || []} filamentColours={filamentColours} layers={layers}
+          <SlicerToolpath3D segments={displaySegments} progressiveMode={progressiveMode} framingSegments={preview?.segments || []} filamentColours={filamentColours} layers={layers}
             activeLayer={currentLayer} activeStep={finalStep} visible={visible}
             colourMode={colourMode} colours={colours} showToolhead={showToolhead} bedSize={bedSize}
             renderMode={renderMode} layerDisplay={layerDisplay}
