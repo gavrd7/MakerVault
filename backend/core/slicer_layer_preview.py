@@ -18,7 +18,7 @@ MAX_LAYER_SEGMENTS = 75000
 def exact_layer_toolpaths(text, target_z):
     """Return actual, ordered G0/G1 extrusion segments at target Z.
 
-    Coordinates use [X1,Y1,X2,Y2,Z,feature,width] as the existing renderer
+    Coordinates use [X1,Y1,X2,Y2,Z,feature,width,logical_tool] as the existing renderer
     expects. Never subsample a layer: if the bound is exceeded, return a
     clearly flagged incomplete layer instead of a visually misleading fill.
     """
@@ -34,6 +34,7 @@ def exact_layer_toolpaths(text, target_z):
     segments = []
     counts = Counter()
     total = 0
+    tool = None
 
     for raw in text.splitlines():
         if len(raw) > 4096:
@@ -51,6 +52,11 @@ def exact_layer_toolpaths(text, target_z):
             continue
         line = line.split(";", 1)[0].strip().upper()
         cmd = line.split(None, 1)[0] if line else ""
+        if len(cmd) in (2, 3) and cmd.startswith("T") and cmd[1:].isdigit():
+            candidate = int(cmd[1:])
+            if cmd == "T" + str(candidate) and candidate < 16 and line == cmd:
+                tool = candidate
+                continue
         if cmd == "G90":
             absolute_xyz = True
         elif cmd == "G91":
@@ -97,7 +103,7 @@ def exact_layer_toolpaths(text, target_z):
                         if len(segments)<MAX_LAYER_SEGMENTS:
                             segments.append([round(px,3),round(py,3),
                                              round(ax,3),round(ay,3),
-                                             round(az,3),role,width])
+                                             round(az,3),role,width,tool])
                     px,py,pz=ax,ay,az
             x,y,z,e=nx,ny,nz,ne
 
