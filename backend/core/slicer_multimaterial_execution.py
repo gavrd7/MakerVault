@@ -100,4 +100,6 @@ def prepare_job_multimaterial(job, source_models, *, bed_width, bed_depth):
         topology=topology, tool_bindings=bindings,
         native_filament_profiles=profiles,
     )
+    # Internal execution metadata: never a firmware-side slot mapping.
+    result["tool_bindings"] = bindings
     return result
