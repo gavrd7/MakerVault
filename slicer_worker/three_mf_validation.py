@@ -117,16 +117,21 @@ def validate_worker_3mf(data, *, native_tool_count=None):
         count += len(triangles)
         for triangle in triangles:
             attributes = set(triangle.attrib)
+            paint_attrs = attributes & {"paint_supports", "paint_seam"}
             if not {"v1", "v2", "v3"} <= attributes or (
-                    attributes - {"v1", "v2", "v3", "paint_supports"}):
+                    attributes - {"v1", "v2", "v3", "paint_supports", "paint_seam"}):
                 raise WorkerError("Unsupported native 3MF triangle attributes.")
-            if "paint_supports" in attributes:
-                # A plain leaf value only; arbitrary recursive paint bitstreams
-                # and unrelated slicer annotations cannot pass this boundary.
-                if (triangle.attrib["paint_supports"] not in ("4", "8")
+            if len(paint_attrs) > 1:
+                raise WorkerError("Combined native painting is not verified.")
+            if paint_attrs:
+                # Accept only Orca's exact unsplit-leaf state encodings.
+                # Foreign 3MF metadata, nested bitstreams, and combinations
+                # remain blocked at the isolated worker boundary.
+                channel = next(iter(paint_attrs))
+                if (triangle.attrib[channel] not in ("4", "8")
                         or len(objects) != 1 or native_tool_count is not None
                         or layer_ranges is not None):
-                    raise WorkerError("Unsupported native support paint annotation.")
+                    raise WorkerError("Unsupported native painted facet annotation.")
         if count > MAX_TRIANGLES:
             raise WorkerError("3MF triangle count exceeds worker limit.")
         if len(vertices) > MAX_VERTICES_PER_OBJECT:
