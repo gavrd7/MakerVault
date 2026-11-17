@@ -210,7 +210,7 @@ export default function SlicerGcodePreview({ fileId = null, preview, bedSize = n
       {layerDisplay === "all" && !preview?.sampled && <p className="projectUploadHint">
         Full-resolution overview: all indexed extrusion paths are displayed, including
         fine support contacts. Switch to Current layer only to examine individual moves.
-      </p>
+      </p>}
       <fieldset className="slicerResultVisibility">
         <legend>Visible extrusion features</legend>
         {features.map(feature => <label className="checkRow" key={feature}>
