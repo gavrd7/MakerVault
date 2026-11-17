@@ -74,7 +74,8 @@ def store_paint(owner, mesh_id, paint, quota_check=None):
         sha256=digest,
         metadata={"slicer_paint": True, "slicer_temporary": True,
                   "source_mesh_id": mesh_id, "extension": ".json.gz",
-                  "size_bytes": len(packed), "format_version": 1},
+                  "size_bytes": len(packed), "format_version": 1,
+                  "paint_fields": sorted(cleaned)},
     )
     try:
         asset.file.save("slicer-paint-" + digest[:16] + ".json.gz",
@@ -145,3 +146,34 @@ def expand_painted_settings(owner, settings):
                 expand_painted_item(owner, row) for row in plate.get("objects", [])]}
             if isinstance(plate, dict) else plate for plate in copy["plates"]]
     return copy
+
+
+def settings_use_paint_field(owner, settings, field):
+    """Read a safe server-authored feature flag without expanding large masks."""
+    if field not in PAINT_FIELDS or not isinstance(settings, dict):
+        return False
+    rows = list(settings.get("plate_objects") or [])
+    for plate in settings.get("plates") or []:
+        if isinstance(plate, dict):
+            rows.extend(plate.get("objects") or [])
+    for row in rows:
+        if not isinstance(row, dict):
+            continue
+        if isinstance(row.get(field), dict):
+            value = row[field]
+            if any(value.get(k) for k in ("regions", "faces", "bands")):
+                return True
+        reference = row.get("paint_asset_id")
+        if reference:
+            try:
+                ref=uuid.UUID(str(reference))
+            except (TypeError, ValueError, AttributeError):
+                continue
+            if FileAsset.objects.filter(
+                pk=ref, owner=owner, category="slicer",
+                metadata__slicer_paint=True,
+                metadata__source_mesh_id=str(row.get("asset_id")),
+                metadata__paint_fields__contains=[field],
+            ).exists():
+                return True
+    return False
