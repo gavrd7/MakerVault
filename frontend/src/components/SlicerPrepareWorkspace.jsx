@@ -881,6 +881,9 @@ export default function SlicerPrepareWorkspace({
     (item.colour_paint?.regions || []).map(region => item.colour_paint?.palette?.[region.slot]))
     .find(swatch => !swatch?.slot_id || String(swatch.printer_id) !== String(printerId));
   const missingToolProfile = requiredMultiSlots.find(slotId => !verifiedSlot(slotId));
+  const baseProfileMismatch = assignedSlots.length === objects.length &&
+    assignedSlots.length > 0 && !assignedSlots.some(slot =>
+      String(slotWithProfile(slot.slot_id)?.id) === String(selectedProfiles?.filament_id));
 
   const multiMaterialReadyForExport = activeEngine === "orcaslicer"
     && activeEngineVersion === "2.5.0"
@@ -927,6 +930,8 @@ export default function SlicerPrepareWorkspace({
           ? "One painted colour is a preview-only swatch. Link it to a loaded CFS slot in Colour painting."
           : missingToolProfile
             ? "A filament slot used by this model has no worker-verified Orca 2.5.0 native profile. Check that slot's Profile selection."
+            : baseProfileMismatch
+              ? "The model's base filament profile does not match the main filament preset selected in Slicer setup. Choose the same verified profile or change the model's base slot."
             : requiredMultiSlots.length < 2
               ? "At least two different filament slots are needed for native multi-colour slicing."
               : "The saved model and painted slot assignments need checking before native multi-colour slicing."
@@ -1748,7 +1753,8 @@ export default function SlicerPrepareWorkspace({
                   {slot.product_name || slot.material || "Unknown filament"}</strong>
                 <small>Slot {(slot.slot_index??0)+1} · {slot.material||"Unknown"}</small>
                 {resolveSlotLibrarySpool(slot,spools).spool && <small>Matched MakerVault spool · {resolveSlotLibrarySpool(slot,spools).spool.spool_id}</small>}
-                <small>{profile ? "Profile: " + profile.name
+                <small>{profile ? "Profile: " + profile.name +
+                  (profile.status === "verified" ? " · Worker verified" : " · Not worker verified")
                   : suggestion.level === "exact" ? "Matching installed profile found"
                   : suggestion.level === "ambiguous" ? "Multiple matching profiles — choose one"
                   : suggestion.level === "fallback" ? "Similar installed profiles available for review"
