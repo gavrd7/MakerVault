@@ -22,12 +22,19 @@ PLATES = {
     "supertack": ("Supertack Plate", "supertack_plate_temp"),
 }
 NATIVE_TO_KEY = {native.casefold(): code for code, (native, _) in PLATES.items()}
+# Exact OrcaSlicer 2.5.0 BedType enum from PrintConfig.hpp. Zero is
+# btDefault, not a real surface; never mistake it for a cold plate.
+ORCA_BED_ENUM = {
+    "1": "cool", "2": "engineering", "3": "high_temp",
+    "4": "textured_pei", "5": "textured_cool", "6": "supertack",
+}
 
 
 def native_plate_key(value):
     if not isinstance(value, str):
         return None
-    return NATIVE_TO_KEY.get(value.strip().casefold())
+    key = value.strip().casefold()
+    return NATIVE_TO_KEY.get(key) or ORCA_BED_ENUM.get(key)
 
 
 def _default_from_model(profile, native):
@@ -100,6 +107,10 @@ def effective_orca_plate(plate_type, process, printer_profile=None):
         metadata = inspect_native_plates(printer_profile)
         if metadata["default"]:
             return metadata["default"]
+        raise ValueError(
+            "The imported printer's default build plate could not be identified. "
+            "Select a known plate explicitly instead of using the process fallback."
+        )
     current = native_plate_key(process.get("curr_bed_type"))
     if current:
         return current
