@@ -33,6 +33,7 @@ from .slicer_colour_painting import validate_colour_paint
 from .slicer_support_painting import validate_support_paint
 from .slicer_semantic_painting import validate_semantic_paint
 from .slicer_variable_layers import validate_variable_layer_profile
+from .slicer_paint_assets import store_paint, load_paint, expand_painted_item, expand_painted_settings, PAINT_FIELDS
 from .slicer_mesh import inspect_stl, MeshInspectionError, MAX_INSPECTION_BYTES
 from .slicer_bed import inspect_orca_plate, inspect_creality_plate
 from .slicer_bed_artwork import (official_artwork_source, cached_official_artwork,
@@ -289,11 +290,12 @@ def _draft_plate_settings(user, input_asset, settings):
         raise ValueError("The visual build plate supports up to 200 model instances.")
     seen = set()
     saved = []
-    for item in objects:
+    for original_item in objects:
+        item = expand_painted_item(user, original_item)
         required = {"instance_id", "asset_id", "x_mm", "y_mm", "rotation_deg",
                     "scale_percent", "color"}
         if (not isinstance(item, dict) or not required.issubset(item)
-                or set(item) - required - {"scale_xyz_percent", "process_overrides", "rotation_xyz_deg", "assembly_id", "z_mm", "text_model", "material_slot", "colour_paint", "support_paint", "seam_paint", "fuzzy_skin_paint", "variable_layer_profile"}):
+                or set(item) - required - {"scale_xyz_percent", "process_overrides", "rotation_xyz_deg", "assembly_id", "z_mm", "text_model", "material_slot", "colour_paint", "support_paint", "seam_paint", "fuzzy_skin_paint", "variable_layer_profile", "paint_asset_id"}):
             raise ValueError("Invalid plate model instance.")
         instance_id = str(_uuid(item["instance_id"]))
         asset_id = _uuid(item["asset_id"])
@@ -396,6 +398,11 @@ def _draft_plate_settings(user, input_asset, settings):
                 paint_fields[field] = validate_semantic_paint(item[field], kind)
         if "variable_layer_profile" in item:
             paint_fields["variable_layer_profile"] = validate_variable_layer_profile(item["variable_layer_profile"])
+        # Validate the untrusted referenced contents above, but keep only
+        # its immutable ID in the job JSON. Existing inline drafts remain
+        # supported without a migration.
+        if "paint_asset_id" in item:
+            paint_fields = {"paint_asset_id": str(_uuid(item["paint_asset_id"]))}
         saved.append({"instance_id": instance_id, "asset_id": str(asset_id),
                       **({"assembly_id": assembly_id} if assembly_id is not None else {}),
                       **values, "color": color.lower(), **text_fields, **material_fields, **paint_fields,
@@ -1047,6 +1054,39 @@ def _slicer_request_json(request):
     if len(raw) > MAX_SLICER_JSON_BYTES:
         raise ValueError("Slicing project exceeded the expanded safety limit.")
     return json.loads(raw.decode("utf-8"))
+
+
+@login_required
+@require_http_methods(["POST"])
+def paint_assets(request):
+    """Store versioned masks separately from STL geometry and slice jobs."""
+    if not request.user.has_perm("core.add_fileasset"):
+        return _error("You do not have permission to store slicing data.", 403)
+    try:
+        payload = _slicer_request_json(request)
+        if not isinstance(payload, dict) or set(payload) != {"mesh_asset_id", "paint"}:
+            raise ValueError("Expected an owned STL and a paint mask.")
+        asset = store_paint(request.user, payload["mesh_asset_id"],
+                            payload["paint"], quota_check=ensure_storage_capacity)
+    except StorageQuotaExceeded:
+        return _error("Insufficient private storage for painting.", 413)
+    except (ValueError, TypeError, UnicodeDecodeError) as exc:
+        return _error(str(exc))
+    except (ValidationError, OSError):
+        return _error("Could not store private painting.")
+    return JsonResponse({"asset_id": str(asset.pk), "sha256": asset.sha256}, status=201)
+
+
+@login_required
+@require_http_methods(["GET"])
+def paint_asset_detail(request, asset_id):
+    """Restore an edit mask only for its owner and exact mesh identity."""
+    try:
+        mesh_id = request.GET.get("mesh_asset_id")
+        paint = load_paint(request.user, asset_id, mesh_id)
+    except (ValueError, TypeError, OSError):
+        return _error("Painting unavailable for the selected STL.", 404)
+    return JsonResponse({"paint": paint})
 
 
 @login_required
