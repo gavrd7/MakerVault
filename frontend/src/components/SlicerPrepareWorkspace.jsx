@@ -849,9 +849,28 @@ export default function SlicerPrepareWorkspace({
     && assignedSlots.every(slot => String(slot.printer_id) === String(printerId)
       && slot.slot_id === assignedSlots[0].slot_id
       && slot.slot_index === assignedSlots[0].slot_index);
+  const paintedSlotRefs = objects.flatMap(item => {
+    const paint = item.colour_paint;
+    if (!paint?.regions?.length || !Array.isArray(paint.palette)) return [];
+    return [...new Set(paint.regions.map(region =>
+      paint.palette[region.slot]?.slot_id).filter(Boolean))];
+  });
+  const requiredMultiSlots = [...new Set([
+    ...assignedSlots.map(slot => String(slot.slot_id)), ...paintedSlotRefs,
+  ])];
   const multiMaterialReadyForExport = assignedSlots.length === objects.length
-    && new Set(assignedSlots.map(slot => slot.slot_id)).size >= 2
-    && slotFilamentProfiles.length >= 2;
+    && assignedSlots.every(slot => String(slot.printer_id) === String(printerId))
+    && requiredMultiSlots.length >= 2
+    && requiredMultiSlots.length <= 16
+    && requiredMultiSlots.every(slotId =>
+      slotFilamentProfiles.some(row => String(row.slot_id) === slotId
+        && filamentProfiles.some(profile => String(profile.id) === String(row.profile_id)
+          && profile.kind === "filament")))
+    && objects.every(item => (item.colour_paint?.regions || []).every(region => {
+      const swatch = item.colour_paint?.palette?.[region.slot];
+      return swatch && String(swatch.printer_id) === String(printerId)
+        && requiredMultiSlots.includes(String(swatch.slot_id));
+    }));
   // The server inherits the explicitly assigned native filament for a
   // single-slot slice; it need not match the main profile shown in Setup.
   // An unrelated or missing native slot profile is still unsafe.
@@ -1093,6 +1112,22 @@ export default function SlicerPrepareWorkspace({
           Printer startup and purge G-code are never changed here.</p>
       </aside>
   );
+  const reassignPaintSwatch = (paletteIndex, slotId) => {
+    if (!canEdit || !paintSelected?.colour_paint || !slotId) return;
+    const slot = liveMaterials.find(row => String(row.id) === slotId);
+    if (!slot) return;
+    updatePlate(latest.current.map(row => {
+      if (row.instance_id !== paintSelected.instance_id || !row.colour_paint) return row;
+      return {...row, colour_paint: {...row.colour_paint,
+        palette: row.colour_paint.palette.map((entry, index) =>
+          index === paletteIndex ? {
+            color: validSlotColor(slot) || entry.color,
+            label: slotName(slot), printer_id: String(printerId),
+            slot_id: String(slot.id), slot_index: Number(slot.slot_index ?? 0),
+          } : entry),
+      }};
+    }));
+  };
   const paintPalette = (() => {
     const saved = objects.find(item => item.instance_id === selectedId)?.colour_paint?.palette;
     if (Array.isArray(saved) && saved.length) return saved;
@@ -1163,6 +1198,18 @@ export default function SlicerPrepareWorkspace({
             color:materialTextColor(slot.color),fontWeight:700,fontSize:11}}>{index+1}</span>
         </button>)}
       </div>}
+      {!isSupportPainting&&!isSemanticPainting&&paintSelected?.colour_paint?.regions?.length>0&&
+        <label style={{display:"grid",gap:4,fontSize:12}}>
+          Assigned printer filament for painted colour {paintSlot+1}
+          <select value={paintPalette[paintSlot]?.slot_id || ""} disabled={!canEdit||!liveMaterials.length}
+            onChange={event=>reassignPaintSwatch(paintSlot,event.target.value)}>
+            <option value="">Preview only · choose a loaded filament</option>
+            {liveMaterials.map(slot=><option key={slot.id} value={String(slot.id)}>
+              {slotName(slot)} · slot {Number(slot.slot_index??0)+1}
+            </option>)}
+          </select>
+          <small>Every painted colour needs a loaded slot and verified native filament profile for offline multi-colour slicing.</small>
+        </label>}
       {isSupportPainting&&<>
         <div role="group" aria-label="Support painting action" style={{display:"flex",gap:5}}>
           {[[0,"Enforce supports"],[1,"Block supports"]].map(([slot,label])=><button type="button" key={slot}
