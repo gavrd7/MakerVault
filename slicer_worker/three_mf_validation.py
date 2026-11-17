@@ -110,6 +110,7 @@ def validate_worker_3mf(data, *, native_tool_count=None):
             previous_max = upper
     count = 0
     used_native_paint_channels = set()
+    painted_native_tools = set()
     for obj in objects:
         vertices = obj.findall("./{%s}mesh/{%s}vertices/{%s}vertex" % (CORE_NS, CORE_NS, CORE_NS))
         triangles = obj.findall("./{%s}mesh/{%s}triangles/{%s}triangle" % (CORE_NS, CORE_NS, CORE_NS))
@@ -145,6 +146,7 @@ def validate_worker_3mf(data, *, native_tool_count=None):
                 if colour not in native_states:
                     raise WorkerError("Painted colour refers to an unavailable native filament.")
                 used_native_paint_channels.add("paint_color")
+                painted_native_tools.add(native_states.index(colour))
         if count > MAX_TRIANGLES:
             raise WorkerError("3MF triangle count exceeds worker limit.")
         if len(vertices) > MAX_VERTICES_PER_OBJECT:
@@ -213,9 +215,11 @@ def validate_worker_3mf(data, *, native_tool_count=None):
                 plate_nodes.append(node)
             else:
                 raise WorkerError("Unknown native 3MF metadata.")
-        if native_tool_count is not None and (
-                set(mapped_extruders) != ids or len(set(mapped_extruders.values())) < 2):
-            raise WorkerError("Every native object must select an extruder; at least two must differ.")
+        if native_tool_count is not None:
+            mapped = {value - 1 for value in mapped_extruders.values()}
+            if set(mapped_extruders) != ids or len(mapped | painted_native_tools) < 2:
+                raise WorkerError(
+                    "Every native object must select a tool and two native tools must be used.")
         if len(plate_nodes) != 1 or manifest_root[-1] is not plate_nodes[0]:
             raise WorkerError("Exactly one final native plate mapping is required.")
         plate = plate_nodes[0]
