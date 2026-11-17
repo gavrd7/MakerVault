@@ -591,6 +591,7 @@ def process_queued_job(job_id):
             profiles[2], profiles[1] = apply_orca_job_overrides(
                 profiles[2], profiles[1], job.plate,
                 (job.settings or {}).get("plate_objects") or [],
+                printer_profile=job.printer_profile,
             )
             profiles[2] = apply_process_overrides(
                 profiles[2], (job.settings or {}).get("process_overrides") or {},
