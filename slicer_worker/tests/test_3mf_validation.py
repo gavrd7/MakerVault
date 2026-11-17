@@ -147,8 +147,12 @@ class Core3MFWorkerTests(TestCase):
                 validate_worker_3mf(with_seam(value))
         with self.assertRaises(WorkerError):
             validate_worker_3mf(with_seam("4"), native_tool_count=2)
+        self.assertTrue(validate_worker_3mf(with_seam("4", "paint_fuzzy_skin")))
+        for state in ("8", "0", "40", "4;M104"):
+            with self.subTest(state=state), self.assertRaises(WorkerError):
+                validate_worker_3mf(with_seam(state, "paint_fuzzy_skin"))
         with self.assertRaises(WorkerError):
-            validate_worker_3mf(with_seam("4", "paint_fuzzy_skin"))
+            validate_worker_3mf(with_seam("4", "paint_fuzzy_skin"), native_tool_count=2)
 
     def test_safe_per_object_metadata_passes_worker_validation(self):
         self.assertTrue(validate_worker_3mf(self.with_object_metadata([
