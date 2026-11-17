@@ -7,6 +7,7 @@ import GcodeViewerModal from "./GcodeViewerModal";
 import SlicerPlateEditor from "./SlicerPlateEditor";
 import SlicerPrepareWorkspace from "./SlicerPrepareWorkspace";
 import SlicerEngineChoices from "./SlicerEngineChoices";
+import SlicerBedTypePicker from "./SlicerBedTypePicker";
 import { engineCompatibilityIssues } from "./slicerEngineCompatibility";
 import { slicerSpoolHex, recolorUnmodifiedPlate } from "./slicerSpoolColour";
 import SlicerSpoolPicker from "./SlicerSpoolPicker";
@@ -68,8 +69,15 @@ const ORCA_PLATE_TYPES = [
   ["textured_cool", "Textured Cool Plate"],
   ["supertack", "SuperTack Plate"],
 ];
-const plateOptions = engine => engine === "orcaslicer"
-  ? ORCA_PLATE_TYPES : ORCA_PLATE_TYPES.slice(0, 1);
+const plateOptions = (engine, bedTypes) => {
+  if (engine !== "orcaslicer") return ORCA_PLATE_TYPES.slice(0, 1);
+  const available = Array.isArray(bedTypes?.supported) ? bedTypes.supported : null;
+  if (available && available.length)
+    return ORCA_PLATE_TYPES.filter(([key]) => available.includes(key));
+  // No confirmed imported native printer capabilities: do not advertise
+  // the full Orca plate catalogue as compatible with this printer.
+  return ORCA_PLATE_TYPES.slice(0, 1);
+};
 
 const initialForm = {
   engine: "orcaslicer", engine_version: "", input_asset_id: "", printer_id: "",
@@ -252,6 +260,7 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
   const manuallyChosenProfiles = useRef(new Set());
   const [profileSuggestions, setProfileSuggestions] = useState({});
   const [nativePlate, setNativePlate] = useState(null);
+  const userChosePlateRef = useRef(false);
   const [importFile, setImportFile] = useState(null);
   const [importKind, setImportKind] = useState("printer");
   const [officialQuery, setOfficialQuery] = useState("");
@@ -348,6 +357,10 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
     // Per-slot filament presets are independent of the selected default native
     // profile. Do not discard their session bindings on profile changes.
     manuallyChosenProfiles.current.add(kind);
+    if(kind==="printer") {
+      userChosePlateRef.current=false;
+      setForm(current=>({...current,plate:"default"}));
+    }
     const profile = profiles.find(item => item.id === id);
     setForm(current => ({
       ...current,
@@ -360,6 +373,7 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
     // A changed physical printer must never silently reuse the previous
     // machine's verified native presets or nozzle geometry.
     manuallyChosenProfiles.current.clear();
+    userChosePlateRef.current=false;
     setProfileSuggestions({});
     setFlushSettings(null);
     setSlotFilamentProfiles([]);
@@ -483,6 +497,19 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
       });
     return () => { active = false; };
   }, [form.engine, form.printer_profile_id]);
+  const bedTypes = nativePlate?.id === form.printer_profile_id
+    ? nativePlate?.plate?.bed_types : null;
+  const availablePlateOptions = plateOptions(form.engine, bedTypes);
+  useEffect(() => {
+    if(form.engine!=="orcaslicer" || !bedTypes?.default ||
+        userChosePlateRef.current) return;
+    setForm(current => current.plate==="default" ?
+      {...current,plate:bedTypes.default} : current);
+  }, [form.engine, bedTypes?.default]);
+  const choosePlate = key => {
+    userChosePlateRef.current=true;
+    update("plate",key);
+  };
 
   async function refresh() {
     setLoading(true);
@@ -548,6 +575,7 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
     setProcessOverrides(job.settings?.process_overrides || {});
     setFlushSettings(job.settings?.flush_settings || null);
     setSlotFilamentProfiles(job.settings?.slot_filament_profiles || []);
+    userChosePlateRef.current = !!job.plate && job.plate !== "default";
     setEditorOpen(true);
     setForm(current => ({
       ...current,
@@ -1326,7 +1354,7 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
       selectedProfiles={{ printer: form.printer_preset, process: form.process_preset, filament: form.filament_preset,
         printer_id: form.printer_profile_id, process_id: form.process_profile_id, filament_id: form.filament_profile_id }}
       onChangeProfiles={() => setProfileModal("change")}
-      selectedPlateType={plateOptions(form.engine).find(([id]) => id === form.plate)?.[1] || "Native / profile default"}
+      selectedPlateType={ORCA_PLATE_TYPES.find(([id]) => id === form.plate)?.[1] || "Native / profile default"}
       workerConfigured={workerConfigured && engines.some(engine => engine.key === form.engine && engine.available)}
       engineCapabilities={engines.find(item => item.key === form.engine)?.feature_capabilities?.[form.engine_version] || engines.find(item => item.key === form.engine)?.feature_capabilities?.default || {}}
       processOverrides={processOverrides} onProcessOverridesChange={setProcessOverrides}
@@ -1395,6 +1423,7 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
                 "\n\nYour edits will be preserved. Switch engines anyway?"
               )) return;
               manuallyChosenProfiles.current.clear();
+              userChosePlateRef.current=false;
               setFlushSettings(null);
               setSlotFilamentProfiles([]);
               setForm(current => ({
@@ -1459,11 +1488,16 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
             Selected spool colour: {selectedSpoolHex} · A uniform build-plate colour is written into single-material Orca G-code; multicolour painting is not yet mapped
           </span>}
         </div>
-        <label>Build plate
-          <select disabled={!canPrepare || busy} value={form.plate} onChange={e => update("plate", e.target.value)}>
-            {plateOptions(form.engine).map(([id, label]) => <option key={id} value={id}>{label}</option>)}
-          </select>
-        </label>
+        <div className="full" style={{minWidth:0}}>
+          <strong>Build plate</strong>
+          <SlicerBedTypePicker value={form.plate} onChange={choosePlate}
+            disabled={!canPrepare||busy} options={availablePlateOptions} compact/>
+          {bedTypes?.default && <small>Printer's native default: {ORCA_PLATE_TYPES.find(([key])=>key===bedTypes.default)?.[1]||bedTypes.default}.</small>}
+          {form.engine==="orcaslicer" && !bedTypes?.default && <small>
+            The imported printer has no confirmed default plate. Select a supported
+            native profile or explicitly configure its bed type before slicing.
+          </small>}
+        </div>
       {["orcaslicer", "crealityprint"].includes(form.engine) && nativePlate?.id === form.printer_profile_id &&
         <div className="slicerNativeVolume" aria-label="Native slicer build volume">
           <strong>Build volume</strong>
@@ -1642,12 +1676,12 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
             value={form.nozzle_mm} disabled={!canPrepare || busy}
             onChange={e => update("nozzle_mm", e.target.value)} />
         </label>
-        <label>Build plate type
-          <select value={form.plate} disabled={!canPrepare || busy}
-            onChange={e => update("plate", e.target.value)}>
-            {plateOptions(form.engine).map(([id, label]) => <option key={id} value={id}>{label}</option>)}
-          </select>
-        </label>
+        <div className="full" style={{minWidth:0}}>
+          <strong>Build plate type</strong>
+          <SlicerBedTypePicker value={form.plate} onChange={choosePlate}
+            options={availablePlateOptions} disabled={!canPrepare||busy} compact/>
+          {bedTypes?.default && <small>Native printer default: {ORCA_PLATE_TYPES.find(([key])=>key===bedTypes.default)?.[1]||bedTypes.default}</small>}
+        </div>
         <p className="full slicerChangePrinterHint">The plate type selects the matching native filament bed-temperature settings when slicing. It does not detect or change the physical build plate.</p>
         <p className="full slicerChangePrinterHint">Changing the printer resets the session's native printer, process and filament profiles to prevent incompatible selections. Select matching presets below before saving or slicing.</p>
         {["printer", "filament", "process"].map(kind => <label key={kind}>
