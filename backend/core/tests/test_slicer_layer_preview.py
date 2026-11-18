@@ -129,6 +129,7 @@ class FullLayerParserTests(SimpleTestCase):
         self.assertEqual(exact_layer_toolpaths("\n".join(lines), 0.2)["segment_count"], 410)
 
     def test_mixed_object_sections_survive_every_layer_of_bounded_overview(self):
+        from core.slicer_layer_preview import _overview_segments
         """A roof or tower must not replace the object's walls/inner geometry."""
         heights = [0.2, 0.4, 0.6, 0.8]
         source = ["G90", "M83"]
