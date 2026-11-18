@@ -91,7 +91,7 @@ def index_overview(index_key, text, heights, detail):
     return cached_batch(index_key, heights[:MAX_BATCH_LAYERS])
 
 
-def _store_overview(index_key, heights, layers, detail):
+def _store_overview(index_key, heights, layers, detail, *, full=False):
     """Publish validated batches; the manifest is the atomic ready marker."""
     if len(heights) != len(layers) or not 1 <= len(heights) <= MAX_INDEX_LAYERS:
         raise ValueError("Invalid preview index data.")
@@ -99,8 +99,8 @@ def _store_overview(index_key, heights, layers, detail):
     for offset in range(0, len(heights), MAX_BATCH_LAYERS):
         part = layers[offset:offset + MAX_BATCH_LAYERS]
         payload = {
-            "layers": part, "complete": True, "sampled": True,
-            "overview": True, "cached": True,
+            "layers": part, "complete": True, "sampled": not full,
+            "overview": not full, "high_fidelity": full, "cached": True,
         }
         packed = zlib.compress(
             json.dumps(payload, separators=(",", ":")).encode("utf-8"), level=3)
@@ -160,3 +160,34 @@ def warm_asset_overviews(asset, source):
         ]
         return _store_overview(preview_index_key(asset, mobile), heights, slim, mobile)
     return True
+
+def warm_asset_high_fidelity(asset, source):
+    """Precompute the geometry-preserving preview in the existing worker.
+
+    Unlike the historical overview, never selects isolated segments from
+    walls, supports or prime towers. Only consecutive collinear extrusion
+    moves can be merged; every other original path remains represented.
+    """
+    from .slicer_preview import generated_preview
+    from .slicer_layer_preview import MAX_FULL_PREVIEW_SEGMENTS
+    if isinstance(source, bytes):
+        if len(source) > 32 * 1024 * 1024 or b"\x00" in source:
+            return False
+        source = source.decode("utf-8")
+    if not isinstance(source, str) or len(source.encode("utf-8")) > 32 * 1024 * 1024:
+        return False
+    heights = generated_preview(source).get("layers", [])
+    if not heights or len(heights) > MAX_INDEX_LAYERS:
+        return False
+    index_key = preview_index_key(asset, "full-v1")
+    if cached_batch(index_key, heights[:MAX_BATCH_LAYERS]) is not None:
+        return True
+    result = layer_batch_toolpaths(
+        source, heights, high_fidelity=True,
+        max_requested_layers=MAX_INDEX_LAYERS,
+        max_total_segments=MAX_FULL_PREVIEW_SEGMENTS,
+    )
+    if not result["complete"]:
+        # Never substitute a partial mesh and label it complete.
+        return False
+    return _store_overview(index_key, heights, result["layers"], 0, full=True)
