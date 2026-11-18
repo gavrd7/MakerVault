@@ -82,6 +82,42 @@ class FullLayerParserTests(SimpleTestCase):
         self.assertEqual(len(result), 80)
         self.assertTrue(all(row[5] == "Outer wall" for row in result))
 
+    def test_streaming_overview_bounds_storage_without_losing_support_priority(self):
+        lines = ["G90", "M83", "G1 X0 Y0 Z0.2"]
+        for index in range(300):
+            kind = "Sparse infill" if index < 150 else "Support material"
+            lines.extend((f";TYPE:{kind}", f"G1 X{index + 1} Y0 E0.1"))
+        result = layer_batch_toolpaths("\\n".join(lines), [0.2],
+                                       overview=True, overview_limit=80)
+        layer = result["layers"][0]
+        self.assertTrue(result["complete"])
+        self.assertTrue(layer["sampled"])
+        self.assertEqual(layer["segment_count"], 300)
+        self.assertEqual(len(layer["segments"]), 80)
+        self.assertTrue(all(move[5] == "Support material"
+                            for move in layer["segments"]))
+        self.assertEqual(layer["segments"],
+                         sorted(layer["segments"], key=lambda move: move[0]))
+
+    def test_cached_index_retrieves_later_page_of_long_print(self):
+        from unittest.mock import patch
+        from django.core.cache.backends.locmem import LocMemCache
+        from core.slicer_preview_cache import cached_batch, index_overview
+        heights = [round((i + 1) * .2, 3) for i in range(70)]
+        lines = ["G90", "M83"]
+        for height in heights:
+            lines.extend((f"G1 X0 Y0 Z{height}", ";TYPE:Outer wall",
+                          "G1 X1 Y0 E0.1"))
+        backend = LocMemCache("preview-index-multiple-pages", {})
+        with patch("core.slicer_preview_cache.cache", backend):
+            first = index_overview("cache-test-70-layers", "\\n".join(lines), heights, 80)
+            self.assertIsNotNone(first)
+            self.assertEqual(len(first["layers"]), 64)
+            second = cached_batch("cache-test-70-layers", heights[64:])
+            self.assertIsNotNone(second)
+            self.assertEqual(len(second["layers"]), 6)
+            self.assertEqual(second["layers"][-1]["z"], heights[-1])
+
     def test_relative_extrusion_and_g92_are_supported(self):
         text = (
             "G90\nM83\nG1 Z0.25 X0 Y0\n"
