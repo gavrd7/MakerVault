@@ -18,6 +18,10 @@ MAX_LAYER_SEGMENTS = 75000
 MAX_BATCH_SEGMENTS = 180000
 MAX_BATCH_LAYERS = 64
 MAX_OVERVIEW_SEGMENTS_PER_LAYER = 450
+OVERVIEW_WEIGHTS = {
+    "tower": .18, "support": .20, "shell": .26,
+    "skin": .16, "inner": .12, "body": .08,
+}
 
 
 def _overview_segments(segments, per_layer_limit=MAX_OVERVIEW_SEGMENTS_PER_LAYER):
@@ -65,6 +69,7 @@ def layer_batch_toolpaths(text, target_zs, *, overview=False, overview_limit=350
     absolute_centres = False
     x = y = z = e = 0.0
     role = "Other"
+    family = overview_family(role)
     width = None
     stored_count = 0
     tool = None
@@ -77,6 +82,7 @@ def layer_batch_toolpaths(text, target_zs, *, overview=False, overview_limit=350
             matched = TYPE.match(line)
             if matched:
                 role = matched.group(1).strip()[:48] or "Other"
+                family = overview_family(role)
             matched = WIDTH.match(line)
             if matched:
                 value = float(matched.group(1))
@@ -139,32 +145,33 @@ def layer_batch_toolpaths(text, target_zs, *, overview=False, overview_limit=350
                             # as we scan. Never accumulate the full 3D print in
                             # Python merely to throw most of it away afterwards.
                             sequence = layer["segment_count"]
-                            family = overview_family(role)
                             spread = (sequence * 2654435761) & 0xffffffff
                             rank = (spread, sequence)
-                            record = [round(px,3), round(py,3),
-                                      round(ax,3), round(ay,3),
-                                      key,role,width,tool]
-                            entry = (*rank, record)
-                            # A global reservoir captures all geometry, while
-                            # smaller feature reservoirs guarantee every model
-                            # section and the separate structures remain visible.
                             global_heap = layer["overview_heap"]
-                            if len(global_heap) < overview_limit:
-                                heapq.heappush(global_heap, entry)
-                            elif rank > global_heap[0][:2]:
-                                heapq.heapreplace(global_heap, entry)
-                            weights = {
-                                "tower": .18, "support": .20, "shell": .26,
-                                "skin": .16, "inner": .12, "body": .08,
-                            }
                             family_heap = layer["feature_heaps"].setdefault(family, [])
                             minimum = 24 if family == "tower" else 16 if family == "support" else 8
-                            quota = max(minimum, int(overview_limit * weights[family]))
-                            if len(family_heap) < quota:
-                                heapq.heappush(family_heap, entry)
-                            elif rank > family_heap[0][:2]:
-                                heapq.heapreplace(family_heap, entry)
+                            quota = max(minimum, int(overview_limit * OVERVIEW_WEIGHTS[family]))
+                            global_needed = (len(global_heap) < overview_limit or
+                                             rank > global_heap[0][:2])
+                            family_needed = (len(family_heap) < quota or
+                                             rank > family_heap[0][:2])
+                            # Avoid allocating and rounding an 8-field record
+                            # for every discarded move on low-spec servers.
+                            if global_needed or family_needed:
+                                record = [round(px,3), round(py,3),
+                                          round(ax,3), round(ay,3),
+                                          key,role,width,tool]
+                                entry = (*rank, record)
+                                if global_needed:
+                                    if len(global_heap) < overview_limit:
+                                        heapq.heappush(global_heap, entry)
+                                    else:
+                                        heapq.heapreplace(global_heap, entry)
+                                if family_needed:
+                                    if len(family_heap) < quota:
+                                        heapq.heappush(family_heap, entry)
+                                    else:
+                                        heapq.heapreplace(family_heap, entry)
                         elif (len(layer["segments"]) < MAX_LAYER_SEGMENTS and
                               stored_count < MAX_BATCH_SEGMENTS):
                             layer["segments"].append([round(px,3),round(py,3),
