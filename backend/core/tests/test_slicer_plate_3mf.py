@@ -9,6 +9,24 @@ from core.slicer_plate_3mf import build_plate_3mf, build_compound_plate_3mf, bui
 from core.slicer_profiles import SlicerProfileError
 
 
+class ExactPlateBoundsTests(SimpleTestCase):
+    def test_roundoff_at_model_boundary_is_accepted(self):
+        # Fixture STL has a 10 mm XY footprint. At x=-105.03 on a 220 mm
+        # bed it protrudes 0.03 mm, within mesh export roundoff tolerance.
+        item = {"x_mm": -105.03, "y_mm": 0,
+                "rotation_deg": 0, "scale_percent": 100}
+        self.assertTrue(build_plate_3mf(
+            [(item, fixture_stl())], bed_width=220, bed_depth=220))
+
+    def test_real_off_plate_model_is_still_rejected_with_extents(self):
+        item = {"x_mm": -105.2, "y_mm": 0,
+                "rotation_deg": 0, "scale_percent": 100}
+        with self.assertRaisesRegex(
+                SlicerProfileError, r"Model 1 extends beyond.*X"):
+            build_plate_3mf(
+                [(item, fixture_stl())], bed_width=220, bed_depth=220)
+
+
 class MultiPlateProject3MFTests(SimpleTestCase):
     def test_export_keeps_separate_plates_and_native_meshes(self):
         model = fixture_stl()
