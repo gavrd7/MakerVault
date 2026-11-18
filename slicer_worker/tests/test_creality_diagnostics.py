@@ -24,7 +24,8 @@ class CrealityDiagnosticMatrixTests(unittest.TestCase):
     def test_isolation_cases_are_fixed_and_predictable(self):
         options = _cases({
             "nozzle_temperature": ["210", "220"],
-            "filament_map": ["1", "1"],
+            "filament_map": ["1", "1", "1", "1"],
+            "filament_settings_id": ["grey", "yellow", "grey", "yellow"],
             "enable_prime_tower": "1",
         })
         self.assertEqual([name for name, _edits, _desc in options], [
@@ -33,7 +34,7 @@ class CrealityDiagnosticMatrixTests(unittest.TestCase):
             "normalised-filament-scalars", "identical-filament-parameters",
         ])
         self.assertEqual(options[1][1], {"filament_map": None})
-        self.assertEqual(options[2][1], {"filament_map": ["1", "1"]})
+        self.assertEqual(options[2][1], {"filament_map": ["1", "1", "1", "1"]})
         self.assertEqual(options[3][1], {"enable_prime_tower": "0"})
 
     @patch("slicer_worker.creality_diagnostics._engine_run")
@@ -47,8 +48,9 @@ class CrealityDiagnosticMatrixTests(unittest.TestCase):
             "binary_sha256": "a" * 64}}
         original = b"test 3MF bytes holding SECRET-STL-COORDINATES"
         project.return_value = original, {
-            "filament_map": ["1", "1"],
-            "nozzle_temperature": ["210", "220"]}
+            "filament_map": ["1", "1", "1", "1"],
+            "filament_settings_id": ["grey", "yellow", "grey", "yellow"],
+            "nozzle_temperature": ["210", "220", "210", "220"]}
         repack.return_value = b"changed, but still private"
         execute.return_value = {
             "status": "failed", "exit_code": 205,
