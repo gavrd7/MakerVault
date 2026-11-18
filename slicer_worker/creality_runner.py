@@ -5,7 +5,9 @@ not the similarly named OrcaSlicer flags. A real tested version and fixture
 receipt are required before this engine may be marked verified/ready.
 """
 import json
+import logging
 import os
+import tempfile
 from pathlib import Path
 import signal
 import subprocess
@@ -18,6 +20,26 @@ from .stl_validation import StlValidationError, validate_stl
 from .three_mf_validation import validate_worker_3mf
 from .headless_env import slicing_environment
 from .orca_runner import NETWORK_KEYS, SCRIPT_KEYS
+
+logger = logging.getLogger(__name__)
+
+
+def _cli_failure_reason(output):
+    """Classify a bounded stderr excerpt without persisting untrusted text."""
+    message = output.decode("utf-8", errors="replace").lower()
+    if any(term in message for term in ("qt.qpa.plugin", "could not connect to display",
+                                        "could not load the qt platform plugin")):
+        return "Creality Print CLI could not initialise its headless Qt platform."
+    if any(term in message for term in ("error while loading shared libraries",
+                                        "cannot open shared object file")):
+        return "Creality Print CLI is missing a runtime library."
+    if any(term in message for term in ("unknown option", "unrecognized option",
+                                        "unrecognised option", "invalid command line")):
+        return "Creality Print CLI rejected a command-line option."
+    if any(term in message for term in ("failed to load settings", "failed to load preset",
+                                        "invalid preset", "invalid config", "load config failed")):
+        return "Creality Print CLI could not load a native preset."
+    return "Creality Print failed to slice using the selected native profiles."
 
 
 def _check_native_json(path):
@@ -105,20 +127,27 @@ def run_creality(binary: Path, workdir: Path, *, timeout_seconds: int = DEFAULT_
     outdir = workdir / "creality-output"
     proc = None
     try:
-        proc = subprocess.Popen(
-            command, cwd=str(workdir),
-            env=slicing_environment(workdir),
-            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
-            start_new_session=True,
-        )
-        try:
-            proc.communicate(timeout=timeout_seconds)
-        except subprocess.TimeoutExpired:
-            os.killpg(proc.pid, signal.SIGKILL)
-            proc.communicate()
-            raise WorkerError("Creality Print did not complete the CLI slice in time.") from None
-        if proc.returncode != 0:
-            raise WorkerError("Creality Print failed to slice using the selected native profiles.")
+        # Temporary file avoids unbounded pipe buffering and is never persisted
+        # or returned to the user. Only fixed diagnostic categories escape.
+        with tempfile.TemporaryFile(mode="w+b") as diagnostics:
+            proc = subprocess.Popen(
+                command, cwd=str(workdir),
+                env=slicing_environment(workdir),
+                stdout=subprocess.DEVNULL, stderr=diagnostics,
+                start_new_session=True,
+            )
+            try:
+                proc.communicate(timeout=timeout_seconds)
+            except subprocess.TimeoutExpired:
+                os.killpg(proc.pid, signal.SIGKILL)
+                proc.communicate()
+                raise WorkerError("Creality Print did not complete the CLI slice in time.") from None
+            if proc.returncode != 0:
+                diagnostics.seek(0)
+                reason = _cli_failure_reason(diagnostics.read(32768))
+                logger.warning("Creality Print CLI exited with status %d (%s)",
+                               proc.returncode, reason)
+                raise WorkerError(reason)
         if outdir.is_symlink() or not outdir.is_dir():
             raise WorkerError("Creality Print produced no safe output directory.")
         # CLI builds may emit a log/result JSON in addition to a G-code.
