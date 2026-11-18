@@ -129,16 +129,18 @@ def creality_command(binary: Path, workdir: Path):
             raise WorkerError("Creality multi-STL material assignments cannot use 3MF.")
         try:
             metadata = json.loads((workdir / "creality-material-map.json").read_text())
-            if not isinstance(metadata, dict) or set(metadata) != {"model_count", "tool_ids"}:
+            if not isinstance(metadata, dict) or set(metadata) != {"model_count", "tool_ids", "filament_count"}:
                 raise ValueError("Invalid material map")
             count = metadata["model_count"]
             if type(count) is not int or not 2 <= count <= 12:
                 raise ValueError("Invalid material map count")
-            filament_files = [workdir / ("filament-" + str(i) + ".json")
-                              for i in range(16)]
-            filament_files = [p for p in filament_files if p.exists()]
-            if not 2 <= len(filament_files) <= 16:
+            filament_count = metadata["filament_count"]
+            if type(filament_count) is not int or not 2 <= filament_count <= 16:
                 raise ValueError("Invalid filament palette count")
+            filament_files = [workdir / ("filament-" + str(i) + ".json")
+                              for i in range(filament_count)]
+            if any(not p.is_file() or p.is_symlink() for p in filament_files):
+                raise ValueError("Missing contiguous native filament palette")
             models = [workdir / ("input-" + str(i) + ".stl") for i in range(count)]
             for native in filament_files:
                 _check_native_json(_regular_file(workdir, native.name, MAX_PROFILE_BYTES))
