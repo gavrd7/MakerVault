@@ -1,4 +1,4 @@
-"""Read-only engine inventory and administrator-controlled maintenance requests.
+"""Engine inventory and user-initiated maintenance requests.
 
 Never executes commands, writes to an engine volume, downloads remote bytes or
 exposes secrets. A separately provisioned host maintenance agent can later
@@ -10,7 +10,7 @@ from django.contrib.auth.decorators import login_required
 from django.db import transaction
 from django.http import JsonResponse
 from django.views.decorators.http import require_http_methods
-from .models import SliceJob, SlicerEngineOperation
+from .models import SliceJob, SlicerEngineOperation, SlicerEngineAccessSettings
 from .slicer_engine_releases import validated_releases, approved_release
 from .slicer_engines import get_engine
 from .slicer_execution import verified_installation
@@ -32,8 +32,10 @@ def _serialize(op):
 @login_required
 @require_http_methods(["GET", "POST"])
 def engine_operations(request):
-    if not request.user.is_superuser:
-        return JsonResponse({"error": "Only an administrator can manage slicer engines."}, status=403)
+    restrict_to_admins = SlicerEngineAccessSettings.current().restrict_engine_management_to_admins
+    can_manage = request.user.is_superuser or not restrict_to_admins
+    if not can_manage:
+        return JsonResponse({"error": "Engine management is restricted by this installation’s administrator."}, status=403)
     connected = os.environ.get("MAKERVAULT_SLICER_HOST_UPDATER_ENABLED") == "1"
     if request.method == "GET":
         try:
@@ -43,12 +45,13 @@ def engine_operations(request):
         records = list(SlicerEngineOperation.objects.order_by("-created_at")[:30])
         return JsonResponse({
             "approved_releases": releases,
+            "can_manage": can_manage,
+            "restrict_to_admins": restrict_to_admins,
             "operations": [_serialize(op) for op in records],
             "host_updater_connected": connected,
             "installation_available": bool(connected and releases),
-            "installation_note": ("Engine installs require a separately configured host "
-                                  "updater and independently approved release bundles. "
-                                  "The web application cannot modify containers."),
+            "installation_note": ("Engine installation becomes available when a safe host updater and "
+                                  "compatible releases are configured. Checks happen automatically."),
         })
 
     if len(request.body) > 2048:
@@ -72,10 +75,10 @@ def engine_operations(request):
         get_engine(engine)
         approved_release(engine, version, digest)
     except ValueError:
-        return JsonResponse({"error": "Engine release has not been independently approved."}, status=400)
+        return JsonResponse({"error": "That engine version is not yet available for automatic installation."}, status=400)
     if not connected:
         return JsonResponse({
-            "error": "The restricted host updater is not connected; installation is unavailable."
+            "error": "The installer service is not yet ready on this MakerVault instance."
         }, status=503)
     if SliceJob.objects.filter(status__in=("queued", "running")).exists():
         return JsonResponse({
