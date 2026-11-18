@@ -7,11 +7,13 @@ and is never interpreted as an executable command.
 import io
 import json
 import zipfile
+from xml.etree import ElementTree as ET
 
 from .runner import WorkerError
 from .three_mf_validation import validate_worker_3mf
 
 PROJECT_SETTINGS = "Metadata/project_settings.config"
+CREALITY_META = "Metadata/creality.config"
 CORE_MEMBERS = {"3D/3dmodel.model", "Metadata/model_settings.config",
                 "[Content_Types].xml", "_rels/.rels"}
 BLOCKED = {"post_process", "post_process_script", "post_process_scripts",
@@ -25,13 +27,21 @@ def validate_creality_project(data, *, native_tool_count=2):
     try:
         with zipfile.ZipFile(io.BytesIO(data)) as archive:
             parts = archive.infolist()
-            if (len(parts) != 5 or set(p.filename for p in parts) !=
-                    CORE_MEMBERS | {PROJECT_SETTINGS} or
+            if (len(parts) != 6 or set(p.filename for p in parts) !=
+                    CORE_MEMBERS | {PROJECT_SETTINGS, CREALITY_META} or
                     any(p.is_dir() or p.file_size <= 0 or
-                        p.file_size > (4 * 1024 * 1024 if p.filename == PROJECT_SETTINGS
+                        p.file_size > (4 * 1024 * 1024 if p.filename in (PROJECT_SETTINGS, CREALITY_META)
                                        else 80 * 1024 * 1024) for p in parts) or
                     sum(p.file_size for p in parts) > 96 * 1024 * 1024):
                 raise WorkerError("Creality native project contains unsupported content.")
+            xml = ET.fromstring(archive.read(CREALITY_META))
+            if xml.tag != "config":
+                raise WorkerError("Invalid Creality native project identification.")
+            identity = {row.attrib.get("key"): row.attrib.get("value")
+                        for row in xml if row.tag == "metadata" and not len(row)}
+            if (identity.get("Application") != "Creality_Print" or
+                    not identity.get("AppVersion", "").startswith("7.3.")):
+                raise WorkerError("Unrecognised native Creality 3MF identity.")
             project = json.loads(archive.read(PROJECT_SETTINGS))
             if (not isinstance(project, dict) or len(project) > 4096 or
                     project.get("name") != "project_settings" or
@@ -56,6 +66,6 @@ def validate_creality_project(data, *, native_tool_count=2):
     except WorkerError:
         raise
     except (ValueError, KeyError, TypeError, OSError, zipfile.BadZipFile,
-            UnicodeDecodeError):
+            UnicodeDecodeError, ET.ParseError):
         raise WorkerError("Malformed Creality native project.") from None
     return True
