@@ -41,7 +41,7 @@ def _read_active_manifest():
 
 def _valid_store_path(path, key, version):
     """Approved binary must be inside its exact engine/version installation."""
-    if not path.is_absolute() or path.is_symlink() or not path.is_file():
+    if not path.is_absolute() or not path.is_file():
         return False
     # Reject traversal and symlinked engine/version parent directories.
     if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._+-]{0,79}", version) or version in {".", ".."}:
@@ -51,7 +51,13 @@ def _valid_store_path(path, key, version):
                                          ENGINE_STORE / "versions" / key, base)):
         return False
     try:
-        return path.resolve(strict=True).is_relative_to(base.resolve(strict=True))
+        canonical_base = base.resolve(strict=True)
+        canonical = path.resolve(strict=True)
+        # Only the AppImage's own AppRun entrypoint may be a symlink, and
+        # its final target must remain inside this exact engine version.
+        if path.is_symlink() and path.name != "AppRun":
+            return False
+        return canonical.is_relative_to(canonical_base)
     except (OSError, ValueError):
         return False
 
@@ -109,7 +115,8 @@ def configured_engines():
         if not isinstance(digest, str) or len(digest) != 64 or any(c not in "0123456789abcdef" for c in digest):
             continue
         path = Path(binary)
-        if (not path.is_absolute() or path.is_symlink() or not path.is_file()
+        if (not path.is_absolute() or not path.is_file()
+                or (path.is_symlink() and stored is None)
                 or not os.access(path, os.X_OK)
                 or (stored is not None and not _valid_store_path(path, key, version))):
             continue
