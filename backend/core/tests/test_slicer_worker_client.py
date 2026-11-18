@@ -21,6 +21,49 @@ class SlicerWorkerClientTests(SimpleTestCase):
     @patch("core.slicer_worker_client._session")
     @patch("core.slicer_worker_client.worker_settings",
            return_value=("http://slicer-worker:8088", "x" * 40))
+    def test_creality_native_code_visible_without_raw_engine_output(self, settings, session):
+        import json
+        response = Mock()
+        response.status_code = 422
+        response.headers = {"Content-Length": "300"}
+        response.iter_content.return_value = [json.dumps({
+            "stage": "running slicer engine",
+            "reason": "creality-cli-validation-error",
+            "cli_exit_code": 205,
+            "raw_output": "/private/secret/appimage-command --token=NEVER_DISPLAY",
+        }).encode()]
+        session.return_value.post.return_value = response
+        with self.assertRaises(SlicerWorkerError) as caught:
+            run_remote_job(uuid.uuid4(), "crealityprint", "7.3.1",
+                           b"model", b"printer", b"filament", b"process")
+        message = str(caught.exception)
+        self.assertIn("exit code 205 (CLI_VALIDATE_ERROR (-51))", message)
+        self.assertIn("embedded project configuration", message)
+        self.assertNotIn("NEVER_DISPLAY", message)
+        self.assertNotIn("/private", message)
+
+    @patch("core.slicer_worker_client._session")
+    @patch("core.slicer_worker_client.worker_settings",
+           return_value=("http://slicer-worker:8088", "x" * 40))
+    def test_creality_unknown_numeric_code_is_reported_without_inventing_cause(self, settings, session):
+        import json
+        response = Mock()
+        response.status_code = 422
+        response.headers = {"Content-Length": "250"}
+        response.iter_content.return_value = [json.dumps({
+            "stage": "running slicer engine",
+            "reason": "creality-cli-exited",
+            "cli_exit_code": 201,
+        }).encode()]
+        session.return_value.post.return_value = response
+        with self.assertRaises(SlicerWorkerError) as caught:
+            run_remote_job(uuid.uuid4(), "crealityprint", "7.3.1",
+                           b"model", b"printer", b"filament", b"process")
+        self.assertIn("exit code 201 (native CLI failure)", str(caught.exception))
+
+    @patch("core.slicer_worker_client._session")
+    @patch("core.slicer_worker_client.worker_settings",
+           return_value=("http://slicer-worker:8088", "x" * 40))
     def test_creality_multistl_worker_request_uses_explicit_one_based_tools(
             self, settings, session):
         import json
