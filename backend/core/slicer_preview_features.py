@@ -80,8 +80,10 @@ def balanced_overview_indices(grouped, budget):
     if not present:
         return []
     # A minimum allocation stops small but important sections from vanishing.
+    minimums = {"tower": 24, "support": 16}
     allocations = {
-        name: min(len(indices), max(1, int(budget * target_weights[name])))
+        name: min(len(indices), max(minimums.get(name, 1),
+                                   int(budget * target_weights[name])))
         for name, indices in present.items()
     }
     unused = budget - sum(allocations.values())
