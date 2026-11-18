@@ -18,9 +18,14 @@ export default function SlicerEngineManager({engines = [], onChanged}) {
   },[]);
   useEffect(()=>{
     refresh();
-    // Refresh is only needed while the panel is visible; operator can also
-    // explicitly refresh. No polling when it is closed/unmounted.
-  },[refresh]);
+    // The modal is mounted only while open. Periodically update progress and
+    // reflect newly activated worker engines without a manual page refresh.
+    const timer=window.setInterval(()=>{
+      refresh();
+      onChanged?.();
+    },2500);
+    return ()=>window.clearInterval(timer);
+  },[refresh,onChanged]);
 
   const operation = (state?.operations || []).find(row => !TERMINAL.has(row.status));
   const releases=state?.approved_releases || [];
@@ -63,6 +68,8 @@ export default function SlicerEngineManager({engines = [], onChanged}) {
       {engines.map(engine=>{
         const approved=releases.filter(release=>release.engine===engine.key);
         const installed=engine.available === true || engine.status === "validated";
+        const matching=(state?.operations||[]).find(item=>item.engine===engine.key &&
+          !TERMINAL.has(item.status));
         return <article key={engine.key} className="slicerEngineManagerCard">
           <div className="slicerEngineManagerIdentity">
             <SlicerEngineLogo engine={engine.key} label={engine.label} size="small"/>
@@ -72,7 +79,7 @@ export default function SlicerEngineManager({engines = [], onChanged}) {
                 : "Not installed"}</small>
             </div>
           </div>
-          {approved.length>0 ? approved.map(release=><div key={release.version+"-"+release.bundle_sha256}
+          {matching && <div role="status" className="slicerEngineManagerRelease">\n            <strong>{matching.status} · {matching.progress}%</strong>\n            <small>{matching.message}</small>\n          </div>}\n          {approved.length>0 ? approved.map(release=><div key={release.version+"-"+release.bundle_sha256}
             className="slicerEngineManagerRelease">
             <div><strong>Version {release.version}</strong>
               <small>{release.architecture} · {release.notes||"Reviewed release"}</small>
