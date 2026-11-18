@@ -127,13 +127,14 @@ def run_creality(binary: Path, workdir: Path, *, timeout_seconds: int = DEFAULT_
     outdir = workdir / "creality-output"
     proc = None
     try:
-        # Temporary file avoids unbounded pipe buffering and is never persisted
-        # or returned to the user. Only fixed diagnostic categories escape.
+        # Capture both CLI streams: Creality can write startup errors to
+        # stdout rather than stderr. Never persist or surface raw output.
+        # Temporary file avoids unbounded pipe buffering.
         with tempfile.TemporaryFile(mode="w+b") as diagnostics:
             proc = subprocess.Popen(
                 command, cwd=str(workdir),
                 env=slicing_environment(workdir),
-                stdout=subprocess.DEVNULL, stderr=diagnostics,
+                stdout=diagnostics, stderr=subprocess.STDOUT,
                 start_new_session=True,
             )
             try:
