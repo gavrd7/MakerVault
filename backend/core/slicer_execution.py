@@ -780,6 +780,19 @@ def process_queued_job(job_id):
                 palette = list(material_result["filament_profiles"])
                 palette[0] = profiles[1]
                 material_result["filament_profiles"] = tuple(palette)
+        if job.engine == "crealityprint":
+            # Apply the same strictly allowlisted process-only native changes
+            # to a worker-bound copy. Never rewrite the imported preset or
+            # quietly ignore controls visible in the interactive workbench.
+            stage = "applying native Creality process settings"
+            try:
+                profiles[2] = apply_process_overrides(
+                    profiles[2], (job.settings or {}).get("process_overrides") or {},
+                )
+            except (ValueError, SlicerProfileError) as exc:
+                raise SlicerExecutionError(
+                    "Creality process changes are not supported by this native profile."
+                ) from exc
         if material_result is not None and job.engine == "crealityprint":
             # The first resolved palette entry is the authenticated job's
             # selected filament profile, as required by the worker protocol.
