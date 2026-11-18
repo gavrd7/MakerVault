@@ -2094,19 +2094,19 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
                 job.message || "Waiting for job update"}</small>
             {job.status === "failed" && <details className="slicerSlicingHelp">
               <summary>Understand this slicing failure and how to fix it</summary>
-              {job.engine === "crealityprint" && /\\[creality-cli-exited\\]/i.test(job.message || "") ? <>
+              {job.engine === "crealityprint" && (job.message || "").includes("[creality-cli-exited]") ? <>
                 <p><strong>Confirmed:</strong> Creality Print started but exited before finishing the slice. The worker has not identified which CLI option, runtime dependency or native preset caused the exit.</p>
                 <p><strong>Next step:</strong> Check the slicer-worker log for the Creality Print exit status and any classified runtime or preset error. This is an engine integration failure, not proof that your imported profiles are wrong. No printer job was started.</p>
-              </> : job.engine === "crealityprint" && /\\[creality-cli-option-invalid\\]/i.test(job.message || "") ? <>
+              </> : job.engine === "crealityprint" && (job.message || "").includes("[creality-cli-option-invalid]") ? <>
                 <p><strong>Confirmed:</strong> Creality Print rejected a CLI option passed by MakerVault.</p>
                 <p><strong>Next step:</strong> The Creality Print adapter needs correcting; changing printer or filament profiles will not fix an unsupported CLI flag.</p>
-              </> : job.engine === "crealityprint" && /\\[creality-(qt-platform-failed|runtime-library-missing|launch-failed)\\]/i.test(job.message || "") ? <>
+              </> : job.engine === "crealityprint" && ["creality-qt-platform-failed", "creality-runtime-library-missing", "creality-launch-failed"].some(reason => (job.message || "").includes("[" + reason + "]")) ? <>
                 <p><strong>Confirmed:</strong> Creality Print could not initialise the required runtime inside the worker.</p>
                 <p><strong>Next step:</strong> Check the worker image and headless runtime dependencies. Re-importing native profiles is unlikely to help.</p>
-              </> : job.engine === "crealityprint" && /\\[creality-(native-preset-invalid|profile-parent-unresolved|profile-json-invalid)\\]/i.test(job.message || "") ? <>
+              </> : job.engine === "crealityprint" && ["creality-native-preset-invalid", "creality-profile-parent-unresolved", "creality-profile-json-invalid"].some(reason => (job.message || "").includes("[" + reason + "]")) ? <>
                 <p><strong>Confirmed:</strong> The worker or CLI could not load a required native preset.</p>
                 <p><strong>Next step:</strong> Review the corresponding printer, filament and process profiles and import their parent dependencies if necessary.</p>
-              </> : job.engine === "crealityprint" && /\\[creality-(no-output-directory|missing-gcode|unexpected-output-layout)\\]/i.test(job.message || "") ? <>
+              </> : job.engine === "crealityprint" && ["creality-no-output-directory", "creality-missing-gcode", "creality-unexpected-output-layout"].some(reason => (job.message || "").includes("[" + reason + "]")) ? <>
                 <p><strong>Confirmed:</strong> The CLI did not produce G-code in the format or location expected by MakerVault.</p>
                 <p><strong>Next step:</strong> Check the Creality Print CLI output contract in the worker adapter. Do not assume the STL or profiles are invalid.</p>
               </> : /238|native-project-settings-invalid|out.of.range/i.test(job.message || "") ? <>
