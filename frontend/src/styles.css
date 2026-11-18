@@ -8504,3 +8504,28 @@ a:focus-visible,
 @media(max-width:480px){
   .slicerVariableLayerPanel .slicerVariableLayerBandGrid{grid-template-columns:repeat(2,minmax(0,1fr))}
 }
+
+/* Slicer multi-engine installer: compact, responsive, operator-focused. */
+.slicerEngineManager {display:flex;flex-direction:column;gap:14px;min-width:0}
+.slicerEngineManagerHeading {display:flex;gap:12px;align-items:start;justify-content:space-between;flex-wrap:wrap}
+.slicerEngineManagerHeading h4,.slicerEngineManagerStatus h4 {margin:0 0 5px}
+.slicerEngineManagerHeading p,.slicerEngineManagerStatus p {margin:0}
+.slicerEngineManagerList {display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,300px),1fr));gap:10px}
+.slicerEngineManagerCard {border:1px solid var(--border,#394958);border-radius:12px;padding:14px;
+ display:flex;flex-direction:column;gap:12px;min-width:0}
+.slicerEngineManagerIdentity {display:flex;gap:12px;align-items:center}
+.slicerEngineManagerIdentity>div {display:flex;flex-direction:column;gap:3px}
+.slicerEngineManagerIdentity small,.slicerEngineManagerRelease small {color:var(--muted,#aab5c2)}
+.slicerEngineManagerRelease {display:flex;gap:12px;justify-content:space-between;align-items:center;
+ border-top:1px solid var(--border,#394958);padding-top:11px}
+.slicerEngineManagerRelease>div {display:flex;flex-direction:column;gap:4px;min-width:0}
+.slicerEngineManagerRelease button {flex:0 0 auto}
+.slicerEngineManagerStatus {border:1px solid var(--border,#394958);border-radius:12px;
+ padding:14px;display:flex;flex-direction:column;gap:10px}
+.slicerEngineManagerStatus details {padding-top:6px}
+.slicerEngineManagerStatus ul {margin:7px 0 0;padding-left:22px}
+@media(max-width:700px){
+ .slicerEngineManagerList {grid-template-columns:minmax(0,1fr)}
+ .slicerEngineManagerCard {padding:11px}
+ .slicerEngineManagerRelease {align-items:flex-start;flex-wrap:wrap}
+}
