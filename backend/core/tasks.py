@@ -515,7 +515,7 @@ def warm_gcode_preview_task(self, asset_id):
     """
     import logging
     from .models import FileAsset
-    from .slicer_preview_cache import warm_asset_overviews
+    from .slicer_preview_cache import warm_asset_high_fidelity
     log = logging.getLogger(__name__)
     asset = FileAsset.objects.filter(pk=asset_id).first()
     if not asset or (asset.metadata or {}).get("extension") != ".gcode":
@@ -525,7 +525,7 @@ def warm_gcode_preview_task(self, asset_id):
             raw = handle.read(32 * 1024 * 1024 + 1)
         if len(raw) > 32 * 1024 * 1024:
             return {"status": "unsupported_size"}
-        ok = warm_asset_overviews(asset, raw)
+        ok = warm_asset_high_fidelity(asset, raw)
         return {"status": "ready" if ok else "skipped"}
     except (OSError, UnicodeError, ValueError) as exc:
         log.warning("Preview cache warmup skipped for %s: %s", asset_id, type(exc).__name__)
