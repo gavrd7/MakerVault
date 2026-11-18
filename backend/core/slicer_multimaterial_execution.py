@@ -1,4 +1,4 @@
-"""Isolated, offline multi-filament test preparation for Orca.
+"""Isolated, offline multi-filament preparation for Orca and Creality.
 
 The selected printer adapter must publish material architecture evidence.
 This intentionally does NOT establish firmware changeover support or allow
