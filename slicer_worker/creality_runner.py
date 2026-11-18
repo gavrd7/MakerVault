@@ -115,12 +115,15 @@ def creality_command(binary: Path, workdir: Path):
     if outdir.exists() or outdir.is_symlink():
         raise WorkerError("Creality Print output directory must not exist yet.")
     _output_path(workdir)
-    # Verified from upstream Creality Print CLI docs. They use underscores,
-    # unlike the hyphenated flags in the Orca adapter.
+    # Creality's config keys are load_settings/load_filaments, but its
+    # CLI parser accepts hyphenated flag names. The 7.3.1 AppImage
+    # rejects --load_settings despite listing it in the help text.
+    # Explicitly request a G-code artifact, not just slice metadata.
     return [
         str(binary), "--cli", "--slice", "0", "--outputdir", str(outdir),
-        "--load_settings", str(profiles[0]) + ";" + str(profiles[2]),
-        "--load_filaments", str(profiles[1]),
+        "--need-gcode-file",
+        "--load-settings", str(profiles[0]) + ";" + str(profiles[2]),
+        "--load-filaments", str(profiles[1]),
         str(model),
     ]
 
