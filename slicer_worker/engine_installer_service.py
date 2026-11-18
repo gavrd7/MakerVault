@@ -146,7 +146,9 @@ def _install(op_id, release):
         _download(release, image, lambda n: _write_operation(op_id, progress=n))
         _write_operation(op_id, status="verifying", progress=70,
                          message="Checking downloaded binary")
-        if image.open("rb").read(4) != b"\x7fELF":
+        with image.open("rb") as source:
+            magic = source.read(4)
+        if magic != b"\x7fELF":
             raise ValueError("Official release is not an ELF AppImage.")
         image.chmod(0o555)
         # The AppImage runtime extracts its payload without requiring FUSE.
@@ -157,8 +159,14 @@ def _install(op_id, release):
             stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL, timeout=90, check=False)
         app_run = stage / "squashfs-root" / "AppRun"
-        if extracted.returncode != 0 or not app_run.exists() or app_run.is_symlink():
+        if extracted.returncode != 0 or not app_run.exists():
             raise ValueError("Engine extraction failed compatibility check.")
+        runtime = app_run.resolve(strict=True)
+        if not runtime.is_relative_to((stage / "squashfs-root").resolve(strict=True)):
+            raise ValueError("Engine runtime escapes its extracted directory.")
+        if not runtime.is_file() or not os.access(runtime, os.X_OK):
+            raise ValueError("Engine runtime is not executable.")
+        runtime_relative = runtime.relative_to(stage)
         _write_operation(op_id, status="staged", progress=85,
                          message="Testing Linux CLI compatibility")
         # Never mark a release available solely because it downloaded.
@@ -176,7 +184,7 @@ def _install(op_id, release):
             raise ValueError("Creality Print CLI compatibility check failed.")
         # Stage a complete version before publishing it; preserve all older
         # engines and use a single atomic manifest rename for activation.
-        binary_hash = _sha256(app_run)
+        binary_hash = _sha256(runtime)
         if not HEX.fullmatch(binary_hash):
             raise ValueError("Engine runtime digest unavailable.")
         os.rename(stage, target)
@@ -186,7 +194,7 @@ def _install(op_id, release):
         current = _manifest(STORE)
         existing = current["engines"]
         new_record = {
-            "binary": str(target / "squashfs-root" / "AppRun"),
+            "binary": str(target / runtime_relative),
             "version": version, "binary_sha256": binary_hash,
         }
         # Keep other engines, including the existing Orca runtime, untouched.
