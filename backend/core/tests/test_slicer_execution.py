@@ -435,7 +435,7 @@ class NativePlateAdmissionTests(SimpleTestCase):
             self.assertTrue(_validate_plate_execution(job))
             dimensions.assert_not_called()
 
-    def test_creality_two_stl_requires_offline_opt_in(self):
+    def test_creality_two_stl_project_requires_no_auto_arrange_opt_in(self):
         from types import SimpleNamespace
         objects = [
             {"instance_id": "a", "material_slot": {
@@ -448,9 +448,8 @@ class NativePlateAdmissionTests(SimpleTestCase):
             engine="crealityprint", printer_id="printer",
             printer_profile_id="printer", printer_profile=SimpleNamespace(),
         )
-        with self.assertRaisesRegex(SlicerExecutionError, "explicit offline"):
-            _validate_plate_execution(job)
-        job.settings["creality_auto_arrange_offline"] = True
+        # Native 3MF input preserves the prepared model positions, so a
+        # separate STL auto-arrangement acknowledgement is not needed.
         with (patch("core.slicer_execution.plan_native_multimaterial") as planned,
               patch("core.slicer_execution.trusted_plate_dimensions",
                     return_value=(350, 350))):
