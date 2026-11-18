@@ -1436,6 +1436,8 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
       engineCapabilities={engines.find(item => item.key === form.engine)?.feature_capabilities?.[form.engine_version] || engines.find(item => item.key === form.engine)?.feature_capabilities?.default || {}}
       processOverrides={processOverrides} onProcessOverridesChange={setProcessOverrides}
       flushSettings={flushSettings} onFlushSettingsChange={setFlushSettings}
+      crealityAutoArrangeTest={crealityAutoArrangeTest}
+      onCrealityAutoArrangeTestChange={setCrealityAutoArrangeTest}
       slotFilamentProfiles={slotFilamentProfiles} onSlotFilamentProfilesChange={setSlotFilamentProfiles}
       filamentProfiles={slotFilamentChoices} spools={spools}
       onRememberedProfiles={remembered => {
@@ -1513,14 +1515,7 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
             }} />
           <button type="button" className="slicerEngineManageLink"
             onClick={() => setProfileModal("engines")}>View engine installations</button>
-          {form.engine==="crealityprint" && plateObjects.length===2 &&
-            plateNeedsMultiMaterial(plateObjects) && <label className="slicerPlateHint">
-              <input type="checkbox" checked={crealityAutoArrangeTest}
-                onChange={event=>setCrealityAutoArrangeTest(event.target.checked)}
-                disabled={busy || loading || !canPrepare}/>
-              Allow Creality Print to auto-arrange these two STL models for an offline multi-filament test.
-              The resulting G-code is for inspection, not printer submission.
-            </label>}
+
         </div>
         <p className="full slicerEngineStatus" role="status">
           {engines.find(engine => engine.key === form.engine)?.available
