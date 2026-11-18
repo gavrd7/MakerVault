@@ -80,6 +80,30 @@ class PersistentEngineRegistryTests(unittest.TestCase):
         self.save(binary=symlink)
         self.assertEqual(registry.configured_engines(), {})
 
+    def test_extracted_creality_apprun_symlink_stays_inside_version(self):
+        import hashlib
+        cp = self.store / "versions" / "crealityprint" / "7.3.1"
+        (cp / "squashfs-root" / "usr" / "bin").mkdir(parents=True)
+        executable = cp / "squashfs-root" / "usr" / "bin" / "CrealityPrint"
+        executable.write_bytes(b"mock headless executable")
+        executable.chmod(0o755)
+        apprun = cp / "squashfs-root" / "AppRun"
+        apprun.symlink_to("usr/bin/CrealityPrint")
+        sha = hashlib.sha256(executable.read_bytes()).hexdigest()
+        (self.store / "active.json").write_text(json.dumps({
+            "schema_version": 1, "engines": {
+                "orcaslicer": {"binary": str(self.binary),
+                              "version": "2.5.0", "binary_sha256": self.digest},
+                "crealityprint": {"binary": str(apprun),
+                                  "version": "7.3.1", "binary_sha256": sha},
+            },
+        }))
+        self.assertEqual(set(registry.configured_engines()), {"orcaslicer", "crealityprint"})
+        # A hostile link cannot escape the installed runtime's version root.
+        apprun.unlink()
+        apprun.symlink_to("/etc/passwd")
+        self.assertNotIn("crealityprint", registry.configured_engines())
+
     def test_manifest_symlink_rejected(self):
         self.save()
         other = self.store / "other.json"
