@@ -97,7 +97,7 @@ def main(argv=None):
                     'umask 077; cat > "$1"', "sh", worker_reference,
                 ], input_bytes=refdata)
                 runner += ["--reference", worker_reference]
-            execution = _cmd(runner, timeout=5 * args.timeout + 45, check=False)
+            execution = _cmd(runner, timeout=6 * args.timeout + 45, check=False)
             # 2 means none of the CLI cases passed; the JSON is still useful.
             if execution.returncode not in (0, 2):
                 raise RuntimeError(
