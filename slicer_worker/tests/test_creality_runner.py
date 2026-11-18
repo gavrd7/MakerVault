@@ -84,6 +84,17 @@ class CrealityCommandTests(TestCase):
             _cli_failure_reason(b"unexpected details with /private/location and token=test"),
             "Creality Print failed to slice using the selected native profiles.")
 
+    def test_creality_cli_parser_diagnostics_are_classified(self):
+        self.assertEqual(
+            _cli_failure_reason(b"error: Only one CLI command may be specified"),
+            "Creality Print CLI received conflicting commands.")
+        self.assertEqual(
+            _cli_failure_reason(b"error: No CLI command was specified"),
+            "Creality Print CLI did not recognise a slicing command.")
+        self.assertEqual(
+            _cli_failure_reason(b"CLI parameter parsing failed"),
+            "Creality Print CLI rejected its command-line parameters.")
+
     def test_real_output_required_before_declaring_success(self):
         class FakeProcess:
             pid = 123
