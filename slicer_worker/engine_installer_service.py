@@ -209,7 +209,7 @@ def _install(op_id, release):
             cwd=stage, env={"HOME": str(stage), "TMPDIR": str(stage),
                             "PATH": "/usr/bin:/bin", "LANG": "C.UTF-8"},
             stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL, timeout=90, check=False)
+            stderr=subprocess.DEVNULL, timeout=180, check=False)
         app_run = stage / "squashfs-root" / "AppRun"
         if extracted.returncode != 0 or not app_run.exists():
             raise ValueError("Engine extraction failed compatibility check.")
@@ -419,7 +419,7 @@ def bootstrap_existing_orca():
                 env={"HOME": str(stage), "TMPDIR": str(stage),
                      "PATH": "/usr/bin:/bin", "LANG": "C.UTF-8"},
                 stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
-                stdin=subprocess.DEVNULL, timeout=120, check=False)
+                stdin=subprocess.DEVNULL, timeout=240, check=False)
             if result.returncode != 0 or not (stage / "squashfs-root" / "AppRun").exists():
                 raise ValueError("Existing Orca AppImage extraction failed.")
             os.rename(stage, target)
