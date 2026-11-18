@@ -97,19 +97,28 @@ export default function SlicerGcodePreview({ fileId = null, preview, bedSize = n
       try {
         for (let offset = 0; offset < layers.length && !cancelled; offset += 64) {
           const requested = layers.slice(offset, offset + 64);
-          // One cold request supplies the layer inventory for Redis indexing.
-          // Afterwards each page is a cheap cached read, including repeat opens.
-          // Keep the URL short enough for ordinary reverse proxies.
-          const allHeights = offset === 0 ? encodeURIComponent(layers.join(",")) : "";
-          const indexQuery = allHeights && allHeights.length <= 6000
-            ? "&all_zs=" + allHeights : "";
+          // Cold indexes are prepared by Celery, never synchronously inside
+          // a web request. Cached pages load immediately; a failed/unavailable
+          // worker falls back to bounded direct parsing after brief polling.
           const url = "/api/files/" + encodeURIComponent(fileId) +
             "/gcode/layers/?overview=1&detail=" + overviewDetail +
-            "&zs=" + encodeURIComponent(requested.join(",")) + indexQuery;
-          const response = await fetch(url, {credentials:"same-origin",signal:controller.signal});
+            "&zs=" + encodeURIComponent(requested.join(","));
+          let response;
+          for (let attempt=0;attempt<6;attempt++){
+            response = await fetch(url + "&warm=1", {
+              credentials:"same-origin",signal:controller.signal,
+            });
+            if(response.status !== 202)break;
+            await new Promise(resolve=>setTimeout(resolve,750));
+          }
+          if(response?.status===202 || response?.status===503){
+            response=await fetch(url + "&direct=1",{
+              credentials:"same-origin",signal:controller.signal,
+            });
+          }
           if (!response.ok) {
             const detail = await response.json().catch(()=>({}));
-            throw new Error(detail.error || "Full-resolution preview unavailable (HTTP " + response.status + ").");
+            throw new Error(detail.error || "Preview unavailable (HTTP " + response.status + ").");
           }
           const data = await response.json();
           if (!Array.isArray(data.layers) || data.layers.length !== requested.length)
