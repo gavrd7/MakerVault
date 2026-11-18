@@ -112,6 +112,7 @@ class CrealityPositionedPlateTests(SimpleTestCase):
         self.assertEqual(config["filament_minimal_purge_on_wipe_tower"], ["15", "15"])
         self.assertEqual(config["filament_shrinkage_compensation_z"], ["100%", "100%"])
         self.assertEqual(config["nozzle_diameter"], ["0.4"])
+        self.assertEqual(config["filament_map"], ["1", "1"])
 
     def test_invalid_palette_fails_before_native_engine(self):
         with self.assertRaises(SlicerProfileError):
