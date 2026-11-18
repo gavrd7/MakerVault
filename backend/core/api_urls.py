@@ -2,11 +2,13 @@ from django.urls import path
 from . import printer_gcode_api
 from . import home_assistant_api
 from . import slicer_api
+from . import slicer_engine_management_api
 from . import slicer_material_preferences
 from . import api_views, printed_parts, camera_views, reusable_spools, reusable_spool_discovery, api_key_views, device_api_views, device_pairing, device_measurements, device_tag_registration, device_tag_lookup, weight_history_views, tag_ndef, device_ndef_write, device_cfs_lookup, device_makertag_operations, device_pending_work
 
 urlpatterns = [
     path("printing/slicer/engines/", slicer_api.engines, name="api-slicer-engines"),
+    path("printing/slicer/engines/operations/", slicer_engine_management_api.engine_operations, name="api-slicer-engine-operations"),
     path("printing/slicer/material-profile-preferences/", slicer_material_preferences.material_preferences, name="api-slicer-material-profile-preferences"),
     path("printing/slicer/profiles/approve/", slicer_api.approve_native_profiles, name="api-slicer-approve-native-profiles"),
     path("printing/slicer/meshes/temporary/", slicer_api.upload_temporary_mesh, name="api-slicer-temp-mesh"),
