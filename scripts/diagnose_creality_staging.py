@@ -123,10 +123,11 @@ def main(argv=None):
             os.chmod(args.output, 0o600)
             print("Creality diagnostic report: " + str(args.output))
             for case in report["test_results"]:
-                print(" - {case}: {status} (exit={exit_code}, category={validation_category})".format(
+                print(" - {case}: {status} (exit={exit_code}, category={validation_category}, reason={known_validation_reason})".format(
                     case=case["case"], status=case["status"],
                     exit_code=case.get("exit_code", "none"),
-                    validation_category=case.get("validation_category", "none")))
+                    validation_category=case.get("validation_category", "none"),
+                    known_validation_reason=case.get("known_validation_reason", "unclassified")))
             return 0 if any(x["status"] == "passed" for x in report["test_results"]) else 2
         finally:
             # Deliberately erase all private model/config copies, including on
