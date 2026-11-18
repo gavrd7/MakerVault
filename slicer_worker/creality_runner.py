@@ -71,7 +71,7 @@ def creality_command(binary: Path, workdir: Path):
     # Verified from upstream Creality Print CLI docs. They use underscores,
     # unlike the hyphenated flags in the Orca adapter.
     return [
-        str(binary), "--slice", "0", "--outputdir", str(outdir),
+        str(binary), "--cli", "--slice", "0", "--outputdir", str(outdir),
         "--load_settings", str(profiles[0]) + ";" + str(profiles[2]),
         "--load_filaments", str(profiles[1]),
         str(model),
