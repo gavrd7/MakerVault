@@ -80,8 +80,10 @@ export default function SlicerGcodePreview({ fileId = null, preview, bedSize = n
     // Overview geometry is deliberately bounded per layer on the server.
     // 700 layers at these limits fit within the appropriate browser budget,
     // rather than stopping partway through the model.
-    const overviewDetail = mobile ? 140 : 350;
     const maxMoves = mobile ? 160000 : 480000;
+    // Spread the GPU budget over *all* layers so tall prints can reach
+    // their final Z rather than exhausting memory halfway through.
+    const overviewDetail = Math.max(80, Math.min(450, Math.floor(maxMoves / layers.length)));
     let cancelled = false;
     setWholeModel({segments:[],loadedLayers:0,complete:false,limited:false,loading:true,message:""});
     const load = async () => {
