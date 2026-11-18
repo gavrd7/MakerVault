@@ -47,7 +47,8 @@ def cached_batch(index_key, heights):
         if packed is None:
             return None
         return json.loads(zlib.decompress(packed))
-    except (ValueError, TypeError, OSError, zlib.error, RuntimeError, ConnectionError):
+    except Exception:
+        # A cache outage or corrupt cached blob must not interrupt preview.
         return None
 
 
@@ -84,6 +85,7 @@ def index_overview(index_key, text, heights, detail):
             cache.set(index_key + ":batch:" + str(number), compressed, CACHE_SECONDS)
         # Written last so readers never see a half-created index.
         cache.set(index_key + ":manifest", list(heights), CACHE_SECONDS)
-    except (OSError, RuntimeError, ConnectionError):
+    except Exception:
+        # Redis availability is optional for correctness.
         return None
     return cached_batch(index_key, heights[:MAX_BATCH_LAYERS])
