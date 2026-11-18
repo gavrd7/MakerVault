@@ -249,6 +249,20 @@ def build_creality_project_candidate(plate, *, printer, process, filaments,
     if set(entries) != required:
         raise SlicerProfileError("Creality plate package has unexpected files.")
     entries["Metadata/project_settings.config"] = encoded
+    # Creality 7.3.1 checks this metadata before accepting the file as a
+    # native project. It is separate from the effective project settings.
+    from xml.etree import ElementTree as ET
+    meta = ET.Element("config")
+    for key, value in (
+        ("Company", "Creality"),
+        ("Application", "Creality_Print"),
+        ("AppVersion", version),
+        ("FileVersion", "1.0"),
+        ("FileType", "Undefined"),
+    ):
+        ET.SubElement(meta, "metadata", {"key": key, "value": value})
+    entries["Metadata/creality.config"] = ET.tostring(
+        meta, encoding="utf-8", xml_declaration=True)
     output = io.BytesIO()
     with zipfile.ZipFile(output, "w", compression=zipfile.ZIP_DEFLATED,
                          compresslevel=6, allowZip64=False) as dst:
