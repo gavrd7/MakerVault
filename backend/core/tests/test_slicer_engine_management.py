@@ -21,8 +21,26 @@ class EngineManagementAPITests(TestCase):
         response = self.client.get(self.endpoint)
         self.assertIn(response.status_code, (302, 401, 403))
         self.client.force_login(self.user)
-        self.assertEqual(self.client.get(self.endpoint).status_code, 403)
-        self.assertEqual(self.client.post(self.endpoint, data="{}", content_type="application/json").status_code, 403)
+        self.assertEqual(self.client.get(self.endpoint).status_code, 200)
+        self.assertTrue(self.client.get(self.endpoint).json()["can_manage"])
+
+    def test_team_restriction_is_optional_and_disabled_by_default(self):
+        from core.models import SlicerEngineAccessSettings
+        self.client.force_login(self.user)
+        self.assertTrue(self.client.get(self.endpoint).json()["can_manage"])
+        settings = SlicerEngineAccessSettings.objects.create(
+            restrict_engine_management_to_admins=True)
+        response = self.client.get(self.endpoint)
+        self.assertEqual(response.status_code, 200)
+        self.assertFalse(response.json()["can_manage"])
+        self.assertEqual(self.client.post(self.endpoint, data={},
+                         content_type="application/json").status_code, 403)
+        self.client.force_login(self.admin)
+        self.assertTrue(self.client.get(self.endpoint).json()["can_manage"])
+        settings.restrict_engine_management_to_admins = False
+        settings.save()
+        self.client.force_login(self.user)
+        self.assertTrue(self.client.get(self.endpoint).json()["can_manage"])
 
     def test_empty_approved_catalogue_does_not_advertise_install(self):
         self.client.force_login(self.admin)
@@ -57,7 +75,7 @@ class EngineManagementAPITests(TestCase):
                    "bundle_url": "https://example.invalid/reviewed-package.tar.gz",
                    "architecture": "linux/amd64", "notes": "Reviewed",
                    "adapter_validated": True}
-        self.client.force_login(self.admin)
+        self.client.force_login(self.user)
         with patch("core.slicer_engine_releases.APPROVED_RELEASES", (release,)):
             listing = self.client.get(self.endpoint).json()
             self.assertTrue(listing["installation_available"])
