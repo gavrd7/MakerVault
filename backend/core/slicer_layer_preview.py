@@ -49,14 +49,14 @@ def _overview_segments(segments, per_layer_limit=MAX_OVERVIEW_SEGMENTS_PER_LAYER
     return [segments[index] for index in sorted(kept)]
 
 
-def layer_batch_toolpaths(text, target_zs, *, overview=False, overview_limit=350):
+def layer_batch_toolpaths(text, target_zs, *, overview=False, overview_limit=350, max_requested_layers=MAX_BATCH_LAYERS):
     """Return actual, ordered G0/G1 extrusion segments at target Z.
 
     Coordinates use [X1,Y1,X2,Y2,Z,feature,width,logical_tool] as the existing renderer
     expects. Never subsample a layer: if the bound is exceeded, return a
     clearly flagged incomplete layer instead of a visually misleading fill.
     """
-    if not isinstance(target_zs, (list, tuple)) or not 1 <= len(target_zs) <= MAX_BATCH_LAYERS:
+    if not isinstance(target_zs, (list, tuple)) or not 1 <= len(target_zs) <= max_requested_layers:
         raise ValueError("Choose between 1 and 64 layers.")
     if (overview and (isinstance(overview_limit, bool) or not isinstance(overview_limit, int)
                      or not 80 <= overview_limit <= MAX_OVERVIEW_SEGMENTS_PER_LAYER)):
