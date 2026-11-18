@@ -50,24 +50,6 @@ def _session():
 
 def health():
     url, _token = worker_settings()
-    if creality_model_stls is not None:
-        if (engine != "crealityprint" or model_format != "stl" or
-                filament_profiles is None or not isinstance(creality_model_stls, (list, tuple))
-                or not 2 <= len(creality_model_stls) <= 12 or
-                not isinstance(creality_tool_ids, (list, tuple)) or
-                len(creality_tool_ids) != len(creality_model_stls) or
-                any(type(tool) is not int or not 1 <= tool <= len(filament_profiles)
-                    for tool in creality_tool_ids) or
-                len(set(creality_tool_ids)) < 2 or
-                any(not isinstance(item, bytes) for item in creality_model_stls) or
-                creality_model_stls[0] != model):
-            raise SlicerWorkerError("Invalid Creality native multi-STL model/tool mapping.")
-        payload["creality_model_stls"] = [
-            _encode(item, MAX_REQUEST_MODEL) for item in creality_model_stls
-        ]
-        payload["creality_tool_ids"] = list(creality_tool_ids)
-    elif creality_tool_ids is not None:
-        raise SlicerWorkerError("Creality tool IDs require multi-STL models.")
     session = _session()
     try:
         response = session.get(url + "/health", timeout=(2, 8), allow_redirects=False)
@@ -145,6 +127,24 @@ def run_remote_job(job_id, engine, version, model, printer_profile, filament_pro
         payload["filament_profiles"] = [
             _encode(profile, MAX_REQUEST_PROFILE) for profile in filament_profiles
         ]
+    if creality_model_stls is not None:
+        if (engine != "crealityprint" or model_format != "stl" or
+                filament_profiles is None or not isinstance(creality_model_stls, (list, tuple))
+                or not 2 <= len(creality_model_stls) <= 12 or
+                not isinstance(creality_tool_ids, (list, tuple)) or
+                len(creality_tool_ids) != len(creality_model_stls) or
+                any(type(tool) is not int or not 1 <= tool <= len(filament_profiles)
+                    for tool in creality_tool_ids) or
+                len(set(creality_tool_ids)) < 2 or
+                any(not isinstance(item, bytes) for item in creality_model_stls) or
+                creality_model_stls[0] != model):
+            raise SlicerWorkerError("Invalid Creality native multi-STL model/tool mapping.")
+        payload["creality_model_stls"] = [
+            _encode(item, MAX_REQUEST_MODEL) for item in creality_model_stls
+        ]
+        payload["creality_tool_ids"] = list(creality_tool_ids)
+    elif creality_tool_ids is not None:
+        raise SlicerWorkerError("Creality tool IDs require multi-STL models.")
     session = _session()
     response = None
     try:
