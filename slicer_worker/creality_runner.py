@@ -20,6 +20,7 @@ from .stl_validation import StlValidationError, validate_stl
 from .three_mf_validation import validate_worker_3mf
 from .headless_env import slicing_environment
 from .orca_runner import NETWORK_KEYS, SCRIPT_KEYS
+from .creality_material_cli import (CrealityMaterialRouteError, native_stl_material_arguments)
 
 logger = logging.getLogger(__name__)
 
@@ -115,17 +116,43 @@ def creality_command(binary: Path, workdir: Path):
     if outdir.exists() or outdir.is_symlink():
         raise WorkerError("Creality Print output directory must not exist yet.")
     _output_path(workdir)
-    # Creality's config keys are load_settings/load_filaments, but its
-    # CLI parser accepts hyphenated flag names. The 7.3.1 AppImage
-    # rejects --load_settings despite listing it in the help text.
-    # Explicitly request a G-code artifact, not just slice metadata.
-    return [
+    # Creality's config keys use underscores; its CLI flags use hyphens.
+    # Multi-STL jobs use 1-based logical filament IDs, never physical tray IDs.
+    # The 3MF path must not receive --load-filament-ids.
+    command = [
         str(binary), "--cli", "--slice", "0", "--outputdir", str(outdir),
         "--need-gcode-file",
         "--load-settings", str(profiles[0]) + ";" + str(profiles[2]),
-        "--load-filaments", str(profiles[1]),
-        str(model),
     ]
+    if (workdir / "creality-material-map.json").exists():
+        if is_project:
+            raise WorkerError("Creality multi-STL material assignments cannot use 3MF.")
+        try:
+            metadata = json.loads((workdir / "creality-material-map.json").read_text())
+            if not isinstance(metadata, dict) or set(metadata) != {"model_count", "tool_ids"}:
+                raise ValueError("Invalid material map")
+            count = metadata["model_count"]
+            if type(count) is not int or not 2 <= count <= 12:
+                raise ValueError("Invalid material map count")
+            filament_files = [workdir / ("filament-" + str(i) + ".json")
+                              for i in range(16)]
+            filament_files = [p for p in filament_files if p.exists()]
+            if not 2 <= len(filament_files) <= 16:
+                raise ValueError("Invalid filament palette count")
+            models = [workdir / ("input-" + str(i) + ".stl") for i in range(count)]
+            for native in filament_files:
+                _check_native_json(_regular_file(workdir, native.name, MAX_PROFILE_BYTES))
+            for native in models:
+                validate_stl(_regular_file(workdir, native.name, MAX_MODEL_BYTES).read_bytes())
+            material_args = native_stl_material_arguments(
+                models, filament_files, metadata["tool_ids"])
+        except (ValueError, KeyError, TypeError, CrealityMaterialRouteError,
+                UnicodeDecodeError) as exc:
+            raise WorkerError("Invalid native Creality multi-STL filament assignment.") from exc
+        command.extend(material_args)
+    else:
+        command.extend(["--load-filaments", str(profiles[1]), str(model)])
+    return command
 
 
 def run_creality(binary: Path, workdir: Path, *, timeout_seconds: int = DEFAULT_TIMEOUT_SECONDS):
