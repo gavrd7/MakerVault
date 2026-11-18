@@ -536,10 +536,14 @@ def queue_draft(job_id, user):
                     item, _read_owned_file(owned[str(item["asset_id"])],
                                            job.owner_id, MAX_INPUT, "Plate STL")
                 ) for item in plate])
-            except (KeyError, PlateCollisionError, ValueError) as exc:
+            except PlateCollisionError as exc:
                 raise SlicerExecutionError(
-                    "Build plate models overlap or cannot be checked. "
-                    "Open the draft and resolve the highlighted conflicts before slicing."
+                    "Model-envelope overlap check: " + str(exc)
+                ) from exc
+            except (KeyError, ValueError) as exc:
+                raise SlicerExecutionError(
+                    "Build plate geometry could not be checked. "
+                    "Please reopen the draft and inspect the model transforms."
                 ) from exc
         job.status = "queued"
         job.progress = 0
