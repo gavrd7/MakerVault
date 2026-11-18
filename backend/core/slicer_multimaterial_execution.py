@@ -17,10 +17,17 @@ from .slicer_native_material_palette import (
 def plan_native_multimaterial(job, *, settings=None):
     settings = (job.settings or {}) if settings is None else settings
     objects = settings.get("plate_objects") or []
-    if job.engine != "orcaslicer" or not 1 <= len(objects) <= 12:
+    if job.engine not in {"orcaslicer", "crealityprint"} or not 1 <= len(objects) <= 12:
         raise MaterialRoutingError("Multi-colour test slicing requires an Orca model.")
     if any(not isinstance(item, dict) for item in objects):
         raise MaterialRoutingError("Multi-colour models are invalid.")
+    if job.engine == "crealityprint" and any(
+        (item.get("colour_paint") or {}).get("regions") or
+        (item.get("colour_paint") or {}).get("faces")
+        for item in objects
+    ):
+        raise MaterialRoutingError(
+            "Creality Print colour painting requires native 3MF integration.")
     # Colour painting is now converted to Orca's native per-triangle
     # paint_color states by prepare_multimaterial_plate. This remains an
     # offline test; no G-code may be submitted to a printer.
@@ -88,7 +95,7 @@ def plan_native_multimaterial(job, *, settings=None):
            or profile.engine != job.engine
            or profile.engine_version != job.engine_version
            for profile in palette):
-        raise MaterialRoutingError("An assigned filament preset is incompatible with the selected Orca engine.")
+        raise MaterialRoutingError("An assigned filament preset is incompatible with the selected slicing engine.")
     # Manual worker fixture approval is not required. Resolve each candidate
     # from its owned, hash-checked source and complete parent lineage before
     # it reaches the isolated native tool palette.
@@ -105,6 +112,8 @@ def plan_native_multimaterial(job, *, settings=None):
 
 
 def prepare_job_multimaterial(job, source_models, *, bed_width, bed_depth):
+    if job.engine != "orcaslicer":
+        raise MaterialRoutingError("Orca native 3MF preparation cannot be used for Creality Print.")
     topology, bindings, profiles = plan_native_multimaterial(job)
     result = prepare_multimaterial_plate(
         source_models, bed_width=bed_width, bed_depth=bed_depth,
@@ -116,3 +125,52 @@ def prepare_job_multimaterial(job, source_models, *, bed_width, bed_depth):
     # Internal execution metadata: never a firmware-side slot mapping.
     result["tool_bindings"] = bindings
     return result
+
+
+def prepare_creality_multistl(job, source_models):
+    """Stage a two-STL Creality offline test with the existing CFS-neutral map.
+
+    Creality's multi-STL CLI arranges its own geometry. This explicitly
+    acknowledges auto-arrangement; it must not silently discard MakerVault
+    placement while presenting the result as an exact interactive plate.
+    """
+    settings = job.settings or {}
+    if job.engine != "crealityprint" or settings.get("creality_auto_arrange_offline") is not True:
+        raise MaterialRoutingError(
+            "Creality multi-STL slicing requires explicit offline auto-arrangement.")
+    if not isinstance(source_models, list) or len(source_models) != 2:
+        raise MaterialRoutingError("Creality offline material test requires exactly two STLs.")
+    objects = settings.get("plate_objects") or []
+    if len(objects) != len(source_models):
+        raise MaterialRoutingError("Creality native model list does not match the draft.")
+    for index, (item, raw) in enumerate(source_models):
+        if item != objects[index] or not isinstance(raw, bytes) or not raw:
+            raise MaterialRoutingError("Creality native STL identity is invalid.")
+        if any(item.get(key) for key in (
+            "process_overrides", "support_paint", "seam_paint",
+            "fuzzy_skin_paint", "colour_paint", "variable_layer_profile",
+        )):
+            raise MaterialRoutingError(
+                "Creality offline STL mode does not support painted or per-object overrides.")
+        if (item.get("rotation_deg", 0) != 0 or
+            item.get("rotation_xyz_deg", [0, 0]) != [0, 0] or
+            item.get("scale_percent", 100) != 100 or
+            item.get("scale_xyz_percent", [100, 100, 100]) != [100, 100, 100] or
+            item.get("z_mm", 0) != 0):
+            raise MaterialRoutingError(
+                "Creality multi-STL auto-arrangement cannot preserve transformed models.")
+    topology, bindings, profiles = plan_native_multimaterial(job)
+    from .slicer_native_resolution import resolved_native_profile
+    model_tools = [bindings[item["material_slot"]["slot_id"]] + 1
+                   for item, _raw in source_models]
+    if len(set(model_tools)) != 2:
+        raise MaterialRoutingError("Two distinct Creality logical filaments are required.")
+    palette = tuple(resolved_native_profile(profile) for profile in profiles)
+    return {
+        "model_stls": tuple(raw for _item, raw in source_models),
+        "tool_ids": tuple(model_tools),
+        "filament_profiles": palette,
+        "tool_bindings": bindings,
+        "topology": topology,
+        "expected_tools": set(tool - 1 for tool in model_tools),
+    }
