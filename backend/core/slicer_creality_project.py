@@ -65,10 +65,15 @@ def build_creality_positioned_plate(source_models, *, bed_width, bed_depth, tool
             raise SlicerProfileError("Creality positioned plate contains an empty model.")
         xs = [float(v.attrib["x"]) for v in vertices]
         ys = [float(v.attrib["y"]) for v in vertices]
+        tolerance = 0.05  # mm; match the shared plate 3MF verifier
         if (not all(math.isfinite(v) for v in xs + ys) or
-                min(xs) < -1e-5 or max(xs) > bed_width + 1e-5 or
-                min(ys) < -1e-5 or max(ys) > bed_depth + 1e-5):
-            raise SlicerProfileError("Creality positioned model exceeds the printable bed.")
+                min(xs) < -tolerance or max(xs) > bed_width + tolerance or
+                min(ys) < -tolerance or max(ys) > bed_depth + tolerance):
+            raise SlicerProfileError(
+                "Creality model %d extends beyond the native %.1f × %.1f mm plate "
+                "(X %.2f–%.2f, Y %.2f–%.2f mm)."
+                % (index, bed_width, bed_depth,
+                   min(xs), max(xs), min(ys), max(ys)))
     return data
 
 
