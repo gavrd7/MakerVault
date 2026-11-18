@@ -423,6 +423,29 @@ class NativePlateAdmissionTests(SimpleTestCase):
             self.assertTrue(_validate_plate_execution(job))
             inspect.assert_not_called()
 
+    def test_plain_creality_single_stl_reaches_native_worker(self):
+        from types import SimpleNamespace
+        plate = [{"asset_id": "model", "x_mm": 0, "y_mm": 0,
+                  "rotation_deg": 0, "scale_percent": 100}]
+        job = SimpleNamespace(settings={"plate_objects": plate},
+                              engine="crealityprint", printer_profile_id="printer",
+                              printer_profile=SimpleNamespace())
+        with patch("core.slicer_execution.trusted_plate_dimensions",
+                   side_effect=ValueError("Not needed")) as dimensions:
+            self.assertTrue(_validate_plate_execution(job))
+            dimensions.assert_not_called()
+
+    def test_creality_per_object_process_overrides_stay_blocked(self):
+        from types import SimpleNamespace
+        plate = [{"asset_id": "model", "x_mm": 0, "y_mm": 0,
+                  "rotation_deg": 0, "scale_percent": 100,
+                  "process_overrides": {"wall_loops": 4}}]
+        job = SimpleNamespace(settings={"plate_objects": plate},
+                              engine="crealityprint", printer_profile_id="printer",
+                              printer_profile=SimpleNamespace())
+        with self.assertRaisesRegex(SlicerExecutionError, "Per-object process overrides"):
+            _validate_plate_execution(job)
+
     def test_edited_3mf_still_requires_native_bed(self):
         from types import SimpleNamespace
         plate = [{"asset_id": "model", "x_mm": 2, "y_mm": 0,
