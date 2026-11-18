@@ -44,6 +44,32 @@ class CrealityCommandTests(TestCase):
         with self.assertRaises(WorkerError):
             creality_command(self.binary, self.root)
 
+    def test_network_preferences_removed_only_from_temporary_creality_profile(self):
+        path = self.root / "printer.json"
+        original = {
+            "name": "K2", "print_host": "192.0.2.5",
+            "printhost_apikey": "not-a-real-token",
+            "machine_start_gcode": "G28",
+        }
+        path.write_text(json.dumps(original))
+        cmd = creality_command(self.binary, self.root)
+        cleaned = json.loads(path.read_text())
+        self.assertNotIn("print_host", cleaned)
+        self.assertNotIn("printhost_apikey", cleaned)
+        self.assertEqual(cleaned["machine_start_gcode"], "G28")
+        self.assertIn("--cli", cmd)
+        # The initial source payload remains unchanged in memory.
+        self.assertEqual(original["print_host"], "192.0.2.5")
+
+    def test_post_processing_commands_still_rejected(self):
+        path = self.root / "printer.json"
+        path.write_text(json.dumps({
+            "print_host": "192.0.2.5",
+            "post_process_scripts": ["touch /tmp/unsafe"],
+        }))
+        with self.assertRaisesRegex(WorkerError, "blocked post-processing"):
+            creality_command(self.binary, self.root)
+
     def test_real_output_required_before_declaring_success(self):
         class FakeProcess:
             pid = 123
