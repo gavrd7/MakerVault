@@ -53,6 +53,24 @@ export default function SlicerEngineManager({engines = [], onChanged}) {
     finally{setBusy(false);}
   };
 
+  const rollbackLast=async()=>{
+    if(!canManage || busy || operation || !state?.rollback_available)return;
+    if(!window.confirm("Restore the previous slicer engine selection? Installed files and G-code will not be deleted."))return;
+    setBusy(true);setError("");setNotice("");
+    try{
+      await apiFetch("/api/printing/slicer/engines/operations/",{
+        method:"POST",body:{
+          engine:"crealityprint",version:"previous",action:"rollback",
+          release_sha256:"0".repeat(64),
+        },
+      });
+      setNotice("Restoring the previous engine selection.");
+      await refresh();
+      onChanged?.();
+    }catch(e){setError(e.message);}
+    finally{setBusy(false);}
+  };
+
   return <section className="slicerEngineManager" aria-label="Engine installations and updates">
     <div className="slicerEngineManagerHeading">
       <div>
@@ -107,6 +125,8 @@ export default function SlicerEngineManager({engines = [], onChanged}) {
           {item.engine} {item.version} · {item.action} · {item.status}
         </li>)}</ul>
       </details>}
+      {state?.rollback_available && <button type="button" disabled={!canManage || !!operation || busy}
+        onClick={rollbackLast}>Restore previous engine version</button>}
       <small>Updates do not start printer jobs. Existing installations remain available while an update is prepared.</small>
     </div>
   </section>;
