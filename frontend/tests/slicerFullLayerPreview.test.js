@@ -67,7 +67,7 @@ test("whole-print layer scrubbing changes a GPU clipping plane rather than geome
   assert.match(toolpath, /view\.layerClipPlane\.constant =/);
   assert.match(toolpath, /const geometryLayer = progressiveMode \? layers\.length-1 : activeLayer/);
   assert.match(toolpath, /const geometryStep = progressiveMode \? -1 : activeStep/);
-  assert.match(toolpath, /clippingPlanes: \[view\.layerClipPlane\]/);
+  assert.match(toolpath, /clippingPlanes:\s*\[view\.layerClipPlane\]/);
   const geometryEffect = toolpath.slice(toolpath.indexOf("const geometryLayer = progressiveMode"));
   assert.match(geometryEffect, /\[segments, layers, geometryLayer, geometryStep,/);
   assert.doesNotMatch(geometryEffect, /\[segments, layers, activeLayer, activeStep,/);
