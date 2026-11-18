@@ -78,7 +78,6 @@ export default function SlicerGcodePreview({ fileId = null, preview, bedSize = n
   useEffect(() => {
     if (!fileId || !layers.length) return undefined;
     const controller = new AbortController();
-    const mobile = typeof window !== "undefined" && window.matchMedia?.("(max-width: 700px)").matches;
     // Retain complete geometry in independent GPU upload batches. The old
     // 700k mobile cutoff silently stopped tall prints halfway through.
     // Streaming batches avoid repeatedly copying the entire model in JS.
