@@ -391,7 +391,7 @@ export default function SlicerGcodePreview({ fileId = null, preview, bedSize = n
         </small>}
       </div>
       {wholeModel.complete && <small className="slicerPreviewAccuracyNote">
-        Surface overview prioritises shells and supports for performance. Select a layer to inspect every original extrusion move.
+        Surface overview balances walls, skins, interiors, supports and prime tower within a preview budget. Select a layer to inspect the exact extrusion paths.
       </small>}
       {showLayerInsert && canEdit && fileId && file && <GcodeLayerInsert
         key={String(currentLayer) + ":" + String(fileId)}
