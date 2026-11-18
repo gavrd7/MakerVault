@@ -102,6 +102,7 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
   const awaitingSlicePreviewRef = useRef(null);
   const [customBed, setCustomBed] = useState({ enabled: false, x: "220", y: "220" });
   const [flushSettings, setFlushSettings] = useState(null);
+  const [crealityAutoArrangeTest,setCrealityAutoArrangeTest] = useState(false);
   const [slotFilamentProfiles,setSlotFilamentProfiles] = useState([]);
   const [profileLineages, setProfileLineages] = useState({});
   const [workerConfigured, setWorkerConfigured] = useState(false);
@@ -772,6 +773,17 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
     const sliceNow = !["draft","project","export-project","native-material"].includes(mode);
     const offlineMultiMaterial = sliceNow && mode !== "all" &&
       plateNeedsMultiMaterial(plateObjects);
+    const crealityMaterialTest = offlineMultiMaterial && form.engine==="crealityprint";
+    if (crealityMaterialTest && !crealityAutoArrangeTest) {
+      setError("Creality Print needs explicit agreement to auto-arrange two STL models for offline multi-filament testing.");
+      return;
+    }
+    if (crealityMaterialTest && (plateObjects.length!==2 || flushSettings || primeTower ||
+        plateObjects.some(item=>item.colour_paint?.regions?.length ||
+          Object.keys(item.colour_paint?.faces||{}).length))) {
+      setError("Creality's offline two-STL test needs exactly two unpainted models without custom flushing or prime-tower positions.");
+      return;
+    }
     const saveOutput = mode === "save-and-slice";
     const workflow = mode === "quick" ? "quick" : mode === "draft" && !editorOpen ? "setup" : "interactive";
     setError(""); setNotice("");
@@ -884,6 +896,7 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
             ...(primeTower?{prime_tower:primeTower}:{}),
             save_gcode_to_library: saveOutput, workflow,
             ...(offlineMultiMaterial ? {multi_material_test:true} : {}),
+            ...(crealityMaterialTest ? {creality_auto_arrange_offline:true} : {}),
             ...(flushSettings ? { flush_settings: flushSettings } : {}),
             ...(slotFilamentProfiles.length ? {slot_filament_profiles:slotFilamentProfiles} : {}),
             ...(form.engine === "orcaslicer" ? { process_overrides: processOverrides } : {}) },
@@ -1489,6 +1502,7 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
               manuallyChosenProfiles.current.clear();
               userChosePlateRef.current=false;
               setFlushSettings(null);
+              setCrealityAutoArrangeTest(false);
               setSlotFilamentProfiles([]);
               setForm(current => ({
                 ...current, engine: key,
@@ -1499,6 +1513,14 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
             }} />
           <button type="button" className="slicerEngineManageLink"
             onClick={() => setProfileModal("engines")}>View engine installations</button>
+          {form.engine==="crealityprint" && plateObjects.length===2 &&
+            plateNeedsMultiMaterial(plateObjects) && <label className="slicerPlateHint">
+              <input type="checkbox" checked={crealityAutoArrangeTest}
+                onChange={event=>setCrealityAutoArrangeTest(event.target.checked)}
+                disabled={busy || loading || !canPrepare}/>
+              Allow Creality Print to auto-arrange these two STL models for an offline multi-filament test.
+              The resulting G-code is for inspection, not printer submission.
+            </label>}
         </div>
         <p className="full slicerEngineStatus" role="status">
           {engines.find(engine => engine.key === form.engine)?.available
