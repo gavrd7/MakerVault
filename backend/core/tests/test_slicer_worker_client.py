@@ -37,7 +37,7 @@ class SlicerWorkerClientTests(SimpleTestCase):
             run_remote_job(uuid.uuid4(), "crealityprint", "7.3.1",
                            b"model", b"printer", b"filament", b"process")
         message = str(caught.exception)
-        self.assertIn("exit code 205 (CLI_VALIDATE_ERROR (-51))", message)
+        self.assertIn("exit 205 (CLI_VALIDATE_ERROR (-51))", message)
         self.assertIn("embedded project configuration", message)
         self.assertNotIn("NEVER_DISPLAY", message)
         self.assertNotIn("/private", message)
@@ -59,7 +59,7 @@ class SlicerWorkerClientTests(SimpleTestCase):
         with self.assertRaises(SlicerWorkerError) as caught:
             run_remote_job(uuid.uuid4(), "crealityprint", "7.3.1",
                            b"model", b"printer", b"filament", b"process")
-        self.assertIn("exit code 201 (native CLI failure)", str(caught.exception))
+        self.assertIn("exit 201 (native CLI failure)", str(caught.exception))
 
     @patch("core.slicer_worker_client._session")
     @patch("core.slicer_worker_client.worker_settings",
