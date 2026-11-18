@@ -109,6 +109,30 @@ class CrealityCommandTests(TestCase):
             ):
                 run_creality(self.binary, self.root)
 
+    def test_linux_205_includes_native_validation_code_without_raw_output(self):
+        class FakeProcess:
+            pid = 123
+            returncode = 205
+            def communicate(self, timeout=None):
+                return None, None
+        with patch("slicer_worker.creality_runner.subprocess.Popen",
+                   return_value=FakeProcess()):
+            with self.assertRaisesRegex(WorkerError, "native 3MF slicing parameters") as result:
+                run_creality(self.binary, self.root)
+        self.assertEqual(result.exception.cli_exit_code, 205)
+
+    def test_other_exit_codes_preserve_numeric_status(self):
+        class FakeProcess:
+            pid = 123
+            returncode = 201
+            def communicate(self, timeout=None):
+                return None, None
+        with patch("slicer_worker.creality_runner.subprocess.Popen",
+                   return_value=FakeProcess()):
+            with self.assertRaises(WorkerError) as result:
+                run_creality(self.binary, self.root)
+        self.assertEqual(result.exception.cli_exit_code, 201)
+
     def test_native_creality_3mf_uses_no_external_profiles_or_stl_arrangement(self):
         (self.root / "input.stl").unlink()
         (self.root / "input.3mf").write_bytes(b"bounded test archive")
