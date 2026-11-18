@@ -4,6 +4,32 @@ import {SlicerEngineLogo} from "./SlicerEngineChoices";
 
 const TERMINAL = new Set(["completed", "failed", "cancelled"]);
 
+function EngineReleasePicker({engine, releases, installed, disabled, onRequest}) {
+  const [selectedDigest, setSelectedDigest] = useState("");
+  const selected = releases.find(release => release.bundle_sha256 === selectedDigest) || releases[0];
+  if (!selected) return <small>{installed
+    ? "Already installed — no newer version available."
+    : "Installation package not yet available."}</small>;
+  const isCurrent = installed && engine.installed_version === selected.version;
+  return <div className="slicerEngineManagerRelease" style={{display:"flex",alignItems:"center",gap:"0.75rem",flexWrap:"wrap"}}>
+    <label style={{display:"flex",alignItems:"center",gap:"0.5rem",flex:"1 1 11rem",minWidth:0}}>
+      <span>Version</span>
+      <select aria-label={engine.label+" version"} value={selected.bundle_sha256}
+        onChange={event=>setSelectedDigest(event.target.value)}
+        disabled={disabled} style={{minWidth:0,width:"100%",maxWidth:"100%"}}>
+        {releases.map(release=><option key={release.version+"-"+release.bundle_sha256}
+          value={release.bundle_sha256}>
+          {release.version}{engine.installed_version === release.version ? " (installed)" : ""}
+        </option>)}
+      </select>
+    </label>
+    <button type="button" disabled={disabled || isCurrent}
+      onClick={()=>onRequest(selected,installed?"update":"install")}>
+      {isCurrent?"Installed":installed?"Update":"Install"}
+    </button>
+  </div>;
+}
+
 export default function SlicerEngineManager({engines = [], onChanged}) {
   const [state,setState] = useState(null);
   const [busy,setBusy] = useState(false);
@@ -110,17 +136,9 @@ export default function SlicerEngineManager({engines = [], onChanged}) {
             <strong>{matching.status} · {matching.progress}%</strong>
             <small>{matching.message}</small>
           </div>}
-          {approved.length>0 ? approved.map(release=><div key={release.version+"-"+release.bundle_sha256}
-            className="slicerEngineManagerRelease">
-            <div><strong>Version {release.version}</strong>
-              <small>{release.architecture} · {release.notes||"Reviewed release"}</small>
-            </div>
-            <button type="button" disabled={busy || !!operation || !state?.installation_available ||
-              engine.installed_version===release.version || !canManage}
-              onClick={()=>request(release,installed?"update":"install")}>
-              {installed?"Update":"Install"}
-            </button>
-          </div>) : <small>{installed ? "Already installed — no newer version available." : "Installation package not yet available."}</small>}
+          <EngineReleasePicker engine={engine} releases={approved} installed={installed}
+            disabled={busy || !!operation || !state?.installation_available || !canManage}
+            onRequest={request}/>
         </article>;
       })}
     </div>
