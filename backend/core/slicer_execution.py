@@ -926,6 +926,8 @@ def process_queued_job(job_id):
                     if diagnostic and stage == "checking native printer/process compatibility"
                     else ("Variable layer test failed: " + diagnostic)
                     if diagnostic and stage == "auditing native variable layer height"
+                    else ("Creality multi-material bounds check: " + diagnostic)
+                    if diagnostic and stage == "checking Creality multi-material extrusion bounds"
                     else "Slicing failed during " + stage +
                     ". Check MakerVault application logs for this job."
                 )[:240]
