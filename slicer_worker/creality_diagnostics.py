@@ -23,6 +23,8 @@ from .creality_project_validation import validate_creality_project
 from .engine_registry import configured_engines
 from .runner import WorkerError
 from .headless_env import slicing_environment
+from .creality_single_control import single_material_control
+from .creality_reference_diagnostics import compare_projects
 
 MAX_PROJECT = 32 * 1024 * 1024
 MAX_CAPTURE = 256 * 1024
@@ -204,20 +206,21 @@ def run_matrix(project_path, *, reference_path=None, timeout_seconds=120):
         "warning": "Diagnosis only; no G-code is approved for printing.",
     }
     if reference_path is not None:
-        # A genuine Creality project may have richer archive members than our
-        # strict worker 3MF, so inspect the settings only; never execute it.
+        # Never execute third-party reference 3MFs. Only inspect bounded
+        # archive structure and public option key names/types.
         p = Path(reference_path)
         if p.is_symlink() or not p.is_file() or not 0 < p.stat().st_size <= MAX_PROJECT:
             raise ValueError("Reference 3MF must be a bounded regular file.")
-        with zipfile.ZipFile(p) as z:
-            ref = json.loads(z.read(SETTINGS))
-        report["reference"] = {
-            "missing_setting_keys": sorted(set(ref) - set(config))[:120],
-            "extra_setting_keys": sorted(set(config) - set(ref))[:120],
-            "different_value_types": sorted(
-                key for key in ref.keys() & config.keys()
-                if type(ref[key]) is not type(config[key]))[:120],
-        }
+        report["reference"] = compare_projects(project, p.read_bytes())
+    # True single-material control reduces object count and active palette.
+    single = single_material_control(project)
+    outcome = _engine_run(engine["binary"], single, timeout_seconds)
+    report["test_results"].append({
+        "case": "single-model-single-material",
+        "description": "One original model, one native filament, tower disabled",
+        "configuration_sha256": hashlib.sha256(single).hexdigest(),
+        **outcome,
+    })
     for name, edits, description in _cases(config):
         variant = copy.deepcopy(config)
         if edits:
