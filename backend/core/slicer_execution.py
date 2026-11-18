@@ -399,7 +399,7 @@ def _validate_plate_execution(job):
             if len(objects) != 2:
                 raise SlicerExecutionError(
                     "Creality project slicing requires exactly two assigned models.")
-            if settings.get("flush_settings") is not None or settings.get("prime_tower") is not None:
+            if settings.get("flush_settings") is not None:
                 raise SlicerExecutionError(
                     "Creality's offline multi-STL test cannot preserve custom flushing or prime tower positions.")
             if any((item.get("colour_paint") or {}).get("regions") or
@@ -411,7 +411,7 @@ def _validate_plate_execution(job):
                    item.get("process_overrides")
                    for item in objects):
                 raise SlicerExecutionError(
-                    "Creality native multi-STL testing cannot include painting or per-object overrides.")
+                    "Creality native project slicing does not yet include painting or per-object overrides.")
         elif settings.get("creality_auto_arrange_offline"):
             raise SlicerExecutionError("Creality auto-arrangement is incompatible with this engine.")
         # This permits *offline G-code generation* only. Uploaded or started
@@ -455,7 +455,7 @@ def _validate_plate_execution(job):
             if len(objects) != 2:
                 raise SlicerExecutionError(
                     "Creality Print project slicing requires two assigned models.")
-            if settings.get("flush_settings") is not None or settings.get("prime_tower") is not None:
+            if settings.get("flush_settings") is not None:
                 raise SlicerExecutionError(
                     "Creality Print's offline multi-STL test cannot preserve custom "
                     "flush settings or prime tower positions.")
