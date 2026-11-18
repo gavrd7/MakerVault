@@ -109,6 +109,35 @@ class CrealityCommandTests(TestCase):
             ):
                 run_creality(self.binary, self.root)
 
+    def test_two_filament_multi_stl_cli_arguments(self):
+        for i in range(2):
+            (self.root / f"input-{i}.stl").write_bytes(one_triangle_stl())
+            (self.root / f"filament-{i}.json").write_text(
+                json.dumps({"name": f"filament-{i}"}))
+        (self.root / "creality-material-map.json").write_text(json.dumps({
+            "model_count": 2, "filament_count": 2, "tool_ids": [2, 1],
+        }))
+        command = creality_command(self.binary, self.root)
+        self.assertEqual(command[command.index("--load-filament-ids") + 1], "2,1")
+        self.assertEqual(
+            command[command.index("--load-filaments") + 1],
+            str(self.root / "filament-0.json") + ";" +
+            str(self.root / "filament-1.json"))
+        self.assertEqual(command[-2:], [
+            str(self.root / "input-0.stl"), str(self.root / "input-1.stl")])
+
+    def test_missing_multi_stl_or_filament_is_rejected(self):
+        for i in range(2):
+            (self.root / f"input-{i}.stl").write_bytes(one_triangle_stl())
+            (self.root / f"filament-{i}.json").write_text(
+                json.dumps({"name": f"filament-{i}"}))
+        (self.root / "creality-material-map.json").write_text(json.dumps({
+            "model_count": 2, "filament_count": 2, "tool_ids": [1, 2],
+        }))
+        (self.root / "filament-1.json").unlink()
+        with self.assertRaises(WorkerError):
+            creality_command(self.binary, self.root)
+
     def test_real_output_required_before_declaring_success(self):
         class FakeProcess:
             pid = 123
