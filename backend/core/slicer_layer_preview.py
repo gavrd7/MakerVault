@@ -11,7 +11,7 @@ from collections import Counter
 
 from .slicer_preview import MOVE, TYPE, WIDTH, ARC_PARAM
 from .slicer_preview_arcs import arc_points
-from .slicer_preview_features import overview_priority, is_prime_tower_feature
+from .slicer_preview_features import overview_priority, is_prime_tower_feature, is_support_feature
 
 MAX_LAYER_SOURCE_BYTES = 32 * 1024 * 1024
 MAX_LAYER_SEGMENTS = 75000
@@ -21,18 +21,24 @@ MAX_OVERVIEW_SEGMENTS_PER_LAYER = 450
 
 
 def _overview_segments(segments, per_layer_limit=MAX_OVERVIEW_SEGMENTS_PER_LAYER):
-    """Reduce precomputed overview data while retaining the prime tower.
+    """Bound a prepared overview, reserving surface paths for towers/supports.
 
-    This is used to derive the mobile preview from the prepared desktop
-    cache, so it must honour exactly the same tower reservation as the parser.
+    Never infer or fabricate geometry: all retained segments originate in
+    the native G-code. This also drives the lighter mobile cache variant.
     """
     if len(segments) <= per_layer_limit:
         return segments
-    tower = [index for index, segment in enumerate(segments)
-             if is_prime_tower_feature(segment[5])]
-    general = [index for index, segment in enumerate(segments)
-               if not is_prime_tower_feature(segment[5])]
-    tower_quota = min(len(tower), max(24, per_layer_limit // 3))
+    tower = []
+    supports = []
+    model = []
+    for index, segment in enumerate(segments):
+        if is_prime_tower_feature(segment[5]):
+            tower.append(index)
+        elif is_support_feature(segment[5]):
+            supports.append(index)
+        else:
+            model.append(index)
+
     def spaced(indices, count):
         if count <= 0:
             return []
@@ -40,18 +46,25 @@ def _overview_segments(segments, per_layer_limit=MAX_OVERVIEW_SEGMENTS_PER_LAYER
             return indices
         return [indices[min(len(indices)-1, (i*len(indices))//count)]
                 for i in range(count)]
-    tower_selected = spaced(tower, tower_quota)
-    remaining = per_layer_limit-len(tower_selected)
-    by_priority = {}
-    for index in general:
+
+    tower_selected=spaced(tower, min(len(tower), max(24, per_layer_limit//3)))
+    support_selected=spaced(supports, min(len(supports), max(16, per_layer_limit//5)))
+    capacity=per_layer_limit-len(tower_selected)-len(support_selected)
+    by_priority={}
+    for index in model:
         by_priority.setdefault(overview_priority(segments[index][5]), []).append(index)
-    selected = list(tower_selected)
+    selected=tower_selected+support_selected
     for priority in sorted(by_priority):
-        if remaining <= 0:
+        if capacity <= 0:
             break
-        chosen = spaced(by_priority[priority], remaining)
+        chosen=spaced(by_priority[priority], capacity)
         selected.extend(chosen)
-        remaining -= len(chosen)
+        capacity-=len(chosen)
+    # Return unused model capacity to support and tower paths if necessary.
+    if capacity:
+        seen=set(selected)
+        remaining=[i for i in supports+tower if i not in seen]
+        selected.extend(spaced(remaining, capacity))
     return [segments[index] for index in sorted(selected)]
 
 
@@ -79,7 +92,7 @@ def layer_batch_toolpaths(text, target_zs, *, overview=False, overview_limit=350
     selected = set(targets)
     by_height = {height: {"z": height, "segments": [], "segment_count": 0,
                          "feature_counts": Counter(), "captured_count": 0,
-                         **({"overview_heap": [], "tower_heap": []} if overview else {})}
+                         **({"overview_heap": [], "tower_heap": [], "support_heap": []} if overview else {})}
                  for height in targets}
     absolute_xyz = True
     absolute_e = True
@@ -161,13 +174,18 @@ def layer_batch_toolpaths(text, target_zs, *, overview=False, overview_limit=350
                             # Python merely to throw most of it away afterwards.
                             sequence = layer["segment_count"]
                             tower_move = is_prime_tower_feature(role)
+                            support_move = is_support_feature(role)
                             priority = overview_priority(role)
                             spread = ((sequence * 2654435761) & 0xffffffff)
                             rank = (-priority, spread, sequence)
-                            # Dedicated tower quota: shell/support moves must
-                            # never displace every prime-tower extrusion.
-                            heap = layer["tower_heap"] if tower_move else layer["overview_heap"]
-                            quota = max(24, overview_limit // 3) if tower_move else overview_limit
+                            # Retain geometry for distinct physical structures
+                            # even on layers dominated by outer-wall moves.
+                            heap = (layer["tower_heap"] if tower_move
+                                    else layer["support_heap"] if support_move
+                                    else layer["overview_heap"])
+                            quota = (max(24, overview_limit // 3) if tower_move
+                                     else max(16, overview_limit // 5) if support_move
+                                     else overview_limit)
                             if len(heap) < quota or rank > heap[0][:3]:
                                 segment = [round(px,3), round(py,3),
                                            round(ax,3), round(ay,3),
@@ -193,11 +211,10 @@ def layer_batch_toolpaths(text, target_zs, *, overview=False, overview_limit=350
         if overview:
             general=layer.pop("overview_heap")
             tower=layer.pop("tower_heap")
-            # Reserve space for observed tower geometry; unused tower capacity
-            # goes straight back to the model. All original layer Z values stay.
-            keep_general = max(0, overview_limit-len(tower))
-            best_general = heapq.nlargest(keep_general, general) if keep_general else []
-            selected = best_general + tower
+            supports=layer.pop("support_heap")
+            keep_general=max(0, overview_limit-len(tower)-len(supports))
+            best_general=heapq.nlargest(keep_general, general) if keep_general else []
+            selected=best_general+tower+supports
             layer["segments"] = [entry[3] for entry in sorted(selected, key=lambda row: row[2])]
             layer["overview_reduced"] = len(layer["segments"]) < original
         layer["feature_counts"] = dict(layer["feature_counts"])
