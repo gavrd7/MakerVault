@@ -39,6 +39,8 @@ test("progressive surface overview reports incomplete loads separately from exac
 test("progressive large prints append surface geometry without polluting exact-layer cache", () => {
   assert.match(preview, /offset \+= 64/);
   assert.match(preview, /overview=1&detail=/);
+  assert.match(preview, /Math\.floor\(maxMoves \/ layers\.length\)/);
+  assert.match(preview, /Math\.max\(80, Math\.min\(450,/);
   assert.doesNotMatch(preview, /fullLayerCache\.current\.set\(key,item\)/);
   assert.match(preview, /progressiveMode=\{progressiveMode\}/);
   assert.match(preview, /return wholeModel\.segments/);
