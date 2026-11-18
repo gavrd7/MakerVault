@@ -28,12 +28,13 @@ class CrealityCommandTests(TestCase):
         for kind in ("printer", "filament", "process"):
             (self.root / (kind + ".json")).write_text(json.dumps({"name": kind}))
 
-    def test_uses_creality_native_flags_not_orca_flags(self):
+    def test_uses_creality_731_accepted_cli_flags(self):
         cmd = creality_command(self.binary, self.root)
-        self.assertIn("--load_settings", cmd)
-        self.assertIn("--load_filaments", cmd)
-        self.assertNotIn("--load-settings", cmd)
-        self.assertNotIn("--load-filaments", cmd)
+        self.assertIn("--load-settings", cmd)
+        self.assertIn("--load-filaments", cmd)
+        self.assertIn("--need-gcode-file", cmd)
+        self.assertNotIn("--load_settings", cmd)
+        self.assertNotIn("--load_filaments", cmd)
         self.assertEqual(cmd[-1], str(self.root / "input.stl"))
 
     def test_unsafe_profile_and_inherited_parent_rejected(self):
