@@ -14,7 +14,7 @@ export default function SlicerEngineManager({engines = [], onChanged}) {
     try {
       const result=await apiFetch("/api/printing/slicer/engines/operations/");
       setState(result);setError("");
-      if ((result.operations || []).some(row => TERMINAL.has(row.status))) setNotice("");
+      if (TERMINAL.has(result.operations?.[0]?.status)) setNotice("");
     } catch(e){setError(e.message);}
   },[]);
   useEffect(()=>{
