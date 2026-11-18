@@ -294,6 +294,7 @@ export default function SlicerToolpath3D({
     const activeZ = progressiveMode ? Infinity : layers[geometryLayer];
     const positions = [];
     const coloursArray = [];
+    const featureShadeCache = new Map();
     let currentCount = 0;
     let lastStep = null;
     const selectedZ = Number.isFinite(activeZ) ? activeZ : Infinity;
@@ -305,7 +306,9 @@ export default function SlicerToolpath3D({
     for (let segmentIndex=startSegment;segmentIndex<segments.length;segmentIndex++) {
       const segment=segments[segmentIndex];
       if (!Array.isArray(segment) || segment.length < 6 ||
-          !segment.slice(0, 5).every(Number.isFinite)) continue;
+          !Number.isFinite(segment[0]) || !Number.isFinite(segment[1]) ||
+          !Number.isFinite(segment[2]) || !Number.isFinite(segment[3]) ||
+          !Number.isFinite(segment[4])) continue;
       const [x1, y1, x2, y2, z, feature] = segment;
       if (z > selectedZ + 0.0005) continue;
       const segmentLayerIndex = layerIndexByHeight.get(Number(z).toFixed(3));
@@ -321,9 +324,13 @@ export default function SlicerToolpath3D({
       // Skip internal segments entirely when comparing outer perimeters.
       if (outerContrast && featureFamily(feature) !== "outer") continue;
       const logicalTool = segment[7];
-      const declaredColour=Number.isInteger(logicalTool) ? filamentColours[logicalTool] : null;
-      const hasDeclaredColour=typeof declaredColour==="string" && /^#[0-9a-f]{6}$/i.test(declaredColour);
-      const hex = colourMode === "filament"
+      const shadeKey = colourMode + "|" + feature + "|" + String(logicalTool??-1) +
+        "|" + (colourMode==="layer"?segmentLayerIndex:0) + "|" + (isCurrent?1:0);
+      let hex=featureShadeCache.get(shadeKey);
+      if(!hex) {
+        const declaredColour=Number.isInteger(logicalTool) ? filamentColours[logicalTool] : null;
+        const hasDeclaredColour=typeof declaredColour==="string" && /^#[0-9a-f]{6}$/i.test(declaredColour);
+        hex = colourMode === "filament"
         ? (hasDeclaredColour ? new THREE.Color(declaredColour)
           : Number.isInteger(logicalTool) && logicalTool >= 0 && logicalTool < 16
           ? new THREE.Color().setHSL((0.06 + logicalTool * 0.618034) % 1, 0.76, 0.61)
@@ -348,6 +355,8 @@ export default function SlicerToolpath3D({
           : fadePrevious ? 0.38
           : previewSampled ? 0.82 : 1;
         hex.multiplyScalar(factor);
+      }
+        featureShadeCache.set(shadeKey,hex);
       }
       if (renderMode === "lines") {
         positions.push(x1, z, y1, x2, z, y2);
