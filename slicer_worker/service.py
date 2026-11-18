@@ -298,6 +298,7 @@ class Handler(BaseHTTPRequestHandler):
                 "Creality Print CLI could not load a native preset.": "creality-native-preset-invalid",
                 "Creality Print rejected its embedded 3MF project configuration.": "creality-native-project-invalid",
                 "Creality Print rejected the 3MF project file version.": "creality-project-version-unsupported",
+                "Creality Print rejected native 3MF slicing parameters during validation.": "creality-cli-validation-error",
                 "Creality Print produced no safe output directory.": "creality-no-output-directory",
                 "Creality Print did not produce exactly one supported G-code artifact.": "creality-unexpected-output-layout",
                 "Creality Print G-code output is empty or oversized.": "creality-missing-gcode",
@@ -427,6 +428,13 @@ class Handler(BaseHTTPRequestHandler):
                 "error": "Slicing input or output was rejected.",
                 "stage": stage, "reason": reason,
             }
+            # Safe machine-readable status only; never return raw engine logs,
+            # CLI arguments, local paths, profile content or credentials.
+            cli_exit_code = getattr(exc, "cli_exit_code", None)
+            if (stage == "running slicer engine"
+                    and type(cli_exit_code) is int and 1 <= cli_exit_code <= 255
+                    and reason.startswith("creality-")):
+                response["cli_exit_code"] = cli_exit_code
             if reason == "native-project-settings-invalid":
                 keys = getattr(exc, "option_keys", ())
                 if isinstance(keys, (list, tuple)):
