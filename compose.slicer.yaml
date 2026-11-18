@@ -67,7 +67,10 @@ services:
 
   slicer-engine-installer:
     profiles: ["engine-installer"]
-    image: ${MAKERVAULT_SLICER_INSTALLER_IMAGE:-ghcr.io/gavrd7/makervault-slicer-orca:latest}
+    image: makervault-engine-installer:local
+    build:
+      context: .
+      dockerfile: slicer_worker/Dockerfile.generic
     command: ["python3", "-m", "slicer_worker.engine_installer_service"]
     restart: unless-stopped
     depends_on:
