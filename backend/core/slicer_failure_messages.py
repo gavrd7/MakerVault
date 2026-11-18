@@ -36,6 +36,7 @@ REASONS = {
     "creality-native-preset-invalid": ("Creality Print could not load a native printer, filament or process preset."),
     "creality-native-project-invalid": ("Creality Print rejected the embedded native 3MF printer, filament or process configuration. The saved model positions were not changed; this requires correction of the Creality project adapter."),
     "creality-project-version-unsupported": ("Creality Print rejected the 3MF generator file version (native CLI -24). This is a MakerVault project metadata compatibility issue, not evidence that the selected filament presets are wrong."),
+    "creality-cli-validation-error": ("Creality Print rejected the native 3MF slicing parameters during validation. This points to the embedded project configuration, not necessarily the selected filament profiles. The exit code does not identify the individual offending setting."),
     "creality-cli-exited": (
         "Creality Print started but exited before completing the slice. The exit status alone cannot identify whether the cause is a runtime problem, CLI option or native preset. Check the worker diagnostics."
     ),
