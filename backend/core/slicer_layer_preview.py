@@ -21,34 +21,38 @@ MAX_OVERVIEW_SEGMENTS_PER_LAYER = 450
 
 
 def _overview_segments(segments, per_layer_limit=MAX_OVERVIEW_SEGMENTS_PER_LAYER):
-    """Bound the 3D overview by feature while preserving original move geometry.
+    """Reduce precomputed overview data while retaining the prime tower.
 
-    Prioritise visible shells, interfaces and supports. Never claim the
-    reduced overview is an exact toolpath; exact-layer inspection is separate.
+    This is used to derive the mobile preview from the prepared desktop
+    cache, so it must honour exactly the same tower reservation as the parser.
     """
-    from .slicer_preview_features import overview_priority
     if len(segments) <= per_layer_limit:
         return segments
-    groups = {}
-    for index, segment in enumerate(segments):
-        priority = overview_priority(segment[5])
-        groups.setdefault(priority, []).append(index)
-    kept = []
-    for priority in sorted(groups):
-        indices = groups[priority]
-        space = per_layer_limit - len(kept)
-        if space <= 0:
+    tower = [index for index, segment in enumerate(segments)
+             if is_prime_tower_feature(segment[5])]
+    general = [index for index, segment in enumerate(segments)
+               if not is_prime_tower_feature(segment[5])]
+    tower_quota = min(len(tower), max(24, per_layer_limit // 3))
+    def spaced(indices, count):
+        if count <= 0:
+            return []
+        if len(indices) <= count:
+            return indices
+        return [indices[min(len(indices)-1, (i*len(indices))//count)]
+                for i in range(count)]
+    tower_selected = spaced(tower, tower_quota)
+    remaining = per_layer_limit-len(tower_selected)
+    by_priority = {}
+    for index in general:
+        by_priority.setdefault(overview_priority(segments[index][5]), []).append(index)
+    selected = list(tower_selected)
+    for priority in sorted(by_priority):
+        if remaining <= 0:
             break
-        if len(indices) <= space:
-            kept.extend(indices)
-        else:
-            # Uniformly distributed endpoints avoid retaining only the first
-            # portion of a shell when it exceeds the per-layer budget.
-            count = max(1, space)
-            kept.extend(indices[min(len(indices)-1, (i * len(indices)) // count)]
-                        for i in range(count))
-            break
-    return [segments[index] for index in sorted(kept)]
+        chosen = spaced(by_priority[priority], remaining)
+        selected.extend(chosen)
+        remaining -= len(chosen)
+    return [segments[index] for index in sorted(selected)]
 
 
 def layer_batch_toolpaths(text, target_zs, *, overview=False, overview_limit=350, max_requested_layers=MAX_BATCH_LAYERS):
