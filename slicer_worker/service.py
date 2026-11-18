@@ -435,6 +435,15 @@ class Handler(BaseHTTPRequestHandler):
                     and type(cli_exit_code) is int and 1 <= cli_exit_code <= 255
                     and reason.startswith("creality-")):
                 response["cli_exit_code"] = cli_exit_code
+                topic = getattr(exc, "cli_validation_category", None)
+                if (cli_exit_code == 205
+                        and reason == "creality-cli-validation-error"
+                        and topic in {
+                            "prime-tower", "layer-height", "line-width",
+                            "nozzle", "flow", "filament", "supports",
+                            "build-plate",
+                        }):
+                    response["validation_category"] = topic
             if reason == "native-project-settings-invalid":
                 keys = getattr(exc, "option_keys", ())
                 if isinstance(keys, (list, tuple)):
