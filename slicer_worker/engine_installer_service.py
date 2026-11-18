@@ -46,7 +46,7 @@ OPERATION_FILE = STORE / "installer-operations.json"
 
 def _persist_operations():
     """Atomic restart-safe status journal, accessible to installer only."""
-    temp = STORE / (".operations-" + uuid.uuid4().hex + ".tmp")
+    temp = OPERATION_FILE.parent / (".operations-" + uuid.uuid4().hex + ".tmp")
     try:
         with temp.open("x", encoding="utf-8") as handle:
             json.dump(list(OPERATIONS.values())[-MAX_OPERATIONS:], handle,
