@@ -63,12 +63,16 @@ class Command(BaseCommand):
                 raise CommandError("Reference name must be one 3MF filename.")
             # Compare both logical record names and the encrypted storage's
             # basename. No arbitrary glob or filesystem access.
+            stem = name[:-4]
             candidates = [
                 entry for entry in owned.filter(
-                    Q(name__iexact=name) | Q(file__iendswith="/" + name)
-                ).order_by("-created_at")[:20]
+                    Q(name__iexact=name) | Q(name__iexact=stem)
+                    | Q(file__iendswith="/" + name)
+                ).order_by("-created_at")[:21]
                 if entry.file and (
                     entry.name.casefold() == name.casefold()
+                    or (entry.name.casefold() == stem.casefold()
+                        and (entry.metadata or {}).get("extension", "").lower() == ".3mf")
                     or Path(entry.file.name).name.casefold() == name.casefold())
             ]
             if len(candidates) != 1:
