@@ -28,7 +28,7 @@ A successful diagnostic execution **does not mean that all cases passed**.
 The wrapper prints each case's status, code and bounded validation category,
 and writes a private `creality-diagnostic-report.json` to the staging checkout.
 
-The wrapper intentionally returns **exit 2** if none of the five CLI scenarios
+The wrapper intentionally returns **exit 2** if none of the six CLI scenarios
 slices successfully; that is useful diagnostic output, not a wrapper crash.
 
 Options:
@@ -53,7 +53,7 @@ unless you have reviewed it for private paths, network settings and model data.
 2. **no-explicit-filament-map** — Creality chooses the physical nozzle map.
 3. **explicit-single-nozzle** — map both materials to nozzle 1.
 4. **tower-disabled** — isolate prime-tower influence; *not safe to print*.
-5. **normalised-filament-scalars** — detect scalar-vs-string vector problems.
+5. **normalised-filament-scalars** — detect scalar-vs-string vector problems.\n6. **identical-filament-parameters** — isolate differences between the two native material profiles.
 
 Each test runs the pinned engine, without the browser, inside the existing
 isolated worker. Candidate project and generated G-code stay in ephemeral
@@ -63,7 +63,7 @@ missing/different setting names, but **not** profile JSON, G-code, native
 engine logs, model coordinates, personal paths or printer credentials.
 
 The matrix isolates known causes but is **not exhaustive** and may still
-yield five failures. If it does, compare a genuine native 3MF using
+yield six failures. If it does, compare a genuine native 3MF using
 `--reference` rather than guessing additional settings. Before any print,
 restore normal worker validation and independently confirm the generated
 tool paths, colour mapping, exact model positions and prime-tower bounds.
