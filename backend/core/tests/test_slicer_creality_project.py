@@ -68,6 +68,10 @@ class CrealityPositionedPlateTests(SimpleTestCase):
             self.assertEqual(len(package.namelist()), 6)
             self.assertIn("Metadata/creality.config", package.namelist())
             project = json.loads(package.read("Metadata/project_settings.config"))
+            model_root = ET.fromstring(package.read("3D/3dmodel.model"))
+            app = [n.text for n in model_root if n.tag.endswith("metadata")
+                   and n.attrib.get("name") == "Application"]
+            self.assertEqual(app, ["Creality_Print V7.3.1"])
         self.assertEqual(project["filament_settings_id"], ["grey", "yellow"])
         self.assertEqual(project["nozzle_temperature"], ["210", "220"])
         self.assertEqual(project["from"], "project")
