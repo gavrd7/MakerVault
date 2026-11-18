@@ -37,5 +37,6 @@ test("existing setup opens the integrated engine manager without altering slicin
 test("installed OrcaSlicer never looks unavailable just because an update is absent",()=>{
   assert.match(manager,/engine\.available === true \|\| engine\.status === "validated"/);
   assert.match(manager,/Already installed — no newer version available/);
-  assert.doesNotMatch(manager,/No approved installation release is available yet/);\n  assert.match(manager,/rollback_available/);
+  assert.doesNotMatch(manager,/No approved installation release is available yet/);
+  assert.match(manager,/rollback_available/);
 });
