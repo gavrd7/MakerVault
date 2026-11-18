@@ -1239,8 +1239,9 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
   function openOfficialSearch(kind = materialHint ? "filament" : form.printer_id ? "printer" : "process") {
     setImportKind(["bambustudio", "prusaslicer"].includes(form.engine) ? "printer" : kind);
     setOfficialVendor("");
-    const targetVersion = form.engine==="orcaslicer" &&
-      ["2.4.2","2.5.0"].includes(form.engine_version) ? form.engine_version : "2.5.0";
+    const targetVersion = form.engine==="orcaslicer"
+      ? (["2.4.2","2.5.0"].includes(form.engine_version) ? form.engine_version : "2.5.0")
+      : form.engine_version;
     setOfficialProfileVersion(targetVersion);
     setOfficialProfileVersions([]);setOfficialBrand("");setOfficialBrands([]);
     setOfficialModel("");
@@ -1797,6 +1798,9 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
       <div className="printingActionGroup" aria-labelledby="slicer-official-profiles-heading">
         <h4 id="slicer-official-profiles-heading">Search official slicer profiles</h4>
         <p>Search available pinned official manufacturer catalogues. Bambu Studio and PrusaSlicer currently offer printer-model artwork records only; other engines may offer printer, filament and process presets. An engine may not provide a profile for every printer. Profiles are imported for your selected engine; profiles cannot be shared between engines.</p>
+        {form.engine==="crealityprint" && officialSourceInfo?.source_engine_version &&
+          officialSourceInfo.source_engine_version !== form.engine_version &&
+          <p role="status">Official profiles are sourced from Creality Print {officialSourceInfo.source_engine_version} and saved for your installed {form.engine_version} engine as candidates. Compatibility will be checked during slicing.</p>}
         {officialSourceInfo && !officialSourceInfo.official_search_available && <p role="status">This engine does not yet have a verified upstream catalogue browser in MakerVault. You can still import native {officialSourceInfo.native_profile_format} profiles for this engine; the installed slicing engine must be available to run.</p>}
         <form className="formGrid" onSubmit={searchOfficialProfiles}>
           <label>Official source
