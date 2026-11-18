@@ -155,11 +155,22 @@ def prepare_creality_multistl(job, source_models):
             (item.get("variable_layer_profile") or {}).get("bands")):
             raise MaterialRoutingError(
                 "Creality offline STL mode does not support painted or per-object overrides.")
-        if (item.get("rotation_deg", 0) != 0 or
-            item.get("rotation_xyz_deg", [0, 0]) != [0, 0] or
-            item.get("scale_percent", 100) != 100 or
-            item.get("scale_xyz_percent", [100, 100, 100]) != [100, 100, 100] or
-            item.get("z_mm", 0) != 0):
+        import math
+        angles = item.get("rotation_xyz_deg", [0, 0])
+        scales = item.get("scale_xyz_percent", [100, 100, 100])
+        if (not isinstance(angles, (list, tuple)) or len(angles) not in (2, 3)
+                or not isinstance(scales, (list, tuple)) or len(scales) != 3):
+            raise MaterialRoutingError("Creality STL transformation is malformed.")
+        try:
+            rotation = [float(item.get("rotation_deg", 0)), *map(float, angles)]
+            size = [float(item.get("scale_percent", 100)), *map(float, scales)]
+            z = float(item.get("z_mm", 0))
+        except (TypeError, ValueError):
+            raise MaterialRoutingError("Creality STL transformation is invalid.") from None
+        if (not all(math.isfinite(v) for v in [*rotation, *size, z])
+                or any(abs(v) > 1e-6 for v in rotation)
+                or any(abs(v - 100) > 1e-6 for v in size)
+                or abs(z) > 1e-6):
             raise MaterialRoutingError(
                 "Creality multi-STL auto-arrangement cannot preserve transformed models.")
     topology, bindings, profiles = plan_native_multimaterial(job)
