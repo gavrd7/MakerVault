@@ -294,6 +294,7 @@ export default function SlicerToolpath3D({
     const activeZ = progressiveMode ? Infinity : layers[geometryLayer];
     const positions = [];
     const coloursArray = [];
+    const indices = [];
     const featureShadeCache = new Map();
     let currentCount = 0;
     let lastStep = null;
@@ -381,17 +382,22 @@ export default function SlicerToolpath3D({
       const bottom = z - beadHeight;
       const leftA = [x1 + sideX, y1 + sideY], rightA = [x1 - sideX, y1 - sideY];
       const leftB = [x2 + sideX, y2 + sideY], rightB = [x2 - sideX, y2 - sideY];
-      const pushTri = (a, b, c, topA, topB, topC) => {
-        positions.push(a[0], topA, a[1], b[0], topB, b[1], c[0], topC, c[1]);
-        for (let index = 0; index < 3; index++) coloursArray.push(hex.r, hex.g, hex.b);
-      };
-      // Top surface, outer left side and outer right side.
-      pushTri(leftA, rightA, leftB, top, top, top);
-      pushTri(rightA, rightB, leftB, top, top, top);
-      pushTri(leftA, leftB, leftB, top, top, bottom);
-      pushTri(leftA, leftB, leftA, top, bottom, bottom);
-      pushTri(rightA, rightB, rightB, top, bottom, top);
-      pushTri(rightA, rightB, rightA, top, bottom, bottom);
+      // One indexed strand needs 8 shared vertices rather than duplicating
+      // 18 positions/colours across its six faces. GPU buffer allocation,
+      // upload and initial normal generation are substantially smaller.
+      const base = positions.length / 3;
+      positions.push(
+        leftA[0],top,leftA[1], rightA[0],top,rightA[1],
+        leftB[0],top,leftB[1], rightB[0],top,rightB[1],
+        leftA[0],bottom,leftA[1], rightA[0],bottom,rightA[1],
+        leftB[0],bottom,leftB[1], rightB[0],bottom,rightB[1]
+      );
+      for (let vertex=0;vertex<8;vertex++)
+        coloursArray.push(hex.r,hex.g,hex.b);
+      // Top and both exposed sides; retain double-sided shading.
+      indices.push(base,base+1,base+2,base+1,base+3,base+2,
+        base,base+2,base+6,base,base+6,base+4,
+        base+1,base+3,base+7,base+1,base+7,base+5);
     }
     // On iOS the WebGL surface may mount before the async indexed layer is
     // populated. The initial camera would then target fallback dimensions,
@@ -425,6 +431,7 @@ export default function SlicerToolpath3D({
       const geometry = new THREE.BufferGeometry();
       geometry.setAttribute("position", new THREE.Float32BufferAttribute(positions, 3));
       geometry.setAttribute("color", new THREE.Float32BufferAttribute(coloursArray, 3));
+      if (renderMode !== "lines") geometry.setIndex(indices);
       if (renderMode === "lines") {
         paths.add(new THREE.LineSegments(geometry,
           new THREE.LineBasicMaterial({ vertexColors: true, transparent: true, opacity: 0.98,
