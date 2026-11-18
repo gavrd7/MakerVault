@@ -97,7 +97,11 @@ export default function SlicerEngineManager({engines = [], onChanged}) {
                 : "Not installed"}</small>
             </div>
           </div>
-          {matching && <div role="status" className="slicerEngineManagerRelease">\n            <strong>{matching.status} · {matching.progress}%</strong>\n            <small>{matching.message}</small>\n          </div>}\n          {approved.length>0 ? approved.map(release=><div key={release.version+"-"+release.bundle_sha256}
+          {matching && <div role="status" className="slicerEngineManagerRelease">
+            <strong>{matching.status} · {matching.progress}%</strong>
+            <small>{matching.message}</small>
+          </div>}
+          {approved.length>0 ? approved.map(release=><div key={release.version+"-"+release.bundle_sha256}
             className="slicerEngineManagerRelease">
             <div><strong>Version {release.version}</strong>
               <small>{release.architecture} · {release.notes||"Reviewed release"}</small>
