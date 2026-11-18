@@ -40,7 +40,7 @@ test("progressive large prints append complete geometry without polluting exact-
   assert.match(preview, /offset \+= 64/);
   assert.match(preview, /quality=full&zs=/);
   assert.match(preview, /maxMoves = mobile \? 700000 : 1500000/);
-  assert.match(preview, /high-fidelity/i);
+  assert.match(preview, /full-detail/i);
   assert.doesNotMatch(preview, /fullLayerCache\.current\.set\(key,item\)/);
   assert.match(preview, /progressiveMode=\{progressiveMode\}/);
   assert.match(preview, /return wholeModel\.segments/);
