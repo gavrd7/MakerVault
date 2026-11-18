@@ -99,6 +99,33 @@ class FullLayerParserTests(SimpleTestCase):
         self.assertEqual(layer["segments"],
                          sorted(layer["segments"], key=lambda move: move[0]))
 
+    def test_prime_tower_keeps_its_own_geometry_budget(self):
+        from core.slicer_layer_preview import _overview_segments
+        from core.slicer_preview_features import is_prime_tower_feature
+        assert is_prime_tower_feature("Prime tower")
+        assert is_prime_tower_feature("Wipe tower")
+        assert not is_prime_tower_feature("Outer wall")
+        lines = ["G90", "M83", "G1 X0 Y0 Z0.2"]
+        for role, count in (("Outer wall", 160), ("Support material", 150),
+                            ("Prime tower", 100)):
+            lines.append(f";TYPE:{role}")
+            for index in range(count):
+                lines.append(f"G1 X{index+1} Y{count} E0.1")
+            lines.append("G1 X0 Y0")
+        result = layer_batch_toolpaths("\n".join(lines), [0.2],
+                                       overview=True, overview_limit=90)
+        segments = result["layers"][0]["segments"]
+        self.assertEqual(len(segments), 90)
+        self.assertTrue(any(move[5] == "Outer wall" for move in segments))
+        self.assertTrue(any(move[5] == "Support material" for move in segments))
+        self.assertGreaterEqual(sum(move[5] == "Prime tower" for move in segments), 24)
+        mobile = _overview_segments(segments, 80)
+        self.assertGreaterEqual(sum(move[5] == "Prime tower" for move in mobile), 24)
+        self.assertEqual(mobile, sorted(mobile,
+                         key=lambda move: (move[0] if move[5] == "Outer wall" else 0)))
+        # Native G-code inspection never uses the reduced overview.
+        self.assertEqual(exact_layer_toolpaths("\n".join(lines), 0.2)["segment_count"], 410)
+
     def test_cached_index_retrieves_later_page_of_long_print(self):
         from unittest.mock import patch
         from django.core.cache.backends.locmem import LocMemCache
