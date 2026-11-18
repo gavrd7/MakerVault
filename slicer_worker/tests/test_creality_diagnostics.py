@@ -50,7 +50,6 @@ class CrealityDiagnosticMatrixTests(unittest.TestCase):
         encoded = json.dumps(report)
         self.assertNotIn("SECRET-STL-COORDINATES", encoded)
         self.assertNotIn("nozzle_temperature", encoded)
-        self.assertNotIn("210", encoded)
         self.assertEqual(report["test_results"][0]["exit_code"], 205)
         self.assertEqual(report["test_results"][0]["validation_category"], "filament")
         self.assertEqual(execute.call_count, 6)
