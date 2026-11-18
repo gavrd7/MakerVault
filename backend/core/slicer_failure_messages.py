@@ -6,6 +6,42 @@ alone as a definitive diagnosis, and never echo untrusted CLI output.
 """
 
 REASONS = {
+    "creality-profile-json-invalid": (
+        "Creality Print rejected an invalid native JSON profile. Check the imported printer, filament and process presets."
+    ),
+    "creality-profile-parent-unresolved": (
+        "A Creality Print preset still has an unresolved parent. Import its complete native dependency chain."
+    ),
+    "creality-profile-structure-invalid": (
+        "Creality Print rejected an oversized or overly nested native preset."
+    ),
+    "creality-post-processing-blocked": (
+        "The Creality Print preset contains a post-processing command that cannot run inside the isolated slicer worker."
+    ),
+    "creality-engine-unavailable": (
+        "The Creality Print executable is unavailable inside the worker. Check the installed engine status."
+    ),
+    "creality-output-path-conflict": (
+        "The isolated Creality Print output folder could not be prepared."
+    ),
+    "creality-cli-timeout": (
+        "Creality Print's native CLI did not finish slicing within the allowed time."
+    ),
+    "creality-cli-exited": (
+        "Creality Print's native CLI exited without completing the slice. Review compatible printer, filament and process profiles and the worker logs."
+    ),
+    "creality-no-output-directory": (
+        "Creality Print exited without creating the expected slicing output directory."
+    ),
+    "creality-unexpected-output-layout": (
+        "Creality Print produced files in an unexpected layout rather than one supported G-code output."
+    ),
+    "creality-missing-gcode": (
+        "Creality Print generated no usable G-code, or its output exceeded the size limit."
+    ),
+    "creality-launch-failed": (
+        "The isolated worker could not launch the installed Creality Print binary."
+    ),
     "native-line-width-invalid": (
         "OrcaSlicer rejected an effective extrusion line width as too small. "
         "Review the nozzle, process layer height and line-width settings; "
