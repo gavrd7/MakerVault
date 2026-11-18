@@ -86,6 +86,21 @@ def balanced_overview_indices(grouped, budget):
                                    int(budget * target_weights[name])))
         for name, indices in present.items()
     }
+    # All six groups may coexist on a single layer. Mandatory reservations
+    # must not accidentally exceed the fixed GPU budget.
+    excess = sum(allocations.values()) - budget
+    if excess > 0:
+        floors = {"tower": min(24, allocations.get("tower", 0)),
+                  "support": min(16, allocations.get("support", 0))}
+        for name in ("body", "inner", "skin", "shell", "support", "tower"):
+            if excess <= 0:
+                break
+            floor = floors.get(name, 1)
+            reducible = max(0, allocations.get(name, 0) - floor)
+            removed = min(excess, reducible)
+            if removed:
+                allocations[name] -= removed
+                excess -= removed
     unused = budget - sum(allocations.values())
     while unused > 0:
         candidates = [name for name in present if allocations[name] < len(present[name])]
