@@ -144,6 +144,54 @@ class CrealityPositionedPlateTests(SimpleTestCase):
              for row in obj.findall("metadata") if row.get("key") == "extruder"],
             ["1", "2"])
 
+    def test_two_slot_flush_matrix_expands_without_erasing_transitions(self):
+        from core.slicer_creality_project import _native_palette_settings
+        project = {
+            "filament_settings_id": ["PLA grey", "PLA yellow"],
+            "filament_type": ["PLA", "PLA"],
+            "flush_volumes_matrix": ["0", "180", "210", "0"],
+            "flush_volumes_vector": ["140", "140", "140", "140"],
+        }
+        self.assertEqual(_native_palette_settings(project, [None, None]), 4)
+        self.assertEqual(project["filament_settings_id"],
+                         ["PLA grey", "PLA yellow", "PLA grey", "PLA yellow"])
+        self.assertEqual(project["flush_volumes_matrix"][1], "180")
+        self.assertEqual(project["flush_volumes_matrix"][4], "210")
+        self.assertEqual(project["flush_volumes_matrix"][11], "180")
+        self.assertEqual(len(project["flush_volumes_vector"]), 8)
+        self.assertEqual(project["filament_type"], ["PLA"] * 4)
+
+    def test_reference_schema_required_cfs_keys(self):
+        import json
+        from core.slicer_creality_project import build_creality_project_candidate
+        plate = build_creality_positioned_plate(
+            self._objects(), bed_width=260, bed_depth=260, tool_ids=[0, 1])
+        printer = json.dumps({"type": "machine", "name": "K2",
+                              "nozzle_diameter": ["0.4"]}).encode()
+        process = json.dumps({"type": "process", "name": "Standard",
+                              "enable_prime_tower": "0"}).encode()
+        filament = lambda name: json.dumps({
+            "type": "filament", "name": name,
+            "filament_type": ["PLA"], "nozzle_temperature": ["220"]}).encode()
+        result = build_creality_project_candidate(
+            plate, printer=printer, process=process,
+            filaments=[filament("grey"), filament("yellow")])
+        with zipfile.ZipFile(io.BytesIO(result)) as package:
+            config = json.loads(package.read("Metadata/project_settings.config"))
+        # Structure observed in a native Creality Print 7.3.2 K2 3MF,
+        # without copying any user-specific source settings or scripts.
+        expected_lengths = {
+            "filament_settings_id": 4, "filament_map": 4,
+            "filament_map_2": 4, "filament_colour_type": 4,
+            "filament_volume_map": 4, "nozzle_temperature": 4,
+            "filament_type": 4, "flush_volumes_matrix": 16,
+            "flush_volumes_vector": 8,
+        }
+        for key, count in expected_lengths.items():
+            self.assertIn(key, config)
+            self.assertEqual(len(config[key]), count, key)
+        self.assertEqual(config["filament_map_mode"], "AutoForSaving")
+
     def test_invalid_palette_fails_before_native_engine(self):
         with self.assertRaises(SlicerProfileError):
             build_creality_positioned_plate(
