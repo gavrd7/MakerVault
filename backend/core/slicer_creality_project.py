@@ -145,6 +145,43 @@ def _native_value(value):
     raise SlicerProfileError("Unsupported native project setting value.")
 
 
+def _choose_safe_tower_position(plate, *, bed_width, bed_depth, width):
+    """Find an unoccupied conservative square for a native prime tower.
+
+    Tower depth may grow during multi-material slicing. This estimates a
+    footprint for pre-slice placement only; the G-code extrusion audit remains
+    authoritative and rejects an unexpectedly enlarged tower.
+    """
+    if not isinstance(width, (int, float)) or not math.isfinite(width) or not 5 <= width <= 100:
+        raise SlicerProfileError("Unsupported Creality prime tower width.")
+    extent = width + 12  # include brim and conservative spacing
+    border = 5
+    root = None
+    with zipfile.ZipFile(io.BytesIO(plate)) as archive:
+        root = SafeET.fromstring(archive.read("3D/3dmodel.model"))
+    ns = "{" + NS + "}"
+    occupied = []
+    for obj in root.findall("./" + ns + "resources/" + ns + "object"):
+        vertices = obj.findall("./" + ns + "mesh/" + ns + "vertices/" + ns + "vertex")
+        if not vertices:
+            raise SlicerProfileError("Empty Creality model.")
+        xs = [float(vertex.attrib["x"]) for vertex in vertices]
+        ys = [float(vertex.attrib["y"]) for vertex in vertices]
+        occupied.append((min(xs) - 3, min(ys) - 3, max(xs) + 3, max(ys) + 3))
+    xs = [border, bed_width - border - extent]
+    ys = [border, bed_depth - border - extent]
+    for x in xs:
+        for y in ys:
+            if x < 0 or y < 0:
+                continue
+            if all(x + extent < left or x > right or
+                   y + extent < bottom or y > top
+                   for left, bottom, right, top in occupied):
+                return x, y
+    raise SlicerProfileError(
+        "No verified free corner for a Creality prime tower on this plate.")
+
+
 def build_creality_project_candidate(plate, *, printer, process, filaments,
                                     version="7.3.1", prime_tower=None,
                                     bed_width=260, bed_depth=260):
@@ -182,6 +219,13 @@ def build_creality_project_candidate(plate, *, printer, process, filaments,
         for i, preset in enumerate(filament_settings)]
     project["print_settings_id"] = str(print_settings.get("name") or "MakerVault process")
     project["printer_settings_id"] = str(machine.get("name") or "MakerVault printer")
+    if prime_tower is None and project.get("enable_prime_tower", "1") != "0":
+        raw = project.get("prime_tower_width", "40")
+        tower_width = float(raw[0] if isinstance(raw, list) else raw)
+        x, y = _choose_safe_tower_position(
+            plate, bed_width=bed_width, bed_depth=bed_depth,
+            width=tower_width)
+        prime_tower = {"x": x, "y": y}
     if prime_tower is not None:
         if not isinstance(prime_tower, dict) or set(prime_tower) != {"x", "y"}:
             raise SlicerProfileError("Invalid Creality prime tower coordinates.")
