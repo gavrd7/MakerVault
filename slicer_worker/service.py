@@ -238,6 +238,7 @@ class Handler(BaseHTTPRequestHandler):
                 "Creality Print CLI could not initialise its headless Qt platform.": "creality-qt-platform-failed",
                 "Creality Print CLI is missing a runtime library.": "creality-runtime-library-missing",
                 "Creality Print CLI rejected a command-line option.": "creality-cli-option-invalid",
+                "Creality Print CLI rejected its command-line parameters.": "creality-cli-parameters-invalid",
                 "Creality Print CLI could not load a native preset.": "creality-native-preset-invalid",
                 "Creality Print produced no safe output directory.": "creality-no-output-directory",
                 "Creality Print did not produce exactly one supported G-code artifact.": "creality-unexpected-output-layout",
