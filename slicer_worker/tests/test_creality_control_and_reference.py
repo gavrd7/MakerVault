@@ -6,7 +6,8 @@ import zipfile
 from xml.etree import ElementTree as ET
 
 from slicer_worker.creality_single_control import single_material_control
-from slicer_worker.creality_reference_diagnostics import compare_projects
+from slicer_worker.creality_reference_diagnostics import compare_projects, compare_to_bundled_reference
+from slicer_worker import creality_reference_schema
 
 NS = "{http://schemas.microsoft.com/3dmanufacturing/core/2015/02}"
 
@@ -93,6 +94,19 @@ class ReferenceComparisonTests(unittest.TestCase):
                             for row in report["different_value_shapes"]))
         self.assertNotIn("yellow", json.dumps(report))
         self.assertNotIn("grey", json.dumps(report))
+
+    def test_bundled_reference_reports_safe_shape_gaps_without_private_values(self):
+        report = compare_to_bundled_reference(fixture())
+        self.assertEqual(len(creality_reference_schema.FOUR_SLOT_KEYS), 112)
+        self.assertEqual(report["reference_setting_count"], 672)
+        self.assertEqual(report["reference_member_count"], 17)
+        self.assertEqual(report["reference_source"], "bundled-sanitised-7.3.2.6412")
+        self.assertEqual(report["candidate_structure_counts"]["component_links"], 0)
+        self.assertEqual(report["reference_structure_counts"]["component_links"], 2)
+        self.assertGreater(report["missing_setting_count"], 0)
+        encoded = json.dumps(report)
+        for private_value in ("grey", "yellow", "210", "220", "Creality Print 7.0"):
+            self.assertNotIn(private_value, encoded)
 
     def test_rejects_duplicate_archive_entries(self):
         source = fixture()
