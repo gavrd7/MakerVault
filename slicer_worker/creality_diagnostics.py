@@ -108,13 +108,19 @@ def _engine_run(binary, project, timeout_seconds):
         ]
         start = time.monotonic()
         try:
-            result = subprocess.run(
-                command, cwd=root, env=slicing_environment(root),
-                stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
-                timeout=timeout_seconds, check=False,
-            )
-            output = result.stdout[-MAX_CAPTURE:]
-            code = result.returncode
+            # Capture in a bounded scratch-backed file rather than an
+            # unbounded PIPE: some native CLI failures log very heavily.
+            with tempfile.TemporaryFile(mode="w+b") as diagnostic:
+                result = subprocess.run(
+                    command, cwd=root, env=slicing_environment(root),
+                    stdout=diagnostic, stderr=subprocess.STDOUT,
+                    timeout=timeout_seconds, check=False,
+                )
+                diagnostic.seek(0, os.SEEK_END)
+                size = diagnostic.tell()
+                diagnostic.seek(max(0, size - MAX_CAPTURE), os.SEEK_SET)
+                output = diagnostic.read(MAX_CAPTURE)
+                code = result.returncode
         except subprocess.TimeoutExpired:
             return {"status": "timeout", "duration_seconds": timeout_seconds}
         duration = round(time.monotonic() - start, 2)
