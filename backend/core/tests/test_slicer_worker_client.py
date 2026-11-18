@@ -19,6 +19,42 @@ class SlicerWorkerClientTests(SimpleTestCase):
                 worker_settings()
 
     @patch("core.slicer_worker_client._session")
+    @patch("core.slicer_worker_client.worker_settings",
+           return_value=("http://slicer-worker:8088", "x" * 40))
+    def test_creality_multistl_worker_request_uses_explicit_one_based_tools(
+            self, settings, session):
+        import json
+        from unittest.mock import Mock
+        gcode = b"; offline two-tool fixture\\nT0\\nT1\\n"
+        response = Mock()
+        response.status_code = 200
+        response.headers = {"Content-Length": "300"}
+        response.iter_content.return_value = [json.dumps({
+            "status": "completed", "gcode": base64.b64encode(gcode).decode(),
+            "bytes": len(gcode), "sha256": hashlib.sha256(gcode).hexdigest(),
+        }).encode()]
+        session.return_value.post.return_value = response
+        result = run_remote_job(
+            uuid.uuid4(), "crealityprint", "7.3.1",
+            b"first", b"printer", b"filament-0", b"process",
+            filament_profiles=[b"filament-0", b"filament-1"],
+            creality_model_stls=[b"first", b"second"],
+            creality_tool_ids=[2, 1])
+        self.assertEqual(result, gcode)
+        sent = json.loads(session.return_value.post.call_args.kwargs["data"])
+        self.assertEqual(sent["creality_tool_ids"], [2, 1])
+        self.assertEqual(
+            [base64.b64decode(raw) for raw in sent["creality_model_stls"]],
+            [b"first", b"second"])
+        with self.assertRaises(SlicerWorkerError):
+            run_remote_job(
+                uuid.uuid4(), "crealityprint", "7.3.1",
+                b"first", b"printer", b"filament-0", b"process",
+                filament_profiles=[b"filament-0", b"filament-1"],
+                creality_model_stls=[b"first", b"second"],
+                creality_tool_ids=[0, 1])
+
+    @patch("core.slicer_worker_client._session")
     @patch("core.slicer_worker_client.worker_settings", return_value=("http://slicer-worker:8088", "x" * 40))
     def test_strict_authenticated_transfer_and_checksum(self, settings, session):
         gcode = b"; mock slicer output\nG1 X1 Y2 E1\n"
