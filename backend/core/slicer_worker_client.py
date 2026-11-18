@@ -230,14 +230,19 @@ def run_remote_job(job_id, engine, version, model, printer_profile, filament_pro
                     232: "CLI_FILE_VERSION_NOT_SUPPORTED (-24)",
                     254: "CLI_INVALID_PARAMS (-2)",
                 }.get(cli_exit_code, "native CLI failure")
-                message = (
-                    "Creality Print exit code " + str(cli_exit_code) + " ("
-                    + native_error + "). " + message
-                )
-            if validation_category is not None:
-                message += " Validation category: " + validation_category.replace("-", " ") + "."
-            if reason:
-                message += " [" + reason + "]"
+                # SliceJob.message is bounded to 240 characters. Put the
+                # reason marker FIRST and keep a compact, useful diagnostic,
+                # otherwise the frontend help never recognises the reason.
+                marker = "[" + reason + "] " if reason else ""
+                prefix = "Creality Print exit " + str(cli_exit_code) + " (" + native_error + "). "
+                if validation_category is not None:
+                    prefix += "Validation category: " + validation_category.replace("-", " ") + ". "
+                message = (marker + prefix + message)[:240]
+            else:
+                if validation_category is not None:
+                    message += " Validation category: " + validation_category.replace("-", " ") + "."
+                if reason:
+                    message += " [" + reason + "]"
             raise SlicerWorkerError(message)
         declared = response.headers.get("Content-Length")
         if declared and (not declared.isdecimal() or int(declared) > MAX_RESPONSE):
