@@ -32,11 +32,11 @@ class Command(BaseCommand):
         for asset in qs[:1 if options["asset_id"] else recent]:
             if options["now"]:
                 from time import perf_counter
-                from core.slicer_preview_cache import warm_asset_overviews
+                from core.slicer_preview_cache import warm_asset_high_fidelity
                 started = perf_counter()
                 with asset.file.storage.open(asset.file.name, "rb") as handle:
                     raw = handle.read(32 * 1024 * 1024 + 1)
-                ok = warm_asset_overviews(asset, raw)
+                ok = warm_asset_high_fidelity(asset, raw)
                 self.stdout.write(
                     f"{asset.name}: {'ready' if ok else 'unsupported'} "
                     f"({perf_counter() - started:.2f}s)"
