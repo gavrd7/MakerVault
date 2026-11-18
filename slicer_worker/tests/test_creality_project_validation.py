@@ -22,8 +22,29 @@ class NativeCreality3MFContractTests(TestCase):
                 '<model xmlns="http://schemas.microsoft.com/3dmanufacturing/core/2015/02" '
                 'unit="millimeter"><metadata name="Application">'
                 'Creality_Print V7.3.1</metadata><resources/><build/></model>')
-            for name in ("Metadata/model_settings.config",
-                         "_rels/.rels", "[Content_Types].xml"):
+            z.writestr("Metadata/model_settings.config",
+                       '<config><object id="1"><metadata key="extruder" value="1"/>'
+                       '<part id="1" subtype="normal_part">'
+                       '<metadata key="name" value="Model 1"/>'
+                       '<metadata key="matrix" value="1 0 0 0 0 1 0 0 0 0 1 0 0 0 0 1"/>'
+                       '</part></object><object id="2">'
+                       '<metadata key="extruder" value="2"/>'
+                       '<part id="1" subtype="normal_part"/>'
+                       '</object><plate><metadata key="plater_id" value="1"/>'
+                       '<metadata key="locked" value="false"/>'
+                       '<model_instance><metadata key="object_id" value="1"/>'
+                       '<metadata key="instance_id" value="0"/>'
+                       '<metadata key="identify_id" value="1"/></model_instance>'
+                       '<model_instance><metadata key="object_id" value="2"/>'
+                       '<metadata key="instance_id" value="0"/>'
+                       '<metadata key="identify_id" value="2"/></model_instance>'
+                       '</plate><assemble>'
+                       '<assemble_item object_id="1" instance_id="0" '
+                       'transform="1 0 0 0 1 0 0 0 1 0 0 0" offset="0 0 0"/>'
+                       '<assemble_item object_id="2" instance_id="0" '
+                       'transform="1 0 0 0 1 0 0 0 1 0 0 0" offset="0 0 0"/>'
+                       '</assemble></config>')
+            for name in ("_rels/.rels", "[Content_Types].xml"):
                 z.writestr(name, b"bounded structural fixture")
             if identity:
                 z.writestr("Metadata/creality.config",
@@ -66,6 +87,38 @@ class NativeCreality3MFContractTests(TestCase):
         with self.assertRaisesRegex(WorkerError, "blocked settings"):
             validate_creality_project(
                 self.project(project={"post_process": "unsafe"}))
+
+    @patch("slicer_worker.creality_project_validation.validate_worker_3mf",
+           return_value=True)
+    def test_four_bay_palette_with_two_used_tools(self, validate):
+        payload = self.project(project={
+            "filament_settings_id": ["grey", "yellow", "grey", "yellow"],
+            "filament_map": ["1", "1", "1", "1"],
+            "flush_volumes_matrix": ["0"] * 16,
+            "flush_volumes_vector": ["140"] * 8,
+        })
+        self.assertTrue(validate_creality_project(payload, native_tool_count=2))
+        validate.assert_called_once()
+
+    def test_inconsistent_native_palette_matrix_is_rejected(self):
+        with self.assertRaisesRegex(WorkerError, "purge matrix"):
+            validate_creality_project(self.project(project={
+                "filament_settings_id": ["grey", "yellow", "grey", "yellow"],
+                "flush_volumes_matrix": ["0"] * 4,
+            }))
+
+    def test_assembly_cannot_reposition_prepared_models(self):
+        data = self.project()
+        out = io.BytesIO()
+        with zipfile.ZipFile(io.BytesIO(data)) as inp, zipfile.ZipFile(out, "w") as dst:
+            for name in inp.namelist():
+                raw = inp.read(name)
+                if name == "Metadata/model_settings.config":
+                    raw = raw.replace(b'transform="1 0 0 0 1 0 0 0 1 0 0 0"',
+                                      b'transform="1 0 0 0 1 0 0 0 1 15 0 0"')
+                dst.writestr(name, raw)
+        with self.assertRaisesRegex(WorkerError, "assembly would modify"):
+            validate_creality_project(out.getvalue())
 
     def test_missing_tool_palette_is_rejected(self):
         with self.assertRaisesRegex(WorkerError, "palette"):
