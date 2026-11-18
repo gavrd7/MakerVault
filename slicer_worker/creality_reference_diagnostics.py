@@ -147,3 +147,41 @@ def compare_projects(candidate, reference):
         "candidate_structure_counts": left["counts"],
         "reference_structure_counts": right["counts"],
     }
+
+def compare_to_bundled_reference(candidate):
+    """Compare against a VALUE-FREE schema from the uploaded desktop 3MF.
+
+    Unlike compare_projects, this does not need a user-file reference path.
+    Only 112 four-slot keys plus a handful of relevant shape contracts are
+    recorded: it must NOT imply that all 672 reference keys are available.
+    """
+    from . import creality_reference_schema as reference
+    observed = _structure(candidate)
+    settings = observed["settings"]
+    keys = reference.KNOWN_SHAPES
+    missing = sorted(key for key in keys if key not in settings)
+    mismatched = sorted(key for key, shape in keys.items()
+                        if key in settings and settings[key] != shape)
+    return {
+        "reference_source": "bundled-sanitised-7.3.2.6412",
+        "reference_version_note": "Structural reference only, not proof of compatibility with the 7.3.1 engine.",
+        "candidate_setting_count": len(settings),
+        "reference_setting_count": reference.SETTING_COUNT,
+        "reference_shape_keys_checked": len(keys),
+        "missing_setting_keys": missing[:120],
+        "missing_setting_count": len(missing),
+        "extra_setting_keys": [],
+        "extra_setting_count": None,
+        "different_value_shapes": [
+            {"key": key, "candidate": settings[key], "reference": keys[key]}
+            for key in mismatched[:120]
+        ],
+        "different_value_shape_count": len(mismatched),
+        "candidate_archive_roles": observed["member_roles"],
+        "reference_archive_roles": reference.ARCHIVE_ROLE_COUNTS,
+        "candidate_structure_counts": observed["counts"],
+        "reference_structure_counts": reference.STRUCTURE_COUNTS,
+        "reference_member_count": reference.MEMBER_COUNT,
+        "reference_value_kind_counts": reference.VALUE_KIND_COUNTS,
+        "reference_list_length_counts": reference.LIST_LENGTH_COUNTS,
+    }
