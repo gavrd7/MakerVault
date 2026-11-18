@@ -283,6 +283,7 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
   const [officialBusy, setOfficialBusy] = useState(false);
   const [officialError, setOfficialError] = useState("");
   const [officialImportNotice, setOfficialImportNotice] = useState("");
+  const [officialImportTarget, setOfficialImportTarget] = useState("");
   const [officialModels, setOfficialModels] = useState([]);
   const [officialModel, setOfficialModel] = useState("");
   const [officialManualModel, setOfficialManualModel] = useState("");
@@ -1033,12 +1034,13 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
 
   async function importOfficialProfile(candidate, asDefault = false) {
     setOfficialError(""); setOfficialBusy(true);
+    setOfficialImportTarget(candidate.sub_path);
     try {
       const result = await apiFetch("/api/printing/slicer/official-profiles/", {
         method: "POST",
         body: {
           kind: importKind, vendor: officialVendor, engine: form.engine,
-          engine_version: officialProfileVersion,
+          engine_version: form.engine==="orcaslicer" ? officialProfileVersion : form.engine_version,
           name: candidate.name, sub_path: candidate.sub_path,
         },
       });
@@ -1064,7 +1066,7 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
         [imported.kind + "_profile_id"]: imported.id,
         [imported.kind + "_preset"]: imported.name,
       }));
-      setOfficialImportNotice(imported.name + " imported as a " + imported.kind + " profile. You can select another profile type or return to your selected profiles.");
+      setOfficialImportNotice(imported.name + " imported as a " + imported.kind + " profile for " + imported.engine_version + ". You can select another profile type or return to your selected profiles.");
       setNotice("Official " + ({ crealityprint: "Creality Print", bambustudio: "Bambu Studio", prusaslicer: "PrusaSlicer", snapmakerorca: "Snapmaker Orca", orcaslicer: "OrcaSlicer" }[imported.engine] || imported.engine) +
         " profile imported" + (imported.is_default ? " and saved as your default" : "") +
         ". " + Math.max(0, (result.parent_chain_length || 1) - 1) +
@@ -1251,6 +1253,7 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
     setOfficialQuery(defaultOfficialSearch(kind, { printer: selectedPrinter, spool: selectedSpool, nozzle: form.nozzle_mm }));
     setOfficialResults(null); // Never carry results into another engine/vendor catalogue.
     setOfficialImportNotice("");
+    setOfficialImportTarget("");
     setOfficialError("");
     setProfileModal("search");
   }
@@ -1886,6 +1889,10 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
                 Import &amp; set default
               </button>
             </div>
+            {officialImportTarget === candidate.sub_path && officialError &&
+              <p className="integrationError" role="alert">{officialError}</p>}
+            {officialImportTarget === candidate.sub_path && !officialError && officialImportNotice &&
+              <p role="status" className="slicerProfileImportNotice">{officialImportNotice}</p>}
           </div>)}
           {!officialResults.profiles.length && <p>No matching presets. Try fewer manual search terms or select All models to browse the complete manufacturer catalogue.</p>}
         </div>}
