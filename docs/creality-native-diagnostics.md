@@ -28,7 +28,7 @@ A successful diagnostic execution **does not mean that all cases passed**.
 The wrapper prints each case's status, code and bounded validation category,
 and writes a private `creality-diagnostic-report.json` to the staging checkout.
 
-The wrapper intentionally returns **exit 2** if none of the six CLI scenarios
+The wrapper intentionally returns **exit 2** if none of the seven CLI scenarios
 slices successfully; that is useful diagnostic output, not a wrapper crash.
 
 Options:
@@ -49,7 +49,7 @@ unless you have reviewed it for private paths, network settings and model data.
 
 ## Matrix
 
-1. **baseline** — exact latest failed MakerVault candidate.
+0. **single-model-single-material** — true one-object, one-material control derived from the first prepared model; distinguishes multi-material validation from a generally invalid native project.\n1. **baseline** — exact latest failed MakerVault candidate.
 2. **no-explicit-filament-map** — Creality chooses the physical nozzle map.
 3. **explicit-single-nozzle** — map both materials to nozzle 1.
 4. **tower-disabled** — isolate prime-tower influence; *not safe to print*.
@@ -63,7 +63,7 @@ missing/different setting names, but **not** profile JSON, G-code, native
 engine logs, model coordinates, personal paths or printer credentials.
 
 The matrix isolates known causes but is **not exhaustive** and may still
-yield six failures. If it does, compare a genuine native 3MF using
+yield seven failures. If it does, compare a genuine native 3MF using
 `--reference` rather than guessing additional settings. Before any print,
 restore normal worker validation and independently confirm the generated
 tool paths, colour mapping, exact model positions and prime-tower bounds.
@@ -113,3 +113,43 @@ regressions and the real-engine diagnostic matrix after updating staging.
 A successful `--slice` result must still pass tool usage, extrusion
 bounds, purge and layout inspection before any future print approval.
 
+
+
+## Control and structural comparison (second diagnostic pass)
+
+The first six variants all retained two models and two active materials, so
+six failures with 205 did not isolate single-material project compatibility.
+
+The **single-model-single-material** control now retains only the first
+original Benchy, its baked placement and the first resolved filament;
+deletes the other object/instances, reduces the native active filament
+palette to one, and disables the prime tower. This is a *diagnostic derivative
+of a MakerVault project*, not a genuine desktop Creality export; a pass is
+useful evidence, but does not prove full CFS support.
+
+Run a reference comparison if the genuine Creality 3MF is available on the
+staging server:
+
+```bash
+sudo python3 scripts/diagnose_creality_staging.py \
+  --reference /path/to/your/3DBenchy.3mf \
+  --output /tmp/creality-diagnostic-v5.json
+```
+
+The reference is **not installed into MakerVault** and **never executed**.
+The report contains only public option key names, data types and list lengths,
+archive role counts, geometry/component counts and structural differences;
+it intentionally omits preset values, private filenames, printer scripts
+and positions.
+
+Results separate three conditions:
+
+- **Single-material fails + multi-material fails:** likely a shared native
+  3MF project loader/validation mismatch (or runtime CLI issue).
+- **Single-material passes + multi-material fails:** investigate material
+  palette, physical nozzle mapping, tower and per-object assignments.
+- **Structural differences without a working control:** they identify
+  areas for source-level verification, not automatically the root cause.
+
+The reference was made by 7.3.2.6412, so compare it carefully against the
+7.3.1 runtime. Continue keeping multi-material printer upload blocked.
