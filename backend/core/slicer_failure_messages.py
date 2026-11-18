@@ -34,6 +34,7 @@ REASONS = {
     "creality-cli-parameters-invalid": ("Creality Print 7.3.1 returned its native invalid-parameters status (-2 / Linux 254). The command supplied by MakerVault requires investigation; this does not establish a profile mismatch."),
     "creality-cli-option-invalid": ("Creality Print rejected an option passed by MakerVault's CLI adapter."),
     "creality-native-preset-invalid": ("Creality Print could not load a native printer, filament or process preset."),
+    "creality-native-project-invalid": ("Creality Print rejected the embedded native 3MF printer, filament or process configuration. The saved model positions were not changed; this requires correction of the Creality project adapter."),
     "creality-cli-exited": (
         "Creality Print started but exited before completing the slice. The exit status alone cannot identify whether the cause is a runtime problem, CLI option or native preset. Check the worker diagnostics."
     ),
