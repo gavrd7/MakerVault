@@ -39,6 +39,8 @@ HEX = re.compile(r"^[a-f0-9]{64}$")
 OPERATIONS = {}
 LOCK = Lock()
 MAX_OPERATIONS = 50
+RELEASE_CACHE = {"time": 0.0, "items": []}
+RELEASE_CACHE_SECONDS = 600
 OPERATION_FILE = STORE / "installer-operations.json"
 
 
@@ -98,6 +100,9 @@ def release_catalogue():
     """Return only official, digest-bearing Linux x86_64 AppImages."""
     if platform.machine() not in {"x86_64", "AMD64"}:
         return []
+    with LOCK:
+        if RELEASE_CACHE["items"] and time.monotonic() - RELEASE_CACHE["time"] < RELEASE_CACHE_SECONDS:
+            return list(RELEASE_CACHE["items"])
     releases = []
     for engine, repo in SUPPORTED.items():
         url = "https://api.github.com/repos/" + repo + "/releases?per_page=10"
@@ -132,6 +137,9 @@ def release_catalogue():
                     "asset_size": asset["size"],
                 })
                 break
+    with LOCK:
+        RELEASE_CACHE["items"] = list(releases)
+        RELEASE_CACHE["time"] = time.monotonic()
     return releases
 
 
