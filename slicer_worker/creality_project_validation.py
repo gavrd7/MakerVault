@@ -42,6 +42,20 @@ def validate_creality_project(data, *, native_tool_count=2):
             if (identity.get("Application") != "Creality_Print" or
                     not identity.get("AppVersion", "").startswith("7.3.")):
                 raise WorkerError("Unrecognised native Creality 3MF identity.")
+            # CLI 7.3.x takes the project file version from the model
+            # Application metadata, not only from creality.config.
+            import re
+            model_root = ET.fromstring(archive.read("3D/3dmodel.model"))
+            ns = "{http://schemas.microsoft.com/3dmanufacturing/core/2015/02}"
+            if model_root.tag != ns + "model":
+                raise WorkerError("Unrecognised native Creality model root.")
+            generator = [
+                entry.text or "" for entry in model_root.findall(ns + "metadata")
+                if entry.get("name") == "Application"
+            ]
+            if len(generator) != 1 or not re.fullmatch(
+                    r"Creality_Print V7\\.3\\.[0-9]+", generator[0]):
+                raise WorkerError("Creality project model generator version is missing or incompatible.")
             project = json.loads(archive.read(PROJECT_SETTINGS))
             if (not isinstance(project, dict) or len(project) > 4096 or
                     project.get("name") != "project_settings" or
