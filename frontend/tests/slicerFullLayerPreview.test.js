@@ -39,13 +39,16 @@ test("progressive full-quality preview reports limited geometry separately from 
 test("progressive large prints append complete geometry without polluting exact-layer cache", () => {
   assert.match(preview, /offset \+= 64/);
   assert.match(preview, /quality=full&zs=/);
-  assert.match(preview, /maxMoves = mobile \? 700000 : 1500000/);
+  assert.match(preview, /const maxMoves = 1500000/);
+  assert.match(preview, /const EMPTY_PATHS = Object\.freeze\(\[\]\)/);
   assert.match(preview, /full-detail/i);
   assert.doesNotMatch(preview, /fullLayerCache\.current\.set\(key,item\)/);
   assert.match(preview, /progressiveMode=\{progressiveMode\}/);
-  assert.match(preview, /return wholeModel\.segments/);
+  assert.match(preview, /if \(progressiveMode\) return EMPTY_PATHS/);
+  assert.match(preview, /segmentChunks=\{progressiveMode \? wholeModel\.chunks : \[\]\}/);
   assert.match(toolpath, /canAppend/);
-  assert.match(toolpath, /startSegment = canAppend \? previous\.count : 0/);
+  assert.match(toolpath, /const startChunk=canAppend \? previous\.chunkCount : 0/);
+  assert.match(toolpath, /const batches=progressiveMode \? segmentChunks\.slice\(startChunk\) : \[segments\]/);
   assert.match(toolpath, /view\.geometryCache = progressiveMode/);
   assert.match(preview, /const naturalLayer = wholeModel\.complete/);
 });
@@ -81,4 +84,15 @@ test("high-fidelity renderer uses GPU instancing without reducing extrusion path
   assert.match(toolpath, /beadMesh\.instanceMatrix\.needsUpdate=true/);
   assert.match(toolpath, /clippingPlanes:\[view\.layerClipPlane\]/);
   assert.doesNotMatch(toolpath, /const pushTri =/);
+});
+
+test("mobile uses the same full-height budget and immutable GPU chunk loading", () => {
+  assert.doesNotMatch(preview, /mobile \? 700000/);
+  assert.match(preview, /const maxMoves = 1500000/);
+  assert.match(preview, /chunks\.push\(batch\)/);
+  assert.match(preview, /chunks:chunks\.slice\(\)/);
+  assert.match(toolpath, /for \(const batch of batches\)/);
+  assert.match(toolpath, /chunkCount:segmentChunks\.length/);
+  assert.match(toolpath, /lastChunk:segmentChunks\[segmentChunks\.length-1\]/);
+  assert.doesNotMatch(toolpath, /const startSegment = canAppend/);
 });
