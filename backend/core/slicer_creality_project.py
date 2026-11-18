@@ -436,6 +436,45 @@ def build_creality_project_candidate(plate, *, printer, process, filaments,
             root, encoding="utf-8", xml_declaration=True)
     except (ValueError, SafeET.ParseError) as exc:
         raise SlicerProfileError("Creality 3MF model metadata is invalid.") from exc
+    # Creality's own project includes per-object part, plate and assemble
+    # records. Identity transforms are essential: MakerVault positions are
+    # already baked into the verified mesh and MUST NOT be applied twice.
+    settings_root = SafeET.fromstring(entries["Metadata/model_settings.config"])
+    from xml.etree import ElementTree as ET
+    objects = settings_root.findall("object")
+    plate_nodes = settings_root.findall("plate")
+    if len(objects) != 2 or len(plate_nodes) != 1:
+        raise SlicerProfileError("Creality model settings do not match two prepared objects.")
+    for index, object_node in enumerate(objects, 1):
+        if object_node.get("id") != str(index):
+            raise SlicerProfileError("Native Creality object IDs are inconsistent.")
+        if not any(child.get("key") == "name" for child in object_node.findall("metadata")):
+            ET.SubElement(object_node, "metadata", {
+                "key": "name", "value": "Model " + str(index)})
+        if object_node.find("part") is None:
+            part = ET.SubElement(object_node, "part", {
+                "id": "1", "subtype": "normal_part"})
+            ET.SubElement(part, "metadata", {
+                "key": "name", "value": "Model " + str(index)})
+            ET.SubElement(part, "metadata", {
+                "key": "matrix", "value":
+                "1 0 0 0 0 1 0 0 0 0 1 0 0 0 0 1"})
+    plate_node = plate_nodes[0]
+    if not any(child.get("key") == "locked" for child in plate_node.findall("metadata")):
+        ET.SubElement(plate_node, "metadata", {
+            "key": "locked", "value": "false"})
+    assemble = settings_root.find("assemble")
+    if assemble is None:
+        assemble = ET.SubElement(settings_root, "assemble")
+    if list(assemble):
+        raise SlicerProfileError("Unexpected pre-existing Creality assembly metadata.")
+    for index in range(1, 3):
+        ET.SubElement(assemble, "assemble_item", {
+            "object_id": str(index), "instance_id": "0",
+            "transform": "1 0 0 0 1 0 0 0 1 0 0 0",
+            "offset": "0 0 0"})
+    entries["Metadata/model_settings.config"] = ET.tostring(
+        settings_root, encoding="utf-8", xml_declaration=True)
     entries["Metadata/project_settings.config"] = encoded
     # Creality 7.3.1 checks this metadata before accepting the file as a
     # native project. It is separate from the effective project settings.
