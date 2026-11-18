@@ -839,12 +839,27 @@ def process_queued_job(job_id):
                 audit_extrusion_xy_bounds(
                     output.decode("utf-8"), width=width, depth=depth,
                 )
-            except (UnicodeDecodeError, ValueError, SlicerProfileError) as exc:
+            except GcodeExtrusionBoundsError as exc:
+                # The auditor emits only fixed, application-authored reasons.
+                if str(exc) == "Generated G-code extrudes outside the native printable rectangle.":
+                    raise SlicerExecutionError(
+                        "Creality Print generated extrusion outside the native "
+                        "printable area. Check model auto-arrangement and the "
+                        "prime tower; G-code was not saved."
+                    ) from exc
                 raise SlicerExecutionError(
-                    "Creality Print generated extrusion outside the trusted build plate "
-                    "or its XY coordinates could not be validated. "
-                    "The output was rejected; review the native prime tower and "
-                    "auto-arrangement before retrying."
+                    "Creality multi-material G-code coordinates could not be "
+                    "verified; G-code was not saved."
+                ) from exc
+            except SlicerProfileError as exc:
+                raise SlicerExecutionError(
+                    "The selected Creality printer profile has no supported, "
+                    "trusted rectangular printable area for this audit."
+                ) from exc
+            except (UnicodeDecodeError, ValueError) as exc:
+                raise SlicerExecutionError(
+                    "Creality generated G-code could not be decoded or "
+                    "validated for printable-area bounds."
                 ) from exc
         variable_test = next((
             (item.get("variable_layer_profile") or {}).get("bands")
