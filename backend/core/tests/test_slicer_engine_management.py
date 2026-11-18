@@ -42,8 +42,8 @@ class EngineManagementAPITests(TestCase):
         self.client.force_login(self.user)
         self.assertTrue(self.client.get(self.endpoint).json()["can_manage"])
 
-    def test_empty_approved_catalogue_does_not_advertise_install(self):
-        self.client.force_login(self.admin)
+    def test_disabled_installer_never_advertises_install(self):
+        self.client.force_login(self.user)
         response = self.client.get(self.endpoint)
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json()["approved_releases"], [])
@@ -69,17 +69,33 @@ class EngineManagementAPITests(TestCase):
         self.assertFalse(SlicerEngineOperation.objects.exists())
 
     @patch.dict(os.environ, {"MAKERVAULT_SLICER_HOST_UPDATER_ENABLED": "1"})
-    def test_only_curated_release_is_queued_and_competing_operations_blocked(self):
-        release = {"engine": "crealityprint", "version": "7.0.1",
-                   "binary_sha256": "a" * 64, "bundle_sha256": "b" * 64,
-                   "bundle_url": "https://example.invalid/reviewed-package.tar.gz",
-                   "architecture": "linux/amd64", "notes": "Reviewed",
-                   "adapter_validated": True}
+    def test_signed_in_user_can_queue_official_install_and_competing_blocked(self):
+        import uuid
+        operation_id = str(uuid.uuid4())
+        release = {"engine": "crealityprint", "version": "7.3.1",
+                   "bundle_sha256": "b" * 64, "binary_sha256": "b" * 64,
+                   "architecture": "linux/amd64", "notes": "Creality Print",
+                   "asset_size": 191511032}
+        def installer(method, path, payload=None):
+            if path == "/catalog":
+                return {"releases": [release]}
+            if path == "/status":
+                return {"operations": []}
+            if path == "/install":
+                assert payload == {
+                    "engine": "crealityprint", "version": "7.3.1",
+                    "bundle_sha256": "b" * 64,
+                }
+                return {"operation": {
+                    "id": operation_id, "engine": "crealityprint",
+                    "version": "7.3.1", "status": "queued",
+                }}
+            raise AssertionError("Unexpected installer request")
         self.client.force_login(self.user)
-        with patch("core.slicer_engine_releases.APPROVED_RELEASES", (release,)):
+        with patch("core.slicer_engine_management_api.installer_request", side_effect=installer):
             listing = self.client.get(self.endpoint).json()
             self.assertTrue(listing["installation_available"])
-            payload = {"engine": "crealityprint", "version": "7.0.1",
+            payload = {"engine": "crealityprint", "version": "7.3.1",
                        "action": "install", "release_sha256": "b" * 64}
             first = self.client.post(self.endpoint, data=payload,
                                      content_type="application/json")
@@ -88,6 +104,30 @@ class EngineManagementAPITests(TestCase):
             self.assertEqual(self.client.post(self.endpoint, data=payload,
                              content_type="application/json").status_code, 409)
             self.assertEqual(SlicerEngineOperation.objects.count(), 1)
+
+    @patch.dict(os.environ, {"MAKERVAULT_SLICER_HOST_UPDATER_ENABLED": "1"})
+    def test_status_progress_is_copied_from_installer(self):
+        import uuid
+        from core.models import SlicerEngineOperation
+        record = SlicerEngineOperation.objects.create(
+            requested_by=self.user, engine="crealityprint", version="7.3.1",
+            action="install", release_sha256="a" * 64)
+        def installer(method, path, payload=None):
+            if path == "/catalog":
+                return {"releases": []}
+            return {"operations": [{
+                "id": str(record.pk), "engine": "crealityprint",
+                "status": "completed", "progress": 100,
+                "message": "Installed and activated",
+            }]}
+        self.client.force_login(self.user)
+        with patch("core.slicer_engine_management_api.installer_request", side_effect=installer):
+            response = self.client.get(self.endpoint)
+        self.assertEqual(response.status_code, 200, response.content)
+        record.refresh_from_db()
+        self.assertEqual(record.status, "completed")
+        self.assertEqual(record.progress, 100)
+        self.assertIsNotNone(record.completed_at)
 
     def test_release_validation_fails_closed(self):
         from core.slicer_engine_releases import validated_releases
