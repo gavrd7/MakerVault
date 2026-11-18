@@ -97,8 +97,15 @@ export default function SlicerGcodePreview({ fileId = null, preview, bedSize = n
       try {
         for (let offset = 0; offset < layers.length && !cancelled; offset += 64) {
           const requested = layers.slice(offset, offset + 64);
+          // One cold request supplies the layer inventory for Redis indexing.
+          // Afterwards each page is a cheap cached read, including repeat opens.
+          // Keep the URL short enough for ordinary reverse proxies.
+          const allHeights = offset === 0 ? encodeURIComponent(layers.join(",")) : "";
+          const indexQuery = allHeights && allHeights.length <= 6000
+            ? "&all_zs=" + allHeights : "";
           const url = "/api/files/" + encodeURIComponent(fileId) +
-            "/gcode/layers/?overview=1&detail=" + overviewDetail + "&zs=" + encodeURIComponent(requested.join(","));
+            "/gcode/layers/?overview=1&detail=" + overviewDetail +
+            "&zs=" + encodeURIComponent(requested.join(",")) + indexQuery;
           const response = await fetch(url, {credentials:"same-origin",signal:controller.signal});
           if (!response.ok) {
             const detail = await response.json().catch(()=>({}));
