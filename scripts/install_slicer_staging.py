@@ -427,6 +427,10 @@ def enable_engine_installer():
         current = current.replace("MAKERVAULT_SLICER_HOST_UPDATER_ENABLED=0",
                                   "MAKERVAULT_SLICER_HOST_UPDATER_ENABLED=1")
     _save_env(current)
+    # Existing staging installs may still use an older worker image that has
+    # no active-manifest support. Rebuild the worker wrapper once, preserving
+    # the exact Orca binary and hash, before activating an extra engine.
+    refresh_worker()
     args = _compose_args()
     _run(args + ["config", "--quiet"])
     print("Starting restricted engine installer with no published ports…")
