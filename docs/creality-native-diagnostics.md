@@ -190,3 +190,37 @@ unchanged. The report is safe-to-share structural metadata only.
 Important: a source STL renamed `.3mf`, a single exported model-only 3MF,
 or a sliced G-code artifact is not interchangeable with a genuine Creality
 project carrying `Metadata/project_settings.config`.
+
+## Built-in sanitised desktop 3MF reference (no file transfer)
+
+A genuine two-Benchy Creality Print **7.3.2.6412** K2 project was
+inspected directly in the development workspace. Rather than committing the
+private project, a value-free structural fixture now ships in
+`slicer_worker/creality_reference_schema.py`.
+
+It records only:
+- 17 archive members and their role counts; three model documents,
+  two component links, one actual mesh, and two build instances
+- 672 configuration setting keys in the original, represented in the fixture
+  by aggregate type/length counts plus **112 four-slot public key names**
+- Shapes of key purge, nozzle and tower options; no actual values
+
+It does **not** include geometry, temperatures, vendor filenames, colour
+values, user paths, source G-code, dates, machine identifiers or private
+filament IDs. Comparing to the fixture checks **only its stored subset of
+option names**; it cannot claim to know every missing one of the 672 keys.
+
+As of this change, the normal command automatically includes the bundled
+schema comparison without requiring a `--reference` or
+`--reference-inventory` argument:
+
+```bash
+sudo python3 scripts/diagnose_creality_staging.py \
+  --output /tmp/creality-diagnostic-v8.json
+```
+
+The existing explicit reference options remain available to compare against
+another original project; they are no longer necessary for the current
+uploaded Benchy fixture. This is structural evidence only: 7.3.2 is not
+interchangeable with the staging 7.3.1 binary, and the diagnostics do not
+authorise CFS printer submission.
