@@ -28,6 +28,7 @@ from .slicer_native_overrides import apply_orca_job_overrides
 from .slicer_variable_layers import audit_orca_variable_layers, validate_orca_variable_support_compatibility
 from .slicer_paint_assets import expand_painted_settings
 from .slicer_process_settings import apply_process_overrides
+from .slicer_profiles import SlicerProfileError
 from .slicer_plate_3mf import build_plate_3mf, build_compound_plate_3mf
 from .slicer_plate_validation import validate_plate_collisions, PlateCollisionError
 from .slicer_worker_client import SlicerWorkerError, health, run_remote_job
