@@ -146,10 +146,13 @@ def prepare_creality_multistl(job, source_models):
     for index, (item, raw) in enumerate(source_models):
         if item != objects[index] or not isinstance(raw, bytes) or not raw:
             raise MaterialRoutingError("Creality native STL identity is invalid.")
-        if any(item.get(key) for key in (
-            "process_overrides", "support_paint", "seam_paint",
-            "fuzzy_skin_paint", "colour_paint", "variable_layer_profile",
-        )):
+        if (item.get("process_overrides") or
+            (item.get("support_paint") or {}).get("regions") or
+            (item.get("seam_paint") or {}).get("regions") or
+            (item.get("fuzzy_skin_paint") or {}).get("regions") or
+            (item.get("colour_paint") or {}).get("regions") or
+            (item.get("colour_paint") or {}).get("faces") or
+            (item.get("variable_layer_profile") or {}).get("bands")):
             raise MaterialRoutingError(
                 "Creality offline STL mode does not support painted or per-object overrides.")
         if (item.get("rotation_deg", 0) != 0 or
