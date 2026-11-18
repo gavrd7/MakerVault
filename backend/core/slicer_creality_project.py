@@ -259,7 +259,8 @@ def build_creality_project_candidate(plate, *, printer, process, filaments,
         for node in list(root):
             if node.tag == "{" + NS + "}metadata" and node.get("name") == "Application":
                 root.remove(node)
-        application = SafeET.Element("{" + NS + "}metadata", {"name": "Application"})
+        from xml.etree import ElementTree as ET
+        application = ET.Element("{" + NS + "}metadata", {"name": "Application"})
         application.text = "Creality_Print V" + version
         root.insert(0, application)
         entries["3D/3dmodel.model"] = SafeET.tostring(
