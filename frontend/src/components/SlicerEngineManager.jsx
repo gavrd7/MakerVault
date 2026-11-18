@@ -4,7 +4,7 @@ import {SlicerEngineLogo} from "./SlicerEngineChoices";
 
 const TERMINAL = new Set(["completed", "failed", "cancelled"]);
 
-export default function SlicerEngineManager({engines = [], canManage = true, onChanged}) {
+export default function SlicerEngineManager({engines = [], onChanged}) {
   const [state,setState] = useState(null);
   const [busy,setBusy] = useState(false);
   const [error,setError] = useState("");
@@ -24,6 +24,7 @@ export default function SlicerEngineManager({engines = [], canManage = true, onC
 
   const operation = (state?.operations || []).find(row => !TERMINAL.has(row.status));
   const releases=state?.approved_releases || [];
+  const canManage=state?.can_manage !== false;
   const request=async(release,action)=>{
     if(!canManage || !state?.installation_available || busy || operation)return;
     const label=engines.find(row=>row.key===release.engine)?.label||release.engine;
@@ -51,7 +52,7 @@ export default function SlicerEngineManager({engines = [], canManage = true, onC
     <div className="slicerEngineManagerHeading">
       <div>
         <h4>Installed engines and updates</h4>
-        <p>Install, update or switch slicing engines here. MakerVault checks downloads and compatibility automatically.</p>
+        <p>Manage installed engines and available updates. MakerVault will check downloads and compatibility automatically.</p>
       </div>
       <button type="button" onClick={refresh} disabled={busy}>Refresh</button>
     </div>
@@ -99,7 +100,7 @@ export default function SlicerEngineManager({engines = [], canManage = true, onC
           {item.engine} {item.version} · {item.action} · {item.status}
         </li>)}</ul>
       </details>}
-      <small>Installed versions remain available for rollback. Updates do not start printer jobs.</small>
+      <small>Updates do not start printer jobs. Existing installations remain available while an update is prepared.</small>
     </div>
   </section>;
 }
