@@ -1765,7 +1765,7 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
     </Modal>}
     {profileModal === "engines" && <Modal title="Slicer engine installations"
       subtitle="Optional self-hosted engines" onClose={() => setProfileModal("")} wide>
-      <SlicerEngineManager engines={engines} canManage={canVerifyProfiles}
+      <SlicerEngineManager engines={engines}
         onChanged={() => apiFetch("/api/printing/slicer/engines/")
           .then(data => setEngines(data.engines || []))
           .catch(() => {})} />
