@@ -325,6 +325,13 @@ def build_creality_project_candidate(plate, *, printer, process, filaments,
     project["filament_settings_id"] = [
         str(preset.get("name") or "MakerVault filament %d" % (i + 1))
         for i, preset in enumerate(filament_settings)]
+    # Creality 7.3.1 uses one-based physical nozzle routing. A K2/CFS
+    # changes filament through a single physical nozzle; it does not have
+    # two physical nozzle_diameter entries. Native upstream tests explicitly
+    # accept [1, 1] for two filaments / one nozzle.
+    nozzles = project.get("nozzle_diameter")
+    if isinstance(nozzles, list) and len(nozzles) == 1:
+        project["filament_map"] = ["1", "1"]
     project["print_settings_id"] = str(print_settings.get("name") or "MakerVault process")
     project["printer_settings_id"] = str(machine.get("name") or "MakerVault printer")
     if prime_tower is None and project.get("enable_prime_tower", "1") != "0":
