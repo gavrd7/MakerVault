@@ -1914,3 +1914,34 @@ class DevicePairing(TimeStampedModel):
 
     class Meta:
         ordering = ["-created_at"]
+
+
+class SlicerEngineOperation(TimeStampedModel):
+    """Durable admin-approved host-updater request, never executed by Django.
+
+    The host maintenance service must independently verify a pinned approved
+    release before touching the single shared engine store. A browser request
+    contains no executable, URL, shell command or filesystem path.
+    """
+    ACTIONS = (("install", "Install"), ("update", "Update"),
+               ("rollback", "Rollback"))
+    STATES = (("queued", "Queued"), ("downloading", "Downloading"),
+              ("verifying", "Verifying"), ("staged", "Staged"),
+              ("activating", "Activating"), ("completed", "Completed"),
+              ("failed", "Failed"), ("cancelled", "Cancelled"))
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    requested_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT,
+                                     related_name="slicer_engine_operations")
+    engine = models.CharField(max_length=32)
+    version = models.CharField(max_length=80)
+    action = models.CharField(max_length=16, choices=ACTIONS)
+    release_sha256 = models.CharField(max_length=64)
+    status = models.CharField(max_length=16, choices=STATES, default="queued")
+    progress = models.PositiveSmallIntegerField(default=0)
+    status_message = models.CharField(max_length=200, blank=True)
+    completed_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ("-created_at",)
+        indexes = [models.Index(fields=["status", "created_at"],
+                                name="slicer_engine_op_queue_idx")]
