@@ -171,6 +171,7 @@ def run_remote_job(job_id, engine, version, model, printer_profile, filament_pro
             stage = None
             reason = None
             reason_details = None
+            cli_exit_code = None
             reasons = set(REASONS)
             try:
                 declared_error_length = response.headers.get("Content-Length")
@@ -189,6 +190,12 @@ def run_remote_job(job_id, engine, version, model, printer_profile, filament_pro
                                 stage = result["stage"]
                             if result.get("reason") in reasons:
                                 reason = result["reason"]
+                            native_code = result.get("cli_exit_code")
+                            if (engine == "crealityprint" and type(native_code) is int
+                                    and 1 <= native_code <= 255
+                                    and isinstance(reason, str)
+                                    and reason.startswith("creality-")):
+                                cli_exit_code = native_code
                             setting_keys = result.get("setting_keys") if reason == "native-project-settings-invalid" else None
                             if isinstance(setting_keys, list) and len(setting_keys) <= 8:
                                 import re
@@ -207,6 +214,16 @@ def run_remote_job(job_id, engine, version, model, printer_profile, filament_pro
             message = explain_worker_failure(reason, response.status_code)
             if reason_details:
                 message += " Rejected native setting(s): " + reason_details + "."
+            if cli_exit_code is not None:
+                native_error = {
+                    205: "CLI_VALIDATE_ERROR (-51)",
+                    232: "CLI_FILE_VERSION_NOT_SUPPORTED (-24)",
+                    254: "CLI_INVALID_PARAMS (-2)",
+                }.get(cli_exit_code, "native CLI failure")
+                message = (
+                    "Creality Print exit code " + str(cli_exit_code) + " ("
+                    + native_error + "). " + message
+                )
             if reason:
                 message += " [" + reason + "]"
             raise SlicerWorkerError(message)
