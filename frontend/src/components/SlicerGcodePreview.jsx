@@ -167,7 +167,10 @@ export default function SlicerGcodePreview({ fileId = null, preview, bedSize = n
   // Query original stored G-code for this exact layer. Global 80k-move
   // samples are not sufficient for continuous wall and support geometry.
   useEffect(() => {
-    if (!fileId || !Number.isFinite(z) || (layer === null && step === null)) return undefined;
+    // Scrubbing through the already-rendered model must never initiate a
+    // full-file scan. Retrieve exact paths only for detailed current-layer
+    // inspection, or when the movement slider is explicitly used.
+    if (!fileId || !Number.isFinite(z) || (layerDisplay !== "current" && step === null)) return undefined;
     const key = String(fileId) + ":" + Number(z).toFixed(3);
     const cached = fullLayerCache.current.get(key);
     if (cached) {
@@ -203,7 +206,7 @@ export default function SlicerGcodePreview({ fileId = null, preview, bedSize = n
       if (live && error.name !== "AbortError") setLayerError(error.message);
     }).finally(() => { if (live) setLayerBusy(false); });
     return () => { live = false; controller.abort(); };
-  }, [fileId, z, layer, step]);
+  }, [fileId, z, layerDisplay, step]);
 
   const layerSegments = useMemo(() => {
     if (exactLayer?.z != null && Math.abs(exactLayer.z - z) < 0.0005)
@@ -211,7 +214,9 @@ export default function SlicerGcodePreview({ fileId = null, preview, bedSize = n
     // While loading, do not pretend that the sparse global sample is exact.
     return [];
   }, [exactLayer, z]);
-  const progressiveMode=layer===null && step===null && layerDisplay==="all" && !highlightCurrent && !outerContrast;
+  // Even when the user drags the layer slider, continue reusing the same
+  // complete GPU buffers. The renderer clips them at the selected Z height.
+  const progressiveMode=layerDisplay==="all" && !highlightCurrent && !outerContrast;
   const displaySegments = useMemo(() => {
     // Complete, ordered batches share their original segment references.
     // Avoid replacing the last batch with an independently fetched exact
@@ -322,7 +327,11 @@ export default function SlicerGcodePreview({ fileId = null, preview, bedSize = n
           <div className="slicerResultSteps">
             <label htmlFor="slice-step-slider">{exactLayer && !exactLayer.limited ? "Full-resolution" : "Available"} layer move {finalStep} / {layerSegments.length}</label>
             <input id="slice-step-slider" className="slicerFullRange" type="range" min="0" max={layerSegments.length}
-              step="1" value={finalStep} onChange={e => setStep(Number(e.target.value))} />
+              step="1" value={finalStep} onChange={e => {
+                // Movement inspection is the separate, exact-detail mode.
+                setLayerDisplay("current");
+                setStep(Number(e.target.value));
+              }} />
           </div>
         </div>
         <label className="slicerResultLayerSlider" htmlFor="slice-layer-slider">
