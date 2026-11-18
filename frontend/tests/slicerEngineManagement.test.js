@@ -15,7 +15,7 @@ test("engine installer shows actual approved releases and worker status",()=>{
   assert.match(manager,/installed_version/);
   assert.match(manager,/Recent engine operations/);
   assert.match(manager,/No approved installation release is available yet/);
-  assert.match(manager,/canManage/);
+  assert.match(manager,/state\?\.can_manage !== false/);
 });
 
 test("only an explicit administrator action can queue a pinned release",()=>{
@@ -30,6 +30,12 @@ test("only an explicit administrator action can queue a pinned release",()=>{
 test("existing setup opens the integrated engine manager without altering slicing",()=>{
   assert.match(workbench,/import SlicerEngineManager/);
   assert.match(workbench,/<SlicerEngineManager engines=\{engines\}/);
-  assert.match(workbench,/canManage=\{canVerifyProfiles\}/);
+  assert.doesNotMatch(workbench,/canManage=\{canVerifyProfiles\}/);
   assert.match(workbench,/View engine installations/);
+});
+
+test("installed OrcaSlicer never looks unavailable just because an update is absent",()=>{
+  assert.match(manager,/engine\.available === true \|\| engine\.status === "validated"/);
+  assert.match(manager,/Already installed — no newer version available/);
+  assert.doesNotMatch(manager,/No approved installation release is available yet/);
 });
