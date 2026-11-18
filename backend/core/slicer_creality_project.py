@@ -341,6 +341,17 @@ def _native_palette_settings(project, filaments, *, palette_slots=4):
         for destination in range(palette_slots)
     ])
     project.setdefault("flush_volumes_vector", ["140"] * (palette_slots * 2))
+    matrix = project["flush_volumes_matrix"]
+    vector = project["flush_volumes_vector"]
+    if isinstance(matrix, list) and len(matrix) == 4:
+        # Expand a source 2x2 matrix by repeating its material-specific
+        # transition values for unassigned virtual slots.
+        project["flush_volumes_matrix"] = [
+            matrix[(source % 2) * 2 + (destination % 2)]
+            for source in range(palette_slots)
+            for destination in range(palette_slots)]
+    if isinstance(vector, list) and len(vector) == 4:
+        project["flush_volumes_vector"] = vector * 2
     if (not isinstance(project["flush_volumes_matrix"], list) or
             len(project["flush_volumes_matrix"]) != palette_slots ** 2 or
             not isinstance(project["flush_volumes_vector"], list) or
