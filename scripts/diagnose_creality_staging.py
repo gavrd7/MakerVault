@@ -38,7 +38,12 @@ def _cmd(args, *, input_bytes=None, timeout=120, check=True):
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--job-id", help="Optional Creality failed job UUID")
-    parser.add_argument("--reference", help="Optional genuine Creality-exported 3MF (comparison only)")
+    refs = parser.add_mutually_exclusive_group()
+    refs.add_argument("--reference", help="Local genuine Creality-exported 3MF")
+    refs.add_argument("--reference-inventory", metavar="FILENAME",
+                      help="Select genuine 3MF from failed job owner's MakerVault files")
+    refs.add_argument("--reference-asset-id", metavar="UUID",
+                      help="Select specific owned FileAsset UUID")
     parser.add_argument("--timeout", type=int, default=90,
                         help="Seconds per native test (10–180)")
     parser.add_argument("--output", type=Path,
@@ -55,6 +60,11 @@ def main(argv=None):
             parser.error("Invalid job UUID.")
     if args.output.exists() or args.output.is_symlink():
         parser.error("Report already exists; specify another --output path.")
+    if args.reference_asset_id:
+        try:
+            uuid.UUID(args.reference_asset_id)
+        except ValueError:
+            parser.error("Invalid FileAsset UUID.")
     if args.reference:
         path = Path(args.reference)
         if path.is_symlink() or not path.is_file() or path.stat().st_size > 32 * 1024 * 1024:
@@ -90,8 +100,33 @@ def main(argv=None):
                 "--project", worker_candidate, "--output", worker_report,
                 "--timeout", str(args.timeout),
             ]
-            if args.reference:
-                refdata = Path(args.reference).read_bytes()
+            if args.reference or args.reference_inventory or args.reference_asset_id:
+                if args.reference:
+                    refdata = Path(args.reference).read_bytes()
+                else:
+                    app_reference = "/tmp/makervault-creality-ref-" + suffix + ".3mf"
+                    reference_export = [
+                        "docker", "exec", APP, "python3",
+                        "/app/backend/manage.py", "diagnose_creality_reference",
+                        "--output", app_reference,
+                    ]
+                    if args.job_id:
+                        reference_export += ["--job-id", args.job_id]
+                    if args.reference_asset_id:
+                        reference_export += ["--asset-id", args.reference_asset_id]
+                    else:
+                        reference_export += ["--name", args.reference_inventory]
+                    try:
+                        _cmd(reference_export, timeout=90)
+                        local_reference = Path(temporary) / "reference.3mf"
+                        _cmd(["docker", "cp", APP + ":" + app_reference,
+                              str(local_reference)], timeout=90)
+                        refdata = local_reference.read_bytes()
+                    finally:
+                        _cmd(["docker", "exec", APP, "rm", "-f", "--",
+                              app_reference], check=False, timeout=15)
+                if not 0 < len(refdata) <= 32 * 1024 * 1024:
+                    raise RuntimeError("Reference 3MF is empty or exceeds the limit.")
                 _cmd([
                     "docker", "exec", "-i", WORKER, "sh", "-c",
                     'umask 077; cat > "$1"', "sh", worker_reference,
