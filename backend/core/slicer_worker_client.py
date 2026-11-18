@@ -92,7 +92,8 @@ def _encode(raw, limit):
 
 
 def run_remote_job(job_id, engine, version, model, printer_profile, filament_profile, process_profile, *, timeout_seconds=900, model_format="stl", filament_profiles=None,
-                   creality_model_stls=None, creality_tool_ids=None):
+                   creality_model_stls=None, creality_tool_ids=None,
+                   creality_native_project=False):
     if model_format not in {"stl", "3mf"}:
         raise SlicerWorkerError("Unsupported slicer input format.")
     if not isinstance(timeout_seconds, int) or not 1 <= timeout_seconds <= 900:
@@ -115,8 +116,9 @@ def run_remote_job(job_id, engine, version, model, printer_profile, filament_pro
         payload["model_format"] = "3mf"
     if filament_profiles is not None:
         if (not ((engine == "orcaslicer" and model_format == "3mf") or
-                 (engine == "crealityprint" and model_format == "stl" and
-                  creality_model_stls is not None))
+                 (engine == "crealityprint" and
+                  ((model_format == "stl" and creality_model_stls is not None) or
+                   (model_format == "3mf" and creality_native_project is True))))
                 or not isinstance(filament_profiles, (list, tuple))
                 or not 2 <= len(filament_profiles) <= 16):
             raise SlicerWorkerError("Multiple native filaments require an Orca 3MF or Creality multi-STL job.")
@@ -127,6 +129,13 @@ def run_remote_job(job_id, engine, version, model, printer_profile, filament_pro
         payload["filament_profiles"] = [
             _encode(profile, MAX_REQUEST_PROFILE) for profile in filament_profiles
         ]
+    if creality_native_project:
+        if (creality_native_project is not True or engine != "crealityprint"
+                or model_format != "3mf" or creality_model_stls is not None
+                or creality_tool_ids is not None or
+                filament_profiles is None or len(filament_profiles) != 2):
+            raise SlicerWorkerError("Invalid Creality self-contained project contract.")
+        payload["creality_native_project"] = True
     if creality_model_stls is not None:
         if (engine != "crealityprint" or model_format != "stl" or
                 filament_profiles is None or not isinstance(creality_model_stls, (list, tuple))
