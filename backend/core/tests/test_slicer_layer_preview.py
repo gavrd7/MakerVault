@@ -87,7 +87,7 @@ class FullLayerParserTests(SimpleTestCase):
         for index in range(300):
             kind = "Sparse infill" if index < 150 else "Support material"
             lines.extend((f";TYPE:{kind}", f"G1 X{index + 1} Y0 E0.1"))
-        result = layer_batch_toolpaths("\\n".join(lines), [0.2],
+        result = layer_batch_toolpaths("\n".join(lines), [0.2],
                                        overview=True, overview_limit=80)
         layer = result["layers"][0]
         self.assertTrue(result["complete"])
@@ -110,7 +110,7 @@ class FullLayerParserTests(SimpleTestCase):
                           "G1 X1 Y0 E0.1"))
         backend = LocMemCache("preview-index-multiple-pages", {})
         with patch("core.slicer_preview_cache.cache", backend):
-            first = index_overview("cache-test-70-layers", "\\n".join(lines), heights, 80)
+            first = index_overview("cache-test-70-layers", "\n".join(lines), heights, 80)
             self.assertIsNotNone(first)
             self.assertEqual(len(first["layers"]), 64)
             second = cached_batch("cache-test-70-layers", heights[64:])
