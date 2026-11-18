@@ -235,6 +235,40 @@ class FullLayerEndpointTests(TestCase):
             with self.subTest(invalid=invalid):
                 self.assertEqual(self.client.get(url + invalid).status_code, 400)
 
+    def test_post_slice_cache_prepares_both_resolutions_without_extra_parses(self):
+        from unittest.mock import patch
+        from django.core.cache.backends.locmem import LocMemCache
+        from core.slicer_preview_cache import (
+            warm_asset_overviews, cached_batch, preview_index_key,
+        )
+        from core.slicer_layer_preview import layer_batch_toolpaths
+        backend = LocMemCache("preview-warmup-variants", {})
+        with patch("core.slicer_preview_cache.cache", backend):
+            with patch("core.slicer_preview_cache.layer_batch_toolpaths",
+                       wraps=layer_batch_toolpaths) as parse:
+                self.assertTrue(warm_asset_overviews(self.asset, GCODE.encode("utf-8")))
+                self.assertEqual(parse.call_count, 1)
+                for detail in (110, 220):
+                    result = cached_batch(preview_index_key(self.asset, detail),
+                                          [0.2, 0.4])
+                    self.assertIsNotNone(result)
+                    self.assertTrue(result["cached"])
+                self.assertTrue(warm_asset_overviews(self.asset, GCODE.encode("utf-8")))
+                self.assertEqual(parse.call_count, 1)
+
+    def test_preview_cache_response_exposes_timing_and_hit(self):
+        from unittest.mock import patch
+        from django.core.cache.backends.locmem import LocMemCache
+        backend = LocMemCache("preview-response-timing", {})
+        self.client.force_login(self.owner)
+        url = f"/api/files/{self.asset.pk}/gcode/layers/?overview=1&detail=80&zs=0.2,0.4"
+        with patch("core.slicer_preview_cache.cache", backend):
+            self.assertEqual(self.client.get(url + "&all_zs=0.2,0.4").status_code, 200)
+            cached = self.client.get(url)
+            self.assertEqual(cached.status_code, 200)
+            self.assertEqual(cached["X-MakerVault-Preview-Cache"], "hit")
+            self.assertIn("preview;dur=", cached["Server-Timing"])
+
     def test_other_user_cannot_inspect_unpublished_output(self):
         self.client.force_login(self.other)
         self.assertEqual(self.client.get(self.url).status_code, 404)
