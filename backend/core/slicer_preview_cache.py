@@ -188,6 +188,11 @@ def warm_asset_high_fidelity(asset, source):
         max_total_segments=MAX_FULL_PREVIEW_SEGMENTS,
     )
     if not result["complete"]:
-        # Never substitute a partial mesh and label it complete.
+        # Avoid repeatedly scheduling expensive scans of G-code beyond the
+        # memory budget. Direct bounded layer fetch remains available.
+        try:
+            cache.set(index_key + ":unavailable", "resource-limit", 3600)
+        except Exception:
+            pass
         return False
     return _store_overview(index_key, heights, result["layers"], 0, full=True)
