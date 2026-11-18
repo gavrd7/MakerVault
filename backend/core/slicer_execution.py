@@ -21,7 +21,7 @@ from .slicer_native_resolution import resolved_native_profile
 from .slicer_bed_dimensions import trusted_plate_dimensions
 from .slicer_material_routing import single_material_slice_assignment, MaterialRoutingError
 from .slicer_multimaterial_execution import (plan_native_multimaterial, prepare_job_multimaterial,
-                                             prepare_creality_multistl)
+                                             prepare_creality_multistl, prepare_creality_positioned_project)
 from .slicer_material_gcode_audit import audit_native_tool_usage, MaterialGcodeAuditError
 from .slicer_gcode_bounds import audit_extrusion_xy_bounds, GcodeExtrusionBoundsError
 from .slicer_flush_settings import apply_orca_flush_settings
@@ -396,10 +396,9 @@ def _validate_plate_execution(job):
                 "Combine variable layer height with Object settings after the native test fixture.")
     if settings.get("multi_material_test") is True:
         if job.engine == "crealityprint":
-            if not (settings.get("creality_auto_arrange_offline") is True
-                    and len(objects) == 2):
+            if len(objects) != 2:
                 raise SlicerExecutionError(
-                    "Creality multi-material requires two STLs and explicit offline auto-arrangement.")
+                    "Creality project slicing requires exactly two assigned models.")
             if settings.get("flush_settings") is not None or settings.get("prime_tower") is not None:
                 raise SlicerExecutionError(
                     "Creality's offline multi-STL test cannot preserve custom flushing or prime tower positions.")
@@ -453,10 +452,9 @@ def _validate_plate_execution(job):
             raise SlicerExecutionError(
                 "Custom process overrides are not yet supported by Creality Print.")
         if settings.get("multi_material_test"):
-            if not (settings.get("creality_auto_arrange_offline") is True and len(objects) == 2):
+            if len(objects) != 2:
                 raise SlicerExecutionError(
-                    "Creality Print multi-material test requires two assigned STL models "
-                    "and explicit offline auto-arrangement.")
+                    "Creality Print project slicing requires two assigned models.")
             if settings.get("flush_settings") is not None or settings.get("prime_tower") is not None:
                 raise SlicerExecutionError(
                     "Creality Print's offline multi-STL test cannot preserve custom "
@@ -659,9 +657,11 @@ def process_queued_job(job_id):
             if is_multi_test:
                 stage = "preparing the native multi-filament test plate"
                 if job.engine == "crealityprint":
-                    material_result = prepare_creality_multistl(job, source_models)
-                    model = material_result["model_stls"][0]
-                    model_format = "stl"
+                    width, depth = trusted_plate_dimensions(job.printer_profile)
+                    material_result = prepare_creality_positioned_project(
+                        job, source_models, bed_width=width, bed_depth=depth)
+                    model = material_result["project_geometry"]
+                    model_format = "3mf"
                 else:
                     width, depth = trusted_plate_dimensions(job.printer_profile)
                     material_result = prepare_job_multimaterial(
@@ -801,6 +801,18 @@ def process_queued_job(job_id):
             # tool 0 for the worker contract; NEVER overwrite the selected
             # slot's native filament with the unrelated Setup default.
             profiles[1] = material_result["filament_profiles"][0]
+        if material_result is not None and job.engine == "crealityprint":
+            stage = "building self-contained Creality native 3MF project"
+            from .slicer_creality_project import build_creality_project_candidate
+            width, depth = trusted_plate_dimensions(job.printer_profile)
+            model = build_creality_project_candidate(
+                material_result["project_geometry"],
+                printer=profiles[0], process=profiles[2],
+                filaments=material_result["filament_profiles"],
+                version=job.engine_version,
+                prime_tower=(job.settings or {}).get("prime_tower"),
+                bed_width=width, bed_depth=depth)
+            model_format = "3mf"
         if model_format == "stl" and job.input_asset.sha256 and hashlib.sha256(model).hexdigest() != job.input_asset.sha256:
             raise SlicerExecutionError("Model contents changed since the job was prepared.")
         stage = "executing the isolated slicer worker"
@@ -810,12 +822,8 @@ def process_queued_job(job_id):
             model_format=model_format,
             filament_profiles=(material_result["filament_profiles"]
                                if material_result is not None else None),
-            creality_model_stls=(material_result["model_stls"]
-                                if material_result is not None and job.engine == "crealityprint"
-                                else None),
-            creality_tool_ids=(material_result["tool_ids"]
-                              if material_result is not None and job.engine == "crealityprint"
-                              else None),
+            creality_native_project=(material_result is not None and
+                                     job.engine == "crealityprint"),
         )
         if material_result is not None:
             stage = "auditing multi-material tool selections and extrusion"
