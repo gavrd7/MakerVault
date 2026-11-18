@@ -76,7 +76,7 @@ def _decode_payload(payload):
         "model", "printer_profile", "filament_profile", "process_profile",
     }
     if not isinstance(payload, dict) or not expected.issubset(payload) or (
-            set(payload) - expected - {"model_format", "filament_profiles"}):
+            set(payload) - expected - {"model_format", "filament_profiles", "creality_model_stls", "creality_tool_ids"}):
         raise WorkerError("Invalid slicing job payload.")
     try:
         uuid.UUID(str(payload["job_id"]))
@@ -106,7 +106,9 @@ def _decode_payload(payload):
         files[key] = raw
     if "filament_profiles" in payload:
         palette = payload["filament_profiles"]
-        if (payload["engine"] != "orcaslicer" or model_format != "3mf"
+        if (not ((payload["engine"] == "orcaslicer" and model_format == "3mf") or
+                 (payload["engine"] == "crealityprint" and model_format == "stl" and
+                  "creality_model_stls" in payload))
                 or not isinstance(palette, list) or not 2 <= len(palette) <= 16):
             raise WorkerError("Multi-filament requests require Orca 3MF and two to sixteen presets.")
         decoded = []
@@ -125,6 +127,36 @@ def _decode_payload(payload):
         if decoded[0] != files["filament_profile"]:
             raise WorkerError("Native filament palette does not match its first preset.")
         files["filament_profiles"] = decoded
+    if "creality_model_stls" in payload:
+        if (payload["engine"] != "crealityprint" or model_format != "stl" or
+                "filament_profiles" not in files):
+            raise WorkerError("Creality multi-STL requires a native filament palette.")
+        stls = payload["creality_model_stls"]
+        tools = payload.get("creality_tool_ids")
+        if (not isinstance(stls, list) or not 2 <= len(stls) <= 12 or
+                not isinstance(tools, list) or len(tools) != len(stls) or
+                any(type(tool) is not int or not 1 <= tool <= len(files["filament_profiles"])
+                    for tool in tools) or len(set(tools)) < 2):
+            raise WorkerError("Invalid Creality multi-STL model/tool mapping.")
+        decoded = []
+        for entry in stls:
+            if not isinstance(entry, str) or len(entry) > ((MAX_MODEL_BYTES + 2)//3)*4 + 8:
+                raise WorkerError("Invalid Creality multi-STL model size.")
+            try:
+                raw = base64.b64decode(entry, validate=True)
+            except (ValueError, base64.binascii.Error):
+                raise WorkerError("Invalid Creality multi-STL model encoding.") from None
+            if not raw or len(raw) > MAX_MODEL_BYTES:
+                raise WorkerError("Invalid Creality multi-STL model size.")
+            from .stl_validation import validate_stl
+            validate_stl(raw)
+            decoded.append(raw)
+        if decoded[0] != files["model"]:
+            raise WorkerError("Creality first model does not match job input.")
+        files["creality_model_stls"] = decoded
+        files["creality_tool_ids"] = tools
+    elif "creality_tool_ids" in payload:
+        raise WorkerError("Creality tool assignments require native STL models.")
     if model_format == "3mf":
         validate_worker_3mf(files["model"],
             native_tool_count=len(files["filament_profiles"])
@@ -204,6 +236,12 @@ class Handler(BaseHTTPRequestHandler):
                 if "filament_profiles" in files:
                     for index, native in enumerate(files["filament_profiles"]):
                         (workdir / ("filament-" + str(index) + ".json")).write_bytes(native)
+                if "creality_model_stls" in files:
+                    for index, raw in enumerate(files["creality_model_stls"]):
+                        (workdir / ("input-" + str(index) + ".stl")).write_bytes(raw)
+                    (workdir / "creality-material-map.json").write_text(
+                        json.dumps({"model_count": len(files["creality_model_stls"]),
+                                    "tool_ids": files["creality_tool_ids"]}))
                 stage = "running slicer engine"
                 runner = {"orcaslicer": run_orca,
                           "crealityprint": run_creality,
@@ -214,7 +252,10 @@ class Handler(BaseHTTPRequestHandler):
                 if not data or len(data) > MAX_OUTPUT_BYTES:
                     raise WorkerError("Generated G-code exceeded the output size limit.")
                 if "filament_profiles" in files:
-                    verify_multi_material_output(data, expected_native_tools(files["model"]))
+                    expected = (set(tool - 1 for tool in files["creality_tool_ids"])
+                                if "creality_tool_ids" in files
+                                else expected_native_tools(files["model"]))
+                    verify_multi_material_output(data, expected)
                 return self._json(200, {
                     "status": "completed", "bytes": receipt["bytes"],
                     "sha256": hashlib.sha256(data).hexdigest(),
@@ -269,6 +310,14 @@ class Handler(BaseHTTPRequestHandler):
                 "Invalid slicing input encoding.": "input-encoding-invalid",
                 "Invalid slicing input size.": "input-size-invalid",
                 "Multi-filament requests require Orca 3MF and two to sixteen presets.": "native-palette-contract-invalid",
+                "Creality multi-STL requires a native filament palette.": "native-palette-contract-invalid",
+                "Invalid Creality multi-STL model/tool mapping.": "native-tool-use-mismatch",
+                "Invalid Creality multi-STL model size.": "input-size-invalid",
+                "Invalid Creality multi-STL model encoding.": "input-encoding-invalid",
+                "Creality first model does not match job input.": "invalid-job-payload",
+                "Creality tool assignments require native STL models.": "native-palette-contract-invalid",
+                "Invalid native Creality multi-STL filament assignment.": "native-tool-use-mismatch",
+                "Creality multi-STL material assignments cannot use 3MF.": "native-palette-contract-invalid",
                 "Invalid native filament palette entry.": "native-palette-entry-invalid",
                 "Invalid native filament palette encoding.": "native-palette-encoding-invalid",
                 "Invalid native filament palette size.": "native-palette-size-invalid",
