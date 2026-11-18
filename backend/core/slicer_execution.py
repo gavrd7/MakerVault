@@ -886,7 +886,6 @@ def process_queued_job(job_id):
         # Only expose explicit, known-safe model-validation messages here.
         # Unrecognised errors still use a generic status; the real traceback
         # remains in MakerVault's application logs, not worker logs.
-        from .slicer_profiles import SlicerProfileError
         diagnostic = None
         if stage == "assembling the build plate 3MF" and isinstance(exc, SlicerProfileError):
             diagnostic = str(exc)[:180]
@@ -895,6 +894,10 @@ def process_queued_job(job_id):
             # compatibility guidance; no native preset contents are echoed.
             diagnostic = str(exc)[:180]
         elif stage == "auditing native variable layer height" and isinstance(exc, SlicerExecutionError):
+            diagnostic = str(exc)[:180]
+        elif stage == "checking Creality multi-material extrusion bounds" and isinstance(exc, SlicerExecutionError):
+            # Server-authored, bounded diagnostic only; no G-code or profile
+            # contents are returned to the frontend.
             diagnostic = str(exc)[:180]
         logger.exception("Slicing job %s failed during %s", job.pk, stage)
         with transaction.atomic():
