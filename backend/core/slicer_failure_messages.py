@@ -29,6 +29,7 @@ REASONS = {
     ),
     "creality-qt-platform-failed": ("Creality Print could not initialise its headless Qt platform in the slicer worker."),
     "creality-runtime-library-missing": ("Creality Print could not load a required runtime library inside the worker container."),
+    "creality-cli-parameters-invalid": ("Creality Print 7.3.1 returned its native invalid-parameters status (-2 / Linux 254). The command supplied by MakerVault requires investigation; this does not establish a profile mismatch."),
     "creality-cli-option-invalid": ("Creality Print rejected an option passed by MakerVault's CLI adapter."),
     "creality-native-preset-invalid": ("Creality Print could not load a native printer, filament or process preset."),
     "creality-cli-exited": (
