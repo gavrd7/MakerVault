@@ -76,7 +76,7 @@ def _decode_payload(payload):
         "model", "printer_profile", "filament_profile", "process_profile",
     }
     if not isinstance(payload, dict) or not expected.issubset(payload) or (
-            set(payload) - expected - {"model_format", "filament_profiles", "creality_model_stls", "creality_tool_ids"}):
+            set(payload) - expected - {"model_format", "filament_profiles", "creality_model_stls", "creality_tool_ids", "creality_native_project"}):
         raise WorkerError("Invalid slicing job payload.")
     try:
         uuid.UUID(str(payload["job_id"]))
@@ -107,8 +107,9 @@ def _decode_payload(payload):
     if "filament_profiles" in payload:
         palette = payload["filament_profiles"]
         if (not ((payload["engine"] == "orcaslicer" and model_format == "3mf") or
-                 (payload["engine"] == "crealityprint" and model_format == "stl" and
-                  "creality_model_stls" in payload))
+                 (payload["engine"] == "crealityprint" and (
+                    (model_format == "stl" and "creality_model_stls" in payload) or
+                    (model_format == "3mf" and payload.get("creality_native_project") is True))))
                 or not isinstance(palette, list) or not 2 <= len(palette) <= 16):
             raise WorkerError("Multi-filament requests require Orca 3MF and two to sixteen presets.")
         decoded = []
@@ -157,7 +158,16 @@ def _decode_payload(payload):
         files["creality_tool_ids"] = tools
     elif "creality_tool_ids" in payload:
         raise WorkerError("Creality tool assignments require native STL models.")
-    if model_format == "3mf":
+    if "creality_native_project" in payload:
+        if (payload["creality_native_project"] is not True or
+                payload["engine"] != "crealityprint" or model_format != "3mf" or
+                len(files.get("filament_profiles", [])) != 2 or
+                "creality_model_stls" in payload or "creality_tool_ids" in payload):
+            raise WorkerError("Invalid Creality project slicing contract.")
+        from .creality_project_validation import validate_creality_project
+        validate_creality_project(files["model"], native_tool_count=2)
+        files["creality_native_project"] = True
+    elif model_format == "3mf":
         validate_worker_3mf(files["model"],
             native_tool_count=len(files["filament_profiles"])
                 if "filament_profiles" in files else None)
@@ -236,6 +246,8 @@ class Handler(BaseHTTPRequestHandler):
                 if "filament_profiles" in files:
                     for index, native in enumerate(files["filament_profiles"]):
                         (workdir / ("filament-" + str(index) + ".json")).write_bytes(native)
+                if files.get("creality_native_project"):
+                    (workdir / "creality-native-project.marker").write_text("v1")
                 if "creality_model_stls" in files:
                     for index, raw in enumerate(files["creality_model_stls"]):
                         (workdir / ("input-" + str(index) + ".stl")).write_bytes(raw)
