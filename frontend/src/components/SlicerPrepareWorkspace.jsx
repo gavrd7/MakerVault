@@ -69,6 +69,7 @@ export default function SlicerPrepareWorkspace({
   selectedProfiles, workerConfigured, engineCapabilities = {}, printerId,
   processOverrides = {}, onProcessOverridesChange, onSaveCustomProcessProfile,
   flushSettings = null, onFlushSettingsChange,
+  crealityAutoArrangeTest = false, onCrealityAutoArrangeTestChange,
   slotFilamentProfiles = [], onSlotFilamentProfilesChange, filamentProfiles = [], onFilamentProfilesReload, onRememberedProfiles, spools = [],
   processProfiles = [], onSelectProcessProfile, onResetProcessSettings,
   printerDetails, nozzleMm, selectedPlateType = "Native / profile default",
@@ -887,6 +888,22 @@ export default function SlicerPrepareWorkspace({
   const missingToolProfile = requiredMultiSlots.find(slotId => !compatibleSlotProfile(slotId));
   // The server derives the main filament profile from the selected model's
   // assigned base CFS slot. Setup need not independently match that profile.
+  const nativeMultiMaterialBaseReady =
+    assignedSlots.length === objects.length &&
+    assignedSlots.every(slot => String(slot.printer_id) === String(printerId)) &&
+    requiredMultiSlots.length >= 2 && requiredMultiSlots.length <= 16 &&
+    requiredMultiSlots.every(compatibleSlotProfile);
+  const crealityTwoStlReady = activeEngine === "crealityprint" &&
+    objects.length === 2 && requiredMultiSlots.length === 2 &&
+    nativeMultiMaterialBaseReady &&
+    objects.every(item =>
+      !(item.colour_paint?.regions || []).length &&
+      !Object.keys(item.colour_paint?.faces || {}).length &&
+      !(item.support_paint?.regions || []).length &&
+      !(item.seam_paint?.regions || []).length &&
+      !(item.fuzzy_skin_paint?.regions || []).length &&
+      !(item.variable_layer_profile?.bands || []).length &&
+      !Object.keys(item.process_overrides || {}).length);
   const multiMaterialReadyForExport = activeEngine === "orcaslicer"
     && activeEngineVersion === "2.5.0"
     && assignedSlots.length === objects.length
@@ -915,9 +932,12 @@ export default function SlicerPrepareWorkspace({
       && profile.kind === "filament"
       && profile.engine === String(engine).split(" ")[0]
       && profile.engine_version === String(engine).split(" ").slice(1).join(" "));
-  const materialRoutingPending = assignedSlots.length > 0
-    ? !(hasSingleSlot && singleSlotProfileMatches)
-    : false;
+  // Only model/paint-assigned slots participate. A loaded but unused CFS
+  // bay requires no native preset and must never disable Slice.
+  const materialRoutingPending = requiredMultiSlots.length > 1
+    ? !(multiMaterialReadyForExport || crealityTwoStlReady)
+    : assignedSlots.length > 0 ? !(hasSingleSlot && singleSlotProfileMatches) : false;
+  const crealityOfflinePending = crealityTwoStlReady && !crealityAutoArrangeTest;
   const projectRoutingPending = plates.some(plate =>
     (plate.objects || []).some(item => item.material_slot != null)
   ) || slotFilamentProfiles.length > 0;
@@ -949,7 +969,9 @@ export default function SlicerPrepareWorkspace({
     (!activePlateReady ? "Select a plate containing models to slice." : "") ||
     (conflictsBlockSlice ? "Resolve build-plate conflicts or wait for models to finish loading before slicing." : "") ||
     (flushSettings != null && !multiMaterialReadyForExport ? "Custom flushing requires at least two assigned filaments with matching native profiles. Configure the loaded slot profiles before slicing." : "") ||
-    (materialRoutingPending && !multiMaterialReadyForExport ? "An assigned CFS/AMS slot requires an imported native filament preset for that slot. Select its Profile before slicing."
+    (materialRoutingPending ? (missingToolProfile
+      ? "An assigned model uses a CFS slot without a matching native filament preset. Set its Profile before slicing."
+      : "This plate has multiple assigned materials but its selected engine or model edits are not supported for native slicing.")
       : objectSettingsPending
       ? "Some Object settings are not yet verified for slicing. Wall loops and sparse infill density are supported; other Object overrides can be saved in drafts but cannot be sliced yet."
       : !workerConfigured
@@ -2125,6 +2147,20 @@ export default function SlicerPrepareWorkspace({
             : <button type="button" onClick={onChangeProfiles}>Check profiles and engine</button>}
         </p>}
       </div>
+      {activeEngine === "crealityprint" && objects.length === 2 &&
+        requiredMultiSlots.length >= 2 && <label className="slicerActionStatus"
+          style={{display:"flex",alignItems:"flex-start",gap:10}}>
+          <input type="checkbox" checked={crealityAutoArrangeTest}
+            onChange={event=>onCrealityAutoArrangeTestChange?.(event.target.checked)}
+            disabled={!canEdit || busy}/>
+          <span><strong>Creality offline auto-arrangement</strong>
+            <small style={{display:"block"}}>Allow Creality Print to arrange these two STL models for a test slice.
+              Preview G-code only; printer submission stays disabled. Unused CFS slots do not need profiles.</small>
+          </span>
+        </label>}
+      {crealityOfflinePending && <p className="slicerActionStatus" role="status">
+        Enable Creality offline auto-arrangement above before slicing this two-material plate.
+      </p>}
       <div className="settingsActions">
         {plates.length>1 && <p className="slicerPlateSliceScope" role="status">
           Save draft and project export preserve all {plates.length} plates. The main Slice button uses <strong>{plateLabel}</strong>.
@@ -2137,7 +2173,7 @@ export default function SlicerPrepareWorkspace({
         </button>
         <div className="slicerSliceSplit">
           <button type="button" className="primary"
-            disabled={!activePlateReady || !profilesReady || !workerConfigured || conflictsBlockSlice || objectSettingsPending || (hasPaintedColours && !paintedNativeReady) || (materialRoutingPending && !multiMaterialReadyForExport)}
+            disabled={!activePlateReady || !profilesReady || !workerConfigured || conflictsBlockSlice || objectSettingsPending || (hasPaintedColours && !paintedNativeReady) || materialRoutingPending || crealityOfflinePending}
             onClick={onSlice}>Slice</button>
           <button type="button" aria-label="More slicing options"
             aria-haspopup="menu" aria-expanded={sliceMenuOpen}
@@ -2145,7 +2181,7 @@ export default function SlicerPrepareWorkspace({
             onClick={()=>setSliceMenuOpen(value=>!value)}>▾</button>
           {sliceMenuOpen && <div className="slicerSliceMenu" role="menu">
             <button type="button" role="menuitem"
-              disabled={!activePlateReady || conflictsBlockSlice || objectSettingsPending || (hasPaintedColours && !paintedNativeReady) || (materialRoutingPending && !multiMaterialReadyForExport)}
+              disabled={!activePlateReady || conflictsBlockSlice || objectSettingsPending || (hasPaintedColours && !paintedNativeReady) || materialRoutingPending || crealityOfflinePending}
               onClick={()=>{setSliceMenuOpen(false);onSlice?.();}}>Slice active plate</button>
             <button type="button" role="menuitem"
               disabled={!projectHasModels || objectSettingsPending || projectRoutingPending}
