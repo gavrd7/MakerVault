@@ -32,7 +32,7 @@ REASONS = {
     "creality-cli-option-invalid": ("Creality Print rejected an option passed by MakerVault's CLI adapter."),
     "creality-native-preset-invalid": ("Creality Print could not load a native printer, filament or process preset."),
     "creality-cli-exited": (
-        "Creality Print's native CLI exited without completing the slice. Review compatible printer, filament and process profiles and the worker logs."
+        "Creality Print started but exited before completing the slice. The exit status alone cannot identify whether the cause is a runtime problem, CLI option or native preset. Check the worker diagnostics."
     ),
     "creality-no-output-directory": (
         "Creality Print exited without creating the expected slicing output directory."
