@@ -2500,6 +2500,25 @@ def file_gcode_layers(request, asset_id):
             cached = cached_batch(index_key, heights)
             if cached is not None:
                 return respond(cached, "hit")
+            # Never build a 700-layer index synchronously in a web request.
+            # The HTTP caller may ask us to enqueue the existing Celery task.
+            # Return 202 promptly and let the client poll, with a direct
+            # bounded-batch fallback if the background worker is unavailable.
+            if request.GET.get("warm") == "1" and request.GET.get("direct") != "1":
+                from django.core.cache import cache
+                from .tasks import warm_gcode_preview_task
+                lock_key = index_key + ":warming"
+                acquired = cache.add(lock_key, 1, timeout=300)
+                if acquired:
+                    try:
+                        warm_gcode_preview_task.delay(str(asset.pk))
+                    except Exception:
+                        cache.delete(lock_key)
+                        return _error("Preview preparation worker is unavailable.", status=503)
+                response = JsonResponse({"building": True}, status=202)
+                response["Cache-Control"] = "private, no-store"
+                response["Retry-After"] = "1"
+                return response
         except (OSError, ValueError, RuntimeError):
             # Source remains inspectable even if the cache/storage metadata
             # cannot be accessed.
