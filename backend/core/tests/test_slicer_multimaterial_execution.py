@@ -58,6 +58,28 @@ class MultiMaterialPreflightTests(SimpleTestCase):
         self.assertEqual(bindings, {"cfs-bay-1": 0, "cfs-bay-4": 1})
         self.assertEqual([p.pk for p in palette], ["red", "blue"])
 
+    @patch("core.slicer_multimaterial_execution.SlicerProfile.objects.filter")
+    @patch("core.slicer_multimaterial_execution.PrinterConnection.objects.filter")
+    def test_creality_uses_model_slot_profiles_even_when_setup_default_differs(self, sources, profiles):
+        sources.return_value = [self.connection]
+        self.job.engine = "crealityprint"
+        self.job.engine_version = "7.3.1"
+        self.job.filament_profile_id = "unrelated-main-profile"
+        self.presets[0].engine = self.presets[1].engine = "crealityprint"
+        self.presets[0].engine_version = self.presets[1].engine_version = "7.3.1"
+        profiles.return_value = self.presets
+        # The first model uses bay 4, so Creality's logical tool zero must
+        # use its actual native preset, not Setup's global filament.
+        _topology, bindings, palette = plan_native_multimaterial(self.job)
+        self.assertEqual(bindings, {"cfs-bay-4": 0, "cfs-bay-1": 1})
+        self.assertEqual([preset.pk for preset in palette], ["blue", "red"])
+        # A completely unused bay never enters the native palette.
+        self.settings["slot_filament_profiles"].append(
+            {"slot_id": "cfs-bay-2", "profile_id": "no-native-preset"}
+        )
+        _topology, bindings, palette = plan_native_multimaterial(self.job)
+        self.assertEqual([preset.pk for preset in palette], ["blue", "red"])
+
     @patch("core.slicer_multimaterial_execution.PrinterConnection.objects.filter")
     def test_missing_live_capability_blocks_multicolour(self, sources):
         sources.return_value = []
