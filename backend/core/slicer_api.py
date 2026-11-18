@@ -1642,7 +1642,7 @@ def customise_profile(request, profile_id):
 @login_required
 @require_http_methods(["POST"])
 def save_process_profile(request, profile_id):
-    """Save an interactive draft's safe Orca process edits as a new native preset.
+    """Save an interactive draft's safe native Orca/Creality process edits as a new native preset.
 
     The source profile is hash-verified and fully flattened; no active source
     file or existing SlicerProfile row is modified, and a candidate profile
@@ -1651,10 +1651,10 @@ def save_process_profile(request, profile_id):
     if not request.user.has_perm("core.add_fileasset"):
         return _error("You do not have permission to save custom profiles.", 403)
     profile = SlicerProfile.objects.filter(
-        pk=profile_id, owner=request.user, engine="orcaslicer", kind="process"
+        pk=profile_id, owner=request.user, engine__in=["orcaslicer", "crealityprint"], kind="process"
     ).select_related("file_asset").first()
     if not profile:
-        return _error("An owned OrcaSlicer process profile is required.", 404)
+        return _error("An owned OrcaSlicer or Creality Print process profile is required.", 404)
     if len(request.body) > 4096:
         return _error("Custom process profile request is too large.", 413)
     try:
