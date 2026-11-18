@@ -102,7 +102,6 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
   const awaitingSlicePreviewRef = useRef(null);
   const [customBed, setCustomBed] = useState({ enabled: false, x: "220", y: "220" });
   const [flushSettings, setFlushSettings] = useState(null);
-  const [crealityAutoArrangeTest,setCrealityAutoArrangeTest] = useState(false);
   const [slotFilamentProfiles,setSlotFilamentProfiles] = useState([]);
   const [profileLineages, setProfileLineages] = useState({});
   const [workerConfigured, setWorkerConfigured] = useState(false);
@@ -774,14 +773,10 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
     const offlineMultiMaterial = sliceNow && mode !== "all" &&
       plateNeedsMultiMaterial(plateObjects);
     const crealityMaterialTest = offlineMultiMaterial && form.engine==="crealityprint";
-    if (crealityMaterialTest && !crealityAutoArrangeTest) {
-      setError("Creality Print needs explicit agreement to auto-arrange two STL models for offline multi-filament testing.");
-      return;
-    }
     if (crealityMaterialTest && (plateObjects.length!==2 || flushSettings || primeTower ||
         plateObjects.some(item=>item.colour_paint?.regions?.length ||
           Object.keys(item.colour_paint?.faces||{}).length))) {
-      setError("Creality's offline two-STL test needs exactly two unpainted models without custom flushing or prime-tower positions.");
+      setError("Creality native project slicing needs exactly two unpainted models without custom flushing.");
       return;
     }
     const saveOutput = mode === "save-and-slice";
@@ -896,7 +891,6 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
             ...(primeTower?{prime_tower:primeTower}:{}),
             save_gcode_to_library: saveOutput, workflow,
             ...(offlineMultiMaterial ? {multi_material_test:true} : {}),
-            ...(crealityMaterialTest ? {creality_auto_arrange_offline:true} : {}),
             ...(flushSettings ? { flush_settings: flushSettings } : {}),
             ...(slotFilamentProfiles.length ? {slot_filament_profiles:slotFilamentProfiles} : {}),
             ...(form.engine === "orcaslicer" ? { process_overrides: processOverrides } : {}) },
@@ -1436,8 +1430,6 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
       engineCapabilities={engines.find(item => item.key === form.engine)?.feature_capabilities?.[form.engine_version] || engines.find(item => item.key === form.engine)?.feature_capabilities?.default || {}}
       processOverrides={processOverrides} onProcessOverridesChange={setProcessOverrides}
       flushSettings={flushSettings} onFlushSettingsChange={setFlushSettings}
-      crealityAutoArrangeTest={crealityAutoArrangeTest}
-      onCrealityAutoArrangeTestChange={setCrealityAutoArrangeTest}
       slotFilamentProfiles={slotFilamentProfiles} onSlotFilamentProfilesChange={setSlotFilamentProfiles}
       filamentProfiles={slotFilamentChoices} spools={spools}
       onRememberedProfiles={remembered => {
@@ -1504,7 +1496,6 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
               manuallyChosenProfiles.current.clear();
               userChosePlateRef.current=false;
               setFlushSettings(null);
-              setCrealityAutoArrangeTest(false);
               setSlotFilamentProfiles([]);
               setForm(current => ({
                 ...current, engine: key,
