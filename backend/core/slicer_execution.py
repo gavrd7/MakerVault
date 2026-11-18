@@ -23,6 +23,7 @@ from .slicer_material_routing import single_material_slice_assignment, MaterialR
 from .slicer_multimaterial_execution import (plan_native_multimaterial, prepare_job_multimaterial,
                                              prepare_creality_multistl)
 from .slicer_material_gcode_audit import audit_native_tool_usage, MaterialGcodeAuditError
+from .slicer_gcode_bounds import audit_extrusion_xy_bounds, GcodeExtrusionBoundsError
 from .slicer_flush_settings import apply_orca_flush_settings
 from .slicer_native_overrides import apply_orca_job_overrides
 from .slicer_variable_layers import audit_orca_variable_layers, validate_orca_variable_support_compatibility
@@ -826,6 +827,24 @@ def process_queued_job(job_id):
             except (UnicodeDecodeError, MaterialGcodeAuditError) as exc:
                 raise SlicerExecutionError(
                     "Multi-colour test G-code did not pass the native tool/extrusion audit."
+                ) from exc
+        if material_result is not None and job.engine == "crealityprint":
+            # Multi-STL auto-arrangement is native and cannot be inferred from
+            # MakerVault's original plate coordinates. At minimum, prevent
+            # extruding off-bed prime towers or auto-arranged parts from being
+            # saved as a completed slice.
+            stage = "checking Creality multi-material extrusion bounds"
+            try:
+                width, depth = trusted_plate_dimensions(job.printer_profile)
+                audit_extrusion_xy_bounds(
+                    output.decode("utf-8"), width=width, depth=depth,
+                )
+            except (UnicodeDecodeError, ValueError, SlicerProfileError) as exc:
+                raise SlicerExecutionError(
+                    "Creality Print generated extrusion outside the trusted build plate "
+                    "or its XY coordinates could not be validated. "
+                    "The output was rejected; review the native prime tower and "
+                    "auto-arrangement before retrying."
                 ) from exc
         variable_test = next((
             (item.get("variable_layer_profile") or {}).get("bands")
