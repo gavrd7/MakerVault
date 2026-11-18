@@ -69,7 +69,7 @@ export default function SlicerGcodePreview({ fileId = null, preview, bedSize = n
   // Never draw sparse global samples as though they were a complete print.
   // Fetch consecutive full-resolution layers from the original file instead.
   const [wholeModel, setWholeModel] = useState({
-    segments: [], loadedLayers: 0, complete: false, limited: false,
+    chunks: [], loadedLayers: 0, complete: false, limited: false,
     loading: false, message: "",
   });
   const sourceLayerHeights = layers.join(",");
@@ -77,17 +77,14 @@ export default function SlicerGcodePreview({ fileId = null, preview, bedSize = n
     if (!fileId || !layers.length) return undefined;
     const controller = new AbortController();
     const mobile = typeof window !== "undefined" && window.matchMedia?.("(max-width: 700px)").matches;
-    // Overview geometry is deliberately bounded per layer on the server.
-    // 700 layers at these limits fit within the appropriate browser budget,
-    // rather than stopping partway through the model.
-    // Geometry-preserving preview: full walls, skins, supports and towers,
-    // with lossless straight-run coalescing only. The smaller mobile budget
-    // prevents tab crashes and is explicitly reported if reached.
-    const maxMoves = mobile ? 700000 : 1500000;
+    // Retain complete geometry in independent GPU upload batches. The old
+    // 700k mobile cutoff silently stopped tall prints halfway through.
+    // Streaming batches avoid repeatedly copying the entire model in JS.
+    const maxMoves = 1500000;
     let cancelled = false;
-    setWholeModel({segments:[],loadedLayers:0,complete:false,limited:false,loading:true,message:""});
+    setWholeModel({chunks:[],loadedLayers:0,complete:false,limited:false,loading:true,message:""});
     const load = async () => {
-      const accumulated = [];
+      const chunks = [];
       let used = 0;
       let completed = 0;
       let limited = false;
@@ -121,6 +118,7 @@ export default function SlicerGcodePreview({ fileId = null, preview, bedSize = n
           if (!Array.isArray(data.layers) || data.layers.length !== requested.length)
             throw new Error("Invalid full-resolution layer response.");
           if (data.complete === false) limited = true;
+          const batch = [];
           for (const item of data.layers) {
             if (!item.complete) limited = true;
             if (!Array.isArray(item.segments)) throw new Error("Invalid layer geometry.");
@@ -128,7 +126,7 @@ export default function SlicerGcodePreview({ fileId = null, preview, bedSize = n
               limited = true;
               break;
             }
-            accumulated.push(...item.segments);
+            batch.push(...item.segments);
             used += item.segments.length;
             completed++;
             pendingLayers++;
@@ -136,10 +134,12 @@ export default function SlicerGcodePreview({ fileId = null, preview, bedSize = n
             // inspection continues to retrieve the unmodified original layer.
           }
           if (cancelled) return;
-          // Publish in coherent chunks, not after every layer. Retain all
-          // previously loaded moves as exact contiguous geometry.
+          // Each completed response becomes one immutable render batch. The
+          // renderer appends a new GPU mesh without copying/re-uploading older
+          // batches. Keep all layers available rather than stopping at 488.
+          if (batch.length) chunks.push(batch);
           if (pendingLayers >= 64 || completed === layers.length || limited) {
-            setWholeModel({segments:accumulated.slice(),loadedLayers:completed,
+            setWholeModel({chunks:chunks.slice(),loadedLayers:completed,
               complete:completed===layers.length&&!limited,limited,
               loading:!limited&&completed<layers.length,message:""});
             pendingLayers = 0;
@@ -149,14 +149,14 @@ export default function SlicerGcodePreview({ fileId = null, preview, bedSize = n
           await new Promise(resolve=>setTimeout(resolve, 12));
         }
         if (!cancelled) setWholeModel({
-          segments:accumulated,loadedLayers:completed,
+          chunks:chunks.slice(),loadedLayers:completed,
           complete:completed===layers.length&&!limited,
           limited,loading:false,message:"",
         });
       } catch (error) {
         if (!cancelled && error.name!=="AbortError") {
           setWholeModel({
-            segments:accumulated,loadedLayers:completed,complete:false,
+            chunks:chunks.slice(),loadedLayers:completed,complete:false,
             limited:true,loading:false,message:error.message,
           });
         }
@@ -240,17 +240,16 @@ export default function SlicerGcodePreview({ fileId = null, preview, bedSize = n
   // complete GPU buffers. The renderer clips them at the selected Z height.
   const progressiveMode=layerDisplay==="all" && !highlightCurrent && !outerContrast;
   const displaySegments = useMemo(() => {
-    // Complete, ordered batches share their original segment references.
-    // Avoid replacing the last batch with an independently fetched exact
-    // layer, which would force the GPU to rebuild all earlier geometry.
-    if (progressiveMode) return wholeModel.segments;
+    // GPU-managed chunks are never flattened for the normal whole-print view.
+    // Concatenate only for an explicit detailed/filtering inspection.
+    if (progressiveMode) return [];
     const current = layerSegments;
     if (layerDisplay === "current") return current;
     const startZ = layerDisplay === "context" ? layers[Math.max(0,currentLayer-8)] : -Infinity;
-    const previous = wholeModel.segments.filter(segment =>
+    const previous = wholeModel.chunks.flat().filter(segment =>
       segment[4] >= startZ - 0.0005 && segment[4] < z - 0.0005);
     return [...previous, ...current];
-  }, [wholeModel.segments,layerSegments,layerDisplay,layers,currentLayer,z,progressiveMode]);
+  }, [wholeModel.chunks,layerSegments,layerDisplay,layers,currentLayer,z,progressiveMode]);
   const finalStep = Math.min(step ?? layerSegments.length, layerSegments.length);
   const formatTime = seconds => {
     if (seconds == null) return "Not declared";
@@ -340,7 +339,7 @@ export default function SlicerGcodePreview({ fileId = null, preview, bedSize = n
                 ? "Preview loading issue: " + wholeModel.message
                 : "Preparing 3D preview… Existing G-code is unchanged."}
             </div>}
-          <SlicerToolpath3D segments={displaySegments} progressiveMode={progressiveMode} framingSegments={preview?.segments || []} filamentColours={filamentColours} layers={layers}
+          <SlicerToolpath3D segments={displaySegments} segmentChunks={progressiveMode ? wholeModel.chunks : []} progressiveMode={progressiveMode} framingSegments={preview?.segments || []} filamentColours={filamentColours} layers={layers}
             activeLayer={currentLayer} activeStep={finalStep} visible={visible}
             colourMode={colourMode} colours={colours} showToolhead={showToolhead} bedSize={bedSize}
             renderMode={renderMode} layerDisplay={layerDisplay}
