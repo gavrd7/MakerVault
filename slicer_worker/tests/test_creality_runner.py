@@ -95,6 +95,19 @@ class CrealityCommandTests(TestCase):
             _cli_failure_reason(b"CLI parameter parsing failed"),
             "Creality Print CLI rejected its command-line parameters.")
 
+    def test_linux_254_is_reported_as_invalid_cli_parameters(self):
+        class FakeProcess:
+            pid = 123
+            returncode = 254
+            def communicate(self, timeout=None):
+                return None, None
+        with patch("slicer_worker.creality_runner.subprocess.Popen",
+                   return_value=FakeProcess()):
+            with self.assertRaisesRegex(
+                WorkerError, "command-line parameters"
+            ):
+                run_creality(self.binary, self.root)
+
     def test_real_output_required_before_declaring_success(self):
         class FakeProcess:
             pid = 123
