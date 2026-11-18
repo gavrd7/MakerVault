@@ -31,13 +31,14 @@ test("one reusable engine branding component is used by both selection and insta
     assert.ok(widget.includes("../assets/slicer-engines/" + engine + ".svg?raw"));
   }
   assert.match(workbench, /<SlicerEngineChoices[^>]*engines=/);
-  assert.match(workbench, /mode="install"/);
+  assert.match(workbench, /<SlicerEngineManager engines=\{engines\}/);
   assert.match(widget, /data:image\/svg\+xml;charset=utf-8/);
   assert.match(widget, /encodeURIComponent\(svg\)/);
   assert.match(widget, /onError=\{\(\) => setFailed\(true\)\}/);
   assert.doesNotMatch(widget, /loading="lazy"/);
   assert.match(widget, /type="radio"/);
-  assert.match(widget, /Installation not yet available/);
+  assert.match(widget, /Installed and ready for slicing with compatible native profiles/);
+  assert.match(widget, /engine\.available === true \|\| engine\.status === "validated"/);
 });
 
 test("engine installation view links to instructions for existing MakerVault deployments", () => {
