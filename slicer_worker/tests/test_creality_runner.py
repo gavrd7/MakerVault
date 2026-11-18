@@ -6,7 +6,7 @@ from tempfile import TemporaryDirectory
 from unittest import TestCase
 from unittest.mock import patch
 
-from slicer_worker.creality_runner import creality_command, run_creality
+from slicer_worker.creality_runner import creality_command, run_creality, _cli_failure_reason
 from slicer_worker.runner import WorkerError
 
 
@@ -69,6 +69,20 @@ class CrealityCommandTests(TestCase):
         }))
         with self.assertRaisesRegex(WorkerError, "blocked post-processing"):
             creality_command(self.binary, self.root)
+
+    def test_cli_diagnostics_are_safe_categories_only(self):
+        self.assertEqual(
+            _cli_failure_reason(b"qt.qpa.plugin: Could not load the Qt platform plugin"),
+            "Creality Print CLI could not initialise its headless Qt platform.")
+        self.assertEqual(
+            _cli_failure_reason(b"error while loading shared libraries: libXYZ.so"),
+            "Creality Print CLI is missing a runtime library.")
+        self.assertEqual(
+            _cli_failure_reason(b"failed to load settings from secret/private/location"),
+            "Creality Print CLI could not load a native preset.")
+        self.assertEqual(
+            _cli_failure_reason(b"unexpected details with /private/location and token=test"),
+            "Creality Print failed to slice using the selected native profiles.")
 
     def test_real_output_required_before_declaring_success(self):
         class FakeProcess:
