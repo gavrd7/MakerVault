@@ -14,6 +14,7 @@ export default function SlicerEngineManager({engines = [], onChanged}) {
     try {
       const result=await apiFetch("/api/printing/slicer/engines/operations/");
       setState(result);setError("");
+      if ((result.operations || []).some(row => TERMINAL.has(row.status))) setNotice("");
     } catch(e){setError(e.message);}
   },[]);
   useEffect(()=>{
@@ -29,6 +30,7 @@ export default function SlicerEngineManager({engines = [], onChanged}) {
 
   const operation = (state?.operations || []).find(row => !TERMINAL.has(row.status));
   const releases=state?.approved_releases || [];
+  const lastOperation=(state?.operations || [])[0];
   const canManage=state?.can_manage !== false;
   const request=async(release,action)=>{
     if(!canManage || !state?.installation_available || busy || operation)return;
@@ -82,6 +84,12 @@ export default function SlicerEngineManager({engines = [], onChanged}) {
     {!canManage && <p role="status">Engine installation is restricted by this instance’s administrator.</p>}
     {error && <p role="alert" className="integrationError">{error}</p>}
     {notice && <p role="status">{notice}</p>}
+    {!operation && lastOperation?.status==="failed" &&
+      <p role="alert" className="integrationError">
+        {lastOperation.engine} {lastOperation.version} installation failed: {lastOperation.message || "Check installer status."}
+      </p>}
+    {!operation && lastOperation?.status==="completed" &&
+      <p role="status">{lastOperation.engine} {lastOperation.version}: {lastOperation.message || "Installation complete."}</p>}
     <div className="slicerEngineManagerList">
       {engines.map(engine=>{
         const approved=releases.filter(release=>release.engine===engine.key);
@@ -128,6 +136,7 @@ export default function SlicerEngineManager({engines = [], onChanged}) {
         <summary>Recent engine operations</summary>
         <ul>{state.operations.slice(0,10).map(item=><li key={item.id}>
           {item.engine} {item.version} · {item.action} · {item.status}
+          {item.status==="failed" && item.message ? " · "+item.message : ""}
         </li>)}</ul>
       </details>}
       {state?.rollback_available && <button type="button" disabled={!canManage || !!operation || busy}
