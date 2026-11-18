@@ -110,6 +110,27 @@ def _scrubbed_tail_category(raw):
     } else "unclassified"
 
 
+def _known_validation_reason(raw):
+    """Return only exact, public Creality validation reasons.
+
+    These fixed strings originate in Creality Print's Print::validate and
+    check_multi_filament_valid. No substrings of user profiles or raw logs
+    are ever copied into the report.
+    """
+    text = raw.decode("utf-8", errors="replace").lower()
+    known = (
+        ("large difference of temperature together", "incompatible-material-temperature-ranges"),
+        ("the mixed filament references a filament that no longer exists", "missing-mixed-filament-reference"),
+        ("filaments of different types cannot be mixed", "mixed-filament-type-mismatch"),
+        ("no extrusions under current settings", "no-active-extrusions"),
+        ("prime tower on every layer", "prime-tower-layer-requirement"),
+    )
+    for phrase, reason in known:
+        if phrase in text:
+            return reason
+    return None
+
+
 def _engine_run(binary, project, timeout_seconds):
     with tempfile.TemporaryDirectory(prefix="creality-matrix-") as temp:
         root = Path(temp)
@@ -143,6 +164,9 @@ def _engine_run(binary, project, timeout_seconds):
         if code == 205:
             safe.update({"native_error": "CLI_VALIDATE_ERROR (-51)",
                          "validation_category": _scrubbed_tail_category(output)})
+            known_reason = _known_validation_reason(output)
+            if known_reason:
+                safe["known_validation_reason"] = known_reason
         elif code == 232:
             safe["native_error"] = "CLI_FILE_VERSION_NOT_SUPPORTED (-24)"
         elif code == 254:
