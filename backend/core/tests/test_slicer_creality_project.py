@@ -112,7 +112,9 @@ class CrealityPositionedPlateTests(SimpleTestCase):
         self.assertEqual(config["filament_minimal_purge_on_wipe_tower"], ["15", "15", "15", "15"])
         self.assertEqual(config["filament_shrinkage_compensation_z"], ["100%", "100%", "100%", "100%"])
         self.assertEqual(config["nozzle_diameter"], ["0.4"])
-        self.assertEqual(config["filament_map"], ["1", "1", "1", "1"])\n        self.assertEqual(len(config["flush_volumes_matrix"]), 16)\n        self.assertEqual(len(config["flush_volumes_vector"]), 8)
+        self.assertEqual(config["filament_map"], ["1", "1", "1", "1"])
+        self.assertEqual(len(config["flush_volumes_matrix"]), 16)
+        self.assertEqual(len(config["flush_volumes_vector"]), 8)
 
     def test_native_object_parts_and_assembly_preserve_exact_positions(self):
         import json
