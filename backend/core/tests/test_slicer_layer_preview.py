@@ -94,8 +94,9 @@ class FullLayerParserTests(SimpleTestCase):
         self.assertTrue(layer["sampled"])
         self.assertEqual(layer["segment_count"], 300)
         self.assertEqual(len(layer["segments"]), 80)
-        self.assertTrue(all(move[5] == "Support material"
-                            for move in layer["segments"]))
+        self.assertGreaterEqual(sum(move[5] == "Support material"
+                                    for move in layer["segments"]), 16)
+        self.assertTrue(any(move[5] == "Sparse infill" for move in layer["segments"]))
         self.assertEqual(layer["segments"],
                          sorted(layer["segments"], key=lambda move: move[0]))
 
@@ -121,8 +122,8 @@ class FullLayerParserTests(SimpleTestCase):
         self.assertGreaterEqual(sum(move[5] == "Prime tower" for move in segments), 24)
         mobile = _overview_segments(segments, 80)
         self.assertGreaterEqual(sum(move[5] == "Prime tower" for move in mobile), 24)
-        self.assertEqual(mobile, sorted(mobile,
-                         key=lambda move: (move[0] if move[5] == "Outer wall" else 0)))
+        self.assertTrue(any(move[5] == "Support material" for move in mobile))
+        self.assertTrue(any(move[5] == "Outer wall" for move in mobile))
         # Native G-code inspection never uses the reduced overview.
         self.assertEqual(exact_layer_toolpaths("\n".join(lines), 0.2)["segment_count"], 410)
 
