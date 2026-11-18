@@ -418,8 +418,20 @@ def _validate_plate_execution(job):
         )
     except MaterialRoutingError as exc:
         raise SlicerExecutionError(str(exc)) from exc
-    if job.engine != "orcaslicer":
-        raise SlicerExecutionError("Multi-model plate execution is currently verified only for the single-material OrcaSlicer worker.")
+    if job.engine not in {"orcaslicer", "crealityprint"}:
+        raise SlicerExecutionError("This engine does not yet support native build-plate slicing.")
+    if job.engine == "crealityprint":
+        # Creality receives the same validated STL/3MF geometry route, but
+        # Orca-only per-object modifiers must not be silently discarded.
+        if any(isinstance(item, dict) and item.get("process_overrides") for item in objects):
+            raise SlicerExecutionError(
+                "Per-object process overrides are not yet supported by Creality Print.")
+        if settings.get("process_overrides"):
+            raise SlicerExecutionError(
+                "Custom process overrides are not yet supported by Creality Print.")
+        if settings.get("multi_material_test"):
+            raise SlicerExecutionError(
+                "Creality Print multi-material plate slicing is not yet supported.")
     if not isinstance(objects, list) or not 1 <= len(objects) <= 12:
         raise SlicerExecutionError("Plate model list is invalid.")
     for item in objects:
