@@ -44,7 +44,7 @@ def _append_continuous_bead(layer, move, max_records, budget, motion_token):
 
     No path subsampling. A join is permitted solely for adjacent extrusions
     from the same material/feature/width whose centreline is collinear within
-    0.015 mm and whose direction does not reverse. Travel breaks continuity.
+    0.002 mm and whose direction does not reverse. Travel breaks continuity.
     """
     segments = layer["segments"]
     previous = segments[-1] if segments else None
@@ -59,7 +59,7 @@ def _append_continuous_bead(layer, move, max_records, budget, motion_token):
         acx, acy = cx-ax, cy-ay
         length = math.hypot(acx, acy)
         if (length > 1e-6 and abx*(cx-bx)+aby*(cy-by) >= 0 and
-                abs(abx*acy-aby*acx)/length < 0.015):
+                abs(abx*acy-aby*acx)/length < 0.002):
             previous[2], previous[3] = move[2], move[3]
             layer["last_token"] = motion_token
             return True
