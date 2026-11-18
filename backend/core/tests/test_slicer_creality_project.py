@@ -41,6 +41,40 @@ class CrealityPositionedPlateTests(SimpleTestCase):
         ]
         self.assertEqual(tools, [["1"], ["2"]])
 
+    def test_creality_self_contained_project_embeds_profiles_and_bounded_tower(self):
+        import json
+        from core.slicer_creality_project import build_creality_project_candidate
+        plate = build_creality_positioned_plate(
+            self._objects(), bed_width=260, bed_depth=260, tool_ids=[0, 1])
+        printer = json.dumps({
+            "type": "machine", "name": "Creality K2 0.4 nozzle",
+            "printable_height": "260",
+            "printable_area": ["0x0", "260x0", "260x260", "0x260"],
+        }).encode()
+        process = json.dumps({
+            "type": "process", "name": "0.20mm Standard",
+            "enable_prime_tower": "1", "prime_tower_width": "40",
+            "layer_height": "0.2",
+        }).encode()
+        filament = lambda name, temp: json.dumps({
+            "type": "filament", "name": name,
+            "filament_type": "PLA", "nozzle_temperature": str(temp),
+        }).encode()
+        result = build_creality_project_candidate(
+            plate, printer=printer, process=process,
+            filaments=[filament("grey", 210), filament("yellow", 220)],
+            bed_width=260, bed_depth=260)
+        with zipfile.ZipFile(io.BytesIO(result)) as package:
+            self.assertEqual(len(package.namelist()), 5)
+            project = json.loads(package.read("Metadata/project_settings.config"))
+        self.assertEqual(project["filament_settings_id"], ["grey", "yellow"])
+        self.assertEqual(project["nozzle_temperature"], ["210", "220"])
+        self.assertEqual(project["from"], "project")
+        self.assertEqual(project["name"], "project_settings")
+        self.assertEqual(len(project["wipe_tower_x"]), 1)
+        self.assertLess(float(project["wipe_tower_x"][0]), 260)
+        self.assertLess(float(project["wipe_tower_y"][0]), 260)
+
     def test_invalid_palette_fails_before_native_engine(self):
         with self.assertRaises(SlicerProfileError):
             build_creality_positioned_plate(
