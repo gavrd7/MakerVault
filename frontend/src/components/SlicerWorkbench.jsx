@@ -7,6 +7,7 @@ import GcodeViewerModal from "./GcodeViewerModal";
 import SlicerPlateEditor from "./SlicerPlateEditor";
 import SlicerPrepareWorkspace from "./SlicerPrepareWorkspace";
 import SlicerEngineChoices from "./SlicerEngineChoices";
+import SlicerEngineManager from "./SlicerEngineManager";
 import SlicerBedTypePicker from "./SlicerBedTypePicker";
 import {separatePaintedPlates, restorePaintedPlates} from "./slicerPaintAssets.js";
 import {ORCA_PLATE_TYPES,plateOptions} from "./slicerPlateOptions";
@@ -1764,13 +1765,10 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
     </Modal>}
     {profileModal === "engines" && <Modal title="Slicer engine installations"
       subtitle="Optional self-hosted engines" onClose={() => setProfileModal("")} wide>
-      <p>All supported slicer engines share one optional MakerVault Slicer worker container.
-        Engines marked Verified are already installed and ready for slicing with compatible
-        native profiles. Installation and updates from this screen are not available yet.</p>
-      <SlicerEngineChoices engines={engines.length ? engines :
-        [{ key: "orcaslicer", label: "OrcaSlicer", available: false },
-         { key: "crealityprint", label: "Creality Print", available: false }]}
-        mode="install" />
+      <SlicerEngineManager engines={engines} canManage={canVerifyProfiles}
+        onChanged={() => apiFetch("/api/printing/slicer/engines/")
+          .then(data => setEngines(data.engines || []))
+          .catch(() => {})} />
       <div className="printingActionGroup">
         <h4>Adding the slicer service to an existing MakerVault installation</h4>
         <p>The optional service must be deployed once by the host administrator.
@@ -1782,7 +1780,7 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
         </a>
         <small>The experimental OrcaSlicer staging installer is documented separately from the future production installation.</small>
       </div>
-      <p>You can save slicing drafts without an installed engine; generating G-code requires a verified engine.</p>
+      <p>You can save drafts without an installed engine. Slicing requires a verified runtime and compatible native profiles.</p>
     </Modal>}
     {profileModal === "search" && <Modal title="Search official profiles" onClose={() => setProfileModal("")} wide>
       <div className="slicerProfileNavigation">
