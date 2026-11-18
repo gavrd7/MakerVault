@@ -61,12 +61,13 @@ def engine_operations(request):
     enabled = os.environ.get("MAKERVAULT_SLICER_HOST_UPDATER_ENABLED") == "1"
 
     if request.method == "GET":
-        releases, connected = [], False
+        releases, connected, rollback_available = [], False, False
         if enabled:
             try:
                 releases = installer_request("GET", "/catalog").get("releases", [])
-                status = installer_request("GET", "/status").get("operations", [])
-                _sync_operations(status)
+                report = installer_request("GET", "/status")
+                _sync_operations(report.get("operations", []))
+                rollback_available = report.get("rollback_available") is True
                 connected = True
             except EngineInstallerUnavailable:
                 pass
@@ -78,6 +79,7 @@ def engine_operations(request):
                            SlicerEngineOperation.objects.order_by("-created_at")[:30]],
             "host_updater_connected": connected,
             "installation_available": bool(connected and releases),
+            "rollback_available": bool(connected and rollback_available),
             "installation_note": "Downloads and integrity checks run automatically.",
         })
 
@@ -94,7 +96,7 @@ def engine_operations(request):
         data["engine"], data["version"], data["action"], data["release_sha256"])
     if any(not isinstance(x, str) for x in (engine, version, action, digest)):
         return JsonResponse({"error": "Invalid engine request."}, status=400)
-    if action not in {"install", "update"}:
+    if action not in {"install", "update", "rollback"}:
         return JsonResponse({"error": "Unsupported engine operation."}, status=400)
     try:
         get_engine(engine)
@@ -115,9 +117,14 @@ def engine_operations(request):
             return JsonResponse({"error": "An engine update is already in progress."},
                                 status=409)
         try:
-            response = installer_request("POST", "/install", {
-                "engine": engine, "version": version, "bundle_sha256": digest,
-            })
+            if action == "rollback":
+                if engine != "crealityprint" or version != "previous" or digest != "0" * 64:
+                    return JsonResponse({"error": "Invalid rollback request."}, status=400)
+                response = installer_request("POST", "/rollback")
+            else:
+                response = installer_request("POST", "/install", {
+                    "engine": engine, "version": version, "bundle_sha256": digest,
+                })
             submitted = response["operation"]
             identity = uuid.UUID(submitted["id"])
             if (submitted["engine"] != engine or submitted["version"] != version
