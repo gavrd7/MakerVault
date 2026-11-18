@@ -65,7 +65,8 @@ class CrealityPositionedPlateTests(SimpleTestCase):
             filaments=[filament("grey", 210), filament("yellow", 220)],
             bed_width=260, bed_depth=260)
         with zipfile.ZipFile(io.BytesIO(result)) as package:
-            self.assertEqual(len(package.namelist()), 5)
+            self.assertEqual(len(package.namelist()), 6)
+            self.assertIn("Metadata/creality.config", package.namelist())
             project = json.loads(package.read("Metadata/project_settings.config"))
         self.assertEqual(project["filament_settings_id"], ["grey", "yellow"])
         self.assertEqual(project["nozzle_temperature"], ["210", "220"])
