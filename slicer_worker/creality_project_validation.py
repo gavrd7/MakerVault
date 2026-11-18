@@ -54,7 +54,7 @@ def validate_creality_project(data, *, native_tool_count=2):
                 if entry.get("name") == "Application"
             ]
             if len(generator) != 1 or not re.fullmatch(
-                    r"Creality_Print V7\\.3\\.[0-9]+", generator[0]):
+                    r"Creality_Print V7\.3\.[0-9]+", generator[0]):
                 raise WorkerError("Creality project model generator version is missing or incompatible.")
             project = json.loads(archive.read(PROJECT_SETTINGS))
             if (not isinstance(project, dict) or len(project) > 4096 or
