@@ -80,12 +80,10 @@ export default function SlicerGcodePreview({ fileId = null, preview, bedSize = n
     // Overview geometry is deliberately bounded per layer on the server.
     // 700 layers at these limits fit within the appropriate browser budget,
     // rather than stopping partway through the model.
-    const maxMoves = mobile ? 100000 : 220000;
-    // Geometry density is deliberately balanced for ordinary browsers.
-    // Full-resolution movements are retained by the dedicated layer inspector.
-    // Spread the GPU budget across the entire print, never only its base.
-    const overviewDetail = Math.max(80, Math.min(mobile ? 110 : 220,
-      Math.floor(maxMoves / layers.length)));
+    // Geometry-preserving preview: full walls, skins, supports and towers,
+    // with lossless straight-run coalescing only. The smaller mobile budget
+    // prevents tab crashes and is explicitly reported if reached.
+    const maxMoves = mobile ? 700000 : 1500000;
     let cancelled = false;
     setWholeModel({segments:[],loadedLayers:0,complete:false,limited:false,loading:true,message:""});
     const load = async () => {
@@ -101,8 +99,7 @@ export default function SlicerGcodePreview({ fileId = null, preview, bedSize = n
           // a web request. Cached pages load immediately; a failed/unavailable
           // worker falls back to bounded direct parsing after brief polling.
           const url = "/api/files/" + encodeURIComponent(fileId) +
-            "/gcode/layers/?overview=1&detail=" + overviewDetail +
-            "&zs=" + encodeURIComponent(requested.join(","));
+            "/gcode/layers/?quality=full&zs=" + encodeURIComponent(requested.join(","));
           let response;
           for (let attempt=0;attempt<6;attempt++){
             response = await fetch(url + "&warm=1", {
@@ -135,8 +132,8 @@ export default function SlicerGcodePreview({ fileId = null, preview, bedSize = n
             used += item.segments.length;
             completed++;
             pendingLayers++;
-            // The simplified whole-print overview must never contaminate
-            // the exact movement-slider cache: its omitted moves are intentional.
+            // Full-model geometry may coalesce straight runs; exact movement
+            // inspection continues to retrieve the unmodified original layer.
           }
           if (cancelled) return;
           // Publish in coherent chunks, not after every layer. Retain all
@@ -304,7 +301,7 @@ export default function SlicerGcodePreview({ fileId = null, preview, bedSize = n
           <select value={layerDisplay} onChange={event => setLayerDisplay(event.target.value)}>
             <option value="current">Current layer only · detail</option>
             <option value="context">Current + 8 faded layers</option>
-            <option value="all">Whole print · surface overview</option>
+            <option value="all">Whole print · full-detail paths</option>
           </select>
         </label>
         <label>Feature focus
@@ -380,18 +377,18 @@ export default function SlicerGcodePreview({ fileId = null, preview, bedSize = n
       </div>
       <div className="slicerWholeModelProgress" role="status">
         <span>{wholeModel.complete
-          ? "Complete-height surface overview · "+layers.length.toLocaleString()+" layers"
+          ? "Full-detail geometry · "+layers.length.toLocaleString()+" layers"
           : wholeModel.loading
-          ? "Building surface overview · "+wholeModel.loadedLayers.toLocaleString()+" / "+layers.length.toLocaleString()+" layers"
-          : "Incomplete surface overview · "+wholeModel.loadedLayers.toLocaleString()+" / "+layers.length.toLocaleString()+" layers"}
+          ? "Loading complete extrusion geometry · "+wholeModel.loadedLayers.toLocaleString()+" / "+layers.length.toLocaleString()+" layers"
+          : "Incomplete full-detail preview · "+wholeModel.loadedLayers.toLocaleString()+" / "+layers.length.toLocaleString()+" layers"}
         </span>
         {wholeModel.loading && <progress value={wholeModel.loadedLayers} max={layers.length} />}
         {(wholeModel.limited || wholeModel.message) && <small>
-          {wholeModel.message || "The overview could not cover all layers. Select any layer for complete G-code toolpath inspection."}
+          {wholeModel.message || "The preview reached its resource budget; no missing paths have been fabricated. Select a layer for original G-code inspection."}
         </small>}
       </div>
       {wholeModel.complete && <small className="slicerPreviewAccuracyNote">
-        Surface overview balances walls, skins, interiors, supports and prime tower within a preview budget. Select a layer to inspect the exact extrusion paths.
+        Full-detail preview preserves walls, skins, supports and prime tower; only collinear extrusion moves are merged. Select a layer to inspect the original movements.
       </small>}
       {showLayerInsert && canEdit && fileId && file && <GcodeLayerInsert
         key={String(currentLayer) + ":" + String(fileId)}
