@@ -159,7 +159,8 @@ def layer_batch_toolpaths(text, target_zs, *, overview=False, overview_limit=350
                                 "skin": .16, "inner": .12, "body": .08,
                             }
                             family_heap = layer["feature_heaps"].setdefault(family, [])
-                            quota = max(8, int(overview_limit * weights[family]))
+                            minimum = 24 if family == "tower" else 16 if family == "support" else 8
+                            quota = max(minimum, int(overview_limit * weights[family]))
                             if len(family_heap) < quota:
                                 heapq.heappush(family_heap, entry)
                             elif rank > family_heap[0][:2]:
