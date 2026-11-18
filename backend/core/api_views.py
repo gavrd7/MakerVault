@@ -2482,7 +2482,8 @@ def file_gcode_layers(request, asset_id):
             raise ValueError()
     except (ValueError, TypeError):
         return _error("Invalid or duplicate layer Z coordinate.", status=400)
-    overview = request.GET.get("overview") == "1"
+    high_fidelity = request.GET.get("quality") == "full"
+    overview = request.GET.get("overview") == "1" and not high_fidelity
     try:
         detail = int(request.GET.get("detail", "350")) if overview else 350
         if overview and not 80 <= detail <= 450:
@@ -2491,12 +2492,12 @@ def file_gcode_layers(request, asset_id):
         return _error("Invalid preview detail level.", status=400)
     index_key = None
     all_heights = None
-    if overview:
+    if overview or high_fidelity:
         from .slicer_preview_cache import (
             cached_batch, index_overview, preview_index_key, MAX_INDEX_LAYERS,
         )
         try:
-            index_key = preview_index_key(asset, detail)
+            index_key = preview_index_key(asset, "full-v1" if high_fidelity else detail)
             cached = cached_batch(index_key, heights)
             if cached is not None:
                 return respond(cached, "hit")
@@ -2558,7 +2559,10 @@ def file_gcode_layers(request, asset_id):
         except (ValueError, TypeError):
             return _error("Invalid complete overview index.", status=400)
     try:
-        result = layer_batch_toolpaths(text, heights, overview=overview, overview_limit=detail)
+        result = layer_batch_toolpaths(
+            text, heights, overview=overview, overview_limit=detail,
+            high_fidelity=high_fidelity,
+        )
     except (ValueError, TypeError):
         return _error("Invalid preview detail level.", status=400)
     return respond(result, "miss")
