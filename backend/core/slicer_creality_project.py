@@ -201,7 +201,7 @@ def build_creality_project_candidate(plate, *, printer, process, filaments,
     filament_settings = [_read_native_profile(blob, "filament") for blob in filaments]
     reserved = {"type", "from", "name", "setting_id", "inherits",
                 "instantiation", "version", "compatible_printers",
-                "compatible_prints", "printer_model", "printer_variant"}
+                "compatible_prints"}
     project = {"version": version, "name": "project_settings", "from": "project"}
     for part in (machine, print_settings):
         for key, val in part.items():
