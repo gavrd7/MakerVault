@@ -34,8 +34,8 @@ def _serialize(op):
 def engine_operations(request):
     restrict_to_admins = SlicerEngineAccessSettings.current().restrict_engine_management_to_admins
     can_manage = request.user.is_superuser or not restrict_to_admins
-    if not can_manage:
-        return JsonResponse({"error": "Engine management is restricted by this installation’s administrator."}, status=403)
+    if request.method == "POST" and not can_manage:
+        return JsonResponse({"error": "Engine changes are restricted by this installation’s administrator."}, status=403)
     connected = os.environ.get("MAKERVAULT_SLICER_HOST_UPDATER_ENABLED") == "1"
     if request.method == "GET":
         try:
