@@ -1227,6 +1227,7 @@ def official_profiles(request):
                 "vendors": (available_official_vendors(version) if selected == "orcaslicer" else provider[0]()) if provider else [],
                 "versions": ORCA_APPROVED_PROFILE_VERSIONS if selected == "orcaslicer" else [],
                 "selected_version": version if selected == "orcaslicer" else None,
+                "source_engine_version": OFFICIAL_CRE_VERSION if selected == "crealityprint" else None,
                 "ref": provider[1] if provider else None,
                 "native_profile_format": native.profile_format,
                 "manual_import_available": True,
@@ -1337,6 +1338,15 @@ def official_profiles(request):
             if version not in ORCA_APPROVED_PROFILE_VERSIONS:
                 raise ValueError("Unsupported OrcaSlicer official profile release.")
             ref = "v" + version
+        elif engine == "crealityprint":
+            # The verified upstream catalogue is pinned to v7.3.0. Allow its
+            # candidates to be associated with an installed 7.3.1 runtime
+            # without misrepresenting their origin or claiming compatibility.
+            # Execution still validates the native preset against the runtime.
+            target_version = selection.get("engine_version", version)
+            if target_version not in {OFFICIAL_CRE_VERSION, "7.3.1"}:
+                raise ValueError("This Creality profile source cannot be used with the selected engine version.")
+            version = target_version
         elif selection.get("engine_version", version) != version:
             raise ValueError("This source does not provide the requested engine version.")
         kind = selection.get("kind")
