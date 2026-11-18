@@ -1,20 +1,16 @@
-"""Engine inventory and user-initiated maintenance requests.
-
-Never executes commands, writes to an engine volume, downloads remote bytes or
-exposes secrets. A separately provisioned host maintenance agent can later
-consume these durable, approved requests.
-"""
+"""Browser engine installation controller; never runs downloaded executables."""
 import json
 import os
+import uuid
 from django.contrib.auth.decorators import login_required
-from django.db import transaction
+from django.db import connection, transaction
 from django.http import JsonResponse
+from django.utils import timezone
 from django.views.decorators.http import require_http_methods
-from .models import SliceJob, SlicerEngineOperation, SlicerEngineAccessSettings
-from .slicer_engine_releases import validated_releases, approved_release
-from .slicer_engines import get_engine
-from .slicer_execution import verified_installation
 
+from .models import SliceJob, SlicerEngineOperation, SlicerEngineAccessSettings
+from .slicer_engine_installer_client import installer_request, EngineInstallerUnavailable
+from .slicer_engines import get_engine
 
 ACTIVE = ("queued", "downloading", "verifying", "staged", "activating")
 
@@ -29,75 +25,111 @@ def _serialize(op):
     }
 
 
+def _sync_operations(rows):
+    if not isinstance(rows, list) or len(rows) > 30:
+        return
+    permitted = set(ACTIVE) | {"completed", "failed", "cancelled"}
+    for row in rows:
+        if not isinstance(row, dict) or row.get("status") not in permitted:
+            continue
+        try:
+            operation_id = uuid.UUID(str(row["id"]))
+        except (TypeError, ValueError, KeyError):
+            continue
+        operation = SlicerEngineOperation.objects.filter(pk=operation_id).first()
+        if not operation or operation.status in {"completed", "failed", "cancelled"}:
+            continue
+        operation.status = row["status"]
+        progress = row.get("progress")
+        if isinstance(progress, int) and 0 <= progress <= 100:
+            operation.progress = progress
+        operation.status_message = str(row.get("message") or "")[:200]
+        if operation.status in {"completed", "failed", "cancelled"}:
+            operation.completed_at = timezone.now()
+        operation.save(update_fields=["status", "progress", "status_message",
+                                     "completed_at", "updated_at"])
+
+
 @login_required
 @require_http_methods(["GET", "POST"])
 def engine_operations(request):
-    restrict_to_admins = SlicerEngineAccessSettings.current().restrict_engine_management_to_admins
-    can_manage = request.user.is_superuser or not restrict_to_admins
+    policy = SlicerEngineAccessSettings.current()
+    can_manage = request.user.is_superuser or not policy.restrict_engine_management_to_admins
     if request.method == "POST" and not can_manage:
-        return JsonResponse({"error": "Engine changes are restricted by this installation’s administrator."}, status=403)
-    connected = os.environ.get("MAKERVAULT_SLICER_HOST_UPDATER_ENABLED") == "1"
+        return JsonResponse({"error": "Engine changes are restricted by this installation."},
+                            status=403)
+    enabled = os.environ.get("MAKERVAULT_SLICER_HOST_UPDATER_ENABLED") == "1"
+
     if request.method == "GET":
-        try:
-            releases = validated_releases()
-        except ValueError:
-            return JsonResponse({"error": "Engine release catalogue is invalid."}, status=503)
-        records = list(SlicerEngineOperation.objects.order_by("-created_at")[:30])
+        releases, connected = [], False
+        if enabled:
+            try:
+                releases = installer_request("GET", "/catalog").get("releases", [])
+                status = installer_request("GET", "/status").get("operations", [])
+                _sync_operations(status)
+                connected = True
+            except EngineInstallerUnavailable:
+                pass
         return JsonResponse({
-            "approved_releases": releases,
+            "approved_releases": releases if isinstance(releases, list) else [],
             "can_manage": can_manage,
-            "restrict_to_admins": restrict_to_admins,
-            "operations": [_serialize(op) for op in records],
+            "restrict_to_admins": policy.restrict_engine_management_to_admins,
+            "operations": [_serialize(op) for op in
+                           SlicerEngineOperation.objects.order_by("-created_at")[:30]],
             "host_updater_connected": connected,
             "installation_available": bool(connected and releases),
-            "installation_note": ("Engine installation becomes available when a safe host updater and "
-                                  "compatible releases are configured. Checks happen automatically."),
+            "installation_note": "Downloads and integrity checks run automatically.",
         })
 
     if len(request.body) > 2048:
-        return JsonResponse({"error": "Engine operation request is too large."}, status=413)
+        return JsonResponse({"error": "Operation request is too large."}, status=413)
     try:
-        payload = json.loads(request.body)
+        data = json.loads(request.body)
     except (ValueError, UnicodeError):
-        return JsonResponse({"error": "Invalid engine operation request."}, status=400)
-    if not isinstance(payload, dict) or set(payload) != {
+        return JsonResponse({"error": "Invalid engine request."}, status=400)
+    if not isinstance(data, dict) or set(data) != {
             "engine", "version", "action", "release_sha256"}:
-        return JsonResponse({"error": "Invalid engine operation fields."}, status=400)
+        return JsonResponse({"error": "Invalid engine request."}, status=400)
     engine, version, action, digest = (
-        payload["engine"], payload["version"], payload["action"],
-        payload["release_sha256"]
-    )
-    if any(not isinstance(value, str) for value in (engine, version, action, digest)):
-        return JsonResponse({"error": "Invalid engine operation values."}, status=400)
+        data["engine"], data["version"], data["action"], data["release_sha256"])
+    if any(not isinstance(x, str) for x in (engine, version, action, digest)):
+        return JsonResponse({"error": "Invalid engine request."}, status=400)
     if action not in {"install", "update"}:
         return JsonResponse({"error": "Unsupported engine operation."}, status=400)
     try:
         get_engine(engine)
-        approved_release(engine, version, digest)
     except ValueError:
-        return JsonResponse({"error": "That engine version is not yet available for automatic installation."}, status=400)
-    if not connected:
-        return JsonResponse({
-            "error": "The installer service is not yet ready on this MakerVault instance."
-        }, status=503)
+        return JsonResponse({"error": "Unsupported slicing engine."}, status=400)
+    if not enabled:
+        return JsonResponse({"error": "Engine installer is not configured."}, status=503)
     if SliceJob.objects.filter(status__in=("queued", "running")).exists():
-        return JsonResponse({
-            "error": "Finish or cancel active slicing jobs before changing engines."
-        }, status=409)
-    # PostgreSQL serialises competing admin requests using an advisory
-    # transactional lock on the singleton engine-operation namespace.
-    from django.db import connection
+        return JsonResponse({"error": "Please finish active slicing jobs first."}, status=409)
+
+    # The installer independently resolves the selected official release and
+    # verifies its published checksum. No browser-supplied download URL.
     with transaction.atomic():
         if connection.vendor == "postgresql":
             with connection.cursor() as cursor:
                 cursor.execute("SELECT pg_advisory_xact_lock(%s)", [276381104])
         if SlicerEngineOperation.objects.filter(status__in=ACTIVE).exists():
+            return JsonResponse({"error": "An engine update is already in progress."},
+                                status=409)
+        try:
+            response = installer_request("POST", "/install", {
+                "engine": engine, "version": version, "bundle_sha256": digest,
+            })
+            submitted = response["operation"]
+            identity = uuid.UUID(submitted["id"])
+            if (submitted["engine"] != engine or submitted["version"] != version
+                    or submitted["status"] not in ACTIVE):
+                raise ValueError("Unexpected installer response.")
+        except (EngineInstallerUnavailable, ValueError, KeyError, TypeError):
             return JsonResponse({
-                "error": "Another engine installation or update is already in progress."
-            }, status=409)
+                "error": "Installer could not start this version. Check the official release or installer status."
+            }, status=503)
         record = SlicerEngineOperation.objects.create(
-            requested_by=request.user, engine=engine, version=version,
-            action=action, release_sha256=digest, status="queued",
-            status_message="Waiting for the restricted host updater.",
+            id=identity, requested_by=request.user, engine=engine,
+            version=version, action=action, release_sha256=digest,
+            status="queued", status_message="Preparing official engine download",
         )
     return JsonResponse({"operation": _serialize(record)}, status=202)
