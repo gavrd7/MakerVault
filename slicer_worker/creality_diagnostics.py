@@ -213,13 +213,22 @@ def run_matrix(project_path, *, reference_path=None, timeout_seconds=120):
             raise ValueError("Reference 3MF must be a bounded regular file.")
         report["reference"] = compare_projects(project, p.read_bytes())
     # True single-material control reduces object count and active palette.
-    single = single_material_control(project)
-    outcome = _engine_run(engine["binary"], single, timeout_seconds)
+    try:
+        single = single_material_control(project)
+    except (ValueError, KeyError, TypeError, zipfile.BadZipFile) as exc:
+        # A diagnostic control that cannot be constructed must not prevent
+        # the original baseline and remaining five cases from executing.
+        single_result = {"status": "control-construction-failed",
+                         "error_type": type(exc).__name__}
+        single_digest = None
+    else:
+        single_result = _engine_run(engine["binary"], single, timeout_seconds)
+        single_digest = hashlib.sha256(single).hexdigest()
     report["test_results"].append({
         "case": "single-model-single-material",
         "description": "One original model, one native filament, tower disabled",
-        "configuration_sha256": hashlib.sha256(single).hexdigest(),
-        **outcome,
+        "configuration_sha256": single_digest,
+        **single_result,
     })
     for name, edits, description in _cases(config):
         variant = copy.deepcopy(config)
