@@ -64,13 +64,24 @@ def plan_native_multimaterial(job, *, settings=None):
         and isinstance(item["material_slot"].get("slot_id"), str)
     }
     preferred = primary_slots & (assigned | set(painted_slot_ids))
-    if not preferred:
-        raise MaterialRoutingError(
-            "Assign your main native filament preset to at least one selected model."
-        )
+    if job.engine == "crealityprint":
+        # Creality multi-STL has explicit, per-model slot presets. A global
+        # setup filament may be different and must not override the assigned
+        # model's actual material. Tool 0 follows the first model, not a CFS
+        # bay index or an unrelated globally selected profile.
+        first_slot = objects[0].get("material_slot")
+        if not isinstance(first_slot, dict) or first_slot.get("slot_id") not in assigned:
+            raise MaterialRoutingError("Assign a filament slot to the first Creality model.")
+        preferred_slot = first_slot["slot_id"]
+    else:
+        if not preferred:
+            raise MaterialRoutingError(
+                "Assign your main native filament preset to at least one selected model."
+            )
+        preferred_slot = sorted(preferred)[0]
     bindings = derive_native_tool_order(
         objects, printer_id=job.printer_id, topology=topology,
-        preferred_slot_id=sorted(preferred)[0],
+        preferred_slot_id=preferred_slot,
         painted_slot_ids=painted_slot_ids,
     )
     rows = [{"slot_id": slot_id, "tool_index": index}
@@ -80,8 +91,19 @@ def plan_native_multimaterial(job, *, settings=None):
     # installed bay presets with slicer-native tools.
     used_profile_rows = [row for row in profile_rows
                          if isinstance(row, dict) and row.get("slot_id") in bindings]
+    if job.engine == "crealityprint":
+        first_profile = next(
+            (row["profile_id"] for row in used_profile_rows
+             if row.get("slot_id") == preferred_slot), None
+        )
+        if first_profile is None:
+            raise MaterialRoutingError(
+                "The first assigned Creality model needs a native filament preset."
+            )
+    else:
+        first_profile = job.filament_profile_id
     profile_ids = ordered_material_profile_ids(
-        rows, used_profile_rows, main_profile_id=job.filament_profile_id,
+        rows, used_profile_rows, main_profile_id=first_profile,
     )
     profiles = SlicerProfile.objects.filter(
         owner_id=job.owner_id, pk__in=profile_ids, kind="filament",
