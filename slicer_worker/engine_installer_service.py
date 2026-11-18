@@ -339,6 +339,60 @@ class Handler(BaseHTTPRequestHandler):
         return self.respond(202, {"operation": result})
 
 
+def bootstrap_existing_orca():
+    """Import the exact staging Orca binary rather than a different bundled one.
+
+    Its staging manifest provides the originally validated SHA-256. Only the
+    already-configured local AppImage is read, never a user-supplied path.
+    """
+    staging = Path("/opt/staging-orca")
+    manifest = staging / "manifest.json"
+    binary = staging / "orcaslicer.AppImage"
+    if not manifest.exists():
+        root = STORE / "versions" / "orcaslicer" / APPROVAL_VERSION
+        if not root.exists():
+            seed_bundled_orca(store=STORE)
+        activate(STORE, engine="orcaslicer", version=APPROVAL_VERSION,
+                 sha256=EXPECTED_ORCA_SHA)
+        return
+    if (staging.is_symlink() or binary.is_symlink() or manifest.is_symlink()
+            or not binary.is_file() or not manifest.is_file()):
+        raise ValueError("Existing Orca stage is unsafe.")
+    if manifest.stat().st_size > 16384:
+        raise ValueError("Existing Orca stage manifest is oversized.")
+    entries = json.loads(manifest.read_text(encoding="utf-8")).get("engines", {})
+    item = entries.get("orcaslicer")
+    if not isinstance(item, dict):
+        raise ValueError("No existing staged Orca engine.")
+    version = item.get("version")
+    digest = item.get("binary_sha256")
+    if (not isinstance(version, str) or not VERSION.fullmatch(version)
+            or not isinstance(digest, str) or not HEX.fullmatch(digest)
+            or item.get("binary") != "/opt/engines/orcaslicer.AppImage"
+            or _sha256(binary) != digest):
+        raise ValueError("Existing Orca SHA-256 does not match staged identity.")
+    target = STORE / "versions" / "orcaslicer" / version
+    target.parent.mkdir(parents=True, exist_ok=True)
+    if not target.exists():
+        stage = Path(tempfile.mkdtemp(prefix=".orca-", dir=target.parent))
+        try:
+            shutil.copy2(binary, stage / "orcaslicer.AppImage")
+            (stage / "orcaslicer.AppImage").chmod(0o555)
+            result = subprocess.run([str(stage / "orcaslicer.AppImage"),
+                                     "--appimage-extract"], cwd=stage,
+                env={"HOME": str(stage), "TMPDIR": str(stage),
+                     "PATH": "/usr/bin:/bin", "LANG": "C.UTF-8"},
+                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                stdin=subprocess.DEVNULL, timeout=120, check=False)
+            if result.returncode != 0 or not (stage / "squashfs-root" / "AppRun").exists():
+                raise ValueError("Existing Orca AppImage extraction failed.")
+            os.rename(stage, target)
+        finally:
+            if stage.exists():
+                shutil.rmtree(stage)
+    activate(STORE, engine="orcaslicer", version=version, sha256=digest)
+
+
 def main():
     if len(TOKEN) < 32 or STORE.is_symlink() or not STORE.is_dir():
         raise SystemExit("Installer requires a restricted engine volume and a strong token.")
@@ -348,11 +402,7 @@ def main():
     # engine is first installed; otherwise the new active manifest would
     # accidentally hide Orca. Bootstrap once from the pinned bundle.
     if not (STORE / "active.json").exists():
-        orca = STORE / "versions" / "orcaslicer" / APPROVAL_VERSION
-        if not orca.exists():
-            seed_bundled_orca(store=STORE)
-        activate(STORE, engine="orcaslicer", version=APPROVAL_VERSION,
-                 sha256=EXPECTED_ORCA_SHA)
+        bootstrap_existing_orca()
     _restore_operations()
     server = ThreadingHTTPServer(("0.0.0.0", 8091), Handler)
     server.serve_forever()
