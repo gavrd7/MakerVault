@@ -236,7 +236,7 @@ def _install(op_id, release):
         # Never mark a release available solely because it downloaded.
         # Known Creality builds can hang by opening the GUI instead of slicing.
         try:
-            probe = subprocess.run([str(app_run), "--help"], cwd=stage,
+            probe = subprocess.run([str(app_run), "--cli", "--help"], cwd=stage,
                 env={"HOME": str(stage), "TMPDIR": str(stage),
                      "PATH": "/usr/bin:/bin", "LANG": "C.UTF-8",
                      "DISPLAY": "", "QT_QPA_PLATFORM": "offscreen"},
