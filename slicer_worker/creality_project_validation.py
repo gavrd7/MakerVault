@@ -66,16 +66,76 @@ def validate_creality_project(data, *, native_tool_count=2):
             if any(key.lower() in BLOCKED for key in project):
                 raise WorkerError("Creality native project contains blocked settings.")
             names = project.get("filament_settings_id")
-            if not isinstance(names, list) or len(names) != native_tool_count or any(
+            if not isinstance(names, list) or len(names) not in (native_tool_count, 4) or any(
                     not isinstance(name, str) or not 0 < len(name) <= 256 for name in names):
                 raise WorkerError("Creality native project filament palette is incomplete.")
+            # A four-bay K2 palette may have only two model-assigned tools.
+            # Vector and flushing dimensions must stay coherent.
+            slots = len(names)
+            for key in ("filament_map", "filament_map_2", "filament_colour_type",
+                        "filament_volume_map", "filament_nozzle_variant"):
+                value = project.get(key)
+                if value is not None and (not isinstance(value, list) or len(value) != slots):
+                    raise WorkerError("Creality filament palette vector size is invalid.")
+            for key, length in (("flush_volumes_matrix", slots * slots),
+                                ("flush_volumes_vector", 2 * slots)):
+                value = project.get(key)
+                if value is not None and (not isinstance(value, list) or len(value) != length):
+                    raise WorkerError("Creality purge matrix dimensions are invalid.")
+            # Validate native model settings safely, then construct a stripped
+            # manifest for the existing, strict worker geometry verifier.
+            settings_root = ET.fromstring(archive.read("Metadata/model_settings.config"))
+            records = settings_root.findall("object")
+            plates = settings_root.findall("plate")
+            assemblies = settings_root.findall("assemble")
+            if (settings_root.tag != "config" or len(records) != native_tool_count
+                    or len(plates) != 1 or len(assemblies) > 1):
+                raise WorkerError("Creality native object metadata is inconsistent.")
+            clean = ET.Element("config")
+            for record in records:
+                if record.tag != "object" or set(record.attrib) != {"id"}:
+                    raise WorkerError("Unexpected Creality object identity.")
+                clone = ET.SubElement(clean, "object", dict(record.attrib))
+                values = [row for row in record.findall("metadata")
+                          if row.get("key") == "extruder"]
+                if len(values) != 1:
+                    raise WorkerError("Missing Creality object material assignment.")
+                ET.SubElement(clone, "metadata", dict(values[0].attrib))
+                parts = record.findall("part")
+                if len(parts) > 1 or (parts and
+                        (parts[0].get("subtype") != "normal_part" or
+                         parts[0].get("id") != "1")):
+                    raise WorkerError("Unexpected Creality model-part settings.")
+                if parts and any(row.get("key") not in ("name", "matrix")
+                                 for row in parts[0].findall("metadata")):
+                    raise WorkerError("Unsupported native model-part metadata.")
+            plate = plates[0]
+            clean_plate = ET.SubElement(clean, "plate")
+            for row in plate:
+                if row.tag == "metadata":
+                    if row.get("key") == "plater_id":
+                        ET.SubElement(clean_plate, "metadata", dict(row.attrib))
+                elif row.tag == "model_instance":
+                    clean_plate.append(row)
+                else:
+                    raise WorkerError("Unsupported Creality plate metadata.")
+            if assemblies:
+                if len(assemblies[0]) != native_tool_count:
+                    raise WorkerError("Creality assembly instances are inconsistent.")
+                for item in assemblies[0]:
+                    if (item.tag != "assemble_item" or
+                            item.get("transform") != "1 0 0 0 1 0 0 0 1 0 0 0" or
+                            item.get("offset") != "0 0 0"):
+                        raise WorkerError("Creality assembly would modify the prepared positions.")
             # Validate the restrictive core plate using the existing worker
             # validator, not the project's richer vendor parser.
             core = io.BytesIO()
             with zipfile.ZipFile(core, "w", compression=zipfile.ZIP_DEFLATED,
                                  allowZip64=False) as trimmed:
                 for name in sorted(CORE_MEMBERS):
-                    trimmed.writestr(name, archive.read(name))
+                    trimmed.writestr(name, ET.tostring(clean, encoding="utf-8")
+                                     if name == "Metadata/model_settings.config"
+                                     else archive.read(name))
         validate_worker_3mf(core.getvalue(), native_tool_count=native_tool_count)
     except WorkerError:
         raise
