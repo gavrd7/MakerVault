@@ -795,11 +795,11 @@ def process_queued_job(job_id):
                     "Creality process changes are not supported by this native profile."
                 ) from exc
         if material_result is not None and job.engine == "crealityprint":
-            # The first resolved palette entry is the authenticated job's
-            # selected filament profile, as required by the worker protocol.
-            palette = list(material_result["filament_profiles"])
-            palette[0] = profiles[1]
-            material_result["filament_profiles"] = tuple(palette)
+            # Each filament in the palette is resolved from the authenticated
+            # model-assigned slot. The legacy single-profile field must match
+            # tool 0 for the worker contract; NEVER overwrite the selected
+            # slot's native filament with the unrelated Setup default.
+            profiles[1] = material_result["filament_profiles"][0]
         if model_format == "stl" and job.input_asset.sha256 and hashlib.sha256(model).hexdigest() != job.input_asset.sha256:
             raise SlicerExecutionError("Model contents changed since the job was prepared.")
         stage = "executing the isolated slicer worker"
