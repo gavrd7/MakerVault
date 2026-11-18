@@ -145,7 +145,14 @@ def run_creality(binary: Path, workdir: Path, *, timeout_seconds: int = DEFAULT_
                 raise WorkerError("Creality Print did not complete the CLI slice in time.") from None
             if proc.returncode != 0:
                 diagnostics.seek(0)
-                reason = _cli_failure_reason(diagnostics.read(32768))
+                output = diagnostics.read(32768)
+                # Creality 7.3.1 defines CLI_INVALID_PARAMS as -2; Linux
+                # subprocesses report its low eight bits as exit status 254.
+                # This is more precise than assuming native presets failed.
+                if proc.returncode == 254:
+                    reason = "Creality Print CLI rejected its command-line parameters."
+                else:
+                    reason = _cli_failure_reason(output)
                 logger.warning("Creality Print CLI exited with status %d (%s)",
                                proc.returncode, reason)
                 raise WorkerError(reason)
