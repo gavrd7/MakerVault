@@ -14,11 +14,11 @@ test("engine installer shows actual approved releases and worker status",()=>{
   assert.match(manager,/host_updater_connected/);
   assert.match(manager,/installed_version/);
   assert.match(manager,/Recent engine operations/);
-  assert.match(manager,/No approved installation release is available yet/);
+  assert.match(manager,/Installation package not yet available/);
   assert.match(manager,/state\?\.can_manage !== false/);
 });
 
-test("only an explicit administrator action can queue a pinned release",()=>{
+test("user-initiated engine installation uses a pinned release and confirmation",()=>{
   assert.match(manager,/window\.confirm/);
   assert.match(manager,/release_sha256:release\.bundle_sha256/);
   assert.match(manager,/method:"POST"/);
@@ -37,5 +37,5 @@ test("existing setup opens the integrated engine manager without altering slicin
 test("installed OrcaSlicer never looks unavailable just because an update is absent",()=>{
   assert.match(manager,/engine\.available === true \|\| engine\.status === "validated"/);
   assert.match(manager,/Already installed — no newer version available/);
-  assert.doesNotMatch(manager,/No approved installation release is available yet/);
+  assert.doesNotMatch(manager,/No approved installation release is available yet/);\n  assert.match(manager,/rollback_available/);
 });
