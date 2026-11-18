@@ -27,6 +27,10 @@ REASONS = {
     "creality-cli-timeout": (
         "Creality Print's native CLI did not finish slicing within the allowed time."
     ),
+    "creality-qt-platform-failed": ("Creality Print could not initialise its headless Qt platform in the slicer worker."),
+    "creality-runtime-library-missing": ("Creality Print could not load a required runtime library inside the worker container."),
+    "creality-cli-option-invalid": ("Creality Print rejected an option passed by MakerVault's CLI adapter."),
+    "creality-native-preset-invalid": ("Creality Print could not load a native printer, filament or process preset."),
     "creality-cli-exited": (
         "Creality Print's native CLI exited without completing the slice. Review compatible printer, filament and process profiles and the worker logs."
     ),
