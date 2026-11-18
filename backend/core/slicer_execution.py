@@ -745,6 +745,14 @@ def process_queued_job(job_id):
                 ) from exc
         stage = "validating and storing generated G-code"
         asset = store_generated_gcode(job.pk, output)
+        # Prepare GPU-friendly overviews outside the HTTP request and outside
+        # the slicing transaction. The task is advisory: queue outages must
+        # never turn a successfully stored slice into a failed job.
+        try:
+            from .tasks import warm_gcode_preview_task
+            warm_gcode_preview_task.delay(str(asset.pk))
+        except Exception:
+            logger.warning("Preview warming could not be queued for %s", asset.pk, exc_info=True)
         return {"status": "completed", "asset_id": str(asset.pk)}
     except SlicerWorkerError as exc:
         # SlicerWorkerError uses fixed, sanitized status/stage/reason values;
