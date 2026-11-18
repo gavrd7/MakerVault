@@ -393,6 +393,24 @@ def _validate_plate_execution(job):
             raise SlicerExecutionError(
                 "Combine variable layer height with Object settings after the native test fixture.")
     if settings.get("multi_material_test") is True:
+        if job.engine == "crealityprint":
+            if not (settings.get("creality_auto_arrange_offline") is True
+                    and len(objects) == 2):
+                raise SlicerExecutionError(
+                    "Creality multi-material requires two STLs and explicit offline auto-arrangement.")
+            if settings.get("flush_settings") is not None or settings.get("prime_tower") is not None:
+                raise SlicerExecutionError(
+                    "Creality's offline multi-STL test cannot preserve custom flushing or prime tower positions.")
+            if any((item.get("colour_paint") or {}).get("regions") or
+                   (item.get("colour_paint") or {}).get("faces") or
+                   item.get("support_paint") or item.get("seam_paint") or
+                   item.get("fuzzy_skin_paint") or item.get("variable_layer_profile") or
+                   item.get("process_overrides")
+                   for item in objects):
+                raise SlicerExecutionError(
+                    "Creality native multi-STL testing cannot include painting or per-object overrides.")
+        elif settings.get("creality_auto_arrange_offline"):
+            raise SlicerExecutionError("Creality auto-arrangement is incompatible with this engine.")
         # This permits *offline G-code generation* only. Uploaded or started
         # printer jobs are blocked by the submission API for these artifacts.
         try:
