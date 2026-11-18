@@ -117,7 +117,13 @@ def main(argv=None):
                     else:
                         reference_export += ["--name", args.reference_inventory]
                     try:
-                        _cmd(reference_export, timeout=90)
+                        reference_lookup = _cmd(reference_export, timeout=90,
+                                                check=False)
+                        if reference_lookup.returncode:
+                            raise RuntimeError(
+                                "Inventory reference was not found, ambiguous, or "
+                                "not a valid native 3MF. Use --reference-asset-id "
+                                "with the exact FileAsset UUID if needed.")
                         local_reference = Path(temporary) / "reference.3mf"
                         _cmd(["docker", "cp", APP + ":" + app_reference,
                               str(local_reference)], timeout=90)
