@@ -504,3 +504,29 @@ def execute_slice_job_task(self, job_id):
     """One explicit slicing attempt; never automatically retry or print."""
     from .slicer_execution import process_queued_job
     return process_queued_job(job_id)
+
+
+@shared_task(bind=True, max_retries=0, acks_late=True, reject_on_worker_lost=False)
+def warm_gcode_preview_task(self, asset_id):
+    """Best-effort cache preparation after G-code is safely stored.
+
+    Does not modify the G-code or affect slicing/printing success. The source
+    remains owner-scoped; cache keys include file identity and owner.
+    """
+    import logging
+    from .models import FileAsset
+    from .slicer_preview_cache import warm_asset_overviews
+    log = logging.getLogger(__name__)
+    asset = FileAsset.objects.filter(pk=asset_id).first()
+    if not asset or (asset.metadata or {}).get("extension") != ".gcode":
+        return {"status": "skipped"}
+    try:
+        with asset.file.storage.open(asset.file.name, "rb") as handle:
+            raw = handle.read(32 * 1024 * 1024 + 1)
+        if len(raw) > 32 * 1024 * 1024:
+            return {"status": "unsupported_size"}
+        ok = warm_asset_overviews(asset, raw)
+        return {"status": "ready" if ok else "skipped"}
+    except (OSError, UnicodeError, ValueError) as exc:
+        log.warning("Preview cache warmup skipped for %s: %s", asset_id, type(exc).__name__)
+        return {"status": "skipped"}
