@@ -186,7 +186,7 @@ export default function SlicerPrepareWorkspace({
   };
   useEffect(() => {
     const id = selectedProfiles?.process_id;
-    if (!id || !String(engine || "").startsWith("orcaslicer ")) {
+    if (!id || !["orcaslicer", "crealityprint"].includes(String(engine || "").split(" ")[0])) {
       setNativeProcessFields({});
       setNativeProcessError("");
       return undefined;
