@@ -80,7 +80,8 @@ class FullLayerParserTests(SimpleTestCase):
             segments.append([index, 0, index + 1, 0, 0.2, kind, 0.4, 0])
         result = _overview_segments(segments, per_layer_limit=80)
         self.assertEqual(len(result), 80)
-        self.assertTrue(all(row[5] == "Outer wall" for row in result))
+        self.assertTrue(any(row[5] == "Outer wall" for row in result))
+        self.assertTrue(any(row[5] == "Sparse infill" for row in result))
 
     def test_streaming_overview_bounds_storage_without_losing_support_priority(self):
         lines = ["G90", "M83", "G1 X0 Y0 Z0.2"]
@@ -126,6 +127,51 @@ class FullLayerParserTests(SimpleTestCase):
         self.assertTrue(any(move[5] == "Outer wall" for move in mobile))
         # Native G-code inspection never uses the reduced overview.
         self.assertEqual(exact_layer_toolpaths("\n".join(lines), 0.2)["segment_count"], 410)
+
+    def test_mixed_object_sections_survive_every_layer_of_bounded_overview(self):
+        """A roof or tower must not replace the object's walls/inner geometry."""
+        heights = [0.2, 0.4, 0.6, 0.8]
+        source = ["G90", "M83"]
+        for height in heights:
+            source.append(f"G1 X0 Y0 Z{height}")
+            for role, xbase, ybase in (
+                ("Outer wall", 10, 10), ("Inner wall", 40, 20),
+                ("Top surface", 70, 30), ("Sparse infill", 100, 40),
+                ("Support material", 130, 50), ("Prime tower", 160, 60),
+            ):
+                source.append(f";TYPE:{role}")
+                source.append(f"G1 X{xbase} Y{ybase}")
+                for i in range(80):
+                    source.append(f"G1 X{xbase+i+1} Y{ybase} E0.1")
+        gcode = "\n".join(source)
+        result = layer_batch_toolpaths(gcode, heights, overview=True, overview_limit=80)
+        self.assertTrue(result["complete"])
+        for row in result["layers"]:
+            self.assertEqual(len(row["segments"]), 80)
+            types = {move[5] for move in row["segments"]}
+            self.assertEqual(types, {"Outer wall", "Inner wall", "Top surface",
+                                     "Sparse infill", "Support material", "Prime tower"})
+            # Each physically separate area retains its own original extrusion.
+            self.assertTrue(all(any(move[5] == name for move in row["segments"])
+                                for name in types))
+            self.assertEqual(row["segments"], sorted(row["segments"],
+                             key=lambda move: ("Outer wall", "Inner wall",
+                             "Top surface", "Sparse infill",
+                             "Support material", "Prime tower").index(move[5])))
+            mobile = _overview_segments(row["segments"], 80)
+            self.assertEqual(mobile, row["segments"])
+
+    def test_balancer_never_exceeds_budget_with_all_six_feature_groups(self):
+        from core.slicer_preview_features import balanced_overview_indices
+        groups = {group: list(range(i*100, (i+1)*100))
+                  for i, group in enumerate(("tower", "support", "shell",
+                                             "skin", "inner", "body"))}
+        selection = balanced_overview_indices(groups, 80)
+        self.assertEqual(len(selection), 80)
+        for values in groups.values():
+            self.assertTrue(any(index in values for index in selection))
+        self.assertGreaterEqual(sum(index in groups["tower"] for index in selection), 24)
+        self.assertGreaterEqual(sum(index in groups["support"] for index in selection), 16)
 
     def test_cached_index_retrieves_later_page_of_long_print(self):
         from unittest.mock import patch
