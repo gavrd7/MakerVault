@@ -1113,9 +1113,9 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
   }
 
   async function saveInteractiveProcessProfile(name) {
-    if (!canPrepare || busy || loading || form.engine !== "orcaslicer" ||
+    if (!canPrepare || busy || loading || !["orcaslicer", "crealityprint"].includes(form.engine) ||
         !form.process_profile_id || !Object.keys(processOverrides).length) {
-      throw new Error("Choose an Orca process profile and change a supported setting first.");
+      throw new Error("Choose an installed engine process profile and change a supported setting first.");
     }
     const trimmed = String(name || "").trim();
     if (!trimmed || trimmed.length > 200) throw new Error("Enter a custom profile name (1–200 characters).");
