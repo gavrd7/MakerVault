@@ -8,6 +8,7 @@ A separate real native-profile test slice is still needed in MakerVault GUI.
   python3 scripts/install_slicer_staging.py enable
   python3 scripts/install_slicer_staging.py status
   python3 scripts/install_slicer_staging.py update
+  python3 scripts/install_slicer_staging.py enable-engine-installer
   python3 scripts/install_slicer_staging.py refresh-worker
   python3 scripts/install_slicer_staging.py upgrade-orca --version 2.5.0
   # Only after a locally reviewed source-corrected build passes real G-code CI:
@@ -409,6 +410,35 @@ def upgrade_orca(version=VERSION, *, reviewed_appimage=None, expected_sha=None):
     print("Reverify the engine and native profiles in MakerVault before slicing.")
 
 
+def enable_engine_installer():
+    """One-time opt-in: configure and start the restricted in-browser installer.
+
+    Does not replace the pinned Orca binary or change the existing print queue.
+    The worker must support the versioned, read-only engine store. Rebuild the
+    wrapper first if upgrading an older staging installation.
+    """
+    current = _read_env()
+    if "MAKERVAULT_SLICER_INSTALLER_TOKEN=" not in current:
+        token = secrets.token_urlsafe(48)
+        current = current.rstrip() + "\nMAKERVAULT_SLICER_INSTALLER_TOKEN=" + token + "\n"
+    if "MAKERVAULT_SLICER_HOST_UPDATER_ENABLED=" not in current:
+        current = current.rstrip() + "\nMAKERVAULT_SLICER_HOST_UPDATER_ENABLED=1\n"
+    else:
+        current = current.replace("MAKERVAULT_SLICER_HOST_UPDATER_ENABLED=0",
+                                  "MAKERVAULT_SLICER_HOST_UPDATER_ENABLED=1")
+    _save_env(current)
+    args = _compose_args()
+    _run(args + ["config", "--quiet"])
+    print("Starting restricted engine installer with no published ports…")
+    _run(args + ["--profile", "engine-installer", "up", "-d", "--build",
+                 "slicer-engine-store-init", "slicer-engine-installer"])
+    print("Refreshing MakerVault installer API configuration…")
+    _run(args + ["up", "-d", "--no-deps", "--force-recreate", "makervault"])
+    _run(args + ["ps", "makervault", "slicer-worker", "slicer-engine-installer"])
+    print("Installer enabled. Check Engine Installations in MakerVault.")
+    print("Creality Print activates only after its official AppImage passes the CLI check.")
+
+
 def update():
     """Update the application with the already-installed slicer worker attached.
 
@@ -469,7 +499,7 @@ def status():
 
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("action", choices=["prepare-orca", "enable", "disable", "status", "refresh-worker", "upgrade-orca", "upgrade-reviewed-orca", "update"])
+    parser.add_argument("action", choices=["prepare-orca", "enable", "disable", "status", "refresh-worker", "upgrade-orca", "upgrade-reviewed-orca", "update", "enable-engine-installer"])
     parser.add_argument("--version", default=VERSION,
                         help="Approved Orca release for prepare-orca and upgrade-orca (default: 2.5.0)")
     parser.add_argument("--reviewed-appimage", type=Path,
@@ -496,7 +526,8 @@ def main(argv=None):
             raise ValueError("--version applies only to prepare-orca or upgrade-orca.")
         {"enable": enable,
          "disable": disable, "status": status,
-         "refresh-worker": refresh_worker, "update": update}[args.action]()
+         "refresh-worker": refresh_worker, "update": update,
+         "enable-engine-installer": enable_engine_installer}[args.action]()
     except (ValueError, OSError, subprocess.CalledProcessError) as exc:
         print("Slicer staging installation failed: " + str(exc), file=sys.stderr)
         return 1
