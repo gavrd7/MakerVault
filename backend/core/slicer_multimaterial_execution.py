@@ -210,3 +210,40 @@ def prepare_creality_multistl(job, source_models):
         "topology": topology,
         "expected_tools": set(tool - 1 for tool in model_tools),
     }
+
+
+def prepare_creality_positioned_project(job, source_models, *, bed_width, bed_depth):
+    """Retain MakerVault plate transforms and each assigned native material."""
+    from .slicer_creality_project import build_creality_positioned_plate
+    from .slicer_native_resolution import resolved_native_profile
+    settings = job.settings or {}
+    objects = settings.get("plate_objects") or []
+    if (job.engine != "crealityprint" or
+            not isinstance(source_models, list) or len(source_models) != 2 or
+            len(objects) != 2 or
+            any(item != objects[i] or not isinstance(raw, bytes)
+                for i, (item, raw) in enumerate(source_models))):
+        raise MaterialRoutingError("Creality positioned plate requires two unchanged owned STLs.")
+    for item, _raw in source_models:
+        if (item.get("process_overrides") or
+                (item.get("colour_paint") or {}).get("regions") or
+                (item.get("colour_paint") or {}).get("faces") or
+                (item.get("support_paint") or {}).get("regions") or
+                (item.get("seam_paint") or {}).get("regions") or
+                (item.get("fuzzy_skin_paint") or {}).get("regions") or
+                (item.get("variable_layer_profile") or {}).get("bands")):
+            raise MaterialRoutingError(
+                "Creality positioned project does not yet support painted model settings.")
+    topology, bindings, profiles = plan_native_multimaterial(job)
+    tools = tuple(bindings[item["material_slot"]["slot_id"]] for item, _ in source_models)
+    if set(tools) != {0, 1}:
+        raise MaterialRoutingError("Creality project requires two distinct native materials.")
+    project_geometry = build_creality_positioned_plate(
+        source_models, bed_width=bed_width, bed_depth=bed_depth, tool_ids=tools)
+    return {
+        "project_geometry": project_geometry,
+        "filament_profiles": tuple(resolved_native_profile(p) for p in profiles),
+        "tool_bindings": bindings,
+        "topology": topology,
+        "expected_tools": {0, 1},
+    }
