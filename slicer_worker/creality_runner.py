@@ -229,7 +229,12 @@ def run_creality(binary: Path, workdir: Path, *, timeout_seconds: int = DEFAULT_
                 proc.communicate()
                 raise WorkerError("Creality Print did not complete the CLI slice in time.") from None
             if proc.returncode != 0:
-                diagnostics.seek(0)
+                # Creality writes the actionable validation message near
+                # the end of verbose native startup logs. Capture a bounded
+                # tail, not the first 32 KiB. Never persist raw contents.
+                diagnostics.seek(0, os.SEEK_END)
+                output_size = diagnostics.tell()
+                diagnostics.seek(max(0, output_size - 32768), os.SEEK_SET)
                 output = diagnostics.read(32768)
                 # Creality 7.3.1 defines CLI_INVALID_PARAMS as -2; Linux
                 # subprocesses report its low eight bits as exit status 254.
