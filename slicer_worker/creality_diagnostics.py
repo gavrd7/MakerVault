@@ -84,6 +84,20 @@ def _cases(config):
                 vectors[key] = [str(int(v)) if isinstance(v, bool) else str(v) for v in value]
     cases.append(("normalised-filament-scalars", vectors,
                   "Normalise existing native per-material vector element types"))
+    # Keep both object-to-tool assignments, but eliminate differences between
+    # material parameters. If only this case passes, the issue is likely in
+    # the distinct native filament values rather than mapping/geometry.
+    identical = {}
+    for key, value in config.items():
+        if (key.startswith("filament_") or key in {
+                "nozzle_temperature", "nozzle_temperature_initial_layer",
+                "cool_plate_temp", "hot_plate_temp", "textured_plate_temp",
+                "fan_min_speed", "fan_max_speed"
+            }) and isinstance(value, list) and len(value) == 2:
+            if key not in {"filament_settings_id", "filament_map", "filament_ids"}:
+                identical[key] = [value[0], value[0]]
+    cases.append(("identical-filament-parameters", identical,
+                  "Keep both logical tools but give both the same native material values"))
     return cases
 
 
