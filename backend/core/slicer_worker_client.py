@@ -50,6 +50,24 @@ def _session():
 
 def health():
     url, _token = worker_settings()
+    if creality_model_stls is not None:
+        if (engine != "crealityprint" or model_format != "stl" or
+                filament_profiles is None or not isinstance(creality_model_stls, (list, tuple))
+                or not 2 <= len(creality_model_stls) <= 12 or
+                not isinstance(creality_tool_ids, (list, tuple)) or
+                len(creality_tool_ids) != len(creality_model_stls) or
+                any(type(tool) is not int or not 1 <= tool <= len(filament_profiles)
+                    for tool in creality_tool_ids) or
+                len(set(creality_tool_ids)) < 2 or
+                any(not isinstance(item, bytes) for item in creality_model_stls) or
+                creality_model_stls[0] != model):
+            raise SlicerWorkerError("Invalid Creality native multi-STL model/tool mapping.")
+        payload["creality_model_stls"] = [
+            _encode(item, MAX_REQUEST_MODEL) for item in creality_model_stls
+        ]
+        payload["creality_tool_ids"] = list(creality_tool_ids)
+    elif creality_tool_ids is not None:
+        raise SlicerWorkerError("Creality tool IDs require multi-STL models.")
     session = _session()
     try:
         response = session.get(url + "/health", timeout=(2, 8), allow_redirects=False)
@@ -91,7 +109,8 @@ def _encode(raw, limit):
     return base64.b64encode(raw).decode("ascii")
 
 
-def run_remote_job(job_id, engine, version, model, printer_profile, filament_profile, process_profile, *, timeout_seconds=900, model_format="stl", filament_profiles=None):
+def run_remote_job(job_id, engine, version, model, printer_profile, filament_profile, process_profile, *, timeout_seconds=900, model_format="stl", filament_profiles=None,
+                   creality_model_stls=None, creality_tool_ids=None):
     if model_format not in {"stl", "3mf"}:
         raise SlicerWorkerError("Unsupported slicer input format.")
     if not isinstance(timeout_seconds, int) or not 1 <= timeout_seconds <= 900:
@@ -113,10 +132,12 @@ def run_remote_job(job_id, engine, version, model, printer_profile, filament_pro
     if model_format == "3mf":
         payload["model_format"] = "3mf"
     if filament_profiles is not None:
-        if (engine != "orcaslicer" or model_format != "3mf"
+        if (not ((engine == "orcaslicer" and model_format == "3mf") or
+                 (engine == "crealityprint" and model_format == "stl" and
+                  creality_model_stls is not None))
                 or not isinstance(filament_profiles, (list, tuple))
                 or not 2 <= len(filament_profiles) <= 16):
-            raise SlicerWorkerError("Multiple native filaments require an Orca 3MF job.")
+            raise SlicerWorkerError("Multiple native filaments require an Orca 3MF or Creality multi-STL job.")
         if any(not isinstance(profile, bytes) for profile in filament_profiles):
             raise SlicerWorkerError("Invalid native filament palette.")
         if filament_profiles[0] != filament_profile:
