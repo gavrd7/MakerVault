@@ -68,7 +68,7 @@ def _cases(config):
                   {"filament_map": None},
                   "Let Creality derive its native filament/nozzle mapping"))
     cases.append(("explicit-single-nozzle",
-                  {"filament_map": ["1", "1"]},
+                  {"filament_map": ["1"] * len(config.get("filament_settings_id", []))},
                   "Assign both logical filaments to physical nozzle one"))
     cases.append(("tower-disabled",
                   {"enable_prime_tower": "0"},
@@ -80,7 +80,7 @@ def _cases(config):
                 "cool_plate_temp", "hot_plate_temp", "textured_plate_temp",
                 "fan_min_speed", "fan_max_speed"}) and isinstance(value, list):
             # Avoid mutating vector shape; report unusual values separately.
-            if len(value) == 2 and all(type(v) in (str, int, float, bool) for v in value):
+            if len(value) == len(config.get("filament_settings_id", [])) and all(type(v) in (str, int, float, bool) for v in value):
                 vectors[key] = [str(int(v)) if isinstance(v, bool) else str(v) for v in value]
     cases.append(("normalised-filament-scalars", vectors,
                   "Normalise existing native per-material vector element types"))
@@ -93,9 +93,9 @@ def _cases(config):
                 "nozzle_temperature", "nozzle_temperature_initial_layer",
                 "cool_plate_temp", "hot_plate_temp", "textured_plate_temp",
                 "fan_min_speed", "fan_max_speed"
-            }) and isinstance(value, list) and len(value) == 2:
+            }) and isinstance(value, list) and len(value) == len(config.get("filament_settings_id", [])):
             if key not in {"filament_settings_id", "filament_map", "filament_ids"}:
-                identical[key] = [value[0], value[0]]
+                identical[key] = [value[0]] * len(value)
     cases.append(("identical-filament-parameters", identical,
                   "Keep both logical tools but give both the same native material values"))
     return cases
