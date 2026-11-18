@@ -2102,7 +2102,16 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
                 job.message || "Waiting for job update"}</small>
             {job.status === "failed" && <details className="slicerSlicingHelp">
               <summary>Understand this slicing failure and how to fix it</summary>
-              {job.engine === "crealityprint" && (job.message || "").includes("[creality-cli-parameters-invalid]") ? <>
+              {job.engine === "crealityprint" && (job.message || "").includes("[creality-cli-validation-error]") ? <>
+                <p><strong>Confirmed:</strong> Creality Print returned native CLI_VALIDATE_ERROR (-51, Linux exit 205) while validating MakerVault's generated 3MF.</p>
+                <p><strong>Next step:</strong> Investigate the embedded project settings and Creality's validation output. This code does not identify which parameter failed. Your two model positions and CFS assignments are saved; do not reimport the official presets or reposition the models to troubleshoot this adapter failure.</p>
+              </> : job.engine === "crealityprint" && (job.message || "").includes("[creality-project-version-unsupported]") ? <>
+                <p><strong>Confirmed:</strong> Creality Print rejected the native project's generator/file version (-24, Linux exit 232).</p>
+                <p><strong>Next step:</strong> The MakerVault 3MF adapter must emit a generator version accepted by the installed engine. Reimporting filament profiles will not correct it.</p>
+              </> : job.engine === "crealityprint" && (job.message || "").includes("[creality-native-project-invalid]") ? <>
+                <p><strong>Confirmed:</strong> Creality Print rejected the generated 3MF project's embedded native settings.</p>
+                <p><strong>Next step:</strong> Correct the self-contained project configuration in MakerVault's Creality adapter; the prepared model layout should remain untouched.</p>
+              </> : job.engine === "crealityprint" && (job.message || "").includes("[creality-cli-parameters-invalid]") ? <>
                 <p><strong>Confirmed:</strong> Creality Print 7.3.1 returned its invalid CLI parameters code (-2, displayed as 254 on Linux).</p>
                 <p><strong>Next step:</strong> Review the adapter's CLI flags and argument values. Changing the saved K2 profiles is not justified by this error alone.</p>
               </> : job.engine === "crealityprint" && (job.message || "").includes("[creality-cli-exited]") ? <>
