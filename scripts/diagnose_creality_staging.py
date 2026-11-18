@@ -97,7 +97,7 @@ def main(argv=None):
                     'umask 077; cat > "$1"', "sh", worker_reference,
                 ], input_bytes=refdata)
                 runner += ["--reference", worker_reference]
-            execution = _cmd(runner, timeout=6 * args.timeout + 45, check=False)
+            execution = _cmd(runner, timeout=7 * args.timeout + 60, check=False)
             # 2 means none of the CLI cases passed; the JSON is still useful.
             if execution.returncode not in (0, 2):
                 raise RuntimeError(
@@ -107,7 +107,8 @@ def main(argv=None):
                           timeout=30)
             report = json.loads(result.stdout)
             if (report.get("schema") != 1 or
-                    not isinstance(report.get("test_results"), list)):
+                    not isinstance(report.get("test_results"), list) or
+                    len(report["test_results"]) != 7):
                 raise RuntimeError("Worker returned malformed diagnostic report.")
             # Always create a new report, never overwrite earlier runs.
             args.output.parent.mkdir(parents=True, exist_ok=True)
@@ -128,6 +129,13 @@ def main(argv=None):
                     exit_code=case.get("exit_code", "none"),
                     validation_category=case.get("validation_category", "none"),
                     known_validation_reason=case.get("known_validation_reason", "unclassified")))
+            if report.get("reference"):
+                comparison = report["reference"]
+                print(" Structural reference comparison: missing settings={missing}, shape differences={shapes}, candidate models={candidate}, reference models={reference}".format(
+                    missing=comparison["missing_setting_count"],
+                    shapes=comparison["different_value_shape_count"],
+                    candidate=comparison["candidate_structure_counts"]["resource_objects"],
+                    reference=comparison["reference_structure_counts"]["resource_objects"]))
             return 0 if any(x["status"] == "passed" for x in report["test_results"]) else 2
         finally:
             # Deliberately erase all private model/config copies, including on
