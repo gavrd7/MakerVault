@@ -48,3 +48,16 @@ admin.site.register([
 admin.site.site_header = "MakerVault administration"
 admin.site.site_title = "MakerVault"
 admin.site.index_title = "MakerVault data"
+
+
+from .models import SlicerEngineAccessSettings
+
+
+@admin.register(SlicerEngineAccessSettings)
+class SlicerEngineAccessSettingsAdmin(admin.ModelAdmin):
+    list_display = ("restrict_engine_management_to_admins",)
+    fields = ("restrict_engine_management_to_admins",)
+    def has_add_permission(self, request):
+        return not SlicerEngineAccessSettings.objects.exists()
+    def has_delete_permission(self, request, obj=None):
+        return False
