@@ -290,6 +290,59 @@ def _one_filament_value(value, key):
     return result
 
 
+def _native_palette_settings(project, filaments, *, palette_slots=4):
+    """Add Creality 7.3.x CFS-compatible vector and matrix dimensions.
+
+    The native K2 reference has four logical filament positions even when
+    only two are assigned to models. Unused positions are filled from an
+    already-resolved and hash-checked native preset, not from any unknown
+    CFS spool. They are not assigned to geometry and cannot start prints.
+    """
+    if len(filaments) != 2 or palette_slots != 4:
+        raise SlicerProfileError("Unsupported Creality CFS palette size.")
+    names = project.get("filament_settings_id")
+    if not isinstance(names, list) or len(names) != 2:
+        raise SlicerProfileError("Creality native filament identities are incomplete.")
+    # Keep both active model material indices unchanged. Positions 3 and 4
+    # are neutral placeholders until actual CFS routing can be established.
+    project["filament_settings_id"] = names + [names[0], names[1]]
+    for key, value in tuple(project.items()):
+        if key in _PER_TOOL_KEYS and isinstance(value, list) and len(value) == 2:
+            project[key] = [value[0], value[1], value[0], value[1]]
+    defaults = {
+        "filament_map": ["1"] * palette_slots,
+        "filament_map_2": ["0"] * palette_slots,
+        "filament_map_mode": "AutoForSaving",
+        "filament_colour_type": ["1"] * palette_slots,
+        "filament_volume_map": ["0"] * palette_slots,
+        "filament_nozzle_variant": ["0"] * palette_slots,
+        "filament_multi_colour": ["#000000"] * palette_slots,
+        "filament_ids": [""] * palette_slots,
+        "default_filament_colour": [""] * palette_slots,
+        "nozzle_flush_dataset": ["0"],
+    }
+    for key, values in defaults.items():
+        existing = project.get(key)
+        if existing is None:
+            project[key] = values
+        elif isinstance(values, list) and isinstance(existing, list) and len(existing) != len(values):
+            if len(existing) == 1 and len(values) == palette_slots:
+                project[key] = existing * palette_slots
+            elif len(existing) == 2 and len(values) == palette_slots:
+                project[key] = existing * 2
+            else:
+                raise SlicerProfileError("Invalid native Creality vector size: " + key)
+    project.setdefault("flush_volumes_matrix", ["0"] * (palette_slots ** 2))
+    project.setdefault("flush_volumes_vector", ["140"] * (palette_slots * 2))
+    if (not isinstance(project["flush_volumes_matrix"], list) or
+            len(project["flush_volumes_matrix"]) != palette_slots ** 2 or
+            not isinstance(project["flush_volumes_vector"], list) or
+            len(project["flush_volumes_vector"]) != palette_slots * 2):
+        raise SlicerProfileError("Creality CFS purge matrix does not match the native material palette.")
+    project.setdefault("enable_filament_dynamic_map", "0")
+    return palette_slots
+
+
 def build_creality_project_candidate(plate, *, printer, process, filaments,
                                     version="7.3.1", prime_tower=None,
                                     bed_width=260, bed_depth=260):
@@ -325,13 +378,14 @@ def build_creality_project_candidate(plate, *, printer, process, filaments,
     project["filament_settings_id"] = [
         str(preset.get("name") or "MakerVault filament %d" % (i + 1))
         for i, preset in enumerate(filament_settings)]
+    _native_palette_settings(project, filament_settings)
     # Creality 7.3.1 uses one-based physical nozzle routing. A K2/CFS
     # changes filament through a single physical nozzle; it does not have
     # two physical nozzle_diameter entries. Native upstream tests explicitly
     # accept [1, 1] for two filaments / one nozzle.
     nozzles = project.get("nozzle_diameter")
     if isinstance(nozzles, list) and len(nozzles) == 1:
-        project["filament_map"] = ["1", "1"]
+        project["filament_map"] = ["1", "1", "1", "1"]
     project["print_settings_id"] = str(print_settings.get("name") or "MakerVault process")
     project["printer_settings_id"] = str(machine.get("name") or "MakerVault printer")
     if prime_tower is None and project.get("enable_prime_tower", "1") != "0":
