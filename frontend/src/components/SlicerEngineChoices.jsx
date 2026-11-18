@@ -48,8 +48,8 @@ export default function SlicerEngineChoices({
       const active = selected === engine.key;
       const verified = engine.available === true || engine.status === "validated";
       const status = verified
-        ? "Verified " + (engine.installed_version || "worker")
-        : "Not installed / not verified";
+        ? "Installed · " + (engine.installed_version || "ready")
+        : "Not installed";
       const body = <>
         <SlicerEngineLogo engine={engine.key} label={engine.label} />
         <span className="slicerEngineChoiceText">
