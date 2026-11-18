@@ -50,11 +50,12 @@ test("progressive large prints append surface geometry without polluting exact-l
   assert.match(preview, /const naturalLayer = wholeModel\.complete/);
 });
 
-test("first overview request supplies one reusable server-side layer index", () => {
-  assert.match(preview, /offset === 0 \? encodeURIComponent\(layers\.join\(","\)\)/);
-  assert.match(preview, /allHeights\.length <= 6000/);
-  assert.match(preview, /"&all_zs=" \+ allHeights/);
-  assert.match(preview, /gcode\/layers\/\?overview=1&detail=/);
+test("cold preview requests asynchronous preparation and has direct fallback", () => {
+  assert.match(preview, /"&warm=1"/);
+  assert.match(preview, /response\.status !== 202/);
+  assert.match(preview, /"&direct=1"/);
+  assert.doesNotMatch(preview, /"&all_zs="/);
+
 });
 
 test("whole-print layer scrubbing changes a GPU clipping plane rather than geometry", () => {
