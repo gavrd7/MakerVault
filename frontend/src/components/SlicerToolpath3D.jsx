@@ -23,7 +23,7 @@ function makeUnitBead() {
  * Never imply a complete print simulation when sampled paths are missing.
  */
 export default function SlicerToolpath3D({
-  segments = [], framingSegments = [], progressiveMode = false, layers = [], activeLayer, activeStep, visible = {},
+  segments = [], segmentChunks = [], framingSegments = [], progressiveMode = false, layers = [], activeLayer, activeStep, visible = {},
   colourMode = "feature", colours = {}, filamentColours = {}, showToolhead = true, bedSize = null,
   renderMode = "solid", nozzleDiameter = 0.4,
   layerDisplay = "current", featureFocus = "all",
@@ -291,44 +291,45 @@ export default function SlicerToolpath3D({
     const styleKey = JSON.stringify([colourMode,colours,filamentColours,renderMode,
       nozzleDiameter,visible,featureFocus,layerDisplay,previewSampled,
       fadePrevious,outerContrast]);
-    const previous = view.geometryCache;
-    const canAppend = progressiveMode && previous?.styleKey === styleKey
-      && segments.length >= previous.count
-      && (previous.count === 0 ||
-        JSON.stringify(segments[previous.count-1]) === previous.lastSegment);
-    const startSegment = canAppend ? previous.count : 0;
-    if (!canAppend) {
-      while (paths.children.length) {
-        const old = paths.children[0];
+    const previous=view.geometryCache;
+    const canAppend=progressiveMode && previous?.styleKey===styleKey &&
+      segmentChunks.length>=previous.chunkCount &&
+      (previous.chunkCount===0 ||
+       segmentChunks[previous.chunkCount-1]===previous.lastChunk);
+    const startChunk=canAppend ? previous.chunkCount : 0;
+    if(!canAppend){
+      while(paths.children.length){
+        const old=paths.children[0];
         paths.remove(old);
         old.geometry.dispose();
         old.material.dispose();
       }
     }
+    const batches=progressiveMode ? segmentChunks.slice(startChunk) : [segments];
     const activeZ = progressiveMode ? Infinity : layers[geometryLayer];
-    const positions = [];
-    const coloursArray = [];
-    const featureShadeCache = new Map();
-    const beadMesh=renderMode==="lines" ? null : new THREE.InstancedMesh(
-      makeUnitBead(),
-      new THREE.MeshLambertMaterial({
-        vertexColors:false,side:THREE.DoubleSide,
-        clippingPlanes:[view.layerClipPlane],
-      }),
-      Math.max(1,segments.length-startSegment),
-    );
+    const featureShadeCache=new Map();
     const beadMatrix=new THREE.Matrix4();
-    let beadCount=0;
-    let currentCount = 0;
-    let lastStep = null;
+    let lastStep=null;
     const selectedZ = Number.isFinite(activeZ) ? activeZ : Infinity;
     const maxStep = Math.max(0, Number(geometryStep) || 0);
     const layerIndexByHeight = new Map(layers.map((height, index) => [Number(height).toFixed(3), index]));
     const activeIndex = Math.max(0, Number(geometryLayer) || 0);
     const minVisibleIndex = layerDisplay === "current" ? activeIndex
       : layerDisplay === "context" ? Math.max(0, activeIndex - 8) : 0;
-    for (let segmentIndex=startSegment;segmentIndex<segments.length;segmentIndex++) {
-      const segment=segments[segmentIndex];
+    for (const batch of batches) {
+      const positions=[];
+      const coloursArray=[];
+      let currentCount=0;
+      let beadCount=0;
+      const beadMesh=renderMode==="lines" ? null : new THREE.InstancedMesh(
+        makeUnitBead(),
+        new THREE.MeshLambertMaterial({
+          vertexColors:false,side:THREE.DoubleSide,
+          clippingPlanes:[view.layerClipPlane],
+        }),
+        Math.max(1,batch.length),
+      );
+    for (const segment of batch) {
       if (!Array.isArray(segment) || segment.length < 6 ||
           !Number.isFinite(segment[0]) || !Number.isFinite(segment[1]) ||
           !Number.isFinite(segment[2]) || !Number.isFinite(segment[3]) ||
@@ -416,9 +417,9 @@ export default function SlicerToolpath3D({
     // leaving a tiny print until opening another modal caused a reflow.
     // Reframe once when first real extrusion geometry arrives, never on every
     // layer or during the user's manual camera interactions.
-    if (!framedInitialGeometry.current && (positions.length || beadCount) && segments.length) {
+    if (!framedInitialGeometry.current && (positions.length || beadCount) && batch.length) {
       const bounds = new THREE.Box3();
-      for (const row of segments) {
+      for (const row of batch) {
         if (!Array.isArray(row) || row.length < 5 ||
             !row.slice(0, 5).every(Number.isFinite)) continue;
         bounds.expandByPoint(new THREE.Vector3(row[0], row[4], row[1]));
@@ -459,13 +460,14 @@ export default function SlicerToolpath3D({
         beadMesh.material.dispose();
       }
     }
+    } // Each completed response is a self-contained GPU mesh.
     view.geometryCache = progressiveMode ? {
-      count:segments.length,styleKey,
-      lastSegment:segments.length?JSON.stringify(segments[segments.length-1]):null,
+      chunkCount:segmentChunks.length,styleKey,
+      lastChunk:segmentChunks[segmentChunks.length-1],
     } : null;
     marker.visible = Boolean(showToolhead && lastStep);
     if (lastStep) marker.position.set(...lastStep);
-  }, [segments, layers, geometryLayer, geometryStep, visible, colourMode, colours, showToolhead,
+  }, [segments, segmentChunks, layers, geometryLayer, geometryStep, visible, colourMode, colours, showToolhead,
     renderMode, nozzleDiameter, filamentColours, layerDisplay, featureFocus, previewSampled,
     fadePrevious, outerContrast, progressiveMode, bedSize?.[0], bedSize?.[1]]);
 
