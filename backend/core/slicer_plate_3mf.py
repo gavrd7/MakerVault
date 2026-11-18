@@ -254,9 +254,25 @@ def build_plate_3mf(objects_with_stl, *, bed_width, bed_depth, native_tool_indic
                 provisional[1] * x + provisional[4] * y + provisional[7] * z + provisional[10],
                 provisional[2] * x + provisional[5] * y + provisional[8] * z,
             ))
-        if not placed or any(not (0 <= x <= bed_width and 0 <= y <= bed_depth)
-                             for x, y, _z in placed):
-            raise SlicerProfileError("A model extends outside the verified build plate.")
+        # Preview and imported STL coordinates use floating-point transforms.
+        # Never reject a model for sub-millimetre roundoff at an otherwise
+        # valid plate boundary. Real overhangs remain blocked.
+        tolerance = 0.05  # mm; strictly below nozzle/line widths
+        if not placed:
+            raise SlicerProfileError("The prepared build plate contains an empty model.")
+        min_x = min(point[0] for point in placed)
+        max_x = max(point[0] for point in placed)
+        min_y = min(point[1] for point in placed)
+        max_y = max(point[1] for point in placed)
+        if (not all(math.isfinite(v) for v in
+                    (min_x, max_x, min_y, max_y)) or
+                min_x < -tolerance or max_x > bed_width + tolerance or
+                min_y < -tolerance or max_y > bed_depth + tolerance):
+            raise SlicerProfileError(
+                "Model %d extends beyond the native %.1f × %.1f mm plate "
+                "(X %.2f–%.2f, Y %.2f–%.2f mm)."
+                % (index, bed_width, bed_depth,
+                   min_x, max_x, min_y, max_y))
         minimum_z = min(point[2] for point in placed)
         # Tilted STL always rests on its lowest vertex before applying the
         # explicitly requested elevation. Do not auto-drop stacked objects.
