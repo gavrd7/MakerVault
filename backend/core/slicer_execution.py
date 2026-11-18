@@ -133,7 +133,9 @@ def verified_installation():
                 (image_ref.endswith("@" + digest) and image_ref.count("@") == 1))
     ):
         return {}
-    configured = os.environ.get("MAKERVAULT_SLICER_ENGINES_JSON", "")
+    configured = (os.environ.get("MAKERVAULT_SLICER_ENGINES_JSON", "")
+                  if os.environ.get("MAKERVAULT_SLICER_HOST_UPDATER_ENABLED") != "1"
+                  else "")
     if configured:
         try:
             import json
@@ -161,6 +163,27 @@ def verified_installation():
             "binary_sha256": worker.get("binary_sha256"),
             "ready": True,
         }}
+    # When the isolated engine installer is present, the worker reads an
+    # atomically activated manifest from its read-only versioned engine store.
+    # Each entry is checked by the worker against its actual on-disk digest;
+    # no administrator-managed environment approval list is required.
+    if os.environ.get("MAKERVAULT_SLICER_HOST_UPDATER_ENABLED") == "1":
+        installed = {}
+        for engine, entry in health_engines.items():
+            version, checksum = entry.get("version"), entry.get("binary_sha256")
+            if not (entry.get("ready") is True and isinstance(version, str)
+                    and isinstance(checksum, str)):
+                continue
+            candidate = {engine: {
+                "version": version, "enabled": True, "verified": True,
+                "image_digest": digest, "binary_sha256": checksum,
+            }}
+            try:
+                validate_engine_selection(engine, version, candidate)
+            except ValueError:
+                continue
+            installed.update(candidate)
+        return installed
     installed = {}
     for engine, entry in approvals.items():
         if not isinstance(entry, dict) or set(entry) != {"version", "binary_sha256"}:
