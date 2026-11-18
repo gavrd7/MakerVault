@@ -27,7 +27,7 @@ import uuid
 
 from .engine_store_admin import (
     _manifest, _write, _sha256, seed_bundled_orca, activate,
-    EXPECTED_ORCA_SHA, APPROVAL_VERSION,
+    EXPECTED_ORCA_SHA, APPROVAL_VERSION, rollback as rollback_store,
 )
 
 STORE = Path(os.environ.get("SLICER_ENGINE_STORE", "/opt/engine-store"))
@@ -294,6 +294,36 @@ def start_install(engine, version, digest):
     return dict(OPERATIONS[op_id])
 
 
+def _rollback_operation(op_id):
+    try:
+        _write_operation(op_id, status="verifying", progress=30,
+                         message="Checking previous engine versions")
+        rollback_store(STORE)
+        _write_operation(op_id, status="completed", progress=100,
+                         message="Previous engine selection restored")
+    except Exception:
+        _write_operation(op_id, status="failed", progress=0,
+                         message="Previous versions could not be restored safely")
+
+
+def start_rollback():
+    previous = STORE / "previous.json"
+    if previous.is_symlink() or not previous.is_file():
+        raise ValueError("No previous engine selection.")
+    with LOCK:
+        if any(op["status"] not in {"completed", "failed"} for op in OPERATIONS.values()):
+            raise ValueError("Another engine change is running.")
+        op_id = str(uuid.uuid4())
+        OPERATIONS[op_id] = {
+            "id": op_id, "engine": "crealityprint", "version": "previous",
+            "action": "rollback", "status": "queued", "progress": 0,
+            "message": "Restoring previous engine selection",
+        }
+        _persist_operations()
+    Thread(target=_rollback_operation, args=(op_id,), daemon=True).start()
+    return dict(OPERATIONS[op_id])
+
+
 class Handler(BaseHTTPRequestHandler):
     server_version = "MakerVaultEngineInstaller/1"
     def log_message(self, *args):
@@ -319,11 +349,16 @@ class Handler(BaseHTTPRequestHandler):
                 return self.respond(503, {"error": "Official engine releases are unavailable."})
         if self.path == "/status":
             with LOCK:
-                return self.respond(200, {"operations": list(OPERATIONS.values())[-30:]})
+                return self.respond(200, {"operations": list(OPERATIONS.values())[-30:],\n                                          "rollback_available": (STORE / "previous.json").is_file()})
         return self.respond(404, {"error": "Not found"})
     def do_POST(self):
-        if self.path != "/install" or not self.authenticated():
+        if self.path not in {"/install", "/rollback"} or not self.authenticated():
             return self.respond(403, {"error": "Unauthorized"})
+        if self.path == "/rollback":
+            try:
+                return self.respond(202, {"operation": start_rollback()})
+            except ValueError:
+                return self.respond(409, {"error": "Rollback is not available."})
         try:
             length = int(self.headers.get("Content-Length", "0"))
             if not 0 < length <= 2048:
