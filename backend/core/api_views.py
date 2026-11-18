@@ -2559,9 +2559,11 @@ def file_gcode_layers(request, asset_id):
         except (ValueError, TypeError):
             return _error("Invalid complete overview index.", status=400)
     try:
+        from .slicer_layer_preview import MAX_FULL_PREVIEW_SEGMENTS, MAX_BATCH_SEGMENTS
         result = layer_batch_toolpaths(
             text, heights, overview=overview, overview_limit=detail,
             high_fidelity=high_fidelity,
+            max_total_segments=(MAX_FULL_PREVIEW_SEGMENTS if high_fidelity else MAX_BATCH_SEGMENTS),
         )
     except (ValueError, TypeError):
         return _error("Invalid preview detail level.", status=400)
