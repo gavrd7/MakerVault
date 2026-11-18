@@ -57,6 +57,37 @@ def _cli_failure_reason(output):
     return "Creality Print failed to slice using the selected native profiles."
 
 
+
+def _cli_validation_category(output):
+    """Allowlisted topic only, extracted from Creality's validation error.
+
+    The native CLI writes 'got error when validate: <detail>'. Never return
+    that detail itself: it may include machine scripts or arbitrary paths.
+    """
+    text = output.decode("utf-8", errors="replace").lower()
+    markers = ("got error when validate:", "validation failed:")
+    details = [line.split(marker, 1)[1].strip()
+               for line in text.splitlines()[-400:]
+               for marker in markers if marker in line]
+    if not details:
+        return None
+    detail = details[-1][:1024]
+    categories = (
+        (("wipe tower", "prime tower", "purge tower"), "prime-tower"),
+        (("layer height", "first layer height"), "layer-height"),
+        (("line width", "extrusion width"), "line-width"),
+        (("nozzle diameter", "nozzle size"), "nozzle"),
+        (("flow ratio", "flowrate", "flow rate"), "flow"),
+        (("filament", "temperature"), "filament"),
+        (("support", "overhang"), "supports"),
+        (("bed", "build plate", "printable area"), "build-plate"),
+    )
+    for phrases, category in categories:
+        if any(phrase in detail for phrase in phrases):
+            return category
+    return None
+
+
 def _check_native_json(path):
     """Check native JSON and remove network-only preferences from scratch.
 
@@ -208,8 +239,9 @@ def run_creality(binary: Path, workdir: Path, *, timeout_seconds: int = DEFAULT_
                     # CLI_FILE_VERSION_NOT_SUPPORTED = -24 (POSIX 232).
                     reason = "Creality Print rejected the 3MF project file version."
                 elif proc.returncode == 205:
-                    # CLI_VALIDATE_ERROR = -51 (POSIX 205). This identifies
-                    # validation failure, not the individual offending key.
+                    # CLI_VALIDATE_ERROR = -51 (POSIX 205). The native error
+                    # line may identify a topic; only pass an allowlisted
+                    # category, never raw stderr or arbitrary setting values.
                     reason = "Creality Print rejected native 3MF slicing parameters during validation."
                 elif proc.returncode == 254 and reason == "Creality Print failed to slice using the selected native profiles.":
                     reason = "Creality Print CLI rejected its command-line parameters."
@@ -220,6 +252,10 @@ def run_creality(binary: Path, workdir: Path, *, timeout_seconds: int = DEFAULT_
                 # not attach raw stdout, CLI arguments, paths or profile JSON.
                 if type(proc.returncode) is int and 1 <= proc.returncode <= 255:
                     error.cli_exit_code = proc.returncode
+                if proc.returncode == 205:
+                    category = _cli_validation_category(output)
+                    if category is not None:
+                        error.cli_validation_category = category
                 raise error
         if outdir.is_symlink() or not outdir.is_dir():
             raise WorkerError("Creality Print produced no safe output directory.")
