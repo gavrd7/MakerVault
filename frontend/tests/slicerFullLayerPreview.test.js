@@ -21,12 +21,12 @@ test("preview retrieves exact selected layer from stored original G-code", () =>
   assert.match(preview, /setLayerBusy\(true\)/);
 });
 
-test("progressive surface overview reports incomplete loads separately from exact layer inspection", () => {
-  assert.match(preview, /gcode\/layers\/\?overview=1&detail=/);
-  assert.match(preview, /Whole print · surface overview/);
+test("progressive full-quality preview reports limited geometry separately from exact layer inspection", () => {
+  assert.match(preview, /gcode\/layers\/\?quality=full&zs=/);
+  assert.match(preview, /Whole print · full-detail paths/);
   assert.match(preview, /slicerWholeModelProgress/);
   assert.match(preview, /wholeModel\.loadedLayers/);
-  assert.match(preview, /The overview could not cover all layers/);
+  assert.match(preview, /The preview reached its resource budget/);
   assert.match(preview, /const previous = wholeModel\.segments\.filter/);
   assert.match(preview, /framingSegments=/);
   assert.match(toolpath, /cameraSource = framingSegments\.length/);
@@ -36,11 +36,11 @@ test("progressive surface overview reports incomplete loads separately from exac
 });
 
 
-test("progressive large prints append surface geometry without polluting exact-layer cache", () => {
+test("progressive large prints append complete geometry without polluting exact-layer cache", () => {
   assert.match(preview, /offset \+= 64/);
-  assert.match(preview, /overview=1&detail=/);
-  assert.match(preview, /Math\.floor\(maxMoves \/ layers\.length\)/);
-  assert.match(preview, /Math\.max\(80, Math\.min\(mobile \? 110 : 220,/);
+  assert.match(preview, /quality=full&zs=/);
+  assert.match(preview, /maxMoves = mobile \? 700000 : 1500000/);
+  assert.match(preview, /high-fidelity/i);
   assert.doesNotMatch(preview, /fullLayerCache\.current\.set\(key,item\)/);
   assert.match(preview, /progressiveMode=\{progressiveMode\}/);
   assert.match(preview, /return wholeModel\.segments/);
@@ -73,10 +73,12 @@ test("whole-print layer scrubbing changes a GPU clipping plane rather than geome
   assert.doesNotMatch(geometryEffect, /\[segments, layers, activeLayer, activeStep,/);
 });
 
-test("initial mesh uses shared indexed bead vertices rather than duplicated triangles", () => {
-  assert.match(toolpath, /const indices = \[\]/);
-  assert.match(toolpath, /const base = positions\.length \/ 3/);
-  assert.match(toolpath, /for \(let vertex=0;vertex<8;vertex\+\+\)/);
-  assert.match(toolpath, /geometry\.setIndex\(indices\)/);
+test("high-fidelity renderer uses GPU instancing without reducing extrusion paths", () => {
+  assert.match(toolpath, /function makeUnitBead\(\)/);
+  assert.match(toolpath, /new THREE\.InstancedMesh\(/);
+  assert.match(toolpath, /beadMesh\.setMatrixAt\(beadCount,beadMatrix\)/);
+  assert.match(toolpath, /beadMesh\.setColorAt\(beadCount,hex\)/);
+  assert.match(toolpath, /beadMesh\.instanceMatrix\.needsUpdate=true/);
+  assert.match(toolpath, /clippingPlanes:\[view\.layerClipPlane\]/);
   assert.doesNotMatch(toolpath, /const pushTri =/);
 });
