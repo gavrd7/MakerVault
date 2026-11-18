@@ -109,6 +109,19 @@ class CrealityCommandTests(TestCase):
             ):
                 run_creality(self.binary, self.root)
 
+    def test_native_creality_3mf_uses_no_external_profiles_or_stl_arrangement(self):
+        (self.root / "input.stl").unlink()
+        (self.root / "input.3mf").write_bytes(b"bounded test archive")
+        (self.root / "creality-native-project.marker").write_text("v1")
+        with patch("slicer_worker.creality_runner.validate_creality_project",
+                   return_value=True):
+            command = creality_command(self.binary, self.root)
+        self.assertIn("--need-gcode-file", command)
+        self.assertNotIn("--load-settings", command)
+        self.assertNotIn("--load-filaments", command)
+        self.assertNotIn("--load-filament-ids", command)
+        self.assertEqual(command[-1], str(self.root / "input.3mf"))
+
     def test_two_filament_multi_stl_cli_arguments(self):
         for i in range(2):
             (self.root / f"input-{i}.stl").write_bytes(one_triangle_stl())
