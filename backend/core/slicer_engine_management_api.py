@@ -64,13 +64,18 @@ def engine_operations(request):
         releases, connected, rollback_available = [], False, False
         if enabled:
             try:
-                releases = installer_request("GET", "/catalog").get("releases", [])
                 report = installer_request("GET", "/status")
                 _sync_operations(report.get("operations", []))
                 rollback_available = report.get("rollback_available") is True
                 connected = True
             except EngineInstallerUnavailable:
                 pass
+            if connected:
+                try:
+                    releases = installer_request("GET", "/catalog").get("releases", [])
+                except EngineInstallerUnavailable:
+                    # GitHub may be offline without the local installer failing.
+                    releases = []
         return JsonResponse({
             "approved_releases": releases if isinstance(releases, list) else [],
             "can_manage": can_manage,
