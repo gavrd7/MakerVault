@@ -59,6 +59,12 @@ class InstallerTests(unittest.TestCase):
             self.assertEqual(installer.release_catalogue(), installer.release_catalogue())
             self.assertEqual(request.call_count, 1)
 
+    def test_creality_cli_probe_uses_explicit_cli_switch(self):
+        # Upstream requires --cli to avoid launching the wxWidgets GUI.
+        from inspect import getsource
+        source = getsource(installer._install)
+        self.assertIn('str(app_run), "--cli", "--help"', source)
+
     def test_arbitrary_download_urls_and_commands_not_accepted(self):
         with self.assertRaises(ValueError):
             installer.start_install("../crealityprint", "7.3.1", "b" * 64)
