@@ -229,6 +229,7 @@ class Handler(BaseHTTPRequestHandler):
                 "Creality Print profile nesting exceeds the limit.": "creality-profile-structure-invalid",
                 "Creality Print profile has too many properties.": "creality-profile-structure-invalid",
                 "Creality Print profile contains too many entries.": "creality-profile-structure-invalid",
+                "Creality Print native profile includes a blocked post-processing command.": "creality-post-processing-blocked",
                 "Unsafe native profile setting.": "unsafe-profile-settings",
                 "Verified Creality Print executable is unavailable.": "creality-engine-unavailable",
                 "Creality Print output directory must not exist yet.": "creality-output-path-conflict",
