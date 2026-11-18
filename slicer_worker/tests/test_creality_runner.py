@@ -6,7 +6,7 @@ from tempfile import TemporaryDirectory
 from unittest import TestCase
 from unittest.mock import patch
 
-from slicer_worker.creality_runner import creality_command, run_creality, _cli_failure_reason
+from slicer_worker.creality_runner import creality_command, run_creality, _cli_failure_reason, _cli_validation_category
 from slicer_worker.runner import WorkerError
 
 
@@ -108,6 +108,22 @@ class CrealityCommandTests(TestCase):
                 WorkerError, "command-line parameters"
             ):
                 run_creality(self.binary, self.root)
+
+    def test_native_validation_topic_is_classified_without_raw_details(self):
+        self.assertEqual(
+            _cli_validation_category(
+                b"got error when validate: prime tower is outside the print bed"),
+            "prime-tower",
+        )
+        self.assertEqual(
+            _cli_validation_category(
+                b"got error when validate: extrusion width is outside range"),
+            "line-width",
+        )
+        self.assertIsNone(_cli_validation_category(
+            b"got error when validate: /private/home/secret field XYZ invalid"))
+        self.assertIsNone(_cli_validation_category(
+            b"Creality Print failed with a generic exit code"))
 
     def test_linux_205_includes_native_validation_code_without_raw_output(self):
         class FakeProcess:
