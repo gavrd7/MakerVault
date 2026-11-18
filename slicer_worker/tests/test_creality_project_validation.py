@@ -17,7 +17,12 @@ class NativeCreality3MFContractTests(TestCase):
         config.update(project or {})
         data = io.BytesIO()
         with zipfile.ZipFile(data, "w", compression=zipfile.ZIP_DEFLATED) as z:
-            for name in ("3D/3dmodel.model", "Metadata/model_settings.config",
+            z.writestr("3D/3dmodel.model",
+                '<?xml version="1.0" encoding="UTF-8"?>'
+                '<model xmlns="http://schemas.microsoft.com/3dmanufacturing/core/2015/02" '
+                'unit="millimeter"><metadata name="Application">'
+                'Creality_Print V7.3.1</metadata><resources/><build/></model>')
+            for name in ("Metadata/model_settings.config",
                          "_rels/.rels", "[Content_Types].xml"):
                 z.writestr(name, b"bounded structural fixture")
             if identity:
@@ -33,6 +38,25 @@ class NativeCreality3MFContractTests(TestCase):
         self.assertTrue(validate_creality_project(self.project(), native_tool_count=2))
         validate.assert_called_once()
         self.assertEqual(validate.call_args.kwargs["native_tool_count"], 2)
+
+    @patch("slicer_worker.creality_project_validation.validate_worker_3mf",
+           return_value=True)
+    def test_missing_generator_version_fails_before_engine(self, validate):
+        data = self.project()
+        import io
+        import zipfile
+        output = io.BytesIO()
+        with zipfile.ZipFile(io.BytesIO(data)) as source, zipfile.ZipFile(
+                output, "w", compression=zipfile.ZIP_DEFLATED) as dest:
+            for name in source.namelist():
+                blob = source.read(name)
+                if name == "3D/3dmodel.model":
+                    blob = blob.replace(
+                        b"Creality_Print V7.3.1", b"MakerVault")
+                dest.writestr(name, blob)
+        with self.assertRaisesRegex(WorkerError, "generator version"):
+            validate_creality_project(output.getvalue())
+        validate.assert_not_called()
 
     def test_missing_creality_identity_is_rejected(self):
         with self.assertRaises(WorkerError):
