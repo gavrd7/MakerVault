@@ -78,6 +78,35 @@ class SlicerWorkerProtocolTests(TestCase):
                 with self.assertRaises(WorkerError):
                     _decode_payload({**payload, **change})
 
+    def test_creality_multi_stl_contract_uses_distinct_one_based_tools(self):
+        import struct
+        stl = (b"fixture".ljust(80, b" ") + struct.pack(
+            "<I12fH", 1, 0, 0, 1, 0, 0, 0,
+            10, 0, 0, 0, 10, 0, 0))
+        encoded = base64.b64encode(stl).decode()
+        profile = self.payload()["filament_profile"]
+        payload = {**self.payload(),
+                   "engine": "crealityprint", "engine_version": "7.3.1",
+                   "model": encoded,
+                   "filament_profiles": [profile, profile],
+                   "creality_model_stls": [encoded, encoded],
+                   "creality_tool_ids": [2, 1]}
+        decoded = _decode_payload(payload)
+        self.assertEqual(decoded["creality_tool_ids"], [2, 1])
+        self.assertEqual(decoded["creality_model_stls"], [stl, stl])
+        for changes in (
+            {"creality_tool_ids": [0, 1]},
+            {"creality_tool_ids": [1, 1]},
+            {"creality_tool_ids": [1, 3]},
+            {"creality_tool_ids": ["1", "2"]},
+            {"creality_tool_ids": [1]},
+            {"model_format": "3mf"},
+            {"engine": "orcaslicer"},
+        ):
+            with self.subTest(changes=changes):
+                with self.assertRaises(WorkerError):
+                    _decode_payload({**payload, **changes})
+
     def test_fixed_payload_accepts_only_bounded_inputs(self):
         decoded = _decode_payload(self.payload())
         self.assertEqual(decoded["model"], b"stl")
