@@ -8,7 +8,7 @@ import io
 import json
 import re
 import zipfile
-from defusedxml import ElementTree as ET
+from xml.etree import ElementTree as ET
 
 MAX_ARCHIVE = 64 * 1024 * 1024
 MAX_UNPACKED = 160 * 1024 * 1024
@@ -19,6 +19,11 @@ SETTINGS = "Metadata/project_settings.config"
 
 
 def _safe_xml(raw):
+    # The worker base image does not depend on defusedxml. Reject external
+    # entity/DTD constructs before the stdlib parser sees untrusted XML.
+    upper = raw.upper()
+    if b"<!DOCTYPE" in upper or b"<!ENTITY" in upper:
+        raise ValueError("Reference XML declarations are unsupported.")
     return ET.fromstring(raw)
 
 
