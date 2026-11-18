@@ -49,3 +49,18 @@ test("progressive large prints append surface geometry without polluting exact-l
   assert.match(toolpath, /view\.geometryCache = progressiveMode/);
   assert.match(preview, /const naturalLayer = wholeModel\.complete/);
 });
+
+test("whole-print layer scrubbing changes a GPU clipping plane rather than geometry", () => {
+  assert.match(preview, /const progressiveMode=layerDisplay==="all"/);
+  assert.match(preview, /const colours = useMemo\(/);
+  assert.match(preview, /layerDisplay !== "current" && step === null/);
+  assert.match(toolpath, /renderer\.localClippingEnabled = true/);
+  assert.match(toolpath, /const layerClipPlane = new THREE\.Plane/);
+  assert.match(toolpath, /view\.layerClipPlane\.constant =/);
+  assert.match(toolpath, /const geometryLayer = progressiveMode \? layers\.length-1 : activeLayer/);
+  assert.match(toolpath, /const geometryStep = progressiveMode \? -1 : activeStep/);
+  assert.match(toolpath, /clippingPlanes: \[view\.layerClipPlane\]/);
+  const geometryEffect = toolpath.slice(toolpath.indexOf("const geometryLayer = progressiveMode"));
+  assert.match(geometryEffect, /\[segments, layers, geometryLayer, geometryStep,/);
+  assert.doesNotMatch(geometryEffect, /\[segments, layers, activeLayer, activeStep,/);
+});
