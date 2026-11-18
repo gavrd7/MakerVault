@@ -171,6 +171,34 @@ class FullLayerEndpointTests(TestCase):
         self.assertEqual(exact.json()["segment_count"], 3)
         self.assertFalse(exact.json()["sampled"])
 
+    def test_cached_overview_is_reused_without_reparsing_and_remains_private(self):
+        from unittest.mock import patch
+        from django.core.cache.backends.locmem import LocMemCache
+        from core.slicer_preview_cache import layer_batch_toolpaths as parser
+        self.client.force_login(self.owner)
+        cache = LocMemCache("gcode-preview-test", {})
+        url = f"/api/files/{self.asset.pk}/gcode/layers/?overview=1&detail=80&zs=0.2,0.4"
+        with patch("core.slicer_preview_cache.cache", cache):
+            with patch("core.slicer_preview_cache.layer_batch_toolpaths",
+                       wraps=parser) as parse:
+                first = self.client.get(url + "&all_zs=0.2,0.4")
+                self.assertEqual(first.status_code, 200, first.content)
+                self.assertTrue(first.json()["cached"])
+                second = self.client.get(url)
+                self.assertEqual(second.status_code, 200, second.content)
+                self.assertTrue(second.json()["cached"])
+                self.assertEqual(first.json()["layers"], second.json()["layers"])
+                self.assertEqual(parse.call_count, 1)
+            self.client.force_login(self.other)
+            self.assertEqual(self.client.get(url).status_code, 404)
+
+    def test_bad_index_inventory_is_rejected_without_polluting_cache(self):
+        self.client.force_login(self.owner)
+        url = f"/api/files/{self.asset.pk}/gcode/layers/?overview=1&detail=80&zs=0.2,0.4&all_zs="
+        for invalid in ("0.2,0.2", "0.4,0.2", "nan,0.4", "0.2,2001"):
+            with self.subTest(invalid=invalid):
+                self.assertEqual(self.client.get(url + invalid).status_code, 400)
+
     def test_other_user_cannot_inspect_unpublished_output(self):
         self.client.force_login(self.other)
         self.assertEqual(self.client.get(self.url).status_code, 404)
