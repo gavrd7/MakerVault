@@ -235,6 +235,24 @@ class FullLayerEndpointTests(TestCase):
         self.assertEqual(exact.json()["segment_count"], 3)
         self.assertFalse(exact.json()["sampled"])
 
+    def test_cold_preview_enqueues_once_and_does_not_parse_in_http_request(self):
+        from unittest.mock import patch
+        from django.core.cache.backends.locmem import LocMemCache
+        backend=LocMemCache("preview-nonblocking-test", {})
+        self.client.force_login(self.owner)
+        url=f"/api/files/{self.asset.pk}/gcode/layers/?zs=0.2,0.4&overview=1&detail=80&warm=1"
+        with (patch("django.core.cache.cache", backend),
+              patch("core.slicer_preview_cache.cache", backend),
+              patch("core.tasks.warm_gcode_preview_task.delay") as queued,
+              patch("core.api_views.layer_batch_toolpaths") as parser):
+            first=self.client.get(url)
+            second=self.client.get(url)
+            self.assertEqual(first.status_code, 202, first.content)
+            self.assertEqual(second.status_code, 202, second.content)
+            self.assertEqual(queued.call_count, 1)
+            parser.assert_not_called()
+        self.assertEqual(self.client.get(url + "&direct=1").status_code, 200)
+
     def test_cached_overview_is_reused_without_reparsing_and_remains_private(self):
         from unittest.mock import patch
         from django.core.cache.backends.locmem import LocMemCache
