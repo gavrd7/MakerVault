@@ -46,6 +46,11 @@ def _cli_failure_reason(output):
     if any(term in message for term in ("params in command line error",
                                         "cli parameter parsing failed")):
         return "Creality Print CLI rejected its command-line parameters."
+    if any(term in message for term in (
+            "error load config from json", "param values in 3mf/config error",
+            "invalid project filament nozzle mapping",
+            "failed to load project", "cannot parse project")):
+        return "Creality Print rejected its embedded 3MF project configuration."
     if any(term in message for term in ("failed to load settings", "failed to load preset",
                                         "invalid preset", "invalid config", "load config failed")):
         return "Creality Print CLI could not load a native preset."
