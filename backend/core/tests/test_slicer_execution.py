@@ -435,6 +435,31 @@ class NativePlateAdmissionTests(SimpleTestCase):
             self.assertTrue(_validate_plate_execution(job))
             dimensions.assert_not_called()
 
+    def test_creality_two_stl_requires_offline_opt_in(self):
+        from types import SimpleNamespace
+        objects = [
+            {"instance_id": "a", "material_slot": {
+                "printer_id": "printer", "slot_id": "a", "slot_index": 0}},
+            {"instance_id": "b", "material_slot": {
+                "printer_id": "printer", "slot_id": "b", "slot_index": 1}},
+        ]
+        job = SimpleNamespace(
+            settings={"plate_objects": objects, "multi_material_test": True},
+            engine="crealityprint", printer_id="printer",
+            printer_profile_id="printer", printer_profile=SimpleNamespace(),
+        )
+        with self.assertRaisesRegex(SlicerExecutionError, "explicit offline"):
+            _validate_plate_execution(job)
+        job.settings["creality_auto_arrange_offline"] = True
+        with (patch("core.slicer_execution.plan_native_multimaterial") as planned,
+              patch("core.slicer_execution.trusted_plate_dimensions",
+                    return_value=(350, 350))):
+            self.assertTrue(_validate_plate_execution(job))
+            planned.assert_called_once()
+        job.settings["flush_settings"] = {"multiplier": 1}
+        with self.assertRaisesRegex(SlicerExecutionError, "custom flushing"):
+            _validate_plate_execution(job)
+
     def test_creality_per_object_process_overrides_stay_blocked(self):
         from types import SimpleNamespace
         plate = [{"asset_id": "model", "x_mm": 0, "y_mm": 0,
