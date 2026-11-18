@@ -37,12 +37,13 @@ class CrealityDiagnosticMatrixTests(unittest.TestCase):
         self.assertEqual(options[2][1], {"filament_map": ["1", "1", "1", "1"]})
         self.assertEqual(options[3][1], {"enable_prime_tower": "0"})
 
+    @patch("slicer_worker.creality_diagnostics.single_material_control", return_value=b"single private geometry")
     @patch("slicer_worker.creality_diagnostics._engine_run")
     @patch("slicer_worker.creality_diagnostics._repack")
     @patch("slicer_worker.creality_diagnostics._read_project")
     @patch("slicer_worker.creality_diagnostics.configured_engines")
     def test_report_contains_no_private_profiles_or_raw_output(
-            self, engines, project, repack, execute):
+            self, engines, project, repack, execute, single):
         engines.return_value = {"crealityprint": {
             "binary": "/approved/AppRun", "version": "7.3.1",
             "binary_sha256": "a" * 64}}
@@ -58,14 +59,15 @@ class CrealityDiagnosticMatrixTests(unittest.TestCase):
             "validation_category": "filament",
         }
         report = run_matrix("/tmp/test.3mf", timeout_seconds=30)
-        self.assertEqual(len(report["test_results"]), 6)
+        self.assertEqual(len(report["test_results"]), 7)
         import json
         encoded = json.dumps(report)
         self.assertNotIn("SECRET-STL-COORDINATES", encoded)
         self.assertNotIn("nozzle_temperature", encoded)
+        self.assertEqual(report["test_results"][0]["case"], "single-model-single-material")
         self.assertEqual(report["test_results"][0]["exit_code"], 205)
         self.assertEqual(report["test_results"][0]["validation_category"], "filament")
-        self.assertEqual(execute.call_count, 6)
+        self.assertEqual(execute.call_count, 7)
 
 
 if __name__ == "__main__":
