@@ -296,6 +296,7 @@ class Handler(BaseHTTPRequestHandler):
                 "Creality Print CLI received conflicting commands.": "creality-cli-command-conflict",
                 "Creality Print CLI did not recognise a slicing command.": "creality-cli-command-missing",
                 "Creality Print CLI could not load a native preset.": "creality-native-preset-invalid",
+                "Creality Print rejected its embedded 3MF project configuration.": "creality-native-project-invalid",
                 "Creality Print produced no safe output directory.": "creality-no-output-directory",
                 "Creality Print did not produce exactly one supported G-code artifact.": "creality-unexpected-output-layout",
                 "Creality Print G-code output is empty or oversized.": "creality-missing-gcode",
