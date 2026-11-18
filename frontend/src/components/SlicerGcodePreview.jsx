@@ -111,7 +111,7 @@ export default function SlicerGcodePreview({ fileId = null, preview, bedSize = n
             if(response.status !== 202)break;
             await new Promise(resolve=>setTimeout(resolve,750));
           }
-          if(response?.status===202 || response?.status===503){
+          if(response?.status===202 || response?.status===503 || response?.status>=500){
             response=await fetch(url + "&direct=1",{
               credentials:"same-origin",signal:controller.signal,
             });
