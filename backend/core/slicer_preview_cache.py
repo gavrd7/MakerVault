@@ -89,3 +89,74 @@ def index_overview(index_key, text, heights, detail):
         # Redis availability is optional for correctness.
         return None
     return cached_batch(index_key, heights[:MAX_BATCH_LAYERS])
+
+
+def _store_overview(index_key, heights, layers, detail):
+    """Publish validated batches; the manifest is the atomic ready marker."""
+    if len(heights) != len(layers) or not 1 <= len(heights) <= MAX_INDEX_LAYERS:
+        raise ValueError("Invalid preview index data.")
+    batches = []
+    for offset in range(0, len(heights), MAX_BATCH_LAYERS):
+        part = layers[offset:offset + MAX_BATCH_LAYERS]
+        payload = {
+            "layers": part, "complete": True, "sampled": True,
+            "overview": True, "cached": True,
+        }
+        packed = zlib.compress(
+            json.dumps(payload, separators=(",", ":")).encode("utf-8"), level=3)
+        batches.append((offset // MAX_BATCH_LAYERS, packed))
+    try:
+        for number, packed in batches:
+            cache.set(index_key + ":batch:" + str(number), packed, CACHE_SECONDS)
+        cache.set(index_key + ":manifest", list(heights), CACHE_SECONDS)
+    except Exception:
+        return False
+    return True
+
+
+def warm_asset_overviews(asset, source):
+    """Prepare desktop and mobile density variants once after a slice finishes.
+
+    Desktop and mobile share the same full G-code parse. Only the small
+    retained overview is downsampled for the lower-memory variant.
+    This intentionally runs outside the HTTP preview request.
+    """
+    from .slicer_preview import generated_preview
+    from .slicer_layer_preview import _overview_segments
+
+    if isinstance(source, bytes):
+        if len(source) > 32 * 1024 * 1024 or b"\\x00" in source:
+            return False
+        source = source.decode("utf-8")
+    if not isinstance(source, str) or not source or len(source.encode("utf-8")) > 32 * 1024 * 1024:
+        return False
+    heights = generated_preview(source).get("layers", [])
+    if not heights or len(heights) > MAX_INDEX_LAYERS:
+        return False
+
+    desktop = max(80, min(220, 220000 // len(heights)))
+    mobile = max(80, min(110, 100000 // len(heights)))
+    if (cached_batch(preview_index_key(asset, desktop), heights[:MAX_BATCH_LAYERS])
+            is not None and
+            cached_batch(preview_index_key(asset, mobile), heights[:MAX_BATCH_LAYERS])
+            is not None):
+        return True
+    parsed = layer_batch_toolpaths(
+        source, heights, overview=True, overview_limit=desktop,
+        max_requested_layers=MAX_INDEX_LAYERS,
+    )
+    if not parsed["complete"]:
+        return False
+    rows = parsed["layers"]
+    if not _store_overview(preview_index_key(asset, desktop), heights, rows, desktop):
+        return False
+    if desktop != mobile:
+        slim = [
+            {**row,
+             "segments": _overview_segments(row["segments"], mobile),
+             "overview_reduced": row["segment_count"] > mobile,
+             "sampled": row["segment_count"] > mobile}
+            for row in rows
+        ]
+        return _store_overview(preview_index_key(asset, mobile), heights, slim, mobile)
+    return True
