@@ -337,6 +337,12 @@ export default function SlicerGcodePreview({ fileId = null, preview, bedSize = n
       </div>}
       <div className="slicerResultLayerLayout">
         <div className="slicerResultViewport">
+          {((wholeModel.loading && wholeModel.loadedLayers===0) || wholeModel.message) &&
+            <div className="slicerPreviewLoadOverlay" role="status">
+              {wholeModel.message
+                ? "Preview loading issue: " + wholeModel.message
+                : "Preparing 3D preview… Existing G-code is unchanged."}
+            </div>}
           <SlicerToolpath3D segments={displaySegments} progressiveMode={progressiveMode} framingSegments={preview?.segments || []} filamentColours={filamentColours} layers={layers}
             activeLayer={currentLayer} activeStep={finalStep} visible={visible}
             colourMode={colourMode} colours={colours} showToolhead={showToolhead} bedSize={bedSize}
