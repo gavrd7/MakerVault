@@ -46,7 +46,7 @@ export default function SlicerEngineChoices({
     aria-label={mode === "select" ? "Slicing engine" : "Available slicer engines"}>
     {engines.map(engine => {
       const active = selected === engine.key;
-      const verified = engine.available === true;
+      const verified = engine.available === true || engine.status === "validated";
       const status = verified
         ? "Verified " + (engine.installed_version || "worker")
         : "Not installed / not verified";
@@ -68,7 +68,7 @@ export default function SlicerEngineChoices({
           {body}
           <small className="slicerEngineInstallHint">{verified
             ? "Installed and ready for slicing with compatible native profiles"
-            : "In-app installation not yet available"}</small>
+            : "Not installed — install from Engine Installations when available"}</small>
         </div>;
     })}
   </div>;
