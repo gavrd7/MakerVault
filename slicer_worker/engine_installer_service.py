@@ -25,7 +25,10 @@ import urllib.parse
 import urllib.request
 import uuid
 
-from .engine_store_admin import _manifest, _write, _sha256
+from .engine_store_admin import (
+    _manifest, _write, _sha256, seed_bundled_orca, activate,
+    EXPECTED_ORCA_SHA, APPROVAL_VERSION,
+)
 
 STORE = Path(os.environ.get("SLICER_ENGINE_STORE", "/opt/engine-store"))
 TOKEN = os.environ.get("SLICER_INSTALLER_TOKEN", "")
@@ -278,6 +281,17 @@ class Handler(BaseHTTPRequestHandler):
 def main():
     if len(TOKEN) < 32 or STORE.is_symlink() or not STORE.is_dir():
         raise SystemExit("Installer requires a restricted engine volume and a strong token.")
+    if not os.access(STORE, os.W_OK):
+        raise SystemExit("Engine-store volume is not writable by installer user.")
+    # Preserve the already-working OrcaSlicer installation when an additional
+    # engine is first installed; otherwise the new active manifest would
+    # accidentally hide Orca. Bootstrap once from the pinned bundle.
+    if not (STORE / "active.json").exists():
+        orca = STORE / "versions" / "orcaslicer" / APPROVAL_VERSION
+        if not orca.exists():
+            seed_bundled_orca(store=STORE)
+        activate(STORE, engine="orcaslicer", version=APPROVAL_VERSION,
+                 sha256=EXPECTED_ORCA_SHA)
     server = ThreadingHTTPServer(("0.0.0.0", 8091), Handler)
     server.serve_forever()
 
