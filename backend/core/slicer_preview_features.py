@@ -13,6 +13,11 @@ def is_prime_tower_feature(feature):
     ))
 
 
+def is_support_feature(feature):
+    name = str(feature or "").lower().strip()
+    return "support" in name and not is_prime_tower_feature(name)
+
+
 def overview_priority(feature):
     name = str(feature or "").lower().strip()
     if is_prime_tower_feature(name):
