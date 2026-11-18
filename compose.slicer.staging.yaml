@@ -6,6 +6,9 @@ services:
   makervault:
     environment:
       MAKERVAULT_SLICER_PREVIEW_ENABLED: "1"
+      MAKERVAULT_SLICER_HOST_UPDATER_ENABLED: ${MAKERVAULT_SLICER_HOST_UPDATER_ENABLED:-0}
+      MAKERVAULT_SLICER_INSTALLER_URL: http://slicer-engine-installer:8091
+      MAKERVAULT_SLICER_INSTALLER_TOKEN: ${MAKERVAULT_SLICER_INSTALLER_TOKEN:-disabled}
       MAKERVAULT_SLICER_EXECUTION_ENABLED: ${MAKERVAULT_SLICER_EXECUTION_ENABLED:-0}
       MAKERVAULT_SLICER_WORKER_URL: http://slicer-worker:8088
       MAKERVAULT_SLICER_WORKER_TOKEN: ${MAKERVAULT_SLICER_WORKER_TOKEN:?Slicer worker token is required}
@@ -50,9 +53,59 @@ services:
       start_period: 60s
     # Deliberately no exposed ports, app secrets, Docker socket or host mount.
 
+  slicer-engine-store-init:
+    profiles: ["engine-installer"]
+    image: busybox:1.37.0
+    command: ["sh", "-c", "chown -R 10001:10001 /engine-store"]
+    user: "0:0"
+    restart: "no"
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    network_mode: "none"
+    volumes:
+      - makervault_slicer_engines:/engine-store:rw
+
+  slicer-engine-installer:
+    profiles: ["engine-installer"]
+    image: makervault-engine-installer:staging
+    build:
+      context: .
+      dockerfile: slicer_worker/Dockerfile.generic
+    command: ["python3", "-m", "slicer_worker.engine_installer_service"]
+    restart: unless-stopped
+    depends_on:
+      slicer-engine-store-init:
+        condition: service_completed_successfully
+    user: "10001:10001"
+    init: true
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    pids_limit: 48
+    mem_limit: 1g
+    cpus: 1.0
+    tmpfs:
+      - /tmp:rw,nosuid,size=256m,mode=1777
+    volumes:
+      - makervault_slicer_engines:/opt/engine-store:rw
+    environment:
+      SLICER_INSTALLER_TOKEN: ${MAKERVAULT_SLICER_INSTALLER_TOKEN:-disabled}
+    networks:
+      - makervault_slicer
+      - makervault_installer_egress
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import socket; s=socket.socket(); s.settimeout(2); s.connect(('127.0.0.1',8091)); s.close()"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 120s
+    # No published ports, Docker socket, database, printer or media access.
+
 networks:
   makervault_slicer:
     internal: true
+  makervault_installer_egress:
+    driver: bridge
 
 volumes:
   makervault_slicer_engines:
