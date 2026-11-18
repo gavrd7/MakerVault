@@ -11,6 +11,7 @@ import hashlib
 import hmac
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import json
+import logging
 import os
 from pathlib import Path
 import platform
@@ -42,6 +43,7 @@ MAX_OPERATIONS = 50
 RELEASE_CACHE = {"time": 0.0, "items": []}
 RELEASE_CACHE_SECONDS = 600
 OPERATION_FILE = STORE / "installer-operations.json"
+LOGGER = logging.getLogger("makervault.slicer.installer")
 
 
 def _persist_operations():
@@ -205,14 +207,24 @@ def _install(op_id, release):
         image.chmod(0o555)
         # The AppImage runtime extracts its payload without requiring FUSE.
         # This is restricted to the installer sandbox and a bounded scratch.
-        extracted = subprocess.run([str(image), "--appimage-extract"],
-            cwd=stage, env={"HOME": str(stage), "TMPDIR": str(stage),
-                            "PATH": "/usr/bin:/bin", "LANG": "C.UTF-8"},
-            stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL, timeout=180, check=False)
+        try:
+            extracted = subprocess.run([str(image), "--appimage-extract"],
+                cwd=stage, env={"HOME": str(stage), "TMPDIR": str(stage),
+                                "PATH": "/usr/bin:/bin", "LANG": "C.UTF-8"},
+                stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
+                stderr=subprocess.PIPE, timeout=180, check=False)
+        except subprocess.TimeoutExpired as exc:
+            raise ValueError("AppImage extraction timed out after 180 seconds.") from exc
+        except OSError as exc:
+            raise ValueError(
+                f"AppImage extraction could not start ({type(exc).__name__}, errno {exc.errno})."
+            ) from exc
         app_run = stage / "squashfs-root" / "AppRun"
         if extracted.returncode != 0 or not app_run.exists():
-            raise ValueError("Engine extraction failed compatibility check.")
+            raise ValueError(
+                f"AppImage extraction failed (exit {extracted.returncode}, "
+                f"AppRun present: {app_run.exists()})."
+            )
         runtime = app_run.resolve(strict=True)
         if not runtime.is_relative_to((stage / "squashfs-root").resolve(strict=True)):
             raise ValueError("Engine runtime escapes its extracted directory.")
@@ -229,11 +241,15 @@ def _install(op_id, release):
                      "PATH": "/usr/bin:/bin", "LANG": "C.UTF-8",
                      "DISPLAY": "", "QT_QPA_PLATFORM": "offscreen"},
                 stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
-                stderr=subprocess.DEVNULL, timeout=18, check=False)
-        except (subprocess.TimeoutExpired, OSError):
-            raise ValueError("Creality Print CLI could not run headlessly.")
+                stderr=subprocess.PIPE, timeout=18, check=False)
+        except subprocess.TimeoutExpired as exc:
+            raise ValueError("Creality Print CLI headless check timed out (18 seconds).") from exc
+        except OSError as exc:
+            raise ValueError(
+                f"Creality Print CLI could not start ({type(exc).__name__}, errno {exc.errno})."
+            ) from exc
         if probe.returncode != 0:
-            raise ValueError("Creality Print CLI compatibility check failed.")
+            raise ValueError(f"Creality Print CLI check exited with status {probe.returncode}.")
         # Stage a complete version before publishing it; preserve all older
         # engines and use a single atomic manifest rename for activation.
         binary_hash = _sha256(runtime)
@@ -261,7 +277,11 @@ def _install(op_id, release):
                          message="Installed and activated", binary_sha256=binary_hash)
     except Exception as exc:
         # No raw paths, URLs, command output or credentials in the UI.
-        reason = str(exc) if isinstance(exc, ValueError) else "Installer could not complete this release."
+        reason = str(exc) if isinstance(exc, ValueError) else (
+            f"Installer failed during {OPERATIONS.get(op_id, {}).get('status', 'unknown')} "
+            f"({type(exc).__name__})."
+        )
+        LOGGER.error("Engine installation %s %s failed: %s", engine, version, reason[:180])
         _write_operation(op_id, status="failed", message=reason[:180], progress=0)
     finally:
         if stage is not None:
@@ -430,6 +450,7 @@ def bootstrap_existing_orca():
 
 
 def main():
+    logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
     if len(TOKEN) < 32 or STORE.is_symlink() or not STORE.is_dir():
         raise SystemExit("Installer requires a restricted engine volume and a strong token.")
     if not os.access(STORE, os.W_OK):
