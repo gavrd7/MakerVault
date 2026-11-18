@@ -24,7 +24,7 @@ from .engine_registry import configured_engines
 from .runner import WorkerError
 from .headless_env import slicing_environment
 from .creality_single_control import single_material_control
-from .creality_reference_diagnostics import compare_projects
+from .creality_reference_diagnostics import compare_projects, compare_to_bundled_reference
 
 MAX_PROJECT = 32 * 1024 * 1024
 MAX_CAPTURE = 256 * 1024
@@ -205,6 +205,10 @@ def run_matrix(project_path, *, reference_path=None, timeout_seconds=120):
         "test_results": [], "reference": None,
         "warning": "Diagnosis only; no G-code is approved for printing.",
     }
+    if reference_path is None:
+        # Uses a sanitised schema derived from an uploaded genuine Creality
+        # project. The actual private reference file is NEVER required here.
+        report["reference"] = compare_to_bundled_reference(project)
     if reference_path is not None:
         # Never execute third-party reference 3MFs. Only inspect bounded
         # archive structure and public option key names/types.
