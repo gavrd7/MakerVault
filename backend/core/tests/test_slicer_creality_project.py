@@ -72,8 +72,8 @@ class CrealityPositionedPlateTests(SimpleTestCase):
             app = [n.text for n in model_root if n.tag.endswith("metadata")
                    and n.attrib.get("name") == "Application"]
             self.assertEqual(app, ["Creality_Print V7.3.1"])
-        self.assertEqual(project["filament_settings_id"], ["grey", "yellow"])
-        self.assertEqual(project["nozzle_temperature"], ["210", "220"])
+        self.assertEqual(project["filament_settings_id"], ["grey", "yellow", "grey", "yellow"])
+        self.assertEqual(project["nozzle_temperature"], ["210", "220", "210", "220"])
         self.assertEqual(project["from"], "project")
         self.assertEqual(project["name"], "project_settings")
         self.assertEqual(len(project["wipe_tower_x"]), 1)
@@ -106,13 +106,43 @@ class CrealityPositionedPlateTests(SimpleTestCase):
             filaments=[filament("grey", 210), filament("yellow", 220)])
         with zipfile.ZipFile(io.BytesIO(result)) as package:
             config = json.loads(package.read("Metadata/project_settings.config"))
-        self.assertEqual(config["nozzle_temperature"], ["210", "220"])
-        self.assertEqual(config["filament_diameter"], ["1.75", "1.75"])
-        self.assertEqual(config["fan_cooling_layer_time"], ["12", "12"])
-        self.assertEqual(config["filament_minimal_purge_on_wipe_tower"], ["15", "15"])
-        self.assertEqual(config["filament_shrinkage_compensation_z"], ["100%", "100%"])
+        self.assertEqual(config["nozzle_temperature"], ["210", "220", "210", "220"])
+        self.assertEqual(config["filament_diameter"], ["1.75", "1.75", "1.75", "1.75"])
+        self.assertEqual(config["fan_cooling_layer_time"], ["12", "12", "12", "12"])
+        self.assertEqual(config["filament_minimal_purge_on_wipe_tower"], ["15", "15", "15", "15"])
+        self.assertEqual(config["filament_shrinkage_compensation_z"], ["100%", "100%", "100%", "100%"])
         self.assertEqual(config["nozzle_diameter"], ["0.4"])
-        self.assertEqual(config["filament_map"], ["1", "1"])
+        self.assertEqual(config["filament_map"], ["1", "1", "1", "1"])\n        self.assertEqual(len(config["flush_volumes_matrix"]), 16)\n        self.assertEqual(len(config["flush_volumes_vector"]), 8)
+
+    def test_native_object_parts_and_assembly_preserve_exact_positions(self):
+        import json
+        from core.slicer_creality_project import build_creality_project_candidate
+        source = build_creality_positioned_plate(
+            self._objects(), bed_width=260, bed_depth=260, tool_ids=[0, 1])
+        printer = json.dumps({"type": "machine", "name": "K2", "nozzle_diameter": ["0.4"]}).encode()
+        process = json.dumps({"type": "process", "name": "Standard", "enable_prime_tower": "0"}).encode()
+        filament = lambda name: json.dumps({
+            "type": "filament", "name": name, "filament_type": ["PLA"]}).encode()
+        result = build_creality_project_candidate(
+            source, printer=printer, process=process,
+            filaments=[filament("grey"), filament("yellow")])
+        with zipfile.ZipFile(io.BytesIO(source)) as z:
+            original = ET.fromstring(z.read("3D/3dmodel.model"))
+        with zipfile.ZipFile(io.BytesIO(result)) as z:
+            model = ET.fromstring(z.read("3D/3dmodel.model"))
+            settings = ET.fromstring(z.read("Metadata/model_settings.config"))
+        ns = "{" + NS + "}"
+        self.assertEqual(
+            [v.attrib for v in original.findall(".//" + ns + "vertex")],
+            [v.attrib for v in model.findall(".//" + ns + "vertex")])
+        self.assertEqual([obj.find("part").get("subtype")
+                          for obj in settings.findall("object")],
+                         ["normal_part", "normal_part"])
+        self.assertEqual(len(settings.findall("./assemble/assemble_item")), 2)
+        self.assertEqual(
+            [row.get("value") for obj in settings.findall("object")
+             for row in obj.findall("metadata") if row.get("key") == "extruder"],
+            ["1", "2"])
 
     def test_invalid_palette_fails_before_native_engine(self):
         with self.assertRaises(SlicerProfileError):
