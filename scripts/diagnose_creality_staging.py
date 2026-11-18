@@ -114,6 +114,12 @@ def main(argv=None):
             with args.output.open("x", encoding="utf-8") as handle:
                 json.dump(report, handle, indent=2)
                 handle.write("\n")
+            # sudo creates root-owned files otherwise, preventing the actual
+            # staging user from reading a report containing only safe fields.
+            uid_text = os.environ.get("SUDO_UID", "")
+            gid_text = os.environ.get("SUDO_GID", "")
+            if uid_text.isdecimal() and gid_text.isdecimal():
+                os.chown(args.output, int(uid_text), int(gid_text))
             os.chmod(args.output, 0o600)
             print("Creality diagnostic report: " + str(args.output))
             for case in report["test_results"]:
