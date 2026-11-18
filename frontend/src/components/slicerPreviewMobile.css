@@ -726,3 +726,23 @@
   flex-basis:100%;
   line-height:1.4;
 }
+
+/* Cold-cache preparation is visible rather than appearing as an empty plate.
+   Never intercept orbit, zoom, pan or layer-slider pointer gestures. */
+.slicerResultViewport { position:relative; }
+.slicerPreviewLoadOverlay {
+  position:absolute;
+  z-index:4;
+  top:14px;
+  left:14px;
+  right:14px;
+  max-width:380px;
+  padding:10px 13px;
+  border:1px solid var(--border,#394958);
+  border-radius:10px;
+  background:rgba(16,27,40,.94);
+  color:var(--text,#d9e2ec);
+  font-size:.84rem;
+  line-height:1.4;
+  pointer-events:none;
+}
