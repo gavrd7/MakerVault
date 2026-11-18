@@ -125,7 +125,7 @@ def warm_asset_overviews(asset, source):
     from .slicer_layer_preview import _overview_segments
 
     if isinstance(source, bytes):
-        if len(source) > 32 * 1024 * 1024 or b"\\x00" in source:
+        if len(source) > 32 * 1024 * 1024 or b"\x00" in source:
             return False
         source = source.decode("utf-8")
     if not isinstance(source, str) or not source or len(source.encode("utf-8")) > 32 * 1024 * 1024:
