@@ -71,3 +71,11 @@ test("whole-print layer scrubbing changes a GPU clipping plane rather than geome
   assert.match(geometryEffect, /\[segments, layers, geometryLayer, geometryStep,/);
   assert.doesNotMatch(geometryEffect, /\[segments, layers, activeLayer, activeStep,/);
 });
+
+test("initial mesh uses shared indexed bead vertices rather than duplicated triangles", () => {
+  assert.match(toolpath, /const indices = \[\]/);
+  assert.match(toolpath, /const base = positions\.length \/ 3/);
+  assert.match(toolpath, /for \(let vertex=0;vertex<8;vertex\+\+\)/);
+  assert.match(toolpath, /geometry\.setIndex\(indices\)/);
+  assert.doesNotMatch(toolpath, /const pushTri =/);
+});
