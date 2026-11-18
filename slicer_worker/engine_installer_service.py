@@ -246,7 +246,7 @@ def _install(op_id, release):
         current = _manifest(STORE)
         existing = current["engines"]
         new_record = {
-            "binary": str(target / runtime_relative),
+            "binary": str(target / "squashfs-root" / "AppRun"),
             "version": version, "binary_sha256": binary_hash,
         }
         # Keep other engines, including the existing Orca runtime, untouched.
