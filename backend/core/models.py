@@ -1945,3 +1945,15 @@ class SlicerEngineOperation(TimeStampedModel):
         ordering = ("-created_at",)
         indexes = [models.Index(fields=["status", "created_at"],
                                 name="slicer_engine_op_queue_idx")]
+
+
+class SlicerEngineAccessSettings(TimeStampedModel):
+    """Optional team policy; self-hosted users can manage engines by default."""
+    restrict_engine_management_to_admins = models.BooleanField(default=False)
+
+    class Meta:
+        verbose_name = "Slicer engine access settings"
+
+    @classmethod
+    def current(cls):
+        return cls.objects.order_by("pk").first() or cls()
