@@ -4,8 +4,19 @@ Only affects visual preview; complete G-code and single-layer inspection retain
 every native extrusion move. Priority follows visual shell significance.
 """
 
+def is_prime_tower_feature(feature):
+    """Recognise explicit native tower labels without guessing G-code geometry."""
+    name = str(feature or "").lower().replace("_", " ").replace("-", " ")
+    return any(marker in name for marker in (
+        "prime tower", "wipe tower", "purge tower", "prime pillar",
+        "wipe pillar", "purge pillar",
+    ))
+
+
 def overview_priority(feature):
     name = str(feature or "").lower().strip()
+    if is_prime_tower_feature(name):
+        return 0
     if any(value in name for value in ("outer wall", "external perimeter", "external wall", "outer perimeter")):
         return 0
     if any(value in name for value in ("top surface", "top solid", "top skin", "top fill", "bridge", "overhang")):
