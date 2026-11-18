@@ -241,6 +241,7 @@ class Handler(BaseHTTPRequestHandler):
                         (workdir / ("input-" + str(index) + ".stl")).write_bytes(raw)
                     (workdir / "creality-material-map.json").write_text(
                         json.dumps({"model_count": len(files["creality_model_stls"]),
+                                    "filament_count": len(files["filament_profiles"]),
                                     "tool_ids": files["creality_tool_ids"]}))
                 stage = "running slicer engine"
                 runner = {"orcaslicer": run_orca,
