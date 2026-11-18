@@ -17,32 +17,49 @@ from .runner import (
 from .stl_validation import StlValidationError, validate_stl
 from .three_mf_validation import validate_worker_3mf
 from .headless_env import slicing_environment
-from .orca_runner import FORBIDDEN_KEYS
+from .orca_runner import NETWORK_KEYS, SCRIPT_KEYS
 
 
 def _check_native_json(path):
+    """Check native JSON and remove network-only preferences from scratch.
+
+    Installed profile originals are retained untouched in MakerVault storage.
+    Native post-processing commands remain prohibited.
+    """
     try:
         value = json.loads(path.read_text(encoding="utf-8-sig"))
     except (ValueError, OSError, UnicodeError):
         raise WorkerError("Invalid Creality Print JSON profile.") from None
     if not isinstance(value, dict) or value.get("inherits"):
         raise WorkerError("Creality Print profile requires a self-contained, verified native preset.")
+    sanitized = False
+
     def walk(item, depth=0):
+        nonlocal sanitized
         if depth > 12:
             raise WorkerError("Creality Print profile nesting exceeds the limit.")
         if isinstance(item, dict):
             if len(item) > 4096:
                 raise WorkerError("Creality Print profile has too many properties.")
-            for key, child in item.items():
-                if str(key).strip().lower() in FORBIDDEN_KEYS:
-                    raise WorkerError("Unsafe native profile setting.")
-                walk(child, depth + 1)
+            for key in list(item):
+                normalized = str(key).strip().lower()
+                if normalized in SCRIPT_KEYS:
+                    raise WorkerError("Creality Print native profile includes a blocked post-processing command.")
+                if normalized in NETWORK_KEYS:
+                    del item[key]
+                    sanitized = True
+                    continue
+                walk(item[key], depth + 1)
         elif isinstance(item, list):
             if len(item) > 4096:
                 raise WorkerError("Creality Print profile contains too many entries.")
             for child in item:
                 walk(child, depth + 1)
     walk(value)
+    if sanitized:
+        # This is the worker's ephemeral copy, never the imported source.
+        path.write_text(json.dumps(value, separators=(",", ":"), ensure_ascii=False),
+                        encoding="utf-8")
 
 
 def creality_command(binary: Path, workdir: Path):
