@@ -139,9 +139,22 @@ def rollback(store):
         if (not isinstance(version, str) or not VERSION_RE.fullmatch(version)
                 or not isinstance(sha, str)):
             raise ValueError("Previous engine metadata is invalid.")
-        binary = store / "versions" / engine / version / (engine + ".AppImage")
-        if (binary.is_symlink() or not binary.is_file() or _sha256(binary) != sha):
+        base = store / "versions" / engine / version
+        binary = Path(row.get("binary", ""))
+        if (not binary.is_absolute() or not binary.is_file() or
+                any(path.is_symlink() for path in
+                    (store, store / "versions", store / "versions" / engine, base))):
             raise ValueError("Previously approved engine is missing or modified.")
+        # An AppImage's AppRun may legitimately link to its own bundled
+        # executable. Never permit a symlink that resolves outside the
+        # immutable, version-specific engine directory.
+        try:
+            if (not binary.resolve(strict=True).is_relative_to(base.resolve(strict=True))
+                    or (binary.is_symlink() and binary.name != "AppRun")
+                    or _sha256(binary) != sha):
+                raise ValueError("Previously approved engine is missing or modified.")
+        except OSError:
+            raise ValueError("Previously approved engine is missing or modified.") from None
     current = _manifest(store)
     _write(store, data)
     # Preserve ability to reverse the rollback explicitly.
