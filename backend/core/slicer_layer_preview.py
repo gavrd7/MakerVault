@@ -11,7 +11,7 @@ from collections import Counter
 
 from .slicer_preview import MOVE, TYPE, WIDTH, ARC_PARAM
 from .slicer_preview_arcs import arc_points
-from .slicer_preview_features import overview_priority
+from .slicer_preview_features import overview_priority, is_prime_tower_feature
 
 MAX_LAYER_SOURCE_BYTES = 32 * 1024 * 1024
 MAX_LAYER_SEGMENTS = 75000
@@ -75,7 +75,7 @@ def layer_batch_toolpaths(text, target_zs, *, overview=False, overview_limit=350
     selected = set(targets)
     by_height = {height: {"z": height, "segments": [], "segment_count": 0,
                          "feature_counts": Counter(), "captured_count": 0,
-                         **({"overview_heap": []} if overview else {})}
+                         **({"overview_heap": [], "tower_heap": []} if overview else {})}
                  for height in targets}
     absolute_xyz = True
     absolute_e = True
@@ -156,11 +156,15 @@ def layer_batch_toolpaths(text, target_zs, *, overview=False, overview_limit=350
                             # as we scan. Never accumulate the full 3D print in
                             # Python merely to throw most of it away afterwards.
                             sequence = layer["segment_count"]
+                            tower_move = is_prime_tower_feature(role)
                             priority = overview_priority(role)
                             spread = ((sequence * 2654435761) & 0xffffffff)
                             rank = (-priority, spread, sequence)
-                            heap = layer["overview_heap"]
-                            if len(heap) < overview_limit or rank > heap[0][:3]:
+                            # Dedicated tower quota: shell/support moves must
+                            # never displace every prime-tower extrusion.
+                            heap = layer["tower_heap"] if tower_move else layer["overview_heap"]
+                            quota = max(24, overview_limit // 3) if tower_move else overview_limit
+                            if len(heap) < quota or rank > heap[0][:3]:
                                 segment = [round(px,3), round(py,3),
                                            round(ax,3), round(ay,3),
                                            key,role,width,tool]
@@ -183,8 +187,14 @@ def layer_batch_toolpaths(text, target_zs, *, overview=False, overview_limit=350
         original = layer["segment_count"]
         original_captured=layer.pop("captured_count")
         if overview:
-            heap=layer.pop("overview_heap")
-            layer["segments"] = [entry[3] for entry in sorted(heap, key=lambda row: row[2])]
+            general=layer.pop("overview_heap")
+            tower=layer.pop("tower_heap")
+            # Reserve space for observed tower geometry; unused tower capacity
+            # goes straight back to the model. All original layer Z values stay.
+            keep_general = max(0, overview_limit-len(tower))
+            best_general = heapq.nlargest(keep_general, general) if keep_general else []
+            selected = best_general + tower
+            layer["segments"] = [entry[3] for entry in sorted(selected, key=lambda row: row[2])]
             layer["overview_reduced"] = len(layer["segments"]) < original
         layer["feature_counts"] = dict(layer["feature_counts"])
         layer["complete"] = True if overview else original_captured == original
