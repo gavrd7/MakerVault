@@ -37,13 +37,14 @@ class CrealityDiagnosticMatrixTests(unittest.TestCase):
         self.assertEqual(options[2][1], {"filament_map": ["1", "1", "1", "1"]})
         self.assertEqual(options[3][1], {"enable_prime_tower": "0"})
 
+    @patch("slicer_worker.creality_diagnostics.compare_to_bundled_reference", return_value={"reference_source": "bundled-sanitised-7.3.2.6412"})
     @patch("slicer_worker.creality_diagnostics.single_material_control", return_value=b"single private geometry")
     @patch("slicer_worker.creality_diagnostics._engine_run")
     @patch("slicer_worker.creality_diagnostics._repack")
     @patch("slicer_worker.creality_diagnostics._read_project")
     @patch("slicer_worker.creality_diagnostics.configured_engines")
     def test_report_contains_no_private_profiles_or_raw_output(
-            self, engines, project, repack, execute, single):
+            self, engines, project, repack, execute, single, reference):
         engines.return_value = {"crealityprint": {
             "binary": "/approved/AppRun", "version": "7.3.1",
             "binary_sha256": "a" * 64}}
@@ -60,6 +61,8 @@ class CrealityDiagnosticMatrixTests(unittest.TestCase):
         }
         report = run_matrix("/tmp/test.3mf", timeout_seconds=30)
         self.assertEqual(len(report["test_results"]), 7)
+        self.assertEqual(report["reference"]["reference_source"], "bundled-sanitised-7.3.2.6412")
+        reference.assert_called_once_with(original)
         import json
         encoded = json.dumps(report)
         self.assertNotIn("SECRET-STL-COORDINATES", encoded)
