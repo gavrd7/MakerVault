@@ -204,7 +204,12 @@ def run_creality(binary: Path, workdir: Path, *, timeout_seconds: int = DEFAULT_
                 # subprocesses report its low eight bits as exit status 254.
                 # This is more precise than assuming native presets failed.
                 reason = _cli_failure_reason(output)
-                if proc.returncode == 254 and reason == "Creality Print failed to slice using the selected native profiles.":
+                if proc.returncode == 232:
+                    # Creality 7.3.1's CLI_FILE_VERSION_NOT_SUPPORTED = -24;
+                    # POSIX exposes its low eight bits (232). The version is
+                    # read from the 3D model XML Application metadata.
+                    reason = "Creality Print rejected the 3MF project file version."
+                elif proc.returncode == 254 and reason == "Creality Print failed to slice using the selected native profiles.":
                     reason = "Creality Print CLI rejected its command-line parameters."
                 logger.warning("Creality Print CLI exited with status %d (%s)",
                                proc.returncode, reason)
