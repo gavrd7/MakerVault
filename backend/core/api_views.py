@@ -2519,9 +2519,10 @@ def file_gcode_layers(request, asset_id):
                 response["Cache-Control"] = "private, no-store"
                 response["Retry-After"] = "1"
                 return response
-        except (OSError, ValueError, RuntimeError):
-            # Source remains inspectable even if the cache/storage metadata
-            # cannot be accessed.
+        except Exception:
+            # Redis/Celery backends raise their own exception subclasses.
+            # Always fall back to a bounded direct parse instead of returning
+            # a blank preview when cache infrastructure is unavailable.
             index_key = None
         raw_all = request.GET.get("all_zs")
         if raw_all and len(raw_all) <= 16000:
