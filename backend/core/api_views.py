@@ -2454,6 +2454,14 @@ def file_gcode_layers(request, asset_id):
     Uses the same ownership, plain-text and source-size safeguards as the
     single-layer endpoint. Empty/oversized batches are rejected before I/O.
     """
+    import time
+    begin = time.monotonic()
+    def respond(data, cache_status):
+        response = JsonResponse(data)
+        response["Cache-Control"] = "private, no-store"
+        response["X-MakerVault-Preview-Cache"] = cache_status
+        response["Server-Timing"] = f'preview;dur={(time.monotonic()-begin)*1000:.1f}'
+        return response
     from .slicer_layer_preview import (
         MAX_LAYER_SOURCE_BYTES, MAX_BATCH_LAYERS, layer_batch_toolpaths,
     )
@@ -2491,9 +2499,7 @@ def file_gcode_layers(request, asset_id):
             index_key = preview_index_key(asset, detail)
             cached = cached_batch(index_key, heights)
             if cached is not None:
-                response = JsonResponse(cached)
-                response["Cache-Control"] = "private, no-store"
-                return response
+                return respond(cached, "hit")
         except (OSError, ValueError, RuntimeError):
             # Source remains inspectable even if the cache/storage metadata
             # cannot be accessed.
@@ -2528,18 +2534,14 @@ def file_gcode_layers(request, asset_id):
         try:
             first = index_overview(index_key, text, all_heights, detail)
             if first is not None:
-                response = JsonResponse(first)
-                response["Cache-Control"] = "private, no-store"
-                return response
+                return respond(first, "built")
         except (ValueError, TypeError):
             return _error("Invalid complete overview index.", status=400)
     try:
         result = layer_batch_toolpaths(text, heights, overview=overview, overview_limit=detail)
     except (ValueError, TypeError):
         return _error("Invalid preview detail level.", status=400)
-    response = JsonResponse(result)
-    response["Cache-Control"] = "private, no-store"
-    return response
+    return respond(result, "miss")
 
 
 @login_required
