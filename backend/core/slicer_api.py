@@ -1815,10 +1815,10 @@ def delete_profile(request, profile_id):
 def profile_process_settings(request, profile_id):
     """Read editable native process settings from the user's resolved preset."""
     profile = SlicerProfile.objects.filter(
-        pk=profile_id, owner=request.user, engine="orcaslicer", kind="process"
+        pk=profile_id, owner=request.user, engine__in=["orcaslicer", "crealityprint"], kind="process"
     ).select_related("file_asset").first()
     if not profile:
-        return _error("Owned Orca process profile not found.", 404)
+        return _error("Owned Orca or Creality process profile not found.", 404)
     try:
         resolved = resolved_native_profile(profile)
         fields = process_schema(resolved)
