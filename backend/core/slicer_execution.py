@@ -403,8 +403,10 @@ def _validate_plate_execution(job):
                     "Creality's offline multi-STL test cannot preserve custom flushing or prime tower positions.")
             if any((item.get("colour_paint") or {}).get("regions") or
                    (item.get("colour_paint") or {}).get("faces") or
-                   item.get("support_paint") or item.get("seam_paint") or
-                   item.get("fuzzy_skin_paint") or item.get("variable_layer_profile") or
+                   (item.get("support_paint") or {}).get("regions") or
+                   (item.get("seam_paint") or {}).get("regions") or
+                   (item.get("fuzzy_skin_paint") or {}).get("regions") or
+                   (item.get("variable_layer_profile") or {}).get("bands") or
                    item.get("process_overrides")
                    for item in objects):
                 raise SlicerExecutionError(
