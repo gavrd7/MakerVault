@@ -69,7 +69,6 @@ export default function SlicerPrepareWorkspace({
   selectedProfiles, workerConfigured, engineCapabilities = {}, printerId,
   processOverrides = {}, onProcessOverridesChange, onSaveCustomProcessProfile,
   flushSettings = null, onFlushSettingsChange,
-  crealityAutoArrangeTest = false, onCrealityAutoArrangeTestChange,
   slotFilamentProfiles = [], onSlotFilamentProfilesChange, filamentProfiles = [], onFilamentProfilesReload, onRememberedProfiles, spools = [],
   processProfiles = [], onSelectProcessProfile, onResetProcessSettings,
   printerDetails, nozzleMm, selectedPlateType = "Native / profile default",
@@ -937,7 +936,7 @@ export default function SlicerPrepareWorkspace({
   const materialRoutingPending = requiredMultiSlots.length > 1
     ? !(multiMaterialReadyForExport || crealityTwoStlReady)
     : assignedSlots.length > 0 ? !(hasSingleSlot && singleSlotProfileMatches) : false;
-  const crealityOfflinePending = crealityTwoStlReady && !crealityAutoArrangeTest;
+
   const projectRoutingPending = plates.some(plate =>
     (plate.objects || []).some(item => item.material_slot != null)
   ) || slotFilamentProfiles.length > 0;
@@ -2147,20 +2146,11 @@ export default function SlicerPrepareWorkspace({
             : <button type="button" onClick={onChangeProfiles}>Check profiles and engine</button>}
         </p>}
       </div>
-      {activeEngine === "crealityprint" && objects.length === 2 &&
-        requiredMultiSlots.length >= 2 && <label className="slicerActionStatus"
-          style={{display:"flex",alignItems:"flex-start",gap:10}}>
-          <input type="checkbox" checked={crealityAutoArrangeTest}
-            onChange={event=>onCrealityAutoArrangeTestChange?.(event.target.checked)}
-            disabled={!canEdit || busy}/>
-          <span><strong>Creality offline auto-arrangement</strong>
-            <small style={{display:"block"}}>Allow Creality Print to arrange these two STL models for a test slice.
-              Preview G-code only; printer submission stays disabled. Unused CFS slots do not need profiles.</small>
-          </span>
-        </label>}
-      {crealityOfflinePending && <p className="slicerActionStatus" role="status">
-        Enable Creality offline auto-arrangement above before slicing this two-material plate.
-      </p>}
+      {activeEngine === "crealityprint" && crealityTwoStlReady &&
+        <p className="slicerActionStatus" role="status">
+          Creality Print will slice the prepared model positions from a native 3MF project.
+          This multi-material test remains offline; printer submission is disabled.
+        </p>}
       <div className="settingsActions">
         {plates.length>1 && <p className="slicerPlateSliceScope" role="status">
           Save draft and project export preserve all {plates.length} plates. The main Slice button uses <strong>{plateLabel}</strong>.
@@ -2173,7 +2163,7 @@ export default function SlicerPrepareWorkspace({
         </button>
         <div className="slicerSliceSplit">
           <button type="button" className="primary"
-            disabled={!activePlateReady || !profilesReady || !workerConfigured || conflictsBlockSlice || objectSettingsPending || (hasPaintedColours && !paintedNativeReady) || materialRoutingPending || crealityOfflinePending}
+            disabled={!activePlateReady || !profilesReady || !workerConfigured || conflictsBlockSlice || objectSettingsPending || (hasPaintedColours && !paintedNativeReady) || materialRoutingPending}
             onClick={onSlice}>Slice</button>
           <button type="button" aria-label="More slicing options"
             aria-haspopup="menu" aria-expanded={sliceMenuOpen}
@@ -2181,7 +2171,7 @@ export default function SlicerPrepareWorkspace({
             onClick={()=>setSliceMenuOpen(value=>!value)}>▾</button>
           {sliceMenuOpen && <div className="slicerSliceMenu" role="menu">
             <button type="button" role="menuitem"
-              disabled={!activePlateReady || conflictsBlockSlice || objectSettingsPending || (hasPaintedColours && !paintedNativeReady) || materialRoutingPending || crealityOfflinePending}
+              disabled={!activePlateReady || conflictsBlockSlice || objectSettingsPending || (hasPaintedColours && !paintedNativeReady) || materialRoutingPending}
               onClick={()=>{setSliceMenuOpen(false);onSlice?.();}}>Slice active plate</button>
             <button type="button" role="menuitem"
               disabled={!projectHasModels || objectSettingsPending || projectRoutingPending}
