@@ -20,7 +20,8 @@ from .slicer_output import store_generated_gcode
 from .slicer_native_resolution import resolved_native_profile
 from .slicer_bed_dimensions import trusted_plate_dimensions
 from .slicer_material_routing import single_material_slice_assignment, MaterialRoutingError
-from .slicer_multimaterial_execution import plan_native_multimaterial, prepare_job_multimaterial
+from .slicer_multimaterial_execution import (plan_native_multimaterial, prepare_job_multimaterial,
+                                             prepare_creality_multistl)
 from .slicer_material_gcode_audit import audit_native_tool_usage, MaterialGcodeAuditError
 from .slicer_flush_settings import apply_orca_flush_settings
 from .slicer_native_overrides import apply_orca_job_overrides
@@ -430,8 +431,19 @@ def _validate_plate_execution(job):
             raise SlicerExecutionError(
                 "Custom process overrides are not yet supported by Creality Print.")
         if settings.get("multi_material_test"):
-            raise SlicerExecutionError(
-                "Creality Print multi-material plate slicing is not yet supported.")
+            if not (settings.get("creality_auto_arrange_offline") is True and len(objects) == 2):
+                raise SlicerExecutionError(
+                    "Creality Print multi-material test requires two assigned STL models "
+                    "and explicit offline auto-arrangement.")
+            if settings.get("flush_settings") is not None or settings.get("prime_tower") is not None:
+                raise SlicerExecutionError(
+                    "Creality Print's offline multi-STL test cannot preserve custom "
+                    "flush settings or prime tower positions.")
+            if any((item.get("colour_paint") or {}).get("regions") or
+                   (item.get("colour_paint") or {}).get("faces")
+                   for item in objects):
+                raise SlicerExecutionError(
+                    "Creality colour-painted models require a future native 3MF route.")
     if not isinstance(objects, list) or not 1 <= len(objects) <= 12:
         raise SlicerExecutionError("Plate model list is invalid.")
     for item in objects:
@@ -624,12 +636,17 @@ def process_queued_job(job_id):
                 source_models.append((item, raw))
             if is_multi_test:
                 stage = "preparing the native multi-filament test plate"
-                width, depth = trusted_plate_dimensions(job.printer_profile)
-                material_result = prepare_job_multimaterial(
-                    job, source_models, bed_width=width, bed_depth=depth,
-                )
-                model = material_result["model_3mf"]
-                model_format = "3mf"
+                if job.engine == "crealityprint":
+                    material_result = prepare_creality_multistl(job, source_models)
+                    model = material_result["model_stls"][0]
+                    model_format = "stl"
+                else:
+                    width, depth = trusted_plate_dimensions(job.printer_profile)
+                    material_result = prepare_job_multimaterial(
+                        job, source_models, bed_width=width, bed_depth=depth,
+                    )
+                    model = material_result["model_3mf"]
+                    model_format = "3mf"
             elif _single_unmodified_stl(plate):
                 # Avoid an unnecessary 3MF round trip for one untransformed
                 # model. The validated native STL CLI path performs its own
@@ -743,6 +760,12 @@ def process_queued_job(job_id):
                 palette = list(material_result["filament_profiles"])
                 palette[0] = profiles[1]
                 material_result["filament_profiles"] = tuple(palette)
+        if material_result is not None and job.engine == "crealityprint":
+            # The first resolved palette entry is the authenticated job's
+            # selected filament profile, as required by the worker protocol.
+            palette = list(material_result["filament_profiles"])
+            palette[0] = profiles[1]
+            material_result["filament_profiles"] = tuple(palette)
         if model_format == "stl" and job.input_asset.sha256 and hashlib.sha256(model).hexdigest() != job.input_asset.sha256:
             raise SlicerExecutionError("Model contents changed since the job was prepared.")
         stage = "executing the isolated slicer worker"
@@ -752,6 +775,12 @@ def process_queued_job(job_id):
             model_format=model_format,
             filament_profiles=(material_result["filament_profiles"]
                                if material_result is not None else None),
+            creality_model_stls=(material_result["model_stls"]
+                                if material_result is not None and job.engine == "crealityprint"
+                                else None),
+            creality_tool_ids=(material_result["tool_ids"]
+                              if material_result is not None and job.engine == "crealityprint"
+                              else None),
         )
         if material_result is not None:
             stage = "auditing multi-material tool selections and extrusion"
