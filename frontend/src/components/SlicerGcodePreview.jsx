@@ -4,6 +4,8 @@ import "./slicerPreviewMobile.css";
 import GcodeLayerInsert from "./GcodeLayerInsert";
 import { featureColour, hasFeatureFocus } from "./slicerToolpathFeatures";
 
+const EMPTY_PATHS = Object.freeze([]);
+
 /**
  * Incremental read-only preview for generated G-code.
  *
@@ -126,7 +128,7 @@ export default function SlicerGcodePreview({ fileId = null, preview, bedSize = n
               limited = true;
               break;
             }
-            batch.push(...item.segments);
+            for (const move of item.segments) batch.push(move);
             used += item.segments.length;
             completed++;
             pendingLayers++;
@@ -242,7 +244,7 @@ export default function SlicerGcodePreview({ fileId = null, preview, bedSize = n
   const displaySegments = useMemo(() => {
     // GPU-managed chunks are never flattened for the normal whole-print view.
     // Concatenate only for an explicit detailed/filtering inspection.
-    if (progressiveMode) return [];
+    if (progressiveMode) return EMPTY_PATHS;
     const current = layerSegments;
     if (layerDisplay === "current") return current;
     const startZ = layerDisplay === "context" ? layers[Math.max(0,currentLayer-8)] : -Infinity;
