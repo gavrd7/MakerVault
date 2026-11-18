@@ -19,7 +19,7 @@ class CrealityDiagnosticMatrixTests(unittest.TestCase):
         self.assertEqual([name for name, _edits, _desc in options], [
             "baseline", "no-explicit-filament-map",
             "explicit-single-nozzle", "tower-disabled",
-            "normalised-filament-scalars",
+            "normalised-filament-scalars", "identical-filament-parameters",
         ])
         self.assertEqual(options[1][1], {"filament_map": None})
         self.assertEqual(options[2][1], {"filament_map": ["1", "1"]})
@@ -45,7 +45,7 @@ class CrealityDiagnosticMatrixTests(unittest.TestCase):
             "validation_category": "filament",
         }
         report = run_matrix("/tmp/test.3mf", timeout_seconds=30)
-        self.assertEqual(len(report["test_results"]), 5)
+        self.assertEqual(len(report["test_results"]), 6)
         import json
         encoded = json.dumps(report)
         self.assertNotIn("SECRET-STL-COORDINATES", encoded)
@@ -53,7 +53,7 @@ class CrealityDiagnosticMatrixTests(unittest.TestCase):
         self.assertNotIn("210", encoded)
         self.assertEqual(report["test_results"][0]["exit_code"], 205)
         self.assertEqual(report["test_results"][0]["validation_category"], "filament")
-        self.assertEqual(execute.call_count, 5)
+        self.assertEqual(execute.call_count, 6)
 
 
 if __name__ == "__main__":
