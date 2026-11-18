@@ -332,7 +332,14 @@ def _native_palette_settings(project, filaments, *, palette_slots=4):
                 project[key] = existing * 2
             else:
                 raise SlicerProfileError("Invalid native Creality vector size: " + key)
-    project.setdefault("flush_volumes_matrix", ["0"] * (palette_slots ** 2))
+    # Non-zero conservative diagnostic purge volumes for material changes.
+    # Never silently disable purging by generating an all-zero matrix.
+    # Actual CFS flushing values must be audited before print approval.
+    project.setdefault("flush_volumes_matrix", [
+        "0" if source == destination else "140"
+        for source in range(palette_slots)
+        for destination in range(palette_slots)
+    ])
     project.setdefault("flush_volumes_vector", ["140"] * (palette_slots * 2))
     if (not isinstance(project["flush_volumes_matrix"], list) or
             len(project["flush_volumes_matrix"]) != palette_slots ** 2 or
