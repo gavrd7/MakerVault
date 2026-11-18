@@ -17,6 +17,7 @@ MAX_LAYER_SOURCE_BYTES = 32 * 1024 * 1024
 MAX_LAYER_SEGMENTS = 75000
 MAX_BATCH_SEGMENTS = 180000
 MAX_BATCH_LAYERS = 64
+MAX_FULL_PREVIEW_SEGMENTS = 1500000
 MAX_OVERVIEW_SEGMENTS_PER_LAYER = 450
 OVERVIEW_WEIGHTS = {
     "tower": .18, "support": .20, "shell": .26,
@@ -38,7 +39,42 @@ def _overview_segments(segments, per_layer_limit=MAX_OVERVIEW_SEGMENTS_PER_LAYER
     return [segments[i] for i in balanced_overview_indices(groups, per_layer_limit)]
 
 
-def layer_batch_toolpaths(text, target_zs, *, overview=False, overview_limit=350, max_requested_layers=MAX_BATCH_LAYERS):
+def _append_continuous_bead(layer, move, max_records, budget):
+    """Keep every path; collapse only exactly aligned adjacent straight moves.
+
+    No path subsampling. A join is permitted solely for adjacent extrusions
+    from the same material/feature/width whose centreline is collinear within
+    0.015 mm and whose direction does not reverse. Travel breaks continuity.
+    """
+    segments = layer["segments"]
+    previous = segments[-1] if segments else None
+    if (previous and layer.get("last_extruding") and
+            previous[4:] == move[4:] and
+            abs(previous[2] - move[0]) <= 0.0005 and
+            abs(previous[3] - move[1]) <= 0.0005):
+        ax, ay = previous[0], previous[1]
+        bx, by = previous[2], previous[3]
+        cx, cy = move[2], move[3]
+        abx, aby = bx-ax, by-ay
+        acx, acy = cx-ax, cy-ay
+        length = math.hypot(acx, acy)
+        if (length > 1e-6 and abx*(cx-bx)+aby*(cy-by) >= 0 and
+                abs(abx*acy-aby*acx)/length < 0.015):
+            previous[2], previous[3] = move[2], move[3]
+            layer["last_extruding"] = True
+            return True
+    if len(segments) >= max_records or budget[0] >= budget[1]:
+        layer["last_extruding"] = False
+        return False
+    segments.append(move)
+    budget[0] += 1
+    layer["last_extruding"] = True
+    return True
+
+
+def layer_batch_toolpaths(text, target_zs, *, overview=False, overview_limit=350,
+                          high_fidelity=False, max_requested_layers=MAX_BATCH_LAYERS,
+                          max_total_segments=MAX_BATCH_SEGMENTS):
     """Return actual, ordered G0/G1 extrusion segments at target Z.
 
     Coordinates use [X1,Y1,X2,Y2,Z,feature,width,logical_tool] as the existing renderer
@@ -47,6 +83,10 @@ def layer_batch_toolpaths(text, target_zs, *, overview=False, overview_limit=350
     """
     if not isinstance(target_zs, (list, tuple)) or not 1 <= len(target_zs) <= max_requested_layers:
         raise ValueError("Choose between 1 and 64 layers.")
+    if overview and high_fidelity:
+        raise ValueError("Choose one preview geometry mode.")
+    if high_fidelity and not 1 <= max_total_segments <= MAX_FULL_PREVIEW_SEGMENTS:
+        raise ValueError("Invalid full preview geometry budget.")
     if (overview and (isinstance(overview_limit, bool) or not isinstance(overview_limit, int)
                      or not 80 <= overview_limit <= MAX_OVERVIEW_SEGMENTS_PER_LAYER)):
         raise ValueError("Invalid preview detail level.")
@@ -62,6 +102,7 @@ def layer_batch_toolpaths(text, target_zs, *, overview=False, overview_limit=350
     selected = set(targets)
     by_height = {height: {"z": height, "segments": [], "segment_count": 0,
                          "feature_counts": Counter(), "captured_count": 0,
+                         **({"last_extruding": False} if high_fidelity else {}),
                          **({"overview_heap": [], "feature_heaps": {}} if overview else {})}
                  for height in targets}
     absolute_xyz = True
@@ -72,6 +113,7 @@ def layer_batch_toolpaths(text, target_zs, *, overview=False, overview_limit=350
     family = overview_family(role)
     width = None
     stored_count = 0
+    budget = [0, max_total_segments]
     tool = None
 
     for raw in text.splitlines():
@@ -132,6 +174,11 @@ def layer_batch_toolpaths(text, target_zs, *, overview=False, overview_limit=350
                                  absolute_centres=absolute_centres)
             else:
                 moves=[(nx,ny,nz,1.0)] if nx!=x or ny!=y else None
+            if high_fidelity and (ne <= e+1e-6 or not moves):
+                # A travel/retraction between two extrusion moves must not
+                # be simplified into an invented continuous extrusion path.
+                for layer in by_height.values():
+                    layer["last_extruding"] = False
             if ne>e+1e-6 and moves:
                 px,py,pz=x,y,z
                 for ax,ay,az,_ in moves:
@@ -140,7 +187,14 @@ def layer_batch_toolpaths(text, target_zs, *, overview=False, overview_limit=350
                         layer = by_height[key]
                         layer["segment_count"] += 1
                         layer["feature_counts"][role] += 1
-                        if overview:
+                        if high_fidelity:
+                            bead=[round(px,3), round(py,3),
+                                  round(ax,3), round(ay,3),
+                                  key,role,width,tool]
+                            if _append_continuous_bead(
+                                    layer, bead, MAX_LAYER_SEGMENTS, budget):
+                                layer["captured_count"] += 1
+                        elif overview:
                             # Keep a small, distributed set of visible surfaces
                             # as we scan. Never accumulate the full 3D print in
                             # Python merely to throw most of it away afterwards.
@@ -185,6 +239,7 @@ def layer_batch_toolpaths(text, target_zs, *, overview=False, overview_limit=350
     for layer in by_height.values():
         original = layer["segment_count"]
         original_captured=layer.pop("captured_count")
+        layer.pop("last_extruding", None)
         if overview:
             candidates = {
                 entry[1]: entry[2]
@@ -207,7 +262,8 @@ def layer_batch_toolpaths(text, target_zs, *, overview=False, overview_limit=350
     return {"layers": [by_height[height] for height in targets],
             "complete": all(layer["complete"] for layer in by_height.values()),
             "sampled": overview,
-            "overview": overview}
+            "overview": overview,
+            "high_fidelity": high_fidelity}
 
 
 def exact_layer_toolpaths(text, target_z):
