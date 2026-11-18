@@ -33,7 +33,11 @@ export default function SlicerToolpath3D({
       setUnavailable(true);
       return undefined;
     }
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+    // On high-density/mobile displays avoid multiplying a large preview's
+    // fragment workload by four. This does not reduce toolpath accuracy.
+    const mobilePreview = window.matchMedia?.("(max-width: 700px)")?.matches;
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, mobilePreview ? 1.25 : 1.5));
+    renderer.localClippingEnabled = true;
     renderer.setClearColor(0x111b27);
     renderer.outputColorSpace = THREE.SRGBColorSpace;
     renderer.domElement.setAttribute("aria-label", "Rotatable sampled 3D extrusion paths");
@@ -60,6 +64,9 @@ export default function SlicerToolpath3D({
     controls.maxDistance = 3000;
     const paths = new THREE.Group();
     scene.add(paths);
+    // One shared clipping plane hides all geometry above the slider height.
+    // Changing this plane never reallocates or rebuilds GPU extrusion buffers.
+    const layerClipPlane = new THREE.Plane(new THREE.Vector3(0, -1, 0), 2000);
     const bedWidth = Number(bedSize?.[0]);
     const bedDepth = Number(bedSize?.[1]);
     const nativeBed = Number.isFinite(bedWidth) && Number.isFinite(bedDepth) &&
@@ -168,7 +175,7 @@ export default function SlicerToolpath3D({
     controls.update();
     sceneRef.current = { scene, paths, marker, camera, controls, renderer,
       grid, bed, plateBoundary, axes, bedCentre, modelCentre: centre, modelSize: size,
-      bedWidth: width, bedDepth: depth, nativeBed };
+      bedWidth: width, bedDepth: depth, nativeBed, layerClipPlane };
     const resize = () => {
       const width = Math.max(mountPoint.clientWidth, 1);
       const height = Math.max(mountPoint.clientHeight, 1);
@@ -249,6 +256,18 @@ export default function SlicerToolpath3D({
     }
   }, [showBedGrid, showBedSurface]);
 
+  // In the whole-print mode the native layer slider changes only this
+  // clipping plane, not the extrusion geometry or its React dependencies.
+  useEffect(() => {
+    const view=sceneRef.current;
+    if (!view) return;
+    view.layerClipPlane.constant = Number.isFinite(layers[activeLayer])
+      ? layers[activeLayer] + 0.0005 : 2000;
+  }, [activeLayer, layers]);
+
+  const geometryLayer = progressiveMode ? layers.length-1 : activeLayer;
+  const geometryStep = progressiveMode ? -1 : activeStep;
+
   useEffect(() => {
     const view = sceneRef.current;
     if (!view) return;
@@ -272,15 +291,15 @@ export default function SlicerToolpath3D({
         old.material.dispose();
       }
     }
-    const activeZ = layers[activeLayer];
+    const activeZ = progressiveMode ? Infinity : layers[geometryLayer];
     const positions = [];
     const coloursArray = [];
     let currentCount = 0;
     let lastStep = null;
     const selectedZ = Number.isFinite(activeZ) ? activeZ : Infinity;
-    const maxStep = Math.max(0, Number(activeStep) || 0);
+    const maxStep = Math.max(0, Number(geometryStep) || 0);
     const layerIndexByHeight = new Map(layers.map((height, index) => [Number(height).toFixed(3), index]));
-    const activeIndex = Math.max(0, Number(activeLayer) || 0);
+    const activeIndex = Math.max(0, Number(geometryLayer) || 0);
     const minVisibleIndex = layerDisplay === "current" ? activeIndex
       : layerDisplay === "context" ? Math.max(0, activeIndex - 8) : 0;
     for (let segmentIndex=startSegment;segmentIndex<segments.length;segmentIndex++) {
@@ -399,7 +418,8 @@ export default function SlicerToolpath3D({
       geometry.setAttribute("color", new THREE.Float32BufferAttribute(coloursArray, 3));
       if (renderMode === "lines") {
         paths.add(new THREE.LineSegments(geometry,
-          new THREE.LineBasicMaterial({ vertexColors: true, transparent: true, opacity: 0.98 })));
+          new THREE.LineBasicMaterial({ vertexColors: true, transparent: true, opacity: 0.98,
+            clippingPlanes: [view.layerClipPlane] })));
       } else {
         // Orca/LibVGCode renders lit bead volume, not only flat face colours.
         // Three.js supplies normals for correctly lit top and side walls.
@@ -407,6 +427,7 @@ export default function SlicerToolpath3D({
         paths.add(new THREE.Mesh(geometry,
           new THREE.MeshLambertMaterial({
             vertexColors: true, side: THREE.DoubleSide, transparent: false,
+            clippingPlanes: [view.layerClipPlane],
           })));
       }
     }
@@ -416,7 +437,7 @@ export default function SlicerToolpath3D({
     } : null;
     marker.visible = Boolean(showToolhead && lastStep);
     if (lastStep) marker.position.set(...lastStep);
-  }, [segments, layers, activeLayer, activeStep, visible, colourMode, colours, showToolhead,
+  }, [segments, layers, geometryLayer, geometryStep, visible, colourMode, colours, showToolhead,
     renderMode, nozzleDiameter, filamentColours, layerDisplay, featureFocus, previewSampled,
     fadePrevious, outerContrast, progressiveMode, bedSize?.[0], bedSize?.[1]]);
 
