@@ -82,3 +82,34 @@ python3 -m unittest slicer_worker.tests.test_creality_diagnostics
 
 The unit tests verify deterministic matrix variants and sanitisation. The
 staging matrix is the real-binary integration test.
+
+## Native K2 reference comparison (November 2026)
+
+A Creality Print **7.3.2.6412** exported two-Benchy project was
+inspected as a *structural reference* for MakerVault's **7.3.1** engine.
+The uploaded 3MF itself, local paths, embedded G-code scripts, mesh data,
+filament colours and source profile values are NOT committed.
+
+The reference establishes these native contract properties:
+
+- Four material entries, even though only two Benchys were assigned
+  (physical slots 3 and 4 in that reference).
+- Four-element `filament_map`, `filament_map_2`, temperature and
+  filament identity vectors.
+- A 16-element flushing matrix and eight-element flushing vector.
+- Object-level `part` and plate `assemble` metadata, plus independent
+  `Metadata/creality.config` and project settings.
+
+The revised adapter emits these dimensions and adds native-style object
+metadata while retaining the safe, baked positions. Unassigned material
+entries are placeholders derived from resolved assigned profiles; **they
+are not evidence of the real contents of unused CFS bays**. Native
+physical-slot-to-firmware mapping and purge adequacy remain unverified.
+Multi-material printer submission remains blocked.
+
+The uploaded reference was saved by 7.3.2, so schema similarity must not
+be treated as proof of compatibility with 7.3.1. Run the backend unit
+regressions and the real-engine diagnostic matrix after updating staging.
+A successful `--slice` result must still pass tool usage, extrusion
+bounds, purge and layout inspection before any future print approval.
+
