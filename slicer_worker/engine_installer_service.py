@@ -349,7 +349,8 @@ class Handler(BaseHTTPRequestHandler):
                 return self.respond(503, {"error": "Official engine releases are unavailable."})
         if self.path == "/status":
             with LOCK:
-                return self.respond(200, {"operations": list(OPERATIONS.values())[-30:],\n                                          "rollback_available": (STORE / "previous.json").is_file()})
+                return self.respond(200, {"operations": list(OPERATIONS.values())[-30:],
+                                          "rollback_available": (STORE / "previous.json").is_file()})
         return self.respond(404, {"error": "Not found"})
     def do_POST(self):
         if self.path not in {"/install", "/rollback"} or not self.authenticated():
