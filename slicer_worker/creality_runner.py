@@ -205,15 +205,22 @@ def run_creality(binary: Path, workdir: Path, *, timeout_seconds: int = DEFAULT_
                 # This is more precise than assuming native presets failed.
                 reason = _cli_failure_reason(output)
                 if proc.returncode == 232:
-                    # Creality 7.3.1's CLI_FILE_VERSION_NOT_SUPPORTED = -24;
-                    # POSIX exposes its low eight bits (232). The version is
-                    # read from the 3D model XML Application metadata.
+                    # CLI_FILE_VERSION_NOT_SUPPORTED = -24 (POSIX 232).
                     reason = "Creality Print rejected the 3MF project file version."
+                elif proc.returncode == 205:
+                    # CLI_VALIDATE_ERROR = -51 (POSIX 205). This identifies
+                    # validation failure, not the individual offending key.
+                    reason = "Creality Print rejected native 3MF slicing parameters during validation."
                 elif proc.returncode == 254 and reason == "Creality Print failed to slice using the selected native profiles.":
                     reason = "Creality Print CLI rejected its command-line parameters."
                 logger.warning("Creality Print CLI exited with status %d (%s)",
                                proc.returncode, reason)
-                raise WorkerError(reason)
+                error = WorkerError(reason)
+                # A subprocess exit status is non-secret structured data. Do
+                # not attach raw stdout, CLI arguments, paths or profile JSON.
+                if type(proc.returncode) is int and 1 <= proc.returncode <= 255:
+                    error.cli_exit_code = proc.returncode
+                raise error
         if outdir.is_symlink() or not outdir.is_dir():
             raise WorkerError("Creality Print produced no safe output directory.")
         # CLI builds may emit a log/result JSON in addition to a G-code.
