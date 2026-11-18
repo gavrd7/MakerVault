@@ -163,7 +163,14 @@ export default function SlicerGcodePreview({ fileId = null, preview, bedSize = n
   const z = layers[currentLayer];
 
   const features = Object.keys(preview?.feature_counts || {});
-  const colours = Object.fromEntries(features.map(feature => [feature, featureColour(feature)]));
+  // Stable palette identity matters: the GPU mesh effect depends on colours.
+  // Recreating this object on every slider event previously invalidated the
+  // complete model even though not a single colour had changed.
+  const colours = useMemo(() =>
+    Object.fromEntries(features.map(feature => [feature, featureColour(feature)])),
+    // Only the feature names determine the palette, not slider position.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [features.join("|")]);
   // Query original stored G-code for this exact layer. Global 80k-move
   // samples are not sufficient for continuous wall and support geometry.
   useEffect(() => {
