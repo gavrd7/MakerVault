@@ -33,9 +33,17 @@ def _cli_failure_reason(output):
     if any(term in message for term in ("error while loading shared libraries",
                                         "cannot open shared object file")):
         return "Creality Print CLI is missing a runtime library."
+    if "only one cli command may be specified" in message:
+        return "Creality Print CLI received conflicting commands."
+    if "no cli command was specified" in message:
+        return "Creality Print CLI did not recognise a slicing command."
     if any(term in message for term in ("unknown option", "unrecognized option",
-                                        "unrecognised option", "invalid command line")):
+                                        "unrecognised option", "invalid command line",
+                                        "invalid option", "unknown argument")):
         return "Creality Print CLI rejected a command-line option."
+    if any(term in message for term in ("params in command line error",
+                                        "cli parameter parsing failed")):
+        return "Creality Print CLI rejected its command-line parameters."
     if any(term in message for term in ("failed to load settings", "failed to load preset",
                                         "invalid preset", "invalid config", "load config failed")):
         return "Creality Print CLI could not load a native preset."
@@ -149,10 +157,9 @@ def run_creality(binary: Path, workdir: Path, *, timeout_seconds: int = DEFAULT_
                 # Creality 7.3.1 defines CLI_INVALID_PARAMS as -2; Linux
                 # subprocesses report its low eight bits as exit status 254.
                 # This is more precise than assuming native presets failed.
-                if proc.returncode == 254:
+                reason = _cli_failure_reason(output)
+                if proc.returncode == 254 and reason == "Creality Print failed to slice using the selected native profiles.":
                     reason = "Creality Print CLI rejected its command-line parameters."
-                else:
-                    reason = _cli_failure_reason(output)
                 logger.warning("Creality Print CLI exited with status %d (%s)",
                                proc.returncode, reason)
                 raise WorkerError(reason)
