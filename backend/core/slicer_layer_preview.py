@@ -39,7 +39,7 @@ def _overview_segments(segments, per_layer_limit=MAX_OVERVIEW_SEGMENTS_PER_LAYER
     return [segments[i] for i in balanced_overview_indices(groups, per_layer_limit)]
 
 
-def _append_continuous_bead(layer, move, max_records, budget):
+def _append_continuous_bead(layer, move, max_records, budget, motion_token):
     """Keep every path; collapse only exactly aligned adjacent straight moves.
 
     No path subsampling. A join is permitted solely for adjacent extrusions
@@ -48,7 +48,7 @@ def _append_continuous_bead(layer, move, max_records, budget):
     """
     segments = layer["segments"]
     previous = segments[-1] if segments else None
-    if (previous and layer.get("last_extruding") and
+    if (previous and layer.get("last_token") == motion_token and
             previous[4:] == move[4:] and
             abs(previous[2] - move[0]) <= 0.0005 and
             abs(previous[3] - move[1]) <= 0.0005):
@@ -61,14 +61,14 @@ def _append_continuous_bead(layer, move, max_records, budget):
         if (length > 1e-6 and abx*(cx-bx)+aby*(cy-by) >= 0 and
                 abs(abx*acy-aby*acx)/length < 0.015):
             previous[2], previous[3] = move[2], move[3]
-            layer["last_extruding"] = True
+            layer["last_token"] = motion_token
             return True
     if len(segments) >= max_records or budget[0] >= budget[1]:
-        layer["last_extruding"] = False
+        layer["last_token"] = None
         return False
     segments.append(move)
     budget[0] += 1
-    layer["last_extruding"] = True
+    layer["last_token"] = motion_token
     return True
 
 
@@ -102,7 +102,7 @@ def layer_batch_toolpaths(text, target_zs, *, overview=False, overview_limit=350
     selected = set(targets)
     by_height = {height: {"z": height, "segments": [], "segment_count": 0,
                          "feature_counts": Counter(), "captured_count": 0,
-                         **({"last_extruding": False} if high_fidelity else {}),
+                         **({"last_token": None} if high_fidelity else {}),
                          **({"overview_heap": [], "feature_heaps": {}} if overview else {})}
                  for height in targets}
     absolute_xyz = True
@@ -114,6 +114,7 @@ def layer_batch_toolpaths(text, target_zs, *, overview=False, overview_limit=350
     width = None
     stored_count = 0
     budget = [0, max_total_segments]
+    motion_token = 0
     tool = None
 
     for raw in text.splitlines():
@@ -175,10 +176,9 @@ def layer_batch_toolpaths(text, target_zs, *, overview=False, overview_limit=350
             else:
                 moves=[(nx,ny,nz,1.0)] if nx!=x or ny!=y else None
             if high_fidelity and (ne <= e+1e-6 or not moves):
-                # A travel/retraction between two extrusion moves must not
-                # be simplified into an invented continuous extrusion path.
-                for layer in by_height.values():
-                    layer["last_extruding"] = False
+                # Constant-time travel barrier: unlike resetting every layer
+                # this costs O(1) even on 700-layer prints with many moves.
+                motion_token += 1
             if ne>e+1e-6 and moves:
                 px,py,pz=x,y,z
                 for ax,ay,az,_ in moves:
@@ -192,7 +192,7 @@ def layer_batch_toolpaths(text, target_zs, *, overview=False, overview_limit=350
                                   round(ax,3), round(ay,3),
                                   key,role,width,tool]
                             if _append_continuous_bead(
-                                    layer, bead, MAX_LAYER_SEGMENTS, budget):
+                                    layer, bead, MAX_LAYER_SEGMENTS, budget, motion_token):
                                 layer["captured_count"] += 1
                         elif overview:
                             # Keep a small, distributed set of visible surfaces
@@ -239,7 +239,7 @@ def layer_batch_toolpaths(text, target_zs, *, overview=False, overview_limit=350
     for layer in by_height.values():
         original = layer["segment_count"]
         original_captured=layer.pop("captured_count")
-        layer.pop("last_extruding", None)
+        layer.pop("last_token", None)
         if overview:
             candidates = {
                 entry[1]: entry[2]
