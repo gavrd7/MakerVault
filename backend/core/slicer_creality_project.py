@@ -248,6 +248,24 @@ def build_creality_project_candidate(plate, *, printer, process, filaments,
                 "_rels/.rels", "[Content_Types].xml"}
     if set(entries) != required:
         raise SlicerProfileError("Creality plate package has unexpected files.")
+    # The 3MF model's Application metadata is what the native importer
+    # actually reads into its Semver file_version. An AppVersion value only
+    # in Metadata/creality.config leaves it at 0.0.0 and causes CLI -24
+    # (Linux exit 232, unsupported project version).
+    try:
+        root = SafeET.fromstring(entries["3D/3dmodel.model"])
+        if root.tag != "{" + NS + "}model":
+            raise SlicerProfileError("Creality 3MF has no native model root.")
+        for node in list(root):
+            if node.tag == "{" + NS + "}metadata" and node.get("name") == "Application":
+                root.remove(node)
+        application = SafeET.Element("{" + NS + "}metadata", {"name": "Application"})
+        application.text = "Creality_Print V" + version
+        root.insert(0, application)
+        entries["3D/3dmodel.model"] = SafeET.tostring(
+            root, encoding="utf-8", xml_declaration=True)
+    except (ValueError, SafeET.ParseError) as exc:
+        raise SlicerProfileError("Creality 3MF model metadata is invalid.") from exc
     entries["Metadata/project_settings.config"] = encoded
     # Creality 7.3.1 checks this metadata before accepting the file as a
     # native project. It is separate from the effective project settings.
