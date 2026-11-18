@@ -2102,7 +2102,7 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
                 job.message || "Waiting for job update"}</small>
             {job.status === "failed" && <details className="slicerSlicingHelp">
               <summary>Understand this slicing failure and how to fix it</summary>
-              {job.engine === "crealityprint" && (job.message || "").includes("[creality-cli-validation-error]") ? <>
+              {job.engine === "crealityprint" && (/\[creality-cli-validation-error\]|CLI_VALIDATE_ERROR\s*\(-51\)|exit code 205|exit 205/i.test(job.message || "")) ? <>
                 <p><strong>Confirmed:</strong> Creality Print returned native CLI_VALIDATE_ERROR (-51, Linux exit 205) while validating MakerVault's generated 3MF.</p>
                 <p><strong>Next step:</strong> Investigate the embedded project settings and Creality's validation output. This code does not identify which parameter failed. Your two model positions and CFS assignments are saved; do not reimport the official presets or reposition the models to troubleshoot this adapter failure.</p>
               </> : job.engine === "crealityprint" && (job.message || "").includes("[creality-project-version-unsupported]") ? <>
