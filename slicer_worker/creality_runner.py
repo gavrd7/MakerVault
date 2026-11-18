@@ -1,8 +1,8 @@
 """Creality Print CLI adapter for one explicitly approved binary.
 
-Uses Creality's documented native --load_settings/--load_filaments flags,
-not the similarly named OrcaSlicer flags. A real tested version and fixture
-receipt are required before this engine may be marked verified/ready.
+Uses the Creality 7.3.1 tested hyphenated CLI flags. Multi-STL jobs
+accept one-based logical material indices and must pass an output tool audit.
+The 3MF/painting path remains separately gated until native validation.
 """
 import json
 import logging
