@@ -65,7 +65,9 @@ class EngineManagementAPITests(TestCase):
             with self.subTest(data=data):
                 response = self.client.post(self.endpoint, data=data,
                                             content_type="application/json")
-                self.assertEqual(response.status_code, 400)
+                expected = 503 if data.get("engine") == "crealityprint" and set(data) == {
+                    "engine", "version", "action", "release_sha256"} else 400
+                self.assertEqual(response.status_code, expected)
         self.assertFalse(SlicerEngineOperation.objects.exists())
 
     @patch.dict(os.environ, {"MAKERVAULT_SLICER_HOST_UPDATER_ENABLED": "1"})
