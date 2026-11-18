@@ -2094,7 +2094,10 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
                 job.message || "Waiting for job update"}</small>
             {job.status === "failed" && <details className="slicerSlicingHelp">
               <summary>Understand this slicing failure and how to fix it</summary>
-              {job.engine === "crealityprint" && (job.message || "").includes("[creality-cli-exited]") ? <>
+              {job.engine === "crealityprint" && (job.message || "").includes("[creality-cli-parameters-invalid]") ? <>
+                <p><strong>Confirmed:</strong> Creality Print 7.3.1 returned its invalid CLI parameters code (-2, displayed as 254 on Linux).</p>
+                <p><strong>Next step:</strong> Review the adapter's CLI flags and argument values. Changing the saved K2 profiles is not justified by this error alone.</p>
+              </> : job.engine === "crealityprint" && (job.message || "").includes("[creality-cli-exited]") ? <>
                 <p><strong>Confirmed:</strong> Creality Print started but exited before finishing the slice. The worker has not identified which CLI option, runtime dependency or native preset caused the exit.</p>
                 <p><strong>Next step:</strong> Check the slicer-worker log for the Creality Print exit status and any classified runtime or preset error. This is an engine integration failure, not proof that your imported profiles are wrong. No printer job was started.</p>
               </> : job.engine === "crealityprint" && (job.message || "").includes("[creality-cli-option-invalid]") ? <>
