@@ -773,7 +773,7 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
     const offlineMultiMaterial = sliceNow && mode !== "all" &&
       plateNeedsMultiMaterial(plateObjects);
     const crealityMaterialTest = offlineMultiMaterial && form.engine==="crealityprint";
-    if (crealityMaterialTest && (plateObjects.length!==2 || flushSettings || primeTower ||
+    if (crealityMaterialTest && (plateObjects.length!==2 || flushSettings ||
         plateObjects.some(item=>item.colour_paint?.regions?.length ||
           Object.keys(item.colour_paint?.faces||{}).length))) {
       setError("Creality native project slicing needs exactly two unpainted models without custom flushing.");
