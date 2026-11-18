@@ -11,6 +11,7 @@ from collections import Counter
 
 from .slicer_preview import MOVE, TYPE, WIDTH, ARC_PARAM
 from .slicer_preview_arcs import arc_points
+from .slicer_preview_features import overview_priority
 
 MAX_LAYER_SOURCE_BYTES = 32 * 1024 * 1024
 MAX_LAYER_SEGMENTS = 75000
@@ -154,7 +155,6 @@ def layer_batch_toolpaths(text, target_zs, *, overview=False, overview_limit=350
                             # Keep a small, distributed set of visible surfaces
                             # as we scan. Never accumulate the full 3D print in
                             # Python merely to throw most of it away afterwards.
-                            from .slicer_preview_features import overview_priority
                             sequence = layer["segment_count"]
                             priority = overview_priority(role)
                             spread = ((sequence * 2654435761) & 0xffffffff)
