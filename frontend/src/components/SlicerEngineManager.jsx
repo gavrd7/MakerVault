@@ -93,7 +93,8 @@ export default function SlicerEngineManager({engines = [], onChanged}) {
             <SlicerEngineLogo engine={engine.key} label={engine.label} size="small"/>
             <div><strong>{engine.label}</strong>
               <small>{installed
-                ? "Installed and ready · "+(engine.installed_version||"Verified")
+                ? "Installed · "+(engine.installed_version||"Current")+
+                  (engine.key==="crealityprint"?" · CLI integration in testing":"")
                 : "Not installed"}</small>
             </div>
           </div>
