@@ -172,6 +172,7 @@ def run_remote_job(job_id, engine, version, model, printer_profile, filament_pro
             reason = None
             reason_details = None
             cli_exit_code = None
+            validation_category = None
             reasons = set(REASONS)
             try:
                 declared_error_length = response.headers.get("Content-Length")
@@ -196,6 +197,15 @@ def run_remote_job(job_id, engine, version, model, printer_profile, filament_pro
                                     and isinstance(reason, str)
                                     and reason.startswith("creality-")):
                                 cli_exit_code = native_code
+                            topic = result.get("validation_category")
+                            if (engine == "crealityprint" and native_code == 205
+                                    and reason == "creality-cli-validation-error"
+                                    and topic in {
+                                        "prime-tower", "layer-height", "line-width",
+                                        "nozzle", "flow", "filament", "supports",
+                                        "build-plate",
+                                    }):
+                                validation_category = topic
                             setting_keys = result.get("setting_keys") if reason == "native-project-settings-invalid" else None
                             if isinstance(setting_keys, list) and len(setting_keys) <= 8:
                                 import re
@@ -224,6 +234,8 @@ def run_remote_job(job_id, engine, version, model, printer_profile, filament_pro
                     "Creality Print exit code " + str(cli_exit_code) + " ("
                     + native_error + "). " + message
                 )
+            if validation_category is not None:
+                message += " Validation category: " + validation_category.replace("-", " ") + "."
             if reason:
                 message += " [" + reason + "]"
             raise SlicerWorkerError(message)
