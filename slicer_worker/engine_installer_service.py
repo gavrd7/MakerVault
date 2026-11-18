@@ -39,6 +39,49 @@ HEX = re.compile(r"^[a-f0-9]{64}$")
 OPERATIONS = {}
 LOCK = Lock()
 MAX_OPERATIONS = 50
+OPERATION_FILE = STORE / "installer-operations.json"
+
+
+def _persist_operations():
+    """Atomic restart-safe status journal, accessible to installer only."""
+    temp = STORE / (".operations-" + uuid.uuid4().hex + ".tmp")
+    try:
+        with temp.open("x", encoding="utf-8") as handle:
+            json.dump(list(OPERATIONS.values())[-MAX_OPERATIONS:], handle,
+                      separators=(",", ":"))
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.replace(temp, OPERATION_FILE)
+    finally:
+        if temp.exists():
+            temp.unlink()
+
+
+def _restore_operations():
+    if OPERATION_FILE.is_symlink() or not OPERATION_FILE.exists():
+        return
+    if OPERATION_FILE.stat().st_size > 128000:
+        raise ValueError("Installer operation journal is oversized.")
+    records = json.loads(OPERATION_FILE.read_text(encoding="utf-8"))
+    if not isinstance(records, list):
+        raise ValueError("Invalid installer operation journal.")
+    with LOCK:
+        for row in records[-MAX_OPERATIONS:]:
+            try:
+                operation_id = str(uuid.UUID(row["id"]))
+            except (KeyError, ValueError, TypeError):
+                continue
+            if row.get("engine") not in SUPPORTED or not isinstance(row.get("version"), str):
+                continue
+            restored = {key: row.get(key) for key in (
+                "id", "engine", "version", "action", "status",
+                "progress", "message", "binary_sha256",
+            ) if key in row}
+            if restored.get("status") not in {"completed", "failed"}:
+                restored.update(status="failed", progress=0,
+                                message="Installer restarted before completion; retry installation.")
+            OPERATIONS[operation_id] = restored
+        _persist_operations()
 ALLOWED_DOWNLOAD_HOSTS = {"github.com", "release-assets.githubusercontent.com",
                           "objects.githubusercontent.com"}
 
@@ -127,6 +170,7 @@ def _write_operation(op_id, **changes):
         if op_id not in OPERATIONS:
             return
         OPERATIONS[op_id].update(changes)
+        _persist_operations()
 
 
 def _install(op_id, release):
@@ -237,6 +281,7 @@ def start_install(engine, version, digest):
             if OPERATIONS[key]["status"] not in {"completed", "failed"}:
                 break
             OPERATIONS.pop(key)
+        _persist_operations()
     Thread(target=_install, args=(op_id, release), daemon=True).start()
     return dict(OPERATIONS[op_id])
 
@@ -300,6 +345,7 @@ def main():
             seed_bundled_orca(store=STORE)
         activate(STORE, engine="orcaslicer", version=APPROVAL_VERSION,
                  sha256=EXPECTED_ORCA_SHA)
+    _restore_operations()
     server = ThreadingHTTPServer(("0.0.0.0", 8091), Handler)
     server.serve_forever()
 
