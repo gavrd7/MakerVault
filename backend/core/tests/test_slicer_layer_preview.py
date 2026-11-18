@@ -244,7 +244,7 @@ class FullLayerEndpointTests(TestCase):
         with (patch("django.core.cache.cache", backend),
               patch("core.slicer_preview_cache.cache", backend),
               patch("core.tasks.warm_gcode_preview_task.delay") as queued,
-              patch("core.api_views.layer_batch_toolpaths") as parser):
+              patch("core.slicer_layer_preview.layer_batch_toolpaths") as parser):
             first=self.client.get(url)
             second=self.client.get(url)
             self.assertEqual(first.status_code, 202, first.content)
