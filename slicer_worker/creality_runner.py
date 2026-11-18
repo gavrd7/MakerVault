@@ -21,6 +21,7 @@ from .three_mf_validation import validate_worker_3mf
 from .headless_env import slicing_environment
 from .orca_runner import NETWORK_KEYS, SCRIPT_KEYS
 from .creality_material_cli import (CrealityMaterialRouteError, native_stl_material_arguments)
+from .creality_project_validation import validate_creality_project
 
 logger = logging.getLogger(__name__)
 
@@ -99,7 +100,10 @@ def creality_command(binary: Path, workdir: Path):
         raise WorkerError("Verified Creality Print executable is unavailable.")
     is_project = (workdir / "input.3mf").exists()
     model = _regular_file(workdir, "input.3mf" if is_project else "input.stl", MAX_MODEL_BYTES)
-    if is_project:
+    native_project = (workdir / "creality-native-project.marker").exists()
+    if is_project and native_project:
+        validate_creality_project(model.read_bytes(), native_tool_count=2)
+    elif is_project:
         validate_worker_3mf(model.read_bytes())
     else:
         try:
@@ -122,8 +126,13 @@ def creality_command(binary: Path, workdir: Path):
     command = [
         str(binary), "--cli", "--slice", "0", "--outputdir", str(outdir),
         "--need-gcode-file",
-        "--load-settings", str(profiles[0]) + ";" + str(profiles[2]),
     ]
+    if native_project:
+        # Upstream Creality's project loader rejects --load-settings and
+        # --load-filaments for 3MF. The project carries its own full config
+        # and the CLI skips STL auto-arrangement for project inputs.
+        return command + [str(model)]
+    command.extend(["--load-settings", str(profiles[0]) + ";" + str(profiles[2])])
     if (workdir / "creality-material-map.json").exists():
         if is_project:
             raise WorkerError("Creality multi-STL material assignments cannot use 3MF.")
