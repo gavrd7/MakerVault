@@ -2474,6 +2474,43 @@ def file_gcode_layers(request, asset_id):
             raise ValueError()
     except (ValueError, TypeError):
         return _error("Invalid or duplicate layer Z coordinate.", status=400)
+    overview = request.GET.get("overview") == "1"
+    try:
+        detail = int(request.GET.get("detail", "350")) if overview else 350
+        if overview and not 80 <= detail <= 450:
+            raise ValueError()
+    except (ValueError, TypeError):
+        return _error("Invalid preview detail level.", status=400)
+    index_key = None
+    all_heights = None
+    if overview:
+        from .slicer_preview_cache import (
+            cached_batch, index_overview, preview_index_key, MAX_INDEX_LAYERS,
+        )
+        try:
+            index_key = preview_index_key(asset, detail)
+            cached = cached_batch(index_key, heights)
+            if cached is not None:
+                response = JsonResponse(cached)
+                response["Cache-Control"] = "private, no-store"
+                return response
+        except (OSError, ValueError, RuntimeError):
+            # Source remains inspectable even if the cache/storage metadata
+            # cannot be accessed.
+            index_key = None
+        raw_all = request.GET.get("all_zs")
+        if raw_all and len(raw_all) <= 16000:
+            try:
+                candidate = [float(part) for part in raw_all.split(",")]
+                if (not 1 <= len(candidate) <= MAX_INDEX_LAYERS
+                        or len({round(z, 3) for z in candidate}) != len(candidate)
+                        or any(not math.isfinite(z) or not 0 <= z <= 2000 for z in candidate)
+                        or [round(z, 3) for z in candidate[:len(heights)]]
+                           != [round(z, 3) for z in heights]):
+                    raise ValueError()
+                all_heights = candidate
+            except (ValueError, TypeError):
+                return _error("Invalid complete preview layer list.", status=400)
     try:
         with asset.file.storage.open(asset.file.name, "rb") as handle:
             raw = handle.read(MAX_LAYER_SOURCE_BYTES + 1)
@@ -2487,9 +2524,16 @@ def file_gcode_layers(request, asset_id):
         text = raw.decode("utf-8")
     except UnicodeDecodeError:
         return _error("Full-resolution preview requires UTF-8 G-code.", status=400)
-    overview = request.GET.get("overview") == "1"
+    if overview and index_key and all_heights:
+        try:
+            first = index_overview(index_key, text, all_heights, detail)
+            if first is not None:
+                response = JsonResponse(first)
+                response["Cache-Control"] = "private, no-store"
+                return response
+        except (ValueError, TypeError):
+            return _error("Invalid complete overview index.", status=400)
     try:
-        detail = int(request.GET.get("detail", "350")) if overview else 350
         result = layer_batch_toolpaths(text, heights, overview=overview, overview_limit=detail)
     except (ValueError, TypeError):
         return _error("Invalid preview detail level.", status=400)
