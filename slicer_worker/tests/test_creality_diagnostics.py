@@ -6,10 +6,21 @@ The separately invoked staging harness exercises the approved actual binary.
 import unittest
 from unittest.mock import patch
 
-from slicer_worker.creality_diagnostics import _cases, run_matrix
+from slicer_worker.creality_diagnostics import _cases, run_matrix, _known_validation_reason
 
 
 class CrealityDiagnosticMatrixTests(unittest.TestCase):
+    def test_upstream_material_validation_reason_is_allowlisted(self):
+        self.assertEqual(_known_validation_reason(
+            b"got error when validate: Can not print multiple filaments which have "
+            b"large difference of temperature together. Otherwise, the nozzle "
+            b"may be blocked"), "incompatible-material-temperature-ranges")
+        self.assertEqual(_known_validation_reason(
+            b"got error when validate: The mixed filament references a filament "
+            b"that no longer exists."), "missing-mixed-filament-reference")
+        self.assertIsNone(_known_validation_reason(
+            b"got error when validate: private/token=DO_NOT_EXPORT"))
+
     def test_isolation_cases_are_fixed_and_predictable(self):
         options = _cases({
             "nozzle_temperature": ["210", "220"],
