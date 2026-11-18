@@ -4,6 +4,7 @@ Unlike the global 80k-move overview sample, this parser retains consecutive
 extrusion moves for one layer so bead geometry is not fragmented. The query
 is bounded by G-code size and maximum layer moves; it never executes commands.
 """
+import heapq
 import math
 import re
 from collections import Counter
@@ -72,7 +73,9 @@ def layer_batch_toolpaths(text, target_zs, *, overview=False, overview_limit=350
         targets.append(height)
     selected = set(targets)
     by_height = {height: {"z": height, "segments": [], "segment_count": 0,
-                         "feature_counts": Counter(), "captured_count": 0} for height in targets}
+                         "feature_counts": Counter(), "captured_count": 0,
+                         **({"overview_heap": []} if overview else {})}
+                 for height in targets}
     absolute_xyz = True
     absolute_e = True
     absolute_centres = False
@@ -147,8 +150,27 @@ def layer_batch_toolpaths(text, target_zs, *, overview=False, overview_limit=350
                         layer = by_height[key]
                         layer["segment_count"] += 1
                         layer["feature_counts"][role] += 1
-                        if (len(layer["segments"]) < MAX_LAYER_SEGMENTS and
-                                stored_count < MAX_BATCH_SEGMENTS):
+                        if overview:
+                            # Keep a small, distributed set of visible surfaces
+                            # as we scan. Never accumulate the full 3D print in
+                            # Python merely to throw most of it away afterwards.
+                            from .slicer_preview_features import overview_priority
+                            sequence = layer["segment_count"]
+                            priority = overview_priority(role)
+                            spread = ((sequence * 2654435761) & 0xffffffff)
+                            rank = (-priority, spread, sequence)
+                            heap = layer["overview_heap"]
+                            if len(heap) < overview_limit or rank > heap[0][:3]:
+                                segment = [round(px,3), round(py,3),
+                                           round(ax,3), round(ay,3),
+                                           key,role,width,tool]
+                                entry = (*rank, segment)
+                                if len(heap) < overview_limit:
+                                    heapq.heappush(heap, entry)
+                                else:
+                                    heapq.heapreplace(heap, entry)
+                        elif (len(layer["segments"]) < MAX_LAYER_SEGMENTS and
+                              stored_count < MAX_BATCH_SEGMENTS):
                             layer["segments"].append([round(px,3),round(py,3),
                                                        round(ax,3),round(ay,3),
                                                        key,role,width,tool])
@@ -161,10 +183,11 @@ def layer_batch_toolpaths(text, target_zs, *, overview=False, overview_limit=350
         original = layer["segment_count"]
         original_captured=layer.pop("captured_count")
         if overview:
-            layer["segments"] = _overview_segments(layer["segments"], overview_limit)
+            heap=layer.pop("overview_heap")
+            layer["segments"] = [entry[3] for entry in sorted(heap, key=lambda row: row[2])]
             layer["overview_reduced"] = len(layer["segments"]) < original
         layer["feature_counts"] = dict(layer["feature_counts"])
-        layer["complete"] = original_captured == original
+        layer["complete"] = True if overview else original_captured == original
         layer["sampled"] = bool(overview and layer.get("overview_reduced"))
         layer["limited"] = not layer["complete"]
     return {"layers": [by_height[height] for height in targets],
