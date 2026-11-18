@@ -153,3 +153,40 @@ Results separate three conditions:
 
 The reference was made by 7.3.2.6412, so compare it carefully against the
 7.3.1 runtime. Continue keeping multi-material printer upload blocked.
+
+## Referencing a 3MF already in MakerVault inventory
+
+If the genuine Creality project has already been uploaded to MakerVault, no
+second file upload or copy to Debian is required. Run:
+
+```bash
+sudo python3 scripts/diagnose_creality_staging.py \
+  --reference-inventory 3DBenchy.3mf \
+  --output /tmp/creality-diagnostic-inventory.json
+```
+
+The command selects the latest failed multi-material Creality draft and
+looks for a matching private FileAsset **owned by that draft's owner**.
+It accepts the exact stored filename or an inventory title without the
+extension if the metadata confirms it is a 3MF. No arbitrary filesystem
+searches or other users' files are allowed.
+
+If multiple candidate assets match, it fails closed. Select the exact
+FileAsset UUID instead:
+
+```bash
+sudo python3 scripts/diagnose_creality_staging.py \
+  --reference-asset-id UUID \
+  --output /tmp/creality-diagnostic-inventory-specific.json
+```
+
+Optionally combine either reference selector with `--job-id UUID` to select
+a particular failed draft and ensure its owner is used for access checking.
+The reference file is read through MakerVault's private storage backend,
+copied to the existing worker temporarily, used for **structural comparison
+only**, and deleted from diagnostic scratch. The original stored file remains
+unchanged. The report is safe-to-share structural metadata only.
+
+Important: a source STL renamed `.3mf`, a single exported model-only 3MF,
+or a sliced G-code artifact is not interchangeable with a genuine Creality
+project carrying `Metadata/project_settings.config`.
