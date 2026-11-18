@@ -2507,19 +2507,20 @@ def file_gcode_layers(request, asset_id):
             # bounded-batch fallback if the background worker is unavailable.
             if request.GET.get("warm") == "1" and request.GET.get("direct") != "1":
                 from django.core.cache import cache
-                from .tasks import warm_gcode_preview_task
-                lock_key = index_key + ":warming"
-                acquired = cache.add(lock_key, 1, timeout=300)
-                if acquired:
-                    try:
-                        warm_gcode_preview_task.delay(str(asset.pk))
-                    except Exception:
-                        cache.delete(lock_key)
-                        return _error("Preview preparation worker is unavailable.", status=503)
-                response = JsonResponse({"building": True}, status=202)
-                response["Cache-Control"] = "private, no-store"
-                response["Retry-After"] = "1"
-                return response
+                if not (high_fidelity and cache.get(index_key + ":unavailable")):
+                    from .tasks import warm_gcode_preview_task
+                    lock_key = index_key + ":warming"
+                    acquired = cache.add(lock_key, 1, timeout=300)
+                    if acquired:
+                        try:
+                            warm_gcode_preview_task.delay(str(asset.pk))
+                        except Exception:
+                            cache.delete(lock_key)
+                            return _error("Preview preparation worker is unavailable.", status=503)
+                    response = JsonResponse({"building": True}, status=202)
+                    response["Cache-Control"] = "private, no-store"
+                    response["Retry-After"] = "1"
+                    return response
         except Exception:
             # Redis/Celery backends raise their own exception subclasses.
             # Always fall back to a bounded direct parse instead of returning
