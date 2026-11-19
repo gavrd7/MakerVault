@@ -30,7 +30,7 @@ def build_creality_positioned_plate(source_models, *, bed_width, bed_depth, tool
             len(tool_ids) != len(source_models) or
             any(type(v) is not int or v not in (0, 1) for v in tool_ids) or
             (len(source_models) > 1 and set(tool_ids) != {0, 1}) or
-            (len(source_models) == 1 and colour_tool_maps is None)):
+            (len(source_models) == 1 and (colour_tool_maps is None or tool_ids[0] != 0))):
         raise SlicerProfileError("Creality positioned two-material plate has invalid assignments.")
     data = build_plate_3mf(
         list(source_models), bed_width=bed_width, bed_depth=bed_depth,
