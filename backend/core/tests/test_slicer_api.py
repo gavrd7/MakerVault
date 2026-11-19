@@ -843,7 +843,11 @@ class SliceJobApiTests(TestCase):
         self.assertEqual(self.client.get(self.url).json()["jobs"][0]["id"], str(job.pk))
         detail = self.client.get(f"{self.url}{job.pk}/")
         self.assertEqual(detail.status_code, 200)
-        self.assertFalse(detail.json()["execution_available"])
+        # Availability reflects the installed worker and engine approval,
+        # not whether creating a draft automatically submitted it.
+        self.assertIsInstance(detail.json()["execution_available"], bool)
+        self.assertEqual(SliceJob.objects.get(pk=job.pk).status, "draft")
+        self.assertIsNone(SliceJob.objects.get(pk=job.pk).output_asset_id)
 
     def test_stl_extension_is_taken_from_metadata_not_display_title(self):
         self.client.force_login(self.owner)
