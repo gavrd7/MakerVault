@@ -1137,6 +1137,16 @@ def _creality_latched_idle_evidence(connection, snapshot):
     previous_signature = previous.get("idle_candidate_signature")
     previous_since = previous.get("idle_candidate_since")
     now = timezone.now()
+    # Once the same inactive, latched printer response has been confirmed,
+    # keep it idle on subsequent independent polls. Previously the first
+    # confirmed poll discarded the candidate and the very next poll returned
+    # to "Preparing" with the same unchanged old job counters.
+    # Any changed signature or active state invalidates this confirmation.
+    if (previous.get("native_idle_confirmed") is True
+            and previous.get("native_idle_reason") == "latched_job_inactive_180s"
+            and previous.get("latched_idle_signature") == signature
+            and (getattr(connection, "last_snapshot", None) or {}).get("state") == "idle"):
+        return True, None, signature
     if previous_signature != signature or not isinstance(previous_since, str):
         return False, now.isoformat(), signature
     try:
@@ -1186,6 +1196,8 @@ def _reconcile_creality_processing(connection, snapshot):
     metadata = dict(result.get("source_metadata") or {})
     metadata.pop("idle_candidate_since", None)
     metadata.pop("idle_candidate_signature", None)
+    if confirmed:
+        metadata["latched_idle_signature"] = signature
     metadata.update({"native_idle_confirmed": True,
                      "native_idle_reason": "latched_job_inactive_180s" if confirmed else "cleared_job_counters",
                      "previous_job_filename": previous_filename,
