@@ -624,12 +624,18 @@ def _supervised_creality_test_preflight(connection, user, asset, payload):
     ).first()
     if job is None:
         raise GcodeSubmissionError("A completed owned Creality slice is required.", 409)
-    saved_objects = (job.settings or {}).get("plate_objects") or []
+    from .slicer_paint_assets import expand_painted_settings
     try:
+        # The stored job may contain a compact paint_asset_id rather than
+        # inline polygons. Rehydrate its owner-scoped mask without modifying
+        # the persisted job or trusting the browser's submitted mapping.
+        expanded_settings = expand_painted_settings(user, job.settings or {})
+        saved_objects = expanded_settings.get("plate_objects") or []
         objects = creality_cfs_audit_objects(
             saved_objects, printer_id=job.printer_id)
-    except CrealityCfsAuditError as exc:
+    except (CrealityCfsAuditError, ValueError, OSError) as exc:
         raise GcodeSubmissionError("Invalid saved CFS assignments: " + str(exc), 409) from exc
+    job.settings = expanded_settings  # in-memory only; audit real painted paths
     ids = [
         item.get("material_slot", {}).get("slot_id")
         for item in objects if isinstance(item, dict)
