@@ -875,6 +875,17 @@ class NativeGcodeAdapterTests(SimpleTestCase):
         self.assertEqual(mapped, [{
             "id": "T1A", "type": "PLA", "color": "#ffffff", "boxId": 1, "materialId": 2,
         }])
+        # Distinct sliced tools cannot both target the same physical bay,
+        # even when their materials and colours happen to agree.
+        two_requirements = [
+            {"tool_index": 0, "material": "PLA", "color_hex": "#ffffff"},
+            {"tool_index": 1, "material": "PLA", "color_hex": "#ffffff"},
+        ]
+        with self.assertRaisesRegex(GcodeSubmissionError, "same physical CFS bay"):
+            _mapped_cfs_entries(moon, two_requirements, [
+                {"tool_index": 0, "slot_label": "1C"},
+                {"tool_index": 1, "slot_label": "1C"},
+            ])
         req[0]["material"] = "PETG"
         with self.assertRaisesRegex(GcodeSubmissionError, "Material mismatch"):
             _mapped_cfs_entries(moon, req, chosen)
