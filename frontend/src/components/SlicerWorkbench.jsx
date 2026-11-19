@@ -510,7 +510,12 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
     ? nativePlate?.plate?.bed_types : null;
   const availablePlateOptions = plateOptions(form.engine, bedTypes);
   useEffect(() => {
-    if(form.engine!=="orcaslicer" || !bedTypes?.default ||
+    if (!bedTypes || availablePlateOptions.some(([key]) => key === form.plate)) return;
+    userChosePlateRef.current = false;
+    setForm(current => ({...current, plate: "default"}));
+  }, [form.engine, form.printer_profile_id, bedTypes, form.plate]);
+  useEffect(() => {
+    if(!["orcaslicer", "crealityprint"].includes(form.engine) || !bedTypes?.default ||
         userChosePlateRef.current) return;
     setForm(current => current.plate==="default" ?
       {...current,plate:bedTypes.default} : current);
@@ -1571,7 +1576,7 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
           <SlicerBedTypePicker value={form.plate} onChange={choosePlate}
             disabled={!canPrepare||busy} options={availablePlateOptions} compact/>
           {bedTypes?.default && <small>Printer's native default: {ORCA_PLATE_TYPES.find(([key])=>key===bedTypes.default)?.[1]||bedTypes.default}.</small>}
-          {form.engine==="orcaslicer" && bedTypes && !bedTypes.default && <small>
+          {["orcaslicer", "crealityprint"].includes(form.engine) && bedTypes && !bedTypes.default && <small>
             This printer profile does not declare a reliable default plate.
             Choose the actual fitted surface manually. These generic illustrations
             do not confirm physical compatibility; the selected filament must
