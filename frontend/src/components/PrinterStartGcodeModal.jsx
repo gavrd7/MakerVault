@@ -463,7 +463,7 @@ export default function PrinterStartGcodeModal({ printer, connection, canEdit, o
           Refresh K2 CFS readiness (read-only)
         </button>
       </div>}
-      <small>{requirements.length > 0 && mappingMode === "mapped"
+      <small>{requirements.length > 0 && mappingMode === "mapped" && cfsMappedAvailable
         ? "MakerVault will send a new native K2 filament mapping before print-start. Check the printer display."
         : cfsOriginalSupported
           ? "The original slicer assignments are retained." + (!cfsSlicedAvailable ? " Wait until the printer is ready before starting." : "")
