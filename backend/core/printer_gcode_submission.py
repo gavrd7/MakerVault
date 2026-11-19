@@ -1048,6 +1048,7 @@ def _receipt(row):
         "request_id": str(row.pk), "status": row.status,
         "action": row.action, "source": row.source,
         "remote_path": row.remote_path, "message": row.message,
+        "cfs_mapping_audit": row.cfs_mapping_audit if row.cfs_mapping_audit else None,
     }
 
 
@@ -1327,6 +1328,17 @@ def submit(connection, user, payload):
                     # Re-check the exact owned slice and its selected CFS bays
                     # after the final telemetry refresh and file transfer.
                     _supervised_creality_test_preflight(connection, user, asset, payload)
+                # Store the exact wire-level mapping before dispatch so an
+                # uncertain firmware response never erases the evidence.
+                row.cfs_mapping_audit = {
+                    "protocol": "creality_k2_colorMatch",
+                    "mapping": [dict(entry) for entry in mapping_entries],
+                    "verified_at": timezone.now().isoformat(),
+                    "file_sha256": asset.sha256 if asset else row.file_sha256,
+                    "supervised_test": bool(asset and (asset.metadata or {}).get("multi_material_test")),
+                    "start_dispatched": False,
+                }
+                row.save(update_fields=["cfs_mapping_audit", "updated_at"])
             progress("Sending the explicitly confirmed print-start command.")
             # Reconciliation only accepts an explicit successful dispatch. This
             # marker is persisted after dispatch and before polling starts.
