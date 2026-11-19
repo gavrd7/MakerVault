@@ -84,6 +84,34 @@ class CrealityPositionedPlateTests(SimpleTestCase):
         self.assertGreater(float(project["wipe_tower_y"][0]), 130)
         self.assertGreater(float(project["wipe_tower_x"][0]), 130)
 
+    def test_mismatched_creality_filament_profiles_name_missing_native_key(self):
+        """Never borrow missing filament settings across physical CFS tools."""
+        import json
+        from core.slicer_creality_project import build_creality_project_candidate
+        plate = build_creality_positioned_plate(
+            self._objects(), bed_width=260, bed_depth=260, tool_ids=[0, 1])
+        printer = json.dumps({"type": "machine", "name": "K2"}).encode()
+        process = json.dumps({"type": "process", "name": "Standard",
+                              "enable_prime_tower": "1"}).encode()
+        grey = json.dumps({"type": "filament", "name": "Grey",
+                           "nozzle_temperature": "210"}).encode()
+        yellow = json.dumps({"type": "filament", "name": "Yellow"}).encode()
+        with self.assertRaisesMessage(
+                SlicerProfileError,
+                "Creality filament presets disagree on native setting "
+                "nozzle_temperature (missing for T1)"):
+            build_creality_project_candidate(
+                plate, printer=printer, process=process,
+                filaments=[grey, yellow], bed_width=260, bed_depth=260,
+                prime_tower={"x": 45, "y": 84})
+        with self.assertRaisesMessage(
+                SlicerProfileError,
+                "Creality filament presets disagree on native setting "
+                "nozzle_temperature (missing for T0)"):
+            build_creality_project_candidate(
+                plate, printer=printer, process=process,
+                filaments=[yellow, grey], bed_width=260, bed_depth=260)
+
     def test_creality_native_project_preserves_explicit_tower_and_directional_flush(self):
         import json
         from core.slicer_creality_project import build_creality_project_candidate
