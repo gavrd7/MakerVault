@@ -124,6 +124,8 @@ def store_generated_gcode(job_id, raw: bytes):
                 job.owner, job.settings or {}, "seam_paint")
             fuzzy_test = settings_use_paint_field(
                 job.owner, job.settings or {}, "fuzzy_skin_paint")
+            colour_test = settings_use_paint_field(
+                job.owner, job.settings or {}, "colour_paint")
             combined_native_test = sum(bool(flag) for flag in
                 (variable_test, support_test, seam_test, fuzzy_test)) > 1
             stored = FileAsset(
@@ -169,8 +171,7 @@ def store_generated_gcode(job_id, raw: bytes):
                 if (job.engine == "crealityprint"
                     and (job.settings or {}).get("multi_material_test") is True
                     and len((job.settings or {}).get("plate_objects") or []) == 1
-                    and bool((((job.settings or {}).get("plate_objects") or [])[0]
-                              .get("colour_paint") or {}).get("regions")))
+                    and colour_test)
                 else "Multi-colour G-code test completed and tool extrusion audited. "
                 "Check printer readiness and explicitly confirm any supervised start."
                 if (job.engine == "crealityprint"
