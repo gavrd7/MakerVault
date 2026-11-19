@@ -5,7 +5,8 @@ from unittest.mock import patch
 from django.test import SimpleTestCase
 
 from core.slicer_native_overrides import apply_orca_job_overrides, ORCA_PLATES
-from core.slicer_plate_types import inspect_native_plates, effective_orca_plate, native_plate_key
+from core.slicer_plate_types import (inspect_native_plates, effective_orca_plate, native_plate_key,
+                                     inspect_engine_plates, apply_creality_plate)
 
 
 class NativeSlicerPlateAndColourTests(SimpleTestCase):
@@ -131,3 +132,46 @@ class NativeSlicerPlateAndColourTests(SimpleTestCase):
             apply_orca_job_overrides(b"{}", b"{}", "unknown", [])
         with self.assertRaises(ValueError):
             apply_orca_job_overrides(b"[]", b"{}", "cool", [])
+
+class CrealityNativePlateTests(SimpleTestCase):
+    def setUp(self):
+        self.machine = SimpleNamespace(
+            engine="crealityprint", engine_version="7.3.1", provenance=""
+        )
+        self.process = b'{"name":"0.20 Standard","curr_bed_type":"Cool Plate"}'
+        self.filament = b'{"cool_plate_temp":["35"],"textured_plate_temp":["60"],"hot_plate_temp":["70"]}'
+
+    def test_creality_731_native_options_respect_exclusions(self):
+        with patch("core.slicer_plate_types.resolved_native_profile",
+                   return_value=b'{"printer_model":"K1","not_support_bed_types":["Cool Plate"]}'):
+            options = inspect_engine_plates(self.machine)
+        self.assertNotIn("cool", options["supported"])
+        self.assertIn("textured_pei", options["supported"])
+
+    def test_creality_selected_plate_is_written_to_process_copy(self):
+        with patch("core.slicer_plate_types.resolved_native_profile",
+                   return_value=b'{"printer_model":"K1"}'):
+            process, filament = apply_creality_plate(
+                self.process, self.filament, "textured_pei", self.machine)
+        self.assertEqual(json.loads(process)["curr_bed_type"], "Textured PEI Plate")
+        self.assertEqual(filament, self.filament)
+        self.assertEqual(json.loads(self.process)["curr_bed_type"], "Cool Plate")
+
+    def test_creality_missing_bed_temperature_fails_closed(self):
+        with patch("core.slicer_plate_types.resolved_native_profile",
+                   return_value=b'{"printer_model":"K1"}'):
+            with self.assertRaisesRegex(ValueError, "does not declare a temperature"):
+                apply_creality_plate(self.process, b'{"cool_plate_temp":["35"]}',
+                                     "textured_pei", self.machine)
+
+    def test_creality_default_keeps_unchanged_unknown_native_selection(self):
+        process = b'{"name":"Standard"}'
+        result, _ = apply_creality_plate(process, self.filament, "default")
+        self.assertNotIn("curr_bed_type", json.loads(result))
+
+    def test_creality_explicit_restriction_rejects_override(self):
+        with patch("core.slicer_plate_types.resolved_native_profile",
+                   return_value=b'{"support_multi_bed_types":"0"}'):
+            with self.assertRaisesRegex(ValueError, "excluded"):
+                apply_creality_plate(self.process, self.filament,
+                                     "textured_pei", self.machine)
