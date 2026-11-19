@@ -181,18 +181,18 @@ def audit_painted_object_toolpaths(gcode):
         elif line == "M83":
             e_absolute = False
         elif line.startswith("G92 "):
-            match = re.search(r"(?:^|\\s)E\\s*([-+]?(?:\\d+(?:\\.\\d*)?|\\.\\d+))", line)
+            match = re.search(r"(?:^|\s)E\s*([-+]?(?:\d+(?:\.\d*)?|\.\d+))", line)
             if match:
                 last_e = float(match.group(1))
-        elif re.match(r"^G0?[01](?:\\s|[XYZE])", line):
-            match = re.search(r"(?:^|\\s)E\\s*([-+]?(?:\\d+(?:\\.\\d*)?|\\.\\d+))", line)
+        elif re.match(r"^G0?[01](?:\s|[XYZE])", line):
+            match = re.search(r"(?:^|\s)E\s*([-+]?(?:\d+(?:\.\d*)?|\.\d+))", line)
             if match:
                 amount = float(match.group(1))
                 delta = amount - last_e if e_absolute else amount
                 if e_absolute:
                     last_e = amount
                 if (in_object and active_tool in count and delta > 0.000001
-                        and re.search(r"[XY]\\s*[-+]?\\d", line)):
+                        and re.search(r"[XY]\s*[-+]?\d", line)):
                     count[active_tool] += 1
     if not saw_object or not all(count.values()):
         raise CrealityCfsAuditError(
