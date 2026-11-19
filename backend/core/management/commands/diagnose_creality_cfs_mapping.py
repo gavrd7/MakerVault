@@ -41,13 +41,16 @@ class Command(BaseCommand):
                 raise CommandError("Saved Creality job not found.") from None
         if job.engine != "crealityprint" or (job.settings or {}).get("multi_material_test") is not True:
             raise CommandError("Select a two-material Creality Print slice.")
+        from core.slicer_paint_assets import expand_painted_settings
         try:
+            expanded_settings = expand_painted_settings(job.owner, job.settings or {})
             objects = creality_cfs_audit_objects(
-                (job.settings or {}).get("plate_objects") or [],
+                expanded_settings.get("plate_objects") or [],
                 printer_id=job.printer_id,
             )
-        except CrealityCfsAuditError as exc:
+        except (CrealityCfsAuditError, ValueError, OSError) as exc:
             raise CommandError(str(exc)) from exc
+        job.settings = expanded_settings  # ephemeral painted mask for the G-code audit
         sources = list(PrinterConnection.objects.filter(
             printer_id=job.printer_id, adapter="creality_local", enabled=True
         ).order_by("-last_seen_at")[:2])
