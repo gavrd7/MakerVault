@@ -39,7 +39,8 @@ class SlicerCapabilityTests(SimpleTestCase):
         self.assertEqual(caps["colour_paint"]["status"], "test_only")
         for feature in ("support_paint", "seam_paint",
                         "fuzzy_skin_paint", "variable_layer_profile"):
-            self.assertEqual(caps[feature]["status"], "unverified")
+            self.assertEqual(caps[feature]["status"], "test_only")
+            self.assertIn("one", caps[feature]["reason"])
         self.assertEqual(
             native_capabilities("crealityprint", "8.0")["colour_paint"]["status"],
             "unverified",
@@ -64,7 +65,7 @@ class SlicerCapabilityTests(SimpleTestCase):
         self.assertEqual(caps["7.3.1.6378"]["colour_paint"]["status"], "test_only")
         self.assertEqual(caps["7.3.1"]["colour_paint"]["status"], "test_only")
         self.assertEqual(caps["default"]["colour_paint"]["status"], "unverified")
-        self.assertEqual(caps["7.3.1.6378"]["support_paint"]["status"], "unverified")
+        self.assertEqual(caps["7.3.1.6378"]["support_paint"]["status"], "test_only")
 
     def test_detects_used_edits_without_falsely_flagging_empty_metadata(self):
         plates = [
