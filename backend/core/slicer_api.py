@@ -1029,15 +1029,25 @@ def engines(request):
     installed = verified_installation()
     rows = engine_catalogue()
     for row in rows:
-        row["feature_capabilities"] = {
-            "default": native_capabilities(row["key"], ""),
-            **({"2.4.2": native_capabilities(row["key"], "2.4.2"),
-                "2.5.0": native_capabilities(row["key"], "2.5.0")}
-               if row["key"] == "orcaslicer" else {}),
-        }
-        if row["key"] in installed:
+        key = row["key"]
+        # Advertise capability records for the *actual installed version*.
+        # Previously this only populated Orca 2.4/2.5, so Creality 7.3
+        # painting remained greyed out even though native_capabilities()
+        # correctly returned test_only for that engine.
+        versions = {"2.4.2", "2.5.0"} if key == "orcaslicer" else set()
+        if key == "crealityprint":
+            versions.add("7.3.1")
+        if key in installed:
+            version = installed[key].get("version")
+            if isinstance(version, str) and version:
+                versions.add(version)
             row.update({"available": True, "enabled": True, "status": "validated",
-                        "installed_version": installed[row["key"]]["version"]})
+                        "installed_version": version})
+        row["feature_capabilities"] = {
+            "default": native_capabilities(key, ""),
+            **{version: native_capabilities(key, version)
+               for version in sorted(versions)},
+        }
     return JsonResponse({
         "engines": rows,
         "worker_configured": bool(installed),
