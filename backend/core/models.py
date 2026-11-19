@@ -1129,6 +1129,9 @@ class PrinterGcodeSubmission(TimeStampedModel):
     original_path = models.CharField(max_length=512, blank=True)
     remote_path = models.CharField(max_length=512, blank=True)
     file_sha256 = models.CharField(max_length=64, blank=True)
+    # Exact scoped CFS mapping authorised for this one-shot submission.
+    # Persist before dispatch; never overwrite when start outcome is unknown.
+    cfs_mapping_audit = models.JSONField(default=dict, blank=True)
     status = models.CharField(max_length=12, choices=STATES, default="pending")
     message = models.TextField(blank=True)
 
