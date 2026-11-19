@@ -60,6 +60,32 @@ class MultiMaterialPreflightTests(SimpleTestCase):
 
     @patch("core.slicer_multimaterial_execution.SlicerProfile.objects.filter")
     @patch("core.slicer_multimaterial_execution.PrinterConnection.objects.filter")
+    def test_creality_selected_colours_follow_logical_tool_not_cfs_bay_index(self):
+        from core.slicer_multimaterial_execution import creality_selected_tool_colours
+        source_models = [
+            ({"color": "#ffcc00", "material_slot": self.slots[0]}, b"stl"),
+            ({"color": "#777777", "material_slot": self.slots[1]}, b"stl"),
+        ]
+        # Bay 4 is logical T0 even though its physical slot index is 3.
+        self.assertEqual(
+            creality_selected_tool_colours(source_models, (0, 1)),
+            ("#FFCC00", "#777777"))
+        self.assertEqual(
+            creality_selected_tool_colours(source_models, (1, 0)),
+            ("#777777", "#FFCC00"))
+
+    def test_creality_conflicting_colours_for_one_tool_fail_closed(self):
+        from core.slicer_multimaterial_execution import creality_selected_tool_colours
+        source_models = [
+            ({"color": "#ffcc00"}, b"stl"),
+            ({"color": "#777777"}, b"stl"),
+            ({"color": "#123456"}, b"stl"),
+        ]
+        with self.assertRaisesRegex(MaterialRoutingError, "conflicting colours"):
+            creality_selected_tool_colours(source_models, (0, 1, 0))
+        with self.assertRaisesRegex(MaterialRoutingError, "two logical tools"):
+            creality_selected_tool_colours(source_models, (0, 0, 0))
+
     def test_creality_uses_model_slot_profiles_even_when_setup_default_differs(self, sources, profiles):
         sources.return_value = [self.connection]
         self.job.engine = "crealityprint"

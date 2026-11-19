@@ -212,6 +212,30 @@ def prepare_creality_multistl(job, source_models):
     }
 
 
+
+def creality_selected_tool_colours(source_models, tools):
+    """Resolve display colours by logical tool, never by physical bay number.
+
+    The caller must derive tools from verified slot_id bindings. This helper
+    only prepares offline native 3MF colour metadata, not printer commands.
+    """
+    if (len(source_models) != len(tools) or set(tools) != {0, 1}):
+        raise MaterialRoutingError("Creality colour palette needs two logical tools.")
+    tool_colours = {}
+    for (item, _raw), tool in zip(source_models, tools):
+        colour = item.get("color")
+        if (not isinstance(colour, str) or len(colour) != 7
+                or colour[0] != "#" or
+                any(ch not in "0123456789abcdefABCDEF" for ch in colour[1:])):
+            raise MaterialRoutingError("Creality model has no valid selected filament colour.")
+        colour = colour.upper()
+        previous = tool_colours.setdefault(tool, colour)
+        if previous != colour:
+            raise MaterialRoutingError(
+                "Models assigned to one Creality filament slot have conflicting colours.")
+    return tuple(tool_colours[i] for i in (0, 1))
+
+
 def prepare_creality_positioned_project(job, source_models, *, bed_width, bed_depth):
     """Retain MakerVault plate transforms and each assigned native material."""
     from .slicer_creality_project import build_creality_positioned_plate
@@ -238,20 +262,7 @@ def prepare_creality_positioned_project(job, source_models, *, bed_width, bed_de
     tools = tuple(bindings[item["material_slot"]["slot_id"]] for item, _ in source_models)
     if set(tools) != {0, 1}:
         raise MaterialRoutingError("Creality project requires two distinct native materials.")
-    # Preserve the display colour chosen for each physical slot in the
-    # logical tool palette; this never authorises firmware CFS slot routing.
-    tool_colours = {}
-    for (item, _raw), tool in zip(source_models, tools):
-        colour = item.get("color")
-        if (not isinstance(colour, str) or len(colour) != 7
-                or colour[0] != "#" or
-                any(ch not in "0123456789abcdefABCDEF" for ch in colour[1:])):
-            raise MaterialRoutingError("Creality model has no valid selected filament colour.")
-        colour = colour.upper()
-        previous = tool_colours.setdefault(tool, colour)
-        if previous != colour:
-            raise MaterialRoutingError(
-                "Models assigned to one Creality filament slot have conflicting colours.")
+    tool_colours = creality_selected_tool_colours(source_models, tools)
     project_geometry = build_creality_positioned_plate(
         source_models, bed_width=bed_width, bed_depth=bed_depth, tool_ids=tools)
     return {
