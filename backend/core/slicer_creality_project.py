@@ -386,6 +386,27 @@ def build_creality_project_candidate(plate, *, printer, process, filaments,
         for key, val in part.items():
             if key not in reserved:
                 project[key] = _native_value(val)
+    # Native machine presets store the bed polygon as a comma-separated
+    # string. The Creality desktop *project* stores each vertex separately.
+    # Parse only the previously verified origin-aligned rectangle, so the
+    # project cannot silently change printable dimensions or exclusion zones.
+    raw_area = project.get("printable_area")
+    if isinstance(raw_area, str):
+        import re
+        points = [point.strip() for point in raw_area.split(",")]
+        if len(points) == 5 and points[-1] == points[0]:
+            points.pop()
+        match = [re.fullmatch(r"([+-]?\\d+(?:\\.\\d+)?)x([+-]?\\d+(?:\\.\\d+)?)", point)
+                 for point in points]
+        if len(points) != 4 or any(m is None for m in match):
+            raise SlicerProfileError("Invalid native Creality project printable polygon.")
+        parsed = [(float(m.group(1)), float(m.group(2))) for m in match]
+        if (not all(math.isfinite(x) and math.isfinite(y) for x, y in parsed)
+                or set(parsed) != {(0.0, 0.0), (float(bed_width), 0.0),
+                                   (float(bed_width), float(bed_depth)),
+                                   (0.0, float(bed_depth))}):
+            raise SlicerProfileError("Native Creality project polygon does not match the verified bed.")
+        project["printable_area"] = points
     for key in _PER_TOOL_KEYS:
         present = [preset.get(key) for preset in filament_settings]
         if any(v is not None for v in present):
