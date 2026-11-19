@@ -785,8 +785,8 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
       const twoPlain = plateObjects.length === 2 &&
         plateObjects.every(item => !(item.colour_paint?.regions || []).length &&
           !Object.keys(item.colour_paint?.faces || {}).length);
-      if ((!singlePainted && !twoPlain) || flushSettings) {
-        setError("Creality CFS slicing supports two unpainted models or one colour-painted model, without custom flushing.");
+      if (!singlePainted && !twoPlain) {
+        setError("Creality CFS slicing supports two unpainted models or one colour-painted model.");
         return;
       }
     }
