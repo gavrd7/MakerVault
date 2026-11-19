@@ -117,6 +117,7 @@ def plan_native_multimaterial(job, *, settings=None):
     # from its owned, hash-checked source and complete parent lineage before
     # it reaches the isolated native tool palette.
     from .slicer_native_resolution import resolved_native_profile
+    from .slicer_variable_layers import orca_layer_config_ranges
     from .slicer_profiles import SlicerProfileError
     try:
         for profile in palette:
@@ -255,13 +256,16 @@ def prepare_creality_positioned_project(job, source_models, *, bed_width, bed_de
         colour = item.get("colour_paint") or {}
         has_colour = bool(colour.get("regions") or colour.get("faces"))
         painted.append(has_colour)
-        if (item.get("process_overrides") or
-                (item.get("support_paint") or {}).get("regions") or
-                (item.get("seam_paint") or {}).get("regions") or
-                (item.get("fuzzy_skin_paint") or {}).get("regions") or
-                (item.get("variable_layer_profile") or {}).get("bands")):
+        if item.get("process_overrides"):
             raise MaterialRoutingError(
-                "Creality colour test cannot combine unverified painting or overrides.")
+                "Creality colour test cannot combine unverified per-object overrides.")
+        if any((item.get(key) or {}).get("regions")
+               for key in ("support_paint", "seam_paint", "fuzzy_skin_paint")) or (
+               (item.get("variable_layer_profile") or {}).get("bands")):
+            if len(objects) != 1 or not has_colour:
+                raise MaterialRoutingError(
+                    "Creality experimental surface painting and variable layers "
+                    "currently require one colour-painted two-filament model.")
     if len(objects) == 1 and not painted[0]:
         raise MaterialRoutingError("One Creality CFS model must include colour-painted regions.")
     if len(objects) == 2 and any(painted):
@@ -307,4 +311,10 @@ def prepare_creality_positioned_project(job, source_models, *, bed_width, bed_de
         "topology": topology,
         "expected_tools": {0, 1},
         "native_colour_paint_test": len(objects) == 1,
+        "layer_ranges": (
+            orca_layer_config_ranges(source_models)
+            if len(objects) == 1 and
+            (objects[0].get("variable_layer_profile") or {}).get("bands")
+            else None
+        ),
     }
