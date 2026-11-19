@@ -11,6 +11,8 @@ import json
 import math
 import re
 import uuid
+import io
+import zipfile
 
 from django.core.management.base import BaseCommand, CommandError
 
@@ -28,6 +30,31 @@ from core.slicer_process_settings import apply_process_overrides
 from core.slicer_worker_client import run_remote_job
 
 CASES = ("baseline", "support", "seam", "fuzzy", "variable", "flushing")
+
+
+def _native_project_audit(package):
+    """Read only bounded non-sensitive effective settings from the generated 3MF."""
+    with zipfile.ZipFile(io.BytesIO(package)) as archive:
+        values = json.loads(archive.read("Metadata/project_settings.config"))
+    audit = {
+        "support_enabled": str(values.get("enable_support", "")),
+        "support_type": str(values.get("support_type", ""))[:48],
+        "fuzzy_skin": str(values.get("fuzzy_skin", ""))[:48],
+        "seam_position": str(values.get("seam_position", ""))[:48],
+    }
+    matrix = values.get("flush_volumes_matrix")
+    multiplier = values.get("flush_multiplier")
+    if isinstance(matrix, list) and len(matrix) == 16:
+        try:
+            raw_01, raw_10 = float(matrix[1]), float(matrix[4])
+            factor = float(multiplier) if multiplier is not None else 1.0
+            if all(math.isfinite(v) for v in (raw_01, raw_10, factor)):
+                audit["flush_t0_to_t1_mm3"] = round(raw_01 * factor, 3)
+                audit["flush_t1_to_t0_mm3"] = round(raw_10 * factor, 3)
+        except (ValueError, TypeError):
+            pass
+    audit["flush_volumes_changed"] = str(values.get("flush_volumes_changed", ""))
+    return audit
 
 
 def _patch_for_model(stl):
@@ -60,11 +87,15 @@ def _metrics(gcode):
     # Ignore headers, timestamps and metadata. Compare actual motion and
     # tool-selection commands, not the byte hash of entire G-code files.
     motion_digest = hashlib.sha256()
+    machine_digest = hashlib.sha256()
     for line in text.splitlines():
         command = line.partition(";")[0].strip()
         if re.match(r"^(?:G0?[0123]|T[01])(?:\s|$)", command, re.I):
             motion_digest.update(" ".join(command.upper().split()).encode("utf-8"))
             motion_digest.update(b"\n")
+        elif re.match(r"^M\d+(?:\s|$)", command, re.I):
+            machine_digest.update(" ".join(command.upper().split()).encode("utf-8"))
+            machine_digest.update(b"\n")
     zs = [float(x) for x in re.findall(r"(?im)^;Z:\s*([0-9]+(?:\.[0-9]+)?)\s*$", text)]
     layers = sorted(set(round(x, 4) for x in zs))
     steps = sorted(set(round(b-a, 3) for a,b in zip(layers,layers[1:])
@@ -72,6 +103,7 @@ def _metrics(gcode):
     return {
         "gcode_sha256": hashlib.sha256(gcode).hexdigest(),
         "motion_sha256": motion_digest.hexdigest(),
+        "machine_command_sha256": machine_digest.hexdigest(),
         "bytes": len(gcode),
         "g1_with_extrusion": len(re.findall(
             r"(?im)^\s*G0?1\s+[^\r\n]*\bE[-+]?\d", text)),
@@ -173,6 +205,12 @@ class Command(BaseCommand):
                 process, first = apply_creality_plate(
                     process_native, first, job.plate,
                     printer_profile=job.printer_profile)
+                if feature == "support":
+                    # Diagnostic-only manual supports test: no user preset mutation.
+                    native = json.loads(process)
+                    native["enable_support"] = "1"
+                    native["support_type"] = "normal(manual)"
+                    process = json.dumps(native, separators=(",", ":")).encode("utf-8")
                 flush = None
                 if feature == "flushing":
                     mapped = {tool: slot for slot, tool in prepared["tool_bindings"].items()}
@@ -193,6 +231,7 @@ class Command(BaseCommand):
                     flush_settings=flush, tool_bindings=prepared["tool_bindings"],
                     layer_ranges=prepared.get("layer_ranges"),
                     bed_width=width, bed_depth=depth)
+                audit = _native_project_audit(package)
                 data = run_remote_job(
                     uuid.uuid4(), "crealityprint", job.engine_version,
                     package, printer_native, prepared["filament_profiles"][0], process,
@@ -204,11 +243,13 @@ class Command(BaseCommand):
                 else:
                     metrics["toolpath_changed_from_baseline"] = (
                         metrics["motion_sha256"] != baseline["motion_sha256"])
+                    metrics["machine_commands_changed_from_baseline"] = (
+                        metrics["machine_command_sha256"] != baseline["machine_command_sha256"])
                     metrics["observation"] = (
                         "Changed G-code; specific painting effect still needs toolpath audit."
                         if metrics["toolpath_changed_from_baseline"]
                         else "No motion difference; native effect not demonstrated.")
-                results[feature] = {"status": "sliced", **metrics}
+                results[feature] = {"status": "sliced", "native_settings": audit, **metrics}
             except Exception as exc:
                 # Do not disclose private native profile contents, G-code, or
                 # server paths. Worker errors have bounded diagnostic labels.
