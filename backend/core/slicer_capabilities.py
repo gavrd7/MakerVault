@@ -35,6 +35,14 @@ def native_capabilities(engine, version):
                   "these annotations. Try the OrcaSlicer editor for draft "
                   "work; native slicing is still pending.")
     result = {key: {"status": state, "reason": reason} for key in FEATURES}
+    if engine == "crealityprint" and version.startswith("7.3."):
+        result["colour_paint"] = {
+            "status": "test_only",
+            "reason": ("Creality native 3MF colour-painted facets can be sliced "
+                       "on one object using two assigned CFS filaments. Confirm "
+                       "real toolpath colour boundaries before considering the "
+                       "physical test complete."),
+        }
     if engine == "orcaslicer" and version == "2.5.0":
         result["fuzzy_skin_paint"] = {
             "status": "test_only",
