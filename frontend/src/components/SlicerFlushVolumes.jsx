@@ -10,7 +10,7 @@ const Swatch = ({slot}) => <span className="slicerFlushSwatch" aria-hidden="true
   style={{backgroundColor:slotColour(slot)}}/>;
 
 /** UI remains advisory until native physical-slot-to-tool mapping has been verified. */
-export default function SlicerFlushVolumes({slots=[],value=null,onChange,disabled=false,processProfileId="",engine="orcaslicer"}) {
+export default function SlicerFlushVolumes({slots=[],value=null,onChange,disabled=false,processProfileId="",engine="orcaslicer",assignedSlotIds=[]}) {
   const [open,setOpen]=useState(false);
   const [native,setNative]=useState(null);
   const [error,setError]=useState("");
@@ -19,6 +19,9 @@ export default function SlicerFlushVolumes({slots=[],value=null,onChange,disable
   const [hasEditedMultiplier,setHasEditedMultiplier]=useState(false);
   const visible=slots.filter(slot=>slot?.id!=null).slice(0,16);
   const creality=engine==="crealityprint";
+  const assignedIds=new Set(assignedSlotIds.map(String));
+  const editableTransition=(from,to)=>!creality ||
+    (assignedIds.has(String(from.id)) && assignedIds.has(String(to.id)));
   const data=value||empty();
   useEffect(()=>{
     if(!open)return undefined;
@@ -108,7 +111,7 @@ export default function SlicerFlushVolumes({slots=[],value=null,onChange,disable
                 ?"Default":"Custom"}</small>
             </div>
           </div>
-          {creality && <p className="projectUploadHint">Creality Print: directional values are saved to the native two-tool project, not applied directly to the printer. Only transitions between filaments assigned to this slice are supported. Verify the sliced purge paths before printing.</p>}
+          {creality && <p className="projectUploadHint">Creality Print: directional values are saved to the native two-tool project, not applied directly to the printer. Only transitions between filaments assigned to this slice can be edited; other loaded slots remain visible but locked. Verify the sliced purge paths before printing.</p>}
           <h4>Directional flushing · mm³</h4>
           <div className="slicerFlushEstimateBar">
             <button type="button" disabled={!recalcRequired}
@@ -128,7 +131,7 @@ export default function SlicerFlushVolumes({slots=[],value=null,onChange,disable
                 {visible.map(to=><td key={to.id}>
                   {String(from.id)===String(to.id) ? <span aria-label="Same filament">—</span> :
                   <><input className="slicerFlushCell" type="number" min="0" max="20000" step="1"
-                    disabled={disabled} value={overrideFor(from,to)??""}
+                    disabled={disabled || !editableTransition(from,to)} value={overrideFor(from,to)??""}
                     placeholder={(()=>{
                       const estimate=estimateSlotFlush(from,to,{allowMixed:true});
                       const scaled=multiplyFlushEstimate(estimate,displayedMultiplier);
