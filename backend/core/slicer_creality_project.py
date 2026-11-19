@@ -563,8 +563,14 @@ def build_creality_project_candidate(plate, *, printer, process, filaments,
         raise SlicerProfileError("Invalid Creality plate package.") from exc
     required = {"3D/3dmodel.model", "Metadata/model_settings.config",
                 "_rels/.rels", "[Content_Types].xml"}
-    if set(entries) != required:
+    optional = {"Metadata/layer_config_ranges.xml"} if layer_ranges is not None else set()
+    if not required.issubset(entries) or set(entries) - required - optional:
         raise SlicerProfileError("Creality plate package has unexpected files.")
+    if layer_ranges is None and "Metadata/layer_config_ranges.xml" in entries:
+        # Do not quietly strip an edited layer range from a native project.
+        raise SlicerProfileError("Creality layer ranges require explicit validation.")
+    if layer_ranges is not None and entries.get("Metadata/layer_config_ranges.xml") != layer_ranges:
+        raise SlicerProfileError("Creality native layer range metadata changed during project preparation.")
     # The 3MF model's Application metadata is what the native importer
     # actually reads into its Semver file_version. An AppVersion value only
     # in Metadata/creality.config leaves it at 0.0.0 and causes CLI -24
