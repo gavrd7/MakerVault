@@ -84,6 +84,41 @@ class CrealityPositionedPlateTests(SimpleTestCase):
         self.assertGreater(float(project["wipe_tower_y"][0]), 130)
         self.assertGreater(float(project["wipe_tower_x"][0]), 130)
 
+    def test_optional_native_z_shrink_default_does_not_override_other_filament(self):
+        """Native Creality Print default is 100%; keep explicit compensation."""
+        import json
+        from core.slicer_creality_project import build_creality_project_candidate
+        plate = build_creality_positioned_plate(
+            self._objects(), bed_width=260, bed_depth=260, tool_ids=[0, 1])
+        machine = json.dumps({"type": "machine", "name": "K2"}).encode()
+        process = json.dumps({"type": "process", "name": "Standard",
+                              "enable_prime_tower": "1"}).encode()
+        def filament(name, shrink=None):
+            values = {"type": "filament", "name": name,
+                      "nozzle_temperature": "220"}
+            if shrink is not None:
+                values["filament_shrinkage_compensation_z"] = shrink
+            return json.dumps(values).encode()
+        for first, second, expected in [
+            (filament("Generic PLA", "100%"), filament("CR-PLA"),
+             ["100%", "100%", "100%", "100%"]),
+            (filament("Generic PLA", "98%"), filament("CR-PLA"),
+             ["98%", "100%", "98%", "100%"]),
+            (filament("CR-PLA"), filament("Generic PLA", "99%"),
+             ["100%", "99%", "100%", "99%"]),
+        ]:
+            with self.subTest(expected=expected):
+                result = build_creality_project_candidate(
+                    plate, printer=machine, process=process,
+                    filaments=[first, second], bed_width=260, bed_depth=260,
+                    prime_tower={"x": 45, "y": 84})
+                with zipfile.ZipFile(io.BytesIO(result)) as archive:
+                    config = json.loads(archive.read("Metadata/project_settings.config"))
+                self.assertEqual(config["filament_shrinkage_compensation_z"],
+                                 expected)
+                self.assertEqual(config["wipe_tower_x"], ["45"])
+                self.assertEqual(config["wipe_tower_y"], ["84"])
+
     def test_mismatched_creality_filament_profiles_name_missing_native_key(self):
         """Never borrow missing filament settings across physical CFS tools."""
         import json
