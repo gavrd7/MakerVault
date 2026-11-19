@@ -981,7 +981,7 @@ export default function SlicerPrepareWorkspace({
     nativeEditReason ||
     (!activePlateReady ? "Select a plate containing models to slice." : "") ||
     (conflictsBlockSlice ? "Resolve build-plate conflicts or wait for models to finish loading before slicing." : "") ||
-    (flushSettings != null && !multiMaterialReadyForExport ? "Custom flushing requires at least two assigned filaments with matching native profiles. Configure the loaded slot profiles before slicing." : "") ||
+    (flushSettings != null && !(multiMaterialReadyForExport || crealityTwoStlReady || crealityPaintReady) ? "Custom flushing requires at least two assigned filaments with matching native profiles. Configure the loaded slot profiles before slicing." : "") ||
     (materialRoutingPending ? (missingToolProfile
       ? "An assigned model uses a CFS slot without a matching native filament preset. Set its Profile before slicing."
       : "This plate has multiple assigned materials but its selected engine or model edits are not supported for native slicing.")
