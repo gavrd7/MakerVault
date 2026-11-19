@@ -13,6 +13,7 @@ import re
 import uuid
 import io
 import zipfile
+from xml.etree import ElementTree as ET
 
 from django.core.management.base import BaseCommand, CommandError
 
@@ -30,6 +31,67 @@ from core.slicer_process_settings import apply_process_overrides
 from core.slicer_worker_client import run_remote_job
 
 CASES = ("baseline", "support", "seam", "fuzzy", "variable", "flushing")
+_SEMANTIC_ATTRS = {
+    "support": "paint_supports",
+    "seam": "paint_seam",
+    "fuzzy": "paint_fuzzy_skin",
+}
+_CORE_NS = "{http://schemas.microsoft.com/3dmanufacturing/core/2015/02}"
+
+
+def _geometry_control_project(project, feature):
+    """Keep *identical* remeshed triangles, colours and native presets.
+
+    Remove only the semantic paint attribute being measured. A native slice
+    of this control is the appropriate comparator, not the original mesh
+    whose triangulation changes when a brush patch is applied.
+    """
+    attribute = _SEMANTIC_ATTRS[feature]
+    result = io.BytesIO()
+    removed = 0
+    with zipfile.ZipFile(io.BytesIO(project)) as source, zipfile.ZipFile(
+            result, "w", compression=zipfile.ZIP_DEFLATED,
+            allowZip64=False) as output:
+        for info in source.infolist():
+            body = source.read(info.filename)
+            if info.filename == "3D/3dmodel.model":
+                root = ET.fromstring(body)
+                for triangle in root.iter(_CORE_NS + "triangle"):
+                    if attribute in triangle.attrib:
+                        triangle.attrib.pop(attribute)
+                        removed += 1
+                body = ET.tostring(root, encoding="utf-8", xml_declaration=True)
+            output.writestr(info.filename, body)
+    if not removed:
+        raise ValueError("Diagnostic patch produced no native painted facets.")
+    return result.getvalue(), removed
+
+
+def _layer_band_audit(gcode, lower, upper, *, target=0.12):
+    """Count actual consecutive layer steps within a requested Z interval."""
+    if not isinstance(gcode, bytes):
+        raise ValueError("Invalid native toolpath")
+    zs = [float(x) for x in re.findall(
+        rb"(?im)^;Z:\s*([0-9]+(?:\.[0-9]+)?)\s*$", gcode)]
+    unique = sorted(set(round(z, 4) for z in zs))
+    inside = []
+    outside = []
+    for a, b in zip(unique, unique[1:]):
+        step = round(b - a, 3)
+        if not 0.049 <= step <= 0.501:
+            continue
+        # Only count a step as inside when both layer boundaries are inside.
+        (inside if lower <= a and b <= upper else outside).append(step)
+    return {
+        "requested_band_mm": [lower, upper],
+        "requested_step_mm": target,
+        "interior_steps": len(inside),
+        "interior_target_steps": sum(abs(step - target) <= 0.002 for step in inside),
+        "interior_observed_steps_mm": sorted(set(inside))[:24],
+        "outside_observed_steps_mm": sorted(set(outside))[:24],
+        "band_target_observed": any(abs(step - target) <= 0.002 for step in inside),
+    }
+
 
 
 def _native_project_audit(package):
@@ -122,6 +184,7 @@ class Command(BaseCommand):
     def add_arguments(self, parser):
         parser.add_argument("--job-id", help="Existing successful one-model Creality CFS painted slice UUID")
         parser.add_argument("--only", choices=CASES[1:], help="Only one feature plus baseline")
+        parser.add_argument("--deep", action="store_true", help="Also slice identical-geometry unpainted controls for semantic facets")
 
     def handle(self, *args, **options):
         jobs = SliceJob.objects.select_related(
@@ -238,6 +301,28 @@ class Command(BaseCommand):
                     model_format="3mf", filament_profiles=prepared["filament_profiles"],
                     creality_native_project=True, timeout_seconds=900)
                 metrics = _metrics(data)
+                if feature == "variable":
+                    metrics["layer_band_audit"] = _layer_band_audit(data, lo, hi)
+                if feature in _SEMANTIC_ATTRS and options["deep"]:
+                    # Same STL triangulation, process and colour annotations;
+                    # the only removed input is this semantic facet channel.
+                    control, painted_facets = _geometry_control_project(package, feature)
+                    control_data = run_remote_job(
+                        uuid.uuid4(), "crealityprint", job.engine_version,
+                        control, printer_native, prepared["filament_profiles"][0], process,
+                        model_format="3mf", filament_profiles=prepared["filament_profiles"],
+                        creality_native_project=True, timeout_seconds=900)
+                    control_metrics = _metrics(control_data)
+                    metrics["geometry_control"] = {
+                        "removed_semantic_facets": painted_facets,
+                        "motion_changed_from_same_geometry": (
+                            metrics["motion_sha256"] != control_metrics["motion_sha256"]),
+                        "machine_commands_changed_from_same_geometry": (
+                            metrics["machine_command_sha256"] != control_metrics["machine_command_sha256"]),
+                        "extrusion_command_difference": (
+                            metrics["g1_with_extrusion"] - control_metrics["g1_with_extrusion"]),
+                        "note": "Same triangulation, colours and process; only semantic paint attribute removed.",
+                    }
                 if feature == "baseline":
                     baseline = metrics
                 else:
@@ -245,10 +330,16 @@ class Command(BaseCommand):
                         metrics["motion_sha256"] != baseline["motion_sha256"])
                     metrics["machine_commands_changed_from_baseline"] = (
                         metrics["machine_command_sha256"] != baseline["machine_command_sha256"])
-                    metrics["observation"] = (
-                        "Changed G-code; specific painting effect still needs toolpath audit."
-                        if metrics["toolpath_changed_from_baseline"]
-                        else "No motion difference; native effect not demonstrated.")
+                    if feature in _SEMANTIC_ATTRS and "geometry_control" in metrics:
+                        metrics["observation"] = (
+                            "Semantic attribute changes motion relative to identical remeshed geometry; spatial effect still needs review."
+                            if metrics["geometry_control"]["motion_changed_from_same_geometry"]
+                            else "No semantic facet motion effect observed against identical geometry control.")
+                    else:
+                        metrics["observation"] = (
+                            "Changed G-code; specific painting effect still needs toolpath audit."
+                            if metrics["toolpath_changed_from_baseline"]
+                            else "No motion difference; native effect not demonstrated.")
                 results[feature] = {"status": "sliced", "native_settings": audit, **metrics}
             except Exception as exc:
                 # Do not disclose private native profile contents, G-code, or
