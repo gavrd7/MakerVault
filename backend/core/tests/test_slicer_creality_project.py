@@ -244,3 +244,43 @@ class CrealityPositionedPlateTests(SimpleTestCase):
         with self.assertRaises(SlicerProfileError):
             build_creality_positioned_plate(
                 self._objects(), bed_width=260, bed_depth=260, tool_ids=[0, 0])
+
+    def test_selected_colours_override_neutral_profile_colours_without_changing_nozzle_map(self):
+        import json
+        from core.slicer_creality_project import build_creality_project_candidate
+        plate = build_creality_positioned_plate(
+            self._objects(), bed_width=260, bed_depth=260, tool_ids=[0, 1])
+        printer = json.dumps({"type": "machine", "name": "K2",
+                              "nozzle_diameter": ["0.4"]}).encode()
+        process = json.dumps({"type": "process", "name": "Standard",
+                              "enable_prime_tower": "0"}).encode()
+        filaments = [json.dumps({"type": "filament", "name": name,
+                                  "filament_type": ["PLA-Silk"],
+                                  "filament_colour": ["#FFFFFF"]}).encode()
+                     for name in ("Grey", "Yellow")]
+        result = build_creality_project_candidate(
+            plate, printer=printer, process=process, filaments=filaments,
+            tool_colours=("#777777", "#ffcc00"))
+        with zipfile.ZipFile(io.BytesIO(result)) as archive:
+            settings = json.loads(archive.read("Metadata/project_settings.config"))
+        self.assertEqual(settings["filament_colour"],
+                         ["#777777", "#FFCC00", "#777777", "#FFCC00"])
+        self.assertEqual(settings["filament_map"], ["1", "1", "1", "1"])
+        self.assertEqual(settings["filament_type"], ["PLA-Silk"] * 4)
+
+    def test_invalid_selected_colours_fail_closed(self):
+        import json
+        from core.slicer_creality_project import build_creality_project_candidate
+        plate = build_creality_positioned_plate(
+            self._objects(), bed_width=260, bed_depth=260, tool_ids=[0, 1])
+        machine = json.dumps({"type": "machine", "nozzle_diameter": ["0.4"]}).encode()
+        process = json.dumps({"type": "process", "enable_prime_tower": "0"}).encode()
+        filaments = [json.dumps({"type": "filament", "name": name}).encode()
+                     for name in ("A", "B")]
+        for colours in (("#FFFFFF",), ("red", "#FFFFFF"),
+                        ("#FFFFFF", "#GGGGGG"), ("#FFFFFF", None)):
+            with self.subTest(colours=colours):
+                with self.assertRaises(SlicerProfileError):
+                    build_creality_project_candidate(
+                        plate, printer=machine, process=process,
+                        filaments=filaments, tool_colours=colours)

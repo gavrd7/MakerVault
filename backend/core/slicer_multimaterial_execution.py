@@ -238,10 +238,25 @@ def prepare_creality_positioned_project(job, source_models, *, bed_width, bed_de
     tools = tuple(bindings[item["material_slot"]["slot_id"]] for item, _ in source_models)
     if set(tools) != {0, 1}:
         raise MaterialRoutingError("Creality project requires two distinct native materials.")
+    # Preserve the display colour chosen for each physical slot in the
+    # logical tool palette; this never authorises firmware CFS slot routing.
+    tool_colours = {}
+    for (item, _raw), tool in zip(source_models, tools):
+        colour = item.get("color")
+        if (not isinstance(colour, str) or len(colour) != 7
+                or colour[0] != "#" or
+                any(ch not in "0123456789abcdefABCDEF" for ch in colour[1:])):
+            raise MaterialRoutingError("Creality model has no valid selected filament colour.")
+        colour = colour.upper()
+        previous = tool_colours.setdefault(tool, colour)
+        if previous != colour:
+            raise MaterialRoutingError(
+                "Models assigned to one Creality filament slot have conflicting colours.")
     project_geometry = build_creality_positioned_plate(
         source_models, bed_width=bed_width, bed_depth=bed_depth, tool_ids=tools)
     return {
         "project_geometry": project_geometry,
+        "tool_colours": tuple(tool_colours[i] for i in (0, 1)),
         "filament_profiles": tuple(resolved_native_profile(p) for p in profiles),
         "tool_bindings": bindings,
         "topology": topology,

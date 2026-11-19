@@ -813,6 +813,7 @@ def process_queued_job(job_id):
                 material_result["project_geometry"],
                 printer=profiles[0], process=profiles[2],
                 filaments=material_result["filament_profiles"],
+                tool_colours=material_result["tool_colours"],
                 version=job.engine_version,
                 prime_tower=(job.settings or {}).get("prime_tower"),
                 bed_width=width, bed_depth=depth)

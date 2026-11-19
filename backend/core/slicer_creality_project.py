@@ -396,6 +396,7 @@ def _native_palette_settings(project, filaments, *, palette_slots=4):
 
 def build_creality_project_candidate(plate, *, printer, process, filaments,
                                     version="7.3.1", prime_tower=None,
+                                    tool_colours=None,
                                     bed_width=260, bed_depth=260):
     """Create a self-contained *candidate* Creality project 3MF.
 
@@ -450,6 +451,17 @@ def build_creality_project_candidate(plate, *, printer, process, filaments,
     project["filament_settings_id"] = [
         str(preset.get("name") or "MakerVault filament %d" % (i + 1))
         for i, preset in enumerate(filament_settings)]
+    # Selected slot colours override neutral preset defaults. These are
+    # material display colours, not evidence of a physical CFS route.
+    if tool_colours is not None:
+        if (not isinstance(tool_colours, (list, tuple))
+                or len(tool_colours) != 2
+                or any(not isinstance(colour, str) or len(colour) != 7
+                       or colour[0] != "#" or
+                       any(c not in "0123456789abcdefABCDEF" for c in colour[1:])
+                       for colour in tool_colours)):
+            raise SlicerProfileError("Invalid Creality selected filament colour palette.")
+        project["filament_colour"] = [colour.upper() for colour in tool_colours]
     _native_palette_settings(project, filament_settings)
     # Creality 7.3.1 uses one-based physical nozzle routing. A K2/CFS
     # changes filament through a single physical nozzle; it does not have
