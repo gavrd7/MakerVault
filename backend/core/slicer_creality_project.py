@@ -403,9 +403,46 @@ def _native_palette_settings(project, filaments, *, palette_slots=4):
     return palette_slots
 
 
+def _apply_creality_flush_settings(project, settings, bindings):
+    """Map explicit physical slot overrides to Creality's native T0/T1 matrix.
+
+    The native project has four slots, but only two assigned tools. Keep the
+    unassigned native entries unchanged. Never map on swatch colour/order.
+    """
+    from .slicer_flush_settings import validate_flush_settings
+    from .slicer_material_routing import MaterialRoutingError
+
+    try:
+        approved = validate_flush_settings(settings)
+    except MaterialRoutingError as exc:
+        raise SlicerProfileError(str(exc)) from exc
+    if approved is None:
+        return
+    if not isinstance(bindings, dict) or set(bindings.values()) != {0, 1} or len(bindings) != 2:
+        raise SlicerProfileError("Creality flushing requires exactly two verified filament-to-tool bindings.")
+    if approved["multiplier"] is not None:
+        # Unlike Orca, the native K2 project multiplier representation has
+        # not been confirmed against this installed Creality binary.
+        raise SlicerProfileError("Custom Creality flush multiplier is not yet validated. Edit directional volumes instead.")
+    if approved["prime_tower"] != "native":
+        project["enable_prime_tower"] = "1" if approved["prime_tower"] == "enabled" else "0"
+    matrix = project.get("flush_volumes_matrix")
+    if not isinstance(matrix, list) or len(matrix) != 16:
+        raise SlicerProfileError("Creality native flush matrix is unavailable.")
+    result = list(matrix)
+    for change in approved["transitions"]:
+        source = bindings.get(change["from_slot_id"])
+        dest = bindings.get(change["to_slot_id"])
+        if source is None or dest is None or source == dest:
+            raise SlicerProfileError("Creality flushing references an unmapped physical filament slot.")
+        result[4 * source + dest] = str(change["volume_mm3"])
+    project["flush_volumes_matrix"] = result
+
+
 def build_creality_project_candidate(plate, *, printer, process, filaments,
                                     version="7.3.1", prime_tower=None,
-                                    tool_colours=None,
+                                    tool_colours=None, flush_settings=None,
+                                    tool_bindings=None,
                                     bed_width=260, bed_depth=260):
     """Create a self-contained *candidate* Creality project 3MF.
 
@@ -472,6 +509,8 @@ def build_creality_project_candidate(plate, *, printer, process, filaments,
             raise SlicerProfileError("Invalid Creality selected filament colour palette.")
         project["filament_colour"] = [colour.upper() for colour in tool_colours]
     _native_palette_settings(project, filament_settings)
+    if flush_settings is not None:
+        _apply_creality_flush_settings(project, flush_settings, tool_bindings)
     # Creality 7.3.1 uses one-based physical nozzle routing. A K2/CFS
     # changes filament through a single physical nozzle; it does not have
     # two physical nozzle_diameter entries. Native upstream tests explicitly
