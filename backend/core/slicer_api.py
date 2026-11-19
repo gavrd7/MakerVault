@@ -195,7 +195,7 @@ def _preset(data, key, max_length=200):
 
 def _validate_project_name(name):
     if (not isinstance(name, str) or not 1 <= len(name.strip()) <= 80
-            or any(ord(char) < 32 or ord(char) == 127 for char in name)):
+            or any(ord(char) < 32 or ord(char) == 127 or char in '\\\\/:*?"<>|' for char in name)):
         raise ValueError("Project name must be 1–80 printable characters.")
     return name.strip()
 
