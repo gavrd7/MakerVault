@@ -561,6 +561,7 @@ def _mapped_cfs_entries(connection, requirements, requested):
         selections[index] = item["slot_label"]
     slots = {slot["label"]: slot for slot in context["slots"]}
     mapping = []
+    used_bays = set()
     for requirement in requirements:
         index = int(requirement["tool_index"])
         selected = slots.get(selections.get(index))
@@ -573,6 +574,11 @@ def _mapped_cfs_entries(connection, requirements, requested):
         colour = str(selected.get("color_hex") or "")
         if not re.fullmatch(r"#[0-9a-fA-F]{6}", colour):
             raise GcodeSubmissionError("Selected CFS slot colour is unreadable.", 409)
+        bay = (selected["box_id"], selected["slot_id"])
+        if bay in used_bays:
+            raise GcodeSubmissionError(
+                "Multiple logical tools cannot target the same physical CFS bay.", 409)
+        used_bays.add(bay)
         if not 0 <= index <= 3:
             raise GcodeSubmissionError("This K2 mapping supports slicer tools 0–3 only.", 409)
         mapping.append({"id": "T1" + "ABCD"[index], "type": actual, "color": colour,
