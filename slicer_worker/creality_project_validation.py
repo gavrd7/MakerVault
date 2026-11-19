@@ -14,6 +14,7 @@ from .three_mf_validation import validate_worker_3mf
 
 PROJECT_SETTINGS = "Metadata/project_settings.config"
 CREALITY_META = "Metadata/creality.config"
+LAYER_RANGES = "Metadata/layer_config_ranges.xml"
 CORE_MEMBERS = {"3D/3dmodel.model", "Metadata/model_settings.config",
                 "[Content_Types].xml", "_rels/.rels"}
 BLOCKED = {"post_process", "post_process_script", "post_process_scripts",
@@ -27,10 +28,12 @@ def validate_creality_project(data, *, native_tool_count=2):
     try:
         with zipfile.ZipFile(io.BytesIO(data)) as archive:
             parts = archive.infolist()
-            if (len(parts) != 6 or set(p.filename for p in parts) !=
-                    CORE_MEMBERS | {PROJECT_SETTINGS, CREALITY_META} or
+            if (len(parts) not in (6, 7) or set(p.filename for p in parts) not in (
+                    CORE_MEMBERS | {PROJECT_SETTINGS, CREALITY_META},
+                    CORE_MEMBERS | {PROJECT_SETTINGS, CREALITY_META, LAYER_RANGES}) or
                     any(p.is_dir() or p.file_size <= 0 or
-                        p.file_size > (4 * 1024 * 1024 if p.filename in (PROJECT_SETTINGS, CREALITY_META)
+                        p.file_size > (32768 if p.filename == LAYER_RANGES else
+                                       4 * 1024 * 1024 if p.filename in (PROJECT_SETTINGS, CREALITY_META)
                                        else 80 * 1024 * 1024) for p in parts) or
                     sum(p.file_size for p in parts) > 96 * 1024 * 1024):
                 raise WorkerError("Creality native project contains unsupported content.")
@@ -140,11 +143,15 @@ def validate_creality_project(data, *, native_tool_count=2):
             core = io.BytesIO()
             with zipfile.ZipFile(core, "w", compression=zipfile.ZIP_DEFLATED,
                                  allowZip64=False) as trimmed:
-                for name in sorted(CORE_MEMBERS):
+                for name in sorted(CORE_MEMBERS | ({LAYER_RANGES} if LAYER_RANGES in archive.namelist() else set())):
                     trimmed.writestr(name, ET.tostring(clean, encoding="utf-8")
                                      if name == "Metadata/model_settings.config"
                                      else archive.read(name))
-        validate_worker_3mf(core.getvalue(), native_tool_count=native_tool_count)
+        validate_worker_3mf(
+            core.getvalue(), native_tool_count=native_tool_count,
+            allow_creality_combined_paint=True,
+            allow_creality_layer_ranges=LAYER_RANGES in archive.namelist(),
+        )
     except WorkerError:
         raise
     except (ValueError, KeyError, TypeError, OSError, zipfile.BadZipFile,
