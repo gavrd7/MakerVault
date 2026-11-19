@@ -84,6 +84,76 @@ class CrealityPositionedPlateTests(SimpleTestCase):
         self.assertGreater(float(project["wipe_tower_y"][0]), 130)
         self.assertGreater(float(project["wipe_tower_x"][0]), 130)
 
+    def test_one_painted_model_retains_native_facets_in_final_creality_project(self):
+        """Creality must receive one object and real colour facet metadata."""
+        import json
+        from core.slicer_creality_project import (
+            build_creality_project_candidate, build_creality_positioned_plate,
+        )
+        from core.tests.test_slicer_colour_native_3mf import fixture_paint, PRINTER_ID
+        raw, paint = fixture_paint()
+        paint["palette"][2].update({
+            "printer_id": PRINTER_ID,
+            "slot_id": "bay-2",
+            "slot_index": 1,
+            "color": "#FADD4D",
+        })
+        item = {
+            "x_mm": 0, "y_mm": 0, "rotation_deg": 0,
+            "scale_percent": 100, "color": "#111111",
+            "material_slot": {
+                "printer_id": PRINTER_ID,
+                "slot_id": "bay-1", "slot_index": 0,
+            },
+            "colour_paint": paint,
+        }
+        geometry = build_creality_positioned_plate(
+            [(item, raw)], bed_width=260, bed_depth=260,
+            tool_ids=[0], colour_tool_maps=({2: 1},),
+        )
+        with zipfile.ZipFile(io.BytesIO(geometry)) as package:
+            root = ET.fromstring(package.read("3D/3dmodel.model"))
+            settings = ET.fromstring(package.read("Metadata/model_settings.config"))
+        triangles = root.findall(".//{%s}triangle" % NS)
+        self.assertTrue(any(face.attrib.get("paint_color") == "8" for face in triangles))
+        self.assertTrue(any("paint_color" not in face.attrib for face in triangles))
+        self.assertEqual(len(settings.findall("object")), 1)
+        printer = json.dumps({
+            "type": "machine", "name": "Creality K2 0.4 nozzle",
+            "printable_height": "260",
+            "printable_area": ["0x0", "260x0", "260x260", "0x260"],
+        }).encode()
+        process = json.dumps({
+            "type": "process", "name": "Standard",
+            "enable_prime_tower": "1", "prime_tower_width": "40",
+        }).encode()
+        filament = lambda name: json.dumps({
+            "type": "filament", "name": name, "filament_type": "PLA",
+            "nozzle_temperature": "210",
+        }).encode()
+        project = build_creality_project_candidate(
+            geometry, printer=printer, process=process,
+            filaments=[filament("grey"), filament("yellow")],
+            tool_colours=("#111111", "#FADD4D"),
+            bed_width=260, bed_depth=260,
+        )
+        with zipfile.ZipFile(io.BytesIO(project)) as package:
+            final = ET.fromstring(package.read("3D/3dmodel.model"))
+            config = ET.fromstring(package.read("Metadata/model_settings.config"))
+        self.assertEqual(len(config.findall("object")), 1)
+        self.assertTrue(any(
+            face.attrib.get("paint_color") == "8"
+            for face in final.findall(".//{%s}triangle" % NS)
+        ))
+
+    def test_single_creality_model_without_paint_cannot_invent_second_tool(self):
+        from core.slicer_creality_project import build_creality_positioned_plate
+        with self.assertRaises(SlicerProfileError):
+            build_creality_positioned_plate(
+                [(self._objects()[0][0], fixture_stl())],
+                bed_width=260, bed_depth=260, tool_ids=[0],
+            )
+
     def test_filament_option_merge_flattens_native_singleton_vectors(self):
         import json
         from core.slicer_creality_project import build_creality_project_candidate
