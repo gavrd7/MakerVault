@@ -103,6 +103,18 @@ def _native_project_audit(package):
         "support_type": str(values.get("support_type", ""))[:48],
         "fuzzy_skin": str(values.get("fuzzy_skin", ""))[:48],
         "seam_position": str(values.get("seam_position", ""))[:48],
+        # Creality 7.3.1 uses distinct wipe-tower and filament-change paths.
+        "enable_prime_tower": str(values.get("enable_prime_tower", ""))[:12],
+        "purge_in_prime_tower": str(values.get("purge_in_prime_tower", ""))[:12],
+        "single_extruder_multi_material": str(
+            values.get("single_extruder_multi_material", ""))[:12],
+        "multicolor_method": str(values.get("multicolor_method", ""))[:12],
+        "prime_volume_mm3": str(values.get("prime_volume", ""))[:24],
+        # Do not disclose native printer/profile macros.
+        "has_change_filament_gcode": bool(values.get("change_filament_gcode")),
+        "change_gcode_uses_flush_length": (
+            "flush_length" in str(values.get("change_filament_gcode", ""))),
+
     }
     matrix = values.get("flush_volumes_matrix")
     multiplier = values.get("flush_multiplier")
@@ -117,6 +129,35 @@ def _native_project_audit(package):
             pass
     audit["flush_volumes_changed"] = str(values.get("flush_volumes_changed", ""))
     return audit
+
+
+def _gcode_effective_settings(gcode):
+    """Read safe config comments emitted by Creality GCode.cpp.
+
+    Presence of a value in G-code comments is not evidence of its
+    physical execution. Missing keys are reported by omission.
+    """
+    if not isinstance(gcode, bytes) or len(gcode) > 64 * 1024 * 1024:
+        raise ValueError("Invalid diagnostic G-code")
+    safe_keys = (
+        "enable_prime_tower", "purge_in_prime_tower", "prime_volume",
+        "flush_multiplier", "flush_volumes_changed", "multicolor_method",
+        "single_extruder_multi_material",
+    )
+    found = {}
+    for key in safe_keys:
+        match = re.search(
+            rb"(?im)^;\\s*" + key.encode("ascii") + rb"\\s*=\\s*([^\\r\\n]{0,40})",
+            gcode)
+        if match:
+            found[key] = match.group(1).decode("ascii", errors="replace").strip()
+    # Do not expose the complete matrix in case the native footer changes
+    # format. A digest is sufficient to compare baseline vs override.
+    match = re.search(rb"(?im)^;\\s*flush_volumes_matrix\\s*=\\s*([^\\r\\n]{0,4096})", gcode)
+    if match:
+        found["flush_matrix_gcode_header_sha256"] = hashlib.sha256(
+            match.group(1).strip()).hexdigest()
+    return found
 
 
 def _patch_for_model(stl):
@@ -301,6 +342,7 @@ class Command(BaseCommand):
                     model_format="3mf", filament_profiles=prepared["filament_profiles"],
                     creality_native_project=True, timeout_seconds=900)
                 metrics = _metrics(data)
+                metrics["gcode_effective_settings"] = _gcode_effective_settings(data)
                 if feature == "variable":
                     metrics["layer_band_audit"] = _layer_band_audit(data, lo, hi)
                 if feature in _SEMANTIC_ATTRS and options["deep"]:
