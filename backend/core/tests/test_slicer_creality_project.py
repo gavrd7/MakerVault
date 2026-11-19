@@ -92,6 +92,11 @@ class CrealityPositionedPlateTests(SimpleTestCase):
         )
         from core.tests.test_slicer_colour_native_3mf import fixture_paint, PRINTER_ID
         raw, paint = fixture_paint()
+        # The shared Orca fixture intentionally contains unused swatches with
+        # placeholder printer IDs. Creality must receive a fully valid palette,
+        # even when only one secondary swatch is painted.
+        for swatch in paint["palette"]:
+            swatch["printer_id"] = PRINTER_ID
         paint["palette"][2].update({
             "printer_id": PRINTER_ID,
             "slot_id": "bay-2",
