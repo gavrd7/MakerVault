@@ -17,7 +17,7 @@ from .slicer_profiles import SlicerProfileError
 _MAX_PROJECT = 32 * 1024 * 1024
 
 
-def build_creality_positioned_plate(source_models, *, bed_width, bed_depth, tool_ids):
+def build_creality_positioned_plate(source_models, *, bed_width, bed_depth, tool_ids, colour_tool_maps=None):
     """Return core 3MF with baked positions and per-object logical filament IDs.
 
     Input tools are zero-based, checked against the assigned palette. This is
@@ -25,15 +25,17 @@ def build_creality_positioned_plate(source_models, *, bed_width, bed_depth, tool
     Never send it to Creality's CLI before embedding verified native presets.
     """
     if (not isinstance(source_models, (list, tuple)) or
-            not 2 <= len(source_models) <= 12 or
+            not 1 <= len(source_models) <= 12 or
             not isinstance(tool_ids, (list, tuple)) or
             len(tool_ids) != len(source_models) or
             any(type(v) is not int or v not in (0, 1) for v in tool_ids) or
-            set(tool_ids) != {0, 1}):
+            (len(source_models) > 1 and set(tool_ids) != {0, 1}) or
+            (len(source_models) == 1 and colour_tool_maps is None)):
         raise SlicerProfileError("Creality positioned two-material plate has invalid assignments.")
     data = build_plate_3mf(
         list(source_models), bed_width=bed_width, bed_depth=bed_depth,
-        native_tool_indices=list(tool_ids))
+        native_tool_indices=list(tool_ids),
+        native_colour_tools=list(colour_tool_maps) if colour_tool_maps is not None else None)
     if len(data) > _MAX_PROJECT:
         raise SlicerProfileError("Creality positioned plate exceeds the project limit.")
     ns = "{" + NS + "}"
@@ -534,7 +536,7 @@ def build_creality_project_candidate(plate, *, printer, process, filaments,
     from xml.etree import ElementTree as ET
     objects = settings_root.findall("object")
     plate_nodes = settings_root.findall("plate")
-    if len(objects) != 2 or len(plate_nodes) != 1:
+    if not 1 <= len(objects) <= 2 or len(plate_nodes) != 1:
         raise SlicerProfileError("Creality model settings do not match two prepared objects.")
     for index, object_node in enumerate(objects, 1):
         if object_node.get("id") != str(index):
@@ -559,7 +561,7 @@ def build_creality_project_candidate(plate, *, printer, process, filaments,
         assemble = ET.SubElement(settings_root, "assemble")
     if list(assemble):
         raise SlicerProfileError("Unexpected pre-existing Creality assembly metadata.")
-    for index in range(1, 3):
+    for index in range(1, len(objects) + 1):
         ET.SubElement(assemble, "assemble_item", {
             "object_id": str(index), "instance_id": "0",
             "transform": "1 0 0 0 1 0 0 0 1 0 0 0",
