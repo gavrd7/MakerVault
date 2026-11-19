@@ -12,6 +12,7 @@ import re
 from .gcode_analysis import MAX_SCAN_BYTES, analyse_text, compare_printer_metadata
 from .models import FileAsset, SliceJob
 from .slicer_paint_assets import settings_use_paint_field
+from .slicer_gcode_thumbnails import add_gcode_thumbnails
 from .storage_usage import ensure_storage_capacity
 
 
@@ -98,7 +99,12 @@ def store_generated_gcode(job_id, raw: bytes):
                 raise SlicerOutputError("Job is not awaiting a new G-code result.")
             if job.input_asset.owner_id != job.owner_id or job.printer.owner_id != job.owner_id:
                 raise SlicerOutputError("Slice job ownership changed.")
+            # The validated engine output remains authoritative. Thumbnail
+            # fallback changes comment-only metadata, never toolpath commands.
             report = inspect_generated_gcode(raw, job.printer)
+            raw, thumbnail_sizes = add_gcode_thumbnails(raw)
+            if len(raw) > MAX_OUTPUT:
+                raise SlicerOutputError("Generated G-code with thumbnails exceeds the output limit.")
             ensure_storage_capacity(job.owner, len(raw))
             output_name = generated_slice_name(job)
             keep_in_library = (job.settings or {}).get("save_gcode_to_library") is True
@@ -128,6 +134,9 @@ def store_generated_gcode(job_id, raw: bytes):
                     "input_asset_id": str(job.input_asset_id),
                     "printer_id": str(job.printer_id),
                     "source_review": report.get("target_review", {}),
+                    "embedded_thumbnail_sizes": [
+                        f"{size}x{size}" for size in thumbnail_sizes
+                    ],
                     **({"multi_material_test": True, "printer_submission_verified": False}
                        if (job.settings or {}).get("multi_material_test") is True else {}),
                     **({"variable_layer_test": True, "printer_submission_verified": False}
