@@ -309,6 +309,36 @@ def _native_palette_settings(project, filaments, *, palette_slots=4):
     for key, value in tuple(project.items()):
         if key in _PER_TOOL_KEYS and isinstance(value, list) and len(value) == 2:
             project[key] = [value[0], value[1], value[0], value[1]]
+    # Creality Print treats filament_colour.size() as the number of physical
+    # filaments in object_used_extruders(). Without this vector, its default
+    # single entry makes extruder 2 look like a mixed/virtual filament and
+    # raises "Unable to resolve a mixed filament used by the current plate."
+    #
+    # The underlying native filament preset can supply the actual colour.
+    # When it does not, a display-only neutral is preferable to inventing
+    # a CFS spool identity. The job is still diagnostic-only until the
+    # physical CFS slot mapping and resulting G-code are independently audited.
+    colours = project.get("filament_colour")
+    if colours is None:
+        colour_sources = project.get("default_filament_colour")
+        if not isinstance(colour_sources, list) or len(colour_sources) not in (2, 4):
+            colour_sources = None
+        if colour_sources is None:
+            colours = ["#FFFFFF"] * palette_slots
+        else:
+            colours = [value if isinstance(value, str) and
+                       len(value) == 7 and value.startswith("#") and
+                       all(ch in "0123456789abcdefABCDEF" for ch in value[1:])
+                       else "#FFFFFF" for value in colour_sources]
+            if len(colours) == 2:
+                colours *= 2
+        project["filament_colour"] = colours
+    elif (not isinstance(colours, list) or len(colours) != palette_slots
+          or any(not isinstance(value, str) or len(value) != 7 or
+                 not value.startswith("#") or
+                 any(ch not in "0123456789abcdefABCDEF" for ch in value[1:])
+                 for value in colours)):
+        raise SlicerProfileError("Invalid Creality physical filament colour palette.")
     defaults = {
         "filament_map": ["1"] * palette_slots,
         "filament_map_2": ["0"] * palette_slots,
