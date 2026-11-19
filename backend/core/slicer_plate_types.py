@@ -1,4 +1,4 @@
-"""Native Orca bed-type selection; never substitute a cold plate for unknown.
+"""Engine-native bed-type selection; never substitute a cold plate for unknown.
 
 Printer machine-model metadata defines the default and enabled plate types.
 Filament presets supply separate temperature vectors for the chosen plate.
@@ -150,3 +150,75 @@ def validate_plate_temperature(filament, plate_key):
         )
     return {"first_layer_c": first if first is not None else normal,
             "other_layers_c": normal if normal is not None else first}
+
+
+def inspect_engine_plates(profile):
+    """Return native plate choices for a specific engine/printer preset.
+
+    Creality 7.3.x uses the same named bed-temperature families as its
+    native project JSON. Unknown capabilities are advisory, never physical
+    compatibility promises: execution validates the exact filament vector.
+    """
+    engine = getattr(profile, "engine", None)
+    if engine == "orcaslicer":
+        return inspect_native_plates(profile)
+    if engine != "crealityprint":
+        return {"default": None, "supported": [], "default_source": "not declared"}
+    native = json.loads(resolved_native_profile(profile))
+    if not isinstance(native, dict):
+        raise SlicerProfileError("Native Creality printer profile is not an object.")
+    default = native_plate_key(native.get("default_bed_type"))
+    # Creality presets may omit Orca's support_multi_bed_types marker.
+    # Expose selectable native temperatures, but never claim the machine
+    # physically supports a surface that its profile explicitly excludes.
+    multi = native.get("support_multi_bed_types")
+    if isinstance(multi, list):
+        multi = multi[0] if multi else None
+    supported = list(PLATES) if str(multi).lower() not in ("0", "false") else []
+    excluded = native.get("not_support_bed_types") or []
+    if isinstance(excluded, str):
+        excluded = re.split(r"[;,]", excluded)
+    if isinstance(excluded, list):
+        denied = {native_plate_key(value) or str(value).strip().lower()
+                  for value in excluded}
+        supported = [key for key in supported if key not in denied]
+    if default and default not in supported:
+        raise SlicerProfileError("Creality default plate conflicts with its supported bed types.")
+    return {"default": default, "supported": supported,
+            "default_source": "native Creality printer" if default else "not declared"}
+
+
+def effective_creality_plate(plate_type, process, printer_profile=None):
+    """Resolve a Creality 7.3.x plate without assuming any fallback heater."""
+    if plate_type not in ("default", *PLATES):
+        raise ValueError("Unsupported native Creality build plate.")
+    if printer_profile is not None:
+        allowed = inspect_engine_plates(printer_profile)
+        if plate_type != "default" and plate_type not in allowed["supported"]:
+            raise ValueError("Selected build plate is excluded by the Creality printer profile.")
+        if plate_type == "default" and allowed["default"]:
+            return allowed["default"]
+    if plate_type != "default":
+        return plate_type
+    return native_plate_key(process.get("curr_bed_type"))
+
+
+def apply_creality_plate(process_bytes, filament_bytes, plate_type, printer_profile=None):
+    """Apply a native bed selection to worker-bound copies, not stored presets."""
+    try:
+        process = json.loads(process_bytes)
+        filament = json.loads(filament_bytes)
+    except (ValueError, UnicodeDecodeError, TypeError) as exc:
+        raise ValueError("Invalid Creality process or filament preset.") from exc
+    if not isinstance(process, dict) or not isinstance(filament, dict):
+        raise ValueError("Creality native presets must be objects.")
+    effective = effective_creality_plate(plate_type, process, printer_profile)
+    if plate_type != "default" or effective:
+        if not effective:
+            raise ValueError("Creality build plate type could not be resolved.")
+        validate_plate_temperature(filament, effective)
+        process["curr_bed_type"] = PLATES[effective][0]
+    # Preserve the engine's original default when the native profiles have
+    # no resolvable selection; never guess a surface or overwrite temperatures.
+    return (json.dumps(process, ensure_ascii=False, separators=(",", ":")).encode(),
+            json.dumps(filament, ensure_ascii=False, separators=(",", ":")).encode())
