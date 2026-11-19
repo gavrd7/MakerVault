@@ -34,6 +34,17 @@ class SlicerCapabilityTests(SimpleTestCase):
                 item["status"] == "unverified"
                 for item in native_capabilities(engine, "2.5.0").values()))
 
+    def test_creality_colour_paint_experimental_only_on_native_73(self):
+        caps = native_capabilities("crealityprint", "7.3.1")
+        self.assertEqual(caps["colour_paint"]["status"], "test_only")
+        for feature in ("support_paint", "seam_paint",
+                        "fuzzy_skin_paint", "variable_layer_profile"):
+            self.assertEqual(caps[feature]["status"], "unverified")
+        self.assertEqual(
+            native_capabilities("crealityprint", "8.0")["colour_paint"]["status"],
+            "unverified",
+        )
+
     def test_detects_used_edits_without_falsely_flagging_empty_metadata(self):
         plates = [
             {"objects": [
