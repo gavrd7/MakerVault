@@ -6,6 +6,14 @@ from core.slicer_execution import verified_installation, _single_unmodified_stl,
 
 
 class IntendedMaterialSafetyTests(SimpleTestCase):
+    def setUp(self):
+        super().setUp()
+        # These unit tests validate paint/material admission; bed dimensions
+        # are exercised separately using owned native printer fixtures.
+        gate = patch("core.slicer_execution.trusted_plate_dimensions", return_value=(220, 220))
+        gate.start()
+        self.addCleanup(gate.stop)
+
     def test_single_slot_is_valid_slicing_annotation_not_tool_selection(self):
         from types import SimpleNamespace
         model = {"instance_id": "a", "x_mm": 0, "y_mm": 0, "rotation_deg": 0, "scale_percent": 100, "material_slot": {
@@ -16,9 +24,10 @@ class IntendedMaterialSafetyTests(SimpleTestCase):
             printer_id="printer", filament_profile_id="selected-preset",
             printer_profile_id="native-printer", engine="orcaslicer",
         )
-        # This is still a normal single-filament Orca slice. The physical bay
-        # is advisory and MUST NOT select tool 3 in the G-code.
-        self.assertTrue(_validate_plate_execution(job))
+        # A physical bay remains advisory; its matching native preset is
+        # nevertheless mandatory before slicing (never silently select T3).
+        with self.assertRaisesRegex(SlicerExecutionError, "no native filament profile"):
+            _validate_plate_execution(job)
         job.settings["slot_filament_profiles"] = [{
             "slot_id": "bay-four", "profile_id": "selected-preset",
         }]
@@ -68,7 +77,7 @@ class IntendedMaterialSafetyTests(SimpleTestCase):
                     }]},
                     engine="orcaslicer",
                 )
-                with self.assertRaisesRegex(SlicerExecutionError, "native region-to-tool"):
+                with self.assertRaisesRegex(SlicerExecutionError, "not marked for native multi-material slicing"):
                     _validate_plate_execution(job)
 
     def test_unexported_native_semantic_paint_and_variable_layers_fail_closed(self):
@@ -97,6 +106,7 @@ class IntendedMaterialSafetyTests(SimpleTestCase):
             settings={"plate_objects": [model]},
             engine="orcaslicer", engine_version="2.5.0",
             printer_id="printer", filament_profile_id="filament",
+            printer_profile_id="native-printer",
         )
         self.assertTrue(_validate_plate_execution(job))
         self.assertFalse(_single_unmodified_stl([model]))
@@ -232,7 +242,7 @@ class IntendedMaterialSafetyTests(SimpleTestCase):
             settings={"plate_objects": [model]},
             engine="orcaslicer", engine_version="2.5.0",
             printer_id="printer", filament_profile_id="filament",
-            printer_profile_id="profile",
+            printer_profile_id="profile", printer_profile=SimpleNamespace(),
         )
         self.assertTrue(_validate_plate_execution(job))
         self.assertFalse(_single_unmodified_stl([model]))
@@ -255,7 +265,7 @@ class IntendedMaterialSafetyTests(SimpleTestCase):
                     }},
                     engine="orcaslicer",
                 )
-                with self.assertRaisesRegex(SlicerExecutionError, "Custom flushing"):
+                with self.assertRaisesRegex(SlicerExecutionError, "flushing changes"):
                     _validate_plate_execution(job)
 
 
@@ -657,6 +667,6 @@ class MultiMaterialTestAdmissionTests(SimpleTestCase):
         self.job.settings["flush_settings"] = {
             "multiplier": 1.2, "prime_tower": "native", "transitions": [],
         }
-        with self.assertRaisesRegex(SlicerExecutionError, "Custom flushing"):
+        with self.assertRaisesRegex(SlicerExecutionError, "flushing changes"):
             _validate_plate_execution(self.job)
         plan.assert_not_called()
