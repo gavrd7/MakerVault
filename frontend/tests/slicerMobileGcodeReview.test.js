@@ -1,3 +1,13 @@
+test("K2 print modal refreshes CFS before checking mapped-print availability", () => {
+  const modal = read("../src/components/PrinterStartGcodeModal.jsx");
+  assert.match(modal, /load\(connection\.adapter === "creality_local"\)/);
+  assert.match(modal, /\/files\/\?refresh_status=1/);
+  assert.match(modal, /mapped_cfs_blockers/);
+  assert.match(modal, /Refresh K2 CFS readiness \(read-only\)/);
+  assert.match(modal, /!cfsMappedAvailable/);
+  assert.match(modal, /supervisedTestEligible && mappedCfs/);
+});
+
 test("G-code toolpath uses right-handed printer coordinates, not a reflected axis swap", () => {
   // The native build plate uses X right, Y rear, Z up. Three.js uses Y up.
   // Proper mapping is (X, Y, Z) -> (X, Z, -Y), a rotation, not a reflection.
