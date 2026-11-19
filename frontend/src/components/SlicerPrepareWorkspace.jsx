@@ -907,10 +907,6 @@ export default function SlicerPrepareWorkspace({
     objects.length === 1 && requiredMultiSlots.length === 2 &&
     nativeMultiMaterialBaseReady &&
     (objects[0].colour_paint?.regions || []).length > 0 &&
-    !(objects[0].support_paint?.regions || []).length &&
-    !(objects[0].seam_paint?.regions || []).length &&
-    !(objects[0].fuzzy_skin_paint?.regions || []).length &&
-    !(objects[0].variable_layer_profile?.bands || []).length &&
     !Object.keys(objects[0].process_overrides || {}).length &&
     (objects[0].colour_paint?.regions || []).every(region => {
       const swatch = objects[0].colour_paint?.palette?.[region.slot];
@@ -954,6 +950,17 @@ export default function SlicerPrepareWorkspace({
   const projectRoutingPending = plates.some(plate =>
     (plate.objects || []).some(item => item.material_slot != null)
   ) || slotFilamentProfiles.length > 0;
+  // Creality's additional surface tools are experimental and currently
+  // require the same one-model/two-filament painted CFS route.
+  const crealityExperimentalPaint = activeEngine === "crealityprint" &&
+    objects.some(item =>
+      (item.support_paint?.regions || []).length ||
+      (item.seam_paint?.regions || []).length ||
+      (item.fuzzy_skin_paint?.regions || []).length ||
+      (item.variable_layer_profile?.bands || []).length);
+  const crealityExperimentalPaintReason = crealityExperimentalPaint && !crealityPaintReady
+    ? "Creality experimental painting currently requires one colour-painted model with two assigned native CFS filament profiles; single-colour and two-model projects can save these edits but cannot slice them yet."
+    : "";
   const paintedNativeReady = multiMaterialReadyForExport || crealityPaintReady;
   const hasPaintedColours = usedNativeFeatures([{objects}]).includes("colour_paint");
   const paintingRoutingNotice = hasPaintedColours && !paintedNativeReady
@@ -978,6 +985,7 @@ export default function SlicerPrepareWorkspace({
     : "";
   const sliceBlockReason = draftBlockReason ||
     paintingRoutingNotice ||
+    crealityExperimentalPaintReason ||
     nativeEditReason ||
     (!activePlateReady ? "Select a plate containing models to slice." : "") ||
     (conflictsBlockSlice ? "Resolve build-plate conflicts or wait for models to finish loading before slicing." : "") ||
