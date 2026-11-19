@@ -123,11 +123,13 @@ class GeneratedSlicerFileTests(TestCase):
         self.assertEqual(response["Content-Type"], "application/octet-stream")
         self.assertIn('filename="shape.gcode"', response["Content-Disposition"])
         self.assertIn("attachment", response["Content-Disposition"])
-        response.close()
+        # The Django test client handles ordinary response cleanup.
+        # Calling HttpResponse.close() directly emits request_finished and
+        # can close PostgreSQL inside TestCase's wrapping atomic transaction,
+        # leaving the connection unusable for the rest of this class.
         inline = self.client.get(url)
         self.assertEqual(inline.status_code, 200)
         self.assertTrue(inline["Content-Type"].startswith("text/plain"))
-        inline.close()
 
     def test_multicolour_test_output_is_marked_unapproved_for_printer_submission(self):
         self.job.settings = {"multi_material_test": True}
