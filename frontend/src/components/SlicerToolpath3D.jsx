@@ -101,8 +101,8 @@ export default function SlicerToolpath3D({
       new THREE.BufferGeometry().setFromPoints([
         new THREE.Vector3(0, -0.12, 0),
         new THREE.Vector3(width, -0.12, 0),
-        new THREE.Vector3(width, -0.12, depth),
-        new THREE.Vector3(0, -0.12, depth),
+        new THREE.Vector3(width, -0.12, -depth),
+        new THREE.Vector3(0, -0.12, -depth),
       ]),
       new THREE.LineBasicMaterial({ color: 0x8092a9 })
     );
@@ -113,7 +113,7 @@ export default function SlicerToolpath3D({
     const axes = new THREE.Group();
     for (const [end, colour] of [
       [new THREE.Vector3(Math.min(40, width / 4), -0.08, 0), 0xe36a74],
-      [new THREE.Vector3(0, -0.08, Math.min(40, depth / 4)), 0x6ca9e8],
+      [new THREE.Vector3(0, -0.08, -Math.min(40, depth / 4)), 0x6ca9e8],
     ]) {
       axes.add(new THREE.Line(
         new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(0, -0.08, 0), end]),
@@ -136,8 +136,8 @@ export default function SlicerToolpath3D({
     for (const segment of cameraSource) {
       if (!Array.isArray(segment) || segment.length < 5 ||
           !segment.slice(0, 5).every(Number.isFinite)) continue;
-      bounds.expandByPoint(new THREE.Vector3(segment[0], segment[4], segment[1]));
-      bounds.expandByPoint(new THREE.Vector3(segment[2], segment[4], segment[3]));
+      bounds.expandByPoint(new THREE.Vector3(segment[0], segment[4], -segment[1]));
+      bounds.expandByPoint(new THREE.Vector3(segment[2], segment[4], -segment[3]));
       valid += 1;
     }
     // Purge lines and skirt moves can span the bed and make the printed part
@@ -159,10 +159,10 @@ export default function SlicerToolpath3D({
       return [low, high];
     };
     const bx = middleBounds(xs), by = middleBounds(ys);
-    const rawCentre = valid ? bounds.getCenter(new THREE.Vector3()) : new THREE.Vector3(110, 0, 110);
+    const rawCentre = valid ? bounds.getCenter(new THREE.Vector3()) : new THREE.Vector3(110, 0, -110);
     const rawSize = valid ? bounds.getSize(new THREE.Vector3()) : new THREE.Vector3(120, 40, 120);
     const centre = bx && by
-      ? new THREE.Vector3((bx[0] + bx[1]) / 2, rawCentre.y, (by[0] + by[1]) / 2)
+      ? new THREE.Vector3((bx[0] + bx[1]) / 2, rawCentre.y, -(by[0] + by[1]) / 2)
       : rawCentre;
     const size = bx && by
       ? new THREE.Vector3(Math.max(1, bx[1]-bx[0]), rawSize.y, Math.max(1, by[1]-by[0]))
@@ -172,7 +172,7 @@ export default function SlicerToolpath3D({
     // at (0, 0). The sample may contain outlying purge/skirt moves and must
     // not change the relative position of the bed and model.
     const bedCentre = nativeBed
-      ? new THREE.Vector3(width / 2, 0, depth / 2)
+      ? new THREE.Vector3(width / 2, 0, -depth / 2)
       : centre;
     grid.position.x = bedCentre.x;
     grid.position.z = bedCentre.z;
@@ -184,11 +184,12 @@ export default function SlicerToolpath3D({
     const distance = Math.max(38, size.length() * 1.25);
     const target = valid ? centre : bedCentre;
     controls.target.copy(target);
-    // G-code XY maps to Three X/Z. Printer front is negative native Y,
-    // therefore negative Three Z. Match the interactive plate camera.
-    // Viewing from positive Z showed the *rear* of the print and made
-    // asymmetric lettering and prime tower placement appear mirrored.
-    camera.position.copy(target).add(new THREE.Vector3(distance * 0.7, distance * 0.9, -distance));
+    // Right-handed printer-to-Three transformation: (X,Y,Z) -> (X,Z,-Y).
+    // Printer +Y runs towards the rear (Three -Z), keeping the plate
+    // editor's front-facing orientation without mirroring model geometry.
+    // The old (X,Z,+Y) axis swap had determinant -1 (a reflection);
+    // switching only the camera could never fix the reversed lettering.
+    camera.position.copy(target).add(new THREE.Vector3(distance * 0.7, distance * 0.9, distance));
     camera.lookAt(target);
     controls.update();
     sceneRef.current = { scene, paths, marker, camera, controls, renderer,
@@ -252,13 +253,15 @@ export default function SlicerToolpath3D({
       ? Math.max(30, modelSize.length() * 1.8)
       : Math.max(80, Math.hypot(bedWidth, bedDepth) * 1.45);
     controls.target.copy(target);
-    camera.up.set(0, 1, 0);
+    // In top view, native +Y (rear) must point up the screen. Camera
+    // orientation uses -Three Z as the up vector, preserving +X to right.
+    camera.up.set(...(viewName === "top" ? [0, 0, -1] : [0, 1, 0]));
     if (viewName === "top") {
       camera.position.copy(target).add(new THREE.Vector3(0, span, 0.0001));
     } else if (viewName === "front") {
-      camera.position.copy(target).add(new THREE.Vector3(0, span * 0.25, -span));
+      camera.position.copy(target).add(new THREE.Vector3(0, span * 0.25, span));
     } else {
-      camera.position.copy(target).add(new THREE.Vector3(span * 0.7, span * 0.85, -span));
+      camera.position.copy(target).add(new THREE.Vector3(span * 0.7, span * 0.85, span));
     }
     camera.lookAt(target);
     controls.update();
@@ -346,7 +349,7 @@ export default function SlicerToolpath3D({
       if (isCurrent) {
         currentCount += 1;
         if (!progressiveMode && currentCount > maxStep) continue;
-        lastStep = [x2, z, y2];
+        lastStep = [x2, z, -y2];
       }
       if (visible[feature] === false || !featureMatchesFocus(feature, featureFocus)) continue;
       // Inspection means *isolation*, not amber paint over dimmed green paths.
@@ -388,7 +391,7 @@ export default function SlicerToolpath3D({
         featureShadeCache.set(shadeKey,hex);
       }
       if (renderMode === "lines") {
-        positions.push(x1, z, y1, x2, z, y2);
+        positions.push(x1, z, -y1, x2, z, -y2);
         for (let index = 0; index < 2; index++) coloursArray.push(hex.r, hex.g, hex.b);
         continue;
       }
@@ -405,11 +408,13 @@ export default function SlicerToolpath3D({
       const priorHeight=segmentLayerIndex>0 ? layers[segmentLayerIndex-1] : 0;
       const beadHeight=Math.max(0.07,Math.min(0.45,z-priorHeight||0.2));
       // In a unit bead, local X follows the extrusion centreline, Y is
-      // layer height and Z is the lateral width. Each matrix is kept on GPU.
+      // layer height and Z is the lateral width. Its right-handed orientation
+      // matches (printer X,Y,Z) -> (Three X,Z,-Y); never reflect the toolpath.
+      // Each matrix is kept on GPU.
       beadMatrix.set(
-        dx,0,-dy/length*width,(x1+x2)/2,
+        dx,0,dy/length*width,(x1+x2)/2,
         0,beadHeight,0,z-beadHeight/2,
-        dy,0,dx/length*width,(y1+y2)/2,
+        -dy,0,dx/length*width,-(y1+y2)/2,
         0,0,0,1
       );
       beadMesh.setMatrixAt(beadCount,beadMatrix);
@@ -437,7 +442,7 @@ export default function SlicerToolpath3D({
         const distance = Math.max(38, modelSize.length() * 1.25);
         view.controls.target.copy(modelCentre);
         view.camera.position.copy(modelCentre).add(
-          new THREE.Vector3(distance * .7, distance * .9, -distance)
+          new THREE.Vector3(distance * .7, distance * .9, distance)
         );
         view.camera.lookAt(modelCentre);
         view.controls.update();
