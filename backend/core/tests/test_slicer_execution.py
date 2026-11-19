@@ -283,7 +283,7 @@ class IntendedMaterialSafetyTests(SimpleTestCase):
             _validate_plate_execution(job)
         job.settings["multi_material_test"] = True
         job.settings["plate_objects"] = [model, {**model, "instance_id": "second"}]
-        with self.assertRaisesRegex(SlicerExecutionError, "one model|one colour-painted"):
+        with self.assertRaisesRegex(SlicerExecutionError, "one .*model"):
             _validate_plate_execution(job)
 
     def test_unhandled_flush_matrix_cannot_be_silently_ignored(self):
