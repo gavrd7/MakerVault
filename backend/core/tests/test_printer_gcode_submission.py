@@ -1143,7 +1143,12 @@ class NativeGcodeAdapterTests(SimpleTestCase):
     def test_creality_browser_preserves_real_error(self, run):
         from core.creality_gcode import list_files
         printer = connection("creality_local")
-        run.side_effect = CrealityGcodeError("Unrecognized printer file list")
+        def fail_after_closing_coroutine(coroutine):
+            # The mocked event-loop runner does not consume its coroutine.
+            # Close it explicitly so the test cannot leak a RuntimeWarning.
+            coroutine.close()
+            raise CrealityGcodeError("Unrecognized printer file list")
+        run.side_effect = fail_after_closing_coroutine
         with self.assertRaisesRegex(CrealityGcodeError, "Unrecognized printer"):
             list_files(printer)
 
