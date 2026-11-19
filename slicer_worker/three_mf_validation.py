@@ -31,10 +31,15 @@ OBJECT_SETTINGS = {
 MAX_OBJECT_SETTINGS = 16
 
 
-def validate_worker_3mf(data, *, native_tool_count=None):
+def validate_worker_3mf(data, *, native_tool_count=None, allow_creality_combined_paint=False,
+                        allow_creality_layer_ranges=False):
     if native_tool_count is not None and (isinstance(native_tool_count, bool) or
             not isinstance(native_tool_count, int) or not 2 <= native_tool_count <= 16):
         raise WorkerError("Invalid native filament tool count.")
+    # These extensions apply only to Creality's reviewed single-object CFS
+    # project. The ordinary Orca validator remains fail-closed.
+    if (allow_creality_combined_paint or allow_creality_layer_ranges) and native_tool_count != 2:
+        raise WorkerError("Creality painting extensions need exactly two native tools.")
     if not isinstance(data, bytes) or not data or len(data) > 32 * 1024 * 1024:
         raise WorkerError("3MF input exceeds worker limits.")
     try:
@@ -73,8 +78,8 @@ def validate_worker_3mf(data, *, native_tool_count=None):
         raise WorkerError("3MF build references unknown objects.")
     # Accept only simple, bounded per-object layer heights, never script keys.
     if layer_ranges is not None:
-        if native_tool_count is not None or len(objects) != 1:
-            raise WorkerError("Native variable layer test requires one single-material object.")
+        if len(objects) != 1 or (native_tool_count is not None and not allow_creality_layer_ranges):
+            raise WorkerError("Native variable layer test requires an approved single object.")
         try:
             layer_root = ET.fromstring(layer_ranges)
         except ET.ParseError:
@@ -128,7 +133,7 @@ def validate_worker_3mf(data, *, native_tool_count=None):
             if paint_attrs:
                 # Semantic paint remains independently constrained to a
                 # single filament until joint material/tool verification.
-                if len(objects) != 1 or native_tool_count is not None:
+                if len(objects) != 1 or (native_tool_count is not None and not allow_creality_combined_paint):
                     raise WorkerError("Unsupported native painted facet annotation.")
                 for channel in paint_attrs:
                     used_native_paint_channels.add(channel)
@@ -139,7 +144,7 @@ def validate_worker_3mf(data, *, native_tool_count=None):
                 # One unsplit TriangleSelector leaf per generated triangle.
                 # No arbitrary nibble streams or unverified colour→tool
                 # remapping are permitted. The server clips exact polygons.
-                if native_tool_count is None or paint_attrs:
+                if native_tool_count is None or (paint_attrs and not allow_creality_combined_paint):
                     raise WorkerError("Colour painting requires verified native multi-tool slicing.")
                 native_states = ("4", "8") + tuple(
                     format(tool - 2, "X") + "C" for tool in range(2, native_tool_count))
@@ -158,6 +163,8 @@ def validate_worker_3mf(data, *, native_tool_count=None):
                 raise WorkerError("3MF vertex coordinates are invalid.") from None
             if any(not math.isfinite(value) or abs(value) > 10000 for value in values):
                 raise WorkerError("3MF contains unsafe geometry.")
+    if allow_creality_combined_paint and len(objects) != 1:
+        raise WorkerError("Creality multi-channel painting needs a single object.")
     # Native object records are explicitly allowlisted. A 3MF project must
     # never pass arbitrary slicer options, file references, scripts or network
     # settings into Orca via model_settings.config.
