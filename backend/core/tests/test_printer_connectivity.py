@@ -262,10 +262,13 @@ class PrinterConnectivityAdapterTests(TestCase):
                 current[section][key] = value
                 result = _reconcile_creality_processing(connection, current)
                 self.assertNotEqual(result["state"], "idle")
-        fresh = deepcopy(snap)
-        fresh["source_metadata"]["idle_candidate_since"] = "bogus"
-        changed = _reconcile_creality_processing(connection, fresh)
-        self.assertEqual(changed["state"], "idle")  # persisted evidence, not untrusted incoming fields
+        # An updated progress value must reset the entire observation window.
+        changed = deepcopy(snap)
+        changed["job"]["progress"] = 19
+        restarted = _reconcile_creality_processing(connection, changed)
+        self.assertEqual(restarted["state"], "processing")
+        self.assertNotEqual(restarted["source_metadata"].get("idle_candidate_since"),
+                            previous["source_metadata"]["idle_candidate_since"])
 
     def test_creality_endpoint_accepts_existing_host_field(self):
         self.assertEqual(
