@@ -796,8 +796,12 @@ def process_queued_job(job_id):
         if job.engine == "crealityprint":
             stage = "validating native Creality build plate and filament temperatures"
             try:
+                # Multi-material jobs use the assigned tool-0 filament,
+                # not an unrelated single-filament Setup selection.
+                first_filament = (material_result["filament_profiles"][0]
+                                  if material_result is not None else profiles[1])
                 profiles[2], profiles[1] = apply_creality_plate(
-                    profiles[2], profiles[1], job.plate,
+                    profiles[2], first_filament, job.plate,
                     printer_profile=job.printer_profile)
                 if material_result is not None:
                     native_process = json.loads(profiles[2])
@@ -826,10 +830,8 @@ def process_queued_job(job_id):
             # model-assigned slot. The legacy single-profile field must match
             # tool 0 for the worker contract; NEVER overwrite the selected
             # slot's native filament with the unrelated Setup default.
-            # Preserve the profile copy validated for this specific bed type.
-            profiles[1] = apply_creality_plate(
-                profiles[2], material_result["filament_profiles"][0],
-                job.plate, job.printer_profile)[1]
+            # The worker's primary filament is the validated tool-0 profile.
+            # Never replace it with the unrelated Setup default.
         if material_result is not None and job.engine == "crealityprint":
             stage = "building self-contained Creality native 3MF project"
             from .slicer_creality_project import build_creality_project_candidate
