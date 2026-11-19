@@ -98,4 +98,27 @@ class Command(BaseCommand):
             report = audit_creality_gcode_for_cfs(job, report, raw)
         except CrealityCfsAuditError as exc:
             raise CommandError(str(exc)) from exc
+        # Read-only protocol compatibility summary, not a print command.
+        # Creality/Orca use T1A for logical tool zero, T1B for tool one;
+        # CFS boxId and materialId are physical bay coordinates.
+        seen_bays = set()
+        preview = []
+        for row in report["mapping"]:
+            bay = (row["box_id"], row["material_id"])
+            if bay in seen_bays:
+                raise CommandError("Duplicate physical CFS bay in protocol audit.")
+            seen_bays.add(bay)
+            preview.append({
+                "logical_id": "T1" + "ABCD"[row["tool_index"]],
+                "boxId": row["box_id"],
+                "materialId": row["material_id"],
+                "material": row["material"],
+                "colour": row["colour"],
+            })
+        report["protocol_preflight"] = {
+            "mapping_entries": preview,
+            "expected_command_sequence": ["colorMatch", "multiColorPrint"],
+            "commands_sent": False,
+            "firmware_response_verified": False,
+        }
         self.stdout.write(json.dumps(report, indent=2))
