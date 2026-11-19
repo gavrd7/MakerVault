@@ -1,3 +1,17 @@
+test("toolpath preview cameras face the physical printer front without mirroring G-code", () => {
+  // The build-plate editor looks at native negative Y as the front.
+  // Toolpath Three.js maps native Y -> Three Z, so its camera must look
+  // from negative Z. Rendering opposite-side photos is not G-code mirroring.
+  const editor = read("../src/components/SlicerPlateEditor.jsx");
+  assert.match(editor, /camera\.position\.set\(bedX \* 1\.0, -bedY \* 1\.3,/);
+  assert.match(viewport, /new THREE\.Vector3\(distance \* 0\.7, distance \* 0\.9, -distance\)/);
+  assert.match(viewport, /new THREE\.Vector3\(0, span \* 0\.25, -span\)/);
+  assert.match(viewport, /new THREE\.Vector3\(span \* 0\.7, span \* 0\.85, -span\)/);
+  assert.match(viewport, /new THREE\.Vector3\(distance \* \.7, distance \* \.9, -distance\)/);
+  assert.match(viewport, /positions\.push\(x1, z, y1, x2, z, y2\)/);
+  assert.doesNotMatch(viewport, /positions\.push\(-x1/);
+});
+
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
