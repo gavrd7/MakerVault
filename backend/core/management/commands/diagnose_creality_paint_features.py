@@ -57,12 +57,21 @@ def _metrics(gcode):
     if not isinstance(gcode, bytes) or len(gcode) > 64 * 1024 * 1024:
         raise ValueError("Invalid diagnostic G-code")
     text = gcode.decode("utf-8", errors="replace")
+    # Ignore headers, timestamps and metadata. Compare actual motion and
+    # tool-selection commands, not the byte hash of entire G-code files.
+    motion_digest = hashlib.sha256()
+    for line in text.splitlines():
+        command = line.partition(";")[0].strip()
+        if re.match(r"^(?:G0?[0123]|T[01])(?:\s|$)", command, re.I):
+            motion_digest.update(b" ".join(command.upper().split()))
+            motion_digest.update(b"\n")
     zs = [float(x) for x in re.findall(r"(?im)^;Z:\s*([0-9]+(?:\.[0-9]+)?)\s*$", text)]
     layers = sorted(set(round(x, 4) for x in zs))
     steps = sorted(set(round(b-a, 3) for a,b in zip(layers,layers[1:])
                        if .049 <= b-a <= .501))
     return {
-        "sha256": hashlib.sha256(gcode).hexdigest(),
+        "gcode_sha256": hashlib.sha256(gcode).hexdigest(),
+        "motion_sha256": motion_digest.hexdigest(),
         "bytes": len(gcode),
         "g1_with_extrusion": len(re.findall(
             r"(?im)^\s*G0?1\s+[^\r\n]*\bE[-+]?\d", text)),
@@ -194,11 +203,11 @@ class Command(BaseCommand):
                     baseline = metrics
                 else:
                     metrics["toolpath_changed_from_baseline"] = (
-                        metrics["sha256"] != baseline["sha256"])
+                        metrics["motion_sha256"] != baseline["motion_sha256"])
                     metrics["observation"] = (
                         "Changed G-code; specific painting effect still needs toolpath audit."
                         if metrics["toolpath_changed_from_baseline"]
-                        else "No whole-file difference; native effect not demonstrated.")
+                        else "No motion difference; native effect not demonstrated.")
                 results[feature] = {"status": "sliced", **metrics}
             except Exception as exc:
                 # Do not disclose private native profile contents, G-code, or
