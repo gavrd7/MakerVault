@@ -26,6 +26,7 @@ from .slicer_material_gcode_audit import audit_native_tool_usage, MaterialGcodeA
 from .slicer_gcode_bounds import audit_extrusion_xy_bounds, GcodeExtrusionBoundsError
 from .slicer_flush_settings import apply_orca_flush_settings
 from .slicer_native_overrides import apply_orca_job_overrides
+from .slicer_plate_types import apply_creality_plate, effective_creality_plate, validate_plate_temperature
 from .slicer_variable_layers import audit_orca_variable_layers, validate_orca_variable_support_compatibility
 from .slicer_paint_assets import expand_painted_settings
 from .slicer_process_settings import apply_process_overrides
@@ -793,6 +794,21 @@ def process_queued_job(job_id):
                 palette[0] = profiles[1]
                 material_result["filament_profiles"] = tuple(palette)
         if job.engine == "crealityprint":
+            stage = "validating native Creality build plate and filament temperatures"
+            try:
+                profiles[2], profiles[1] = apply_creality_plate(
+                    profiles[2], profiles[1], job.plate,
+                    printer_profile=job.printer_profile)
+                if material_result is not None:
+                    native_process = json.loads(profiles[2])
+                    effective = effective_creality_plate(
+                        job.plate, native_process, job.printer_profile)
+                    if effective:
+                        for native_filament in material_result["filament_profiles"]:
+                            validate_plate_temperature(json.loads(native_filament), effective)
+            except (ValueError, TypeError, UnicodeDecodeError, SlicerProfileError) as exc:
+                raise SlicerExecutionError(str(exc)) from exc
+        if job.engine == "crealityprint":
             # Apply the same strictly allowlisted process-only native changes
             # to a worker-bound copy. Never rewrite the imported preset or
             # quietly ignore controls visible in the interactive workbench.
@@ -810,7 +826,10 @@ def process_queued_job(job_id):
             # model-assigned slot. The legacy single-profile field must match
             # tool 0 for the worker contract; NEVER overwrite the selected
             # slot's native filament with the unrelated Setup default.
-            profiles[1] = material_result["filament_profiles"][0]
+            # Preserve the profile copy validated for this specific bed type.
+            profiles[1] = apply_creality_plate(
+                profiles[2], material_result["filament_profiles"][0],
+                job.plate, job.printer_profile)[1]
         if material_result is not None and job.engine == "crealityprint":
             stage = "building self-contained Creality native 3MF project"
             from .slicer_creality_project import build_creality_project_candidate
