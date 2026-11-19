@@ -224,3 +224,81 @@ another original project; they are no longer necessary for the current
 uploaded Benchy fixture. This is structural evidence only: 7.3.2 is not
 interchangeable with the staging 7.3.1 binary, and the diagnostics do not
 authorise CFS printer submission.
+
+
+## Source-backed painted feature and K2 flushing investigation (7.3.1)
+
+Source references below are pinned to CrealityOfficial/CrealityPrint tag **v7.3.1**.
+This section documents a diagnostic hypothesis and does **not** approve printing
+or claim that semantic effects are proved by a successful slice.
+
+- [CLI notes / README](https://github.com/CrealityOfficial/CrealityPrint/blob/v7.3.1/README.md#command-line-slicing):
+  `--slice 0` means all plates; `--slice 1` means plate one.
+  `--outputdir`, `--logfile` and `--debug` are documented.
+  The README uses `--load_settings`/`--load_filaments` spelling for raw
+  STL/OBJ. MakerVault's pinned adapter uses its **tested hyphenated** flags for
+  raw STL; it intentionally omits external preset loading for a native 3MF
+  because the 7.3.x native project loader requires embedded settings.
+  Do not change established worker CLI flags based on documentation alone.
+
+- [Support facets](https://github.com/CrealityOfficial/CrealityPrint/blob/v7.3.1/src/libslic3r/PrintObject.cpp):
+  `generate_support_material()` requires `enable_support`, and the native
+  process supports manual enforcers. A tiny paint annotation on a generic cube
+  or on a bed-contact face cannot prove support extrusion is generated.
+  The diagnostic now audits extrusion XY moves under G-code
+  `; FEATURE: Support...`/`;TYPE:Support...` roles. A physically useful test
+  still requires an actual unsupported underside or an explicit cantilever
+  fixture; zero support-role moves on the original model are inconclusive.
+
+- [Seam placement](https://github.com/CrealityOfficial/CrealityPrint/blob/v7.3.1/src/libslic3r/GCode/SeamPlacer.cpp):
+  Creality projects `paint_seam` enforcer and blocker facets into seam
+  placement. The identical-triangulation control already changes motion,
+  but a spatial seam assertion must use a known outside wall and compare the
+  seam-start coordinates to its painted bounds; one changed extrusion line
+  is not proof of positional accuracy.
+
+- [Painted fuzzy skin](https://github.com/CrealityOfficial/CrealityPrint/blob/v7.3.1/src/libslic3r/PrintObjectSlice.cpp)
+  and [PrintApply.cpp](https://github.com/CrealityOfficial/CrealityPrint/blob/v7.3.1/src/libslic3r/PrintApply.cpp):
+  Creality checks `is_fuzzy_skin_painted()`, segments the painted region,
+  and sets the new *painted-only* print region to `FuzzySkinType::All`
+  independently of its parent `fuzzy_skin=none` process setting.
+  **Do not globally force `fuzzy_skin=all`**: that would texture nonpainted
+  geometry and mask broken selective painting. Test against an actual outer
+  wall and report an unchanged same-geometry control as inconclusive until
+  suitable wall geometry is available.
+
+- [Flush-volume calculation](https://github.com/CrealityOfficial/CrealityPrint/blob/v7.3.1/src/libslic3r/GCode/ToolOrdering.cpp),
+  [GCode.cpp](https://github.com/CrealityOfficial/CrealityPrint/blob/v7.3.1/src/libslic3r/GCode.cpp),
+  [Print.cpp](https://github.com/CrealityOfficial/CrealityPrint/blob/v7.3.1/src/libslic3r/Print.cpp):
+  effective purge volume derives from directional matrix entry
+  `[old_extruder * filament_count + new_extruder] * flush_multiplier`.
+  But the printer-specific route depends on `enable_prime_tower`,
+  `purge_in_prime_tower`, `single_extruder_multi_material`, change-filament
+  macros and settings such as `prime_volume`. For instance, the generated
+  change-filament template receives `flush_length` as a placeholder;
+  some tower modes intentionally pass zero wipe volume through that path.
+  No assumption that every increased matrix value yields more G1 E commands
+  is safe. Existing K2 results changed effective 140/140 to
+  462.5/218.75 mm³ but *not* G0/G1/T or M command hashes.
+
+The command `diagnose_creality_paint_features --deep` now also returns
+`feature_role_audit.extrusion_xy_moves_by_role.support`,
+`geometry_control.support_xy_move_difference`, limited
+`gcode_effective_settings` parsed from native config comments,
+`gcode_header_flush_matrix_changed` when both headers contain matrices,
+and non-sensitive purge-route flags from the project settings. It **never
+returns filament-change macro contents**. Missing effective settings are
+reported as absent rather than guessed.
+
+To run after an **application-only** staging update:
+
+```bash
+sudo docker exec makervault python3 /app/backend/manage.py test \
+  core.tests.test_slicer_creality_paint_diagnostics --noinput
+sudo docker exec makervault python3 /app/backend/manage.py \
+  diagnose_creality_paint_features --deep
+```
+
+Do not refresh the isolated worker for these application-only diagnostic
+changes. Do not upload G-code to a printer, merge PR #171, or claim flushing,
+support or selective fuzzy skin is verified merely because the engine slices.
