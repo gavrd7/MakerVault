@@ -81,7 +81,7 @@ export default function SlicerFlushVolumes({slots=[],value=null,onChange,disable
             <div className="slicerFlushField">
               <label htmlFor="slicer-flush-multiplier">Flush multiplier</label>
               <input id="slicer-flush-multiplier" type="number" min=".1" max="3" step=".1"
-                disabled={disabled || creality} value={creality ? effectiveMultiplier : (data.multiplier ?? effectiveMultiplier)}
+                disabled={disabled} value={data.multiplier ?? effectiveMultiplier}
                 onChange={e=>{
                   const raw=e.target.value;
                   if(!raw.trim()){
@@ -93,12 +93,11 @@ export default function SlicerFlushVolumes({slots=[],value=null,onChange,disable
                     onChange?.({...data,multiplier:n});setHasEditedMultiplier(true);
                   }
                 }}/>
-              <small>{creality
-                ? "Creality global multiplier editing is not yet validated; use directional volumes."
-                : data.multiplier==null
-                  ? nativeMultiplier!=null?"Inherited from process profile · "+nativeMultiplier
-                    :"Default · 1"
-                  :"Custom · "+data.multiplier}</small>
+              <small>{data.multiplier==null
+                ? nativeMultiplier!=null?"Inherited from process profile · "+nativeMultiplier
+                  :"Native default · 1"
+                :"Custom · "+data.multiplier}
+                {creality?" · Creality native scalar multiplier":""}</small>
             </div>
             <div className="slicerFlushField">
               <label htmlFor="slicer-flush-prime-tower">Prime tower</label>
@@ -111,7 +110,7 @@ export default function SlicerFlushVolumes({slots=[],value=null,onChange,disable
                 ?"Default":"Custom"}</small>
             </div>
           </div>
-          {creality && <p className="projectUploadHint">Creality Print: directional values are saved to the native two-tool project, not applied directly to the printer. Only assigned filament transitions are editable. Empty cells show estimates, not actual native purge amounts; changes affect the slice, not the printer directly.</p>}
+          {creality && <p className="projectUploadHint">Creality Print: multiplier and directional values are stored in the native 3MF project; only two model-assigned tools can be edited. Empty cells are colour-based estimates, not native purge volumes. Validate generated G-code before printing; changes never write directly to the printer.</p>}
           <h4>Directional flushing · mm³</h4>
           <div className="slicerFlushEstimateBar">
             <button type="button" disabled={!recalcRequired}
