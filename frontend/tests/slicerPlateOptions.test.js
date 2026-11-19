@@ -21,3 +21,14 @@ test("unknown or unrelated engines do not claim support for every plate",()=>{
     supported:[],
   }).map(([key])=>key),["cool","engineering","high_temp","textured_pei","textured_cool","supertack"]);
 });
+
+test("Creality Print native profile offers bed surfaces from resolved capabilities",()=>{
+  const plates=plateOptions("crealityprint",{
+    default:null,
+    supported:["engineering","textured_pei","supertack"],
+  });
+  assert.deepEqual(plates.map(([key])=>key),
+    ["engineering","textured_pei","supertack"]);
+  assert.deepEqual(plateOptions("crealityprint",null).map(([key])=>key),["default"]);
+  assert.deepEqual(plateOptions("crealityprint",{supported:[]}).map(([key])=>key),["default"]);
+});
