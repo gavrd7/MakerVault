@@ -102,9 +102,17 @@ def store_generated_gcode(job_id, raw: bytes):
             # The validated engine output remains authoritative. Thumbnail
             # fallback changes comment-only metadata, never toolpath commands.
             report = inspect_generated_gcode(raw, job.printer)
-            raw, thumbnail_sizes = add_gcode_thumbnails(raw)
-            if len(raw) > MAX_OUTPUT:
-                raise SlicerOutputError("Generated G-code with thumbnails exceeds the output limit.")
+            # Thumbnail generation is best-effort presentation metadata:
+            # renderer failures or oversized PNG blocks must never invalidate a
+            # previously validated, working printer toolpath.
+            original_raw = raw
+            thumbnail_sizes = ()
+            try:
+                enriched, candidate_sizes = add_gcode_thumbnails(raw)
+                if len(enriched) <= MAX_OUTPUT:
+                    raw, thumbnail_sizes = enriched, candidate_sizes
+            except (ValueError, OSError, OverflowError, MemoryError):
+                raw = original_raw
             ensure_storage_capacity(job.owner, len(raw))
             output_name = generated_slice_name(job)
             keep_in_library = (job.settings or {}).get("save_gcode_to_library") is True
