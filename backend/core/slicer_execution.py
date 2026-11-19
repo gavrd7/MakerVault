@@ -823,8 +823,10 @@ def process_queued_job(job_id):
             # model-assigned slot. The legacy single-profile field must match
             # tool 0 for the worker contract; NEVER overwrite the selected
             # slot's native filament with the unrelated Setup default.
-            # The worker's primary filament is the validated tool-0 profile.
-            # Never replace it with the unrelated Setup default.
+            # Preserve the profile copy validated for this specific bed type.
+            profiles[1] = apply_creality_plate(
+                profiles[2], material_result["filament_profiles"][0],
+                job.plate, job.printer_profile)[1]
         if material_result is not None and job.engine == "crealityprint":
             stage = "building self-contained Creality native 3MF project"
             from .slicer_creality_project import build_creality_project_candidate
