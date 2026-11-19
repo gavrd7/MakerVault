@@ -446,7 +446,7 @@ def _apply_creality_flush_settings(project, settings, bindings):
 def build_creality_project_candidate(plate, *, printer, process, filaments,
                                     version="7.3.1", prime_tower=None,
                                     tool_colours=None, flush_settings=None,
-                                    tool_bindings=None,
+                                    tool_bindings=None, layer_ranges=None,
                                     bed_width=260, bed_depth=260):
     """Create a self-contained *candidate* Creality project 3MF.
 
@@ -623,6 +623,19 @@ def build_creality_project_candidate(plate, *, printer, process, filaments,
             "offset": "0 0 0"})
     entries["Metadata/model_settings.config"] = ET.tostring(
         settings_root, encoding="utf-8", xml_declaration=True)
+    if layer_ranges is not None:
+        # Creality's bbs_3mf importer accepts the same Bambu/Orca-style
+        # Metadata/layer_config_ranges.xml object-range format.
+        # The source-model builder already validates band bounds and geometry.
+        if (not isinstance(layer_ranges, bytes) or len(layer_ranges) > 128 * 1024):
+            raise SlicerProfileError("Invalid Creality native layer range metadata.")
+        try:
+            layer_root = SafeET.fromstring(layer_ranges)
+        except SafeET.ParseError as exc:
+            raise SlicerProfileError("Invalid Creality native layer range XML.") from exc
+        if layer_root.tag != "objects":
+            raise SlicerProfileError("Invalid Creality native layer range root.")
+        entries["Metadata/layer_config_ranges.xml"] = layer_ranges
     entries["Metadata/project_settings.config"] = encoded
     # Creality 7.3.1 checks this metadata before accepting the file as a
     # native project. It is separate from the effective project settings.
