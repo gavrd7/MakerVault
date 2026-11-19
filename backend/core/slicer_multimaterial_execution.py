@@ -4,6 +4,8 @@ The selected printer adapter must publish material architecture evidence.
 This intentionally does NOT establish firmware changeover support or allow
 printer transfer. Preview/painted facets require an independent integration.
 """
+import re
+
 from .models import PrinterConnection, SlicerProfile
 from .slicer_colour_painting import validate_colour_paint
 from .slicer_material_routing import (
@@ -281,11 +283,13 @@ def prepare_creality_positioned_project(job, source_models, *, bed_width, bed_de
         for index, tool in colour_maps[0].items():
             selected = painted_data["palette"][index]["color"]
             current = colours.setdefault(tool, selected)
-            if not isinstance(selected, str) or current.upper() != selected.upper():
+            if (not isinstance(selected, str) or
+                    not isinstance(current, str) or
+                    current.upper() != selected.upper()):
                 raise MaterialRoutingError("Painted swatches conflict with the assigned filament colours.")
         if set(colours) != {0, 1} or any(
             not isinstance(value, str) or
-            not __import__("re").fullmatch(r"#[0-9A-Fa-f]{6}", value)
+            not re.fullmatch(r"#[0-9A-Fa-f]{6}", value)
             for value in colours.values()
         ):
             raise MaterialRoutingError("Creality painted colours require two valid selected filament colours.")
