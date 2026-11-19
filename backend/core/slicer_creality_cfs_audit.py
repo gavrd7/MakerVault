@@ -91,3 +91,72 @@ def audit_creality_cfs_assignments(objects, slot_records, cfs_context, *, printe
         "mapping": mapping,
         "note": "Read-only slot identity check; firmware changeover and print start remain unverified.",
     }
+
+
+def audit_creality_gcode_for_cfs(job, mapping_report, raw):
+    """Tie a completed offline Creality G-code file to the selected live bays.
+
+    This cross-checks the actual generated toolpath and filament headers. It
+    never authorises transport or firmware operation, even on success.
+    """
+    import hashlib
+    from .gcode_analysis import analyse_text
+    from .slicer_material_gcode_audit import (
+        audit_native_tool_usage, MaterialGcodeAuditError,
+    )
+
+    asset = getattr(job, "output_asset", None)
+    if (getattr(job, "engine", None) != "crealityprint"
+            or getattr(job, "status", None) != "completed"
+            or asset is None
+            or str((asset.metadata or {}).get("slice_job_id")) != str(job.pk)
+            or str((asset.metadata or {}).get("printer_id")) != str(job.printer_id)
+            or (asset.metadata or {}).get("multi_material_test") is not True
+            or (asset.metadata or {}).get("printer_submission_verified") is not False):
+        raise CrealityCfsAuditError("No matching completed, unapproved Creality test G-code.")
+    if not isinstance(raw, bytes) or not 0 < len(raw) <= 64 * 1024 * 1024:
+        raise CrealityCfsAuditError("G-code is empty or exceeds the supported audit size.")
+    if not getattr(asset, "sha256", None) or hashlib.sha256(raw).hexdigest() != asset.sha256:
+        raise CrealityCfsAuditError("Saved G-code SHA-256 does not match the completed slice.")
+    try:
+        gcode = raw.decode("utf-8")
+    except UnicodeDecodeError as exc:
+        raise CrealityCfsAuditError("Creality G-code must be plain UTF-8 text.") from exc
+    try:
+        tools = audit_native_tool_usage(gcode, expected_tools={0, 1})
+    except MaterialGcodeAuditError as exc:
+        raise CrealityCfsAuditError("G-code tool/extrusion audit failed: " + str(exc)) from exc
+    # Reject unexpected depositing tools, even if both expected ones appear.
+    if set(tools["extruding_moves"]) != {0, 1}:
+        raise CrealityCfsAuditError("G-code extrudes on unexpected logical tools.")
+    report = analyse_text(gcode, truncated=False)
+    filaments = report.get("filaments") or {}
+    declared = filaments.get("requirements") or []
+    by_tool = {row.get("tool_index"): row for row in declared if isinstance(row, dict)}
+    slots = mapping_report.get("mapping") or []
+    if (len(slots) != 2 or {row["tool_index"] for row in slots} != {0, 1}
+            or any(tool not in by_tool for tool in (0, 1))):
+        raise CrealityCfsAuditError("Saved tools and G-code filament declarations disagree.")
+    for row in slots:
+        requirement = by_tool[row["tool_index"]]
+        colour = requirement.get("color_hex")
+        native_material = str(requirement.get("material") or "").upper()
+        live_material = str(row.get("material") or "").strip().upper()
+        if not colour or colour.upper() != row["colour"]:
+            raise CrealityCfsAuditError("G-code filament colour differs from the verified CFS bay.")
+        # Creality CFS usually reports the polymer family (PLA), while the
+        # native slicer may declare the subtype PLA-Silk. Never equate PETG/PLA.
+        if not native_material or not live_material or not (
+            native_material == live_material
+            or native_material.startswith(live_material + "-")
+            or native_material.startswith(live_material + "+")
+        ):
+            raise CrealityCfsAuditError("G-code filament family differs from the verified CFS material.")
+    return {
+        **mapping_report,
+        "verified_gcode_sha256": asset.sha256,
+        "verified_gcode_tools": sorted(tools["extruding_moves"]),
+        "gcode_material_preflight_passed": True,
+        "printer_submission_verified": False,
+        "note": "G-code and live CFS slot identities agree; firmware routing and print start remain unverified.",
+    }

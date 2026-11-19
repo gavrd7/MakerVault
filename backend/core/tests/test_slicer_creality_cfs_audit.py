@@ -71,3 +71,45 @@ class CrealityCfsAuditTests(SimpleTestCase):
         self.objects[1]["material_slot"] = dict(self.objects[0]["material_slot"])
         with self.assertRaisesRegex(CrealityCfsAuditError, "distinct CFS slots"):
             self.audit()
+
+    def test_completed_slice_gcode_must_match_live_slot_identity(self):
+        import hashlib
+        from core.slicer_creality_cfs_audit import audit_creality_gcode_for_cfs
+        raw = (
+            b"; filament_type = PLA-Silk;PLA-Silk;PLA-Silk;PLA-Silk\n"
+            b"; filament_colour = #777777;#FADD4D;#777777;#FADD4D\n"
+            b"T0\nM83\nG1 X1 Y1 E0.2\nT1\nG1 X2 Y2 E0.2\n"
+        )
+        asset = SimpleNamespace(
+            sha256=hashlib.sha256(raw).hexdigest(),
+            metadata={"slice_job_id": "job", "printer_id": "p",
+                      "multi_material_test": True, "printer_submission_verified": False},
+        )
+        job = SimpleNamespace(pk="job", printer_id="p", engine="crealityprint",
+                              status="completed", output_asset=asset)
+        result = audit_creality_gcode_for_cfs(job, self.audit(), raw)
+        self.assertTrue(result["gcode_material_preflight_passed"])
+        self.assertFalse(result["printer_submission_verified"])
+        self.assertEqual(result["verified_gcode_tools"], [0, 1])
+        altered = raw.replace(b"#FADD4D", b"#FFFFFF")
+        with self.assertRaisesRegex(CrealityCfsAuditError, "SHA-256"):
+            audit_creality_gcode_for_cfs(job, self.audit(), altered)
+        asset.sha256 = hashlib.sha256(altered).hexdigest()
+        with self.assertRaisesRegex(CrealityCfsAuditError, "colour differs"):
+            audit_creality_gcode_for_cfs(job, self.audit(), altered)
+
+    def test_gcode_preflight_rejects_missing_second_tool(self):
+        import hashlib
+        from core.slicer_creality_cfs_audit import audit_creality_gcode_for_cfs
+        raw = (b"; filament_type = PLA;PLA;PLA;PLA\n"
+               b"; filament_colour = #777777;#FADD4D;#777777;#FADD4D\n"
+               b"T0\nM83\nG1 X1 Y1 E0.2\n")
+        asset = SimpleNamespace(
+            sha256=hashlib.sha256(raw).hexdigest(),
+            metadata={"slice_job_id": "job", "printer_id": "p",
+                      "multi_material_test": True, "printer_submission_verified": False},
+        )
+        job = SimpleNamespace(pk="job", printer_id="p", engine="crealityprint",
+                              status="completed", output_asset=asset)
+        with self.assertRaisesRegex(CrealityCfsAuditError, "tool/extrusion"):
+            audit_creality_gcode_for_cfs(job, self.audit(), raw)

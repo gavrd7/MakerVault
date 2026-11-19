@@ -7,7 +7,7 @@ from core.models import SliceJob, PrinterConnection, PrinterFilamentSlot
 from core.printer_gcode_submission import creality_cfs_context, _is_k2
 from core.printer_connectivity import poll_connection, PrinterConnectionError
 from core.slicer_creality_cfs_audit import (
-    CrealityCfsAuditError, audit_creality_cfs_assignments,
+    CrealityCfsAuditError, audit_creality_cfs_assignments, audit_creality_gcode_for_cfs,
 )
 
 
@@ -24,7 +24,7 @@ class Command(BaseCommand):
         if options["latest"]:
             job = next((
                 candidate for candidate in
-                SliceJob.objects.select_related("printer").filter(
+                SliceJob.objects.select_related("printer", "output_asset").filter(
                     engine="crealityprint"
                 ).order_by("-created_at")[:25]
                 if (candidate.settings or {}).get("multi_material_test") is True
@@ -34,7 +34,7 @@ class Command(BaseCommand):
                 raise CommandError("No recent two-material Creality job found.")
         else:
             try:
-                job = SliceJob.objects.select_related("printer").get(pk=options["job_id"])
+                job = SliceJob.objects.select_related("printer", "output_asset").get(pk=options["job_id"])
             except (SliceJob.DoesNotExist, ValueError, TypeError):
                 raise CommandError("Saved Creality job not found.") from None
         if job.engine != "crealityprint" or (job.settings or {}).get("multi_material_test") is not True:
@@ -84,6 +84,17 @@ class Command(BaseCommand):
                 objects, rows, context,
                 printer_id=job.printer_id,
             )
+        except CrealityCfsAuditError as exc:
+            raise CommandError(str(exc)) from exc
+        asset = job.output_asset
+        if asset is None:
+            raise CommandError("Selected Creality job has no completed G-code file.")
+        if asset.file.size > 64 * 1024 * 1024:
+            raise CommandError("Creality G-code exceeds the supported audit size.")
+        with asset.file.storage.open(asset.file.name, "rb") as handle:
+            raw = handle.read(64 * 1024 * 1024 + 1)
+        try:
+            report = audit_creality_gcode_for_cfs(job, report, raw)
         except CrealityCfsAuditError as exc:
             raise CommandError(str(exc)) from exc
         self.stdout.write(json.dumps(report, indent=2))
