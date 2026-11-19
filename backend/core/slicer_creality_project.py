@@ -491,15 +491,20 @@ def build_creality_project_candidate(plate, *, printer, process, filaments,
         present = [preset.get(key) for preset in filament_settings]
         if any(v is not None for v in present):
             if any(v is None for v in present):
-                # This is a native allowlisted option name, never preset
-                # contents. A partial value must not silently inherit another
-                # filament's temperature, retract or purge configuration.
-                missing = ", ".join("T%d" % i for i, value in enumerate(present)
-                                    if value is None)
-                raise SlicerProfileError(
-                    "Creality filament presets disagree on native setting "
-                    + key + " (missing for " + missing + "). "
-                    "Select compatible native filament profiles.")
+                # Creality Print's PrintConfig.cpp explicitly defines
+                # filament_shrinkage_compensation_z (coPercents) default 100%.
+                # Normalise ONLY this known, neutral native default; never
+                # infer missing temperature, flow, retract, or purge settings
+                # from another material's preset.
+                if key == "filament_shrinkage_compensation_z":
+                    present = ["100%" if v is None else v for v in present]
+                else:
+                    missing = ", ".join("T%d" % i for i, value in enumerate(present)
+                                        if value is None)
+                    raise SlicerProfileError(
+                        "Creality filament presets disagree on native setting "
+                        + key + " (missing for " + missing + "). "
+                        "Select compatible native filament profiles.")
             project[key] = [_one_filament_value(v, key) for v in present]
     project["filament_settings_id"] = [
         str(preset.get("name") or "MakerVault filament %d" % (i + 1))
