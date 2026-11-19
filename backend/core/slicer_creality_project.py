@@ -260,10 +260,17 @@ def _choose_safe_tower_position(plate, *, bed_width, bed_depth, width):
         xs = [float(vertex.attrib["x"]) for vertex in vertices]
         ys = [float(vertex.attrib["y"]) for vertex in vertices]
         occupied.append((min(xs) - 3, min(ys) - 3, max(xs) + 3, max(ys) + 3))
-    xs = [border, bed_width - border - extent]
-    ys = [border, bed_depth - border - extent]
-    for x in xs:
-        for y in ys:
+    # Prefer rear corners, then front corners. The earlier ordering selected
+    # (5, 5) first on a mostly empty plate: the K2's front-left area. Avoid
+    # that as the default while preserving native collision/bed bounds checks.
+    # Explicit user placement is handled separately and is never overridden.
+    candidates = (
+        (bed_width - border - extent, bed_depth - border - extent),
+        (border, bed_depth - border - extent),
+        (bed_width - border - extent, border),
+        (border, border),
+    )
+    for x, y in candidates:
             if x < 0 or y < 0:
                 continue
             if all(x + extent < left or x > right or
