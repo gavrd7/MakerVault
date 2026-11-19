@@ -9,6 +9,7 @@ from django.test import SimpleTestCase
 from core.management.commands.diagnose_creality_paint_features import (
     _metrics, _patch_for_model, _native_project_audit,
     _geometry_control_project, _layer_band_audit,
+    _feature_role_audit, _gcode_effective_settings,
 )
 from core.slicer_approval import fixture_stl
 
@@ -97,3 +98,27 @@ class CrealityPaintingDiagnosticTests(SimpleTestCase):
         self.assertEqual(result["interior_observed_steps_mm"], [0.12])
         self.assertEqual(result["outside_observed_steps_mm"], [0.2])
         self.assertFalse(_layer_band_audit(gcode, 2.0, 3.0)["band_target_observed"])
+
+    def test_feature_roles_count_support_extrusions_not_markers_alone(self):
+        gcode = (b"; FEATURE: Outer wall\nG1 X1 Y2 E0.1\n"
+                 b"; FEATURE: Support\nG1 X3 Y3 E0.2\n"
+                 b"G1 E-0.3\nG1 X4 Y4\n"
+                 b";TYPE:Support interface\nG1 X4 Y5 E0.4\n"
+                 b"; FEATURE: Sparse infill\nG1 X6 E0.5\n")
+        audit = _feature_role_audit(gcode)
+        self.assertEqual(audit["feature_role_tags"], 4)
+        self.assertEqual(audit["extrusion_xy_moves_by_role"]["support"], 2)
+        self.assertEqual(audit["extrusion_xy_moves_by_role"]["outer_wall"], 1)
+        self.assertEqual(audit["extrusion_xy_moves_by_role"]["other"], 1)
+
+    def test_gcode_config_audit_reads_safe_keys_only(self):
+        gcode = (b"; flush_volumes_matrix = 0,370,175,0\n"
+                 b"; flush_multiplier = 1.25\n"
+                 b"; purge_in_prime_tower = 0\n"
+                 b"; change_filament_gcode = sensitive G-code macro\n")
+        audit = _gcode_effective_settings(gcode)
+        self.assertEqual(audit["flush_multiplier"], "1.25")
+        self.assertEqual(audit["purge_in_prime_tower"], "0")
+        self.assertEqual(len(audit["flush_matrix_gcode_header_sha256"]), 64)
+        self.assertNotIn("change_filament_gcode", audit)
+        self.assertNotIn("sensitive", str(audit))
