@@ -11,6 +11,7 @@ from core.management.commands.diagnose_creality_paint_features import (
     _geometry_control_project, _layer_band_audit,
     _feature_role_audit, _gcode_effective_settings,
     _cantilever_fixture_stl, _cantilever_support_marker,
+    _cantilever_wall_marker,
 )
 from core.slicer_approval import fixture_stl
 from core.slicer_mesh import inspect_stl
@@ -143,3 +144,16 @@ class CrealityPaintingDiagnosticTests(SimpleTestCase):
         self.assertTrue(all(abs(point[2] - 20.) < 1e-5
                             for point in patch["polygon"]))
         self.assertGreater(sum(vertex[0] for vertex in triangle) / 3, 13)
+
+    def test_wall_fixture_targets_exterior_vertical_face(self):
+        mesh = _cantilever_fixture_stl()
+        marker = _cantilever_wall_marker(mesh)
+        self.assertEqual(marker["signature"], _patch_for_model(mesh)[0])
+        region = marker["regions"][0]
+        self.assertEqual(region["slot"], 0)
+        patch = region["patches"][0]
+        triangle = list(_triangles(mesh))[patch["face"]]
+        self.assertTrue(all(abs(point[1]) < 1e-5 for point in triangle))
+        self.assertGreater(max(p[2] for p in triangle) -
+                           min(p[2] for p in triangle), 15)
+        self.assertEqual(len(patch["polygon"]), 3)
