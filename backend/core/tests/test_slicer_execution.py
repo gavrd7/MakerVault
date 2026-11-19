@@ -107,6 +107,7 @@ class IntendedMaterialSafetyTests(SimpleTestCase):
             engine="orcaslicer", engine_version="2.5.0",
             printer_id="printer", filament_profile_id="filament",
             printer_profile_id="native-printer",
+            printer_profile=SimpleNamespace(),
         )
         self.assertTrue(_validate_plate_execution(job))
         self.assertFalse(_single_unmodified_stl([model]))
