@@ -89,6 +89,7 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
   const [savedProfileModel, setSavedProfileModel] = useState("all");
   const [savedProfileMaterial, setSavedProfileMaterial] = useState("all");
   const [savedProfileSearch, setSavedProfileSearch] = useState("");
+  const [changeProfileSearch, setChangeProfileSearch] = useState({printer: "", filament: "", process: ""});
   const [editingProfile, setEditingProfile] = useState(null);
   const [editProfileName, setEditProfileName] = useState("");
   const [editProfileSchema, setEditProfileSchema] = useState({});
@@ -1763,16 +1764,35 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
         </div>
         <p className="full slicerChangePrinterHint">The plate type selects the matching native filament bed-temperature settings when slicing. It does not detect or change the physical build plate.</p>
         <p className="full slicerChangePrinterHint">Changing the printer resets the session's native printer, process and filament profiles to prevent incompatible selections. Select matching presets below before saving or slicing.</p>
-        {["printer", "filament", "process"].map(kind => <label key={kind}>
-          {kind.charAt(0).toUpperCase() + kind.slice(1)} profile
-          <select value={form[kind + "_profile_id"]} disabled={!canPrepare || busy}
-            onChange={e => selectNativeProfile(kind, e.target.value)}>
-            <option value="">Choose {kind} profile</option>
-            {forKind(kind).map(profile => <option key={profile.id} value={profile.id}>
-              {profile.name}
-            </option>)}
-          </select>
-        </label>)}
+        {["printer", "filament", "process"].map(kind => {
+          const installed = forKind(kind);
+          const term = changeProfileSearch[kind].trim().toLocaleLowerCase();
+          const matching = term ? installed.filter(profile =>
+            [profile.name, profile.provenance, profile.kind].some(value =>
+              String(value || "").toLocaleLowerCase().includes(term))) : installed;
+          const selected = installed.find(profile => String(profile.id) === String(form[kind + "_profile_id"]));
+          return <div key={kind} className="slicerChangeProfileChoice">
+            <label>{kind.charAt(0).toUpperCase() + kind.slice(1)} profile
+              <input type="search" value={changeProfileSearch[kind]}
+                placeholder={"Search installed " + kind + " profiles…"}
+                aria-label={"Search installed " + kind + " profiles"}
+                onChange={e => setChangeProfileSearch(current => ({...current, [kind]: e.target.value}))} />
+              <select value={form[kind + "_profile_id"]} disabled={!canPrepare || busy}
+                onChange={e => selectNativeProfile(kind, e.target.value)}>
+                <option value="">Choose {kind} profile</option>
+                {selected && !matching.some(profile => profile.id === selected.id) &&
+                  <option value={selected.id}>{selected.name} (selected)</option>}
+                {matching.map(profile => <option key={profile.id} value={profile.id}>{profile.name}</option>)}
+              </select>
+            </label>
+            <small role="status">{matching.length} of {installed.length} installed {kind} profiles</small>
+            {(installed.length === 0 || matching.length === 0) && <small>
+              {installed.length === 0 ? "No installed profiles for this engine and version." : "No installed profiles match your search."}
+            </small>}
+            <button type="button" disabled={busy}
+              onClick={() => openOfficialSearch(kind)}>Search official {kind} profiles</button>
+          </div>;
+        })}
       </div>
       <p className="projectUploadHint">Material slot assignments are separate from native filament presets.
         Changing these profiles does not modify printer hardware or loaded CFS/AMS slots.</p>
