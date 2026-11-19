@@ -520,6 +520,7 @@ class GcodePrinterContractTests(SimpleTestCase):
 
     @patch("core.printer_gcode_submission.PrinterConnection.objects.filter")
     def test_k2_mapped_readiness_explains_stale_or_busy_state(self, filtered):
+        from datetime import timedelta
         native = connection("creality_local")
         native.printer = SimpleNamespace(model="K2", catalog_model=None)
         native.printer_id = "printer-one"
