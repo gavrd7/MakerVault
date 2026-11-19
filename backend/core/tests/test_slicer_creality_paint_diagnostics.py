@@ -10,8 +10,11 @@ from core.management.commands.diagnose_creality_paint_features import (
     _metrics, _patch_for_model, _native_project_audit,
     _geometry_control_project, _layer_band_audit,
     _feature_role_audit, _gcode_effective_settings,
+    _cantilever_fixture_stl, _cantilever_support_marker,
 )
 from core.slicer_approval import fixture_stl
+from core.slicer_mesh import inspect_stl
+from core.slicer_plate_3mf import _triangles
 
 
 class CrealityPaintingDiagnosticTests(SimpleTestCase):
@@ -122,3 +125,21 @@ class CrealityPaintingDiagnosticTests(SimpleTestCase):
         self.assertEqual(len(audit["flush_matrix_gcode_header_sha256"]), 64)
         self.assertNotIn("change_filament_gcode", audit)
         self.assertNotIn("sensitive", str(audit))
+
+    def test_deterministic_cantilever_fixture_paints_elevated_underside(self):
+        first = _cantilever_fixture_stl()
+        self.assertEqual(first, _cantilever_fixture_stl())
+        mesh = inspect_stl(first)
+        self.assertEqual(mesh["triangles"], 20)
+        self.assertEqual(mesh["size_mm"], [30.0, 12.0, 25.0])
+        marker = _cantilever_support_marker(first)
+        signature, _face, _polygon, height = _patch_for_model(first)
+        self.assertEqual(marker["signature"], signature)
+        self.assertEqual(height, 25.0)
+        patch = marker["regions"][0]["patches"][0]
+        triangle = list(_triangles(first))[patch["face"]]
+        self.assertTrue(all(abs(vertex[2] - 20.) < 1e-5
+                            for vertex in triangle))
+        self.assertTrue(all(abs(point[2] - 20.) < 1e-5
+                            for point in patch["polygon"]))
+        self.assertGreater(sum(vertex[0] for vertex in triangle) / 3, 13)
