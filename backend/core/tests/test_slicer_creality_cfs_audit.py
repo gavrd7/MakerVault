@@ -32,6 +32,53 @@ class CrealityCfsAuditTests(SimpleTestCase):
         return audit_creality_cfs_assignments(
             self.objects, self.rows, self.context, printer_id="p")
 
+    def test_one_painted_object_maps_base_then_painted_cfs_slot(self):
+        from core.slicer_creality_cfs_audit import creality_cfs_audit_objects
+        painted = [{
+            **self.objects[0],
+            "colour_paint": {
+                "version": 2, "signature": "2:deadbeef",
+                "palette": [
+                    {"color": "#777777", "label": "Grey", "printer_id":
+                     "11111111-1111-4111-8111-111111111111",
+                     "slot_id": "grey", "slot_index": 3},
+                    {"color": "#FADD4D", "label": "Yellow", "printer_id":
+                     "11111111-1111-4111-8111-111111111111",
+                     "slot_id": "yellow", "slot_index": 0},
+                ],
+                "regions": [{"slot": 1, "patches": [
+                    {"face": 0, "polygon": [[0,0,0], [1,0,0], [0,1,0]]}
+                ]}],
+            },
+        }]
+        painted[0]["material_slot"]["printer_id"] = "11111111-1111-4111-8111-111111111111"
+        for row in self.rows:
+            row.printer_id = "11111111-1111-4111-8111-111111111111"
+        expanded = creality_cfs_audit_objects(
+            painted, printer_id="11111111-1111-4111-8111-111111111111")
+        self.assertEqual(len(expanded), 2)
+        self.assertEqual(expanded[0]["material_slot"]["slot_id"], "grey")
+        self.assertEqual(expanded[1]["material_slot"]["slot_id"], "yellow")
+        self.assertEqual(expanded[1]["color"].upper(), "#FADD4D")
+        report = audit_creality_cfs_assignments(
+            expanded, self.rows, self.context,
+            printer_id="11111111-1111-4111-8111-111111111111")
+        self.assertEqual([row["slot_label"] for row in report["mapping"]],
+                         ["1D", "2A"])
+
+    def test_one_painted_object_rejects_unassigned_or_extra_slot(self):
+        from core.slicer_creality_cfs_audit import creality_cfs_audit_objects
+        obj = dict(self.objects[0])
+        obj["colour_paint"] = {
+            "version": 2, "signature": "2:deadbeef",
+            "palette": [{"color": "#FADD4D", "label": "Yellow"}],
+            "regions": [{"slot": 0, "patches": [
+                {"face": 0, "polygon": [[0,0,0], [1,0,0], [0,1,0]]}
+            ]}],
+        }
+        with self.assertRaises(CrealityCfsAuditError):
+            creality_cfs_audit_objects([obj], printer_id="p")
+
     def test_non_contiguous_bays_keep_logical_tool_order(self):
         report = self.audit()
         self.assertEqual([row["slot_label"] for row in report["mapping"]],
