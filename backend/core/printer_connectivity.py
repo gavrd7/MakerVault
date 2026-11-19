@@ -1083,9 +1083,97 @@ def _creality_native_idle_evidence(snapshot):
     return True
 
 
+CREALITY_LATCHED_IDLE_MIN_SECONDS = 180
+
+
+def _creality_latched_idle_signature(snapshot):
+    """Return the complete inactive, *latched* job identity or fail closed.
+
+    K2 firmware can retain a cancelled file's progress/remaining values while
+    state=0, deviceState=0, heaters=off and the touchscreen/app show Idle.
+    Neither counters nor a screen label alone proves a new print is safe.
+    """
+    if not isinstance(snapshot, dict) or snapshot.get("online") is not True:
+        return None
+    if snapshot.get("state") != "processing":
+        return None
+    meta = snapshot.get("source_metadata") or {}
+    if meta.get("raw_state") != 0 or meta.get("device_state") != 0:
+        return None
+    if meta.get("power_loss_recovery"):
+        return None
+    if str(meta.get("material_status")) not in {"0", "0.0"}:
+        return None
+    if meta.get("activity_state") != "processing":
+        return None
+    temps = snapshot.get("temperatures") or {}
+    for key in ("tool0", "bed"):
+        target = _finite_number((temps.get(key) or {}).get("target_c"))
+        if target is None or target != 0:
+            return None
+    job = snapshot.get("job") or {}
+    if not job.get("file_name"):
+        return None
+    if _finite_number(job.get("elapsed_seconds")) != 0:
+        return None
+    if _finite_number(job.get("current_layer")) != 0:
+        return None
+    progress = _finite_number(job.get("progress"))
+    remaining = _finite_number(job.get("remaining_seconds"))
+    if progress is None or not 0 < progress < 100 or remaining is None or remaining <= 0:
+        return None
+    # Use all job identity and counter signals, so any new activity resets
+    # the countdown even if Creality keeps the same file name.
+    return [str(job["file_name"]), progress, remaining,
+            str(meta.get("print_id") or ""), str(meta.get("print_start_time") or "")]
+
+
+def _creality_latched_idle_evidence(connection, snapshot):
+    """Require an unchanged, independent native poll history for 3 minutes."""
+    signature = _creality_latched_idle_signature(snapshot)
+    if signature is None:
+        return False, None, None
+    previous = (getattr(connection, "last_snapshot", None) or {}).get("source_metadata") or {}
+    previous_signature = previous.get("idle_candidate_signature")
+    previous_since = previous.get("idle_candidate_since")
+    now = timezone.now()
+    if previous_signature != signature or not isinstance(previous_since, str):
+        return False, now.isoformat(), signature
+    try:
+        since = timezone.datetime.fromisoformat(previous_since)
+    except ValueError:
+        return False, now.isoformat(), signature
+    if timezone.is_naive(since) or since > now:
+        return False, now.isoformat(), signature
+    # The last comparison is with previously persisted telemetry; a repeat
+    # of the same payload within a single poll cannot self-authorise idle.
+    previous_at = (getattr(connection, "last_snapshot", None) or {}).get("captured_at")
+    try:
+        observed = timezone.datetime.fromisoformat(previous_at)
+    except (TypeError, ValueError):
+        return False, now.isoformat(), signature
+    if timezone.is_naive(observed) or observed >= now:
+        return False, now.isoformat(), signature
+    return (now - since).total_seconds() >= CREALITY_LATCHED_IDLE_MIN_SECONDS, previous_since, signature
+
+
 def _reconcile_creality_processing(connection, snapshot):
-    """Remove a stale job filename only on direct native idle evidence."""
-    if not _creality_native_idle_evidence(snapshot):
+    """Clear a latched job only after independent, inactive native evidence."""
+    direct = _creality_native_idle_evidence(snapshot)
+    confirmed, candidate_since, signature = (
+        (False, None, None) if direct else
+        _creality_latched_idle_evidence(connection, snapshot)
+    )
+    if not direct and not confirmed:
+        # Carry the observation window through the normal persisted snapshot.
+        # Any active/changed state clears it; no state is forced to idle.
+        if candidate_since is not None:
+            result = dict(snapshot)
+            metadata = dict(result.get("source_metadata") or {})
+            metadata["idle_candidate_since"] = candidate_since
+            metadata["idle_candidate_signature"] = signature
+            result["source_metadata"] = metadata
+            return result
         return snapshot
     result = dict(snapshot)
     result["state"] = "idle"
@@ -1096,8 +1184,14 @@ def _reconcile_creality_processing(connection, snapshot):
                 "remaining_seconds": None, "current_layer": None, "total_layers": None})
     result["job"] = job
     metadata = dict(result.get("source_metadata") or {})
+    metadata.pop("idle_candidate_since", None)
+    metadata.pop("idle_candidate_signature", None)
     metadata.update({"native_idle_confirmed": True,
-                     "previous_job_filename": previous_filename})
+                     "native_idle_reason": "latched_job_inactive_180s" if confirmed else "cleared_job_counters",
+                     "previous_job_filename": previous_filename,
+                     # Downstream live history must never treat a stale
+                     # cancelled print as a successful completion.
+                     "activity_state": "idle"})
     result["source_metadata"] = metadata
     return result
 
