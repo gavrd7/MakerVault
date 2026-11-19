@@ -117,7 +117,6 @@ def plan_native_multimaterial(job, *, settings=None):
     # from its owned, hash-checked source and complete parent lineage before
     # it reaches the isolated native tool palette.
     from .slicer_native_resolution import resolved_native_profile
-    from .slicer_variable_layers import orca_layer_config_ranges
     from .slicer_profiles import SlicerProfileError
     try:
         for profile in palette:
@@ -242,6 +241,7 @@ def prepare_creality_positioned_project(job, source_models, *, bed_width, bed_de
     from .slicer_creality_project import build_creality_positioned_plate
     from .slicer_native_material_palette import native_colour_tool_maps
     from .slicer_native_resolution import resolved_native_profile
+    from .slicer_variable_layers import orca_layer_config_ranges
 
     settings = job.settings or {}
     objects = settings.get("plate_objects") or []
