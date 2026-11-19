@@ -255,6 +255,37 @@ class IntendedMaterialSafetyTests(SimpleTestCase):
         with self.assertRaisesRegex(SlicerExecutionError, "single-filament"):
             _validate_plate_execution(job)
 
+    @patch("core.slicer_execution.plan_native_multimaterial",
+           return_value=("single_nozzle_changer", {"slot-a": 0, "slot-b": 1}, ()))
+    def test_creality_native_combined_paint_requires_explicit_cfs_test(self, _plan):
+        """Support/seam/fuzzy/layers cannot silently degrade into plain STL."""
+        from types import SimpleNamespace
+        model = {
+            "instance_id": "one", "asset_id": "source",
+            "x_mm": 0, "y_mm": 0, "rotation_deg": 0,
+            "scale_percent": 100,
+            "colour_paint": {"regions": [{"slot": 1}], "palette": []},
+            "support_paint": {"regions": [{"slot": 0}]},
+            "seam_paint": {"regions": [{"slot": 1}]},
+            "fuzzy_skin_paint": {"regions": [{"slot": 0}]},
+            "variable_layer_profile": {"bands": [
+                {"from_mm": 1, "to_mm": 3, "layer_mm": 0.12}]},
+        }
+        job = SimpleNamespace(
+            settings={"plate_objects": [model], "multi_material_test": True},
+            engine="crealityprint", engine_version="7.3.1.6378",
+            printer_id="printer", printer_profile_id="profile",
+            printer_profile=SimpleNamespace(), filament_profile_id="filament",
+        )
+        self.assertTrue(_validate_plate_execution(job))
+        job.settings["multi_material_test"] = False
+        with self.assertRaisesRegex(SlicerExecutionError, "not marked for native multi-material"):
+            _validate_plate_execution(job)
+        job.settings["multi_material_test"] = True
+        job.settings["plate_objects"] = [model, {**model, "instance_id": "second"}]
+        with self.assertRaisesRegex(SlicerExecutionError, "one model|one colour-painted"):
+            _validate_plate_execution(job)
+
     def test_unhandled_flush_matrix_cannot_be_silently_ignored(self):
         from types import SimpleNamespace
         for models in (None, [], [{"instance_id": "one"}]):
