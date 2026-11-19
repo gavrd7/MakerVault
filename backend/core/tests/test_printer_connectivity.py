@@ -214,6 +214,34 @@ class PrinterConnectivityAdapterTests(TestCase):
         self.assertEqual(clear["source_metadata"]["activity_state"], "idle")
         self.assertNotIn("idle_candidate_since", clear["source_metadata"])
         self.assertEqual(old_job["state"], "processing")
+        # Regression: the K2 may repeat the same stale 18%/2243s frame
+        # indefinitely. Once independently confirmed idle, it MUST stay idle
+        # until the hardware reports a genuinely changed state/job.
+        connection.last_snapshot = deepcopy(clear)
+        again = _reconcile_creality_processing(connection, deepcopy(old_job))
+        self.assertEqual(again["state"], "idle")
+        self.assertEqual(again["source_metadata"]["native_idle_reason"],
+                         "latched_job_inactive_180s")
+        connection.last_snapshot = deepcopy(again)
+        third = _reconcile_creality_processing(connection, deepcopy(old_job))
+        self.assertEqual(third["state"], "idle")
+        # New job identity or progress cancels the persisted confirmation.
+        for section, key, value in (
+            ("job", "file_name", "new-model.gcode"),
+            ("job", "progress", 19),
+            ("job", "remaining_seconds", 1999),
+            ("source_metadata", "print_id", "new"),
+            ("source_metadata", "raw_state", 1),
+            ("source_metadata", "material_status", 1),
+            ("temperatures", "tool0", {"target_c": 210}),
+        ):
+            with self.subTest(key=key):
+                changed = deepcopy(old_job)
+                changed[section][key] = value
+                result = _reconcile_creality_processing(connection, changed)
+                self.assertNotEqual(result["state"], "idle")
+                self.assertNotIn("latched_idle_signature",
+                                 result.get("source_metadata") or {})
 
     def test_creality_latched_idle_rejects_changed_or_active_telemetry(self):
         from copy import deepcopy
