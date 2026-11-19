@@ -14,6 +14,60 @@ class CrealityCfsAuditError(ValueError):
 _COLOUR = re.compile(r"#[0-9a-fA-F]{6}\Z")
 
 
+def creality_cfs_audit_objects(objects, *, printer_id):
+    """Expand one two-colour painted object to two *logical* filament records.
+
+    Creality uses T0 for the object's assigned base filament, and T1 for
+    paint-bound facets. This transformation is for read-only slot validation;
+    it never creates extra printable models or substitutes colour for a bay ID.
+    """
+    if not isinstance(objects, list):
+        raise CrealityCfsAuditError("Saved Creality plate is invalid.")
+    if len(objects) == 2:
+        if any(not isinstance(obj, dict) or
+               (obj.get("colour_paint") or {}).get("regions") or
+               (obj.get("colour_paint") or {}).get("faces") for obj in objects):
+            raise CrealityCfsAuditError("Two-model CFS audit cannot include painted facets.")
+        return objects
+    if len(objects) != 1 or not isinstance(objects[0], dict):
+        raise CrealityCfsAuditError("Expected two models or one two-filament painted model.")
+    obj = objects[0]
+    base = obj.get("material_slot")
+    paint = obj.get("colour_paint") or {}
+    if not isinstance(base, dict) or not isinstance(paint, dict):
+        raise CrealityCfsAuditError("Painted model needs an assigned base CFS slot.")
+    from .slicer_colour_painting import validate_colour_paint
+    try:
+        data = validate_colour_paint(paint)
+    except ValueError as exc:
+        raise CrealityCfsAuditError("Saved colour-painted regions are invalid.") from exc
+    if data.get("version") != 2 or not data["regions"]:
+        raise CrealityCfsAuditError("Creality painted CFS audit requires native surface regions.")
+    swatches = [data["palette"][index] for index in
+                {region["slot"] for region in data["regions"]}]
+    secondary = [swatch for swatch in swatches
+                 if swatch.get("slot_id") != base.get("slot_id")]
+    unique = {swatch.get("slot_id") for swatch in secondary}
+    if len(unique) != 1 or None in unique:
+        raise CrealityCfsAuditError(
+            "Painted Creality test requires exactly one additional assigned CFS slot.")
+    if any(str(swatch.get("printer_id")) != str(printer_id) for swatch in swatches):
+        raise CrealityCfsAuditError("Painted swatch belongs to a different printer.")
+    selected = secondary[0]
+    if any(swatch.get("color", "").upper() != selected["color"].upper()
+           or swatch.get("slot_index") != selected.get("slot_index")
+           for swatch in secondary):
+        raise CrealityCfsAuditError("Painted swatches disagree about the selected CFS bay.")
+    return [obj, {
+        "material_slot": {
+            "printer_id": selected["printer_id"],
+            "slot_id": selected["slot_id"],
+            "slot_index": selected["slot_index"],
+        },
+        "color": selected["color"],
+    }]
+
+
 def audit_creality_cfs_assignments(objects, slot_records, cfs_context, *, printer_id):
     """Verify saved logical-tool order against live CFS bay coordinates.
 
