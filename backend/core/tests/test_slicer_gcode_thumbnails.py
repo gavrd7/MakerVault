@@ -101,6 +101,18 @@ class SlicerGcodeThumbnailTests(SimpleTestCase):
                 result, sizes = add_gcode_thumbnails(source)
                 self.assertEqual((result, sizes), (source, ()))
 
+    def test_bounded_sampler_retains_later_layers(self):
+        from unittest.mock import patch
+        from core.slicer_gcode_thumbnails import _paths
+        commands = ["G90", "M83", "T0", "G1 X1 Y1 Z0.2 E1"]
+        for layer in range(1, 34):
+            commands.append(f"G1 X{layer + 1} Y1 Z{layer / 5:.2f} E1")
+        with patch("core.slicer_gcode_thumbnails.MAX_SEGMENTS", 6), \\
+                patch("core.slicer_gcode_thumbnails.MAX_RENDER_SEGMENTS", 6):
+            segments, _ = _paths("\n".join(commands))
+        self.assertGreater(len(segments), 0)
+        self.assertTrue(any(segment[4] > 3.0 for segment in segments))
+
     def test_existing_native_thumbnail_is_preserved_exactly(self):
         native = SAMPLE + b"; thumbnail begin 96x96 4\n; dGVz\n; thumbnail end\n"
         out, sizes = add_gcode_thumbnails(native)
