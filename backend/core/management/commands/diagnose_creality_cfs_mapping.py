@@ -5,6 +5,7 @@ from django.core.management.base import BaseCommand, CommandError
 
 from core.models import SliceJob, PrinterConnection, PrinterFilamentSlot
 from core.printer_gcode_submission import creality_cfs_context, _is_k2
+from core.printer_connectivity import poll_connection, PrinterConnectionError
 from core.slicer_creality_cfs_audit import (
     CrealityCfsAuditError, audit_creality_cfs_assignments,
 )
@@ -46,6 +47,29 @@ class Command(BaseCommand):
             raise CommandError("Exactly one enabled native Creality connection is required.")
         if not _is_k2(sources[0]):
             raise CommandError("This CFS identity audit currently supports K2 printers only.")
+        # The submission safety context intentionally rejects snapshots older
+        # than 60 seconds. Refresh via the existing read-only adapter poll,
+        # otherwise an otherwise healthy K2 fails when the dashboard is idle.
+        # Polling updates MakerVault's stored telemetry but NEVER issues a
+        # printer print/start/toolchange command.
+        try:
+            poll_connection(sources[0])
+        except (PrinterConnectionError, OSError, ValueError) as exc:
+            raise CommandError(
+                "Could not refresh native K2 CFS telemetry: " + str(exc)
+            ) from exc
+        sources[0].refresh_from_db()
+        context = creality_cfs_context(sources[0])
+        if not context.get("verified"):
+            raise CommandError(
+                "Native K2 telemetry was refreshed but is still not verified "
+                "(connection offline or no fresh online snapshot)."
+            )
+        if context.get("connected") is not True:
+            raise CommandError(
+                "Fresh K2 telemetry does not confirm an attached CFS; "
+                "check that the printer reports cfs_connected and materials."
+            )
         slot_ids = [
             obj.get("material_slot", {}).get("slot_id")
             for obj in objects if isinstance(obj, dict)
@@ -57,7 +81,7 @@ class Command(BaseCommand):
         ))
         try:
             report = audit_creality_cfs_assignments(
-                objects, rows, creality_cfs_context(sources[0]),
+                objects, rows, context,
                 printer_id=job.printer_id,
             )
         except CrealityCfsAuditError as exc:
