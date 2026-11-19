@@ -945,6 +945,10 @@ def process_queued_job(job_id):
         diagnostic = None
         if stage == "assembling the build plate 3MF" and isinstance(exc, SlicerProfileError):
             diagnostic = str(exc)[:180]
+        elif stage == "building self-contained Creality native 3MF project" and isinstance(exc, SlicerProfileError):
+            # The builder emits bounded server-authored validation messages.
+            # Never expose profile JSON, filament G-code, or underlying files.
+            diagnostic = str(exc)[:180]
         elif stage == "checking native printer/process compatibility" and isinstance(exc, SlicerExecutionError):
             # All messages in this branch are fixed, server-authored
             # compatibility guidance; no native preset contents are echoed.
@@ -963,6 +967,8 @@ def process_queued_job(job_id):
                 row.message = (
                     ("Build-plate preparation failed: " + diagnostic)
                     if diagnostic and stage == "assembling the build plate 3MF"
+                    else ("Creality native project: " + diagnostic)
+                    if diagnostic and stage == "building self-contained Creality native 3MF project"
                     else ("Native profile compatibility: " + diagnostic)
                     if diagnostic and stage == "checking native printer/process compatibility"
                     else ("Variable layer test failed: " + diagnostic)
