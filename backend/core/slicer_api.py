@@ -158,6 +158,14 @@ def serialise(job, installed=None, temp_assets=None, *, list_view=False):
             "id": str(job.output_asset.pk),
             "name": job.output_asset.name,
             "filename": (job.output_asset.metadata or {}).get("original_name") or job.output_asset.name,
+            # Only the slice owner sees these test eligibility facts. Merely
+            # receiving them does not authorise a print-start operation.
+            "creality_test_sha256": job.output_asset.sha256
+                if (job.engine == "crealityprint"
+                    and (job.output_asset.metadata or {}).get("multi_material_test") is True
+                    and (job.output_asset.metadata or {}).get("printer_submission_verified") is False)
+                else None,
+            "size_bytes": job.output_asset.file.size if job.output_asset.file else None,
         } if job.output_asset_id else None,
         "message": job.message,
         "created_at": job.created_at.isoformat(),
