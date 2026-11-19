@@ -164,6 +164,14 @@ def main(argv=None):
                 os.chown(args.output, int(uid_text), int(gid_text))
             os.chmod(args.output, 0o600)
             print("Creality diagnostic report: " + str(args.output))
+            sizes = report.get("physical_palette_lengths")
+            if isinstance(sizes, dict):
+                print(" Physical material arrays: colours={colours}, diameters={diameters}, "
+                      "presets={presets}, maps={maps}".format(
+                          colours=sizes.get("filament_colour"),
+                          diameters=sizes.get("filament_diameter"),
+                          presets=sizes.get("filament_settings_id"),
+                          maps=sizes.get("filament_map")))
             for case in report["test_results"]:
                 print(" - {case}: {status} (exit={exit_code}, category={validation_category}, reason={known_validation_reason})".format(
                     case=case["case"], status=case["status"],
