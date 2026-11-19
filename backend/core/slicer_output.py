@@ -164,7 +164,18 @@ def store_generated_gcode(job_id, raw: bytes):
             job.status = "completed"
             job.progress = 100
             job.message = (
-                "Multi-colour G-code test completed and tool extrusion audited. "
+                "Creality colour-painted G-code generated; verify that both tools "
+                "extrude inside the model before any supervised printer test."
+                if (job.engine == "crealityprint"
+                    and (job.settings or {}).get("multi_material_test") is True
+                    and len((job.settings or {}).get("plate_objects") or []) == 1
+                    and bool((((job.settings or {}).get("plate_objects") or [])[0]
+                              .get("colour_paint") or {}).get("regions")))
+                else "Multi-colour G-code test completed and tool extrusion audited. "
+                "Check printer readiness and explicitly confirm any supervised start."
+                if (job.engine == "crealityprint"
+                    and (job.settings or {}).get("multi_material_test") is True)
+                else "Multi-colour G-code test completed and tool extrusion audited. "
                 "Printer upload and print start remain disabled."
                 if (job.settings or {}).get("multi_material_test") is True
                 else "Combined native painting/layer test slice completed. Inspect every requested toolpath effect; printer upload remains disabled."
