@@ -25,3 +25,10 @@ class CrealityPaintingDiagnosticTests(SimpleTestCase):
         self.assertNotEqual(first["motion_sha256"], third["motion_sha256"])
         self.assertEqual(first["tool0_selects"], 1)
         self.assertEqual(first["g1_with_extrusion"], 1)
+
+    def test_motion_hash_normalizes_spacing_and_ignores_comments(self):
+        first = _metrics(b"; timestamp: one\nT0\nG1 X1 Y1 E0.1 ; extrusion\n")
+        second = _metrics(b"; timestamp: two\n t0  \n g1   x1  y1   e0.1\n")
+        changed = _metrics(b"T0\nG1 X1 Y1 E0.2\n")
+        self.assertEqual(first["motion_sha256"], second["motion_sha256"])
+        self.assertNotEqual(first["motion_sha256"], changed["motion_sha256"])
