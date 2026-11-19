@@ -154,6 +154,76 @@ class NativeCreality3MFContractTests(TestCase):
                 dest.writestr(name, part)
         self.assertTrue(validate_creality_project(output.getvalue(), native_tool_count=2))
 
+    def _single_painted_project(self, *, semantic=None, layer_xml=None):
+        """A real single-model, two-tool fixture validated without mocks."""
+        from xml.etree import ElementTree as ET
+        ns = "{http://schemas.microsoft.com/3dmanufacturing/core/2015/02}"
+        output = io.BytesIO()
+        with zipfile.ZipFile(io.BytesIO(self.project())) as src, zipfile.ZipFile(
+                output, "w", compression=zipfile.ZIP_DEFLATED) as dst:
+            for name in src.namelist():
+                blob = src.read(name)
+                if name == "3D/3dmodel.model":
+                    root = ET.fromstring(blob)
+                    resources = root.find(ns + "resources")
+                    resources.remove(resources[1])
+                    obj = resources[0]
+                    obj.set("type", "model")
+                    mesh = ET.SubElement(obj, ns + "mesh")
+                    vertices = ET.SubElement(mesh, ns + "vertices")
+                    for x, y, z in ((0, 0, 0), (5, 0, 0), (0, 5, 0)):
+                        ET.SubElement(vertices, ns + "vertex", {
+                            "x": str(x), "y": str(y), "z": str(z)})
+                    triangles = ET.SubElement(mesh, ns + "triangles")
+                    attrs = {"v1": "0", "v2": "1", "v3": "2", "paint_color": "8"}
+                    attrs.update(semantic or {})
+                    ET.SubElement(triangles, ns + "triangle", attrs)
+                    ET.SubElement(root.find(ns + "build"), ns + "item", {
+                        "objectid": "1", "transform": "1 0 0 0 1 0 0 0 1 0 0 0"})
+                    blob = ET.tostring(root, encoding="utf-8")
+                elif name == "Metadata/model_settings.config":
+                    root = ET.fromstring(blob)
+                    root.remove(root.findall("object")[1])
+                    root.find("plate").remove(root.find("plate").findall("model_instance")[1])
+                    root.find("assemble").remove(root.find("assemble")[1])
+                    blob = ET.tostring(root, encoding="utf-8")
+                dst.writestr(name, blob)
+            if layer_xml is not None:
+                dst.writestr("Metadata/layer_config_ranges.xml", layer_xml)
+        return output.getvalue()
+
+    def test_creality_combined_facets_admitted_only_for_known_states(self):
+        for channel, state in (
+                ("paint_supports", "4"), ("paint_seam", "8"),
+                ("paint_fuzzy_skin", "4")):
+            with self.subTest(channel=channel):
+                self.assertTrue(validate_creality_project(
+                    self._single_painted_project(semantic={channel: state})))
+                with self.assertRaises(WorkerError):
+                    validate_creality_project(self._single_painted_project(
+                        semantic={channel: "4;M104 S300"}))
+        self.assertTrue(validate_creality_project(self._single_painted_project(
+            semantic={"paint_supports": "4", "paint_seam": "8",
+                      "paint_fuzzy_skin": "4"})))
+
+    def test_creality_layer_ranges_bounded_and_rejected_if_unsafe(self):
+        valid = ('<objects><object id="1"><range min_z="1" max_z="4">'
+                 '<option opt_key="layer_height">0.12</option>'
+                 '</range></object></objects>')
+        self.assertTrue(validate_creality_project(
+            self._single_painted_project(layer_xml=valid)))
+        for invalid in (
+                valid.replace('opt_key="layer_height"', 'opt_key="machine_start_gcode"'),
+                valid.replace('id="1"', 'id="999"'),
+                valid.replace("0.12", "NaN"),
+                valid.replace('max_z="4"', 'max_z="10000"')):
+            with self.subTest(xml=invalid), self.assertRaises(WorkerError):
+                validate_creality_project(
+                    self._single_painted_project(layer_xml=invalid))
+        with self.assertRaises(WorkerError):
+            validate_creality_project(self._single_painted_project(
+                layer_xml="<objects>" + " " * 40000 + "</objects>"))
+
     def test_missing_creality_identity_is_rejected(self):
         with self.assertRaises(WorkerError):
             validate_creality_project(self.project(identity=False))
