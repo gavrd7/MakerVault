@@ -1389,7 +1389,9 @@ export default function SlicerPrepareWorkspace({
       <small style={{fontSize:11,opacity:.8}}>Left drag: paint · Right drag: rotate view · Wheel: zoom · Ctrl+Z / Ctrl+Y: undo / redo. {(isSupportPainting && engineCapabilities.support_paint?.status==="test_only") ||
          (isSeamPainting && engineCapabilities.seam_paint?.status==="test_only") ||
          (isFuzzyPainting && engineCapabilities.fuzzy_skin_paint?.status==="test_only")
-        ? "This painting can be sliced for offline Orca 2.5 testing; printer submission remains blocked."
+        ? activeEngine === "crealityprint"
+          ? "Experimental Creality 7.3.x offline CFS painting requires one two-colour model; check generated toolpaths before printing."
+          : "This painting can be sliced for offline Orca 2.5 testing; printer submission remains blocked."
         : "Paint annotations are draft-only until native export is verified."}</small>
       {isSupportPainting && (paintSelected?.support_paint?.regions?.reduce((n,r)=>n+r.patches.length,0)||0)>10000 &&
         <small className="slicerActionStatus" role="status">
@@ -2091,35 +2093,36 @@ export default function SlicerPrepareWorkspace({
         {objects.some(item => (item.fuzzy_skin_paint?.regions || []).length > 0) &&
           engineCapabilities.fuzzy_skin_paint?.status === "test_only" &&
           <p className="slicerActionStatus" role="status">
-            Selective fuzzy skin is an offline OrcaSlicer 2.5.0 test. Painted
-            areas use Orca's native Painted only mode with the chosen process
-            texture settings. Use one upright, unscaled model without other
-            painted features. Compare the actual outer-wall texture paths with
-            an unpainted baseline before considering this verified.
-            Printer upload and print start remain disabled for experimental G-code.
+            Selective fuzzy skin is an experimental native painting feature.
+            Creality 7.3.x currently requires one upright, unscaled,
+            colour-painted CFS model with two assigned filaments; Orca 2.5.0
+            supports its separate offline test route. Check the process fuzzy
+            settings and actual outer-wall texture paths against an unpainted
+            baseline. Experimental G-code is not approved for printer submission.
           </p>}
         {objects.some(item => (item.seam_paint?.regions || []).length > 0) &&
           engineCapabilities.seam_paint?.status === "test_only" &&
           <p className="slicerActionStatus" role="status">
-            Seam painting is an offline OrcaSlicer 2.5.0 test. Use one upright,
-            unscaled model with no other painted features. Verify that the actual
-            start/end extrusion moves follow enforcer/blocker regions in G-code.
-            Printer upload and print start remain disabled for these test files.
+            Seam painting is an experimental offline native test. For Creality 7.3.x
+            use one upright, unscaled colour-painted CFS model with two assigned
+            filaments. Verify extrusion start/end positions follow the painted
+            enforcer/blocker regions. The generated G-code is not print-approved.
           </p>}
         {objects.some(item => (item.support_paint?.regions || []).length > 0) &&
           engineCapabilities.support_paint?.status === "test_only" &&
           <p className="slicerActionStatus" role="status">
-            Support painting is an offline OrcaSlicer 2.5.0 test. Use a single
-            upright, unscaled model and check that support generation is enabled
-            in the process profile. Inspect support toolpaths before printing;
-            printer submission is disabled for experimental G-code.
+            Support painting is an experimental offline native test. Creality 7.3.x
+            requires one upright, unscaled colour-painted CFS model and two assigned
+            filaments. Enable supports in the process profile and inspect the
+            generated supports; experimental G-code is not print-approved.
           </p>}
         {objects.some(item => (item.variable_layer_profile?.bands || []).length > 0) &&
           engineCapabilities.variable_layer_profile?.status === "test_only" &&
           <p className="slicerActionStatus" role="status">
-            Variable layer height is an offline OrcaSlicer test. Use one upright, unscaled
-            model. Generated G-code cannot be uploaded or printed until its actual layer
-            transitions have passed native verification.
+            Variable layer height is an experimental offline Orca/Creality test.
+            Creality 7.3.x requires one upright, unscaled colour-painted CFS model
+            with two assigned filaments. Inspect actual layer-height transitions
+            in the generated G-code before treating this as verified.
           </p>}
         {incompatibleEdits.length > 0 && <p className="slicerActionStatus" role="status">
           Saved edits require verified native export: {incompatibleEdits.map(key => FEATURE_NAMES[key]).join(", ")}.
