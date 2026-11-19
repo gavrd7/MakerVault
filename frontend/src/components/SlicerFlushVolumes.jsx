@@ -10,7 +10,7 @@ const Swatch = ({slot}) => <span className="slicerFlushSwatch" aria-hidden="true
   style={{backgroundColor:slotColour(slot)}}/>;
 
 /** UI remains advisory until native physical-slot-to-tool mapping has been verified. */
-export default function SlicerFlushVolumes({slots=[],value=null,onChange,disabled=false,processProfileId=""}) {
+export default function SlicerFlushVolumes({slots=[],value=null,onChange,disabled=false,processProfileId="",engine="orcaslicer"}) {
   const [open,setOpen]=useState(false);
   const [native,setNative]=useState(null);
   const [error,setError]=useState("");
@@ -18,20 +18,21 @@ export default function SlicerFlushVolumes({slots=[],value=null,onChange,disable
   const [previewMultiplier,setPreviewMultiplier]=useState(null);
   const [hasEditedMultiplier,setHasEditedMultiplier]=useState(false);
   const visible=slots.filter(slot=>slot?.id!=null).slice(0,16);
+  const creality=engine==="crealityprint";
   const data=value||empty();
   useEffect(()=>{
     if(!open)return undefined;
     setNative(null);
-    if(!processProfileId){setError("Select an imported OrcaSlicer process profile to view its native flushing values.");return undefined;}
+    if(!processProfileId){setError("Select an imported process profile to view its native flushing values.");return undefined;}
     setError("");
     let live=true;
     setLoading(true);setError("");setNative(null);
     apiFetch("/api/printing/slicer/profiles/"+encodeURIComponent(processProfileId)+"/flush-defaults/")
-      .then(v=>{if(live)setNative(v);})
+      .then(v=>{if(live){if(v.engine!==engine)throw new Error("Selected process profile belongs to a different slicer engine.");setNative(v);}})
       .catch(e=>{if(live)setError(e.message||"Could not resolve native flushing defaults.");})
       .finally(()=>{if(live)setLoading(false);});
     return ()=>{live=false;};
-  },[open,processProfileId]);
+  },[open,processProfileId,engine]);
   useEffect(()=>{
     if(!open)return undefined;
     const close=e=>{if(e.key==="Escape")setOpen(false);};
@@ -77,7 +78,7 @@ export default function SlicerFlushVolumes({slots=[],value=null,onChange,disable
             <div className="slicerFlushField">
               <label htmlFor="slicer-flush-multiplier">Flush multiplier</label>
               <input id="slicer-flush-multiplier" type="number" min=".1" max="3" step=".1"
-                disabled={disabled} value={data.multiplier ?? effectiveMultiplier}
+                disabled={disabled || creality} value={creality ? effectiveMultiplier : (data.multiplier ?? effectiveMultiplier)}
                 onChange={e=>{
                   const raw=e.target.value;
                   if(!raw.trim()){
@@ -89,10 +90,12 @@ export default function SlicerFlushVolumes({slots=[],value=null,onChange,disable
                     onChange?.({...data,multiplier:n});setHasEditedMultiplier(true);
                   }
                 }}/>
-              <small>{data.multiplier==null
-                ? nativeMultiplier!=null?"Inherited from process profile · "+nativeMultiplier
-                  :"Default · 1"
-                :"Custom · "+data.multiplier}</small>
+              <small>{creality
+                ? "Creality global multiplier editing is not yet validated; use directional volumes."
+                : data.multiplier==null
+                  ? nativeMultiplier!=null?"Inherited from process profile · "+nativeMultiplier
+                    :"Default · 1"
+                  :"Custom · "+data.multiplier}</small>
             </div>
             <div className="slicerFlushField">
               <label htmlFor="slicer-flush-prime-tower">Prime tower</label>
@@ -105,6 +108,7 @@ export default function SlicerFlushVolumes({slots=[],value=null,onChange,disable
                 ?"Default":"Custom"}</small>
             </div>
           </div>
+          {creality && <p className="projectUploadHint">Creality Print: directional values are saved to the native two-tool project, not applied directly to the printer. Only transitions between filaments assigned to this slice are supported. Verify the sliced purge paths before printing.</p>}
           <h4>Directional flushing · mm³</h4>
           <div className="slicerFlushEstimateBar">
             <button type="button" disabled={!recalcRequired}
