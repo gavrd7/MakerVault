@@ -166,7 +166,7 @@ def _engine_run(binary, project, timeout_seconds):
                 # Native warnings can appear early, followed by long
                 # repetitive logs. Keep both bounded sections in memory;
                 # neither section is persisted in the report.
-                output = first + b"\\n" + last
+                output = first + b"\n" + last
                 code = result.returncode
         except subprocess.TimeoutExpired:
             return {"status": "timeout", "duration_seconds": timeout_seconds}
