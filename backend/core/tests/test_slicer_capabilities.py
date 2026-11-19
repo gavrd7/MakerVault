@@ -45,6 +45,27 @@ class SlicerCapabilityTests(SimpleTestCase):
             "unverified",
         )
 
+    def test_engine_api_advertises_installed_creality_colour_paint(self):
+        from unittest.mock import patch
+        from django.test import RequestFactory
+        from core.slicer_api import engines
+        import json
+
+        request = RequestFactory().get("/api/printing/slicer/engines/")
+        request.user = type("User", (), {"is_authenticated": True, "is_superuser": False})()
+        with patch("core.slicer_api.verified_installation", return_value={
+            "crealityprint": {"version": "7.3.1.6378"}
+        }):
+            response = engines(request)
+        self.assertEqual(response.status_code, 200)
+        rows = json.loads(response.content)["engines"]
+        creality = next(row for row in rows if row["key"] == "crealityprint")
+        caps = creality["feature_capabilities"]
+        self.assertEqual(caps["7.3.1.6378"]["colour_paint"]["status"], "test_only")
+        self.assertEqual(caps["7.3.1"]["colour_paint"]["status"], "test_only")
+        self.assertEqual(caps["default"]["colour_paint"]["status"], "unverified")
+        self.assertEqual(caps["7.3.1.6378"]["support_paint"]["status"], "unverified")
+
     def test_detects_used_edits_without_falsely_flagging_empty_metadata(self):
         plates = [
             {"objects": [
