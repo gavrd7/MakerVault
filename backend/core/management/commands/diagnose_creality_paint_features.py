@@ -432,7 +432,11 @@ class Command(BaseCommand):
                 model_stl = _cantilever_fixture_stl()
                 colour_signature, colour_face, colour_polygon, _ = _patch_for_model(model_stl)
                 old_colour = obj["colour_paint"]
-                first_colour_region = old_colour["regions"][0]
+                base_slot_id = (obj.get("material_slot") or {}).get("slot_id")
+                first_colour_region = next((
+                    region for region in old_colour["regions"]
+                    if old_colour["palette"][region["slot"]].get("slot_id") != base_slot_id
+                ), old_colour["regions"][0])
                 obj["colour_paint"] = {
                     "version": 2, "signature": colour_signature,
                     "palette": copy.deepcopy(old_colour["palette"]),
