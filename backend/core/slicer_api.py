@@ -1860,16 +1860,19 @@ def profile_process_settings(request, profile_id):
 @login_required
 @require_http_methods(["GET"])
 def profile_flush_defaults(request, profile_id):
-    """Inspect actual inherited Orca process flushing defaults, if present.
+    """Inspect engine-native process flushing defaults, without guessing slot mappings.
 
-    A native matrix is indexed by slicer tools, not observed physical CFS slots.
-    Do not misrepresent those entries as a physical slot mapping.
+    A native matrix is indexed by slicer tools, not physical CFS slots.
+    Creality's four-position project matrix may be assembled later from
+    native process settings; do not imply that missing profile values are
+    verified manufacturer purge amounts.
     """
     profile = SlicerProfile.objects.filter(
-        pk=profile_id, owner=request.user, engine="orcaslicer", kind="process"
+        pk=profile_id, owner=request.user,
+        engine__in=["orcaslicer", "crealityprint"], kind="process"
     ).select_related("file_asset").first()
     if not profile:
-        return _error("Owned Orca process profile not found.", 404)
+        return _error("Owned slicer process profile not found.", 404)
     try:
         raw = json.loads(resolved_native_profile(profile))
         multiplier = raw.get("flush_multiplier")
@@ -1897,7 +1900,8 @@ def profile_flush_defaults(request, profile_id):
     except (SlicerProfileError, ValueError, TypeError, OSError, OverflowError):
         return _error("Native flushing values could not be inspected.", 422)
     return JsonResponse({
-        "profile_id": str(profile.pk), "multiplier": multiplier,
+        "profile_id": str(profile.pk), "engine": profile.engine,
+        "multiplier": multiplier,
         "prime_tower": enabled, "matrix": matrix,
         "tool_count": math.isqrt(len(matrix)) if matrix else None,
         "native_profile_unchanged": True,
