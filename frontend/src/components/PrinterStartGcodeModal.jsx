@@ -119,7 +119,10 @@ export default function PrinterStartGcodeModal({ printer, connection, canEdit, o
       setError(remote.reason.message);
     }
   }
-  useEffect(() => { load(); }, [printer.id, connection.id]);
+  // CFS mapping needs native telemetry less than 60 seconds old. The slicer
+  // preview can stay open much longer than that, so a cached first load
+  // incorrectly hides mapped start for an otherwise idle K2.
+  useEffect(() => { load(connection.adapter === "creality_local"); }, [printer.id, connection.id]);
   useEffect(() => {
     // A Creality print-start may be confirmed by a later normal telemetry
     // poll. Read only the existing receipt; never re-submit the command.
@@ -444,7 +447,7 @@ export default function PrinterStartGcodeModal({ printer, connection, canEdit, o
         <small>In mapped-print mode, selections are sent to the K2. The proprietary protocol does not confirm acceptance, so check its display after submitting.</small>
       </>}
     </div>}
-    {source !== "new" && (cfs?.connected === true || cfsOriginalSupported || cfsMappedAvailable) && <div className="settingsCallout">
+    {source !== "new" && (cfs?.applicable || cfsOriginalSupported || cfsMappedAvailable) && <div className="settingsCallout">
       <strong>CFS print preparation</strong>
       <p>Review the sliced filament and select the correct loaded CFS slot. You can send these selections to the K2 or use its original slicer mapping.</p>
       <label>Filament mapping
@@ -453,6 +456,13 @@ export default function PrinterStartGcodeModal({ printer, connection, canEdit, o
           <option value="original" disabled={!cfsOriginalSupported}>Use original mapping embedded by the slicer{!cfsOriginalSupported ? " — unavailable on this connection" : ""}</option>
         </select>
       </label>
+      {!cfsMappedAvailable && cfs?.applicable && <div role="status" style={{marginTop: 10}}>
+        <strong>CFS start not ready</strong>
+        <p>{capabilities?.mapped_cfs_blockers?.join(" ") || cfs.reason || "Fresh, idle native CFS status is required."}</p>
+        <button type="button" disabled={busy} onClick={() => load(true)}>
+          Refresh K2 CFS readiness (read-only)
+        </button>
+      </div>}
       <small>{requirements.length > 0 && mappingMode === "mapped"
         ? "MakerVault will send a new native K2 filament mapping before print-start. Check the printer display."
         : cfsOriginalSupported
