@@ -734,6 +734,25 @@ def availability(connection):
         and cfs["slots"] and _ready_for_start(connection.last_snapshot)
         and not (connection.last_snapshot or {}).get("source_metadata", {}).get("power_loss_recovery")
     )
+    mapped_cfs_blockers = []
+    if cfs["applicable"] and _is_k2(connection):
+        if not online:
+            mapped_cfs_blockers.append("Printer status is offline or older than 60 seconds.")
+        if not authorised:
+            mapped_cfs_blockers.append("The selected connection is not enabled for submission.")
+        if adapter not in {"moonraker", "creality_local"}:
+            mapped_cfs_blockers.append("Mapped K2 submission needs a native Creality or Moonraker connection.")
+        if not cfs["verified"]:
+            mapped_cfs_blockers.append("Fresh native CFS telemetry is required.")
+        elif cfs["connected"] is not True:
+            mapped_cfs_blockers.append("The native connection does not report an attached CFS.")
+        elif not cfs["slots"]:
+            mapped_cfs_blockers.append("No loaded CFS filament slots were reported.")
+        if not _ready_for_start(connection.last_snapshot):
+            mapped_cfs_blockers.append("Printer is not confirmed idle (state: %s)." %
+                                       str((connection.last_snapshot or {}).get("state") or "unknown")[:32])
+        if (connection.last_snapshot or {}).get("source_metadata", {}).get("power_loss_recovery"):
+            mapped_cfs_blockers.append("Printer reports an active power-loss recovery state.")
     moonraker_for_sliced = (connection if adapter == "moonraker" else
                              _same_printer_moonraker(connection, require_controls=True)
                              if adapter == "creality_local" and cfs["applicable"] and cfs["connected"] is True else None)
@@ -798,6 +817,7 @@ def availability(connection):
         "supports_original_mapping": supports_original_mapping,
         "can_start_sliced_mapping": sliced_mapping_candidate,
         "can_start_mapped_cfs": mapped_mapping_candidate,
+        "mapped_cfs_blockers": mapped_cfs_blockers,
         "can_submit_from_printer": adapter in BROWSE_ADAPTERS and start_supported,
         "requires_opt_in": False,
         "requires_start_opt_in": False,
