@@ -49,6 +49,14 @@ def validate_creality_project(data, *, native_tool_count=2):
             ns = "{http://schemas.microsoft.com/3dmanufacturing/core/2015/02}"
             if model_root.tag != ns + "model":
                 raise WorkerError("Unrecognised native Creality model root.")
+            # A colour-painted single model has two *filaments*, not two
+            # separate printable objects. The strict lower-level validator
+            # still requires extrusion tools 0 and 1 to be represented by
+            # actual per-triangle native paint selectors.
+            object_count = len(model_root.findall(
+                "./" + ns + "resources/" + ns + "object"))
+            if object_count not in (1, 2):
+                raise WorkerError("Creality CFS project needs one painted or two plain objects.")
             generator = [
                 entry.text or "" for entry in model_root.findall(ns + "metadata")
                 if entry.get("name") == "Application"
@@ -88,7 +96,7 @@ def validate_creality_project(data, *, native_tool_count=2):
             records = settings_root.findall("object")
             plates = settings_root.findall("plate")
             assemblies = settings_root.findall("assemble")
-            if (settings_root.tag != "config" or len(records) != native_tool_count
+            if (settings_root.tag != "config" or len(records) != object_count
                     or len(plates) != 1 or len(assemblies) > 1):
                 raise WorkerError("Creality native object metadata is inconsistent.")
             clean = ET.Element("config")
@@ -120,7 +128,7 @@ def validate_creality_project(data, *, native_tool_count=2):
                 else:
                     raise WorkerError("Unsupported Creality plate metadata.")
             if assemblies:
-                if len(assemblies[0]) != native_tool_count:
+                if len(assemblies[0]) != object_count:
                     raise WorkerError("Creality assembly instances are inconsistent.")
                 for item in assemblies[0]:
                     if (item.tag != "assemble_item" or
