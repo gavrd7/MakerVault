@@ -302,3 +302,44 @@ sudo docker exec makervault python3 /app/backend/manage.py \
 Do not refresh the isolated worker for these application-only diagnostic
 changes. Do not upload G-code to a printer, merge PR #171, or claim flushing,
 support or selective fuzzy skin is verified merely because the engine slices.
+
+
+### Optional, repeatable semantic geometry fixtures
+
+The original painted cube may have no unsupported underside, and the arbitrary
+one-triangle paint patch may miss an exterior wall. The app-side diagnostics
+now offer geometry-specific controls without saving or importing any new mesh.
+They reuse the existing completed Creality two-filament job **only** as the
+source of verified, owned process/filament/printer profiles and material-slot
+bindings. They generate a deterministic 30 × 12 × 25 mm L-section STL inside
+the command, create a newly fingerprinted colour patch assigned to the
+verified secondary material, and apply the requested semantic annotation.
+The existing worker handles only the usual authenticated offline slice.
+
+```bash
+sudo docker exec makervault python3 /app/backend/manage.py \
+  diagnose_creality_paint_features --only support --deep --support-fixture
+
+sudo docker exec makervault python3 /app/backend/manage.py \
+  diagnose_creality_paint_features --only seam --deep --wall-fixture
+
+sudo docker exec makervault python3 /app/backend/manage.py \
+  diagnose_creality_paint_features --only fuzzy --deep --wall-fixture
+```
+
+The support fixture paints the **elevated, downward-facing** underside at
+Z=20 mm (not the plate-contact underside). The wall fixture paints a broad
+external vertical face. Each painted variant is compared to a control with
+identical synthetic geometry and identical native settings but with the one
+semantic paint attribute removed. `--support-fixture` and `--wall-fixture`
+require their relevant `--only` selector and `--deep`, and neither option
+changes production slicing configuration. Inspect
+`geometry_control.motion_changed_from_same_geometry` and
+`feature_role_audit.extrusion_xy_moves_by_role.support`. A successful
+fixture slice alone never proves that placement or surface treatment is
+correct; explicit spatial toolpath checks remain a subsequent gate.
+
+No worker refresh or approved engine hash update is needed for these
+application-only additions. The synthetic fixtures and new checks must still
+be validated by the user's staging tests and native CLI; they have **not**
+been declared to pass on the pinned worker by this documentation.
