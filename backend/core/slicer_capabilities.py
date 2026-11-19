@@ -43,6 +43,20 @@ def native_capabilities(engine, version):
                        "real toolpath colour boundaries before considering the "
                        "physical test complete."),
         }
+        for key, title in (
+            ("support_paint", "Support"),
+            ("seam_paint", "Seam"),
+            ("fuzzy_skin_paint", "Selective fuzzy skin"),
+            ("variable_layer_profile", "Variable layer height"),
+        ):
+            result[key] = {
+                "status": "test_only",
+                "reason": (title + " native export is experimental for one "
+                           "Creality 7.3.x colour-painted CFS model with two "
+                           "assigned filaments. Inspect generated G-code; "
+                           "ordinary single-filament Creality slicing and "
+                           "printer submission are not approved for this mode."),
+            }
     if engine == "orcaslicer" and version == "2.5.0":
         result["fuzzy_skin_paint"] = {
             "status": "test_only",
