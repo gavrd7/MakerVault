@@ -945,9 +945,12 @@ def process_queued_job(job_id):
         diagnostic = None
         if stage == "assembling the build plate 3MF" and isinstance(exc, SlicerProfileError):
             diagnostic = str(exc)[:180]
-        elif stage == "building self-contained Creality native 3MF project" and isinstance(exc, SlicerProfileError):
-            # The builder emits bounded server-authored validation messages.
-            # Never expose profile JSON, filament G-code, or underlying files.
+        elif (stage == "building self-contained Creality native 3MF project"
+              and isinstance(exc, SlicerProfileError)
+              and str(exc).startswith("Creality filament presets disagree on native setting ")):
+            # Only expose canonical allowlisted native option names and T0/T1.
+            # Other errors remain in application logs: never echo user profile
+            # contents, model paths, or private filament start/end G-code.
             diagnostic = str(exc)[:180]
         elif stage == "checking native printer/process compatibility" and isinstance(exc, SlicerExecutionError):
             # All messages in this branch are fixed, server-authored
