@@ -421,9 +421,10 @@ def _apply_creality_flush_settings(project, settings, bindings):
     if not isinstance(bindings, dict) or set(bindings.values()) != {0, 1} or len(bindings) != 2:
         raise SlicerProfileError("Creality flushing requires exactly two verified filament-to-tool bindings.")
     if approved["multiplier"] is not None:
-        # Unlike Orca, the native K2 project multiplier representation has
-        # not been confirmed against this installed Creality binary.
-        raise SlicerProfileError("Custom Creality flush multiplier is not yet validated. Edit directional volumes instead.")
+        # Creality Print PrintConfig.cpp declares flush_multiplier as coFloat
+        # (scalar), unlike Orca 2.5's single-nozzle coFloats vector.
+        # Preserve the validated user value in native project settings.
+        project["flush_multiplier"] = str(approved["multiplier"])
     if approved["prime_tower"] != "native":
         project["enable_prime_tower"] = "1" if approved["prime_tower"] == "enabled" else "0"
     matrix = project.get("flush_volumes_matrix")
@@ -437,6 +438,9 @@ def _apply_creality_flush_settings(project, settings, bindings):
             raise SlicerProfileError("Creality flushing references an unmapped physical filament slot.")
         result[4 * source + dest] = str(change["volume_mm3"])
     project["flush_volumes_matrix"] = result
+    if approved["transitions"]:
+        # Native Creality's explicit edited-volume flag is a coBool.
+        project["flush_volumes_changed"] = "1"
 
 
 def build_creality_project_candidate(plate, *, printer, process, filaments,
