@@ -13,6 +13,7 @@ import re
 import uuid
 import io
 import zipfile
+import struct
 from xml.etree import ElementTree as ET
 
 from django.core.management.base import BaseCommand, CommandError
@@ -190,6 +191,63 @@ def _feature_role_audit(gcode):
     return {"feature_role_tags": role_tags, "extrusion_xy_moves_by_role": counts}
 
 
+def _cantilever_fixture_stl():
+    """Watertight, offline-only L-section cantilever: 30 x 12 x 25 mm.
+
+    The elevated underside spans X=10..30, Z=20, above empty space.
+    Unlike the original colour cube, it can demand painted support.
+    """
+    outline = [(0., 0.), (10., 0.), (10., 20.),
+               (30., 20.), (30., 25.), (0., 25.)]
+    caps = ((0, 1, 2), (0, 2, 5), (2, 3, 4), (2, 4, 5))
+    triangles = []
+    for a, b, c in caps:
+        for y, ids in ((0., (a, b, c)), (12., (c, b, a))):
+            triangles.append(tuple((outline[i][0], y, outline[i][1]) for i in ids))
+    for i in range(len(outline)):
+        a, b = outline[i], outline[(i + 1) % len(outline)]
+        a0, b0 = (a[0], 0., a[1]), (b[0], 0., b[1])
+        a1, b1 = (a[0], 12., a[1]), (b[0], 12., b[1])
+        triangles.extend(((a0, b1, b0), (a0, a1, b1)))
+    data = bytearray(b"MakerVault offline diagnostic cantilever".ljust(80, b"\\x00"))
+    data.extend(struct.pack("<I", len(triangles)))
+    for tri in triangles:
+        data.extend(struct.pack("<12fH", *([0.] * 3),
+                                *(coord for vertex in tri for coord in vertex), 0))
+    return bytes(data)
+
+
+def _cantilever_support_marker(stl):
+    """Paint the suspended downward face, never the build-plate underside."""
+    tris = list(_triangles(stl))
+    signature, _unused, _unused_poly, _height = _patch_for_model(stl)
+    min_x = min(v[0] for tri in tris for v in tri)
+    max_x = max(v[0] for tri in tris for v in tri)
+    min_y = min(v[1] for tri in tris for v in tri)
+    max_y = max(v[1] for tri in tris for v in tri)
+    min_z = min(v[2] for tri in tris for v in tri)
+    origin = ((min_x + max_x) / 2, (min_y + max_y) / 2, min_z)
+    for idx, tri in enumerate(tris):
+        if (all(abs(p[2] - 20.) < 1e-5 for p in tri) and
+                sum(p[0] for p in tri) / 3 > 13.):
+            a, b, c = tri
+            ux = (b[0] - a[0], b[1] - a[1])
+            vx = (c[0] - a[0], c[1] - a[1])
+            z_normal = ux[0]*vx[1] - ux[1]*vx[0]
+            if z_normal >= 0:
+                continue
+            centre = [sum(p[axis] for p in tri) / 3 for axis in range(3)]
+            polygon = [
+                [(0.9 * vertex[axis] + 0.1 * centre[axis]) - origin[axis]
+                 for axis in range(3)]
+                for vertex in tri
+            ]
+            return {"version": 2, "signature": signature, "regions": [
+                {"slot": 0, "patches": [{"face": idx, "polygon": polygon}]}
+            ]}
+    raise ValueError("The diagnostic cantilever has no exposed elevated underside.")
+
+
 def _patch_for_model(stl):
     """Produce a valid model-local brush patch from actual STL triangles."""
     triangles = list(_triangles(stl))
@@ -256,8 +314,13 @@ class Command(BaseCommand):
         parser.add_argument("--job-id", help="Existing successful one-model Creality CFS painted slice UUID")
         parser.add_argument("--only", choices=CASES[1:], help="Only one feature plus baseline")
         parser.add_argument("--deep", action="store_true", help="Also slice identical-geometry unpainted controls for semantic facets")
+        parser.add_argument("--support-fixture", action="store_true",
+                            help="Replace the in-memory support test mesh with a fixed unsupported cantilever")
 
     def handle(self, *args, **options):
+        if options["support_fixture"] and (
+                options["only"] != "support" or not options["deep"]):
+            raise CommandError("--support-fixture requires --only support --deep.")
         jobs = SliceJob.objects.select_related(
             "owner", "printer", "printer_profile", "filament_profile",
             "process_profile").filter(
@@ -329,12 +392,29 @@ class Command(BaseCommand):
                 obj["variable_layer_profile"] = {
                     "version": 1, "bands": [
                         {"from_mm": lo, "to_mm": hi, "layer_mm": .12}]}
+            model_stl = raw_stl
+            if feature == "support" and options["support_fixture"]:
+                # Explicit synthetic test only; no FileAsset, saved job, or
+                # private mesh is changed. Preserve the user's known-good
+                # verified two-slot material palette and native profiles.
+                model_stl = _cantilever_fixture_stl()
+                colour_signature, colour_face, colour_polygon, _ = _patch_for_model(model_stl)
+                old_colour = obj["colour_paint"]
+                first_colour_region = old_colour["regions"][0]
+                obj["colour_paint"] = {
+                    "version": 2, "signature": colour_signature,
+                    "palette": copy.deepcopy(old_colour["palette"]),
+                    "regions": [{"slot": first_colour_region["slot"],
+                                 "patches": [{"face": colour_face,
+                                              "polygon": colour_polygon}]}],
+                }
+                obj["support_paint"] = _cantilever_support_marker(model_stl)
             # Deliberately change only native flush values in this test case.
             copy_settings["flush_settings"] = None
             job.settings = copy_settings  # In-memory only: NEVER call .save().
             try:
                 prepared = prepare_creality_positioned_project(
-                    job, [(obj, raw_stl)], bed_width=width, bed_depth=depth)
+                    job, [(obj, model_stl)], bed_width=width, bed_depth=depth)
                 first = prepared["filament_profiles"][0]
                 process, first = apply_creality_plate(
                     process_native, first, job.plate,
@@ -372,6 +452,8 @@ class Command(BaseCommand):
                     model_format="3mf", filament_profiles=prepared["filament_profiles"],
                     creality_native_project=True, timeout_seconds=900)
                 metrics = _metrics(data)
+                if feature == "support" and options["support_fixture"]:
+                    metrics["test_geometry"] = "synthetic elevated cantilever (offline only)"
                 metrics["gcode_effective_settings"] = _gcode_effective_settings(data)
                 metrics["feature_role_audit"] = _feature_role_audit(data)
                 if feature == "variable":
