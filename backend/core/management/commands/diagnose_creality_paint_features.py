@@ -160,6 +160,36 @@ def _gcode_effective_settings(gcode):
     return found
 
 
+def _feature_role_audit(gcode):
+    """Count extrusion moves by native FEATURE/TYPE role, not generic comments.
+
+    Creality GCode.cpp emits extrusion-role tags through GCodeProcessor.
+    An actual support test must show support-role extrusion, not merely a
+    different hash or an enabled support checkbox.
+    """
+    if not isinstance(gcode, bytes) or len(gcode) > 64 * 1024 * 1024:
+        raise ValueError("Invalid diagnostic G-code")
+    role = ""
+    counts = {"support": 0, "outer_wall": 0, "other": 0}
+    role_tags = 0
+    for line in gcode.splitlines():
+        tag = re.match(rb"^;\\s*(?:FEATURE|TYPE)\\s*:\\s*(.{1,60})$", line, re.I)
+        if tag:
+            role = tag.group(1).decode("ascii", errors="replace").lower().strip()
+            role_tags += 1
+            continue
+        command = line.partition(b";")[0].strip().upper()
+        if (re.match(rb"^G0?1(?:\\s|$)", command) and
+                re.search(rb"(?:^|\\s)E[-+]?\\d", command) and
+                (re.search(rb"(?:^|\\s)X[-+]?\\d", command) or
+                 re.search(rb"(?:^|\\s)Y[-+]?\\d", command))):
+            bucket = ("support" if "support" in role else
+                      "outer_wall" if any(term in role for term in
+                                          ("outer wall", "external perimeter")) else "other")
+            counts[bucket] += 1
+    return {"feature_role_tags": role_tags, "extrusion_xy_moves_by_role": counts}
+
+
 def _patch_for_model(stl):
     """Produce a valid model-local brush patch from actual STL triangles."""
     triangles = list(_triangles(stl))
@@ -343,6 +373,7 @@ class Command(BaseCommand):
                     creality_native_project=True, timeout_seconds=900)
                 metrics = _metrics(data)
                 metrics["gcode_effective_settings"] = _gcode_effective_settings(data)
+                metrics["feature_role_audit"] = _feature_role_audit(data)
                 if feature == "variable":
                     metrics["layer_band_audit"] = _layer_band_audit(data, lo, hi)
                 if feature in _SEMANTIC_ATTRS and options["deep"]:
@@ -355,6 +386,7 @@ class Command(BaseCommand):
                         model_format="3mf", filament_profiles=prepared["filament_profiles"],
                         creality_native_project=True, timeout_seconds=900)
                     control_metrics = _metrics(control_data)
+                    control_role_audit = _feature_role_audit(control_data)
                     metrics["geometry_control"] = {
                         "removed_semantic_facets": painted_facets,
                         "motion_changed_from_same_geometry": (
@@ -363,6 +395,9 @@ class Command(BaseCommand):
                             metrics["machine_command_sha256"] != control_metrics["machine_command_sha256"]),
                         "extrusion_command_difference": (
                             metrics["g1_with_extrusion"] - control_metrics["g1_with_extrusion"]),
+                        "support_xy_move_difference": (
+                            metrics["feature_role_audit"]["extrusion_xy_moves_by_role"]["support"] -
+                            control_role_audit["extrusion_xy_moves_by_role"]["support"]),
                         "note": "Same triangulation, colours and process; only semantic paint attribute removed.",
                     }
                 if feature == "baseline":
@@ -372,6 +407,13 @@ class Command(BaseCommand):
                         metrics["motion_sha256"] != baseline["motion_sha256"])
                     metrics["machine_commands_changed_from_baseline"] = (
                         metrics["machine_command_sha256"] != baseline["machine_command_sha256"])
+                    current_matrix = metrics["gcode_effective_settings"].get(
+                        "flush_matrix_gcode_header_sha256")
+                    previous_matrix = baseline["gcode_effective_settings"].get(
+                        "flush_matrix_gcode_header_sha256")
+                    if current_matrix and previous_matrix:
+                        metrics["gcode_header_flush_matrix_changed"] = (
+                            current_matrix != previous_matrix)
                     if feature in _SEMANTIC_ATTRS and "geometry_control" in metrics:
                         metrics["observation"] = (
                             "Semantic attribute changes motion relative to identical remeshed geometry; spatial effect still needs review."
