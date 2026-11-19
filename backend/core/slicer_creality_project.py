@@ -333,12 +333,15 @@ def _native_palette_settings(project, filaments, *, palette_slots=4):
             if len(colours) == 2:
                 colours *= 2
         project["filament_colour"] = colours
-    elif (not isinstance(colours, list) or len(colours) != palette_slots
+    elif (not isinstance(colours, list) or len(colours) not in (2, palette_slots)
           or any(not isinstance(value, str) or len(value) != 7 or
                  not value.startswith("#") or
                  any(ch not in "0123456789abcdefABCDEF" for ch in value[1:])
                  for value in colours)):
         raise SlicerProfileError("Invalid Creality physical filament colour palette.")
+    else:
+        if len(colours) == 2:
+            project["filament_colour"] = colours * 2
     defaults = {
         "filament_map": ["1"] * palette_slots,
         "filament_map_2": ["0"] * palette_slots,
