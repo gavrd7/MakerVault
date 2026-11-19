@@ -84,6 +84,58 @@ class CrealityPositionedPlateTests(SimpleTestCase):
         self.assertGreater(float(project["wipe_tower_y"][0]), 130)
         self.assertGreater(float(project["wipe_tower_x"][0]), 130)
 
+    def test_creality_native_project_preserves_explicit_tower_and_directional_flush(self):
+        import json
+        from core.slicer_creality_project import build_creality_project_candidate
+        plate = build_creality_positioned_plate(
+            self._objects(), bed_width=260, bed_depth=260, tool_ids=[0, 1])
+        printer = json.dumps({
+            "type": "machine", "name": "Creality K2",
+            "printable_area": ["0x0", "260x0", "260x260", "0x260"],
+        }).encode()
+        process = json.dumps({
+            "type": "process", "name": "0.20mm Standard",
+            "enable_prime_tower": "1", "prime_tower_width": "40",
+            "flush_volumes_matrix": ["0", "140", "140", "0"],
+        }).encode()
+        filament = lambda name: json.dumps({
+            "type": "filament", "name": name,
+            "filament_type": "PLA", "nozzle_temperature": "210",
+        }).encode()
+        setting = {
+            "multiplier": None, "prime_tower": "enabled",
+            "transitions": [
+                {"from_slot_id": "grey-id", "to_slot_id": "yellow-id", "volume_mm3": 370},
+                {"from_slot_id": "yellow-id", "to_slot_id": "grey-id", "volume_mm3": 175},
+            ],
+        }
+        def build(settings=setting, bindings=None):
+            return build_creality_project_candidate(
+                plate, printer=printer, process=process,
+                filaments=[filament("grey"), filament("yellow")],
+                prime_tower={"x": 170, "y": 170}, bed_width=260, bed_depth=260,
+                flush_settings=settings, tool_bindings=bindings or {
+                    "grey-id": 0, "yellow-id": 1,
+                })
+        with zipfile.ZipFile(io.BytesIO(build())) as package:
+            result = json.loads(package.read("Metadata/project_settings.config"))
+        self.assertEqual(result["wipe_tower_x"], ["170"])
+        self.assertEqual(result["wipe_tower_y"], ["170"])
+        self.assertEqual(result["enable_prime_tower"], "1")
+        self.assertEqual(result["flush_volumes_matrix"][1], "370.0")
+        self.assertEqual(result["flush_volumes_matrix"][4], "175.0")
+        self.assertEqual(result["flush_volumes_matrix"][2], "0")
+        self.assertEqual(len(result["flush_volumes_matrix"]), 16)
+        with self.assertRaisesMessage(SlicerProfileError, "unmapped physical"):
+            build({**setting, "transitions": [{
+                "from_slot_id": "unrelated-slot", "to_slot_id": "yellow-id",
+                "volume_mm3": 300,
+            }]})
+        with self.assertRaisesMessage(SlicerProfileError, "multiplier"):
+            build({**setting, "multiplier": 1.5})
+        with self.assertRaisesMessage(SlicerProfileError, "two verified"):
+            build(bindings={"grey-id": 0, "yellow-id": 0})
+
     def test_one_painted_model_retains_native_facets_in_final_creality_project(self):
         """Creality must receive one object and real colour facet metadata."""
         import json
