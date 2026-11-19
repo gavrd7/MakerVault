@@ -341,15 +341,24 @@ def start_cfs_mapped(connection, remote_path, mapping):
     safe = _safe_printer_file(remote_path)
     if not safe or safe != remote_path or not isinstance(mapping, list) or not 1 <= len(mapping) <= 4:
         raise CrealityGcodeError("Invalid mapped K2 print request.")
+    used_tools, used_bays = set(), set()
     for item in mapping:
         if not isinstance(item, dict) or set(item) != {"id", "type", "color", "boxId", "materialId"}:
             raise CrealityGcodeError("Invalid CFS mapping entry.")
-        if not re.fullmatch(r"T1[A-D]", str(item["id"])) or not re.fullmatch(r"#[0-9A-Fa-f]{6}", str(item["color"])):
+        if (not isinstance(item["id"], str) or not re.fullmatch(r"T1[A-D]", item["id"])
+                or not isinstance(item["color"], str) or
+                not re.fullmatch(r"#[0-9A-Fa-f]{6}", item["color"])):
             raise CrealityGcodeError("Invalid sliced tool or filament colour.")
-        if not isinstance(item["boxId"], int) or not 1 <= item["boxId"] <= 4 or not isinstance(item["materialId"], int) or not 0 <= item["materialId"] <= 3:
+        if (type(item["boxId"]) is not int or not 1 <= item["boxId"] <= 4
+                or type(item["materialId"]) is not int or not 0 <= item["materialId"] <= 3):
             raise CrealityGcodeError("Invalid CFS box or material slot.")
-        if not re.fullmatch(r"[A-Za-z0-9+_-]{2,20}", str(item["type"])):
+        if not isinstance(item["type"], str) or not re.fullmatch(r"[A-Za-z0-9+_-]{2,20}", item["type"]):
             raise CrealityGcodeError("Invalid CFS material type.")
+        bay = (item["boxId"], item["materialId"])
+        if item["id"] in used_tools or bay in used_bays:
+            raise CrealityGcodeError("Duplicate logical tool or physical CFS bay.")
+        used_tools.add(item["id"])
+        used_bays.add(bay)
     try:
         asyncio.run(_start_cfs_mapped(connection.endpoint_url, safe, mapping))
     except (OSError, asyncio.TimeoutError, WebSocketException, RuntimeError) as exc:
