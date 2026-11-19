@@ -593,7 +593,6 @@ def _supervised_creality_test_preflight(connection, user, asset, payload):
     repeats this preflight immediately before firmware start using fresh native
     telemetry, after any upload has completed.
     """
-    import hashlib
     from .models import SliceJob, PrinterFilamentSlot
     from .slicer_creality_cfs_audit import (
         audit_creality_cfs_assignments, audit_creality_gcode_for_cfs,
