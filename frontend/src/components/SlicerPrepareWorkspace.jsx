@@ -1942,6 +1942,7 @@ export default function SlicerPrepareWorkspace({
           {slotOfficialError && <p role="alert">{slotOfficialError}</p>}
           <SlicerFlushVolumes slots={liveMaterials} value={flushSettings}
             processProfileId={selectedProfiles?.process_id} engine={activeEngine}
+            assignedSlotIds={requiredMultiSlots}
             onChange={onFlushSettingsChange} disabled={!canEdit || busy} />
         </section>
 
