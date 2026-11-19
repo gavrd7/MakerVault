@@ -107,8 +107,8 @@ class SlicerGcodeThumbnailTests(SimpleTestCase):
         commands = ["G90", "M83", "T0", "G1 X1 Y1 Z0.2 E1"]
         for layer in range(1, 34):
             commands.append(f"G1 X{layer + 1} Y1 Z{layer / 5:.2f} E1")
-        with patch("core.slicer_gcode_thumbnails.MAX_SEGMENTS", 6), \\
-                patch("core.slicer_gcode_thumbnails.MAX_RENDER_SEGMENTS", 6):
+        with (patch("core.slicer_gcode_thumbnails.MAX_SEGMENTS", 6),
+              patch("core.slicer_gcode_thumbnails.MAX_RENDER_SEGMENTS", 6)):
             segments, _ = _paths("\n".join(commands))
         self.assertGreater(len(segments), 0)
         self.assertTrue(any(segment[4] > 3.0 for segment in segments))
