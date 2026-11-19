@@ -60,6 +60,13 @@ class CrealityCfsAuditTests(SimpleTestCase):
         with self.assertRaisesRegex(CrealityCfsAuditError, "not a loaded"):
             self.audit()
 
+    def test_two_database_slots_cannot_resolve_to_one_bay(self):
+        self.rows[1].unit_index = 0
+        self.rows[1].slot_index = 3
+        self.objects[1]["material_slot"]["slot_index"] = 3
+        with self.assertRaisesRegex(CrealityCfsAuditError, "same CFS bay"):
+            self.audit()
+
     def test_same_physical_slot_cannot_serve_two_tools(self):
         self.objects[1]["material_slot"] = dict(self.objects[0]["material_slot"])
         with self.assertRaisesRegex(CrealityCfsAuditError, "distinct CFS slots"):
