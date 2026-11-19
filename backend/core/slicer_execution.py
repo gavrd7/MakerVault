@@ -396,22 +396,28 @@ def _validate_plate_execution(job):
                 "Combine variable layer height with Object settings after the native test fixture.")
     if settings.get("multi_material_test") is True:
         if job.engine == "crealityprint":
-            if len(objects) != 2:
+            single_painted = (len(objects) == 1 and isinstance(objects[0], dict)
+                              and bool((objects[0].get("colour_paint") or {}).get("regions")))
+            if not (len(objects) == 2 or single_painted):
                 raise SlicerExecutionError(
-                    "Creality project slicing requires exactly two assigned models.")
+                    "Creality CFS slicing requires two assigned models, or one colour-painted model.")
             if settings.get("flush_settings") is not None:
                 raise SlicerExecutionError(
-                    "Creality's offline multi-STL test cannot preserve custom flushing or prime tower positions.")
-            if any((item.get("colour_paint") or {}).get("regions") or
-                   (item.get("colour_paint") or {}).get("faces") or
-                   (item.get("support_paint") or {}).get("regions") or
+                    "Creality test slicing does not yet support custom flushing.")
+            if any((item.get("support_paint") or {}).get("regions") or
                    (item.get("seam_paint") or {}).get("regions") or
                    (item.get("fuzzy_skin_paint") or {}).get("regions") or
                    (item.get("variable_layer_profile") or {}).get("bands") or
                    item.get("process_overrides")
                    for item in objects):
                 raise SlicerExecutionError(
-                    "Creality native project slicing does not yet include painting or per-object overrides.")
+                    "Creality colour test cannot combine unverified painting or per-object overrides.")
+            if len(objects) == 2 and any(
+                    (item.get("colour_paint") or {}).get("regions") or
+                    (item.get("colour_paint") or {}).get("faces")
+                    for item in objects):
+                raise SlicerExecutionError(
+                    "Creality colour painting test is currently limited to one model.")
         elif settings.get("creality_auto_arrange_offline"):
             raise SlicerExecutionError("Creality auto-arrangement is incompatible with this engine.")
         # This permits *offline G-code generation* only. Uploaded or started
