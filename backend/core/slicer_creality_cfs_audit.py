@@ -147,6 +147,59 @@ def audit_creality_cfs_assignments(objects, slot_records, cfs_context, *, printe
     }
 
 
+def audit_painted_object_toolpaths(gcode):
+    """Require both logical filaments to deposit inside real object scopes.
+
+    A prime tower can use two tools while the actual model remains single
+    colour. Creality 7.3.x emits EXCLUDE_OBJECT markers for deposited model
+    paths; do not treat tool changes outside them as painted-model evidence.
+    """
+    import re
+    active_tool = None
+    in_object = False
+    e_absolute = True
+    last_e = 0.0
+    count = {0: 0, 1: 0}
+    saw_object = False
+    for raw in gcode.splitlines():
+        line = raw.split(";", 1)[0].strip().upper()
+        if not line:
+            continue
+        if line.startswith("EXCLUDE_OBJECT_START "):
+            in_object = True
+            saw_object = True
+            continue
+        if line.startswith("EXCLUDE_OBJECT_END "):
+            in_object = False
+            continue
+        selected = re.fullmatch(r"T([0-9]{1,2})", line)
+        if selected:
+            active_tool = int(selected.group(1))
+            continue
+        if line == "M82":
+            e_absolute = True
+        elif line == "M83":
+            e_absolute = False
+        elif line.startswith("G92 "):
+            match = re.search(r"(?:^|\\s)E\\s*([-+]?(?:\\d+(?:\\.\\d*)?|\\.\\d+))", line)
+            if match:
+                last_e = float(match.group(1))
+        elif re.match(r"^G0?[01](?:\\s|[XYZE])", line):
+            match = re.search(r"(?:^|\\s)E\\s*([-+]?(?:\\d+(?:\\.\\d*)?|\\.\\d+))", line)
+            if match:
+                amount = float(match.group(1))
+                delta = amount - last_e if e_absolute else amount
+                if e_absolute:
+                    last_e = amount
+                if (in_object and active_tool in count and delta > 0.000001
+                        and re.search(r"[XY]\\s*[-+]?\\d", line)):
+                    count[active_tool] += 1
+    if not saw_object or not all(count.values()):
+        raise CrealityCfsAuditError(
+            "Painted G-code does not confirm both filament tools depositing inside the object.")
+    return count
+
+
 def audit_creality_gcode_for_cfs(job, mapping_report, raw):
     """Tie a completed offline Creality G-code file to the selected live bays.
 
@@ -183,6 +236,11 @@ def audit_creality_gcode_for_cfs(job, mapping_report, raw):
     # Reject unexpected depositing tools, even if both expected ones appear.
     if set(tools["extruding_moves"]) != {0, 1}:
         raise CrealityCfsAuditError("G-code extrudes on unexpected logical tools.")
+    painted_objects = (getattr(job, "settings", None) or {}).get("plate_objects") or []
+    painted_one_object = (len(painted_objects) == 1
+                          and isinstance(painted_objects[0], dict)
+                          and bool((painted_objects[0].get("colour_paint") or {}).get("regions")))
+    model_deposition = audit_painted_object_toolpaths(gcode) if painted_one_object else None
     report = analyse_text(gcode, truncated=False)
     filaments = report.get("filaments") or {}
     declared = filaments.get("requirements") or []
@@ -211,6 +269,7 @@ def audit_creality_gcode_for_cfs(job, mapping_report, raw):
         "verified_gcode_sha256": asset.sha256,
         "verified_gcode_tools": sorted(tools["extruding_moves"]),
         "gcode_material_preflight_passed": True,
+        **({"painted_model_extrusions": model_deposition} if model_deposition is not None else {}),
         "printer_submission_verified": False,
         "note": "G-code and live CFS slot identities agree; firmware routing and print start remain unverified.",
     }
