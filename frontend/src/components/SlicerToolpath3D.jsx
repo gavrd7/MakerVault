@@ -184,7 +184,11 @@ export default function SlicerToolpath3D({
     const distance = Math.max(38, size.length() * 1.25);
     const target = valid ? centre : bedCentre;
     controls.target.copy(target);
-    camera.position.copy(target).add(new THREE.Vector3(distance * 0.7, distance * 0.9, distance));
+    // G-code XY maps to Three X/Z. Printer front is negative native Y,
+    // therefore negative Three Z. Match the interactive plate camera.
+    // Viewing from positive Z showed the *rear* of the print and made
+    // asymmetric lettering and prime tower placement appear mirrored.
+    camera.position.copy(target).add(new THREE.Vector3(distance * 0.7, distance * 0.9, -distance));
     camera.lookAt(target);
     controls.update();
     sceneRef.current = { scene, paths, marker, camera, controls, renderer,
@@ -252,9 +256,9 @@ export default function SlicerToolpath3D({
     if (viewName === "top") {
       camera.position.copy(target).add(new THREE.Vector3(0, span, 0.0001));
     } else if (viewName === "front") {
-      camera.position.copy(target).add(new THREE.Vector3(0, span * 0.25, span));
+      camera.position.copy(target).add(new THREE.Vector3(0, span * 0.25, -span));
     } else {
-      camera.position.copy(target).add(new THREE.Vector3(span * 0.7, span * 0.85, span));
+      camera.position.copy(target).add(new THREE.Vector3(span * 0.7, span * 0.85, -span));
     }
     camera.lookAt(target);
     controls.update();
@@ -433,7 +437,7 @@ export default function SlicerToolpath3D({
         const distance = Math.max(38, modelSize.length() * 1.25);
         view.controls.target.copy(modelCentre);
         view.camera.position.copy(modelCentre).add(
-          new THREE.Vector3(distance * .7, distance * .9, distance)
+          new THREE.Vector3(distance * .7, distance * .9, -distance)
         );
         view.camera.lookAt(modelCentre);
         view.controls.update();
