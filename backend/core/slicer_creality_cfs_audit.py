@@ -45,6 +45,7 @@ def audit_creality_cfs_assignments(objects, slot_records, cfs_context, *, printe
         telemetry[key] = slot
     mapping = []
     seen_slots = set()
+    seen_bays = set()
     for item in objects:
         if not isinstance(item, dict) or not isinstance(item.get("material_slot"), dict):
             raise CrealityCfsAuditError("Every model must select a physical CFS slot.")
@@ -61,6 +62,9 @@ def audit_creality_cfs_assignments(objects, slot_records, cfs_context, *, printe
             raise CrealityCfsAuditError("Two-material audit needs two distinct CFS slots.")
         seen_slots.add(ident)
         key = (row.unit_index + 1, row.slot_index)
+        if key in seen_bays:
+            raise CrealityCfsAuditError("Two model assignments resolve to the same CFS bay.")
+        seen_bays.add(key)
         live = telemetry.get(key)
         if live is None:
             raise CrealityCfsAuditError("Selected CFS bay is absent from fresh native telemetry.")
