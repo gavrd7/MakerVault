@@ -63,7 +63,7 @@ def _metrics(gcode):
     for line in text.splitlines():
         command = line.partition(";")[0].strip()
         if re.match(r"^(?:G0?[0123]|T[01])(?:\s|$)", command, re.I):
-            motion_digest.update(b" ".join(command.upper().split()))
+            motion_digest.update(" ".join(command.upper().split()).encode("utf-8"))
             motion_digest.update(b"\n")
     zs = [float(x) for x in re.findall(r"(?im)^;Z:\s*([0-9]+(?:\.[0-9]+)?)\s*$", text)]
     layers = sorted(set(round(x, 4) for x in zs))
