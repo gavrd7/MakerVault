@@ -903,6 +903,20 @@ export default function SlicerPrepareWorkspace({
       !(item.fuzzy_skin_paint?.regions || []).length &&
       !(item.variable_layer_profile?.bands || []).length &&
       !Object.keys(item.process_overrides || {}).length);
+  const crealityPaintReady = activeEngine === "crealityprint" &&
+    objects.length === 1 && requiredMultiSlots.length === 2 &&
+    nativeMultiMaterialBaseReady &&
+    (objects[0].colour_paint?.regions || []).length > 0 &&
+    !(objects[0].support_paint?.regions || []).length &&
+    !(objects[0].seam_paint?.regions || []).length &&
+    !(objects[0].fuzzy_skin_paint?.regions || []).length &&
+    !(objects[0].variable_layer_profile?.bands || []).length &&
+    !Object.keys(objects[0].process_overrides || {}).length &&
+    (objects[0].colour_paint?.regions || []).every(region => {
+      const swatch = objects[0].colour_paint?.palette?.[region.slot];
+      return swatch && String(swatch.printer_id) === String(printerId)
+        && requiredMultiSlots.includes(String(swatch.slot_id));
+    });
   const multiMaterialReadyForExport = activeEngine === "orcaslicer"
     && activeEngineVersion === "2.5.0"
     && assignedSlots.length === objects.length
@@ -934,17 +948,17 @@ export default function SlicerPrepareWorkspace({
   // Only model/paint-assigned slots participate. A loaded but unused CFS
   // bay requires no native preset and must never disable Slice.
   const materialRoutingPending = requiredMultiSlots.length > 1
-    ? !(multiMaterialReadyForExport || crealityTwoStlReady)
+    ? !(multiMaterialReadyForExport || crealityTwoStlReady || crealityPaintReady)
     : assignedSlots.length > 0 ? !(hasSingleSlot && singleSlotProfileMatches) : false;
 
   const projectRoutingPending = plates.some(plate =>
     (plate.objects || []).some(item => item.material_slot != null)
   ) || slotFilamentProfiles.length > 0;
-  const paintedNativeReady = multiMaterialReadyForExport;
+  const paintedNativeReady = multiMaterialReadyForExport || crealityPaintReady;
   const hasPaintedColours = usedNativeFeatures([{objects}]).includes("colour_paint");
   const paintingRoutingNotice = hasPaintedColours && !paintedNativeReady
-    ? activeEngine !== "orcaslicer" || activeEngineVersion !== "2.5.0"
-      ? "Native multi-colour slicing currently requires OrcaSlicer 2.5.0."
+    ? !(activeEngine === "orcaslicer" && activeEngineVersion === "2.5.0") && activeEngine !== "crealityprint"
+      ? "Native multi-colour slicing currently requires OrcaSlicer 2.5.0 or Creality Print."
       : paintedObjectsWithoutBase.length
         ? "The loaded CFS slots have profiles, but the painted model has no base filament slot. Assign its base filament; this is separate from choosing native profiles for loaded slots."
         : incompletePaintSlot
@@ -2146,10 +2160,11 @@ export default function SlicerPrepareWorkspace({
             : <button type="button" onClick={onChangeProfiles}>Check profiles and engine</button>}
         </p>}
       </div>
-      {activeEngine === "crealityprint" && crealityTwoStlReady &&
+      {activeEngine === "crealityprint" && (crealityTwoStlReady || crealityPaintReady) &&
         <p className="slicerActionStatus" role="status">
-          Creality Print will slice the prepared model positions from a native 3MF project.
-          This multi-material test remains offline; printer submission is disabled.
+          {crealityPaintReady
+            ? "Creality Print will test one colour-painted object with two assigned CFS filaments in a native 3MF project. Check both colours in the sliced G-code preview before attempting any print."
+            : "Creality Print will slice both positioned models using the native 3MF project."}
         </p>}
       <div className="settingsActions">
         {plates.length>1 && <p className="slicerPlateSliceScope" role="status">
