@@ -169,6 +169,8 @@ def _engine_run(binary, project, timeout_seconds):
             known_reason = _known_validation_reason(output)
             if known_reason:
                 safe["known_validation_reason"] = known_reason
+        elif code == 250:
+            safe["native_error"] = "CLI_DATA_FILE_ERROR (-6)"
         elif code == 232:
             safe["native_error"] = "CLI_FILE_VERSION_NOT_SUPPORTED (-24)"
         elif code == 254:
