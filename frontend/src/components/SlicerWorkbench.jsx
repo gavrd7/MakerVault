@@ -773,11 +773,16 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
     const offlineMultiMaterial = sliceNow && mode !== "all" &&
       plateNeedsMultiMaterial(plateObjects);
     const crealityMaterialTest = offlineMultiMaterial && form.engine==="crealityprint";
-    if (crealityMaterialTest && (plateObjects.length!==2 || flushSettings ||
-        plateObjects.some(item=>item.colour_paint?.regions?.length ||
-          Object.keys(item.colour_paint?.faces||{}).length))) {
-      setError("Creality native project slicing needs exactly two unpainted models without custom flushing.");
-      return;
+    if (crealityMaterialTest) {
+      const singlePainted = plateObjects.length === 1 &&
+        plateObjects[0].colour_paint?.regions?.length > 0;
+      const twoPlain = plateObjects.length === 2 &&
+        plateObjects.every(item => !(item.colour_paint?.regions || []).length &&
+          !Object.keys(item.colour_paint?.faces || {}).length);
+      if ((!singlePainted && !twoPlain) || flushSettings) {
+        setError("Creality CFS slicing supports two unpainted models or one colour-painted model, without custom flushing.");
+        return;
+      }
     }
     const saveOutput = mode === "save-and-slice";
     const workflow = mode === "quick" ? "quick" : mode === "draft" && !editorOpen ? "setup" : "interactive";
