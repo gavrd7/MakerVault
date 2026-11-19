@@ -402,9 +402,6 @@ def _validate_plate_execution(job):
             if not (len(objects) == 2 or single_painted):
                 raise SlicerExecutionError(
                     "Creality CFS slicing requires two assigned models, or one colour-painted model.")
-            if settings.get("flush_settings") is not None:
-                raise SlicerExecutionError(
-                    "Creality test slicing does not yet support custom flushing.")
             if any((item.get("support_paint") or {}).get("regions") or
                    (item.get("seam_paint") or {}).get("regions") or
                    (item.get("fuzzy_skin_paint") or {}).get("regions") or
@@ -462,10 +459,6 @@ def _validate_plate_execution(job):
             if len(objects) != 2:
                 raise SlicerExecutionError(
                     "Creality Print project slicing requires two assigned models.")
-            if settings.get("flush_settings") is not None:
-                raise SlicerExecutionError(
-                    "Creality Print's offline multi-STL test cannot preserve custom "
-                    "flush settings or prime tower positions.")
             if any((item.get("colour_paint") or {}).get("regions") or
                    (item.get("colour_paint") or {}).get("faces")
                    for item in objects):
@@ -843,6 +836,8 @@ def process_queued_job(job_id):
                 tool_colours=material_result["tool_colours"],
                 version=job.engine_version,
                 prime_tower=(job.settings or {}).get("prime_tower"),
+                flush_settings=(job.settings or {}).get("flush_settings"),
+                tool_bindings=material_result["tool_bindings"],
                 bed_width=width, bed_depth=depth)
             model_format = "3mf"
         if model_format == "stl" and job.input_asset.sha256 and hashlib.sha256(model).hexdigest() != job.input_asset.sha256:
