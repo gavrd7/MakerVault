@@ -396,7 +396,7 @@ def build_creality_project_candidate(plate, *, printer, process, filaments,
         points = [point.strip() for point in raw_area.split(",")]
         if len(points) == 5 and points[-1] == points[0]:
             points.pop()
-        match = [re.fullmatch(r"([+-]?\\d+(?:\\.\\d+)?)x([+-]?\\d+(?:\\.\\d+)?)", point)
+        match = [re.fullmatch(r"([+-]?\d+(?:\.\d+)?)x([+-]?\d+(?:\.\d+)?)", point)
                  for point in points]
         if len(points) != 4 or any(m is None for m in match):
             raise SlicerProfileError("Invalid native Creality project printable polygon.")
