@@ -27,7 +27,7 @@ from .slicer_profile_edit import SETTINGS as EDITABLE_PROFILE_SETTINGS, customis
 from .slicer_profile_lineage import inspect_orca_lineage
 from .slicer_native_resolution import resolved_native_profile
 from .slicer_native_overrides import ORCA_PLATES
-from .slicer_plate_types import inspect_native_plates
+from .slicer_plate_types import inspect_engine_plates
 from .slicer_process_settings import process_schema, validate_process_overrides, apply_process_overrides
 from .slicer_flush_settings import validate_flush_settings
 from .slicer_colour_painting import validate_colour_paint
@@ -600,10 +600,21 @@ def _draft(user, data):
         native_labels[f"{kind}_preset"] = label
 
     plate_type = _preset(data, "plate", 80) if "plate" in data else "default"
-    if engine.key == "orcaslicer" and plate_type not in ORCA_PLATES:
-        raise ValueError("Choose a supported OrcaSlicer build plate type.")
-    if engine.key != "orcaslicer" and plate_type != "default":
-        raise ValueError("Build plate overrides are not yet supported for this slicer engine.")
+    if engine.key in ("orcaslicer", "crealityprint"):
+        if plate_type not in ORCA_PLATES:
+            raise ValueError("Choose a supported native build plate type.")
+        if engine.key == "crealityprint" and plate_type != "default":
+            printer_profile = native_profiles.get("printer_profile")
+            if not printer_profile:
+                raise ValueError("Select a native Creality printer profile before choosing a plate.")
+            try:
+                supported = inspect_engine_plates(printer_profile)["supported"]
+            except (SlicerProfileError, ValueError, TypeError, OSError) as exc:
+                raise ValueError("Creality build plate capabilities could not be verified.") from exc
+            if plate_type not in supported:
+                raise ValueError("Build plate is not supported by the Creality printer profile.")
+    elif plate_type != "default":
+        raise ValueError("Build plate overrides are not supported by this slicer engine.")
     return SliceJob.objects.create(
         owner=user, input_asset=input_asset, printer=printer, spool=spool,
         **native_profiles,
@@ -1913,9 +1924,9 @@ def profile_plate(request, profile_id):
         # The frontend may display approved artwork against the configured
         # printer dimensions, but this never changes slice-fit validation.
         geometry = {"status": "unavailable", "reason": "Use printer build dimensions."}
-    if profile.engine == "orcaslicer":
+    if profile.engine in ("orcaslicer", "crealityprint"):
         try:
-            geometry["bed_types"] = inspect_native_plates(profile)
+            geometry["bed_types"] = inspect_engine_plates(profile)
         except (SlicerProfileError, ValueError, OSError, TypeError):
             geometry["bed_types"] = {"default": None, "supported": [],
                                      "default_source": "not declared"}
