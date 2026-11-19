@@ -596,7 +596,7 @@ def _supervised_creality_test_preflight(connection, user, asset, payload):
     from .models import SliceJob, PrinterFilamentSlot
     from .slicer_creality_cfs_audit import (
         audit_creality_cfs_assignments, audit_creality_gcode_for_cfs,
-        CrealityCfsAuditError,
+        creality_cfs_audit_objects, CrealityCfsAuditError,
     )
     if (payload.get("creality_supervised_test") is not True
             or payload.get("creality_test_confirmed") is not True
@@ -624,7 +624,12 @@ def _supervised_creality_test_preflight(connection, user, asset, payload):
     ).first()
     if job is None:
         raise GcodeSubmissionError("A completed owned Creality slice is required.", 409)
-    objects = (job.settings or {}).get("plate_objects") or []
+    saved_objects = (job.settings or {}).get("plate_objects") or []
+    try:
+        objects = creality_cfs_audit_objects(
+            saved_objects, printer_id=job.printer_id)
+    except CrealityCfsAuditError as exc:
+        raise GcodeSubmissionError("Invalid saved CFS assignments: " + str(exc), 409) from exc
     ids = [
         item.get("material_slot", {}).get("slot_id")
         for item in objects if isinstance(item, dict)
