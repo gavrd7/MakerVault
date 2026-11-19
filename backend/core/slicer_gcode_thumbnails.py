@@ -43,6 +43,7 @@ def _paths(gcode):
     in_object = False
     segments = []
     observed = 0
+    stride = 1
     for number, raw in enumerate(gcode.splitlines()):
         if number >= MAX_LINES:
             break
@@ -90,21 +91,28 @@ def _paths(gcode):
             ne = params.get("E", e)
             extruded = (ne - e) if absolute_e else params.get("E", 0)
             if all(math.isfinite(val) for val in (x, y, z, nx, ny, nz, extruded)):
-                if (absolute_xy and extruded > 0.000001 and
+                if (absolute_xy and 0.000001 < extruded < 10000 and
+                        all(abs(value) <= 10000 for value in (x, y, z, nx, ny, nz)) and
                         ("X" in params or "Y" in params) and
                         (not tagged_objects or in_object) and
                         abs(nx - x) + abs(ny - y) > 0.001):
                     observed += 1
-                    if len(segments) < MAX_SEGMENTS:
+                    if observed % stride == 0:
                         segments.append((x, y, nx, ny, nz, current_tool))
+                    if len(segments) >= MAX_SEGMENTS:
+                        # Re-sample the accumulated history and continue
+                        # collecting across later layers. A hard first-N cap
+                        # otherwise produces thumbnails missing their tops.
+                        segments = segments[::2]
+                        stride *= 2
             x, y, z = nx, ny, nz
             if "E" in params and absolute_e:
                 e = ne
     if not segments:
         return [], []
-    # Stable, deterministic overview of long toolpaths.
-    stride = max(1, math.ceil(len(segments) / MAX_RENDER_SEGMENTS))
-    return segments[::stride], colours
+    # Stable, deterministic overview of the complete toolpath.
+    render_stride = max(1, math.ceil(len(segments) / MAX_RENDER_SEGMENTS))
+    return segments[::render_stride], colours
 
 
 def _render_png(segments, colours, size):
