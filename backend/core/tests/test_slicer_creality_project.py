@@ -79,6 +79,10 @@ class CrealityPositionedPlateTests(SimpleTestCase):
         self.assertEqual(len(project["wipe_tower_x"]), 1)
         self.assertLess(float(project["wipe_tower_x"][0]), 260)
         self.assertLess(float(project["wipe_tower_y"][0]), 260)
+        # Keep the tower off the front-left corner on a mostly empty K2
+        # plate, without claiming that this can replace cleaning the bed.
+        self.assertGreater(float(project["wipe_tower_y"][0]), 130)
+        self.assertGreater(float(project["wipe_tower_x"][0]), 130)
 
     def test_filament_option_merge_flattens_native_singleton_vectors(self):
         import json
