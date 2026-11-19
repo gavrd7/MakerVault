@@ -397,7 +397,7 @@ export default function PrinterStartGcodeModal({ printer, connection, canEdit, o
       {cfs.connected === true && <>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
           <strong>Current CFS inventory</strong>
-          <button type="button" onClick={load} disabled={busy}>Refresh CFS snapshot</button>
+          <button type="button" onClick={() => load(true)} disabled={busy}>Refresh CFS snapshot</button>
         </div>
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(215px, 1fr))", gap: 10, margin: "12px 0" }}>
           {(cfs.slots || []).map(slot => <div key={slot.label} style={{ display: "flex", alignItems: "center", gap: 10, padding: 12, border: "1px solid var(--border-color, #344255)", borderRadius: 10 }}>
