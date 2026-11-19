@@ -21,7 +21,8 @@ class NativeCreality3MFContractTests(TestCase):
                 '<?xml version="1.0" encoding="UTF-8"?>'
                 '<model xmlns="http://schemas.microsoft.com/3dmanufacturing/core/2015/02" '
                 'unit="millimeter"><metadata name="Application">'
-                'Creality_Print V7.3.1</metadata><resources/><build/></model>')
+                'Creality_Print V7.3.1</metadata><resources>'
+                '<object id="1"/><object id="2"/></resources><build/></model>')
             z.writestr("Metadata/model_settings.config",
                        '<config><object id="1"><metadata key="extruder" value="1"/>'
                        '<part id="1" subtype="normal_part">'
@@ -78,6 +79,38 @@ class NativeCreality3MFContractTests(TestCase):
         with self.assertRaisesRegex(WorkerError, "generator version"):
             validate_creality_project(output.getvalue())
         validate.assert_not_called()
+
+    @patch("slicer_worker.creality_project_validation.validate_worker_3mf",
+           return_value=True)
+    def test_one_painted_model_keeps_two_native_filament_tools(self, validate):
+        import xml.etree.ElementTree as ET
+        source = self.project()
+        output = io.BytesIO()
+        ns = "{http://schemas.microsoft.com/3dmanufacturing/core/2015/02}"
+        with zipfile.ZipFile(io.BytesIO(source)) as original, zipfile.ZipFile(
+                output, "w", compression=zipfile.ZIP_DEFLATED) as dest:
+            for name in original.namelist():
+                raw = original.read(name)
+                if name == "3D/3dmodel.model":
+                    root = ET.fromstring(raw)
+                    resources = root.find(ns + "resources")
+                    resources.remove(resources[1])
+                    raw = ET.tostring(root, encoding="utf-8")
+                elif name == "Metadata/model_settings.config":
+                    root = ET.fromstring(raw)
+                    records = root.findall("object")
+                    root.remove(records[1])
+                    plate = root.find("plate")
+                    instances = plate.findall("model_instance")
+                    plate.remove(instances[1])
+                    assembly = root.find("assemble")
+                    assembly.remove(assembly[1])
+                    raw = ET.tostring(root, encoding="utf-8")
+                dest.writestr(name, raw)
+        self.assertTrue(validate_creality_project(output.getvalue(),
+                                                  native_tool_count=2))
+        validate.assert_called_once()
+        self.assertEqual(validate.call_args.kwargs["native_tool_count"], 2)
 
     def test_missing_creality_identity_is_rejected(self):
         with self.assertRaises(WorkerError):
