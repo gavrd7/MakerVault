@@ -885,6 +885,27 @@ class NativeGcodeAdapterTests(SimpleTestCase):
         with self.assertRaises(GcodeSubmissionError):
             _mapped_cfs_entries(moon, req, chosen)
 
+    @patch("core.creality_gcode.asyncio.run")
+    def test_ambiguous_creality_cfs_mapping_rejected_before_network(self, run):
+        from core.creality_gcode import start_cfs_mapped
+        native = connection("creality_local")
+        first = {"id": "T1A", "type": "PLA", "color": "#7C7D7E",
+                 "boxId": 1, "materialId": 2}
+        second = {"id": "T1B", "type": "PLA", "color": "#FADD4D",
+                  "boxId": 1, "materialId": 3}
+        for invalid in (
+            [first, {**second, "id": "T1A"}],
+            [first, {**second, "materialId": 2}],
+            [{**first, "boxId": True}],
+            [{**first, "materialId": False}],
+            [{**first, "color": None}],
+            [{**first, "type": 123}],
+        ):
+            with self.subTest(mapping=invalid):
+                with self.assertRaises(CrealityGcodeError):
+                    start_cfs_mapped(native, "fixture.gcode", invalid)
+        run.assert_not_called()
+
     @patch("core.creality_gcode.websockets.connect")
     def test_mapped_creality_command_sequence_once(self, connect):
         import asyncio
