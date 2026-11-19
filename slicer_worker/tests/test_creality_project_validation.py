@@ -112,6 +112,48 @@ class NativeCreality3MFContractTests(TestCase):
         validate.assert_called_once()
         self.assertEqual(validate.call_args.kwargs["native_tool_count"], 2)
 
+    def test_real_worker_accepts_one_painted_mesh_with_two_tools(self):
+        """No mocks: exercise the strict native facet/tool validator."""
+        import xml.etree.ElementTree as ET
+        ns = "{http://schemas.microsoft.com/3dmanufacturing/core/2015/02}"
+        raw = self.project()
+        output = io.BytesIO()
+        with zipfile.ZipFile(io.BytesIO(raw)) as source, zipfile.ZipFile(
+                output, "w", compression=zipfile.ZIP_DEFLATED) as dest:
+            for name in source.namelist():
+                part = source.read(name)
+                if name == "3D/3dmodel.model":
+                    root = ET.fromstring(part)
+                    resources = root.find(ns + "resources")
+                    resources.remove(resources[1])
+                    obj = resources[0]
+                    obj.set("type", "model")
+                    mesh = ET.SubElement(obj, ns + "mesh")
+                    vertices = ET.SubElement(mesh, ns + "vertices")
+                    for x, y, z in ((0, 0, 0), (5, 0, 0), (0, 5, 0)):
+                        ET.SubElement(vertices, ns + "vertex", {
+                            "x": str(x), "y": str(y), "z": str(z)})
+                    triangles = ET.SubElement(mesh, ns + "triangles")
+                    ET.SubElement(triangles, ns + "triangle", {
+                        "v1": "0", "v2": "1", "v3": "2", "paint_color": "8"})
+                    build = root.find(ns + "build")
+                    ET.SubElement(build, ns + "item", {
+                        "objectid": "1",
+                        "transform": "1 0 0 0 1 0 0 0 1 0 0 0",
+                    })
+                    part = ET.tostring(root, encoding="utf-8")
+                elif name == "Metadata/model_settings.config":
+                    root = ET.fromstring(part)
+                    second = root.findall("object")[1]
+                    root.remove(second)
+                    plate = root.find("plate")
+                    plate.remove(plate.findall("model_instance")[1])
+                    assembly = root.find("assemble")
+                    assembly.remove(assembly[1])
+                    part = ET.tostring(root, encoding="utf-8")
+                dest.writestr(name, part)
+        self.assertTrue(validate_creality_project(output.getvalue(), native_tool_count=2))
+
     def test_missing_creality_identity_is_rejected(self):
         with self.assertRaises(WorkerError):
             validate_creality_project(self.project(identity=False))
