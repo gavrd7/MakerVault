@@ -79,6 +79,23 @@ class CrealityCfsAuditTests(SimpleTestCase):
         with self.assertRaises(CrealityCfsAuditError):
             creality_cfs_audit_objects([obj], printer_id="p")
 
+    def test_painted_object_audit_excludes_prime_tower_only_tool_use(self):
+        from core.slicer_creality_cfs_audit import audit_painted_object_toolpaths
+        model = (
+            "M83\nT0\nEXCLUDE_OBJECT_START NAME=painted\n"
+            "G1 X1 Y1 E0.5\nEXCLUDE_OBJECT_END NAME=painted\n"
+            "T1\nG1 X80 Y80 E0.5\n"
+        )
+        with self.assertRaisesRegex(CrealityCfsAuditError, "inside the object"):
+            audit_painted_object_toolpaths(model)
+        painted = model + (
+            "EXCLUDE_OBJECT_START NAME=painted\n"
+            "G1 X2 Y2 E0.4\nEXCLUDE_OBJECT_END NAME=painted\n"
+        )
+        result = audit_painted_object_toolpaths(painted)
+        self.assertGreater(result[0], 0)
+        self.assertGreater(result[1], 0)
+
     def test_non_contiguous_bays_keep_logical_tool_order(self):
         report = self.audit()
         self.assertEqual([row["slot_label"] for row in report["mapping"]],
