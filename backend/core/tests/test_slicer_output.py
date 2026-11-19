@@ -38,6 +38,34 @@ class GeneratedSlicerFileTests(TestCase):
             nozzle_mm="0.40", status="running",
         )
 
+    def test_orca_and_creality_outputs_share_thumbnail_embedding_and_sha(self):
+        import hashlib
+        from core.slicer_gcode_thumbnails import THUMBNAIL
+        for engine in ("orcaslicer", "crealityprint"):
+            with self.subTest(engine=engine):
+                self.job.engine = engine
+                self.job.status = "running"
+                self.job.output_asset = None
+                self.job.save(update_fields=["engine", "status", "output_asset"])
+                source = (
+                    b"; filament_colour = #7C7D7E;#FADD4D\n"
+                    b"G90\nM83\nT0\nG1 X1 Y1 E0.5\n"
+                    b"G1 X8 Y1 E0.5\nT1\nG1 X8 Y8 E0.5\n"
+                )
+                asset = store_generated_gcode(self.job.pk, source)
+                with asset.file.storage.open(asset.file.name, "rb") as handle:
+                    enriched = handle.read()
+                self.assertTrue(THUMBNAIL.search(enriched))
+                self.assertEqual(asset.metadata["embedded_thumbnail_sizes"],
+                                 ["96x96", "300x300"])
+                self.assertEqual(asset.metadata["size_bytes"], len(enriched))
+                self.assertEqual(asset.sha256, hashlib.sha256(enriched).hexdigest())
+                self.assertEqual(
+                    [line for line in enriched.splitlines() if line and not line.lstrip().startswith(b";")],
+                    [line for line in source.splitlines() if line and not line.lstrip().startswith(b";")],
+                )
+                self.assertFalse(asset.metadata.get("printer_submission_verified", False))
+
     def test_generated_filename_uses_source_stl_name(self):
         output = store_generated_gcode(self.job.pk, b"; generated\nG1 X1 Y1 E0.5\n")
         self.assertEqual(output.name, "shape.gcode")
