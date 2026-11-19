@@ -187,6 +187,7 @@ class CrealityPositionedPlateTests(SimpleTestCase):
         self.assertEqual(result["enable_prime_tower"], "1")
         self.assertEqual(result["flush_volumes_matrix"][1], "370.0")
         self.assertEqual(result["flush_volumes_matrix"][4], "175.0")
+        self.assertEqual(result["flush_volumes_changed"], "1")
         self.assertEqual(result["flush_volumes_matrix"][2], "0")
         self.assertEqual(len(result["flush_volumes_matrix"]), 16)
         with self.assertRaisesMessage(SlicerProfileError, "unmapped physical"):
@@ -194,8 +195,17 @@ class CrealityPositionedPlateTests(SimpleTestCase):
                 "from_slot_id": "unrelated-slot", "to_slot_id": "yellow-id",
                 "volume_mm3": 300,
             }]})
-        with self.assertRaisesMessage(SlicerProfileError, "multiplier"):
-            build({**setting, "multiplier": 1.5})
+        with zipfile.ZipFile(io.BytesIO(
+                build({**setting, "multiplier": 1.5}))) as package:
+            customised = json.loads(package.read("Metadata/project_settings.config"))
+        self.assertEqual(customised["flush_multiplier"], "1.5")
+        self.assertEqual(customised["flush_volumes_matrix"][1], "370.0")
+        self.assertEqual(customised["flush_volumes_matrix"][4], "175.0")
+        with zipfile.ZipFile(io.BytesIO(
+                build({**setting, "multiplier": 0.75, "transitions": []}))) as package:
+            multiplier_only = json.loads(package.read("Metadata/project_settings.config"))
+        self.assertEqual(multiplier_only["flush_multiplier"], "0.75")
+        self.assertNotEqual(multiplier_only.get("flush_volumes_changed"), "1")
         with self.assertRaisesMessage(SlicerProfileError, "two verified"):
             build(bindings={"grey-id": 0, "yellow-id": 0})
 
