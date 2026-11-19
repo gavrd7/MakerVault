@@ -173,4 +173,5 @@ def submission_status(request, printer_id, connection_id, request_id):
         "request_id": str(row.pk), "source": row.source, "action": row.action,
         "remote_path": row.remote_path, "status": row.status,
         "message": row.message,
+        "cfs_mapping_audit": row.cfs_mapping_audit if row.cfs_mapping_audit else None,
     }})
