@@ -220,6 +220,26 @@ class CrealityPositionedPlateTests(SimpleTestCase):
                 plate, printer=wrong_bed, process=process,
                 filaments=filaments, bed_width=260, bed_depth=260)
 
+    def test_physical_filament_colour_vector_matches_four_native_slots(self):
+        from core.slicer_creality_project import _native_palette_settings
+        project = {
+            "filament_settings_id": ["Grey PLA", "Yellow PLA"],
+            "filament_diameter": ["1.75", "1.75"],
+            "default_filament_colour": ["#808080", "#FFFF00"],
+        }
+        _native_palette_settings(project, [None, None])
+        self.assertEqual(project["filament_colour"],
+                         ["#808080", "#FFFF00", "#808080", "#FFFF00"])
+        self.assertEqual(len(project["filament_diameter"]), 4)
+        self.assertEqual(len(project["filament_settings_id"]), 4)
+
+    def test_missing_source_colours_keep_full_physical_material_count(self):
+        from core.slicer_creality_project import _native_palette_settings
+        project = {"filament_settings_id": ["A", "B"],
+                   "filament_type": ["PLA", "PLA"]}
+        _native_palette_settings(project, [None, None])
+        self.assertEqual(project["filament_colour"], ["#FFFFFF"] * 4)
+
     def test_invalid_palette_fails_before_native_engine(self):
         with self.assertRaises(SlicerProfileError):
             build_creality_positioned_plate(
