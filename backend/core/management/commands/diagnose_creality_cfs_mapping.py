@@ -25,7 +25,8 @@ class Command(BaseCommand):
             job = next((
                 candidate for candidate in
                 SliceJob.objects.select_related("printer", "output_asset").filter(
-                    engine="crealityprint"
+                    engine="crealityprint", status="completed",
+                    output_asset__isnull=False,
                 ).order_by("-created_at")[:25]
                 if (candidate.settings or {}).get("multi_material_test") is True
                 and len((candidate.settings or {}).get("plate_objects") or []) == 2
