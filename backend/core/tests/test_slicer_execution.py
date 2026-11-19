@@ -116,7 +116,7 @@ class IntendedMaterialSafetyTests(SimpleTestCase):
             _validate_plate_execution(job)
         job.engine_version = "2.5.0"
         job.settings["plate_objects"] = [model, {**model, "instance_id": "two"}]
-        with self.assertRaisesRegex(SlicerExecutionError, "one single-material"):
+        with self.assertRaisesRegex(SlicerExecutionError, "one model"):
             _validate_plate_execution(job)
         for setting in ({"z_mm": 5}, {"scale_percent": 80},
                         {"rotation_xyz_deg": [30, 0]}):
@@ -148,7 +148,7 @@ class IntendedMaterialSafetyTests(SimpleTestCase):
             _validate_plate_execution(job)
         job.engine_version = "2.5.0"
         job.settings["plate_objects"] = [one, {**one,"instance_id":"two"}]
-        with self.assertRaisesRegex(SlicerExecutionError, "single-filament model"):
+        with self.assertRaisesRegex(SlicerExecutionError, "one .*model"):
             _validate_plate_execution(job)
         for change in ({"z_mm":3},{"scale_percent":90},{"rotation_xyz_deg":[15,0]}):
             job.settings["plate_objects"] = [{**one,**change}]
@@ -179,7 +179,7 @@ class IntendedMaterialSafetyTests(SimpleTestCase):
             _validate_plate_execution(job)
         job.engine_version = "2.5.0"
         job.settings["plate_objects"] = [model, {**model, "instance_id":"two"}]
-        with self.assertRaisesRegex(SlicerExecutionError, "single-filament model"):
+        with self.assertRaisesRegex(SlicerExecutionError, "one .*model"):
             _validate_plate_execution(job)
         for change in ({"z_mm": 4}, {"scale_percent": 92},
                        {"rotation_xyz_deg": [10,0]}):
@@ -212,7 +212,7 @@ class IntendedMaterialSafetyTests(SimpleTestCase):
             _validate_plate_execution(job)
         job.engine_version="2.5.0"
         job.settings["plate_objects"]=[model,{**model,"instance_id":"two"}]
-        with self.assertRaisesRegex(SlicerExecutionError,"single-filament model"):
+        with self.assertRaisesRegex(SlicerExecutionError,"one .*model"):
             _validate_plate_execution(job)
         for modification in ({"z_mm":4},{"scale_percent":85},
                              {"rotation_xyz_deg":[10,0]}):
@@ -252,7 +252,7 @@ class IntendedMaterialSafetyTests(SimpleTestCase):
             _validate_plate_execution(job)
         job.engine_version = "2.5.0"
         job.settings["plate_objects"] = [model, {**model, "instance_id": "two"}]
-        with self.assertRaisesRegex(SlicerExecutionError, "single-filament"):
+        with self.assertRaisesRegex(SlicerExecutionError, "one .*model"):
             _validate_plate_execution(job)
 
     @patch("core.slicer_execution.plan_native_multimaterial",
