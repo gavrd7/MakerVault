@@ -126,6 +126,10 @@ def _known_validation_reason(raw):
         ("filaments of different types cannot be mixed", "mixed-filament-type-mismatch"),
         ("no extrusions under current settings", "no-active-extrusions"),
         ("prime tower on every layer", "prime-tower-layer-requirement"),
+        ("unable to resolve a mixed filament used by the current plate", "unresolved-mixed-filament"),
+        ("does not support filament", "printer-filament-incompatible"),
+        ("spiral vase mode does not work when an object contains more than one materials", "spiral-vase-multi-material"),
+        ("support filament must be assigned to an explicit nozzle", "support-nozzle-unassigned"),
     )
     for phrase, reason in known:
         if phrase in text:
@@ -155,8 +159,14 @@ def _engine_run(binary, project, timeout_seconds):
                 )
                 diagnostic.seek(0, os.SEEK_END)
                 size = diagnostic.tell()
+                diagnostic.seek(0)
+                first = diagnostic.read(min(64 * 1024, size))
                 diagnostic.seek(max(0, size - MAX_CAPTURE), os.SEEK_SET)
-                output = diagnostic.read(MAX_CAPTURE)
+                last = diagnostic.read(MAX_CAPTURE)
+                # Native warnings can appear early, followed by long
+                # repetitive logs. Keep both bounded sections in memory;
+                # neither section is persisted in the report.
+                output = first + b"\\n" + last
                 code = result.returncode
         except subprocess.TimeoutExpired:
             return {"status": "timeout", "duration_seconds": timeout_seconds}
