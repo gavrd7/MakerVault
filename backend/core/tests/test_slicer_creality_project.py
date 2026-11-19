@@ -288,6 +288,11 @@ class CrealityPositionedPlateTests(SimpleTestCase):
         raw, signature, patch = _fixture()
         painted_raw, colour = fixture_paint()
         self.assertEqual(raw, painted_raw)
+        from core.tests.test_slicer_colour_native_3mf import PRINTER_ID
+        # All swatches must be valid owned printer references, including
+        # palette entries not used by this small painted fixture.
+        for swatch in colour["palette"]:
+            swatch["printer_id"] = PRINTER_ID
         def painted(slot):
             return {"version": 2, "signature": signature,
                     "regions": [{"slot": slot, "patches": [
