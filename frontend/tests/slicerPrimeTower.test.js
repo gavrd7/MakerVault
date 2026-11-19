@@ -1,5 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import {readFileSync} from "node:fs";
 import {autoPrimeTowerPosition,towerFits} from "../src/components/slicerPrimeTower.js";
 
 const model={instance_id:"benchy",x_mm:0,y_mm:0,rotation_deg:0,scale_percent:100};
@@ -28,4 +29,21 @@ test("a manually shifted model changes the available tower positions",()=>{
   const tower=autoPrimeTowerPosition([shifted],dimensions,260,260,35,35);
   assert.ok(tower);
   assert.equal(towerFits(tower,[shifted],dimensions,260,260,35,35),true);
+});
+
+test("Creality Print exposes the existing draggable tower with native X/Y persistence",()=>{
+  const workspace=readFileSync(new URL("../src/components/SlicerPrepareWorkspace.jsx",import.meta.url),"utf8");
+  const workbench=readFileSync(new URL("../src/components/SlicerWorkbench.jsx",import.meta.url),"utf8");
+  assert.match(workspace,/primeTowerEnabled=\{\["orcaslicer","crealityprint"\]\.includes\(activeEngine\)/);
+  assert.match(workspace,/assignedSlotIds=\{requiredMultiSlots\}/);
+  assert.match(workspace,/engine=\{activeEngine\}/);
+  assert.match(workbench,/primeTower=\{primeTower\} onPrimeTowerChange=\{setPrimeTower\}/);
+  assert.doesNotMatch(workbench,/\(\(!singlePainted && !twoPlain\) \|\| flushSettings\)/);
+});
+
+test("Creality flush modal forbids unvalidated global multiplier and unmapped slot edits",()=>{
+  const modal=readFileSync(new URL("../src/components/SlicerFlushVolumes.jsx",import.meta.url),"utf8");
+  assert.match(modal,/disabled=\{disabled \|\| creality\}/);
+  assert.match(modal,/disabled=\{disabled \|\| !editableTransition\(from,to\)\}/);
+  assert.match(modal,/Selected process profile belongs to a different slicer engine/);
 });
