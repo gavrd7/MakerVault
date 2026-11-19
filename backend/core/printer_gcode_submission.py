@@ -586,6 +586,74 @@ def _mapped_cfs_entries(connection, requirements, requested):
     return mapping
 
 
+def _supervised_creality_test_preflight(connection, user, asset, payload):
+    """Strict test-only approval for one completed K2 slice, with no network writes.
+
+    This is deliberately distinct from generic mapped printing. The caller
+    repeats this preflight immediately before firmware start using fresh native
+    telemetry, after any upload has completed.
+    """
+    import hashlib
+    from .models import SliceJob, PrinterFilamentSlot
+    from .slicer_creality_cfs_audit import (
+        audit_creality_cfs_assignments, audit_creality_gcode_for_cfs,
+        CrealityCfsAuditError,
+    )
+    if (payload.get("creality_supervised_test") is not True
+            or payload.get("creality_test_confirmed") is not True
+            or payload.get("cfs_mode") != "mapped"
+            or payload.get("action") != "print"
+            or payload.get("source") != "makervault"
+            or not _is_k2(connection)
+            or connection.adapter not in {"creality_local", "moonraker"}):
+        raise GcodeSubmissionError(
+            "This Creality two-colour test requires explicit K2 supervised confirmation.", 409)
+    metadata = asset.metadata or {}
+    if (metadata.get("multi_material_test") is not True
+            or metadata.get("engine") != "crealityprint"
+            or metadata.get("printer_submission_verified") is not False
+            or str(metadata.get("printer_id")) != str(connection.printer_id)
+            or str(payload.get("creality_test_sha256") or "") != str(asset.sha256)):
+        raise GcodeSubmissionError("Selected test G-code identity was not confirmed.", 409)
+    # Keep the initial physical validation deliberately small and reversible.
+    if not 0 < asset.file.size <= 2 * 1024 * 1024:
+        raise GcodeSubmissionError(
+            "Initial supervised CFS tests must use G-code at most 2 MiB.", 409)
+    job = SliceJob.objects.select_related("output_asset").filter(
+        owner=user, printer_id=connection.printer_id,
+        output_asset=asset, engine="crealityprint", status="completed",
+    ).first()
+    if job is None:
+        raise GcodeSubmissionError("A completed owned Creality slice is required.", 409)
+    objects = (job.settings or {}).get("plate_objects") or []
+    ids = [
+        item.get("material_slot", {}).get("slot_id")
+        for item in objects if isinstance(item, dict)
+    ]
+    if len(ids) != 2 or any(not isinstance(value, str) for value in ids):
+        raise GcodeSubmissionError("Incomplete saved CFS slot assignments.", 409)
+    slots = list(PrinterFilamentSlot.objects.filter(
+        printer_id=connection.printer_id, pk__in=ids, system="creality_cfs"))
+    try:
+        report = audit_creality_cfs_assignments(
+            objects, slots, creality_cfs_context(connection),
+            printer_id=connection.printer_id,
+        )
+        with asset.file.storage.open(asset.file.name, "rb") as file:
+            raw = file.read(2 * 1024 * 1024 + 1)
+        report = audit_creality_gcode_for_cfs(job, report, raw)
+    except (CrealityCfsAuditError, OSError, ValueError) as exc:
+        raise GcodeSubmissionError("CFS supervised test preflight failed: " + str(exc), 409) from exc
+    expected = [
+        {"tool_index": row["tool_index"], "slot_label": row["slot_label"]}
+        for row in report["mapping"]
+    ]
+    if (payload.get("cfs_mapping") != expected
+            or report.get("gcode_material_preflight_passed") is not True):
+        raise GcodeSubmissionError("Selected mapping differs from the saved and verified slice.", 409)
+    return report
+
+
 def _printer_transfer_name(original_name, request_id):
     """Preserve the original name first, suffix with a stable job identity."""
     original = PurePosixPath(str(original_name or "job.gcode")).name
@@ -1023,10 +1091,20 @@ def submit(connection, user, payload):
         # Experimental multicolour slices are offline evidence only.
         # No opt-in, adapter flag or CFS acknowledgement bypasses this guard.
         if (asset.metadata or {}).get("multi_material_test") is True:
-            raise GcodeSubmissionError(
-                "Multi-colour test G-code is not approved for printer upload or print start. "
-                "Complete manufacturer-specific toolchange verification first.", 409
-            )
+            # The sole exception is a deliberately small, explicitly
+            # confirmed K2 hardware validation. It is revalidated against
+            # the owned saved job, exact G-code and fresh slots before start.
+            if not (payload.get("creality_supervised_test") is True
+                    and payload.get("creality_test_confirmed") is True
+                    and payload.get("cfs_mode") == "mapped"
+                    and action == "print"
+                    and source == "makervault"
+                    and (asset.metadata or {}).get("engine") == "crealityprint"):
+                raise GcodeSubmissionError(
+                    "Multi-colour test G-code is not approved for printer upload or print start. "
+                    "Complete manufacturer-specific toolchange verification first.", 409
+                )
+            _supervised_creality_test_preflight(connection, user, asset, payload)
         if (asset.metadata or {}).get("variable_layer_test") is True:
             raise GcodeSubmissionError(
                 "Variable layer-height test G-code is not approved for printer upload "
@@ -1245,6 +1323,10 @@ def submit(connection, user, payload):
                 if connection.adapter == "creality_local":
                     connection.refresh_from_db()
                 mapping_entries = _mapped_cfs_entries(connection, (report.get("filaments") or {}).get("used_requirements"), payload.get("cfs_mapping"))
+                if asset is not None and (asset.metadata or {}).get("multi_material_test") is True:
+                    # Re-check the exact owned slice and its selected CFS bays
+                    # after the final telemetry refresh and file transfer.
+                    _supervised_creality_test_preflight(connection, user, asset, payload)
             progress("Sending the explicitly confirmed print-start command.")
             # Reconciliation only accepts an explicit successful dispatch. This
             # marker is persisted after dispatch and before polling starts.
