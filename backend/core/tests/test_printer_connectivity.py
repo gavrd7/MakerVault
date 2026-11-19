@@ -174,6 +174,99 @@ class PrinterConnectivityAdapterTests(TestCase):
         active["online"] = False
         self.assertEqual(_reconcile_creality_processing(native, active), active)
 
+    def test_creality_latched_cancelled_job_clears_only_after_stable_inactive_window(self):
+        from copy import deepcopy
+        from datetime import timedelta
+        from types import SimpleNamespace
+        from core.printer_connectivity import (
+            _reconcile_creality_processing, CREALITY_LATCHED_IDLE_MIN_SECONDS,
+        )
+        now = timezone.now()
+        old_job = {
+            "online": True, "state": "processing", "state_label": "Preparing",
+            "captured_at": (now - timedelta(seconds=220)).isoformat(),
+            "job": {"file_name": "cancelled-mv.gcode", "progress": 18,
+                    "elapsed_seconds": 0, "remaining_seconds": 2243,
+                    "current_layer": 0, "total_layers": 151},
+            "temperatures": {"tool0": {"target_c": 0, "actual_c": 25},
+                             "bed": {"target_c": 0, "actual_c": 23}},
+            "source_metadata": {
+                "raw_state": 0, "device_state": 0, "material_status": 0,
+                "power_loss_recovery": False, "activity_state": "processing",
+                "print_id": "old", "print_start_time": 123,
+            },
+        }
+        connection = SimpleNamespace(last_snapshot={})
+        first = _reconcile_creality_processing(connection, deepcopy(old_job))
+        self.assertEqual(first["state"], "processing")
+        self.assertIn("idle_candidate_since", first["source_metadata"])
+        connection.last_snapshot = deepcopy(first)
+        candidate = connection.last_snapshot["source_metadata"]
+        candidate["idle_candidate_since"] = (
+            now - timedelta(seconds=CREALITY_LATCHED_IDLE_MIN_SECONDS + 10)
+        ).isoformat()
+        clear = _reconcile_creality_processing(connection, deepcopy(old_job))
+        self.assertEqual(clear["state"], "idle")
+        self.assertEqual(clear["job"]["file_name"], "")
+        self.assertIsNone(clear["job"]["progress"])
+        self.assertEqual(clear["source_metadata"]["native_idle_reason"],
+                         "latched_job_inactive_180s")
+        self.assertEqual(clear["source_metadata"]["activity_state"], "idle")
+        self.assertNotIn("idle_candidate_since", clear["source_metadata"])
+        self.assertEqual(old_job["state"], "processing")
+
+    def test_creality_latched_idle_rejects_changed_or_active_telemetry(self):
+        from copy import deepcopy
+        from datetime import timedelta
+        from types import SimpleNamespace
+        from core.printer_connectivity import (
+            _reconcile_creality_processing, _creality_latched_idle_signature,
+        )
+        now = timezone.now()
+        snap = {
+            "online": True, "state": "processing", "state_label": "Preparing",
+            "captured_at": (now - timedelta(seconds=20)).isoformat(),
+            "job": {"file_name": "old.gcode", "progress": 18,
+                    "elapsed_seconds": 0, "remaining_seconds": 2243,
+                    "current_layer": 0},
+            "temperatures": {"tool0": {"target_c": 0}, "bed": {"target_c": 0}},
+            "source_metadata": {
+                "raw_state": 0, "device_state": 0, "material_status": 0,
+                "power_loss_recovery": False, "activity_state": "processing",
+            },
+        }
+        signature = _creality_latched_idle_signature(snap)
+        self.assertIsNotNone(signature)
+        previous = deepcopy(snap)
+        previous["source_metadata"]["idle_candidate_signature"] = signature
+        previous["source_metadata"]["idle_candidate_since"] = (
+            now - timedelta(minutes=6)
+        ).isoformat()
+        connection = SimpleNamespace(last_snapshot=previous)
+        for section, key, value in (
+            ("job", "progress", 19),
+            ("job", "remaining_seconds", 2100),
+            ("job", "file_name", "new.gcode"),
+            ("job", "current_layer", 1),
+            ("job", "elapsed_seconds", 1),
+            ("temperatures", "tool0", {"target_c": 220}),
+            ("temperatures", "bed", {"target_c": 50}),
+            ("source_metadata", "raw_state", 1),
+            ("source_metadata", "device_state", 1),
+            ("source_metadata", "material_status", 1),
+            ("source_metadata", "power_loss_recovery", True),
+            ("source_metadata", "print_id", "new"),
+        ):
+            with self.subTest(key=key, value=value):
+                current = deepcopy(snap)
+                current[section][key] = value
+                result = _reconcile_creality_processing(connection, current)
+                self.assertNotEqual(result["state"], "idle")
+        fresh = deepcopy(snap)
+        fresh["source_metadata"]["idle_candidate_since"] = "bogus"
+        changed = _reconcile_creality_processing(connection, fresh)
+        self.assertEqual(changed["state"], "idle")  # persisted evidence, not untrusted incoming fields
+
     def test_creality_endpoint_accepts_existing_host_field(self):
         self.assertEqual(
             normalise_creality_endpoint("192.168.1.34"),
