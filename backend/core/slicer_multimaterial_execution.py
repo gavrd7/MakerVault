@@ -21,13 +21,6 @@ def plan_native_multimaterial(job, *, settings=None):
         raise MaterialRoutingError("Multi-colour test slicing requires an Orca model.")
     if any(not isinstance(item, dict) for item in objects):
         raise MaterialRoutingError("Multi-colour models are invalid.")
-    if job.engine == "crealityprint" and any(
-        (item.get("colour_paint") or {}).get("regions") or
-        (item.get("colour_paint") or {}).get("faces")
-        for item in objects
-    ):
-        raise MaterialRoutingError(
-            "Creality Print colour painting requires native 3MF integration.")
     # Colour painting is now converted to Orca's native per-triangle
     # paint_color states by prepare_multimaterial_plate. This remains an
     # offline test; no G-code may be submitted to a printer.
@@ -237,39 +230,77 @@ def creality_selected_tool_colours(source_models, tools):
 
 
 def prepare_creality_positioned_project(job, source_models, *, bed_width, bed_depth):
-    """Retain MakerVault plate transforms and each assigned native material."""
+    """Prepare one painted or two independently assigned Creality 3MF objects.
+
+    A single painted model must reference both physically assigned CFS slots,
+    and its native paint_color facets are carried into the project unchanged.
+    This produces test G-code, NOT proof of printed paint boundaries.
+    """
     from .slicer_creality_project import build_creality_positioned_plate
+    from .slicer_native_material_palette import native_colour_tool_maps
     from .slicer_native_resolution import resolved_native_profile
+
     settings = job.settings or {}
     objects = settings.get("plate_objects") or []
     if (job.engine != "crealityprint" or
-            not isinstance(source_models, list) or len(source_models) != 2 or
-            len(objects) != 2 or
+            not isinstance(source_models, list) or not 1 <= len(source_models) <= 2 or
+            len(objects) != len(source_models) or
             any(item != objects[i] or not isinstance(raw, bytes)
                 for i, (item, raw) in enumerate(source_models))):
-        raise MaterialRoutingError("Creality positioned plate requires two unchanged owned STLs.")
+        raise MaterialRoutingError("Creality plate requires one or two unchanged owned STLs.")
+    painted = []
     for item, _raw in source_models:
+        colour = item.get("colour_paint") or {}
+        has_colour = bool(colour.get("regions") or colour.get("faces"))
+        painted.append(has_colour)
         if (item.get("process_overrides") or
-                (item.get("colour_paint") or {}).get("regions") or
-                (item.get("colour_paint") or {}).get("faces") or
                 (item.get("support_paint") or {}).get("regions") or
                 (item.get("seam_paint") or {}).get("regions") or
                 (item.get("fuzzy_skin_paint") or {}).get("regions") or
                 (item.get("variable_layer_profile") or {}).get("bands")):
             raise MaterialRoutingError(
-                "Creality positioned project does not yet support painted model settings.")
+                "Creality colour test cannot combine unverified painting or overrides.")
+    if len(objects) == 1 and not painted[0]:
+        raise MaterialRoutingError("One Creality CFS model must include colour-painted regions.")
+    if len(objects) == 2 and any(painted):
+        raise MaterialRoutingError("Creality test painting currently requires one model only.")
     topology, bindings, profiles = plan_native_multimaterial(job)
     tools = tuple(bindings[item["material_slot"]["slot_id"]] for item, _ in source_models)
-    if set(tools) != {0, 1}:
-        raise MaterialRoutingError("Creality project requires two distinct native materials.")
-    tool_colours = creality_selected_tool_colours(source_models, tools)
+    colour_maps = native_colour_tool_maps(objects, printer_id=job.printer_id,
+                                          tool_bindings=bindings)
+    if set(tools) | {tool for mapping in colour_maps for tool in mapping.values()} != {0, 1}:
+        raise MaterialRoutingError("Creality plate requires two distinct native materials.")
+
+    if len(objects) == 1:
+        from .slicer_colour_painting import validate_colour_paint
+        painted_data = validate_colour_paint(objects[0]["colour_paint"])
+        # Both native palette positions must be bound to an actual selected
+        # printer slot. The object's base colour and the painted swatch must
+        # not guess an unassigned physical bay from an RGB value.
+        colours = {tools[0]: objects[0].get("color")}
+        for index, tool in colour_maps[0].items():
+            selected = painted_data["palette"][index]["color"]
+            current = colours.setdefault(tool, selected)
+            if not isinstance(selected, str) or current.upper() != selected.upper():
+                raise MaterialRoutingError("Painted swatches conflict with the assigned filament colours.")
+        if set(colours) != {0, 1} or any(
+            not isinstance(value, str) or
+            not __import__("re").fullmatch(r"#[0-9A-Fa-f]{6}", value)
+            for value in colours.values()
+        ):
+            raise MaterialRoutingError("Creality painted colours require two valid selected filament colours.")
+        tool_colours = tuple(colours[tool].upper() for tool in (0, 1))
+    else:
+        tool_colours = creality_selected_tool_colours(source_models, tools)
     project_geometry = build_creality_positioned_plate(
-        source_models, bed_width=bed_width, bed_depth=bed_depth, tool_ids=tools)
+        source_models, bed_width=bed_width, bed_depth=bed_depth, tool_ids=tools,
+        colour_tool_maps=colour_maps if len(objects) == 1 else None)
     return {
         "project_geometry": project_geometry,
-        "tool_colours": tuple(tool_colours[i] for i in (0, 1)),
+        "tool_colours": tool_colours,
         "filament_profiles": tuple(resolved_native_profile(p) for p in profiles),
         "tool_bindings": bindings,
         "topology": topology,
         "expected_tools": {0, 1},
+        "native_colour_paint_test": len(objects) == 1,
     }
