@@ -799,8 +799,11 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
       return;
     }
     if (sliceNow && projectPlates.some(plate=>plate.objects.some(item=>item.support_paint?.regions?.length)) &&
-        (form.engine!=="orcaslicer" || form.engine_version!=="2.5.0")) {
-      setError("Native painted-support test slicing requires OrcaSlicer 2.5.0. Other engines remain incompatible.");
+        !((form.engine==="orcaslicer" && form.engine_version==="2.5.0") ||
+          (form.engine==="crealityprint" && form.engine_version.startsWith("7.3.") &&
+           crealityMaterialTest && plateObjects.length===1 &&
+           (plateObjects[0].colour_paint?.regions || []).length>0))) {
+      setError("Native painted-support slicing requires OrcaSlicer 2.5.0 or the experimental single painted model Creality Print CFS route.");
       return;
     }
     if (sliceNow && !offlineMultiMaterial && projectPlates.some(plate=>plate.objects.some(item=>
