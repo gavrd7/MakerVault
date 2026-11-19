@@ -455,9 +455,18 @@ class NativePlateAdmissionTests(SimpleTestCase):
                     return_value=(350, 350))):
             self.assertTrue(_validate_plate_execution(job))
             planned.assert_called_once()
-        job.settings["flush_settings"] = {"multiplier": 1}
-        with self.assertRaisesRegex(SlicerExecutionError, "custom flushing"):
-            _validate_plate_execution(job)
+        job.settings["flush_settings"] = {
+            "multiplier": None, "prime_tower": "native",
+            "transitions": [{"from_slot_id": "a", "to_slot_id": "b",
+                             "volume_mm3": 370}],
+        }
+        # Creality now derives a bounded two-tool native 3MF flush matrix;
+        # job admission remains explicitly offline/multi-material only.
+        with (patch("core.slicer_execution.plan_native_multimaterial") as planned,
+              patch("core.slicer_execution.trusted_plate_dimensions",
+                    return_value=(350, 350))):
+            self.assertTrue(_validate_plate_execution(job))
+            planned.assert_called_once()
 
     def test_creality_per_object_process_overrides_stay_blocked(self):
         from types import SimpleNamespace
