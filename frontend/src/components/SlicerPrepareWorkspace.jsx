@@ -1941,7 +1941,7 @@ export default function SlicerPrepareWorkspace({
           <p role="status">{materialMessage}</p>
           {slotOfficialError && <p role="alert">{slotOfficialError}</p>}
           <SlicerFlushVolumes slots={liveMaterials} value={flushSettings}
-            processProfileId={selectedProfiles?.process_id}
+            processProfileId={selectedProfiles?.process_id} engine={activeEngine}
             onChange={onFlushSettingsChange} disabled={!canEdit || busy} />
         </section>
 
@@ -2016,7 +2016,7 @@ export default function SlicerPrepareWorkspace({
         </section> : <SlicerPlateEditor key={activePlateId} plateIndex={Math.max(0,plates.findIndex(item=>item.id===activePlateId))} plateCount={plates.length||1} toolbar={modelToolbar} paintControls={variableLayerPanel || paintPanel} files={files} localAssets={localAssets}
           onLocalAssetsChange={onLocalAssetsChange} onPlateIssuesChange={onPlateIssuesChange} objects={objects} onChange={updatePlate}
           primeTower={primeTower} onPrimeTowerChange={onPrimeTowerChange}
-          primeTowerEnabled={activeEngine==="orcaslicer" &&
+          primeTowerEnabled={["orcaslicer","crealityprint"].includes(activeEngine) &&
             requiredMultiSlots.length>1 &&
             processOverrides.enable_prime_tower!=="0" && flushSettings?.prime_tower!=="disabled"}
           primeTowerWidth={Number(processOverrides.prime_tower_width ??
