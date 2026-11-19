@@ -1,27 +1,20 @@
-test("toolpath preview cameras face the physical printer front without mirroring G-code", () => {
-  // The build-plate editor looks at native negative Y as the front.
-  // Toolpath Three.js maps native Y -> Three Z, so its camera must look
-  // from negative Z. Rendering opposite-side photos is not G-code mirroring.
+test("G-code toolpath uses right-handed printer coordinates, not a reflected axis swap", () => {
+  // The native build plate uses X right, Y rear, Z up. Three.js uses Y up.
+  // Proper mapping is (X, Y, Z) -> (X, Z, -Y), a rotation, not a reflection.
   const editor = read("../src/components/SlicerPlateEditor.jsx");
   assert.match(editor, /camera\.position\.set\(bedX \* 1\.0, -bedY \* 1\.3,/);
-  assert.match(viewport, /new THREE\.Vector3\(distance \* 0\.7, distance \* 0\.9, -distance\)/);
-  assert.match(viewport, /new THREE\.Vector3\(0, span \* 0\.25, -span\)/);
-  assert.match(viewport, /new THREE\.Vector3\(span \* 0\.7, span \* 0\.85, -span\)/);
-  assert.match(viewport, /new THREE\.Vector3\(distance \* \.7, distance \* \.9, -distance\)/);
-  assert.match(viewport, /positions\.push\(x1, z, y1, x2, z, y2\)/);
-  assert.doesNotMatch(viewport, /positions\.push\(-x1/);
+  assert.match(viewport, /new THREE\.Vector3\(segment\[0\], segment\[4\], -segment\[1\]\)/);
+  assert.match(viewport, /new THREE\.Vector3\(segment\[2\], segment\[4\], -segment\[3\]\)/);
+  assert.match(viewport, /new THREE\.Vector3\(width \/ 2, 0, -depth \/ 2\)/);
+  assert.match(viewport, /positions\.push\(x1, z, -y1, x2, z, -y2\)/);
+  assert.match(viewport, /lastStep = \[x2, z, -y2\]/);
+  assert.match(viewport, /-\(y1\+y2\)\/2/);
+  assert.match(viewport, /new THREE\.Vector3\(distance \* 0\.7, distance \* 0\.9, distance\)/);
+  assert.match(viewport, /new THREE\.Vector3\(0, span \* 0\.25, span\)/);
+  assert.match(viewport, /new THREE\.Vector3\(span \* 0\.7, span \* 0\.85, span\)/);
+  assert.match(viewport, /viewName === "top" \? \[0, 0, -1\] : \[0, 1, 0\]/);
+  assert.doesNotMatch(viewport, /positions\.push\(x1, z, y1, x2, z, y2\)/);
 });
-
-import test from "node:test";
-import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
-
-const read = file => readFileSync(new URL(file, import.meta.url), "utf8");
-const preview = read("../src/components/SlicerGcodePreview.jsx");
-const viewer = read("../src/components/GcodeViewerModal.jsx");
-const viewport = read("../src/components/SlicerToolpath3D.jsx");
-const workbench = read("../src/components/SlicerWorkbench.jsx");
-const mobileCss = read("../src/components/slicerPreviewMobile.css");
 
 test("mobile preview retains the toolpath, temperatures and primary figures", () => {
   assert.match(preview, /<SlicerToolpath3D segments=/);
