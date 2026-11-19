@@ -215,6 +215,11 @@ def run_matrix(project_path, *, reference_path=None, timeout_seconds=120):
         "binary_sha256": engine["binary_sha256"],
         "candidate_sha256": hashlib.sha256(project).hexdigest(),
         "test_results": [], "reference": None,
+        "physical_palette_lengths": {
+            key: len(config[key]) if isinstance(config.get(key), list) else None
+            for key in ("filament_colour", "filament_diameter",
+                        "filament_settings_id", "filament_map")
+        },
         "warning": "Diagnosis only; no G-code is approved for printing.",
     }
     if reference_path is None:
