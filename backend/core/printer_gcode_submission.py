@@ -1336,7 +1336,7 @@ def submit(connection, user, payload):
                     "verified_at": timezone.now().isoformat(),
                     "file_sha256": asset.sha256 if asset else row.file_sha256,
                     "supervised_test": bool(asset and (asset.metadata or {}).get("multi_material_test")),
-                    "start_dispatched": False,
+                    "recorded_before_dispatch": True,
                 }
                 row.save(update_fields=["cfs_mapping_audit", "updated_at"])
             progress("Sending the explicitly confirmed print-start command.")
