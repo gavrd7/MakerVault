@@ -19,6 +19,93 @@ from core.printer_gcode_submission import (
 )
 
 
+class SupervisedCrealityTestPreflightTests(SimpleTestCase):
+    """A supervised test may be reviewed without sending any printer command."""
+
+    @patch("core.printer_gcode_submission.creality_cfs_context")
+    @patch("core.models.PrinterFilamentSlot.objects.filter")
+    @patch("core.models.SliceJob.objects.select_related")
+    def test_exact_small_owned_slice_and_live_bays_required(self, fetch_job, fetch_slots, context):
+        import hashlib
+        from core.printer_gcode_submission import _supervised_creality_test_preflight
+        raw = (
+            b"; filament_type = PLA;PLA;PLA;PLA\n"
+            b"; filament_colour = #7C7D7E;#FADD4D;#7C7D7E;#FADD4D\n"
+            b"T0\nM83\nG1 X1 Y1 E0.1\nT1\nG1 X2 Y2 E0.1\n"
+        )
+        sha = hashlib.sha256(raw).hexdigest()
+        asset = SimpleNamespace(
+            sha256=sha,
+            metadata={"multi_material_test": True,
+                      "engine": "crealityprint",
+                      "printer_submission_verified": False,
+                      "printer_id": "k2", "slice_job_id": "job"},
+            file=SimpleNamespace(
+                size=len(raw), name="owned.gcode",
+                storage=SimpleNamespace(open=lambda *_: BytesIO(raw)),
+            ),
+        )
+        slot = lambda name, index, color: {
+            "printer_id": "k2", "slot_id": name, "slot_index": index,
+        }
+        objects = [
+            {"color": "#7C7D7E", "material_slot": slot("grey", 2, "#7C7D7E")},
+            {"color": "#FADD4D", "material_slot": slot("yellow", 3, "#FADD4D")},
+        ]
+        job = SimpleNamespace(pk="job", printer_id="k2",
+                              engine="crealityprint", status="completed",
+                              output_asset=asset,
+                              settings={"plate_objects": objects})
+        fetch_job.return_value.filter.return_value.first.return_value = job
+        fetch_slots.return_value = [
+            SimpleNamespace(pk="grey", printer_id="k2", system="creality_cfs",
+                            is_loaded=True, unit_index=0, slot_index=2),
+            SimpleNamespace(pk="yellow", printer_id="k2", system="creality_cfs",
+                            is_loaded=True, unit_index=0, slot_index=3),
+        ]
+        context.return_value = {"verified": True, "connected": True, "slots": [
+            {"box_id": 1, "slot_id": 2, "label": "1C",
+             "material": "PLA", "color_hex": "#7C7D7E"},
+            {"box_id": 1, "slot_id": 3, "label": "1D",
+             "material": "PLA", "color_hex": "#FADD4D"},
+        ]}
+        printer = connection("creality_local")
+        printer.printer = SimpleNamespace(model="K2", catalog_model=None)
+        printer.printer_id = "k2"
+        payload = {
+            "creality_supervised_test": True,
+            "creality_test_confirmed": True,
+            "creality_test_sha256": sha,
+            "cfs_mode": "mapped", "action": "print", "source": "makervault",
+            "cfs_mapping": [
+                {"tool_index": 0, "slot_label": "1C"},
+                {"tool_index": 1, "slot_label": "1D"},
+            ],
+        }
+        user = SimpleNamespace(pk="owner")
+        report = _supervised_creality_test_preflight(printer, user, asset, payload)
+        self.assertTrue(report["gcode_material_preflight_passed"])
+        self.assertFalse(report["printer_submission_verified"])
+        for changed, reason in (
+            ({"creality_test_sha256": "0"*64}, "identity"),
+            ({"creality_test_confirmed": False}, "explicit"),
+            ({"cfs_mapping": [
+                {"tool_index": 0, "slot_label": "1D"},
+                {"tool_index": 1, "slot_label": "1C"},
+            ]}, "differs"),
+        ):
+            with self.subTest(changed=changed):
+                with self.assertRaisesRegex(GcodeSubmissionError, reason):
+                    _supervised_creality_test_preflight(
+                        printer, user, asset, {**payload, **changed})
+        context.return_value["verified"] = False
+        with self.assertRaisesRegex(GcodeSubmissionError, "preflight failed"):
+            _supervised_creality_test_preflight(printer, user, asset, payload)
+        asset.file.size = 3 * 1024 * 1024
+        with self.assertRaisesRegex(GcodeSubmissionError, "2 MiB"):
+            _supervised_creality_test_preflight(printer, user, asset, payload)
+
+
 class UnverifiedMaterialSubmissionTests(SimpleTestCase):
     @patch("core.printer_gcode_submission.FileAsset.objects.filter")
     def test_multicolour_test_gcode_cannot_be_uploaded_or_started(self, fetch):
