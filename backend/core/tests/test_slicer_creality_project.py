@@ -194,6 +194,32 @@ class CrealityPositionedPlateTests(SimpleTestCase):
             self.assertEqual(len(config[key]), count, key)
         self.assertEqual(config["filament_map_mode"], "AutoForSaving")
 
+    def test_creality_machine_polygon_is_serialised_as_project_vector(self):
+        import json
+        from core.slicer_creality_project import build_creality_project_candidate
+        plate = build_creality_positioned_plate(
+            self._objects(), bed_width=260, bed_depth=260, tool_ids=[0, 1])
+        process = json.dumps({"type": "process", "enable_prime_tower": "0"}).encode()
+        filaments = [json.dumps({"type": "filament", "name": name,
+                                  "filament_type": ["PLA"]}).encode()
+                     for name in ("grey", "yellow")]
+        machine = json.dumps({
+            "type": "machine", "name": "K2",
+            "printable_area": "0x0,260x0,260x260,0x260"}).encode()
+        project = build_creality_project_candidate(
+            plate, printer=machine, process=process, filaments=filaments,
+            bed_width=260, bed_depth=260)
+        with zipfile.ZipFile(io.BytesIO(project)) as archive:
+            settings = json.loads(archive.read("Metadata/project_settings.config"))
+        self.assertEqual(settings["printable_area"],
+                         ["0x0", "260x0", "260x260", "0x260"])
+        wrong_bed = json.dumps({
+            "type": "machine", "printable_area": "0x0,300x0,300x300,0x300"}).encode()
+        with self.assertRaisesRegex(SlicerProfileError, "verified bed"):
+            build_creality_project_candidate(
+                plate, printer=wrong_bed, process=process,
+                filaments=filaments, bed_width=260, bed_depth=260)
+
     def test_invalid_palette_fails_before_native_engine(self):
         with self.assertRaises(SlicerProfileError):
             build_creality_positioned_plate(
