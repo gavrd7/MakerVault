@@ -8,6 +8,7 @@ from core.printer_gcode_submission import creality_cfs_context, _is_k2
 from core.printer_connectivity import poll_connection, PrinterConnectionError
 from core.slicer_creality_cfs_audit import (
     CrealityCfsAuditError, audit_creality_cfs_assignments, audit_creality_gcode_for_cfs,
+    creality_cfs_audit_objects,
 )
 
 
@@ -29,7 +30,7 @@ class Command(BaseCommand):
                     output_asset__isnull=False,
                 ).order_by("-created_at")[:25]
                 if (candidate.settings or {}).get("multi_material_test") is True
-                and len((candidate.settings or {}).get("plate_objects") or []) == 2
+                and 1 <= len((candidate.settings or {}).get("plate_objects") or []) <= 2
             ), None)
             if job is None:
                 raise CommandError("No recent two-material Creality job found.")
@@ -40,7 +41,13 @@ class Command(BaseCommand):
                 raise CommandError("Saved Creality job not found.") from None
         if job.engine != "crealityprint" or (job.settings or {}).get("multi_material_test") is not True:
             raise CommandError("Select a two-material Creality Print slice.")
-        objects = (job.settings or {}).get("plate_objects") or []
+        try:
+            objects = creality_cfs_audit_objects(
+                (job.settings or {}).get("plate_objects") or [],
+                printer_id=job.printer_id,
+            )
+        except CrealityCfsAuditError as exc:
+            raise CommandError(str(exc)) from exc
         sources = list(PrinterConnection.objects.filter(
             printer_id=job.printer_id, adapter="creality_local", enabled=True
         ).order_by("-last_seen_at")[:2])
