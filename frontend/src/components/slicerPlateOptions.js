@@ -11,14 +11,14 @@ export const ORCA_PLATE_TYPES = [
 
 /** Never advertise unknown plate types as supported by a selected printer. */
 export function plateOptions(engine, bedTypes) {
-  if (engine !== "orcaslicer") return ORCA_PLATE_TYPES.slice(0, 1);
+  if (!["orcaslicer", "crealityprint"].includes(engine)) return ORCA_PLATE_TYPES.slice(0, 1);
   const supported = Array.isArray(bedTypes?.supported) ? bedTypes.supported : null;
   if (supported?.length)
     return ORCA_PLATE_TYPES.filter(([key]) => supported.includes(key));
   // Explicitly loaded but incomplete/custom profile: expose manual choices,
   // never describe them as confirmed physical hardware capabilities. The
   // backend still validates the selected filament's bed temperature.
-  if (bedTypes && !bedTypes.default)
+  if (bedTypes && !bedTypes.default && engine === "orcaslicer")
     return ORCA_PLATE_TYPES.slice(1);
   return ORCA_PLATE_TYPES.slice(0, 1);
 }
