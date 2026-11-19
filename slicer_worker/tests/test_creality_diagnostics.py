@@ -20,6 +20,12 @@ class CrealityDiagnosticMatrixTests(unittest.TestCase):
             b"that no longer exists."), "missing-mixed-filament-reference")
         self.assertIsNone(_known_validation_reason(
             b"got error when validate: private/token=DO_NOT_EXPORT"))
+        self.assertEqual(_known_validation_reason(
+            b"got error when validate: Unable to resolve a mixed filament "
+            b"used by the current plate."), "unresolved-mixed-filament")
+        self.assertEqual(_known_validation_reason(
+            b"got error when validate: Plate 1: machine preset name "
+            b"does not support filament secret colour"), "printer-filament-incompatible")
 
     def test_isolation_cases_are_fixed_and_predictable(self):
         options = _cases({
