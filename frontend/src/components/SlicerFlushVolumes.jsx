@@ -9,7 +9,7 @@ const slotColour = slot => /^#[0-9a-f]{6}$/i.test(slot.color_hex||"") ? slot.col
 const Swatch = ({slot}) => <span className="slicerFlushSwatch" aria-hidden="true"
   style={{backgroundColor:slotColour(slot)}}/>;
 
-/** UI remains advisory until native physical-slot-to-tool mapping has been verified. */
+/** Native process defaults are tool-indexed; Creality edits target only the two model-assigned CFS slots. */
 export default function SlicerFlushVolumes({slots=[],value=null,onChange,disabled=false,processProfileId="",engine="orcaslicer",assignedSlotIds=[]}) {
   const [open,setOpen]=useState(false);
   const [native,setNative]=useState(null);
@@ -111,7 +111,7 @@ export default function SlicerFlushVolumes({slots=[],value=null,onChange,disable
                 ?"Default":"Custom"}</small>
             </div>
           </div>
-          {creality && <p className="projectUploadHint">Creality Print: directional values are saved to the native two-tool project, not applied directly to the printer. Only transitions between filaments assigned to this slice can be edited; other loaded slots remain visible but locked. Verify the sliced purge paths before printing.</p>}
+          {creality && <p className="projectUploadHint">Creality Print: directional values are saved to the native two-tool project, not applied directly to the printer. Only assigned filament transitions are editable. Empty cells show estimates, not actual native purge amounts; changes affect the slice, not the printer directly.</p>}
           <h4>Directional flushing · mm³</h4>
           <div className="slicerFlushEstimateBar">
             <button type="button" disabled={!recalcRequired}
