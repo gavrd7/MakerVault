@@ -248,6 +248,29 @@ def _cantilever_support_marker(stl):
     raise ValueError("The diagnostic cantilever has no exposed elevated underside.")
 
 
+def _cantilever_wall_marker(stl):
+    """Target a broad, outer vertical wall for seam/fuzzy geometry controls."""
+    tris = list(_triangles(stl))
+    signature, _face, _polygon, _height = _patch_for_model(stl)
+    minima = [min(point[i] for tri in tris for point in tri) for i in range(3)]
+    maxima = [max(point[i] for tri in tris for point in tri) for i in range(3)]
+    origin = ((minima[0] + maxima[0]) / 2,
+              (minima[1] + maxima[1]) / 2, minima[2])
+    for idx, tri in enumerate(tris):
+        zs = [p[2] for p in tri]
+        if all(abs(p[1]) < 1e-5 for p in tri) and max(zs) - min(zs) > 15:
+            centre = [sum(p[axis] for p in tri) / 3 for axis in range(3)]
+            polygon = [
+                [(0.9 * point[axis] + 0.1 * centre[axis]) - origin[axis]
+                 for axis in range(3)]
+                for point in tri
+            ]
+            return {"version": 2, "signature": signature, "regions": [
+                {"slot": 0, "patches": [{"face": idx, "polygon": polygon}]}
+            ]}
+    raise ValueError("Diagnostic cantilever has no broad exterior wall.")
+
+
 def _patch_for_model(stl):
     """Produce a valid model-local brush patch from actual STL triangles."""
     triangles = list(_triangles(stl))
@@ -316,11 +339,17 @@ class Command(BaseCommand):
         parser.add_argument("--deep", action="store_true", help="Also slice identical-geometry unpainted controls for semantic facets")
         parser.add_argument("--support-fixture", action="store_true",
                             help="Replace the in-memory support test mesh with a fixed unsupported cantilever")
+        parser.add_argument("--wall-fixture", action="store_true",
+                            help="Use a synthetic outside wall for seam or fuzzy tests")
 
     def handle(self, *args, **options):
         if options["support_fixture"] and (
                 options["only"] != "support" or not options["deep"]):
             raise CommandError("--support-fixture requires --only support --deep.")
+        if options["wall_fixture"] and (
+                options["only"] not in ("seam", "fuzzy") or not options["deep"]):
+            raise CommandError("--wall-fixture requires --only seam|fuzzy --deep.")
+
         jobs = SliceJob.objects.select_related(
             "owner", "printer", "printer_profile", "filament_profile",
             "process_profile").filter(
@@ -393,7 +422,10 @@ class Command(BaseCommand):
                     "version": 1, "bands": [
                         {"from_mm": lo, "to_mm": hi, "layer_mm": .12}]}
             model_stl = raw_stl
-            if feature == "support" and options["support_fixture"]:
+            synthetic_fixture = (
+                (feature == "support" and options["support_fixture"]) or
+                (feature in ("seam", "fuzzy") and options["wall_fixture"]))
+            if synthetic_fixture:
                 # Explicit synthetic test only; no FileAsset, saved job, or
                 # private mesh is changed. Preserve the user's known-good
                 # verified two-slot material palette and native profiles.
@@ -408,7 +440,12 @@ class Command(BaseCommand):
                                  "patches": [{"face": colour_face,
                                               "polygon": colour_polygon}]}],
                 }
-                obj["support_paint"] = _cantilever_support_marker(model_stl)
+                if feature == "support":
+                    obj["support_paint"] = _cantilever_support_marker(model_stl)
+                elif feature == "seam":
+                    obj["seam_paint"] = _cantilever_wall_marker(model_stl)
+                else:
+                    obj["fuzzy_skin_paint"] = _cantilever_wall_marker(model_stl)
             # Deliberately change only native flush values in this test case.
             copy_settings["flush_settings"] = None
             job.settings = copy_settings  # In-memory only: NEVER call .save().
@@ -452,8 +489,10 @@ class Command(BaseCommand):
                     model_format="3mf", filament_profiles=prepared["filament_profiles"],
                     creality_native_project=True, timeout_seconds=900)
                 metrics = _metrics(data)
-                if feature == "support" and options["support_fixture"]:
-                    metrics["test_geometry"] = "synthetic elevated cantilever (offline only)"
+                if synthetic_fixture:
+                    metrics["test_geometry"] = (
+                        "synthetic elevated cantilever (offline only)" if feature == "support"
+                        else "synthetic exterior wall (offline only)")
                 metrics["gcode_effective_settings"] = _gcode_effective_settings(data)
                 metrics["feature_role_audit"] = _feature_role_audit(data)
                 if feature == "variable":
