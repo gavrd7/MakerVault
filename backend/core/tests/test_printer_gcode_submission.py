@@ -519,6 +519,34 @@ class GcodePrinterContractTests(SimpleTestCase):
         self.assertFalse(availability(native)["can_start_sliced_mapping"])
 
     @patch("core.printer_gcode_submission.PrinterConnection.objects.filter")
+    def test_k2_mapped_readiness_explains_stale_or_busy_state(self, filtered):
+        native = connection("creality_local")
+        native.printer = SimpleNamespace(model="K2", catalog_model=None)
+        native.printer_id = "printer-one"
+        native.last_snapshot["source_metadata"] = {"cfs_connected": True}
+        native.last_snapshot["materials"] = [{
+            "system": "creality_cfs", "unit_index": 0, "slot_index": 2,
+            "material": "PLA", "color_hex": "#7C7D7E",
+        }]
+        filtered.return_value.order_by.return_value = []
+        ready = availability(native)
+        self.assertTrue(ready["can_start_mapped_cfs"])
+        self.assertEqual(ready["mapped_cfs_blockers"], [])
+        native.last_snapshot["state"] = "printing"
+        busy = availability(native)
+        self.assertFalse(busy["can_start_mapped_cfs"])
+        self.assertTrue(any("not confirmed idle" in reason
+                            for reason in busy["mapped_cfs_blockers"]))
+        native.last_snapshot["state"] = "idle"
+        native.last_seen_at = timezone.now() - timedelta(minutes=3)
+        stale = availability(native)
+        self.assertFalse(stale["can_start_mapped_cfs"])
+        self.assertTrue(any("older than 60 seconds" in reason
+                            for reason in stale["mapped_cfs_blockers"]))
+        self.assertTrue(any("Fresh native CFS" in reason
+                            for reason in stale["mapped_cfs_blockers"]))
+
+    @patch("core.printer_gcode_submission.PrinterConnection.objects.filter")
     def test_original_mapping_option_persists_when_printer_is_busy(self, filtered):
         native = connection("creality_local")
         native.printer = SimpleNamespace(model="K2", catalog_model=None)
