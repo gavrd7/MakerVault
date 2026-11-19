@@ -313,10 +313,12 @@ def _validate_plate_execution(job):
            and item["support_paint"].get("regions") for item in objects):
         # Native geometry splitting and paint_supports attributes are
         # experimental until compared with real Orca-generated toolpaths.
-        if job.engine != "orcaslicer" or job.engine_version != "2.5.0":
+        if not ((job.engine == "orcaslicer" and job.engine_version == "2.5.0") or
+                (job.engine == "crealityprint" and job.engine_version.startswith("7.3.") and
+                 settings.get("multi_material_test") is True)): 
             raise SlicerExecutionError(
                 "Native support painting test requires OrcaSlicer 2.5.0.")
-        if len(objects) != 1 or settings.get("multi_material_test"):
+        if len(objects) != 1 or (settings.get("multi_material_test") and job.engine != "crealityprint"):
             raise SlicerExecutionError(
                 "Support painting test requires one single-filament model.")
         item = objects[0]
@@ -335,9 +337,11 @@ def _validate_plate_execution(job):
                 "Support painting test requires an unscaled model.")
     if any(isinstance(item, dict) and isinstance(item.get("seam_paint"), dict)
            and item["seam_paint"].get("regions") for item in objects):
-        if job.engine != "orcaslicer" or job.engine_version != "2.5.0":
+        if not ((job.engine == "orcaslicer" and job.engine_version == "2.5.0") or
+                (job.engine == "crealityprint" and job.engine_version.startswith("7.3.") and
+                 settings.get("multi_material_test") is True)): 
             raise SlicerExecutionError("Native seam painting test requires OrcaSlicer 2.5.0.")
-        if len(objects) != 1 or settings.get("multi_material_test"):
+        if len(objects) != 1 or (settings.get("multi_material_test") and job.engine != "crealityprint"):
             raise SlicerExecutionError("Seam painting test requires one single-filament model.")
         item = objects[0]
         if item.get("process_overrides"):
@@ -355,10 +359,12 @@ def _validate_plate_execution(job):
         # Orca 2.5 saves painted fuzzy regions in paint_fuzzy_skin and uses
         # fuzzy_skin=none ("Painted only") to activate them. The distinct
         # disabled_fuzzy value turns the effect off entirely.
-        if job.engine != "orcaslicer" or job.engine_version != "2.5.0":
+        if not ((job.engine == "orcaslicer" and job.engine_version == "2.5.0") or
+                (job.engine == "crealityprint" and job.engine_version.startswith("7.3.") and
+                 settings.get("multi_material_test") is True)): 
             raise SlicerExecutionError(
                 "Native fuzzy skin painting test requires OrcaSlicer 2.5.0.")
-        if len(objects) != 1 or settings.get("multi_material_test"):
+        if len(objects) != 1 or (settings.get("multi_material_test") and job.engine != "crealityprint"):
             raise SlicerExecutionError(
                 "Selective fuzzy skin test requires one single-filament model.")
         item = objects[0]
@@ -380,10 +386,12 @@ def _validate_plate_execution(job):
         # Native Orca layer_config_ranges.xml export is available for an
         # explicitly offline, single upright model experiment only. Real
         # G-code and firmware checks are still needed for print approval.
-        if job.engine != "orcaslicer" or job.engine_version != "2.5.0":
+        if not ((job.engine == "orcaslicer" and job.engine_version == "2.5.0") or
+                (job.engine == "crealityprint" and job.engine_version.startswith("7.3.") and
+                 settings.get("multi_material_test") is True)): 
             raise SlicerExecutionError(
                 "Variable layer test slicing currently requires OrcaSlicer 2.5.0.")
-        if len(objects) != 1 or settings.get("multi_material_test"):
+        if len(objects) != 1 or (settings.get("multi_material_test") and job.engine != "crealityprint"):
             raise SlicerExecutionError(
                 "Variable layer test slicing currently requires one single-material model.")
         item = objects[0]
@@ -406,12 +414,15 @@ def _validate_plate_execution(job):
             if not (len(objects) == 2 or single_painted):
                 raise SlicerExecutionError(
                     "Creality CFS slicing requires two assigned models, or one colour-painted model.")
-            if any((item.get("support_paint") or {}).get("regions") or
-                   (item.get("seam_paint") or {}).get("regions") or
-                   (item.get("fuzzy_skin_paint") or {}).get("regions") or
-                   (item.get("variable_layer_profile") or {}).get("bands") or
-                   item.get("process_overrides")
-                   for item in objects):
+            if any(item.get("process_overrides") for item in objects):
+                raise SlicerExecutionError(
+                    "Creality colour test cannot combine unverified per-object overrides.")
+            if len(objects) != 1 and any(
+                    (item.get("support_paint") or {}).get("regions") or
+                    (item.get("seam_paint") or {}).get("regions") or
+                    (item.get("fuzzy_skin_paint") or {}).get("regions") or
+                    (item.get("variable_layer_profile") or {}).get("bands")
+                    for item in objects):
                 raise SlicerExecutionError(
                     "Creality colour test cannot combine unverified painting or per-object overrides.")
             if len(objects) == 2 and any(
@@ -844,6 +855,7 @@ def process_queued_job(job_id):
                 prime_tower=(job.settings or {}).get("prime_tower"),
                 flush_settings=(job.settings or {}).get("flush_settings"),
                 tool_bindings=material_result["tool_bindings"],
+                layer_ranges=material_result.get("layer_ranges"),
                 bed_width=width, bed_depth=depth)
             model_format = "3mf"
         if model_format == "stl" and job.input_asset.sha256 and hashlib.sha256(model).hexdigest() != job.input_asset.sha256:
