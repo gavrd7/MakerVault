@@ -328,8 +328,9 @@ def _validate_plate_execution(job):
                 or abs(float(item.get("z_mm", 0))) > 0.000001):
             raise SlicerExecutionError(
                 "Support painting test requires an upright, non-elevated model.")
-        if any(abs(float(value) - 100) > 0.000001 for value in
-               item.get("scale_xyz_percent", [item.get("scale_percent", 100)] * 3)):
+        if (abs(float(item.get("scale_percent", 100)) - 100) > 0.000001 or
+               any(abs(float(value) - 100) > 0.000001 for value in
+                   item.get("scale_xyz_percent", [item.get("scale_percent", 100)] * 3))):
             raise SlicerExecutionError(
                 "Support painting test requires an unscaled model.")
     if any(isinstance(item, dict) and isinstance(item.get("seam_paint"), dict)
@@ -345,8 +346,9 @@ def _validate_plate_execution(job):
                 item.get("rotation_xyz_deg", [0, 0]))
                 or abs(float(item.get("z_mm", 0))) > 0.000001):
             raise SlicerExecutionError("Seam painting test requires an upright, non-elevated model.")
-        if any(abs(float(value)-100) > 0.000001 for value in
-               item.get("scale_xyz_percent", [item.get("scale_percent", 100)] * 3)):
+        if (abs(float(item.get("scale_percent", 100)) - 100) > 0.000001 or
+               any(abs(float(value) - 100) > 0.000001 for value in
+                   item.get("scale_xyz_percent", [item.get("scale_percent", 100)] * 3))):
             raise SlicerExecutionError("Seam painting test requires an unscaled model.")
     if any(isinstance(item, dict) and isinstance(item.get("fuzzy_skin_paint"), dict)
            and item["fuzzy_skin_paint"].get("regions") for item in objects):
@@ -368,8 +370,9 @@ def _validate_plate_execution(job):
                 or abs(float(item.get("z_mm", 0))) > 0.000001):
             raise SlicerExecutionError(
                 "Fuzzy skin painting test requires an upright, non-elevated model.")
-        if any(abs(float(value) - 100) > 0.000001 for value in
-               item.get("scale_xyz_percent", [item.get("scale_percent", 100)] * 3)):
+        if (abs(float(item.get("scale_percent", 100)) - 100) > 0.000001 or
+               any(abs(float(value) - 100) > 0.000001 for value in
+                   item.get("scale_xyz_percent", [item.get("scale_percent", 100)] * 3))):
             raise SlicerExecutionError(
                 "Fuzzy skin painting test requires an unscaled model.")
     if any(isinstance(item, dict) and isinstance(item.get("variable_layer_profile"), dict)
@@ -388,8 +391,9 @@ def _validate_plate_execution(job):
                item.get("rotation_xyz_deg", [0, 0])) or abs(float(item.get("z_mm", 0))) > 0.000001:
             raise SlicerExecutionError(
                 "Variable layer test slicing requires an upright, non-elevated model.")
-        if any(abs(float(x) - 100) > 0.000001 for x in
-               item.get("scale_xyz_percent", [item.get("scale_percent", 100)] * 3)):
+        if (abs(float(item.get("scale_percent", 100)) - 100) > 0.000001 or
+               any(abs(float(x) - 100) > 0.000001 for x in
+                   item.get("scale_xyz_percent", [item.get("scale_percent", 100)] * 3))):
             raise SlicerExecutionError(
                 "Variable layer test slicing requires an unscaled model.")
         if any(item.get("process_overrides") for item in objects):
