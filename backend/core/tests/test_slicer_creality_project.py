@@ -276,6 +276,62 @@ class CrealityPositionedPlateTests(SimpleTestCase):
             for face in final.findall(".//{%s}triangle" % NS)
         ))
 
+    def test_creality_cfs_project_preserves_combined_painted_facets_and_layer_ranges(self):
+        """Native 3MF contains every experimental annotation, never just colour."""
+        import json
+        from core.tests.test_slicer_combined_paint_3mf import _fixture
+        from core.tests.test_slicer_colour_native_3mf import fixture_paint
+        from core.slicer_variable_layers import orca_layer_config_ranges
+        from core.slicer_creality_project import (
+            build_creality_positioned_plate, build_creality_project_candidate,
+        )
+        raw, signature, patch = _fixture()
+        painted_raw, colour = fixture_paint()
+        self.assertEqual(raw, painted_raw)
+        def painted(slot):
+            return {"version": 2, "signature": signature,
+                    "regions": [{"slot": slot, "patches": [
+                        {"face": 0, "polygon": patch}]}]}
+        item = {
+            "x_mm": 0, "y_mm": 0, "rotation_deg": 0,
+            "rotation_xyz_deg": [0, 0], "scale_percent": 100,
+            "colour_paint": colour,
+            "support_paint": painted(0),
+            "seam_paint": painted(1),
+            "fuzzy_skin_paint": painted(0),
+            "variable_layer_profile": {"version": 1, "bands": [
+                {"from_mm": 1, "to_mm": 3, "layer_mm": 0.12}]},
+        }
+        geometry = build_creality_positioned_plate(
+            [(item, raw)], bed_width=260, bed_depth=260,
+            tool_ids=[0], colour_tool_maps=({2: 1},))
+        layers = orca_layer_config_ranges([(item, raw)])
+        self.assertIsNotNone(layers)
+        machine = json.dumps({"type": "machine", "name": "K2"}).encode()
+        process = json.dumps({"type": "process", "name": "Standard",
+                              "enable_prime_tower": "1"}).encode()
+        filament = lambda name: json.dumps({
+            "type": "filament", "name": name,
+            "nozzle_temperature": "220"}).encode()
+        project = build_creality_project_candidate(
+            geometry, printer=machine, process=process,
+            filaments=[filament("Generic PLA"), filament("CR-PLA")],
+            layer_ranges=layers, bed_width=260, bed_depth=260)
+        with zipfile.ZipFile(io.BytesIO(project)) as archive:
+            root = ET.fromstring(archive.read("3D/3dmodel.model"))
+            ranges = ET.fromstring(archive.read("Metadata/layer_config_ranges.xml"))
+        faces = root.findall(".//{%s}triangle" % NS)
+        self.assertTrue(any(all(face.attrib.get(key) == value for key, value in (
+            ("paint_supports", "4"), ("paint_seam", "8"),
+            ("paint_fuzzy_skin", "4"), ("paint_color", "8")))
+            for face in faces))
+        self.assertEqual(ranges.find("object/range/option").text, "0.120")
+        with self.assertRaisesMessage(SlicerProfileError, "layer range"):
+            build_creality_project_candidate(
+                geometry, printer=machine, process=process,
+                filaments=[filament("Generic PLA"), filament("CR-PLA")],
+                layer_ranges=b"<wrong/>")
+
     def test_single_creality_model_without_paint_cannot_invent_second_tool(self):
         from core.slicer_creality_project import build_creality_positioned_plate
         with self.assertRaises(SlicerProfileError):
