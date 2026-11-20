@@ -225,6 +225,18 @@ class Command(BaseCommand):
         if opts["test_flush"] and (
                 engine != "orcaslicer" or not cap.supported_for_encoding_only or count < 2):
             raise CommandError("Directional native flush test requires verified Orca single-nozzle changer.")
+        # Reject missing/incompatible matrices *before* using worker time.
+        first_flush_volume = None
+        if opts["test_flush"]:
+            raw_matrix = json.loads(native["process"]).get("flush_volumes_matrix")
+            if not isinstance(raw_matrix, list) or len(raw_matrix) != count * count:
+                raise CommandError("No complete native flush matrix for directional A/B fixture.")
+            try:
+                first_flush_volume = float(raw_matrix[1])
+            except (TypeError, ValueError, OverflowError):
+                raise CommandError("Native T0-to-T1 flush volume is invalid.") from None
+            if not 0 <= first_flush_volume <= 19950:
+                raise CommandError("Native T0-to-T1 volume exceeds safe A/B fixture bounds.")
         if count == 1:
             model = fixture_stl()
             kwargs = {}
@@ -254,13 +266,7 @@ class Command(BaseCommand):
         summary["native_run"] = "sliced"
         summary["baseline"] = _safe_native_result(output)
         if opts["test_flush"]:
-            values = json.loads(native["process"])
-            matrix = values.get("flush_volumes_matrix")
-            if not isinstance(matrix, list) or len(matrix) != count * count:
-                raise CommandError("Baseline native slice passed, but no complete verified native flush matrix for A/B test.")
-            first = float(matrix[1])
-            if not 0 <= first <= 19950:
-                raise CommandError("Native directional volume cannot be changed safely.")
+            first = first_flush_volume
             modified = apply_orca_native_flush(
                 native["process"], {
                     "prime_tower": "native", "multiplier": None,
