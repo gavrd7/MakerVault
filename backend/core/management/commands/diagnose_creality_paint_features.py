@@ -148,13 +148,13 @@ def _gcode_effective_settings(gcode):
     found = {}
     for key in safe_keys:
         match = re.search(
-            rb"(?im)^;\\s*" + key.encode("ascii") + rb"\\s*=\\s*([^\\r\\n]{0,40})",
+            rb"(?im)^;\s*" + key.encode("ascii") + rb"\s*=\s*([^\r\n]{0,40})",
             gcode)
         if match:
             found[key] = match.group(1).decode("ascii", errors="replace").strip()
     # Do not expose the complete matrix in case the native footer changes
     # format. A digest is sufficient to compare baseline vs override.
-    match = re.search(rb"(?im)^;\\s*flush_volumes_matrix\\s*=\\s*([^\\r\\n]{0,4096})", gcode)
+    match = re.search(rb"(?im)^;\s*flush_volumes_matrix\s*=\s*([^\r\n]{0,4096})", gcode)
     if match:
         found["flush_matrix_gcode_header_sha256"] = hashlib.sha256(
             match.group(1).strip()).hexdigest()
@@ -174,16 +174,16 @@ def _feature_role_audit(gcode):
     counts = {"support": 0, "outer_wall": 0, "other": 0}
     role_tags = 0
     for line in gcode.splitlines():
-        tag = re.match(rb"^;\\s*(?:FEATURE|TYPE)\\s*:\\s*(.{1,60})$", line, re.I)
+        tag = re.match(rb"^;\s*(?:FEATURE|TYPE)\s*:\s*(.{1,60})$", line, re.I)
         if tag:
             role = tag.group(1).decode("ascii", errors="replace").lower().strip()
             role_tags += 1
             continue
         command = line.partition(b";")[0].strip().upper()
-        if (re.match(rb"^G0?1(?:\\s|$)", command) and
-                re.search(rb"(?:^|\\s)E[-+]?\\d", command) and
-                (re.search(rb"(?:^|\\s)X[-+]?\\d", command) or
-                 re.search(rb"(?:^|\\s)Y[-+]?\\d", command))):
+        if (re.match(rb"^G0?1(?:\s|$)", command) and
+                re.search(rb"(?:^|\s)E[-+]?\d", command) and
+                (re.search(rb"(?:^|\s)X[-+]?\d", command) or
+                 re.search(rb"(?:^|\s)Y[-+]?\d", command))):
             bucket = ("support" if "support" in role else
                       "outer_wall" if any(term in role for term in
                                           ("outer wall", "external perimeter")) else "other")
@@ -209,7 +209,7 @@ def _cantilever_fixture_stl():
         a0, b0 = (a[0], 0., a[1]), (b[0], 0., b[1])
         a1, b1 = (a[0], 12., a[1]), (b[0], 12., b[1])
         triangles.extend(((a0, b1, b0), (a0, a1, b1)))
-    data = bytearray(b"MakerVault offline diagnostic cantilever".ljust(80, b"\\x00"))
+    data = bytearray(b"MakerVault offline diagnostic cantilever".ljust(80, b"\x00"))
     data.extend(struct.pack("<I", len(triangles)))
     for tri in triangles:
         data.extend(struct.pack("<12fH", *([0.] * 3),
