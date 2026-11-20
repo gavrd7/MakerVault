@@ -569,12 +569,20 @@ class Command(BaseCommand):
                     if changed.get("flush_multiplier") != original.get("flush_multiplier"):
                         raise CommandError("Creality native multiplier changed in directional fixture.")
                 elif name.startswith("purge_route_"):
+                    # Compare the route fixture to its parent multiplier=2
+                    # control, NOT to baseline, which can have no multiplier.
+                    # Keep the baseline check as a separate bounded allowlist.
                     expected_route = "1" if name == "purge_route_tower" else "0"
-                    if (keys - {"purge_in_prime_tower"} or
-                            changed.get("purge_in_prime_tower") != expected_route or
-                            changed.get("flush_multiplier") != "2.0" or
-                            changed.get("flush_volumes_matrix") != original.get("flush_volumes_matrix")):
-                        raise CommandError("Creality purge route isolation failed.")
+                    if (keys - {"flush_multiplier", "purge_in_prime_tower"} or
+                            changed.get("purge_in_prime_tower") != expected_route):
+                        raise CommandError("Creality purge route baseline isolation failed.")
+                    _parent_before, parent_after, route_keys = (
+                        _creality_control_project_with_extra(
+                            fixed_control, candidate, {"purge_in_prime_tower"}))
+                    if (route_keys - {"purge_in_prime_tower"} or
+                            parent_after.get("purge_in_prime_tower") != expected_route or
+                            parent_after.get("flush_multiplier") != "2.0"):
+                        raise CommandError("Creality purge route parent isolation failed.")
                 else:
                     raw_name = name.removeprefix("multiplier_").removesuffix("_marked")
                     requested = float(raw_name.replace("_", "."))
