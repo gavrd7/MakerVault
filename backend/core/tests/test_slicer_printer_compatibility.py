@@ -13,6 +13,7 @@ from core.management.commands.diagnose_slicer_printer_profiles import (
     _creality_purge_route_control, _creality_purge_route_audit,
     _validate_creality_purge_route_pair,
     _creality_emitted_setting_audit, _creality_emitted_comparison,
+    _creality_prime_volume_control, _creality_control_project_with_extra,
 )
 from core.slicer_plate_3mf import build_plate_3mf, NS
 
@@ -356,6 +357,33 @@ class PrinterCompatibilityFixtureTests(SimpleTestCase):
             _validate_creality_purge_route_pair(
                 baseline, parent, archive({**native, "flush_multiplier": "1.0",
                                            "purge_in_prime_tower": "1"}), True)
+
+    def test_prime_volume_positive_control_preserves_all_other_archive_members(self):
+        original = {
+            "prime_volume": "45",
+            "purge_in_prime_tower": "0",
+            "flush_multiplier": "2.0",
+            "flush_volumes_matrix": ["0", "140"] + ["140"] * 14,
+            "change_filament_gcode": "preserve vendor macro",
+        }
+        out = io.BytesIO()
+        with zipfile.ZipFile(out, "w") as z:
+            z.writestr("Metadata/project_settings.config", json.dumps(original))
+            for name in ("3D/3dmodel.model", "Metadata/model_settings.config",
+                         "Metadata/creality.config", "[Content_Types].xml", "_rels/.rels"):
+                z.writestr(name, b"untouched geometry and native script")
+        raw = out.getvalue()
+        changed = _creality_prime_volume_control(raw)
+        self.assertEqual(_read_creality_project_settings(changed)["prime_volume"], "180")
+        before, after, changed_keys = _creality_control_project_with_extra(
+            raw, changed, {"prime_volume"})
+        self.assertEqual(changed_keys, {"prime_volume"})
+        self.assertEqual(before["change_filament_gcode"], after["change_filament_gcode"])
+        self.assertEqual(_creality_prime_volume_control(raw), changed)
+        with self.assertRaises(ValueError):
+            _creality_prime_volume_control(raw, 50)
+        with self.assertRaises(ValueError):
+            _creality_prime_volume_control(raw, True)
 
     def test_emitted_gcode_audit_reports_only_safe_native_comment_evidence(self):
         baseline = (b"; flush_multiplier = 1.0\n"
