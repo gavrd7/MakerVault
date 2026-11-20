@@ -1299,3 +1299,42 @@ sudo docker exec makervault python3 /app/backend/manage.py test \
 
 Do not run `refresh-worker`: this feature only changes Django
 diagnostic files and unit tests.
+
+
+### Two-object CFS worker preflight blocker, resolved in source — 20 Nov 2026
+
+Initial native K2 two-filament A/B fixture passed 45/45 Django
+unit tests but failed at **`validating model and profile payloads`**
+before launching the binary. The redacted existing worker log
+confirmed `WorkerError, validation-error`. Source inspection found
+a deterministic validator mismatch: `validate_creality_project()`
+unconditionally enabled `allow_creality_combined_paint=True` when
+calling `validate_worker_3mf()`, but that option strictly requires
+**one painted object**. The diagnostic intentionally builds **two
+plain objects** assigned to T0/T1, so its correct model was rejected.
+
+The worker validator now passes
+`allow_creality_combined_paint=(object_count == 1)`: it still
+validates one painted object via the painting-specific extension and
+validates two plain objects via the strict normal tool assignments.
+Worker tests now exercise two real unpainted objects and both tool
+assignments without mocking the nested geometry validator, plus
+explicit checks that painted single-object projects retain their
+extension. No unsafe general bypass or vendor machine-script change.
+
+**Worker refresh is required for this particular fix**, unlike
+earlier application-only diagnostics:
+
+```bash
+cd ~/MakerVault-Staging
+git pull --ff-only origin feature/self-hosted-slicer-foundation
+sudo python3 scripts/install_slicer_staging.py refresh-worker
+```
+
+This refresh rebuilds the **existing isolated worker Python code**;
+approved native engine binary hashes must remain unchanged. Run
+focused worker `slicer_worker.tests.test_creality_project_validation`
+and Django compatibility tests before repeating the K2 native
+`--test-flush` command above. A pass of the validation gate
+alone is not proof that Creality's native binary accepts the
+project or generates meaningful flush G-code.
