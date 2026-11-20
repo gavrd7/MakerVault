@@ -7,7 +7,8 @@ from django.test import SimpleTestCase
 
 from core.management.commands.diagnose_slicer_printer_profiles import (
     _fixture_items, _safe_native_result, _same_native_pair, _native_nozzle_count,
-    _compatible_filament_diameter,
+    _compatible_filament_diameter, _read_creality_project_settings,
+    _creality_flush_basis, _creality_control_project,
 )
 from core.slicer_plate_3mf import build_plate_3mf, NS
 
@@ -127,3 +128,77 @@ class PrinterCompatibilityFixtureTests(SimpleTestCase):
         # Orca continues to reject Creality's scalar representation.
         with self.assertRaises(ValueError):
             _compatible_filament_diameter([scalar("1.75")], engine="orcaslicer")
+
+    def test_creality_directional_control_rejects_native_script_or_geometry_mutation(self):
+        def archive(config, model=b"same fixture"):
+            data = io.BytesIO()
+            with zipfile.ZipFile(data, "w") as dst:
+                dst.writestr("Metadata/project_settings.config",
+                             json.dumps(config).encode())
+                dst.writestr("3D/3dmodel.model", model)
+            return data.getvalue()
+
+        source = {
+            "flush_multiplier": "1.3",
+            "flush_volumes_matrix": ["0", "624", "220", "661",
+                                     "237", "0", "220", "353",
+                                     "220", "598", "0", "626",
+                                     "378", "493", "358", "0"],
+            "change_filament_gcode": "vendor script unchanged",
+            "printer_settings_id": "native machine",
+        }
+        original = archive(source)
+        modified = {**source, "flush_volumes_matrix": source["flush_volumes_matrix"].copy(),
+                    "flush_volumes_changed": "1"}
+        modified["flush_volumes_matrix"][1] = "649.0"
+        before, after, changed_keys = _creality_control_project(
+            original, archive(modified))
+        self.assertEqual(before["flush_volumes_matrix"][4], "237")
+        self.assertEqual(after["flush_volumes_matrix"][1], "649.0")
+        self.assertEqual(changed_keys, {"flush_volumes_matrix", "flush_volumes_changed"})
+        self.assertEqual(_creality_flush_basis(before), (624.0, 1.3))
+        for mutated, model in (
+            ({**modified, "change_filament_gcode": "tampered"}, b"same fixture"),
+            (modified, b"DIFFERENT geometry"),
+            ({**modified, "printer_settings_id": "wrong machine"}, b"same fixture"),
+        ):
+            with self.subTest(changed=list(mutated), model=model):
+                with self.assertRaises(ValueError):
+                    _creality_control_project(original, archive(mutated, model))
+
+    def test_creality_multiplier_control_does_not_mutate_native_matrix(self):
+        def archive(config):
+            data = io.BytesIO()
+            with zipfile.ZipFile(data, "w") as dst:
+                dst.writestr("Metadata/project_settings.config",
+                             json.dumps(config).encode())
+                dst.writestr("3D/3dmodel.model", b"identical geometry")
+            return data.getvalue()
+
+        source = {"flush_multiplier": "1.3",
+                  "flush_volumes_matrix": ["0", "624", *["140"] * 14],
+                  "change_filament_gcode": "native"}
+        control = {**source, "flush_multiplier": "1.0"}
+        before, after, keys = _creality_control_project(
+            archive(source), archive(control))
+        self.assertEqual(keys, {"flush_multiplier"})
+        self.assertEqual(before["flush_volumes_matrix"],
+                         after["flush_volumes_matrix"])
+        self.assertEqual(_creality_flush_basis(after), (624.0, 1.0))
+
+    def test_invalid_creality_native_flush_basis_fails_closed(self):
+        valid = {"flush_multiplier": "1.3",
+                 "flush_volumes_matrix": ["0", "624"] + ["140"] * 14}
+        for altered in (
+            {**valid, "flush_multiplier": ["1.3"]},
+            {**valid, "flush_multiplier": "nan"},
+            {**valid, "flush_volumes_matrix": ["0", "624"]},
+            {**valid, "flush_volumes_matrix": ["0", "inf"] + ["140"] * 14},
+            {**valid, "flush_volumes_matrix": ["0", "-1"] + ["140"] * 14},
+        ):
+            with self.subTest(altered=altered):
+                with self.assertRaises(ValueError):
+                    _creality_flush_basis(altered)
+        self.assertEqual(_creality_flush_basis({
+            "flush_volumes_matrix": valid["flush_volumes_matrix"]}),
+            (624.0, None))
