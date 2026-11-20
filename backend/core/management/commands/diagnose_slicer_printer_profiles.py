@@ -60,6 +60,28 @@ def _safe_native_result(data):
             "note": "Native offline slicing; no physical printer validation."}
 
 
+def _native_nozzle_count(printer_blob):
+    """Count nozzles from the *resolved native machine profile*, never names."""
+    try:
+        printer = json.loads(printer_blob)
+    except (TypeError, ValueError, UnicodeDecodeError) as exc:
+        raise ValueError("Native machine nozzle information is invalid.") from exc
+    if not isinstance(printer, dict):
+        raise ValueError("Native machine must be a JSON object.")
+    values = printer.get("nozzle_diameter")
+    if not isinstance(values, list) or not 1 <= len(values) <= 16:
+        raise ValueError("Native machine must declare one to sixteen nozzle diameters.")
+    import math
+    for item in values:
+        try:
+            diameter = float(item) if not isinstance(item, bool) else math.nan
+        except (ValueError, TypeError):
+            raise ValueError("Invalid native machine nozzle diameter.") from None
+        if not math.isfinite(diameter) or not 0.1 <= diameter <= 3:
+            raise ValueError("Invalid native machine nozzle diameter.")
+    return len(values)
+
+
 def _same_native_pair(profile, owner, engine, version, kind):
     return (profile and profile.owner_id == owner
             and profile.engine == engine and profile.engine_version == version
@@ -133,14 +155,24 @@ class Command(BaseCommand):
             check_native_compatibility(engine, version, kind, raw)
         count = len(filaments)
         width, depth = trusted_plate_dimensions(printer)
+        try:
+            nozzles = _native_nozzle_count(native["printer"])
+        except ValueError as exc:
+            raise CommandError(str(exc)) from exc
+        if opts["topology"] == "single_nozzle_changer" and nozzles != 1:
+            raise CommandError("A single-nozzle changer requires exactly one native nozzle.")
+        if opts["topology"] in ("independent_toolheads", "toolchanger", "idex"):
+            if nozzles != count or count < 2:
+                raise CommandError("Independent toolhead fixture needs one verified native nozzle per logical tool.")
+            if opts["topology"] == "idex" and nozzles != 2:
+                raise CommandError("IDEX fixture requires two verified nozzles.")
         cap = resolve_flush_capability(
-            engine, opts["topology"], nozzle_count=1 if opts["topology"] in (
-                "single_nozzle_changer", "single_material",
-                "manual_filament_change", "unknown") else count,
+            engine, opts["topology"], nozzle_count=nozzles,
             material_count=count)
         summary = {
             "schema": 1, "engine": engine, "version": version,
             "topology": opts["topology"], "logical_material_count": count,
+            "native_nozzle_count": nozzles,
             "bed_mm": [width, depth],
             "native_flush_encoding_supported": cap.supported_for_encoding_only,
             "unsupported_reason": cap.reason,
