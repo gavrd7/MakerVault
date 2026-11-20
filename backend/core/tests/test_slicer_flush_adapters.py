@@ -287,6 +287,108 @@ class FlushAdapterCapabilityTests(SimpleTestCase):
         self.assertEqual(orca["change_filament_gcode"], "ORCA_VERIFIED_MACRO")
         self.assertEqual(creality["change_filament_gcode"], "CREALITY_VERIFIED_MACRO")
 
+    def test_desktop_native_multipliers_and_matrices_are_not_normalised(self):
+        # Reference values transcribed from the user's desktop Orca and
+        # Creality Print flushing dialogs for the same four colour swatches.
+        # They are observations, NOT a new cross-engine calculation formula.
+        orca_matrix = [
+            "0", "480", "170", "509",
+            "212", "0", "199", "301",
+            "170", "460", "0", "482",
+            "291", "380", "276", "0",
+        ]
+        creality_matrix = [
+            "0", "624", "220", "661",
+            "237", "0", "220", "353",
+            "220", "598", "0", "626",
+            "378", "493", "358", "0",
+        ]
+        self.assertEqual(creality_matrix[1], str(int(orca_matrix[1]) * 1.3))
+        # Some native entries do NOT follow a universal 1.3x rule.
+        self.assertNotEqual(int(creality_matrix[4]),
+                            int(float(orca_matrix[4]) * 1.3))
+        orca_native = json.dumps({
+            "flush_multiplier": ["1"],
+            "flush_volumes_matrix": orca_matrix,
+            "change_filament_gcode": "ORCA_VENDOR_MACRO",
+        }).encode()
+        # No user override must preserve byte-for-byte native settings.
+        self.assertEqual(apply_orca_native_flush(
+            orca_native, None, routes=[], tool_count=4,
+            topology="single_nozzle_changer"), orca_native)
+        creality_native = {
+            "flush_multiplier": "1.3",
+            "flush_volumes_matrix": creality_matrix.copy(),
+            "change_filament_gcode": "CREALITY_VENDOR_MACRO",
+        }
+        original = dict(creality_native)
+        apply_creality_native_flush(creality_native, None,
+                                    {"slot-1": 0, "slot-2": 1})
+        self.assertEqual(creality_native, original)
+
+    def test_creality_native_selected_direction_not_scaled_by_native_multiplier(self):
+        # Creality native matrices are four-by-four even though the current
+        # verified printer route binds precisely two logical materials.
+        matrix = [
+            "0", "624", "220", "661",
+            "237", "0", "220", "353",
+            "220", "598", "0", "626",
+            "378", "493", "358", "0",
+        ]
+        native = {
+            "flush_multiplier": "1.3",
+            "flush_volumes_matrix": matrix.copy(),
+            "change_filament_gcode": "CREALITY_VENDOR_MACRO",
+        }
+        settings = {
+            "multiplier": None, "prime_tower": "native",
+            "transitions": [{
+                "from_slot_id": "a", "to_slot_id": "b",
+                "volume_mm3": 480,
+            }],
+        }
+        apply_creality_native_flush(native, settings, {"a": 0, "b": 1})
+        self.assertEqual(native["flush_volumes_matrix"][1], "480.0")
+        self.assertEqual(native["flush_volumes_matrix"][4], "237")
+        self.assertEqual(native["flush_volumes_matrix"][3], "661")
+        self.assertEqual(native["flush_multiplier"], "1.3")
+        self.assertEqual(native["flush_volumes_changed"], "1")
+        self.assertEqual(native["change_filament_gcode"], "CREALITY_VENDOR_MACRO")
+        # Explicit multiplier changes only the native scalar; no second
+        # arithmetic pass is applied to directional user volumes.
+        native_again = {
+            "flush_multiplier": "1.3",
+            "flush_volumes_matrix": matrix.copy(),
+            "change_filament_gcode": "CREALITY_VENDOR_MACRO",
+        }
+        apply_creality_native_flush(native_again,
+            {**settings, "multiplier": 1.0}, {"a": 0, "b": 1})
+        self.assertEqual(native_again["flush_multiplier"], "1.0")
+        self.assertEqual(native_again["flush_volumes_matrix"][1], "480.0")
+        self.assertEqual(native_again["flush_volumes_matrix"][4], "237")
+
+    def test_orca_desktop_selected_direction_not_scaled_by_native_multiplier(self):
+        native = json.dumps({
+            "flush_multiplier": ["1"],
+            "flush_volumes_matrix": ["0", "480", "212", "0"],
+            "change_filament_gcode": "ORCA_VENDOR_MACRO",
+        }).encode()
+        routes = [SimpleNamespace(slot_id="a", tool_index=0),
+                  SimpleNamespace(slot_id="b", tool_index=1)]
+        settings = {
+            "multiplier": None, "prime_tower": "native",
+            "transitions": [{
+                "from_slot_id": "a", "to_slot_id": "b",
+                "volume_mm3": 624,
+            }],
+        }
+        result = json.loads(apply_orca_native_flush(
+            native, settings, routes=routes, tool_count=2,
+            topology="single_nozzle_changer"))
+        self.assertEqual(result["flush_volumes_matrix"], ["0", "624", "212", "0"])
+        self.assertEqual(result["flush_multiplier"], ["1"])
+        self.assertEqual(result["change_filament_gcode"], "ORCA_VENDOR_MACRO")
+
     def test_no_override_does_not_alter_source_or_invent_purge(self):
         self.assertEqual(apply_orca_native_flush(
             b"native", None, routes=[], tool_count=2,
