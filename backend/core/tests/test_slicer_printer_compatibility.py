@@ -1,11 +1,12 @@
 """Native printer-compatibility fixtures are bounded, offline, and tool-agnostic."""
 import io
+import json
 import zipfile
 from defusedxml import ElementTree as ET
 from django.test import SimpleTestCase
 
 from core.management.commands.diagnose_slicer_printer_profiles import (
-    _fixture_items, _safe_native_result, _same_native_pair,
+    _fixture_items, _safe_native_result, _same_native_pair, _native_nozzle_count,
 )
 from core.slicer_plate_3mf import build_plate_3mf, NS
 
@@ -70,3 +71,19 @@ class PrinterCompatibilityFixtureTests(SimpleTestCase):
         profile.status = "unverified_invalid"
         self.assertFalse(_same_native_pair(
             profile, "user1", "orcaslicer", "2.4.2", "filament"))
+
+    def test_native_nozzle_count_comes_from_resolved_profile_not_printer_name(self):
+        for values, expected in ((["0.4"], 1),
+                                 (["0.4", "0.4"], 2),
+                                 (["0.25", "0.4", "0.6", "0.8"], 4)):
+            with self.subTest(values=values):
+                source = json.dumps({
+                    "name": "Any Printer", "nozzle_diameter": values,
+                }).encode()
+                self.assertEqual(_native_nozzle_count(source), expected)
+        for values in (None, [], ["nan"], ["0"], ["bad"], ["0.4"] * 17):
+            with self.subTest(values=values):
+                with self.assertRaises(ValueError):
+                    _native_nozzle_count(json.dumps({
+                        "name": "Any Printer", "nozzle_diameter": values,
+                    }).encode())
