@@ -316,8 +316,8 @@ def _creality_emitted_setting_audit(gcode):
         "prime_volume", "prime_tower_width", "flush_volumes_matrix",
     }
     pattern = re.compile(
-        r"^;\\s*(" + "|".join(sorted(recognised)) +
-        r")\\s*(?:=|:)\\s*(.*?)\\s*$", re.I)
+        r"^;\s*(" + "|".join(sorted(recognised)) +
+        r")\s*(?:=|:)\s*(.*?)\s*$", re.I)
     found = {}
     conflicts = set()
     for line in gcode.decode("utf-8", errors="replace").splitlines():
