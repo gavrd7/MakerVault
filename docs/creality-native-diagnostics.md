@@ -376,3 +376,58 @@ This is strictly a diagnostic exercise: no user settings, worker Python,
 slicer binaries, printer databases or saved jobs are modified. Run the
 Django diagnostic regression tests before the real engine test. Only the
 application needs to be refreshed.
+
+
+### Genuine painted-support project comparison — 20 November 2026
+
+A user-provided **Creality Print 7.3.2.6412** saved 3MF project was
+inspected offline (without committing the file, model mesh, printer G-code
+macros, profile IDs, paths or native preset values). Its mesh is referenced
+from `3D/Objects/object_1.model` via a component in
+`3D/3dmodel.model`. It contains **3,630 triangles**, **253 native
+`paint_supports="4"` facets** and native `normal(manual)` support mode.
+An accompanying desktop sliced-preview image shows actual green supports.
+This proves the desktop reference produces supports; it does not prove
+the same project is executable with our pinned **7.3.1 CLI**.
+
+Source-level evidence from Creality 7.3.1
+[`SupportMaterial.cpp`](https://github.com/CrealityOfficial/CrealityPrint/blob/v7.3.1/src/libslic3r/Support/SupportMaterial.cpp)
+and [`PrintObject.cpp`](https://github.com/CrealityOfficial/CrealityPrint/blob/v7.3.1/src/libslic3r/PrintObject.cpp)
+confirms facet enforcers are projected through layers with
+`slice_mesh_slabs`; testing only a perfectly horizontal painted
+underside may yield an uninformative zero-area layer projection. The
+reference also paints substantial **sloped** surfaces spanning multiple
+Z layers. The referenced-mesh package structure remains a separate
+hypothesis; do **not** weaken the existing worker 3MF allowlist or
+repackage production geometry without an isolated validation.
+
+The existing `--only support --deep --support-fixture` mode now also
+reports a bounded `effective_support_settings` audit, creates the
+normal unpainted auto control, and **adds a fourth** diagnostic-only
+relaxed automatic control. Only the support-relevant values in that
+last 3MF are changed: threshold angle, minimum support area,
+bridge filtering and relevant support-only switches. That control
+**must never be printed**. It does not copy settings from the private
+reference or modify the native worker.
+
+Use an independent sloped-cantilever test while retaining the previous
+flat-cantilever comparator:
+
+```bash
+sudo docker exec makervault python3 /app/backend/manage.py test \
+  core.tests.test_slicer_creality_paint_diagnostics --noinput
+sudo docker exec makervault python3 /app/backend/manage.py \
+  diagnose_creality_paint_features --only support --deep --support-fixture
+sudo docker exec makervault python3 /app/backend/manage.py \
+  diagnose_creality_paint_features --only support --deep --support-fixture \
+  --sloped-support-fixture
+```
+
+Compare `geometry_control`, `automatic_support_control`,
+`relaxed_auto_support_control` and `effective_support_settings`.
+If relaxed auto generates supports but defaults do not, isolate the
+process gate. If sloped painted support becomes effective but flat
+does not, investigate slab projection and flat surface handling.
+If all are still inactive, review the CLI's effective object-level
+configuration and model import path before changing native painting
+values. The user has not run these new tests yet.
