@@ -877,3 +877,66 @@ profile differs from Creality's versioned official K2 profile, inspect
 profile pack selection and source/variant in private rather than
 importing/replacing machine commands. Physical purge volumes remain
 unverified until an approved native command path is demonstrated.
+
+
+### Verified staging provenance: selected K2 preset uses a short script (20 Nov 2026, 08:59 GMT)
+
+User deployed `523e8c80` application-only with the pinned native worker
+unchanged; the five Django test suites ran **62/62 passed**. Read-only
+`diagnose_creality_paint_features --profile-audit-only` succeeded.
+
+Its exact verified imported profile reports:
+
+- Machine preset `change_filament_gcode` defined **in selected preset**,
+  not an inherited parent: 212 characters, SHA-256
+  `d848d81ee40a47a4483b85e232b4a583afa05fe9663e4272ebfd10b19f16a54b`.
+  Machine preset has two levels of inheritance but the selected leaf
+  directly replaces the filament-change script.
+- Process preset has two inherited levels but never defines that
+  script. The selected process did **not** override machine's script,
+  and saved `process_overrides_present=false`.
+- Resolved effective printer script has no `flush_length` placeholders,
+  `multicolor_method` conditional or `M8200` marker, consistent
+  with prior native G-code A/B output. Native nozzle volume is 183
+  mm³, purge_in_prime_tower=0, and single_extruder_multi_material is
+  explicitly defined by selected machine preset.
+- Neither machine nor process preset defines
+  `flush_volumes_matrix`, `flush_multiplier`,
+  `flush_volumes_changed` or `multicolor_method`. The slicer
+  defaults/projects supply these values in the final 3MF.
+
+**Additional pinned upstream comparison:** Official Creality Print v7.3.1
+machine profiles have the following structural signatures (not
+firmware-validating tests):
+
+| Native machine preset | Change script chars | flush_length segmented | M8200 | multicolor_method conditional | nozzle_volume mm³ |
+| --- | ---: | --- | --- | --- | ---: |
+| K2 0.4 mm | 7183 | yes | yes | yes | 183 |
+| K2 Pro 0.4 mm | 7085 | yes | yes | yes | 183 |
+| K2 Plus 0.4 mm | 7644 | yes | yes | yes | 268 |
+| K2 SE 0.4 mm | 141 | no | no | no | 178 |
+| **MakerVault selected imported preset** | **212** | **no** | **no** | **no** | **183** |
+
+Source: official versioned
+[Creality K2](https://github.com/CrealityOfficial/CrealityPrint/blob/v7.3.1/resources/profiles/Creality/machine/Creality%20K2%200.4%20nozzle.json),
+[K2 Pro](https://github.com/CrealityOfficial/CrealityPrint/blob/v7.3.1/resources/profiles/Creality/machine/Creality%20K2%20Pro%200.4%20nozzle.json),
+[K2 Plus](https://github.com/CrealityOfficial/CrealityPrint/blob/v7.3.1/resources/profiles/Creality/machine/Creality%20K2%20Plus%200.4%20nozzle.json),
+[K2 SE](https://github.com/CrealityOfficial/CrealityPrint/blob/v7.3.1/resources/profiles/Creality/machine/Creality%20K2%20SE%200.4%20nozzle.json).
+
+The imported 212-character script **does not structurally match**
+the known K2-family official v7.3.1 script variants above. We have not
+yet identified its original source, chosen profile variant or intended
+firmware-owned purge behaviour. Do **not** automatically replace it
+with upstream long G-code or infer that this would be printer-safe.
+There are community reports of K2 non-Pro firmware not respecting the
+Creality flushing table; treat those as *anecdotes only*, not proof
+about the user's specific printer or firmware.
+
+Next useful gate: compare the selected imported printer profile's
+name/variant and source scope in the authorized local profile UI
+against the matching official K2 0.4 mm preset and confirm it is the
+intended CFS mode. Keep the user's existing saved machine preset
+unchanged. Only if a tested, approved native profile and slicer path
+supports directional purge commands should the UI claim its
+flushing-volume changes affect actual filament waste. Future printer
+types stay behind separate engine and topology capabilities.
