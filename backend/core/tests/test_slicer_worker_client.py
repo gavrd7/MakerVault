@@ -205,6 +205,31 @@ class SlicerWorkerClientTests(SimpleTestCase):
     @patch("core.slicer_worker_client._session")
     @patch("core.slicer_worker_client.worker_settings",
            return_value=("http://slicer-worker:8088", "x" * 40))
+    def test_generic_worker_validation_error_keeps_safe_stage(self, settings, session):
+        import json
+        for stage in ("validating model and profile payloads",
+                      "running slicer engine",
+                      "validating generated G-code"):
+            with self.subTest(stage=stage):
+                response = Mock()
+                response.status_code = 422
+                payload = json.dumps({
+                    "stage": stage, "reason": "validation-error",
+                    "error": "PRIVATE_MACHINE_MACRO",
+                }).encode()
+                response.headers = {"Content-Length": str(len(payload))}
+                response.iter_content.return_value = [payload]
+                session.return_value.post.return_value = response
+                with self.assertRaises(SlicerWorkerError) as caught:
+                    run_remote_job(uuid.uuid4(), "crealityprint", "7.3.1",
+                                   b"model", b"printer", b"filament", b"process")
+                self.assertIn("Stage: " + stage, str(caught.exception))
+                self.assertIn("[validation-error]", str(caught.exception))
+                self.assertNotIn("PRIVATE_MACHINE_MACRO", str(caught.exception))
+
+    @patch("core.slicer_worker_client._session")
+    @patch("core.slicer_worker_client.worker_settings",
+           return_value=("http://slicer-worker:8088", "x" * 40))
     def test_orca_exit_codes_are_translated_not_lost(self, settings, session):
         import json
         for reason, expected in (
