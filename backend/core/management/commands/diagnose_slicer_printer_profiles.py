@@ -7,6 +7,7 @@ runs printer API calls, or permits the resulting G-code to be printed.
 import hashlib
 import json
 import uuid
+from types import SimpleNamespace
 
 from django.core.management.base import BaseCommand, CommandError
 
@@ -237,9 +238,8 @@ class Command(BaseCommand):
                         "volume_mm3": first + 25,
                     }],
                 },
-                routes=[type("Route", (), {"slot_id": "fixture-slot-%d" % n,
-                                          "tool_index": n})()
-                        for n in range(count)],
+                routes=[SimpleNamespace(slot_id="fixture-slot-%d" % n,
+                                        tool_index=n) for n in range(count)],
                 tool_count=count, topology="single_nozzle_changer")
             control = slice_native(modified)
             summary["directional_matrix_control"] = {
