@@ -168,9 +168,6 @@ def apply_orca_native_flush(process_bytes, settings, *, routes, tool_count, topo
     matrix. If that matrix is absent, every off-diagonal transition must be
     explicitly configured; zero is NOT a safe default for colour changes.
     """
-    if settings is not None:
-        require_flush_capability("orcaslicer", "single_nozzle_changer",
-                                 nozzle_count=1, material_count=tool_count)
     from .slicer_flush_settings import validate_flush_settings
     approved = validate_flush_settings(settings)
     if approved is None:
@@ -180,6 +177,8 @@ def apply_orca_native_flush(process_bytes, settings, *, routes, tool_count, topo
     if (isinstance(tool_count, bool) or not isinstance(tool_count, int)
             or not 2 <= tool_count <= 16):
         raise MaterialRoutingError("Invalid native tool palette for flushing.")
+    require_flush_capability("orcaslicer", topology, nozzle_count=1,
+                             material_count=tool_count)
     try:
         process = json.loads(process_bytes)
     except (UnicodeDecodeError, ValueError, TypeError) as exc:
