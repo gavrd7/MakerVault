@@ -266,6 +266,42 @@ def _validate_creality_purge_route_pair(baseline, parent, candidate, enabled):
 
 
 
+
+def _creality_prime_volume_control(project_blob, volume_mm3=180):
+    """Create an offline positive control without changing native scripts."""
+    if type(volume_mm3) is not int or not 90 <= volume_mm3 <= 300:
+        raise ValueError("Invalid bounded native tower volume control.")
+    original = _read_creality_project_settings(project_blob)
+    baseline_volume = original.get("prime_volume")
+    if isinstance(baseline_volume, (bool, dict, list)) or baseline_volume is None:
+        raise ValueError("Native prime volume source is missing or invalid.")
+    try:
+        old_value = float(baseline_volume)
+    except (TypeError, ValueError, OverflowError):
+        raise ValueError("Invalid native prime volume value.") from None
+    if not math.isfinite(old_value) or not 0 < old_value < volume_mm3:
+        raise ValueError("Native prime volume cannot form an increasing control.")
+    modified = dict(original)
+    modified["prime_volume"] = str(volume_mm3)
+    output = io.BytesIO()
+    with zipfile.ZipFile(io.BytesIO(project_blob)) as source, zipfile.ZipFile(
+            output, "w", compression=zipfile.ZIP_DEFLATED, allowZip64=False) as dest:
+        members = source.namelist()
+        if len(members) != len(set(members)) or len(members) not in (6, 7):
+            raise ValueError("Invalid native tower volume project archive.")
+        for member in source.infolist():
+            data = (json.dumps(modified, separators=(",", ":")).encode()
+                    if member.filename == "Metadata/project_settings.config"
+                    else source.read(member.filename))
+            dest.writestr(member, data)
+    result = output.getvalue()
+    _before, after, keys = _creality_control_project_with_extra(
+        project_blob, result, {"prime_volume"})
+    if keys != {"prime_volume"} or after["prime_volume"] != str(volume_mm3):
+        raise ValueError("Native prime volume positive control changed unrelated data.")
+    return result
+
+
 def _creality_emitted_setting_audit(gcode):
     """Read safe numerical/flag settings emitted by Creality into G-code.
 
@@ -645,11 +681,17 @@ class Command(BaseCommand):
                 creality_controls.append((
                     route_name, _creality_purge_route_control(
                         fixed_control, route_enabled)))
+            # An independent setting expected to influence native tower
+            # generation in the source, isolated from all flush fields.
+            creality_controls.append((
+                "prime_volume_positive_control",
+                _creality_prime_volume_control(fixed_control)))
             for name, candidate in creality_controls:
                 original, changed, keys = _creality_control_project_with_extra(
                     model, candidate,
                     ({"different_settings_to_system"} if name.endswith("_marked")
                      else {"purge_in_prime_tower"} if name.startswith("purge_route_")
+                     else {"prime_volume"} if name == "prime_volume_positive_control"
                      else set()))
                 if name == "forward":
                     if (float(changed["flush_volumes_matrix"][1]) !=
@@ -659,6 +701,15 @@ class Command(BaseCommand):
                         raise CommandError("Creality forward directional fixture was not isolated.")
                     if changed.get("flush_multiplier") != original.get("flush_multiplier"):
                         raise CommandError("Creality native multiplier changed in directional fixture.")
+                elif name == "prime_volume_positive_control":
+                    if (keys - {"flush_multiplier", "prime_volume"} or
+                            changed.get("flush_multiplier") != "2.0" or
+                            changed.get("prime_volume") != "180"):
+                        raise CommandError("Creality prime volume control baseline isolation failed.")
+                    _p0, _p1, parent_keys = _creality_control_project_with_extra(
+                        fixed_control, candidate, {"prime_volume"})
+                    if parent_keys != {"prime_volume"}:
+                        raise CommandError("Creality prime volume parent isolation failed.")
                 elif name.startswith("purge_route_"):
                     try:
                         _validate_creality_purge_route_pair(
@@ -774,6 +825,16 @@ class Command(BaseCommand):
                 current["tower_extrusion_changed_vs_multiplier_2_0"] = (
                     current["tower_deposition"]["positive_e_length_mm"] !=
                     route_reference["tower_deposition"]["positive_e_length_mm"])
+            prime_control = summary["creality_flush_controls"]["prime_volume_positive_control"]
+            prime_control["requested_prime_volume_mm3"] = 180
+            prime_control["motion_changed_vs_multiplier_2_0"] = (
+                prime_control["motion_sha256"] != route_reference["motion_sha256"])
+            prime_control["machine_commands_changed_vs_multiplier_2_0"] = (
+                prime_control["machine_command_sha256"] !=
+                route_reference["machine_command_sha256"])
+            prime_control["tower_extrusion_changed_vs_multiplier_2_0"] = (
+                prime_control["tower_deposition"]["positive_e_length_mm"] !=
+                route_reference["tower_deposition"]["positive_e_length_mm"])
             summary["creality_flush_controls"]["forward"]["requested_t0_to_t1_mm3"] = first_flush_volume + 25
             summary["native_tool_selects_observed"] = {
                 "t0": baseline_metrics["tool0_selects"],
