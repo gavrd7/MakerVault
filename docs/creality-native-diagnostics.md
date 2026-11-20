@@ -1428,3 +1428,58 @@ whether Creality 7.3.1's project loader honours
 `different_settings_to_system` override flags *before* altering
 production flushing calculations. Physical K2 flushing remains
 unverified; do not print diagnostic G-code.
+
+
+### Investigating whether native Creality 7.3.1 reload drops flushing overrides
+
+The real K2 1.00 vs 2.00 run also showed identical 22.898mm tower
+X/Y dimensions, 28,613.328mm XY tower path, 1,090.971mm positive-E
+tower extrusion and exactly the same global motion and machine-command
+fingerprints. This supports investigating **config reload semantics**
+instead of increasing the multiplier again.
+
+MakerVault already uses `different_settings_to_system[0]` to preserve
+explicit **support** overrides during Creality's project preset reload
+(`_mark_creality_support_overrides`), while the current production
+flushing adapter only writes `flush_multiplier`,
+`flush_volumes_matrix`, and `flush_volumes_changed` directly into
+`Metadata/project_settings.config`.
+
+The offline `diagnose_slicer_printer_profiles --native --test-flush`
+command now adds two **additional, disposable** projects:
+`multiplier_1_0_marked` and `multiplier_2_0_marked`. Each matches
+its corresponding unmarked multiplier project byte-for-byte in every
+other archive member and **every configuration field** except the
+native `different_settings_to_system[0]` process-override list,
+which gains the three flushing keys above while preserving existing
+support overrides and all palette entries.
+
+The new output compares each marked control with its unmarked
+counterpart for global motion commands, machine M commands and tagged
+tower deposition, as well as with the unchanged baseline. Only
+read-only authenticated native slicing is performed. No printing,
+saved presets, printer/database updates, vendor machine G-code edits,
+worker code or approved engine binaries change.
+
+This experiment is **not yet evidence** that those fields belong in
+the native process override list, nor that Creality 7.3.1 honours them.
+An unchanged marked A/B would narrow the investigation toward either
+native UI matrix recomputation, separate flush-volume routing, CLI
+configuration overrides, or firmware-side K2 purging. Avoid a
+production change until native A/B behaviour confirms it.
+
+New focused Django suites:
+
+```bash
+sudo docker exec makervault python3 /app/backend/manage.py test \
+  core.tests.test_slicer_printer_compatibility \
+  core.tests.test_slicer_tower_diagnostics \
+  core.tests.test_slicer_flush_adapters \
+  core.tests.test_slicer_creality_project --noinput
+```
+
+Then rerun the same previously successful exact K2 native
+`--test-flush` command. This is an **application-only** change;
+run `sudo python3 scripts/install_slicer_staging.py update`, not
+`refresh-worker`. The output now includes two additional marked
+controls; the isolated worker and native engines remain pinned.
