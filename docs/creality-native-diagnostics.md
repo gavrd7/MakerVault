@@ -1177,3 +1177,49 @@ single-material tetrahedron using exact imported Creality Print
 Only diagnostic counting/test code changed in this follow-up.
 The native engine, approved worker, imported presets and all machine
 macros remain untouched.
+
+
+### Desktop multiplier-reference regression (K2 four-colour example)
+
+Two desktop UI screenshots for the same four swatches show OrcaSlicer
+at native multiplier **1.00** and Creality Print at **1.30**.
+The observed four-by-four matrices (directional row-major, mm³) are:
+
+```text
+Orca 1.00
+   0 480 170 509
+ 212   0 199 301
+ 170 460   0 482
+ 291 380 276   0
+
+Creality Print 1.30
+   0 624 220 661
+ 237   0 220 353
+ 220 598   0 626
+ 378 493 358   0
+```
+
+Many pairs approximately match 1.30× (e.g. Orca T0→T1
+480, Creality 624), but **not all pairs match**. Do not hardcode
+a 1.3 scaling factor or infer equivalent colour/material settings.
+These are UI observations; the screenshot alone does not prove
+whether the matrix has already been multiplied or whether firmware
+executes these values. Nor should a user-entered 480mm³ be translated
+to 624mm³ merely because Creality happens to display 1.30 by default.
+
+Regression coverage in `test_slicer_flush_adapters.py` explicitly
+preserves each native matrix and native multiplier when no override is
+specified. With an explicit directional override, the adapters write
+**the exact requested native matrix cell once** without applying an
+extra multiplier; the other directional cells, native multiplier and
+manufacturer scripts remain intact. An explicit multiplier edit
+writes only the engine's correct native representation (Orca vector
+or Creality scalar), without eagerly changing matrix cells.
+
+The final purge amount used by Creality's native slicer/firmware has
+**not** been inferred from the UI multiplier; physical effectiveness
+remains unverified on the K2. Before making any calculation changes,
+perform a separate controlled native app/worker A/B experiment that
+distinguishes pre-scaled matrix entries, native multiplier application
+and machine-level purge commands. Do not alter native K2 machine
+macros or printer databases during these tests.
