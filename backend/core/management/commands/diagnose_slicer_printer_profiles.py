@@ -23,6 +23,7 @@ from core.slicer_flush_adapters import (
     apply_orca_native_flush, resolve_flush_capability,
 )
 from core.slicer_native_compatibility import check_native_compatibility
+from core.slicer_native_material_palette import _single_positive_diameter
 from core.slicer_native_resolution import resolved_native_profile
 from core.slicer_plate_3mf import build_plate_3mf
 from core.slicer_worker_client import run_remote_job
@@ -59,6 +60,25 @@ def _safe_native_result(data):
             "machine_command_sha256": result["machine_command_sha256"],
             "g1_with_extrusion": result["g1_with_extrusion"],
             "note": "Native offline slicing; no physical printer validation."}
+
+
+def _compatible_filament_diameter(filament_blobs):
+    """Do not send a mixed-diameter multi-material palette to a real engine."""
+    diameters = []
+    for blob in filament_blobs:
+        try:
+            data = json.loads(blob)
+        except (UnicodeDecodeError, TypeError, ValueError) as exc:
+            raise ValueError("Invalid native filament preset.") from exc
+        if not isinstance(data, dict):
+            raise ValueError("Invalid native filament preset.")
+        diameter = _single_positive_diameter(data)
+        if diameter is None:
+            raise ValueError("Native filament diameter is missing or invalid.")
+        diameters.append(diameter)
+    if not diameters or max(diameters) - min(diameters) > 0.001:
+        raise ValueError("Mixed native filament diameters cannot be tested together.")
+    return diameters[0]
 
 
 def _native_nozzle_count(printer_blob):
@@ -156,6 +176,10 @@ class Command(BaseCommand):
                           *[("filament", blob) for blob in native["filaments"]]):
             check_native_compatibility(engine, version, kind, raw)
         count = len(filaments)
+        try:
+            filament_diameter = _compatible_filament_diameter(native["filaments"])
+        except ValueError as exc:
+            raise CommandError(str(exc)) from exc
         width, depth = trusted_plate_dimensions(printer)
         try:
             nozzles = _native_nozzle_count(native["printer"])
@@ -175,6 +199,7 @@ class Command(BaseCommand):
             "schema": 1, "engine": engine, "version": version,
             "topology": opts["topology"], "logical_material_count": count,
             "native_nozzle_count": nozzles,
+            "filament_diameter_mm": filament_diameter,
             "bed_mm": [width, depth],
             "native_flush_encoding_supported": cap.supported_for_encoding_only,
             "unsupported_reason": cap.reason,
