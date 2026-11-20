@@ -164,8 +164,8 @@ def _creality_control_project(base, candidate):
     if not changed.issubset({
             "flush_multiplier", "flush_volumes_matrix", "flush_volumes_changed"}):
         raise ValueError("Unexpected native Creality project settings changed.")
-    with zipfile.ZipFile(io.BytesIO(base)) as before, \\
-            zipfile.ZipFile(io.BytesIO(candidate)) as after:
+    with (zipfile.ZipFile(io.BytesIO(base)) as before,
+          zipfile.ZipFile(io.BytesIO(candidate)) as after):
         before_names = before.namelist()
         after_names = after.namelist()
         if set(before_names) != set(after_names):
@@ -438,16 +438,19 @@ class Command(BaseCommand):
                 "note": "Motion or command change is stronger than metadata difference, but is NOT physical purge validation.",
             }
         if creality_controls is not None:
-            provenance = json.loads(native["process"])
-            # A self-contained project may manufacture a conservative 140mm3
-            # matrix when the selected native process has none. Label that
-            # explicitly, never call it a vendor-calculated flush volume.
-            inherited = provenance.get("flush_volumes_matrix")
+            # Project packager overlays printer and process native settings.
+            # If neither contains a matrix, its conservative 140mm3 values
+            # are diagnostic placeholders, never vendor-calculated defaults.
+            machine_source = json.loads(native["printer"])
+            process_source = json.loads(native["process"])
+            if "flush_volumes_matrix" in process_source:
+                matrix_source = "resolved_native_process"
+            elif "flush_volumes_matrix" in machine_source:
+                matrix_source = "resolved_native_printer"
+            else:
+                matrix_source = "candidate_builder_140mm3_fallback_unverified"
             summary["creality_flush_basis"] = {
-                "matrix_source": (
-                    "native_resolved_process" if isinstance(inherited, list)
-                    and len(inherited) in (4, 16) else
-                    "candidate_builder_140mm3_fallback_unverified"),
+                "matrix_source": matrix_source,
                 "baseline_t0_to_t1_mm3": first_flush_volume,
                 "native_scalar_multiplier": native_multiplier,
                 "multiplier_default_known": native_multiplier is not None,
