@@ -483,3 +483,125 @@ sudo docker exec makervault python3 /app/backend/manage.py \
 
 No `refresh-worker` necessary for these backend-only changes. Existing
 worker validation remains strict; no printer uploads or physical printing.
+
+
+### Cross-engine K2 flushing source audit — 20 November 2026
+
+**Research only. No binary, worker, printer, macro or production flush
+code changes.** Sources are pinned to the supported engines:
+[Creality Print v7.3.1](https://github.com/CrealityOfficial/CrealityPrint/tree/v7.3.1)
+and [OrcaSlicer v2.4.2](https://github.com/OrcaSlicer/OrcaSlicer/tree/v2.4.2).
+Do not assume current application defaults match these exact releases.
+
+#### Native data-model comparison
+
+- Both use `flush_volumes_matrix`, directional `old*n+new`, in mm³.
+- Creality `PrintConfig.cpp` defines `flush_multiplier` as scalar
+  `coFloat`; Orca v2.4.2 defines it as `coFloats` per-nozzle vector.
+  This is an engine-specific serializer concern, not a different unit.
+- Creality v7.3.1 `FlushVolCalc.cpp` uses the HSV/luminance predictor,
+  adds a source filament/nozzle-dependent minimum and caps the result
+  at `g_max_flush_volume = 1200` mm³ before any UI multiplier. It
+  considers `nozzle_volume`, optional long-retraction details, and
+  type changes in `GUI/WipeTowerDialog.cpp` (cross-material warning
+  threshold `nozzle_volume*3`).
+- Orca v2.4.2 `FlushVolCalc.cpp` also contains the HSV/luminance
+  heuristic but supports `GenericFlushPredictor` via
+  `nozzle_flush_dataset`, an additional condition-dependent boost,
+  and `g_max_flush_volume = 20000`. Orca's UI uses a per-nozzle
+  `flush_multiplier` and can select a nozzle-specific matrix.
+- The official v7.3.1 Creality K2 0.4 nozzle machine preset and
+  official v2.4.2 Orca K2 0.4 nozzle preset both specify
+  `nozzle_volume=183`, but differ in `purge_in_prime_tower`:
+  Creality `0` vs Orca `1`. Creality's machine
+  `change_filament_gcode` is a 325-line native routine (325 lines
+  including blank lines); it contains `{if multicolor_method}`,
+  `M8200`, and uses `flush_length_1..5`. Orca's machine
+  `change_filament_gcode` is a six-line positioning script with no
+  `flush_length` or `M8200` placeholders. These routines do **not**
+  implement interchangeable physical purge behavior.
+- Creality's `GCode.cpp` computes
+  `purge_length = purge_volume / filament_cross_section_area`,
+  produces `flush_length_1..5` variables and expands the selected
+  `change_filament_gcode` template. The native K2 profile consumes
+  them in its `multicolor_method` branch. A K2 material-selection
+  command (`Tn` or `M8200`) does not by itself establish that
+  firmware honoured a specific flush volume.
+- Creality `CLI/SliceCommand.cpp::update_filament_colors_and_flush`
+  can *recompute the entire matrix and reset multiplier to 1* when
+  the CLI receives an explicit `filament_colour` override or when
+  the matrix is missing. This is separate from the already-confirmed
+  `PresetBundle` restore issue for process keys.
+  `Utils/FlushVolume.cpp` checks `flush_volumes_changed` to skip
+  automatic UI recalculation. Exact CLI behavior requires evidence.
+
+#### MakerVault implementation audit and caution
+
+- `backend/core/slicer_flush_settings.py` already provides a
+  reusable normalized directional transition contract, physical slot
+  to verified native tool binding, and native-prime-tower preference.
+  It currently permits up to 20,000 mm³ and a single 0.1–3 multiplier;
+  engine-native limits, nozzle topology and representation must be
+  validated *in the adapter* rather than treated as universal.
+- `backend/core/slicer_creality_project.py::_apply_creality_flush_settings`
+  writes scalar multiplier, 16-cell matrix (four CFS slots), and
+  `flush_volumes_changed=1`. It currently makes no explicit override
+  registration of any flush-related config fields in
+  `different_settings_to_system`. **Do not assume** adding them is
+  universally correct: inspect whether each is project-level vs
+  process-preset owned, then test effective CLI output.
+- Prior offline flush diagnostic altered T0→T1 / T1→T0 matrix plus
+  multiplier. It changed G-code config-footer matrix but **not motion
+  or machine command hashes**. Selected test profile reported
+  `change_filament_gcode` present but *no flush_length placeholder*,
+  and effective `multicolor_method=0`. Contrast this with Creality's
+  upstream native K2 macro, which uses `flush_length_1..5` behind
+  its `multicolor_method` conditional. Do not infer physical purging
+  from footer-only data.
+- The project builder also has conservative `140` mm³ fallback
+  values for missing native matrix entries: these are staging
+  placeholders, **not documented manufacturer K2 purge defaults**.
+  Keep any unsupported user configuration fail-closed for print-ready
+  claims. Never auto-replace or synthesize a native K2 macro.
+
+#### Next offline diagnostic design (no production change until verified)
+
+1. Audit the **resolved selected machine and process profiles** with
+   sensitive macros redacted: report only structural flags such as
+   has `flush_length_1..5` placeholders, uses `multicolor_method`,
+   contains a `Tn` or vendor command, nozzle volume, firmware-vs-
+   slicer-managed topology, `purge_in_prime_tower`. Compare the
+   approved profile to the matching versioned official profile by
+   structural properties and hashes, not by copying upstream scripts.
+2. For one already verified 2-tool CFS colour job, compare baseline
+   against two *separate* directional matrix-only modifications and
+   multiplier-only modifications. Capture the **embedded 3MF**,
+   **G-code emitted config**, **actual tool-change extrusion segments**
+   and per-transition macro role/segment summaries (no raw private
+   G-code or credentials).
+3. Establish whether a change survives Creality `PresetBundle` load,
+   whether the installed K2 change macro consumes `flush_length_n`,
+   and whether any remaining physical purge is firmware-owned. The
+   absence of changed G/M motion may be explained by a firmware
+   handoff, but is not proof; physical confirmation is a separate
+   safety gate.
+4. Preserve the shared adapter-neutral contract
+   `{from_slot,to_slot,volume_mm3,multiplier,prime_tower}`.
+   Introduce per-engine capabilities describing multiplier shape,
+   maximum native volume, matrix topology, auto-prediction source,
+   printer-owned vs slicer-owned purge, and evidence level
+   (`requested`, `effective_config`, `emitted_commands`,
+   `physical_verified`). Display **unverified** rather than
+   suggesting a slider definitely changes the K2's physical waste.
+5. Generalize the contract to future single-nozzle changers and
+   independent toolheads with explicit topology checks. Avoid
+   universal G-code injection, altering vendor macros or treating
+   visible UI matrix values as guaranteed delivered purging volume.
+
+Useful upstream code:
+[Creality FlushVolCalc.cpp](https://github.com/CrealityOfficial/CrealityPrint/blob/v7.3.1/src/libslic3r/FlushVolCalc.cpp),
+[Creality CLI SliceCommand.cpp](https://github.com/CrealityOfficial/CrealityPrint/blob/v7.3.1/src/slic3r/CLI/SliceCommand.cpp),
+[Creality GCode.cpp](https://github.com/CrealityOfficial/CrealityPrint/blob/v7.3.1/src/libslic3r/GCode.cpp),
+[Creality K2 machine JSON](https://github.com/CrealityOfficial/CrealityPrint/blob/v7.3.1/resources/profiles/Creality/machine/Creality%20K2%200.4%20nozzle.json),
+[Orca FlushVolCalc.cpp](https://github.com/OrcaSlicer/OrcaSlicer/blob/v2.4.2/src/libslic3r/FlushVolCalc.cpp),
+[Orca K2 machine JSON](https://github.com/OrcaSlicer/OrcaSlicer/blob/v2.4.2/resources/profiles/Creality/machine/Creality%20K2%200.4%20nozzle.json).
