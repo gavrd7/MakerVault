@@ -1223,3 +1223,79 @@ perform a separate controlled native app/worker A/B experiment that
 distinguishes pre-scaled matrix entries, native multiplier application
 and machine-level purge commands. Do not alter native K2 machine
 macros or printer databases during these tests.
+
+
+### Creality Print 7.3.1 native two-filament flushing A/B (offline-only)
+
+The generic `diagnose_slicer_printer_profiles` command now supports
+`--native --test-flush` with `--engine crealityprint` and **exactly
+two** explicitly selected, matched-version native filament profiles
+on a verified **single-nozzle changer**. This is a read-only
+native-worker diagnostic: never prints, stores a slice job, changes
+a machine macro or modifies the approved worker. Before sending any
+worker request it builds a baseline and two *isolated* candidate
+self-contained Creality 3MF projects and verifies the same geometry,
+metadata and vendor machine scripts.
+
+It runs up to three bounded native slices using the **same geometry**:
+baseline, T0→T1 native matrix cell **+25mm³** (T1→T0 and
+all other cells unchanged), and a native scalar-multiplier-only
+control (1.00 if source is not 1.00, otherwise 1.30). The latter
+only runs when the resolved native project actually declares
+`flush_multiplier` and passes validation; an absent default is
+**not guessed**. Native 3MF control settings are verified before
+sending them to the worker.
+
+Run the following with the **already imported** Creality Print
+7.3.1 K2 native profile candidates (do not substitute Orca profiles):
+
+```bash
+sudo docker exec makervault python3 /app/backend/manage.py \
+  diagnose_slicer_printer_profiles \
+  --engine crealityprint --topology single_nozzle_changer \
+  --printer-profile-id 91b19730-66f5-4b5f-bd7d-b08fbb4ee768 \
+  --process-profile-id 0c90fa89-a193-48b6-ac94-a69792230163 \
+  --filament-profile-id e9c1274c-d95b-4592-87e5-03a645d699aa \
+  --filament-profile-id eb8473e9-f993-4c6e-8cc4-fb357e3ae782 \
+  --native --test-flush
+```
+
+The selected K2 machine still requires the **separate
+provenance/machine-macro audit**: its imported tool-change macro has
+previously differed from the official manufacturer variant.
+A successful A/B does not approve it for physical printing or
+establish effective purge. Both selected filament presets must
+resolve with compatible native keys and 1.75mm diameter; fail-closed
+error means inspect those preset differences, not bypass validation.
+
+Output provides a baseline and two independent controls including
+G-code digest, motion digest, M-command digest, G1 extrusion count,
+T0/T1 selection counts and booleans for output versus motion versus
+machine-command differences. A changed full G-code hash may mean
+*only metadata*. A changed motion hash may include print/tower
+motion rather than true purge. T0/T1 selections are not proof of
+actual printer material-change operation. Firmware-owned purge
+could remain invisible. A baseline without an effective native
+multi-material switch is **inconclusive**, not a passing flush test.
+
+**Matrix provenance:** When imported printer/process settings
+supply `flush_volumes_matrix`, the report says which source.
+If neither supplies one, `matrix_source` is
+`candidate_builder_140mm3_fallback_unverified`. This is
+MakerVault's conservative project construction fallback, **not**
+Creality Print's desktop 1.30× auto-calculation; never present it
+as the user's original native settings. Do not infer multiplier
+post-processing from these controls until native G-code semantics
+are understood; there is no additional 1.30 scaling in the adapters.
+
+Focused new unit tests (no worker needed):
+
+```bash
+sudo docker exec makervault python3 /app/backend/manage.py test \
+  core.tests.test_slicer_printer_compatibility \
+  core.tests.test_slicer_flush_adapters \
+  core.tests.test_slicer_creality_project --noinput
+```
+
+Do not run `refresh-worker`: this feature only changes Django
+diagnostic files and unit tests.
