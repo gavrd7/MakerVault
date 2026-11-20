@@ -201,7 +201,7 @@ class PrinterCompatibilityFixtureTests(SimpleTestCase):
             "change_filament_gcode": "original native vendor macro",
         }
         self.assertEqual(_creality_flush_basis(original), (140.0, None))
-        for multiplier in (1.0, 1.3):
+        for multiplier in (1.0, 2.0):
             with self.subTest(multiplier=multiplier):
                 explicit = {**original, "flush_multiplier": str(multiplier)}
                 before, after, changes = _creality_control_project(
