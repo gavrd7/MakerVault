@@ -244,6 +244,27 @@ def _creality_purge_route_control(project_blob, enabled):
     return candidate
 
 
+
+def _validate_creality_purge_route_pair(baseline, parent, candidate, enabled):
+    """Validate baseline and parent isolation before running native slicer."""
+    if type(enabled) is not bool:
+        raise ValueError("Invalid native purge route selection.")
+    original, changed, keys = _creality_control_project_with_extra(
+        baseline, candidate, {"purge_in_prime_tower"})
+    if keys - {"flush_multiplier", "purge_in_prime_tower"}:
+        raise ValueError("Purge route candidate changed baseline settings.")
+    _parent_before, parent_after, parent_keys = (
+        _creality_control_project_with_extra(
+            parent, candidate, {"purge_in_prime_tower"}))
+    if parent_keys - {"purge_in_prime_tower"}:
+        raise ValueError("Purge route candidate changed its multiplier parent.")
+    requested = "1" if enabled else "0"
+    if (parent_after.get("purge_in_prime_tower") != requested or
+            parent_after.get("flush_multiplier") != "2.0"):
+        raise ValueError("Purge route control lost its fixed multiplier or routing.")
+    return True
+
+
 def _creality_purge_route_audit(config):
     """Report a bounded project setting snapshot, not effective runtime values."""
     if not isinstance(config, dict):
@@ -569,20 +590,12 @@ class Command(BaseCommand):
                     if changed.get("flush_multiplier") != original.get("flush_multiplier"):
                         raise CommandError("Creality native multiplier changed in directional fixture.")
                 elif name.startswith("purge_route_"):
-                    # Compare the route fixture to its parent multiplier=2
-                    # control, NOT to baseline, which can have no multiplier.
-                    # Keep the baseline check as a separate bounded allowlist.
-                    expected_route = "1" if name == "purge_route_tower" else "0"
-                    if (keys - {"flush_multiplier", "purge_in_prime_tower"} or
-                            changed.get("purge_in_prime_tower") != expected_route):
-                        raise CommandError("Creality purge route baseline isolation failed.")
-                    _parent_before, parent_after, route_keys = (
-                        _creality_control_project_with_extra(
-                            fixed_control, candidate, {"purge_in_prime_tower"}))
-                    if (route_keys - {"purge_in_prime_tower"} or
-                            parent_after.get("purge_in_prime_tower") != expected_route or
-                            parent_after.get("flush_multiplier") != "2.0"):
-                        raise CommandError("Creality purge route parent isolation failed.")
+                    try:
+                        _validate_creality_purge_route_pair(
+                            model, fixed_control, candidate,
+                            name == "purge_route_tower")
+                    except ValueError as exc:
+                        raise CommandError("Creality purge route isolation failed.") from exc
                 else:
                     raw_name = name.removeprefix("multiplier_").removesuffix("_marked")
                     requested = float(raw_name.replace("_", "."))
