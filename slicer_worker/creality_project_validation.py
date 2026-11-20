@@ -149,7 +149,10 @@ def validate_creality_project(data, *, native_tool_count=2):
                                      else archive.read(name))
         validate_worker_3mf(
             core.getvalue(), native_tool_count=native_tool_count,
-            allow_creality_combined_paint=True,
+            # Painting extensions require a SINGLE object. The plain
+            # two-object/two-tool fixture must use strict per-object
+            # assignments, not the combined-paint single-mesh validator.
+            allow_creality_combined_paint=object_count == 1,
             allow_creality_layer_ranges=LAYER_RANGES in archive.namelist(),
         )
     except WorkerError:
