@@ -173,11 +173,17 @@ def _feature_role_audit(gcode):
     role = ""
     counts = {"support": 0, "outer_wall": 0, "other": 0}
     role_tags = 0
+    recognized_roles = {"outer wall", "inner wall", "overhang wall", "support",
+                        "support interface", "support transition", "prime tower",
+                        "sparse infill", "top surface", "bottom surface"}
+    role_histogram = {name: 0 for name in sorted(recognized_roles)}
     for line in gcode.splitlines():
         tag = re.match(rb"^;\s*(?:FEATURE|TYPE)\s*:\s*(.{1,60})$", line, re.I)
         if tag:
             role = tag.group(1).decode("ascii", errors="replace").lower().strip()
             role_tags += 1
+            if role in role_histogram:
+                role_histogram[role] += 1
             continue
         command = line.partition(b";")[0].strip().upper()
         if (re.match(rb"^G0?1(?:\s|$)", command) and
@@ -188,7 +194,9 @@ def _feature_role_audit(gcode):
                       "outer_wall" if any(term in role for term in
                                           ("outer wall", "external perimeter")) else "other")
             counts[bucket] += 1
-    return {"feature_role_tags": role_tags, "extrusion_xy_moves_by_role": counts}
+    return {"feature_role_tags": role_tags,
+            "recognized_role_tag_counts": {k: v for k, v in role_histogram.items() if v},
+            "extrusion_xy_moves_by_role": counts}
 
 
 def _cantilever_fixture_stl():
