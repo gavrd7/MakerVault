@@ -116,6 +116,7 @@ class Command(BaseCommand):
         parser.add_argument("--engine", choices=("orcaslicer", "crealityprint"), required=True)
         parser.add_argument("--list-profiles", action="store_true",
                             help="List up to 100 available imported native profile identities")
+        parser.add_argument("--name-contains", help="Filter local imported profile list by bounded name fragment")
         parser.add_argument("--printer-profile-id")
         parser.add_argument("--process-profile-id")
         parser.add_argument("--filament-profile-id", action="append", default=[])
@@ -128,7 +129,13 @@ class Command(BaseCommand):
     def handle(self, *args, **opts):
         engine = opts["engine"]
         if opts["list_profiles"]:
-            rows = list(SlicerProfile.objects.filter(engine=engine).order_by(
+            query = SlicerProfile.objects.filter(engine=engine)
+            fragment = opts.get("name_contains")
+            if fragment:
+                if not 1 <= len(fragment) <= 100 or any(ord(ch) < 32 for ch in fragment):
+                    raise CommandError("Invalid imported profile name filter.")
+                query = query.filter(name__icontains=fragment)
+            rows = list(query.order_by(
                 "engine_version", "kind", "pk").values(
                 "pk", "name", "source_scope", "kind", "engine_version", "status")[:100])
             self.stdout.write(json.dumps({"schema": 1, "engine": engine,
