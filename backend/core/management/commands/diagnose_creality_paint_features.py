@@ -226,34 +226,40 @@ def _cantilever_fixture_stl():
 
 
 def _cantilever_support_marker(stl):
-    """Paint the suspended downward face, never the build-plate underside."""
+    """Paint both triangles of the suspended downward-facing cantilever.
+
+    A one-triangle diagnostic patch can fall below support-generator minimum
+    island/overhang thresholds. This control covers almost the entire
+    cantilever underside while preserving a small remesh-safe margin.
+    """
     tris = list(_triangles(stl))
     signature, _unused, _unused_poly, _height = _patch_for_model(stl)
-    min_x = min(v[0] for tri in tris for v in tri)
-    max_x = max(v[0] for tri in tris for v in tri)
-    min_y = min(v[1] for tri in tris for v in tri)
-    max_y = max(v[1] for tri in tris for v in tri)
-    min_z = min(v[2] for tri in tris for v in tri)
-    origin = ((min_x + max_x) / 2, (min_y + max_y) / 2, min_z)
+    minima = [min(v[i] for tri in tris for v in tri) for i in range(3)]
+    maxima = [max(v[i] for tri in tris for v in tri) for i in range(3)]
+    origin = ((minima[0] + maxima[0]) / 2,
+              (minima[1] + maxima[1]) / 2, minima[2])
+    patches = []
     for idx, tri in enumerate(tris):
-        if (all(abs(p[2] - 20.) < 1e-5 for p in tri) and
+        if not (all(abs(p[2] - 20.) < 1e-5 for p in tri) and
                 sum(p[0] for p in tri) / 3 > 13.):
-            a, b, c = tri
-            ux = (b[0] - a[0], b[1] - a[1])
-            vx = (c[0] - a[0], c[1] - a[1])
-            z_normal = ux[0]*vx[1] - ux[1]*vx[0]
-            if z_normal >= 0:
-                continue
-            centre = [sum(p[axis] for p in tri) / 3 for axis in range(3)]
-            polygon = [
-                [(0.9 * vertex[axis] + 0.1 * centre[axis]) - origin[axis]
-                 for axis in range(3)]
-                for vertex in tri
-            ]
-            return {"version": 2, "signature": signature, "regions": [
-                {"slot": 0, "patches": [{"face": idx, "polygon": polygon}]}
-            ]}
-    raise ValueError("The diagnostic cantilever has no exposed elevated underside.")
+            continue
+        a, b, c = tri
+        ux = (b[0] - a[0], b[1] - a[1])
+        vx = (c[0] - a[0], c[1] - a[1])
+        if ux[0] * vx[1] - ux[1] * vx[0] >= 0:
+            continue
+        centre = [sum(p[axis] for p in tri) / 3 for axis in range(3)]
+        polygon = [
+            [(0.98 * vertex[axis] + 0.02 * centre[axis]) - origin[axis]
+             for axis in range(3)]
+            for vertex in tri
+        ]
+        patches.append({"face": idx, "polygon": polygon})
+    if len(patches) != 2:
+        raise ValueError("Cantilever must have two painted underside triangles.")
+    return {"version": 2, "signature": signature, "regions": [
+        {"slot": 0, "patches": patches}
+    ]}
 
 
 def _cantilever_wall_marker(stl):
