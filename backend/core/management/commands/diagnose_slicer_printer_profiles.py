@@ -6,6 +6,7 @@ runs printer API calls, or permits the resulting G-code to be printed.
 """
 import hashlib
 import json
+import math
 import uuid
 from types import SimpleNamespace
 
@@ -62,8 +63,15 @@ def _safe_native_result(data):
             "note": "Native offline slicing; no physical printer validation."}
 
 
-def _compatible_filament_diameter(filament_blobs):
-    """Do not send a mixed-diameter multi-material palette to a real engine."""
+def _compatible_filament_diameter(filament_blobs, *, engine="orcaslicer"):
+    """Validate each engine's native diameter representation, without guessing.
+
+    Orca's one-element vector and Creality Print's scalar are different
+    native schemas. Both require an exact positive bounded diameter, and
+    mixed-diameter tool palettes remain forbidden for offline fixtures.
+    """
+    if engine not in {"orcaslicer", "crealityprint"}:
+        raise ValueError("Unsupported native filament diameter encoding.")
     diameters = []
     for blob in filament_blobs:
         try:
@@ -72,7 +80,19 @@ def _compatible_filament_diameter(filament_blobs):
             raise ValueError("Invalid native filament preset.") from exc
         if not isinstance(data, dict):
             raise ValueError("Invalid native filament preset.")
-        diameter = _single_positive_diameter(data)
+        if engine == "orcaslicer":
+            diameter = _single_positive_diameter(data)
+        else:
+            raw = data.get("filament_diameter")
+            diameter = None
+            if not isinstance(raw, (list, tuple, dict, bool)) and raw is not None:
+                try:
+                    parsed = float(raw)
+                except (ValueError, TypeError, OverflowError):
+                    pass
+                else:
+                    if math.isfinite(parsed) and 1 <= parsed <= 3.5:
+                        diameter = parsed
         if diameter is None:
             raise ValueError("Native filament diameter is missing or invalid.")
         diameters.append(diameter)
@@ -184,7 +204,8 @@ class Command(BaseCommand):
             check_native_compatibility(engine, version, kind, raw)
         count = len(filaments)
         try:
-            filament_diameter = _compatible_filament_diameter(native["filaments"])
+            filament_diameter = _compatible_filament_diameter(
+                native["filaments"], engine=engine)
         except ValueError as exc:
             raise CommandError(str(exc)) from exc
         width, depth = trusted_plate_dimensions(printer)
