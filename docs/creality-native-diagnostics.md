@@ -1530,7 +1530,7 @@ sudo docker exec makervault python3 /app/backend/manage.py \
   --native --test-flush
 ```
 
-Expected focused Django test count: **55** (previous 53 + 2); the real binary
+Expected focused Django test count: **56** (previous 53 + 3); the real binary
 must still be tested on staging. If switching the route alters tower/toolpath,
 investigate native purge routing and effective profile inheritance. If neither
 route alters executable output, investigate whether native 3MF configuration is
@@ -1538,3 +1538,29 @@ restored/overridden during CLI loading or whether the selected vendor tool-chang
 macro produces only printer-firmware-owned purge instructions. Do not infer
 physical purge adequacy from any offline result, merge production flushing
 changes, submit diagnostic G-code to the printer, or change worker/firmware.
+
+
+### Follow-up after stale 53-test output
+
+A server log showing `Already up to date`, **53 tests** and no
+`creality_purge_route_project_audit` / `purge_route_tower` output is still
+running the earlier diagnostics, not the new A/B implementation. Verify the
+checked-out commit and application container before interpreting output:
+
+```bash
+cd ~/MakerVault-Staging
+git fetch origin feature/self-hosted-slicer-foundation
+git status --short --branch
+git rev-parse --short HEAD
+git rev-parse --short origin/feature/self-hosted-slicer-foundation
+sudo docker exec makervault sh -c 'grep -n "_validate_creality_purge_route_pair" /app/backend/core/management/commands/diagnose_slicer_printer_profiles.py'
+```
+
+The parent-relative validation was corrected in commits `db206b4d`,
+`ec744d48` and `bcf1dc0b`; the earlier route implementation compared a
+fixed multiplier-2.0 control to a baseline lacking the multiplier and would
+reject the intended change as unrelated. New regression now proves the
+baseline/parent comparison and rejects unrelated configuration mutations.
+Do not reset/rebase the working tree blindly; if HEAD differs from the
+remote branch, inspect `git status` and switch only after checking any
+local modifications. The pinned worker remains unchanged.
