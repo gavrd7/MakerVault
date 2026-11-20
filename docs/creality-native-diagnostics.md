@@ -758,3 +758,58 @@ different verification; never silently replace Creality/Orca macros.
 Independent toolheads remain unsupported for common single-nozzle
 waste-volume controls, rather than receiving inappropriate CFS
 behaviour. PR #171 remains draft/unmerged.
+
+
+### Staging results: native flushing matrix survives, purge still unverified — 20 November 2026
+
+Debian user updated application-only staging from 1b5c56f4 to 6031026a
+(pinned Creality 7.3.1 worker unchanged). The four-suite test run
+discovered **58 tests**: 54 passed, 4 errored due to a refactor
+`NameError: MAX_FLUSH_MM3` in the Orca adapter. This is corrected by
+commit **27bd5647**, importing the shared limit from the common
+`slicer_flush_settings` module. A fresh staging test run is required;
+the fix has not yet been verified on Debian.
+
+`diagnose_creality_paint_features --only flushing --deep` sliced all
+four native controls successfully. The following values are the
+**G-code-emitted effective configuration**, not hypothetical requests:
+
+| Control | T0 to T1 raw mm3 | T1 to T0 raw mm3 | Multiplier | Motion/M commands vs baseline |
+| --- | ---: | ---: | ---: | --- |
+| Baseline | 140 | 140 | 1 | baseline |
+| Matrix only | 370 | 175 | 1 | unchanged |
+| Multiplier only | 140 | 140 | 1.25 | unchanged |
+| Combined | 370 | 175 | 1.25 | unchanged |
+
+The edited matrix also survives to G-code with
+`flush_volumes_changed=1`. This confirms **native config retention**;
+it does **not** establish effective physical purge adjustment. No
+diagnostic `FLUSH_START/FLUSH_END` segments or positive extrusion
+moves inside those segments were seen in any variant. All emitted
+motion and machine-command digests are identical. The selected
+machine's actual macro was present but the redacted audit showed
+no `flush_length_1..5` placeholders, no `multicolor_method`
+conditional and no known vendor `M8200` handoff. The emitted
+`multicolor_method=0`. Unlike this selected machine profile, the
+official v7.3.1 Creality K2 0.4 machine profile has segmented
+flush-length placeholders behind a multicolor condition. This makes
+**selected profile provenance and effective printer-specific purge
+mechanism** the next decisive question. Do not silently import the
+upstream macro or force `multicolor_method`.
+
+The fixed adapter should be retested using:
+
+```bash
+cd ~/MakerVault-Staging
+git pull --ff-only origin feature/self-hosted-slicer-foundation
+sudo python3 scripts/install_slicer_staging.py update
+sudo docker exec makervault python3 /app/backend/manage.py test \
+  core.tests.test_slicer_flush_settings \
+  core.tests.test_slicer_flush_adapters \
+  core.tests.test_slicer_creality_project \
+  core.tests.test_slicer_creality_paint_diagnostics --noinput
+```
+
+Do not treat a successful 58/58 pass as final physical purge validation.
+The user already ran the new flushing deep diagnostic successfully, so
+there is no need to repeat it merely to test the missing import.
