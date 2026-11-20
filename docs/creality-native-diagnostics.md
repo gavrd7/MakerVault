@@ -1395,3 +1395,36 @@ control, and explicit `multiplier_1_0` and `multiplier_1_3`
 controls. This change only touches backend Python, tests and docs:
 `sudo python3 scripts/install_slicer_staging.py update` is
 sufficient; **do not refresh the worker**.
+
+
+### Follow-up: stronger 1.00 versus 2.00 comparison (20 Nov 2026)
+
+The previous **1.00 versus 1.30** controls both sliced successfully, with
+identical measured native tower width/depth (22.898 × 22.898mm),
+tower XY path length (28,613.328mm), tower positive-E length
+(1,090.971mm), 3,247 tower deposition moves, and identical motion
+and machine-command hashes. Those figures are historical results;
+they are **not** outcomes of the new comparison.
+
+The current offline A/B control has been increased to
+**`flush_multiplier=1.00` versus `2.00`**. This doubles the requested
+multiplier while preserving the same geometry, native profile-derived
+settings, fallback matrix, filament assignments, and manufacturer
+tool-change macros. It remains an explicit *disposable diagnostic
+control*, **not** a claim that a selected Creality K2 profile natively
+defaults to either value. The output controls are now
+`multiplier_1_0` and `multiplier_2_0`. The same
+`--native --test-flush` command and existing app-only staging update
+are sufficient; no pinned worker change is required.
+
+Compare global motion and machine-command digests, labelled tower
+X/Y bounding width/depth, tower XY path distance, tower positive-E
+length and tower deposition moves. A larger multiplier does not
+necessarily change external tower X/Y dimensions; increased material
+could change paths within a fixed footprint or printer-side purge
+commands. If even 2.00 generates identical native motions, investigate
+whether Creality 7.3.1's project loader honours
+`flush_multiplier` / `flush_volumes_changed` and its
+`different_settings_to_system` override flags *before* altering
+production flushing calculations. Physical K2 flushing remains
+unverified; do not print diagnostic G-code.
