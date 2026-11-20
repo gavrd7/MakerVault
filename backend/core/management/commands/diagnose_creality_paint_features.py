@@ -25,7 +25,8 @@ from core.slicer_creality_project import (build_creality_project_candidate,
 from core.slicer_flush_adapters import audit_native_flush_profile
 from core.slicer_execution import MAX_INPUT, _read_owned_file, verified_installation
 from core.slicer_multimaterial_execution import prepare_creality_positioned_project
-from core.slicer_native_resolution import resolved_native_profile
+from core.slicer_native_resolution import (resolved_native_profile,
+                                           audit_creality_profile_origins)
 from core.slicer_native_support_paint import _fingerprint
 from core.slicer_paint_assets import expand_painted_settings
 from core.slicer_plate_3mf import _triangles
@@ -196,6 +197,53 @@ def _layer_band_audit(gcode, lower, upper, *, target=0.12):
         "band_target_observed": any(abs(step - target) <= 0.002 for step in inside),
     }
 
+
+
+def _creality_purge_profile_merge_audit(machine_blob, process_blob):
+    """Report which imported native preset supplies each purge option.
+
+    The builder applies machine then process, so process keys win even when
+    blank. Report only allowlisted property provenance and structural flags,
+    never private printer scripts.
+    """
+    try:
+        machine = json.loads(machine_blob)
+        process = json.loads(process_blob)
+    except (TypeError, UnicodeDecodeError, ValueError) as exc:
+        raise ValueError("Invalid resolved native profiles.") from exc
+    if not isinstance(machine, dict) or not isinstance(process, dict):
+        raise ValueError("Native profiles must be JSON objects.")
+    selected = {}
+    keys = (
+        "change_filament_gcode", "multicolor_method",
+        "purge_in_prime_tower", "nozzle_volume",
+        "single_extruder_multi_material", "flush_volumes_matrix",
+        "flush_multiplier", "flush_volumes_changed",
+    )
+    for key in keys:
+        if key in process:
+            source, effective = "process_overrides_machine", process[key]
+        elif key in machine:
+            source, effective = "machine", machine[key]
+        else:
+            source, effective = "native_default_or_missing", None
+        selected[key] = {
+            "source": source,
+            "defined": effective is not None,
+            "machine_defines": key in machine,
+            "process_defines": key in process,
+            "values_differ": (
+                key in machine and key in process and machine[key] != process[key]),
+        }
+    macro = selected["change_filament_gcode"]
+    macro["machine_capability"] = audit_native_flush_profile(machine)
+    macro["process_capability"] = audit_native_flush_profile(process)
+    macro["effective_capability"] = audit_native_flush_profile(
+        {**machine, **process})
+    return {
+        "fields": selected,
+        "verification": "resolved_profile_merge_not_native_execution_proof",
+    }
 
 
 def _native_project_audit(package):
@@ -521,6 +569,8 @@ class Command(BaseCommand):
 
     def add_arguments(self, parser):
         parser.add_argument("--job-id", help="Existing successful one-model Creality CFS painted slice UUID")
+        parser.add_argument("--profile-audit-only", action="store_true",
+                            help="Inspect verified native profile origins offline; no slicer calls")
         parser.add_argument("--only", choices=CASES[1:], help="Only one feature plus baseline")
         parser.add_argument("--deep", action="store_true", help="Also slice identical-geometry unpainted controls for semantic facets")
         parser.add_argument("--support-fixture", action="store_true",
@@ -565,6 +615,24 @@ class Command(BaseCommand):
         if not selected:
             raise CommandError("No completed one-object colour-painted Creality CFS job found. Supply --job-id.")
         job, settings = selected
+        if options["profile_audit_only"]:
+            # No worker, mesh reading, package mutation or printer IO.
+            machine = resolved_native_profile(job.printer_profile)
+            process = resolved_native_profile(job.process_profile)
+            adjusted_process = apply_process_overrides(
+                process, settings.get("process_overrides") or {})
+            self.stdout.write(json.dumps({
+                "schema": 1,
+                "engine": job.engine_version,
+                "read_only": True,
+                "machine_origin": audit_creality_profile_origins(job.printer_profile),
+                "process_origin": audit_creality_profile_origins(job.process_profile),
+                "native_profile_merge": _creality_purge_profile_merge_audit(
+                    machine, adjusted_process),
+                "process_overrides_present": process != adjusted_process,
+                "note": "Verified import-chain provenance and merged values only; no proof of native or physical purge.",
+            }, indent=2))
+            return
         installed = verified_installation().get("crealityprint")
         if not installed or installed["version"] != job.engine_version:
             raise CommandError("Saved job's exact Creality binary is not approved in the current worker.")
