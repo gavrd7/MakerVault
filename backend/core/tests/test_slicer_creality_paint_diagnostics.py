@@ -199,5 +199,5 @@ class CrealityPaintingDiagnosticTests(SimpleTestCase):
                                     json.dumps(values))
                 with self.assertRaises(ValueError):
                     _support_auto_control_project(source.getvalue())
-        with self.assertRaises(ValueError):
+        with self.assertRaises(zipfile.BadZipFile):
             _support_auto_control_project(b"not a 3mf")
