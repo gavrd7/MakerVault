@@ -29,6 +29,17 @@ class CrealityPaintingDiagnosticTests(SimpleTestCase):
         self.assertGreater(height, 3)
         self.assertTrue(all(len(point) == 3 for point in polygon))
 
+    def test_extrusion_metrics_match_native_acceptance_for_decimal_e_values(self):
+        from core.slicer_approval import _approved_gcode
+        # Creality/Orca can emit decimal-first extrusion values, including
+        # negative retractions. The native output validator already accepts
+        # this form; diagnostic metrics must not misleadingly report zero.
+        for value in (b"E0.25", b"E.25", b"E-.25", b"E+0.25"):
+            with self.subTest(value=value):
+                gcode = b"; exported by native worker\\nG1 X10 Y11 " + value + b"\\n"
+                self.assertEqual(len(_approved_gcode(gcode)), 64)
+                self.assertEqual(_metrics(gcode)["g1_with_extrusion"], 1)
+
     def test_motion_compare_does_not_count_changed_header_as_toolpath(self):
         first = _metrics(b"; generated: 1\n;Z:0.2\nT0\nG1 X1 Y1 E0.1\n")
         second = _metrics(b"; generated: 2\n;Z:0.2\nT0\nG1 X1 Y1 E0.1\n")
