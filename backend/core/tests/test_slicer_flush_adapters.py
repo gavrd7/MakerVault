@@ -253,6 +253,40 @@ class FlushAdapterCapabilityTests(SimpleTestCase):
         with self.assertRaises(SlicerProfileError):
             apply_creality_native_flush(original, request, {"blue": 0, "black": 0})
 
+    def test_shared_request_maps_same_transition_into_distinct_native_engines(self):
+        # Printer names deliberately omitted: source/destination mapping is
+        # a verified routing relationship, not a specific K2/AMS model.
+        common = {
+            "multiplier": 1.15, "prime_tower": "native",
+            "transitions": [
+                {"from_slot_id": "left-feeder", "to_slot_id": "right-feeder",
+                 "volume_mm3": 365},
+                {"from_slot_id": "right-feeder", "to_slot_id": "left-feeder",
+                 "volume_mm3": 205},
+            ],
+        }
+        bindings = {"left-feeder": 1, "right-feeder": 0}
+        orca = json.loads(apply_orca_native_flush(
+            json.dumps({"flush_volumes_matrix": ["0", "150", "150", "0"],
+                        "change_filament_gcode": "ORCA_VERIFIED_MACRO"}).encode(),
+            common, routes=[
+                SimpleNamespace(slot_id=slot, tool_index=index)
+                for slot, index in bindings.items()],
+            tool_count=2, topology="single_nozzle_changer"))
+        creality = {
+            "flush_volumes_matrix": ["0"] * 16,
+            "change_filament_gcode": "CREALITY_VERIFIED_MACRO",
+        }
+        apply_creality_native_flush(creality, common, bindings)
+        self.assertEqual(orca["flush_volumes_matrix"][2], "365")
+        self.assertEqual(orca["flush_volumes_matrix"][1], "205")
+        self.assertEqual(creality["flush_volumes_matrix"][4], "365.0")
+        self.assertEqual(creality["flush_volumes_matrix"][1], "205.0")
+        self.assertEqual(orca["flush_multiplier"], ["1.15"])
+        self.assertEqual(creality["flush_multiplier"], "1.15")
+        self.assertEqual(orca["change_filament_gcode"], "ORCA_VERIFIED_MACRO")
+        self.assertEqual(creality["change_filament_gcode"], "CREALITY_VERIFIED_MACRO")
+
     def test_no_override_does_not_alter_source_or_invent_purge(self):
         self.assertEqual(apply_orca_native_flush(
             b"native", None, routes=[], tool_count=2,
