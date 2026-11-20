@@ -343,3 +343,36 @@ No worker refresh or approved engine hash update is needed for these
 application-only additions. The synthetic fixtures and new checks must still
 be validated by the user's staging tests and native CLI; they have **not**
 been declared to pass on the pinned worker by this documentation.
+
+
+### Automatic support positive control (November 2026)
+
+The opt-in `--only support --deep --support-fixture` diagnostic now
+performs **three offline native slices** with identical cantilever geometry,
+the same two selected materials, unchanged colour painting and unchanged
+printer profile:
+
+1. Painted support underside, `enable_support=1`,
+   `support_type=normal(manual)`.
+2. Same remeshed project with only `paint_supports` facets removed,
+   leaving manual support settings unchanged.
+3. Exactly the same *unpainted* project as (2), but with only the embedded
+   native `support_type` changed to `normal(auto)`.
+
+The additional `automatic_support_control` output includes bounded native
+support role-tag counts, support XY move counts, motion changes and extrusion
+delta relative to the unpainted manual control.
+
+Interpretation:
+
+- If ordinary auto generates support and painted manual does not, investigate
+  `paint_supports` decoding and support-enforcer projection under Creality 7.3.1.
+- If neither generates support, inspect fixture topology, profile support
+  defaults and G-code role classification before altering native facet encoding.
+- A nonzero role-tag count is useful evidence but is not a guarantee of safe
+  support contact or final print quality.
+
+This is strictly a diagnostic exercise: no user settings, worker Python,
+slicer binaries, printer databases or saved jobs are modified. Run the
+Django diagnostic regression tests before the real engine test. Only the
+application needs to be refreshed.
