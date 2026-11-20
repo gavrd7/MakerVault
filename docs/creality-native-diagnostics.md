@@ -1483,3 +1483,58 @@ Then rerun the same previously successful exact K2 native
 run `sudo python3 scripts/install_slicer_staging.py update`, not
 `refresh-worker`. The output now includes two additional marked
 controls; the isolated worker and native engines remain pinned.
+
+
+## Purge destination isolation (20 November 2026, app-only, offline)
+
+After the original six-way K2 comparison (baseline, +25 mm³ directional,
+explicit 1.0/2.0 multiplier, and two native override-marker controls) produced
+**identical G0/G1, machine-command and tower-deposition digests**, a further
+source-guided experiment was added. Official Creality Print v7.3.1
+`Print.cpp::_make_wipe_tower()` uses `prime_volume` / minimum tower volume
+in some paths when `purge_in_prime_tower=0`, while the matrix multiplied by
+`flush_multiplier` may still feed another purge destination. The exact
+effective K2 runtime settings are **not yet proven**.
+
+The existing `--native --test-flush` command now slices **eight** disposable
+controls: the previous six slices plus `purge_route_toolchange`
+(`purge_in_prime_tower=0`) and `purge_route_tower`
+(`purge_in_prime_tower=1`). Both new candidates are based on the same
+explicit `multiplier_2_0` project; they change **only** the route flag,
+preserving the matrix, multiplier, filament bindings, geometry, vendor printer
+scripts, all other native settings, and pinned worker. Comparison booleans
+`*_vs_multiplier_2_0` report motion, machine-command and tower E differences
+against the identical-multiplier reference. A source-project-only redacted
+`creality_purge_route_project_audit` reports flag status, prime-volume
+presence/value, matrix presence and scalar multiplier; this is **not** a read
+of the effective in-memory native Creality runtime configuration.
+
+Apply the **app-only** staging update (do not refresh the worker):
+
+```bash
+cd ~/MakerVault-Staging
+git pull --ff-only origin feature/self-hosted-slicer-foundation
+sudo python3 scripts/install_slicer_staging.py update
+sudo docker exec makervault python3 /app/backend/manage.py test \
+  core.tests.test_slicer_printer_compatibility \
+  core.tests.test_slicer_tower_diagnostics \
+  core.tests.test_slicer_flush_adapters \
+  core.tests.test_slicer_creality_project --noinput
+sudo docker exec makervault python3 /app/backend/manage.py \
+  diagnose_slicer_printer_profiles \
+  --engine crealityprint --topology single_nozzle_changer \
+  --printer-profile-id 91b19730-66f5-4b5f-bd7d-b08fbb4ee768 \
+  --process-profile-id 0c90fa89-a193-48b6-ac94-a69792230163 \
+  --filament-profile-id e9c1274c-d95b-4592-87e5-03a645d699aa \
+  --filament-profile-id eb8473e9-f993-4c6e-8cc4-fb357e3ae782 \
+  --native --test-flush
+```
+
+Expected focused Django test count: **55** (previous 53 + 2); the real binary
+must still be tested on staging. If switching the route alters tower/toolpath,
+investigate native purge routing and effective profile inheritance. If neither
+route alters executable output, investigate whether native 3MF configuration is
+restored/overridden during CLI loading or whether the selected vendor tool-change
+macro produces only printer-firmware-owned purge instructions. Do not infer
+physical purge adequacy from any offline result, merge production flushing
+changes, submit diagnostic G-code to the printer, or change worker/firmware.
