@@ -109,10 +109,11 @@ class Command(BaseCommand):
         if opts["list_profiles"]:
             rows = list(SlicerProfile.objects.filter(engine=engine).order_by(
                 "engine_version", "kind", "pk").values(
-                "pk", "kind", "engine_version", "status")[:100])
+                "pk", "name", "source_scope", "kind", "engine_version", "status")[:100])
             self.stdout.write(json.dumps({"schema": 1, "engine": engine,
-                "profiles": [{"id": str(row["pk"]), "kind": row["kind"],
-                              "version": row["engine_version"],
+                "profiles": [{"id": str(row["pk"]), "name": str(row["name"])[:120],
+                              "source_scope": str(row["source_scope"])[:100],
+                              "kind": row["kind"], "version": row["engine_version"],
                               "status": row["status"]} for row in rows],
                 "truncated_at": 100, "note": "Listing only, not native validation."}, indent=2))
             return
