@@ -287,6 +287,48 @@ def _gcode_effective_settings(gcode):
     return found
 
 
+def _flush_toolchange_gcode_audit(gcode):
+    """Redacted count/volume of explicit FLUSH_START..FLUSH_END blocks.
+
+    Counts only extrusion-only G1 E segments between native markers. This
+    does not capture firmware-owned purging or certify a physical purge.
+    No G-code lines, printer scripts, tool IDs or path data are returned.
+    """
+    if not isinstance(gcode, bytes) or len(gcode) > 64 * 1024 * 1024:
+        raise ValueError("Invalid offline toolchange G-code.")
+    in_flush = False
+    starts = ends = moves = 0
+    total_e = 0.0
+    for line in gcode.splitlines():
+        token = line.strip().upper()
+        if token == b"; FLUSH_START":
+            starts += 1
+            in_flush = True
+            continue
+        if token == b"; FLUSH_END":
+            ends += 1
+            in_flush = False
+            continue
+        if not in_flush:
+            continue
+        match = re.match(rb"^G1\s+E([+-]?[0-9]+(?:\.[0-9]+)?)(?:\s|$)", token)
+        if match:
+            try:
+                amount = float(match.group(1))
+                if math.isfinite(amount) and amount > 0:
+                    moves += 1
+                    total_e += amount
+            except ValueError:
+                continue
+    return {
+        "native_flush_blocks_started": starts,
+        "native_flush_blocks_ended": ends,
+        "extrusion_only_positive_moves_in_blocks": moves,
+        "sum_positive_e_in_blocks_mm": round(total_e, 3),
+        "note": "G-code markers and E moves only; no firmware purge or physical verification.",
+    }
+
+
 def _feature_role_audit(gcode):
     """Count extrusion moves by native FEATURE/TYPE role, not generic comments.
 
@@ -657,6 +699,8 @@ class Command(BaseCommand):
                         else "synthetic exterior wall (offline only)")
                 metrics["gcode_effective_settings"] = _gcode_effective_settings(data)
                 metrics["feature_role_audit"] = _feature_role_audit(data)
+                if feature in ("baseline", "flushing"):
+                    metrics["native_toolchange_flush_audit"] = _flush_toolchange_gcode_audit(data)
                 if feature == "variable":
                     metrics["layer_band_audit"] = _layer_band_audit(data, lo, hi)
                 if feature in _SEMANTIC_ATTRS and options["deep"]:
@@ -748,6 +792,56 @@ class Command(BaseCommand):
                                auto_roles["recognized_role_tag_counts"].get("support transition", 0) > 0
                             else "No recognized auto-support roles: investigate fixture/profile or role decoding."),
                     }
+                if feature == "flushing" and options["deep"]:
+                    # Deliberately isolate direction-specific native matrix
+                    # changes from the scalar multiplier. Never print these
+                    # diagnostic slices and never edit machine G-code macros.
+                    mapped = {tool: slot for slot, tool in prepared["tool_bindings"].items()}
+                    variants = {
+                        "matrix_only": {
+                            "prime_tower": "native", "multiplier": None,
+                            "transitions": [
+                                {"from_slot_id": mapped[0], "to_slot_id": mapped[1],
+                                 "volume_mm3": 370},
+                                {"from_slot_id": mapped[1], "to_slot_id": mapped[0],
+                                 "volume_mm3": 175},
+                            ],
+                        },
+                        "multiplier_only": {
+                            "prime_tower": "native", "multiplier": 1.25,
+                            "transitions": [],
+                        },
+                    }
+                    controls = {}
+                    for variant_name, variant_settings in variants.items():
+                        variant_project = build_creality_project_candidate(
+                            prepared["project_geometry"], printer=printer_native,
+                            process=process, filaments=prepared["filament_profiles"],
+                            version=job.engine_version, tool_colours=prepared["tool_colours"],
+                            prime_tower=copy_settings.get("prime_tower"),
+                            flush_settings=variant_settings,
+                            tool_bindings=prepared["tool_bindings"],
+                            layer_ranges=prepared.get("layer_ranges"),
+                            bed_width=width, bed_depth=depth)
+                        variant_gcode = run_remote_job(
+                            uuid.uuid4(), "crealityprint", job.engine_version,
+                            variant_project, printer_native, prepared["filament_profiles"][0],
+                            process, model_format="3mf",
+                            filament_profiles=prepared["filament_profiles"],
+                            creality_native_project=True, timeout_seconds=900)
+                        variant_metrics = _metrics(variant_gcode)
+                        controls[variant_name] = {
+                            "requested_project": _native_project_audit(variant_project),
+                            "emitted_gcode": _gcode_effective_settings(variant_gcode),
+                            "toolchange_flush": _flush_toolchange_gcode_audit(variant_gcode),
+                            "motion_changed_from_baseline": (
+                                variant_metrics["motion_sha256"] != baseline["motion_sha256"]),
+                            "machine_commands_changed_from_baseline": (
+                                variant_metrics["machine_command_sha256"] !=
+                                baseline["machine_command_sha256"]),
+                            "diagnostic_only_not_printable": True,
+                        }
+                    metrics["independent_flush_controls"] = controls
                 if feature == "baseline":
                     baseline = metrics
                 else:
