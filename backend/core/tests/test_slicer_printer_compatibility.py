@@ -188,6 +188,32 @@ class PrinterCompatibilityFixtureTests(SimpleTestCase):
                          after["flush_volumes_matrix"])
         self.assertEqual(_creality_flush_basis(after), (624.0, 1.0))
 
+    def test_explicit_multiplier_controls_when_native_default_is_absent(self):
+        def archive(config):
+            data = io.BytesIO()
+            with zipfile.ZipFile(data, "w") as z:
+                z.writestr("Metadata/project_settings.config", json.dumps(config))
+                z.writestr("3D/3dmodel.model", b"identical")
+            return data.getvalue()
+
+        original = {
+            "flush_volumes_matrix": ["0", "140", *["140"] * 14],
+            "change_filament_gcode": "original native vendor macro",
+        }
+        self.assertEqual(_creality_flush_basis(original), (140.0, None))
+        for multiplier in (1.0, 1.3):
+            with self.subTest(multiplier=multiplier):
+                explicit = {**original, "flush_multiplier": str(multiplier)}
+                before, after, changes = _creality_control_project(
+                    archive(original), archive(explicit))
+                self.assertEqual(changes, {"flush_multiplier"})
+                self.assertEqual(before["flush_volumes_matrix"],
+                                 after["flush_volumes_matrix"])
+                self.assertEqual(before["change_filament_gcode"],
+                                 after["change_filament_gcode"])
+                self.assertEqual(_creality_flush_basis(after),
+                                 (140.0, multiplier))
+
     def test_invalid_creality_native_flush_basis_fails_closed(self):
         valid = {"flush_multiplier": "1.3",
                  "flush_volumes_matrix": ["0", "624"] + ["140"] * 14}
