@@ -238,9 +238,9 @@ def _creality_purge_route_control(project_blob, enabled):
     candidate = result.getvalue()
     original, changed, keys = _creality_control_project_with_extra(
         project_blob, candidate, {"purge_in_prime_tower"})
-    if keys != {"purge_in_prime_tower"} or (
-            original.get("purge_in_prime_tower") == changed["purge_in_prime_tower"]):
-        raise ValueError("Purge routing control did not change only its target option.")
+    if not keys.issubset({"purge_in_prime_tower"}) or (
+            changed.get("purge_in_prime_tower") != ("1" if enabled else "0")):
+        raise ValueError("Purge routing control changed unrelated native options.")
     return candidate
 
 
