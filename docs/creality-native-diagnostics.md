@@ -1338,3 +1338,60 @@ and Django compatibility tests before repeating the K2 native
 `--test-flush` command above. A pass of the validation gate
 alone is not proof that Creality's native binary accepts the
 project or generates meaningful flush G-code.
+
+
+### Native 1.00 versus 1.30 multiplier and prime-tower X/Y experiment
+
+A confirmed Creality Print 7.3.1 **K2 two-filament offline** run generated
+304,288 bytes of G-code, 5,470 G1 extrusion moves and 24 T0 + 24 T1
+selections after fixing the worker's two-object validation mode.
+Changing its T0→T1 matrix cell **140 → 165mm³** changed the full G-code
+SHA256 only; the motion and M-command digests were **identical**.
+The selected imported presets lacked both a verified original matrix
+(the baseline was MakerVault's **140mm³ diagnostic fallback**) and
+a native `flush_multiplier` field. Consequently the first version
+skipped multiplier A/B entirely. Those findings do **not** prove that
+the K2 physically purges a particular amount.
+
+The offline diagnostic now also constructs **explicit disposable**
+scalar multiplier **1.00** and **1.30** controls, regardless of whether
+the imported project declared the setting. These are deliberately
+labelled `explicit_disposable_1_00_vs_1_30_not_native_default`;
+neither is claimed to be the printer's native default. The controls
+preserve the same model, resolved native presets, 4×4 matrix, native
+tool mappings and every manufacturer machine macro. Their only
+effective configuration change is the `flush_multiplier` project
+field. Unlike the directional test, these controls do **not** adjust
+individual matrix cells. All controls run using the existing pinned
+authenticated worker; no printer communication is performed.
+
+A conservative per-G-code tower deposition parser now reports
+`native_tower_deposition_baseline` and
+`creality_flush_controls.<name>.tower_deposition`. Only positive-E
+X/Y movements **explicitly labelled** by native
+`;TYPE: Wipe tower` / `;FEATURE: Prime tower` (or equivalent
+prime/purge/wipe tower feature label) qualify. For these tagged moves
+the report contains X/Y deposition bounding width and depth,
+positive E length (raw filament millimetres), XY toolpath length,
+number of deposition moves, and whether tower dimensions or extrusion
+differ from the baseline. Absolute/relative E, G92 E resets, and
+non-tower move sections are handled separately. There is no raw
+G-code, machine macro or private path in the report.
+
+**Safety and interpretation:** if the Creality native G-code does not
+label tower moves, each tower field is reported as
+`unavailable_no_verified_tower_moves` and comparison flags are
+`null` — **not** as proof of zero or unchanged tower deposition.
+A tower's X/Y footprint may remain fixed while path length or E
+changes. Motion digests cover complete G-code and help catch global
+changes; neither the tower metrics nor tool selections are physical
+CFS purge verification. Do not use these diagnostic G-code outputs
+for printing.
+
+After the focused test suite passes, rerun the **same existing**
+K2 two-filament `diagnose_slicer_printer_profiles --native --test-flush`
+command above. The report will have a baseline, a directional T0→T1
+control, and explicit `multiplier_1_0` and `multiplier_1_3`
+controls. This change only touches backend Python, tests and docs:
+`sudo python3 scripts/install_slicer_staging.py update` is
+sufficient; **do not refresh the worker**.
