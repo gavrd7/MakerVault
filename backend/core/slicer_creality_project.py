@@ -405,43 +405,13 @@ def _native_palette_settings(project, filaments, *, palette_slots=4):
 
 
 def _apply_creality_flush_settings(project, settings, bindings):
-    """Map explicit physical slot overrides to Creality's native T0/T1 matrix.
+    """Compatibility entrypoint for native Creality project flushing.
 
-    The native project has four slots, but only two assigned tools. Keep the
-    unassigned native entries unchanged. Never map on swatch colour/order.
+    Keep printer/project generation separate from the Creality serializer.
+    Do not replace, synthesise or edit manufacturer machine G-code.
     """
-    from .slicer_flush_settings import validate_flush_settings
-    from .slicer_material_routing import MaterialRoutingError
-
-    try:
-        approved = validate_flush_settings(settings)
-    except MaterialRoutingError as exc:
-        raise SlicerProfileError(str(exc)) from exc
-    if approved is None:
-        return
-    if not isinstance(bindings, dict) or set(bindings.values()) != {0, 1} or len(bindings) != 2:
-        raise SlicerProfileError("Creality flushing requires exactly two verified filament-to-tool bindings.")
-    if approved["multiplier"] is not None:
-        # Creality Print PrintConfig.cpp declares flush_multiplier as coFloat
-        # (scalar), unlike Orca 2.5's single-nozzle coFloats vector.
-        # Preserve the validated user value in native project settings.
-        project["flush_multiplier"] = str(approved["multiplier"])
-    if approved["prime_tower"] != "native":
-        project["enable_prime_tower"] = "1" if approved["prime_tower"] == "enabled" else "0"
-    matrix = project.get("flush_volumes_matrix")
-    if not isinstance(matrix, list) or len(matrix) != 16:
-        raise SlicerProfileError("Creality native flush matrix is unavailable.")
-    result = list(matrix)
-    for change in approved["transitions"]:
-        source = bindings.get(change["from_slot_id"])
-        dest = bindings.get(change["to_slot_id"])
-        if source is None or dest is None or source == dest:
-            raise SlicerProfileError("Creality flushing references an unmapped physical filament slot.")
-        result[4 * source + dest] = str(change["volume_mm3"])
-    project["flush_volumes_matrix"] = result
-    if approved["transitions"]:
-        # Native Creality's explicit edited-volume flag is a coBool.
-        project["flush_volumes_changed"] = "1"
+    from .slicer_flush_adapters import apply_creality_native_flush
+    return apply_creality_native_flush(project, settings, bindings)
 
 
 _CREALITY_SUPPORT_OVERRIDE_KEYS = frozenset({
