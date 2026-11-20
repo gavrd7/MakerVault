@@ -61,6 +61,44 @@ class NativeCreality3MFContractTests(TestCase):
         validate.assert_called_once()
         self.assertEqual(validate.call_args.kwargs["native_tool_count"], 2)
 
+    def test_real_two_plain_objects_with_two_filament_assignments(self):
+        """Real strict worker validator, no mocked 3MF acceptance."""
+        import xml.etree.ElementTree as ET
+        ns = "{http://schemas.microsoft.com/3dmanufacturing/core/2015/02}"
+        archive = io.BytesIO()
+        with zipfile.ZipFile(io.BytesIO(self.project())) as source, zipfile.ZipFile(
+                archive, "w", compression=zipfile.ZIP_DEFLATED) as dest:
+            for name in source.namelist():
+                data = source.read(name)
+                if name == "3D/3dmodel.model":
+                    root = ET.fromstring(data)
+                    objects = root.findall("./" + ns + "resources/" + ns + "object")
+                    for index, obj in enumerate(objects):
+                        obj.set("type", "model")
+                        mesh = ET.SubElement(obj, ns + "mesh")
+                        vertices = ET.SubElement(mesh, ns + "vertices")
+                        shift = index * 12
+                        for x, y, z in ((0, 0, 0), (6, 0, 0), (0, 6, 1)):
+                            ET.SubElement(vertices, ns + "vertex", {
+                                "x": str(x + shift), "y": str(y), "z": str(z)})
+                        triangles = ET.SubElement(mesh, ns + "triangles")
+                        ET.SubElement(triangles, ns + "triangle", {
+                            "v1": "0", "v2": "1", "v3": "2"})
+                        ET.SubElement(root.find(ns + "build"), ns + "item", {
+                            "objectid": str(index + 1),
+                            "transform": "1 0 0 0 1 0 0 0 1 0 0 0"})
+                    data = ET.tostring(root, encoding="utf-8")
+                dest.writestr(name, data)
+        self.assertTrue(validate_creality_project(
+            archive.getvalue(), native_tool_count=2))
+
+    @patch("slicer_worker.creality_project_validation.validate_worker_3mf",
+           return_value=True)
+    def test_plain_two_object_route_does_not_enable_paint_extension(self, validate):
+        self.assertTrue(validate_creality_project(
+            self.project(), native_tool_count=2))
+        self.assertFalse(validate.call_args.kwargs["allow_creality_combined_paint"])
+
     @patch("slicer_worker.creality_project_validation.validate_worker_3mf",
            return_value=True)
     def test_missing_generator_version_fails_before_engine(self, validate):
@@ -111,6 +149,7 @@ class NativeCreality3MFContractTests(TestCase):
                                                   native_tool_count=2))
         validate.assert_called_once()
         self.assertEqual(validate.call_args.kwargs["native_tool_count"], 2)
+        self.assertTrue(validate.call_args.kwargs["allow_creality_combined_paint"])
 
     def test_real_worker_accepts_one_painted_mesh_with_two_tools(self):
         """No mocks: exercise the strict native facet/tool validator."""
