@@ -10,6 +10,7 @@ import json
 import math
 
 from .slicer_material_routing import MaterialRoutingError
+from .slicer_flush_settings import MAX_FLUSH_MM3
 from .slicer_profiles import SlicerProfileError
 
 
