@@ -431,3 +431,55 @@ does not, investigate slab projection and flat surface handling.
 If all are still inactive, review the CLI's effective object-level
 configuration and model import path before changing native painting
 values. The user has not run these new tests yet.
+
+
+### Confirmed Creality 7.3.1 support preset restore issue (November 20, 2026)
+
+On Debian staging the **18/18 Django diagnostic tests passed**, but the
+sloped cantilever's native 3MF had `enable_support=1` and
+`support_type=normal(manual)`, while the **generated G-code settings footer**
+reported `enable_support=0` and `support_type=normal(auto)`. The relaxed
+automatic control also reverted its threshold **89→30**, minimum support
+area **0→5**, and `max_bridge_length` **0→10**. This is direct evidence
+the CLI's effective configuration discarded the overridden process values;
+it is **not** evidence that native `paint_supports=4` itself is defective.
+
+Pinned upstream 7.3.1
+[`SliceCommand.cpp`](https://github.com/CrealityOfficial/CrealityPrint/blob/v7.3.1/src/slic3r/CLI/SliceCommand.cpp)
+calls `refresh_creality_project_configuration()`, which reads the imported
+3MF configuration into a `PresetBundle` and replaces `m_print_config`
+with `project_bundle.full_config()` before slicing. In
+[`PresetBundle.cpp`](https://github.com/CrealityOfficial/CrealityPrint/blob/v7.3.1/src/libslic3r/PresetBundle.cpp)
+the process preset's overridden keys are obtained from
+`different_settings_to_system[0]` and passed as
+`print_different_keys_set` to the external-preset loader. The uploaded
+genuine **7.3.2** desktop project contains
+`different_settings_to_system[0] = "enable_support;support_type"` and
+empty remaining slots. The user's 3MF file and G-code macros were not
+copied into Git.
+
+The native project generator now explicitly preserves exactly those
+two safe support option names through the six-position vector for the
+four-slot CFS palette. It preserves other existing vector slots and
+rejects malformed vectors/unsafe setting names. Both the ordinary and
+relaxed automatic diagnostic controls also mark the support keys they
+modify. This change **does not** change other printer, filament, purge
+or executable G-code settings, the worker, or the pinned Creality binary.
+
+**Retest required:** deployed native CLI output must demonstrate
+`emitted_support_settings.enable_support=1` (and appropriate
+`support_type`), with a non-zero support extrusion role for a genuine
+unsupported fixture. Until the actual native results verify this, do
+not claim support painting is production-ready. Run:
+
+```bash
+sudo docker exec makervault python3 /app/backend/manage.py test \
+  core.tests.test_slicer_creality_paint_diagnostics \
+  core.tests.test_slicer_creality_project --noinput
+sudo docker exec makervault python3 /app/backend/manage.py \
+  diagnose_creality_paint_features --only support --deep \
+  --support-fixture --sloped-support-fixture
+```
+
+No `refresh-worker` necessary for these backend-only changes. Existing
+worker validation remains strict; no printer uploads or physical printing.
