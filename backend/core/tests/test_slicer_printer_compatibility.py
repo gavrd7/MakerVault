@@ -49,6 +49,8 @@ class PrinterCompatibilityFixtureTests(SimpleTestCase):
         self.assertEqual(len(report["motion_sha256"]), 64)
         self.assertEqual(len(report["machine_command_sha256"]), 64)
         self.assertEqual(report["g1_with_extrusion"], 2)
+        self.assertEqual(report["tool0_selects"], 1)
+        self.assertEqual(report["tool1_selects"], 0)
         self.assertNotIn("PRIVATE_MACHINE_GCODE", str(report))
         self.assertNotIn("M117 CHANGE", str(report))
 
