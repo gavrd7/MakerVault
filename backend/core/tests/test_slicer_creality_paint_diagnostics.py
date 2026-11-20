@@ -12,6 +12,7 @@ from core.management.commands.diagnose_creality_paint_features import (
     _feature_role_audit, _gcode_effective_settings,
     _cantilever_fixture_stl, _cantilever_support_marker,
     _cantilever_wall_marker, _support_auto_control_project,
+    _native_support_settings, _support_relaxed_auto_control_project,
 )
 from core.slicer_approval import fixture_stl
 from core.slicer_mesh import inspect_stl
@@ -201,3 +202,48 @@ class CrealityPaintingDiagnosticTests(SimpleTestCase):
                     _support_auto_control_project(source.getvalue())
         with self.assertRaises(zipfile.BadZipFile):
             _support_auto_control_project(b"not a 3mf")
+
+    def test_support_native_options_are_bounded_and_filtered(self):
+        source = io.BytesIO()
+        settings = {
+            "enable_support": "1", "support_type": "normal(manual)",
+            "minimum_support_area": "5", "max_bridge_length": "10",
+            "change_filament_gcode": "do not disclose this private macro",
+        }
+        with zipfile.ZipFile(source, "w") as archive:
+            archive.writestr("Metadata/project_settings.config", json.dumps(settings))
+        result = _native_support_settings(source.getvalue())
+        self.assertEqual(result["minimum_support_area"], "5")
+        self.assertEqual(result["support_type"], "normal(manual)")
+        self.assertNotIn("change_filament_gcode", result)
+        self.assertNotIn("private macro", str(result))
+
+    def test_relaxed_auto_support_only_overrides_support_keys(self):
+        original = {
+            "enable_support": "1", "support_type": "normal(auto)",
+            "support_threshold_angle": "30", "minimum_support_area": "5",
+            "max_bridge_length": "10", "flush_multiplier": "1.3",
+            "filament_colour": ["#123456", "#789ABC"],
+        }
+        archive = io.BytesIO()
+        with zipfile.ZipFile(archive, "w") as output:
+            output.writestr("Metadata/project_settings.config", json.dumps(original))
+            output.writestr("3D/3dmodel.model", b"unchanged mesh bytes")
+        result = _support_relaxed_auto_control_project(archive.getvalue())
+        with zipfile.ZipFile(io.BytesIO(result)) as changed:
+            self.assertEqual(changed.read("3D/3dmodel.model"), b"unchanged mesh bytes")
+            config = json.loads(changed.read("Metadata/project_settings.config"))
+        self.assertEqual(config["flush_multiplier"], "1.3")
+        self.assertEqual(config["filament_colour"], original["filament_colour"])
+        self.assertEqual(config["support_threshold_angle"], "89")
+        self.assertEqual(config["minimum_support_area"], "0")
+        self.assertEqual(config["max_bridge_length"], "0")
+        self.assertEqual(original["support_threshold_angle"], "30")
+
+    def test_relaxed_auto_support_rejects_manual_mode(self):
+        source = io.BytesIO()
+        with zipfile.ZipFile(source, "w") as output:
+            output.writestr("Metadata/project_settings.config",
+                            '{"enable_support":"1","support_type":"normal(manual)"}')
+        with self.assertRaises(ValueError):
+            _support_relaxed_auto_control_project(source.getvalue())
