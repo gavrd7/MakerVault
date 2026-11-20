@@ -1697,3 +1697,36 @@ its motion/tower deposition changes, this establishes an actionable
 preset-merge contract for the native 3MF route. It still does not establish
 safe physical purge volumes; do not merge production flushing changes or
 send diagnostic G-code to the printer.
+
+
+## Marked-control reporting regression fix (20 Nov 2026 23:27 GMT)
+
+Staging pulled `e9d42a90..f5760366`; pinned worker remained unchanged;
+**61/61** focused tests passed. The expanded native command subsequently
+failed while **assembling the diagnostic JSON**, after reaching the
+marked-control reporting loop:
+
+```text
+KeyError: 'prime_volume'
+diagnose_slicer_printer_profiles.py:944
+```
+
+The old terminal loop incorrectly guessed every marked control's parent by
+stripping `_marked`: `prime_volume_marked` was compared to nonexistent
+`prime_volume` instead of `prime_volume_positive_control`. A preceding
+explicit comparison block already did the correct lookup, but the duplicate
+loop overwrote it and raised. This is an application diagnostic reporting
+bug; it does not demonstrate a native engine failure.
+
+Fixed by replacing both reporting paths with a single
+`_creality_marked_result_comparison` helper and explicitly enumerating all
+four parent pairs (both multipliers, `prime_volume_positive_control` and
+`purge_route_tower`). Added regression coverage including missing-parent
+rejection. New expected focused test count **62** and native offline
+scenario count remains **11**. Because previous output was interrupted,
+do not claim the 11 native slices or preset-marking result are validated
+until the corrected command completes.
+
+Use the same staged update, test command, and K2 native diagnostic
+command shown above; no worker refresh, physical printer operation or
+production adapter modification.
