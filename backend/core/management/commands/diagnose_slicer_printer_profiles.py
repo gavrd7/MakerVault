@@ -181,6 +181,78 @@ def _creality_control_project(base, candidate):
     return original, test, changed
 
 
+def _creality_flush_override_control(project_blob):
+    """Add only reviewed native process override declarations, not printer scripts.
+
+    This is a disposable diagnostic, intentionally NOT the production adapter.
+    """
+    data = io.BytesIO()
+    with zipfile.ZipFile(io.BytesIO(project_blob)) as source, zipfile.ZipFile(
+            data, "w", compression=zipfile.ZIP_DEFLATED, allowZip64=False) as target:
+        names = source.namelist()
+        if len(names) != len(set(names)) or len(names) not in (6, 7):
+            raise ValueError("Unsupported native control project archive.")
+        settings = _read_creality_project_settings(project_blob)
+        palette = settings.get("filament_settings_id")
+        original = settings.get("different_settings_to_system")
+        if not isinstance(palette, list) or len(palette) != 4:
+            raise ValueError("Native override control requires four palette slots.")
+        if (not isinstance(original, list) or len(original) != len(palette) + 2
+                or any(not isinstance(v, str) or len(v) > 8192 for v in original)):
+            raise ValueError("Native process overrides are unavailable or invalid.")
+        import re
+        rows = list(original)
+        existing = [x for x in rows[0].split(";") if x]
+        if any(not re.fullmatch(r"[a-z][a-z0-9_]{0,79}", key) for key in existing):
+            raise ValueError("Unsupported existing native process override key.")
+        for key in ("flush_multiplier", "flush_volumes_matrix", "flush_volumes_changed"):
+            if key not in existing:
+                existing.append(key)
+        rows[0] = ";".join(existing)
+        settings["different_settings_to_system"] = rows
+        for name in names:
+            content = (json.dumps(settings, separators=(",", ":")).encode()
+                       if name == "Metadata/project_settings.config"
+                       else source.read(name))
+            target.writestr(name, content)
+    return data.getvalue()
+
+
+def _validate_creality_override_pair(unmarked, marked):
+    before, after, keys = _creality_control_project_with_extra(
+        unmarked, marked, {"different_settings_to_system"})
+    if keys != {"different_settings_to_system"}:
+        raise ValueError("Native override pair changed unrelated settings.")
+    if (before.get("flush_multiplier") != after.get("flush_multiplier")
+            or before.get("flush_volumes_matrix") != after.get("flush_volumes_matrix")
+            or before.get("flush_volumes_changed") != after.get("flush_volumes_changed")):
+        raise ValueError("Native override pair changed flushing numeric values.")
+    return True
+
+
+def _creality_control_project_with_extra(base, candidate, extra_keys):
+    original = _read_creality_project_settings(base)
+    test = _read_creality_project_settings(candidate)
+    changed = {key for key in set(original) | set(test)
+               if original.get(key) != test.get(key)}
+    if not changed.issubset({
+            "flush_multiplier", "flush_volumes_matrix", "flush_volumes_changed"
+            } | set(extra_keys)):
+        raise ValueError("Unexpected native Creality project settings changed.")
+    with (zipfile.ZipFile(io.BytesIO(base)) as before,
+          zipfile.ZipFile(io.BytesIO(candidate)) as after):
+        before_names = before.namelist()
+        after_names = after.namelist()
+        if (len(before_names) != len(set(before_names)) or
+                set(before_names) != set(after_names)):
+            raise ValueError("Native Creality control entries mismatch.")
+        for name in before_names:
+            if name != "Metadata/project_settings.config" and (
+                    before.read(name) != after.read(name)):
+                raise ValueError("Native Creality geometry or metadata changed.")
+    return original, test, changed
+
+
 def _native_nozzle_count(printer_blob):
     """Count nozzles from the *resolved native machine profile*, never names."""
     try:
@@ -397,8 +469,17 @@ class Command(BaseCommand):
                 creality_controls.append((
                     "multiplier_" + str(requested).replace(".", "_"),
                     build_creality(settings(multiplier=requested))))
+            for requested in multiplier_controls:
+                name = "multiplier_" + str(requested).replace(".", "_")
+                source_control = next(project for key, project in creality_controls
+                                      if key == name)
+                marked = _creality_flush_override_control(source_control)
+                _validate_creality_override_pair(source_control, marked)
+                creality_controls.append((name + "_marked", marked))
             for name, candidate in creality_controls:
-                original, changed, keys = _creality_control_project(model, candidate)
+                original, changed, keys = _creality_control_project_with_extra(
+                    model, candidate,
+                    {"different_settings_to_system"} if name.endswith("_marked") else set())
                 if name == "forward":
                     if (float(changed["flush_volumes_matrix"][1]) !=
                             first_flush_volume + 25 or
@@ -408,10 +489,14 @@ class Command(BaseCommand):
                     if changed.get("flush_multiplier") != original.get("flush_multiplier"):
                         raise CommandError("Creality native multiplier changed in directional fixture.")
                 else:
-                    requested = float(name.removeprefix("multiplier_").replace("_", "."))
+                    raw_name = name.removeprefix("multiplier_").removesuffix("_marked")
+                    requested = float(raw_name.replace("_", "."))
                     if ("flush_volumes_matrix" in keys or
                             float(changed["flush_multiplier"]) != requested):
                         raise CommandError("Creality multiplier control changed directional volumes.")
+                    if name.endswith("_marked") and (
+                            "different_settings_to_system" not in keys):
+                        raise CommandError("Native flushing marker control is missing override declarations.")
         output = slice_native(native["process"])
         summary["native_run"] = "sliced"
         summary["baseline"] = _safe_native_result(output)
@@ -503,6 +588,19 @@ class Command(BaseCommand):
             for requested in multiplier_controls:
                 name = "multiplier_" + str(requested).replace(".", "_")
                 summary["creality_flush_controls"][name]["requested_multiplier"] = requested
+                summary["creality_flush_controls"][name + "_marked"]["requested_multiplier"] = requested
+                summary["creality_flush_controls"][name + "_marked"]["override_markers"] = (
+                    "flush_multiplier;flush_volumes_matrix;flush_volumes_changed")
+            for name, result in summary["creality_flush_controls"].items():
+                if name.endswith("_marked"):
+                    bare = summary["creality_flush_controls"][name.removesuffix("_marked")]
+                    result["motion_changed_vs_unmarked"] = (
+                        result["motion_sha256"] != bare["motion_sha256"])
+                    result["machine_commands_changed_vs_unmarked"] = (
+                        result["machine_command_sha256"] != bare["machine_command_sha256"])
+                    result["tower_extrusion_changed_vs_unmarked"] = (
+                        result["tower_deposition"]["positive_e_length_mm"] !=
+                        bare["tower_deposition"]["positive_e_length_mm"])
             summary["creality_flush_basis"]["multiplier_control_origin"] = (
                 "explicit_disposable_1_00_vs_2_00_not_native_default")
         after = verified_installation().get(engine)
