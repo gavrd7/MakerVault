@@ -1141,3 +1141,39 @@ printer transfer, imported profile writes or native worker
 rebuild are required. A successful **single-material** K1 native
 slice would establish profile acceptance on a second printer but
 would not demonstrate multi-material purge control.
+
+
+### Real non-K2 Creality Print 7.3.1 K1 single-material acceptance — 20 Nov 2026
+
+The user's pinned isolated worker **successfully sliced** the K1
+single-material tetrahedron using exact imported Creality Print
+7.3.1 native presets. Verified runtime results:
+
+- K1 machine `f2150019-d42a-478a-aa1a-a7141a340eb5`,
+  K1 process `dbf937e0-6dfd-4a8a-8549-75449036dee0`,
+  K1 Soleyin Ultra PLA filament
+  `db839c91-38b7-4d21-9734-f8cf9ea5fdd4`.
+- Preflight passed: 1 nozzle, 1.75 mm native Creality
+  scalar filament diameter, 220 × 220 mm rectangular bed.
+- Native result `native_run=sliced`, 90,687 G-code bytes,
+  G-code SHA-256 `d7d4857371700cbd0ee7004f1250d7e3674137adeb80527015a87bdd3c14fc65`,
+  motion SHA-256 `faead65169b64d51d7bce279ebde2a773afee191f91daedd588e69625c7859c8`,
+  machine-command SHA-256 `9a9e7022ca62c3f18d3ed2d22dca2665318e1c03f191f3004f9bf553319c20ce`.
+- The G-code passes the existing native approval/acceptance
+  extrusion-presence gate. The diagnostic nevertheless reported
+  `g1_with_extrusion=0`. Inspection found inconsistent regex
+  definitions: acceptance permits `E.25`/`E-.25`, while the old
+  counter required `E0.25`/`E-0.25`. The counter is now aligned
+  with the native acceptance syntax and has a focused test; an
+  updated K1 native run is required before concluding its actual
+  extrusion-move count. Do not infer the original G-code necessarily
+  uses any particular decimal format without inspecting it privately.
+- `native_flush_encoding_supported=false` is expected for
+  `topology=single_material`, and physical purge remains
+  `unverified`. Passing K1 is **native non-K2 single-material
+  compatibility only**, not proof of K1 multicolour or K2 firmware
+  purge adjustment.
+
+Only diagnostic counting/test code changed in this follow-up.
+The native engine, approved worker, imported presets and all machine
+macros remain untouched.
