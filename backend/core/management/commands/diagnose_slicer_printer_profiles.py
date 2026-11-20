@@ -267,6 +267,54 @@ def _validate_creality_purge_route_pair(baseline, parent, candidate, enabled):
 
 
 
+
+def _creality_mark_native_process_options(project_blob, keys):
+    """Mark only reviewed print options on a disposable native project.
+
+    Creality's project preset merge can restore unmarked process options.
+    This tests whether the native process override list controls retention.
+    """
+    import re
+    allowed = {"prime_volume", "purge_in_prime_tower"}
+    if not isinstance(keys, (tuple, list)) or not keys or any(
+            key not in allowed for key in keys) or len(set(keys)) != len(keys):
+        raise ValueError("Unsupported native print override control.")
+    config = _read_creality_project_settings(project_blob)
+    names = config.get("filament_settings_id")
+    rows = config.get("different_settings_to_system")
+    if (not isinstance(names, list) or len(names) != 4
+            or not isinstance(rows, list) or len(rows) != len(names) + 2
+            or any(not isinstance(row, str) or len(row) > 8192 for row in rows)):
+        raise ValueError("Unsupported native process override vector.")
+    existing = [value for value in rows[0].split(";") if value]
+    if any(not re.fullmatch(r"[a-z][a-z0-9_]{0,79}", key) for key in existing):
+        raise ValueError("Untrusted native process override name.")
+    for key in keys:
+        if key not in existing:
+            existing.append(key)
+    modified = dict(config)
+    modified["different_settings_to_system"] = [
+        ";".join(existing), *rows[1:]]
+    output = io.BytesIO()
+    with zipfile.ZipFile(io.BytesIO(project_blob)) as source, zipfile.ZipFile(
+            output, "w", compression=zipfile.ZIP_DEFLATED, allowZip64=False) as target:
+        members = source.namelist()
+        if len(members) != len(set(members)) or len(members) not in (6, 7):
+            raise ValueError("Invalid native marked control archive.")
+        for member in source.infolist():
+            content = (json.dumps(modified, separators=(",", ":")).encode()
+                       if member.filename == "Metadata/project_settings.config"
+                       else source.read(member.filename))
+            target.writestr(member, content)
+    candidate = output.getvalue()
+    _before, after, changes = _creality_control_project_with_extra(
+        project_blob, candidate, {"different_settings_to_system"})
+    if (changes - {"different_settings_to_system"} or
+            after["different_settings_to_system"][1:] != rows[1:]):
+        raise ValueError("Native process marker control changed unrelated settings.")
+    return candidate
+
+
 def _creality_prime_volume_control(project_blob, volume_mm3=180):
     """Create an offline positive control without changing native scripts."""
     if type(volume_mm3) is not int or not 90 <= volume_mm3 <= 300:
@@ -683,13 +731,27 @@ class Command(BaseCommand):
                         fixed_control, route_enabled)))
             # An independent setting expected to influence native tower
             # generation in the source, isolated from all flush fields.
+            positive_control = _creality_prime_volume_control(fixed_control)
             creality_controls.append((
-                "prime_volume_positive_control",
-                _creality_prime_volume_control(fixed_control)))
+                "prime_volume_positive_control", positive_control))
+            creality_controls.append((
+                "prime_volume_marked",
+                _creality_mark_native_process_options(
+                    positive_control, ["prime_volume"])))
+            tower_source = next(project for key, project in creality_controls
+                                if key == "purge_route_tower")
+            creality_controls.append((
+                "purge_route_tower_marked",
+                _creality_mark_native_process_options(
+                    tower_source, ["purge_in_prime_tower"])))
             for name, candidate in creality_controls:
                 original, changed, keys = _creality_control_project_with_extra(
                     model, candidate,
                     ({"different_settings_to_system"} if name.endswith("_marked")
+                     else {"purge_in_prime_tower", "different_settings_to_system"}
+                     if name == "purge_route_tower_marked"
+                     else {"different_settings_to_system", "prime_volume"}
+                     if name == "prime_volume_marked"
                      else {"purge_in_prime_tower"} if name.startswith("purge_route_")
                      else {"prime_volume"} if name == "prime_volume_positive_control"
                      else set()))
@@ -701,6 +763,16 @@ class Command(BaseCommand):
                         raise CommandError("Creality forward directional fixture was not isolated.")
                     if changed.get("flush_multiplier") != original.get("flush_multiplier"):
                         raise CommandError("Creality native multiplier changed in directional fixture.")
+                elif name == "prime_volume_marked":
+                    _original, _marked, marker_keys = _creality_control_project_with_extra(
+                        positive_control, candidate, {"different_settings_to_system"})
+                    if marker_keys - {"different_settings_to_system"}:
+                        raise CommandError("Creality prime volume marker isolation failed.")
+                elif name == "purge_route_tower_marked":
+                    _original, _marked, marker_keys = _creality_control_project_with_extra(
+                        tower_source, candidate, {"different_settings_to_system"})
+                    if marker_keys - {"different_settings_to_system"}:
+                        raise CommandError("Creality purge routing marker isolation failed.")
                 elif name == "prime_volume_positive_control":
                     if (keys - {"flush_multiplier", "prime_volume"} or
                             changed.get("flush_multiplier") != "2.0" or
@@ -835,6 +907,23 @@ class Command(BaseCommand):
             prime_control["tower_extrusion_changed_vs_multiplier_2_0"] = (
                 prime_control["tower_deposition"]["positive_e_length_mm"] !=
                 route_reference["tower_deposition"]["positive_e_length_mm"])
+            for marked_name, plain_name in (
+                    ("prime_volume_marked", "prime_volume_positive_control"),
+                    ("purge_route_tower_marked", "purge_route_tower")):
+                marked = summary["creality_flush_controls"][marked_name]
+                plain = summary["creality_flush_controls"][plain_name]
+                marked["motion_changed_vs_unmarked"] = (
+                    marked["motion_sha256"] != plain["motion_sha256"])
+                marked["machine_commands_changed_vs_unmarked"] = (
+                    marked["machine_command_sha256"] != plain["machine_command_sha256"])
+                marked["tower_extrusion_changed_vs_unmarked"] = (
+                    marked["tower_deposition"]["positive_e_length_mm"] !=
+                    plain["tower_deposition"]["positive_e_length_mm"])
+                marked["emitted_keys_changed_vs_unmarked"] = sorted(
+                    key for key in set(marked["emitted_gcode_settings_comparison"]["candidate"]["settings"])
+                    | set(plain["emitted_gcode_settings_comparison"]["candidate"]["settings"])
+                    if marked["emitted_gcode_settings_comparison"]["candidate"]["settings"].get(key)
+                    != plain["emitted_gcode_settings_comparison"]["candidate"]["settings"].get(key))
             summary["creality_flush_controls"]["forward"]["requested_t0_to_t1_mm3"] = first_flush_volume + 25
             summary["native_tool_selects_observed"] = {
                 "t0": baseline_metrics["tool0_selects"],
