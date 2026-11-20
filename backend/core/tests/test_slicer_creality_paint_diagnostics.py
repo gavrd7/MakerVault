@@ -9,7 +9,7 @@ from django.test import SimpleTestCase
 from core.management.commands.diagnose_creality_paint_features import (
     _metrics, _patch_for_model, _native_project_audit,
     _geometry_control_project, _layer_band_audit,
-    _feature_role_audit, _gcode_effective_settings,
+    _feature_role_audit, _gcode_effective_settings, _flush_toolchange_gcode_audit,
     _cantilever_fixture_stl, _cantilever_support_marker,
     _cantilever_wall_marker, _support_auto_control_project,
     _native_support_settings, _support_relaxed_auto_control_project,
@@ -313,3 +313,30 @@ class CrealityPaintingDiagnosticTests(SimpleTestCase):
             with self.subTest(project=project, keys=keys):
                 with self.assertRaises(ValueError):
                     _mark_creality_support_overrides(project, keys)
+
+    def test_redacted_native_flush_blocks_audit_counts_only_positive_e(self):
+        gcode = (b"; FLUSH_START\n"
+                 b"G1 E12.5 F500\n"
+                 b"G1 E-2.0 F1000\n"
+                 b"G1 E3\n"
+                 b"; FLUSH_END\n"
+                 b"G1 E1000\n"
+                 b"; SECRET_PRIVATE_MACRO\n")
+        report = _flush_toolchange_gcode_audit(gcode)
+        self.assertEqual(report["native_flush_blocks_started"], 1)
+        self.assertEqual(report["native_flush_blocks_ended"], 1)
+        self.assertEqual(report["extrusion_only_positive_moves_in_blocks"], 2)
+        self.assertEqual(report["sum_positive_e_in_blocks_mm"], 15.5)
+        self.assertNotIn("SECRET_PRIVATE_MACRO", str(report))
+
+    def test_emitted_matrix_audit_reports_directional_values_not_macro(self):
+        fixture = (
+            b"; flush_volumes_matrix = 0,370,0,0,175,0,0,0,0,0,0,0,0,0,0,0\n"
+            b"; flush_multiplier = 1.25\n"
+            b"; change_filament_gcode = PRIVATE_MACHINE_SCRIPT\n"
+        )
+        report = _gcode_effective_settings(fixture)
+        self.assertEqual(report["flush_matrix_t0_to_t1_raw_mm3"], 370.0)
+        self.assertEqual(report["flush_matrix_t1_to_t0_raw_mm3"], 175.0)
+        self.assertEqual(report["flush_multiplier"], "1.25")
+        self.assertNotIn("PRIVATE_MACHINE_SCRIPT", str(report))
