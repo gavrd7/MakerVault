@@ -1100,3 +1100,44 @@ unavailable profile is a blocked test rather than a compatibility
 failure; do not claim the user already has A1 or U1 profiles imported.
 No printer macro replacement, engine installation or hardware
 communication is authorised.
+
+
+### Creality Print K1 preflight: correct native filament diameter representation — 20 November 2026
+
+Actual Debian `--engine crealityprint --topology single_material` preflight
+for the imported Creality Print 7.3.1 K1 0.4 mm trio initially failed
+`Native filament diameter is missing or invalid` **before native slicing**.
+The diagnostic mistakenly reused Orca's one-element-array
+`filament_diameter` validator for Creality Print's scalar
+`filament_diameter="1.75"` native profile format. This was a fixture
+validator bug, not a failure in the selected official native K1 preset
+or the Creality engine.
+
+The management command now dispatches diameter parsing by slicer
+engine: Orca requires the original exactly-one-element array;
+Creality Print requires a scalar finite positive diameter within
+the accepted filament bounds. Unknown encodings, booleans,
+out-of-range values and mixed-diameter multi-filament palettes fail
+closed. A dedicated regression test verifies both representations
+and that cross-engine interchange is rejected.
+
+**This new correction is not yet exercised in Debian**. After
+application-only update, rerun
+`core.tests.test_slicer_printer_compatibility` (now seven tests), and
+repeat the exact K1 structural preflight:
+
+```bash
+sudo docker exec makervault python3 /app/backend/manage.py \
+  diagnose_slicer_printer_profiles --engine crealityprint \
+  --topology single_material \
+  --printer-profile-id f2150019-d42a-478a-aa1a-a7141a340eb5 \
+  --process-profile-id dbf937e0-6dfd-4a8a-8549-75449036dee0 \
+  --filament-profile-id db839c91-38b7-4d21-9734-f8cf9ea5fdd4
+```
+
+If and only if this passes, rerun with `--native` to test
+the verified pinned Creality Print 7.3.1 worker. No firmware,
+printer transfer, imported profile writes or native worker
+rebuild are required. A successful **single-material** K1 native
+slice would establish profile acceptance on a second printer but
+would not demonstrate multi-material purge control.
