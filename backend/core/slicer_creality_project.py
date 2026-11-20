@@ -8,6 +8,7 @@ MakerVault model placements before a separately verified profile packager.
 import io
 import json
 import math
+import re
 import zipfile
 from defusedxml import ElementTree as SafeET
 
