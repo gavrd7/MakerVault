@@ -443,6 +443,50 @@ def _apply_creality_flush_settings(project, settings, bindings):
         project["flush_volumes_changed"] = "1"
 
 
+_CREALITY_SUPPORT_OVERRIDE_KEYS = frozenset({
+    "enable_support", "support_type", "support_threshold_angle",
+    "minimum_support_area", "support_remove_small_overhang",
+    "support_on_build_plate_only", "support_critical_regions_only",
+    "bridge_no_support", "max_bridge_length",
+})
+
+
+def _mark_creality_support_overrides(project, keys):
+    """Preserve explicit support options across Creality 7.3.x preset reload.
+
+    CLI SliceCommand::refresh_creality_project_configuration passes project
+    settings through PresetBundle::load_config_model. Its process-preset
+    loader honors different_settings_to_system[0] as the list of intentionally
+    overridden process keys; merely writing values into the project JSON is
+    not enough. The real Creality desktop project uses this exact convention.
+    """
+    selected = set(keys)
+    if not selected or not selected <= _CREALITY_SUPPORT_OVERRIDE_KEYS:
+        raise SlicerProfileError("Invalid Creality support override keys.")
+    palette = project.get("filament_settings_id")
+    if not isinstance(palette, list) or len(palette) not in (2, 4):
+        raise SlicerProfileError("Creality support override requires a verified filament palette.")
+    width = len(palette) + 2
+    value = project.get("different_settings_to_system")
+    if value is None:
+        value = [""] * width
+    elif (not isinstance(value, list) or len(value) != width
+          or any(not isinstance(row, str) or len(row) > 8192 for row in value)):
+        raise SlicerProfileError("Creality preset override vector is malformed.")
+    else:
+        value = list(value)
+    # These are native semicolon-separated process setting identifiers.
+    # Retain any existing process overrides and all other preset slots.
+    existing = [key for key in value[0].split(";") if key]
+    if any(not re.fullmatch(r"[a-z][a-z0-9_]{0,79}", key) for key in existing):
+        raise SlicerProfileError("Creality process override identifier is malformed.")
+    for key in sorted(selected):
+        if key not in existing:
+            existing.append(key)
+    value[0] = ";".join(existing)
+    project["different_settings_to_system"] = value
+
+
 def build_creality_project_candidate(plate, *, printer, process, filaments,
                                     version="7.3.1", prime_tower=None,
                                     tool_colours=None, flush_settings=None,
@@ -525,6 +569,12 @@ def build_creality_project_candidate(plate, *, printer, process, filaments,
             raise SlicerProfileError("Invalid Creality selected filament colour palette.")
         project["filament_colour"] = [colour.upper() for colour in tool_colours]
     _native_palette_settings(project, filament_settings)
+    # Creality's project loader restores a system print preset and otherwise
+    # discards non-default support options from project_settings.config.
+    # Mark only explicitly selected native support keys, not arbitrary user
+    # JSON or printer/filament G-code settings.
+    _mark_creality_support_overrides(
+        project, ("enable_support", "support_type"))
     if flush_settings is not None:
         _apply_creality_flush_settings(project, flush_settings, tool_bindings)
     # Creality 7.3.1 uses one-based physical nozzle routing. A K2/CFS
