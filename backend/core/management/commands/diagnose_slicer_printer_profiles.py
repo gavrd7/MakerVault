@@ -407,6 +407,40 @@ def _creality_emitted_setting_audit(gcode):
     }
 
 
+
+def _creality_marked_result_comparison(controls, marked_name, parent_name):
+    """Compare a marked slice with its explicit parent, never a guessed key."""
+    if (not isinstance(controls, dict) or marked_name not in controls
+            or parent_name not in controls or marked_name == parent_name):
+        raise ValueError("Missing Creality marked or parent control.")
+    marked, parent = controls[marked_name], controls[parent_name]
+    for entry in (marked, parent):
+        if (not isinstance(entry, dict)
+                or not isinstance(entry.get("tower_deposition"), dict)
+                or not isinstance(entry.get("emitted_gcode_settings_comparison"), dict)):
+            raise ValueError("Missing native Creality comparison evidence.")
+    def emitted(config):
+        return config["emitted_gcode_settings_comparison"]["candidate"]["settings"]
+    try:
+        before, after = emitted(parent), emitted(marked)
+        if not isinstance(before, dict) or not isinstance(after, dict):
+            raise ValueError("Invalid Creality emitted settings evidence.")
+        return {
+            "motion_changed_vs_unmarked": (
+                marked["motion_sha256"] != parent["motion_sha256"]),
+            "machine_commands_changed_vs_unmarked": (
+                marked["machine_command_sha256"] != parent["machine_command_sha256"]),
+            "tower_extrusion_changed_vs_unmarked": (
+                marked["tower_deposition"]["positive_e_length_mm"] !=
+                parent["tower_deposition"]["positive_e_length_mm"]),
+            "emitted_keys_changed_vs_unmarked": sorted(
+                key for key in set(before) | set(after)
+                if before.get(key) != after.get(key)),
+        }
+    except (KeyError, TypeError) as exc:
+        raise ValueError("Incomplete native Creality marked comparison.") from exc
+
+
 def _creality_emitted_comparison(baseline, candidate):
     """Compare only scrubbed native comment evidence across two slice outputs."""
     before = _creality_emitted_setting_audit(baseline)
@@ -907,23 +941,16 @@ class Command(BaseCommand):
             prime_control["tower_extrusion_changed_vs_multiplier_2_0"] = (
                 prime_control["tower_deposition"]["positive_e_length_mm"] !=
                 route_reference["tower_deposition"]["positive_e_length_mm"])
-            for marked_name, plain_name in (
+            # All four marked controls use explicit parent names. The
+            # prime-volume parent is NOT named "prime_volume".
+            for marked_name, parent_name in (
+                    ("multiplier_1_0_marked", "multiplier_1_0"),
+                    ("multiplier_2_0_marked", "multiplier_2_0"),
                     ("prime_volume_marked", "prime_volume_positive_control"),
                     ("purge_route_tower_marked", "purge_route_tower")):
-                marked = summary["creality_flush_controls"][marked_name]
-                plain = summary["creality_flush_controls"][plain_name]
-                marked["motion_changed_vs_unmarked"] = (
-                    marked["motion_sha256"] != plain["motion_sha256"])
-                marked["machine_commands_changed_vs_unmarked"] = (
-                    marked["machine_command_sha256"] != plain["machine_command_sha256"])
-                marked["tower_extrusion_changed_vs_unmarked"] = (
-                    marked["tower_deposition"]["positive_e_length_mm"] !=
-                    plain["tower_deposition"]["positive_e_length_mm"])
-                marked["emitted_keys_changed_vs_unmarked"] = sorted(
-                    key for key in set(marked["emitted_gcode_settings_comparison"]["candidate"]["settings"])
-                    | set(plain["emitted_gcode_settings_comparison"]["candidate"]["settings"])
-                    if marked["emitted_gcode_settings_comparison"]["candidate"]["settings"].get(key)
-                    != plain["emitted_gcode_settings_comparison"]["candidate"]["settings"].get(key))
+                summary["creality_flush_controls"][marked_name].update(
+                    _creality_marked_result_comparison(
+                        summary["creality_flush_controls"], marked_name, parent_name))
             summary["creality_flush_controls"]["forward"]["requested_t0_to_t1_mm3"] = first_flush_volume + 25
             summary["native_tool_selects_observed"] = {
                 "t0": baseline_metrics["tool0_selects"],
@@ -939,16 +966,6 @@ class Command(BaseCommand):
                 summary["creality_flush_controls"][name + "_marked"]["requested_multiplier"] = requested
                 summary["creality_flush_controls"][name + "_marked"]["override_markers"] = (
                     "flush_multiplier;flush_volumes_matrix;flush_volumes_changed")
-            for name, result in summary["creality_flush_controls"].items():
-                if name.endswith("_marked"):
-                    bare = summary["creality_flush_controls"][name.removesuffix("_marked")]
-                    result["motion_changed_vs_unmarked"] = (
-                        result["motion_sha256"] != bare["motion_sha256"])
-                    result["machine_commands_changed_vs_unmarked"] = (
-                        result["machine_command_sha256"] != bare["machine_command_sha256"])
-                    result["tower_extrusion_changed_vs_unmarked"] = (
-                        result["tower_deposition"]["positive_e_length_mm"] !=
-                        bare["tower_deposition"]["positive_e_length_mm"])
             summary["creality_flush_basis"]["multiplier_control_origin"] = (
                 "explicit_disposable_1_00_vs_2_00_not_native_default")
         after = verified_installation().get(engine)
