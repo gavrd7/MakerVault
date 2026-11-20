@@ -62,6 +62,8 @@ def _safe_native_result(data):
             "motion_sha256": result["motion_sha256"],
             "machine_command_sha256": result["machine_command_sha256"],
             "g1_with_extrusion": result["g1_with_extrusion"],
+            "tool0_selects": result["tool0_selects"],
+            "tool1_selects": result["tool1_selects"],
             "note": "Native offline slicing; no physical printer validation."}
 
 
@@ -469,6 +471,14 @@ class Command(BaseCommand):
                     "note": "Offline native comparison only; physical purge is unverified.",
                 }
             summary["creality_flush_controls"]["forward"]["requested_t0_to_t1_mm3"] = first_flush_volume + 25
+            summary["native_tool_selects_observed"] = {
+                "t0": baseline_metrics["tool0_selects"],
+                "t1": baseline_metrics["tool1_selects"],
+                "both_tool_ids_seen": (
+                    baseline_metrics["tool0_selects"] > 0
+                    and baseline_metrics["tool1_selects"] > 0),
+                "note": "Native tool ID observations, NOT physical CFS tool-change or purge proof.",
+            }
             if alternate_multiplier is not None:
                 summary["creality_flush_controls"]["multiplier"]["requested_multiplier"] = alternate_multiplier
         after = verified_installation().get(engine)
