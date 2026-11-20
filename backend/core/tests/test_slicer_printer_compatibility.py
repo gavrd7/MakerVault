@@ -14,6 +14,7 @@ from core.management.commands.diagnose_slicer_printer_profiles import (
     _validate_creality_purge_route_pair,
     _creality_emitted_setting_audit, _creality_emitted_comparison,
     _creality_prime_volume_control, _creality_control_project_with_extra,
+    _creality_mark_native_process_options,
 )
 from core.slicer_plate_3mf import build_plate_3mf, NS
 
@@ -357,6 +358,51 @@ class PrinterCompatibilityFixtureTests(SimpleTestCase):
             _validate_creality_purge_route_pair(
                 baseline, parent, archive({**native, "flush_multiplier": "1.0",
                                            "purge_in_prime_tower": "1"}), True)
+
+    def test_creality_print_override_markers_preserve_numeric_options_and_macros(self):
+        values = {
+            "filament_settings_id": ["A", "B", "A", "B"],
+            "different_settings_to_system": [
+                "enable_support;support_type", "", "", "", "", ""],
+            "purge_in_prime_tower": "1",
+            "prime_volume": "180",
+            "flush_multiplier": "2.0",
+            "change_filament_gcode": "untouched manufacturer macro",
+        }
+        raw = io.BytesIO()
+        with zipfile.ZipFile(raw, "w") as z:
+            z.writestr("Metadata/project_settings.config", json.dumps(values))
+            for name in ("3D/3dmodel.model", "Metadata/model_settings.config",
+                         "Metadata/creality.config", "[Content_Types].xml", "_rels/.rels"):
+                z.writestr(name, b"untouched")
+        baseline = raw.getvalue()
+        for key in ("prime_volume", "purge_in_prime_tower"):
+            with self.subTest(key=key):
+                changed = _creality_mark_native_process_options(baseline, [key])
+                _original, next_config, changed_keys = _creality_control_project_with_extra(
+                    baseline, changed, {"different_settings_to_system"})
+                self.assertEqual(changed_keys, {"different_settings_to_system"})
+                self.assertEqual(next_config[key], values[key])
+                self.assertEqual(next_config["change_filament_gcode"],
+                                 "untouched manufacturer macro")
+                self.assertEqual(next_config["different_settings_to_system"][1:],
+                                 values["different_settings_to_system"][1:])
+                self.assertIn(key, next_config["different_settings_to_system"][0])
+                self.assertEqual(changed, _creality_mark_native_process_options(changed, [key]))
+
+    def test_creality_marked_process_control_fails_closed_on_invalid_keys(self):
+        raw = io.BytesIO()
+        with zipfile.ZipFile(raw, "w") as z:
+            z.writestr("Metadata/project_settings.config", json.dumps({
+                "filament_settings_id": ["A", "B", "A", "B"],
+                "different_settings_to_system": ["", "", "", "", "", ""],
+            }))
+            for name in ("3D/3dmodel.model", "Metadata/model_settings.config",
+                         "Metadata/creality.config", "[Content_Types].xml", "_rels/.rels"):
+                z.writestr(name, b"unchanged")
+        for keys in ([], ["bad"], ["prime_volume", "prime_volume"], [";bad"]):
+            with self.subTest(keys=keys), self.assertRaises(ValueError):
+                _creality_mark_native_process_options(raw.getvalue(), keys)
 
     def test_prime_volume_positive_control_preserves_all_other_archive_members(self):
         original = {
