@@ -1623,3 +1623,77 @@ no emitted settings are present, stop treating G-code metadata as effective
 configuration proof and move to a source-instrumented/round-trip loader
 probe in an independently approved worker build; do not change the pinned
 engine or claim a physical flushing fix.
+
+
+## Isolating GUI-style native preset merge (20 Nov 2026, source-based follow-up)
+
+The completed **59/59** staging suite and **nine** offline Creality v7.3.1
+K2 slices reveal a useful split in G-code-emitted comments:
+
+- Explicit `flush_multiplier=2.0` survives into generated G-code comments,
+  although the executable motion and tagged tower extrusion remain unchanged.
+- Explicit `purge_in_prime_tower=1` in the generated 3MF is emitted as **0**.
+- Explicit `prime_volume=180` in the generated 3MF is emitted as **45**.
+- No control changed the G0/G1 or machine-command digests, or the tower E.
+  These are generated G-code comment observations, not direct native
+  in-memory `PrintConfig` instrumentation.
+
+The **exact official v7.3.1 source** contains
+`src/slic3r/CLI/SliceCommand.cpp::refresh_creality_project_configuration`
+(lines ~2006–2057), which loads the Creality system presets, applies the
+project configuration to defaults, invokes
+`PresetBundle::load_config_model(...)`, and then **replaces**
+`m_print_config = project_bundle.full_config()`. Called by
+`prepare_configuration` before slicing. The associated
+`src/libslic3r/PresetBundle.cpp::load_config_file_config` (around
+lines 3965–4050) reads `different_settings_to_system[0]` as process
+option override identifiers. This is a specific hypothesis for why those
+two values revert while the multiplier is present in metadata, but
+the actual diagnosis requires an A/B test.
+
+Two **additional disposable 3MF controls** have been added, without
+changing the production Creality adapter or worker:
+
+- `prime_volume_marked`: exact same 180 mm³ positive-control project,
+  with **only** `prime_volume` appended to the existing process
+  `different_settings_to_system[0]` list.
+- `purge_route_tower_marked`: exact same purge-in-tower project at
+  explicit multiplier 2.0, with **only** `purge_in_prime_tower` appended
+  to its process override list.
+
+Each test preserves the native printer macros, matrix, other project
+settings, geometry, and remaining five entries of the override vector.
+The existing unmarked controls remain in place for direct comparison.
+New comparisons include `emitted_keys_changed_vs_unmarked`, motion,
+machine commands and tagged tower E. The output is limited to sanitised
+config values and hashes.
+
+Expected focused Django tests: **61** (59 prior + 2).
+Expected offline native Creality slices: **11** (nine prior + two marked).
+These new runs **have not yet been executed on staging**.
+
+```bash
+cd ~/MakerVault-Staging
+git pull --ff-only origin feature/self-hosted-slicer-foundation
+sudo python3 scripts/install_slicer_staging.py update
+sudo docker exec makervault python3 /app/backend/manage.py test \
+  core.tests.test_slicer_printer_compatibility \
+  core.tests.test_slicer_tower_diagnostics \
+  core.tests.test_slicer_flush_adapters \
+  core.tests.test_slicer_creality_project --noinput
+sudo docker exec makervault python3 /app/backend/manage.py \
+  diagnose_slicer_printer_profiles \
+  --engine crealityprint --topology single_nozzle_changer \
+  --printer-profile-id 91b19730-66f5-4b5f-bd7d-b08fbb4ee768 \
+  --process-profile-id 0c90fa89-a193-48b6-ac94-a69792230163 \
+  --filament-profile-id e9c1274c-d95b-4592-87e5-03a645d699aa \
+  --filament-profile-id eb8473e9-f993-4c6e-8cc4-fb357e3ae782 \
+  --native --test-flush
+```
+
+If either marked version now emits the expected configuration
+(`prime_volume=180` or `purge_in_prime_tower=1`) and especially if
+its motion/tower deposition changes, this establishes an actionable
+preset-merge contract for the native 3MF route. It still does not establish
+safe physical purge volumes; do not merge production flushing changes or
+send diagnostic G-code to the printer.
