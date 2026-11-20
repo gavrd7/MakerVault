@@ -303,7 +303,7 @@ class FlushAdapterCapabilityTests(SimpleTestCase):
             "220", "598", "0", "626",
             "378", "493", "358", "0",
         ]
-        self.assertEqual(creality_matrix[1], str(int(orca_matrix[1]) * 1.3))
+        self.assertAlmostEqual(float(creality_matrix[1]), float(orca_matrix[1]) * 1.3)
         # Some native entries do NOT follow a universal 1.3x rule.
         self.assertNotEqual(int(creality_matrix[4]),
                             int(float(orca_matrix[4]) * 1.3))
