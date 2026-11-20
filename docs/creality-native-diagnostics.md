@@ -676,3 +676,85 @@ number must never be presented as evidence of firmware purge control.
 This decision supports multiple engines and printer categories without
 falsely asserting that every printer's physical flushing is already
 implemented.
+
+
+### Common flushing adapter implementation checkpoint — 20 November 2026
+
+The architecture decision above is now implemented in **backend application
+code** (not yet exercised on the Debian staging worker):
+
+- `backend/core/slicer_flush_settings.py` remains the authoritative
+  engine-neutral validation contract
+  (`from_slot_id`, `to_slot_id`, `volume_mm3`, multiplier, tower).
+  The public `apply_orca_flush_settings` name remains as a compatibility
+  wrapper to avoid changes to existing callers and API payloads.
+- New `backend/core/slicer_flush_adapters.py` provides
+  `resolve_flush_capability` and `require_flush_capability`,
+  independent of printer brand. It distinguishes single-nozzle material
+  changer from independent heads, toolchanger, IDEX, manual changes,
+  single material and unknown. Currently *only* verified single-nozzle
+  material changers with one nozzle and 2–16 logical materials are
+  eligible for Orca's directional override; Creality's approved project
+  builder only handles **two assigned logical materials**, even though
+  its native project declares four CFS filament slots. Other setups
+  are **unsupported**, not automatically enabled. New printer support
+  must follow approved machine/profile routing tests.
+- The new module owns `apply_orca_native_flush` (Orca per-nozzle
+  vector multiplier and matrix) and `apply_creality_native_flush`
+  (Creality scalar multiplier and native four-slot matrix). Existing
+  Creality project generator calls the native adapter through a
+  compatibility shim. There is no shared vendor G-code macro.
+- Both adapters reuse `map_verified_flush_transitions`, preserving
+  source/destination direction and validating physical slot-to-native
+  tool mappings including duplicate/colliding routes. Changes are
+  derived from validated settings, not UI swatch order.
+- `audit_native_flush_profile` reports **only** structural
+  capabilities: presence of segmented flush placeholders, optional
+  multicolor condition, vendor handoff indicator, bounded nozzle
+  volumes and native tower preference. It never returns actual
+  machine G-code or proof of physical purging.
+- The offline Creality diagnostic now reports the selected project's
+  redacted profile capabilities, two raw directional matrix entries
+  from the *emitted* G-code footer (when present), and counts/summed
+  positive E extrusion **only** inside `FLUSH_START` /
+  `FLUSH_END` markers. These markers may be absent in some native
+  profiles; zero means not observed, **not** that the printer firmware
+  did no purging.
+- `--only flushing --deep` now independently slices a
+  `matrix_only` control (370/175 mm3 T0/T1) and a
+  `multiplier_only` control (1.25), besides the existing combined
+  diagnostic, comparing the same base geometry and redacted output.
+  These are **offline diagnostic-only** G-code outputs, never printed.
+- New tests `core.tests.test_slicer_flush_adapters` cover two
+  brand-neutral printer examples, alternate material topologies,
+  unsupported/unknown counts, Orca four-material/one-nozzle routing,
+  Creality two-assigned-material restriction, directional reversal,
+  duplicate/colliding mappings, scalar vs vector encoding, native
+  machine macro preservation and redacted macro introspection.
+  Expanded `core.tests.test_slicer_creality_paint_diagnostics` tests
+  cover the emitted directional matrix and FLUSH block audit.
+
+**Local staging verification** after updating app only (no worker
+refresh, pinned engine unchanged):
+
+```bash
+cd ~/MakerVault-Staging
+git pull --ff-only origin feature/self-hosted-slicer-foundation
+sudo python3 scripts/install_slicer_staging.py update
+sudo docker exec makervault python3 /app/backend/manage.py test \
+  core.tests.test_slicer_flush_settings \
+  core.tests.test_slicer_flush_adapters \
+  core.tests.test_slicer_creality_project \
+  core.tests.test_slicer_creality_paint_diagnostics --noinput
+sudo docker exec makervault python3 /app/backend/manage.py \
+  diagnose_creality_paint_features --only flushing --deep
+```
+
+Until staging validates that custom Creality flush values survive
+native preset restoration **and** demonstrably change intended
+filament-change purge commands, do not promote any UI claim beyond
+config request/storage. A printer- or firmware-owned purge may need
+different verification; never silently replace Creality/Orca macros.
+Independent toolheads remain unsupported for common single-nozzle
+waste-volume controls, rather than receiving inappropriate CFS
+behaviour. PR #171 remains draft/unmerged.
