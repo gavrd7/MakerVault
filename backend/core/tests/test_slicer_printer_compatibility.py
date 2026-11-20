@@ -103,3 +103,27 @@ class PrinterCompatibilityFixtureTests(SimpleTestCase):
             with self.subTest(profiles=profiles):
                 with self.assertRaises(ValueError):
                     _compatible_filament_diameter(profiles)
+
+    def test_creality_native_scalar_filament_diameter_is_not_orca_vector(self):
+        def scalar(value):
+            return json.dumps({"type": "filament",
+                               "filament_diameter": value}).encode()
+        self.assertEqual(_compatible_filament_diameter(
+            [scalar("1.75"), scalar("1.750")], engine="crealityprint"), 1.75)
+        self.assertEqual(_compatible_filament_diameter(
+            [scalar(1.75)], engine="crealityprint"), 1.75)
+        for invalid in (
+            [scalar(["1.75"])],  # Orca encoding must not silently cross engines.
+            [scalar("nan")],
+            [scalar("0")],
+            [scalar("bad")],
+            [scalar(True)],
+            [scalar("1.75"), scalar("2.85")],
+            [json.dumps({"type": "filament"}).encode()],
+        ):
+            with self.subTest(invalid=invalid):
+                with self.assertRaises(ValueError):
+                    _compatible_filament_diameter(invalid, engine="crealityprint")
+        # Orca continues to reject Creality's scalar representation.
+        with self.assertRaises(ValueError):
+            _compatible_filament_diameter([scalar("1.75")], engine="orcaslicer")
