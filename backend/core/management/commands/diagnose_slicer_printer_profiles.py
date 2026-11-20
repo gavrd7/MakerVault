@@ -376,9 +376,9 @@ class Command(BaseCommand):
             if not 0 <= first_flush_volume <= 19950:
                 raise CommandError("Native Creality directional volume is outside safe A/B bounds.")
             # The imported K2 preset has no native multiplier: test 1.00
-            # and 1.30 as EXPLICIT disposable controls, not inherited
+            # and 2.00 as EXPLICIT disposable controls, not inherited
             # defaults or changes to the user's saved profiles.
-            multiplier_controls = (1.0, 1.3)
+            multiplier_controls = (1.0, 2.0)
             def settings(multiplier=None, transition=None):
                 return {
                     "multiplier": multiplier, "prime_tower": "native",
@@ -504,7 +504,7 @@ class Command(BaseCommand):
                 name = "multiplier_" + str(requested).replace(".", "_")
                 summary["creality_flush_controls"][name]["requested_multiplier"] = requested
             summary["creality_flush_basis"]["multiplier_control_origin"] = (
-                "explicit_disposable_1_00_vs_1_30_not_native_default")
+                "explicit_disposable_1_00_vs_2_00_not_native_default")
         after = verified_installation().get(engine)
         if after != installed:
             raise CommandError("Pinned engine approval changed during offline diagnostics.")
