@@ -80,6 +80,47 @@ def require_flush_capability(engine, topology, *, nozzle_count, material_count):
     return capability
 
 
+def audit_native_flush_profile(settings):
+    """Redacted capability evidence from a *resolved* native printer profile.
+
+    Never return machine scripts, identifiers, colours or profile paths.
+    Placeholder presence alone does NOT prove the command executes.
+    """
+    if not isinstance(settings, dict):
+        raise MaterialRoutingError("Invalid native printer profile.")
+    macro = settings.get("change_filament_gcode")
+    if not isinstance(macro, str):
+        macro = ""
+    if len(macro) > 128 * 1024:
+        raise MaterialRoutingError("Native printer toolchange macro exceeds audit limit.")
+    nozzle = settings.get("nozzle_volume")
+    if isinstance(nozzle, list):
+        values = nozzle[:16]
+    elif nozzle is None:
+        values = []
+    else:
+        values = [nozzle]
+    safe_nozzle = []
+    for value in values:
+        try:
+            number = float(value)
+            if math.isfinite(number) and 0 <= number <= 20000:
+                safe_nozzle.append(round(number, 3))
+        except (TypeError, ValueError):
+            pass
+    return {
+        "has_change_filament_gcode": bool(macro.strip()),
+        "uses_flush_length_segments": any(
+            ("flush_length_" + str(i)) in macro for i in range(1, 6)),
+        "uses_total_flush_length": "flush_length" in macro,
+        "has_multicolor_conditional": "multicolor_method" in macro,
+        "mentions_vendor_material_handoff": "M8200" in macro,
+        "nozzle_volumes_mm3": safe_nozzle,
+        "purge_in_prime_tower": str(settings.get("purge_in_prime_tower", ""))[:8],
+        "verification": "template_only_not_emitted_or_physical_proof",
+    }
+
+
 def map_verified_flush_transitions(transitions, bindings, tool_count):
     """Map user physical slots to native indices, preserving direction.
 
