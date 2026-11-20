@@ -5,9 +5,11 @@ isolated worker. This never creates a SliceJob, persists modified profiles,
 runs printer API calls, or permits the resulting G-code to be printed.
 """
 import hashlib
+import io
 import json
 import math
 import uuid
+import zipfile
 from types import SimpleNamespace
 
 from django.core.management.base import BaseCommand, CommandError
@@ -101,6 +103,81 @@ def _compatible_filament_diameter(filament_blobs, *, engine="orcaslicer"):
     return diameters[0]
 
 
+def _read_creality_project_settings(project_blob):
+    """Inspect only the generated effective native project configuration.
+
+    The worker itself consumes the 3MF, not a standalone process JSON.
+    Read exactly the setting file the native 3MF route receives.
+    """
+    try:
+        with zipfile.ZipFile(io.BytesIO(project_blob)) as archive:
+            names = archive.namelist()
+            if len(names) != len(set(names)):
+                raise ValueError("Duplicate Creality native archive entries.")
+            data = archive.read("Metadata/project_settings.config")
+    except (zipfile.BadZipFile, KeyError, OSError, ValueError) as exc:
+        raise ValueError("Invalid self-contained Creality project settings.") from exc
+    if len(data) > 4 * 1024 * 1024:
+        raise ValueError("Creality native project settings exceed audit limit.")
+    try:
+        config = json.loads(data)
+    except (UnicodeDecodeError, ValueError) as exc:
+        raise ValueError("Invalid Creality native project settings JSON.") from exc
+    if not isinstance(config, dict):
+        raise ValueError("Creality native project settings must be an object.")
+    return config
+
+
+def _creality_flush_basis(project_config):
+    """Fail closed on missing/invalid native matrix and multiplier evidence."""
+    import math
+    matrix = project_config.get("flush_volumes_matrix")
+    if not isinstance(matrix, list) or len(matrix) != 16:
+        raise ValueError("Creality native project requires its complete 4x4 matrix.")
+    for value in matrix:
+        try:
+            number = float(value) if not isinstance(value, bool) else math.nan
+        except (ValueError, TypeError, OverflowError):
+            raise ValueError("Invalid native Creality matrix entry.") from None
+        if not math.isfinite(number) or not 0 <= number <= 20000:
+            raise ValueError("Invalid native Creality matrix entry.")
+    multiplier = project_config.get("flush_multiplier")
+    if multiplier is None:
+        return float(matrix[1]), None
+    if isinstance(multiplier, (bool, list, dict, tuple)):
+        raise ValueError("Invalid Creality native scalar flush multiplier.")
+    try:
+        number = float(multiplier)
+    except (ValueError, TypeError, OverflowError):
+        raise ValueError("Invalid Creality native scalar flush multiplier.") from None
+    if not math.isfinite(number) or not 0.1 <= number <= 3:
+        raise ValueError("Invalid Creality native scalar flush multiplier.")
+    return float(matrix[1]), number
+
+
+def _creality_control_project(base, candidate):
+    """Ensure no printer scripts or unrelated native fields were modified."""
+    original = _read_creality_project_settings(base)
+    test = _read_creality_project_settings(candidate)
+    changed = {key for key in set(original) | set(test)
+               if original.get(key) != test.get(key)}
+    if not changed.issubset({
+            "flush_multiplier", "flush_volumes_matrix", "flush_volumes_changed"}):
+        raise ValueError("Unexpected native Creality project settings changed.")
+    with zipfile.ZipFile(io.BytesIO(base)) as before, \\
+            zipfile.ZipFile(io.BytesIO(candidate)) as after:
+        before_names = before.namelist()
+        after_names = after.namelist()
+        if set(before_names) != set(after_names):
+            raise ValueError("Native Creality project entry set changed.")
+        for name in before_names:
+            if name == "Metadata/project_settings.config":
+                continue
+            if before.read(name) != after.read(name):
+                raise ValueError("Native Creality project geometry or metadata changed.")
+    return original, test, changed
+
+
 def _native_nozzle_count(printer_blob):
     """Count nozzles from the *resolved native machine profile*, never names."""
     try:
@@ -144,7 +221,7 @@ class Command(BaseCommand):
         parser.add_argument("--native", action="store_true",
                             help="Send ONLY disposable offline fixture to approved worker")
         parser.add_argument("--test-flush", action="store_true",
-                            help="For native Orca single-nozzle tests, compare one directional matrix override")
+                            help="Run bounded native A/B flushing controls for Orca or Creality single-nozzle changers")
 
     def handle(self, *args, **opts):
         engine = opts["engine"]
@@ -244,11 +321,11 @@ class Command(BaseCommand):
                 count != 2 or opts["topology"] != "single_nozzle_changer"):
             raise CommandError("Creality multi-material fixture only supports its verified two-tool single-nozzle project.")
         if opts["test_flush"] and (
-                engine != "orcaslicer" or not cap.supported_for_encoding_only or count < 2):
-            raise CommandError("Directional native flush test requires verified Orca single-nozzle changer.")
+                not cap.supported_for_encoding_only or count < 2):
+            raise CommandError("Native flushing A/B test requires a supported single-nozzle changer.")
         # Reject missing/incompatible matrices *before* using worker time.
         first_flush_volume = None
-        if opts["test_flush"]:
+        if opts["test_flush"] and engine == "orcaslicer":
             raw_matrix = json.loads(native["process"]).get("flush_volumes_matrix")
             if not isinstance(raw_matrix, list) or len(raw_matrix) != count * count:
                 raise CommandError("No complete native flush matrix for directional A/B fixture.")
@@ -271,22 +348,70 @@ class Command(BaseCommand):
             geometry = build_creality_positioned_plate(
                 items, bed_width=width, bed_depth=depth,
                 tool_ids=list(range(count)))
-            model = build_creality_project_candidate(
-                geometry, printer=native["printer"], process=native["process"],
-                filaments=native["filaments"], bed_width=width, bed_depth=depth,
-                version=version)
+            def build_creality(flush=None):
+                return build_creality_project_candidate(
+                    geometry, printer=native["printer"], process=native["process"],
+                    filaments=native["filaments"], bed_width=width, bed_depth=depth,
+                    version=version, flush_settings=flush,
+                    tool_bindings={"fixture-slot-0": 0, "fixture-slot-1": 1}
+                    if flush is not None else None)
+            model = build_creality()
             kwargs = {"model_format": "3mf",
                       "filament_profiles": native["filaments"],
                       "creality_native_project": True}
-        def slice_native(process_blob):
+        def slice_native(process_blob, model_blob=None):
             return run_remote_job(
-                uuid.uuid4(), engine, version, model, native["printer"],
-                native["filaments"][0], process_blob,
+                uuid.uuid4(), engine, version, model if model_blob is None else model_blob,
+                native["printer"], native["filaments"][0], process_blob,
                 timeout_seconds=900, **kwargs)
+        # Validate Creality controls and baseline provenance before any worker
+        # execution; generated zero/140 fallback values are NOT user defaults.
+        creality_controls = None
+        if opts["test_flush"] and engine == "crealityprint":
+            baseline_config = _read_creality_project_settings(model)
+            first_flush_volume, native_multiplier = _creality_flush_basis(baseline_config)
+            if not 0 <= first_flush_volume <= 19950:
+                raise CommandError("Native Creality directional volume is outside safe A/B bounds.")
+            alternate_multiplier = 1.0 if native_multiplier != 1.0 else 1.3
+            if native_multiplier is None:
+                # Do not guess native engine multiplier defaults when missing.
+                alternate_multiplier = None
+            def settings(multiplier=None, transition=None):
+                return {
+                    "multiplier": multiplier, "prime_tower": "native",
+                    "transitions": [] if transition is None else [{
+                        "from_slot_id": transition[0],
+                        "to_slot_id": transition[1],
+                        "volume_mm3": transition[2],
+                    }],
+                }
+            creality_controls = [
+                ("forward", build_creality(settings(
+                    transition=("fixture-slot-0", "fixture-slot-1",
+                                first_flush_volume + 25)))),
+            ]
+            if alternate_multiplier is not None:
+                creality_controls.append((
+                    "multiplier", build_creality(settings(
+                        multiplier=alternate_multiplier))))
+            for name, candidate in creality_controls:
+                original, changed, keys = _creality_control_project(model, candidate)
+                if name == "forward":
+                    if (float(changed["flush_volumes_matrix"][1]) !=
+                            first_flush_volume + 25 or
+                            changed["flush_volumes_matrix"][4] !=
+                            original["flush_volumes_matrix"][4]):
+                        raise CommandError("Creality forward directional fixture was not isolated.")
+                    if changed.get("flush_multiplier") != original.get("flush_multiplier"):
+                        raise CommandError("Creality native multiplier changed in directional fixture.")
+                else:
+                    if ("flush_volumes_matrix" in keys or
+                            float(changed["flush_multiplier"]) != alternate_multiplier):
+                        raise CommandError("Creality multiplier control changed directional volumes.")
         output = slice_native(native["process"])
         summary["native_run"] = "sliced"
         summary["baseline"] = _safe_native_result(output)
-        if opts["test_flush"]:
+        if opts["test_flush"] and engine == "orcaslicer":
             first = first_flush_volume
             modified = apply_orca_native_flush(
                 native["process"], {
@@ -312,6 +437,37 @@ class Command(BaseCommand):
                     _metrics(control)["machine_command_sha256"]),
                 "note": "Motion or command change is stronger than metadata difference, but is NOT physical purge validation.",
             }
+        if creality_controls is not None:
+            provenance = json.loads(native["process"])
+            # A self-contained project may manufacture a conservative 140mm3
+            # matrix when the selected native process has none. Label that
+            # explicitly, never call it a vendor-calculated flush volume.
+            inherited = provenance.get("flush_volumes_matrix")
+            summary["creality_flush_basis"] = {
+                "matrix_source": (
+                    "native_resolved_process" if isinstance(inherited, list)
+                    and len(inherited) in (4, 16) else
+                    "candidate_builder_140mm3_fallback_unverified"),
+                "baseline_t0_to_t1_mm3": first_flush_volume,
+                "native_scalar_multiplier": native_multiplier,
+                "multiplier_default_known": native_multiplier is not None,
+            }
+            baseline_metrics = _metrics(output)
+            summary["creality_flush_controls"] = {}
+            for name, candidate in creality_controls:
+                result = slice_native(native["process"], candidate)
+                measured = _metrics(result)
+                summary["creality_flush_controls"][name] = {
+                    **_safe_native_result(result),
+                    "gcode_changed": hashlib.sha256(result).digest() != hashlib.sha256(output).digest(),
+                    "motion_changed": measured["motion_sha256"] != baseline_metrics["motion_sha256"],
+                    "machine_commands_changed": measured["machine_command_sha256"] !=
+                                                baseline_metrics["machine_command_sha256"],
+                    "note": "Offline native comparison only; physical purge is unverified.",
+                }
+            summary["creality_flush_controls"]["forward"]["requested_t0_to_t1_mm3"] = first_flush_volume + 25
+            if alternate_multiplier is not None:
+                summary["creality_flush_controls"]["multiplier"]["requested_multiplier"] = alternate_multiplier
         after = verified_installation().get(engine)
         if after != installed:
             raise CommandError("Pinned engine approval changed during offline diagnostics.")
