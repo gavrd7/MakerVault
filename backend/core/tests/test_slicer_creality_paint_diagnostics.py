@@ -11,7 +11,7 @@ from core.management.commands.diagnose_creality_paint_features import (
     _geometry_control_project, _layer_band_audit,
     _feature_role_audit, _gcode_effective_settings,
     _cantilever_fixture_stl, _cantilever_support_marker,
-    _cantilever_wall_marker,
+    _cantilever_wall_marker, _support_auto_control_project,
 )
 from core.slicer_approval import fixture_stl
 from core.slicer_mesh import inspect_stl
@@ -164,3 +164,40 @@ class CrealityPaintingDiagnosticTests(SimpleTestCase):
         self.assertGreater(max(p[2] for p in triangle) -
                            min(p[2] for p in triangle), 15)
         self.assertEqual(len(patch["polygon"]), 3)
+
+    def test_support_auto_control_only_switches_native_support_mode(self):
+        settings = {"enable_support": "1", "support_type": "normal(manual)",
+                    "flush_multiplier": "1", "filament_map": [1, 2, 3, 4]}
+        source = io.BytesIO()
+        with zipfile.ZipFile(source, "w") as output:
+            output.writestr("Metadata/project_settings.config", json.dumps(settings))
+            output.writestr("3D/3dmodel.model", b"unchanged geometry")
+            output.writestr("Metadata/model_settings.config", b"unchanged material mapping")
+        original = source.getvalue()
+        derived = _support_auto_control_project(original)
+        with zipfile.ZipFile(io.BytesIO(original)) as previous, zipfile.ZipFile(
+                io.BytesIO(derived)) as revised:
+            self.assertEqual(previous.namelist(), revised.namelist())
+            for path in previous.namelist():
+                if path != "Metadata/project_settings.config":
+                    self.assertEqual(previous.read(path), revised.read(path))
+            actual = json.loads(revised.read("Metadata/project_settings.config"))
+        self.assertEqual(actual, {**settings, "support_type": "normal(auto)"})
+        self.assertEqual(json.loads(zipfile.ZipFile(io.BytesIO(original)).read(
+            "Metadata/project_settings.config")), settings)
+
+    def test_support_auto_control_rejects_disabled_or_wrong_support_mode(self):
+        for values in (
+                {"enable_support": "0", "support_type": "normal(manual)"},
+                {"enable_support": "1", "support_type": "normal(auto)"},
+                {"support_type": "normal(manual)"},
+        ):
+            with self.subTest(values=values):
+                source = io.BytesIO()
+                with zipfile.ZipFile(source, "w") as output:
+                    output.writestr("Metadata/project_settings.config",
+                                    json.dumps(values))
+                with self.assertRaises(ValueError):
+                    _support_auto_control_project(source.getvalue())
+        with self.assertRaises(ValueError):
+            _support_auto_control_project(b"not a 3mf")
