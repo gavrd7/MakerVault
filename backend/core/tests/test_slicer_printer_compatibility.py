@@ -9,6 +9,7 @@ from core.management.commands.diagnose_slicer_printer_profiles import (
     _fixture_items, _safe_native_result, _same_native_pair, _native_nozzle_count,
     _compatible_filament_diameter, _read_creality_project_settings,
     _creality_flush_basis, _creality_control_project,
+    _creality_flush_override_control, _validate_creality_override_pair,
 )
 from core.slicer_plate_3mf import build_plate_3mf, NS
 
@@ -213,6 +214,57 @@ class PrinterCompatibilityFixtureTests(SimpleTestCase):
                                  after["change_filament_gcode"])
                 self.assertEqual(_creality_flush_basis(after),
                                  (140.0, multiplier))
+
+    def test_creality_override_marker_control_only_changes_process_declarations(self):
+        def archive(config, model=b"same geometry"):
+            destination = io.BytesIO()
+            with zipfile.ZipFile(destination, "w") as z:
+                z.writestr("Metadata/project_settings.config", json.dumps(config))
+                z.writestr("3D/3dmodel.model", model)
+                for name in ("Metadata/model_settings.config",
+                             "Metadata/creality.config",
+                             "[Content_Types].xml", "_rels/.rels"):
+                    z.writestr(name, b"unchanged")
+            return destination.getvalue()
+
+        config = {
+            "filament_settings_id": ["A", "B", "A", "B"],
+            "different_settings_to_system": [
+                "enable_support;support_type", "", "", "", "", ""],
+            "flush_multiplier": "2.0",
+            "flush_volumes_matrix": ["0", "140"] + ["140"] * 14,
+            "flush_volumes_changed": "1",
+            "change_filament_gcode": "preserve vendor macro",
+        }
+        raw = archive(config)
+        marked = _creality_flush_override_control(raw)
+        self.assertTrue(_validate_creality_override_pair(raw, marked))
+        original = _read_creality_project_settings(raw)
+        result = _read_creality_project_settings(marked)
+        self.assertEqual(result["flush_multiplier"], "2.0")
+        self.assertEqual(result["flush_volumes_matrix"], original["flush_volumes_matrix"])
+        self.assertEqual(result["change_filament_gcode"], "preserve vendor macro")
+        self.assertEqual(result["different_settings_to_system"][1:],
+                         original["different_settings_to_system"][1:])
+        names = result["different_settings_to_system"][0].split(";")
+        self.assertEqual(names[:2], ["enable_support", "support_type"])
+        self.assertEqual(names[2:], [
+            "flush_multiplier", "flush_volumes_matrix", "flush_volumes_changed"])
+        self.assertEqual(marked, _creality_flush_override_control(marked))
+
+    def test_creality_override_marker_fails_closed_on_invalid_vector(self):
+        config = {
+            "filament_settings_id": ["A", "B", "A", "B"],
+            "different_settings_to_system": ["", "", ""],
+        }
+        buffer = io.BytesIO()
+        with zipfile.ZipFile(buffer, "w") as z:
+            z.writestr("Metadata/project_settings.config", json.dumps(config))
+            for name in ("3D/3dmodel.model", "Metadata/model_settings.config",
+                         "Metadata/creality.config", "[Content_Types].xml", "_rels/.rels"):
+                z.writestr(name, b"unchanged")
+        with self.assertRaises(ValueError):
+            _creality_flush_override_control(buffer.getvalue())
 
     def test_invalid_creality_native_flush_basis_fails_closed(self):
         valid = {"flush_multiplier": "1.3",
