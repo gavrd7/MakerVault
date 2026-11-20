@@ -6,6 +6,7 @@ from django.test import SimpleTestCase
 
 from core.slicer_flush_adapters import (
     apply_creality_native_flush, apply_orca_native_flush,
+    audit_native_flush_profile,
     map_verified_flush_transitions, require_flush_capability,
     resolve_flush_capability,
 )
@@ -153,3 +154,21 @@ class FlushAdapterCapabilityTests(SimpleTestCase):
         project = {"flush_volumes_matrix": ["0"] * 16}
         apply_creality_native_flush(project, None, {"A": 0, "B": 1})
         self.assertEqual(project, {"flush_volumes_matrix": ["0"] * 16})
+
+    def test_redacted_native_profile_capability_audit_never_reveals_gcode(self):
+        info = audit_native_flush_profile({
+            "change_filament_gcode":
+                "{if multicolor_method} M8200 P S[next_extruder] "
+                "G1 E{flush_length_1} ; SECRET_SUPPLIER_MACRO {endif}",
+            "nozzle_volume": ["183", "99999999", "bad"],
+            "purge_in_prime_tower": "0",
+            "printer_settings_id": "PRIVATE_PRINTER",
+        })
+        self.assertTrue(info["uses_flush_length_segments"])
+        self.assertTrue(info["has_multicolor_conditional"])
+        self.assertTrue(info["mentions_vendor_material_handoff"])
+        self.assertEqual(info["nozzle_volumes_mm3"], [183.0])
+        self.assertNotIn("SECRET_SUPPLIER_MACRO", str(info))
+        self.assertNotIn("PRIVATE_PRINTER", str(info))
+        self.assertEqual(info["verification"],
+                         "template_only_not_emitted_or_physical_proof")
