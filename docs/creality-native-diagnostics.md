@@ -940,3 +940,56 @@ unchanged. Only if a tested, approved native profile and slicer path
 supports directional purge commands should the UI claim its
 flushing-volume changes affect actual filament waste. Future printer
 types stay behind separate engine and topology capabilities.
+
+
+### Printer-independent flushing foundation gate — 20 November 2026
+
+**Decision:** the non-Pro K2's unverified physical purge mechanism
+must not prevent the shared flushing foundation from supporting other
+eligible printers. The common contract remains independent of printer
+brand; physical applicability and actual delivered purge are separate
+verification questions.
+
+The adapter capability now exposes `supported_for_encoding_only`
+and a bounded machine-readable `reason` for unsupported topologies
+alongside the existing `supported` field, and continues to report
+`purge_validation=native_unverified`. **Neither supported field is
+proof that any printer will execute the requested waste volume.**
+Existing encoding support is currently limited to a verified
+single-nozzle material changer with one nozzle, with 2–16 logical
+materials on Orca and 2 assigned logical materials in the present
+Creality 3MF builder. Distinct independent-toolhead/toolchanger/IDEX
+mechanisms are recognized but deliberately cannot use these
+single-nozzle waste-volume adapters; add their own verified adapters
+when supported.
+
+The additional regression tests exercise:
+- A single verified physical-to-logical map with different physical
+  slot order for **2, 3, 4, 8 and 16** Orca logical materials. The
+  directional row-major index is correct; opposite-direction and
+  untouched transitions remain unchanged.
+- Absent native matrices with **3 and 4** logical materials. These
+  require every off-diagonal transition to be explicitly supplied,
+  rather than inventing zero purge defaults.
+- A single printer-neutral directional request encoded independently
+  through Orca's per-nozzle multiplier vector and Creality's scalar
+  multiplier. Vendor machine scripts remain byte-for-byte unchanged
+  by this operation.
+- Known unsupported or unknown printer topologies are rejected with
+  explicit capability reasons. A supported encoder is always still
+  marked `native_unverified` until actual machine-specific G-code
+  and firmware evidence is available.
+
+A number of future printer types, such as independent toolheads,
+could have little or no nozzle-purge waste, or could use entirely
+different head cleaning operations. Their future adapters must expose
+the appropriate **per-toolhead** capabilities instead of reusing
+single-nozzle changer purge controls. This prevents the K2 firmware
+unknown from blocking general architecture evolution **without**
+asserting that unverified printer models currently support active
+flushing adjustment.
+
+These changes are backend capability and tests only. They do not
+modify any machine G-code, native engine binaries, worker code or
+printer. Public PR #171 remains draft and requires the new tests to
+pass on Debian staging.
