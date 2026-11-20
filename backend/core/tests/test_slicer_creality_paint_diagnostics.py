@@ -36,7 +36,7 @@ class CrealityPaintingDiagnosticTests(SimpleTestCase):
         # this form; diagnostic metrics must not misleadingly report zero.
         for value in (b"E0.25", b"E.25", b"E-.25", b"E+0.25"):
             with self.subTest(value=value):
-                gcode = b"; exported by native worker\\nG1 X10 Y11 " + value + b"\\n"
+                gcode = b"; exported by native worker\nG1 X10 Y11 " + value + b"\n"
                 self.assertEqual(len(_approved_gcode(gcode)), 64)
                 self.assertEqual(_metrics(gcode)["g1_with_extrusion"], 1)
 
