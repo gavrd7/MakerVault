@@ -10,6 +10,7 @@ from core.management.commands.diagnose_slicer_printer_profiles import (
     _compatible_filament_diameter, _read_creality_project_settings,
     _creality_flush_basis, _creality_control_project,
     _creality_flush_override_control, _validate_creality_override_pair,
+    _creality_purge_route_control, _creality_purge_route_audit,
 )
 from core.slicer_plate_3mf import build_plate_3mf, NS
 
@@ -282,3 +283,65 @@ class PrinterCompatibilityFixtureTests(SimpleTestCase):
         self.assertEqual(_creality_flush_basis({
             "flush_volumes_matrix": valid["flush_volumes_matrix"]}),
             (624.0, None))
+
+    def test_purge_route_controls_preserve_native_geometry_macros_and_flush_values(self):
+        def archive(config):
+            destination = io.BytesIO()
+            with zipfile.ZipFile(destination, "w") as z:
+                z.writestr("Metadata/project_settings.config", json.dumps(config))
+                for name in ("3D/3dmodel.model", "Metadata/model_settings.config",
+                             "Metadata/creality.config", "[Content_Types].xml", "_rels/.rels"):
+                    z.writestr(name, b"unchanged native bytes")
+            return destination.getvalue()
+
+        source = {
+            "purge_in_prime_tower": "0",
+            "enable_prime_tower": "1",
+            "prime_volume": "45",
+            "flush_multiplier": "2.0",
+            "flush_volumes_matrix": ["0", "140"] + ["140"] * 14,
+            "change_filament_gcode": "secret native vendor macro",
+            "filament_settings_id": ["A", "B", "C", "D"],
+        }
+        original = archive(source)
+        for enabled, expected in ((False, "0"), (True, "1")):
+            with self.subTest(enabled=enabled):
+                candidate = _creality_purge_route_control(original, enabled)
+                with zipfile.ZipFile(io.BytesIO(original)) as before, zipfile.ZipFile(
+                        io.BytesIO(candidate)) as after:
+                    self.assertEqual(before.namelist(), after.namelist())
+                    for name in before.namelist():
+                        if name != "Metadata/project_settings.config":
+                            self.assertEqual(before.read(name), after.read(name))
+                changed = _read_creality_project_settings(candidate)
+                self.assertEqual(changed["purge_in_prime_tower"], expected)
+                for key in ("change_filament_gcode", "flush_multiplier",
+                            "flush_volumes_matrix", "prime_volume", "enable_prime_tower"):
+                    self.assertEqual(changed[key], source[key])
+                audit = _creality_purge_route_audit(changed)
+                self.assertEqual(audit["purge_in_prime_tower"],
+                                 "enabled" if enabled else "disabled")
+                self.assertEqual(audit["flush_multiplier"], 2.0)
+                self.assertEqual(audit["prime_volume_mm3"], 45.0)
+                self.assertNotIn("secret native vendor macro", str(audit))
+                self.assertEqual(candidate, _creality_purge_route_control(candidate, enabled))
+
+    def test_purge_route_audit_rejects_unrecognised_values_without_leaking(self):
+        audit = _creality_purge_route_audit({
+            "purge_in_prime_tower": ["invalid"],
+            "multicolor_method": "not a flag",
+            "prime_volume": "NaN",
+            "flush_multiplier": {"invalid": 123},
+            "change_filament_gcode": "private details",
+        })
+        self.assertEqual(audit["purge_in_prime_tower"], "unrecognised")
+        self.assertEqual(audit["multicolor_method"], "unrecognised")
+        self.assertIsNone(audit["prime_volume_mm3"])
+        self.assertIsNone(audit["flush_multiplier"])
+        self.assertNotIn("private details", str(audit))
+        with self.assertRaises(ValueError):
+            _creality_purge_route_audit([])
+        with self.assertRaises(ValueError):
+            _creality_purge_route_control(b"not a zip", True)
+        with self.assertRaises(ValueError):
+            _creality_purge_route_control(b"not a zip", "1")
