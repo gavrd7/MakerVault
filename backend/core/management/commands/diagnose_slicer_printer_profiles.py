@@ -265,6 +265,76 @@ def _validate_creality_purge_route_pair(baseline, parent, candidate, enabled):
     return True
 
 
+
+def _creality_emitted_setting_audit(gcode):
+    """Read safe numerical/flag settings emitted by Creality into G-code.
+
+    This captures G-code *text*, not the slicer's in-memory effective PrintConfig.
+    Never return raw comments, unrecognised field values, or native scripts.
+    """
+    import re
+    if not isinstance(gcode, bytes) or not 0 < len(gcode) <= 64 * 1024 * 1024:
+        raise ValueError("Invalid bounded native G-code audit input.")
+    recognised = {
+        "flush_multiplier", "purge_in_prime_tower", "enable_prime_tower",
+        "prime_volume", "prime_tower_width", "flush_volumes_matrix",
+    }
+    pattern = re.compile(
+        r"^;\\s*(" + "|".join(sorted(recognised)) +
+        r")\\s*(?:=|:)\\s*(.*?)\\s*$", re.I)
+    found = {}
+    conflicts = set()
+    for line in gcode.decode("utf-8", errors="replace").splitlines():
+        if len(line) > 8192:
+            continue
+        match = pattern.fullmatch(line.strip())
+        if match is None:
+            continue
+        key, raw = match.group(1).lower(), match.group(2).strip()
+        value = None
+        if key == "flush_volumes_matrix":
+            # Never expose a whole source matrix, including custom materials.
+            value = "present" if raw else "empty"
+        elif key in {"purge_in_prime_tower", "enable_prime_tower"}:
+            if raw in {"0", "1"}:
+                value = "enabled" if raw == "1" else "disabled"
+        else:
+            try:
+                number = float(raw)
+            except (ValueError, TypeError, OverflowError):
+                pass
+            else:
+                if math.isfinite(number) and 0 <= number <= 20000:
+                    value = round(number, 4)
+        if value is None:
+            continue
+        if key in found and found[key] != value:
+            conflicts.add(key)
+        else:
+            found[key] = value
+    for key in conflicts:
+        found.pop(key, None)
+    return {
+        "evidence_source": "generated_gcode_comment_metadata_not_native_runtime_config",
+        "settings": found,
+        "conflicting_keys": sorted(conflicts),
+        "recognised_keys_absent": sorted(recognised - set(found) - conflicts),
+        "limitation": "Only recognised emitted G-code comment values; absence does not prove settings were ignored.",
+    }
+
+
+def _creality_emitted_comparison(baseline, candidate):
+    """Compare only scrubbed native comment evidence across two slice outputs."""
+    before = _creality_emitted_setting_audit(baseline)
+    after = _creality_emitted_setting_audit(candidate)
+    return {
+        "candidate": after,
+        "changed_emitted_keys": sorted(
+            key for key in set(before["settings"]) | set(after["settings"])
+            if before["settings"].get(key) != after["settings"].get(key)),
+    }
+
+
 def _creality_purge_route_audit(config):
     """Report a bounded project setting snapshot, not effective runtime values."""
     if not isinstance(config, dict):
@@ -657,6 +727,7 @@ class Command(BaseCommand):
             baseline_metrics = _metrics(output)
             baseline_tower = tower_deposition_metrics(output)
             summary["native_tower_deposition_baseline"] = baseline_tower
+            summary["creality_emitted_gcode_baseline_audit"] = _creality_emitted_setting_audit(output)
             summary["creality_flush_controls"] = {}
             for name, candidate in creality_controls:
                 result = slice_native(native["process"], candidate)
@@ -664,6 +735,7 @@ class Command(BaseCommand):
                 tower = tower_deposition_metrics(result)
                 summary["creality_flush_controls"][name] = {
                     **_safe_native_result(result),
+                    "emitted_gcode_settings_comparison": _creality_emitted_comparison(output, result),
                     "purge_route_project_audit": (
                         _creality_purge_route_audit(_read_creality_project_settings(candidate))
                         if name.startswith("purge_route_") else None),
