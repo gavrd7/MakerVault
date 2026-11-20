@@ -7,6 +7,7 @@ from django.test import SimpleTestCase
 
 from core.management.commands.diagnose_slicer_printer_profiles import (
     _fixture_items, _safe_native_result, _same_native_pair, _native_nozzle_count,
+    _compatible_filament_diameter,
 )
 from core.slicer_plate_3mf import build_plate_3mf, NS
 
@@ -87,3 +88,18 @@ class PrinterCompatibilityFixtureTests(SimpleTestCase):
                     _native_nozzle_count(json.dumps({
                         "name": "Any Printer", "nozzle_diameter": values,
                     }).encode())
+
+    def test_native_multi_material_requires_same_verified_filament_diameter(self):
+        def filament(diameter):
+            return json.dumps({"type": "filament",
+                               "filament_diameter": [diameter]}).encode()
+        self.assertEqual(_compatible_filament_diameter(
+            [filament("1.75"), filament("1.75"), filament("1.750")]), 1.75)
+        for profiles in (
+            [filament("1.75"), filament("2.85")],
+            [filament("1.75"), filament("nan")],
+            [filament("1.75"), json.dumps({"type": "filament"}).encode()],
+        ):
+            with self.subTest(profiles=profiles):
+                with self.assertRaises(ValueError):
+                    _compatible_filament_diameter(profiles)
