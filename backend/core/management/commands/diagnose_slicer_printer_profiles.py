@@ -747,11 +747,11 @@ class Command(BaseCommand):
             for name, candidate in creality_controls:
                 original, changed, keys = _creality_control_project_with_extra(
                     model, candidate,
-                    ({"different_settings_to_system"} if name.endswith("_marked")
-                     else {"purge_in_prime_tower", "different_settings_to_system"}
+                    ({"purge_in_prime_tower", "different_settings_to_system"}
                      if name == "purge_route_tower_marked"
                      else {"different_settings_to_system", "prime_volume"}
                      if name == "prime_volume_marked"
+                     else {"different_settings_to_system"} if name.endswith("_marked")
                      else {"purge_in_prime_tower"} if name.startswith("purge_route_")
                      else {"prime_volume"} if name == "prime_volume_positive_control"
                      else set()))
