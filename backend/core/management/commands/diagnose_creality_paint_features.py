@@ -292,14 +292,16 @@ def _feature_role_audit(gcode):
             "extrusion_xy_moves_by_role": counts}
 
 
-def _cantilever_fixture_stl():
+def _cantilever_fixture_stl(*, sloped=False):
     """Watertight, offline-only L-section cantilever: 30 x 12 x 25 mm.
 
     The elevated underside spans X=10..30, Z=20, above empty space.
     Unlike the original colour cube, it can demand painted support.
     """
-    outline = [(0., 0.), (10., 0.), (10., 20.),
-               (30., 20.), (30., 25.), (0., 25.)]
+    # The sloped variant intersects multiple Z slabs; planar downward facets
+    # at exactly Z=20 may be discarded by native slice_mesh_slabs().
+    outline = [(0., 0.), (10., 0.), (10., 19. if sloped else 20.),
+               (30., 23. if sloped else 20.), (30., 25.), (0., 25.)]
     caps = ((0, 1, 2), (0, 2, 5), (2, 3, 4), (2, 4, 5))
     triangles = []
     for a, b, c in caps:
@@ -318,7 +320,7 @@ def _cantilever_fixture_stl():
     return bytes(data)
 
 
-def _cantilever_support_marker(stl):
+def _cantilever_support_marker(stl, *, sloped=False):
     """Paint both triangles of the suspended downward-facing cantilever.
 
     A one-triangle diagnostic patch can fall below support-generator minimum
@@ -333,7 +335,9 @@ def _cantilever_support_marker(stl):
               (minima[1] + maxima[1]) / 2, minima[2])
     patches = []
     for idx, tri in enumerate(tris):
-        if not (all(abs(p[2] - 20.) < 1e-5 for p in tri) and
+        if not (all(p[0] >= 10. - 1e-5 and
+                    abs(p[2] - (19. + (p[0] - 10.) * 0.2 if sloped else 20.)) < 1e-5
+                    for p in tri) and
                 sum(p[0] for p in tri) / 3 > 13.):
             continue
         a, b, c = tri
@@ -446,6 +450,8 @@ class Command(BaseCommand):
         parser.add_argument("--deep", action="store_true", help="Also slice identical-geometry unpainted controls for semantic facets")
         parser.add_argument("--support-fixture", action="store_true",
                             help="Replace the in-memory support test mesh with a fixed unsupported cantilever")
+        parser.add_argument("--sloped-support-fixture", action="store_true",
+                            help="Use a sloped underside spanning several Z slabs (requires --support-fixture)")
         parser.add_argument("--wall-fixture", action="store_true",
                             help="Use a synthetic outside wall for seam or fuzzy tests")
 
@@ -453,6 +459,8 @@ class Command(BaseCommand):
         if options["support_fixture"] and (
                 options["only"] != "support" or not options["deep"]):
             raise CommandError("--support-fixture requires --only support --deep.")
+        if options["sloped_support_fixture"] and not options["support_fixture"]:
+            raise CommandError("--sloped-support-fixture requires --support-fixture.")
         if options["wall_fixture"] and (
                 options["only"] not in ("seam", "fuzzy") or not options["deep"]):
             raise CommandError("--wall-fixture requires --only seam|fuzzy --deep.")
@@ -536,7 +544,8 @@ class Command(BaseCommand):
                 # Explicit synthetic test only; no FileAsset, saved job, or
                 # private mesh is changed. Preserve the user's known-good
                 # verified two-slot material palette and native profiles.
-                model_stl = _cantilever_fixture_stl()
+                model_stl = _cantilever_fixture_stl(
+                    sloped=feature == "support" and options["sloped_support_fixture"])
                 colour_signature, colour_face, colour_polygon, _ = _patch_for_model(model_stl)
                 old_colour = obj["colour_paint"]
                 base_slot_id = (obj.get("material_slot") or {}).get("slot_id")
@@ -552,7 +561,8 @@ class Command(BaseCommand):
                                               "polygon": colour_polygon}]}],
                 }
                 if feature == "support":
-                    obj["support_paint"] = _cantilever_support_marker(model_stl)
+                    obj["support_paint"] = _cantilever_support_marker(
+                        model_stl, sloped=options["sloped_support_fixture"])
                 elif feature == "seam":
                     obj["seam_paint"] = _cantilever_wall_marker(model_stl)
                 else:
@@ -604,7 +614,9 @@ class Command(BaseCommand):
                     metrics["effective_support_settings"] = _native_support_settings(package)
                 if synthetic_fixture:
                     metrics["test_geometry"] = (
-                        "synthetic elevated cantilever (offline only)" if feature == "support"
+                        ("synthetic sloped underside cantilever (offline only)"
+                         if options["sloped_support_fixture"] else
+                         "synthetic elevated cantilever (offline only)") if feature == "support"
                         else "synthetic exterior wall (offline only)")
                 metrics["gcode_effective_settings"] = _gcode_effective_settings(data)
                 metrics["feature_role_audit"] = _feature_role_audit(data)
