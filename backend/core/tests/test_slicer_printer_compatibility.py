@@ -12,6 +12,7 @@ from core.management.commands.diagnose_slicer_printer_profiles import (
     _creality_flush_override_control, _validate_creality_override_pair,
     _creality_purge_route_control, _creality_purge_route_audit,
     _validate_creality_purge_route_pair,
+    _creality_emitted_setting_audit, _creality_emitted_comparison,
 )
 from core.slicer_plate_3mf import build_plate_3mf, NS
 
@@ -355,6 +356,40 @@ class PrinterCompatibilityFixtureTests(SimpleTestCase):
             _validate_creality_purge_route_pair(
                 baseline, parent, archive({**native, "flush_multiplier": "1.0",
                                            "purge_in_prime_tower": "1"}), True)
+
+    def test_emitted_gcode_audit_reports_only_safe_native_comment_evidence(self):
+        baseline = (b"; flush_multiplier = 1.0\n"
+                    b"; prime_volume = 45\n"
+                    b"; purge_in_prime_tower = 0\n"
+                    b"; flush_volumes_matrix = 0,140,140,0\n"
+                    b"; change_filament_gcode = SECRET_MACRO\n"
+                    b"G1 X1 Y1 E1\n")
+        changed = baseline.replace(b"flush_multiplier = 1.0", b"flush_multiplier = 2.0")
+        before = _creality_emitted_setting_audit(baseline)
+        comparison = _creality_emitted_comparison(baseline, changed)
+        self.assertEqual(before["settings"]["flush_multiplier"], 1.0)
+        self.assertEqual(before["settings"]["purge_in_prime_tower"], "disabled")
+        self.assertEqual(before["settings"]["flush_volumes_matrix"], "present")
+        self.assertEqual(comparison["changed_emitted_keys"], ["flush_multiplier"])
+        self.assertEqual(comparison["candidate"]["settings"]["flush_multiplier"], 2.0)
+        self.assertNotIn("SECRET_MACRO", str(comparison))
+        self.assertNotIn("0,140,140,0", str(before))
+
+    def test_emitted_gcode_audit_handles_absence_conflicts_and_invalid_input(self):
+        report = _creality_emitted_setting_audit(
+            b"; flush_multiplier = 1.0\n; flush_multiplier = 2.0\n"
+            b"; prime_volume = nan\n; prime_tower_width = 0xBAD\n"
+            b"; purge_in_prime_tower = suspicious\n"
+            b"; a_secret = 1234\n")
+        self.assertEqual(report["settings"], {})
+        self.assertEqual(report["conflicting_keys"], ["flush_multiplier"])
+        self.assertIn("prime_volume", report["recognised_keys_absent"])
+        self.assertNotIn("suspicious", str(report))
+        self.assertNotIn("0xBAD", str(report))
+        for value in (None, b"", "not bytes"):
+            with self.subTest(value=value):
+                with self.assertRaises(ValueError):
+                    _creality_emitted_setting_audit(value)
 
     def test_purge_route_audit_rejects_unrecognised_values_without_leaking(self):
         audit = _creality_purge_route_audit({
