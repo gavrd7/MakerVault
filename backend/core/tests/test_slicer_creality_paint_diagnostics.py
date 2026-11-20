@@ -132,6 +132,22 @@ class CrealityPaintingDiagnosticTests(SimpleTestCase):
         self.assertNotIn("change_filament_gcode", audit)
         self.assertNotIn("sensitive", str(audit))
 
+    def test_support_config_footer_audit_is_bounded_and_does_not_leak_macros(self):
+        gcode = (b"; enable_support = 1\n"
+                 b"; support_type = normal(auto)\n"
+                 b"; support_threshold_angle = 89\n"
+                 b"; minimum_support_area = 0\n"
+                 b"; bridge_no_support = 0\n"
+                 b"; change_filament_gcode = PRIVATE_MACRO\n")
+        data = _gcode_effective_settings(gcode)
+        self.assertEqual(data["enable_support"], "1")
+        self.assertEqual(data["support_type"], "normal(auto)")
+        self.assertEqual(data["support_threshold_angle"], "89")
+        self.assertEqual(data["minimum_support_area"], "0")
+        self.assertEqual(data["bridge_no_support"], "0")
+        self.assertNotIn("change_filament_gcode", data)
+        self.assertNotIn("PRIVATE_MACRO", str(data))
+
     def test_deterministic_cantilever_fixture_paints_elevated_underside(self):
         first = _cantilever_fixture_stl()
         self.assertEqual(first, _cantilever_fixture_stl())
