@@ -813,3 +813,67 @@ sudo docker exec makervault python3 /app/backend/manage.py test \
 Do not treat a successful 58/58 pass as final physical purge validation.
 The user already ran the new flushing deep diagnostic successfully, so
 there is no need to repeat it merely to test the missing import.
+
+
+### Read-only Creality K2 profile provenance audit — 20 November 2026
+
+The previously selected Creality preset has a filament-change script but
+none of the segmented purge length placeholders present in upstream
+Creality's K2 profile. Do not infer that the machine preset is wrong or
+replace the vendor G-code. To find the source of the discrepancy,
+the existing offline diagnostic now supports **`--profile-audit-only`**.
+
+```bash
+sudo docker exec makervault python3 /app/backend/manage.py \
+  diagnose_creality_paint_features --profile-audit-only
+```
+
+The command selects the same completed single-object painted Creality
+test job used by the original diagnostics. With `--job-id <UUID>`,
+the test can be pinned to one specific stored job. It reads the *already
+verified imported* printer and process profiles; it does **not**
+start the worker, upload G-code, create a SliceJob or write any printer
+configuration. Profile inheritance is traced only within the same
+owner, engine, version, kind and import source scope, with the original
+profile content hash checked at each step. Missing/ambiguous parents
+fail closed.
+
+Output includes:
+
+- `machine_origin` and `process_origin`: for a fixed allowlist of
+  purge-related native keys, whether the selected imported file
+  defined the value directly, inherited it from a parent (including
+  ancestry depth), or left it absent.
+- `native_profile_merge`: the actual selected *resolved* machine
+  plus *resolved/overridden* process settings. For each purge key,
+  whether the machine defined it, whether process defined it,
+  whether process displaced machine's value and whether they differ.
+  Native project creation applies machine then process, so the
+  process always wins when both provide a key.
+- For `change_filament_gcode`, only script-presence, a SHA-256
+  fingerprint, character length and boolean structural capabilities,
+  including segmented flush placeholders and vendor handoff flags.
+  **No printer macro lines, profile file paths, private names,
+  credentials or filament scripts are returned.**
+- `process_overrides_present` identifies whether saved process
+  changes altered the imported resolved process before packaging.
+
+Regression suite:
+
+```bash
+sudo docker exec makervault python3 /app/backend/manage.py test \
+  core.tests.test_slicer_creality_profile_provenance \
+  core.tests.test_slicer_flush_settings \
+  core.tests.test_slicer_flush_adapters \
+  core.tests.test_slicer_creality_project \
+  core.tests.test_slicer_creality_paint_diagnostics --noinput
+```
+
+This is a **diagnostic addition**, not a production printer/macro
+change. Follow-up: use the report to determine whether the selected
+machine preset, an inherited parent, a process override or the
+Creality CLI itself accounts for the short macro. If the resolved
+profile differs from Creality's versioned official K2 profile, inspect
+profile pack selection and source/variant in private rather than
+importing/replacing machine commands. Physical purge volumes remain
+unverified until an approved native command path is demonstrated.
