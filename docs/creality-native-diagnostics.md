@@ -605,3 +605,74 @@ Useful upstream code:
 [Creality K2 machine JSON](https://github.com/CrealityOfficial/CrealityPrint/blob/v7.3.1/resources/profiles/Creality/machine/Creality%20K2%200.4%20nozzle.json),
 [Orca FlushVolCalc.cpp](https://github.com/OrcaSlicer/OrcaSlicer/blob/v2.4.2/src/libslic3r/FlushVolCalc.cpp),
 [Orca K2 machine JSON](https://github.com/OrcaSlicer/OrcaSlicer/blob/v2.4.2/resources/profiles/Creality/machine/Creality%20K2%200.4%20nozzle.json).
+
+
+### Accepted cross-printer and cross-slicer architecture decision — 20 November 2026
+
+**Mandatory for follow-up flushing work.** One engine-neutral MakerVault
+application/API/UI request, independent per-slicer adapters, and
+independent per-printer material-change capabilities. No hardcoded K2
+behaviour in the common layer.
+
+**Common user request**: verified printer and slicer profile, assigned
+physical material slots, directional source-to-destination transition
+volumes in mm3, optional multiplier, and a native purge/tower preference
+where supported. Distinguish user-entered final volume from engine raw
+pre-multiplier matrix values, and both from actual physical purging.
+Never accept arbitrary printer scripts via this request.
+
+**Independent capability axes**:
+
+1. **Slicer adapter** describes version, native matrix arrangement,
+   scalar versus per-nozzle multiplier representation, calculation and
+   defaults, preset restoration, supported destinations, and native
+   validation/audit method. Orca and Creality retain independent
+   adapters beneath the same contract.
+2. **Printer/material topology** describes a single-nozzle changer
+   (CFS/AMS/MMU), independent toolheads, ordinary single material, or
+   unknown/unsupported arrangement. Resolve nozzle count, material
+   indices, physical slot routes and native vs firmware-owned purge
+   from verified profiles and bindings; never infer from brand/model
+   names alone.
+
+A printer targeted through two engines must receive the same user
+request, translated separately. An engine targeting multiple printers
+must obey each printer's verified capabilities. Single-nozzle changer
+flushing must not be silently enabled for independent toolheads.
+Unsupported/unknown combinations fail closed or retain verified
+native defaults with an explicit unsupported status; never inject
+or invent a machine-specific G-code purge sequence.
+
+**Evidence stages**: input validated/mapped; native project or preset
+contains override; emitted effective G-code config retains override;
+toolchange/purge commands respond; physical purge verified (if
+applicable). Each stage must be reported separately; storing a UI
+number must never be presented as evidence of firmware purge control.
+
+**Implementation plan and acceptance tests**:
+
+- Retain the common validated directional-settings contract in
+  backend/core/slicer_flush_settings.py, preserving compatible APIs.
+  Put the four-slot/scalar/preset behaviour in a Creality adapter and
+  the per-nozzle/vector/matrix behaviour in an Orca adapter.
+- Resolve each job's printer topology independently from engine
+  selection. Confirm filament count is not automatically nozzle
+  count, tool count or CFS slot count.
+- Test at least a verified single-nozzle multimaterial printer,
+  independent multi-toolhead machine, single-material machine, and
+  unknown/unsupported profile; include more than the Creality K2.
+  Do not claim support for a printer until its native profile and
+  toolchange path have actually passed tests.
+- Audit directional row/column ordering, slot-to-tool remapping,
+  scalar vs per-nozzle multipliers, default retention, invalid
+  topology, and native G-code effects separately for each adapter.
+- Register future slicers by their adapter and capability descriptor;
+  don't extend a global K2-specific conditional chain.
+- Keep this a staging-only verification effort until the native
+  matrix is shown to change the intended toolchange/purge behaviour
+  and necessary physical checks have been completed. No replacement
+  of vendor macros, firmware guessing, or new hardware commands.
+
+This decision supports multiple engines and printer categories without
+falsely asserting that every printer's physical flushing is already
+implemented.
