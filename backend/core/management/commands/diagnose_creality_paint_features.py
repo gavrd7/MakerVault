@@ -102,6 +102,65 @@ def _support_auto_control_project(unpainted_project):
     return output.getvalue()
 
 
+_SUPPORT_DIAGNOSTIC_KEYS = (
+    "enable_support", "support_type", "support_threshold_angle",
+    "minimum_support_area", "support_remove_small_overhang",
+    "support_on_build_plate_only", "support_critical_regions_only",
+    "bridge_no_support", "max_bridge_length", "support_style",
+    "support_interface_top_layers", "support_top_z_distance",
+    "support_object_xy_distance", "enforce_support_layers",
+)
+
+
+def _native_support_settings(package):
+    """Return bounded, non-sensitive support-only native project options."""
+    with zipfile.ZipFile(io.BytesIO(package)) as archive:
+        config = json.loads(archive.read("Metadata/project_settings.config"))
+    return {key: str(config[key])[:48] for key in _SUPPORT_DIAGNOSTIC_KEYS
+            if key in config and isinstance(config[key], (str, int, float, bool))}
+
+
+def _support_relaxed_auto_control_project(unpainted_auto_project):
+    """Diagnostic-only high-sensitivity auto-support control, not printable.
+
+    Settings are derived from upstream 7.3.1 PrintConfig/SupportMaterial
+    semantics, not copied from a user's reference project. Retain geometry,
+    metadata, colours, filament mapping and all other native configuration.
+    """
+    if len(unpainted_auto_project) > 32 * 1024 * 1024:
+        raise ValueError("Support diagnostic archive exceeds size limit.")
+    output = io.BytesIO()
+    updated = False
+    overrides = {
+        "enable_support": "1", "support_type": "normal(auto)",
+        "support_threshold_angle": "89",
+        "minimum_support_area": "0",
+        "support_remove_small_overhang": "0",
+        "support_on_build_plate_only": "0",
+        "support_critical_regions_only": "0",
+        "bridge_no_support": "0", "max_bridge_length": "0",
+    }
+    with zipfile.ZipFile(io.BytesIO(unpainted_auto_project)) as source, zipfile.ZipFile(
+            output, "w", compression=zipfile.ZIP_DEFLATED, allowZip64=False) as target:
+        names = source.namelist()
+        if len(names) != len(set(names)) or len(names) > 16:
+            raise ValueError("Invalid diagnostic project file list.")
+        for info in source.infolist():
+            value = source.read(info.filename)
+            if info.filename == "Metadata/project_settings.config":
+                config = json.loads(value)
+                if str(config.get("enable_support")) != "1" or config.get(
+                        "support_type") != "normal(auto)":
+                    raise ValueError("Relaxed control requires enabled automatic support.")
+                config.update(overrides)
+                value = json.dumps(config, separators=(",", ":")).encode("utf-8")
+                updated = True
+            target.writestr(info.filename, value)
+    if not updated:
+        raise ValueError("Missing native project settings.")
+    return output.getvalue()
+
+
 def _layer_band_audit(gcode, lower, upper, *, target=0.12):
     """Count actual consecutive layer steps within a requested Z interval."""
     if not isinstance(gcode, bytes):
@@ -541,6 +600,8 @@ class Command(BaseCommand):
                     model_format="3mf", filament_profiles=prepared["filament_profiles"],
                     creality_native_project=True, timeout_seconds=900)
                 metrics = _metrics(data)
+                if feature == "support":
+                    metrics["effective_support_settings"] = _native_support_settings(package)
                 if synthetic_fixture:
                     metrics["test_geometry"] = (
                         "synthetic elevated cantilever (offline only)" if feature == "support"
@@ -586,6 +647,27 @@ class Command(BaseCommand):
                     auto_metrics = _metrics(auto_data)
                     auto_roles = _feature_role_audit(auto_data)
                     manual_roles = control_role_audit
+                    relaxed_project = _support_relaxed_auto_control_project(auto_project)
+                    relaxed_data = run_remote_job(
+                        uuid.uuid4(), "crealityprint", job.engine_version,
+                        relaxed_project, printer_native, prepared["filament_profiles"][0], process,
+                        model_format="3mf", filament_profiles=prepared["filament_profiles"],
+                        creality_native_project=True, timeout_seconds=900)
+                    relaxed_metrics = _metrics(relaxed_data)
+                    relaxed_roles = _feature_role_audit(relaxed_data)
+                    metrics["relaxed_auto_support_control"] = {
+                        "diagnostic_only_not_printable": True,
+                        "effective_support_settings": _native_support_settings(relaxed_project),
+                        "native_support_role_tags": sum(
+                            relaxed_roles["recognized_role_tag_counts"].get(name, 0)
+                            for name in ("support", "support interface", "support transition")),
+                        "motion_changed_from_default_auto": (
+                            relaxed_metrics["motion_sha256"] != auto_metrics["motion_sha256"]),
+                        "extrusion_command_difference_from_default_auto": (
+                            relaxed_metrics["g1_with_extrusion"] -
+                            auto_metrics["g1_with_extrusion"]),
+                        "note": "Only support thresholds/filtering changed; diagnostic G-code must not be printed.",
+                    }
                     metrics["automatic_support_control"] = {
                         "support_type": "normal(auto)",
                         "support_enabled": True,
