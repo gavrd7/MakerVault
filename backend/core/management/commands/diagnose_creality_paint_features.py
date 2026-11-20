@@ -20,7 +20,8 @@ from django.core.management.base import BaseCommand, CommandError
 
 from core.models import SliceJob, FileAsset
 from core.slicer_bed_dimensions import trusted_plate_dimensions
-from core.slicer_creality_project import build_creality_project_candidate
+from core.slicer_creality_project import (build_creality_project_candidate,
+                                          _mark_creality_support_overrides)
 from core.slicer_execution import MAX_INPUT, _read_owned_file, verified_installation
 from core.slicer_multimaterial_execution import prepare_creality_positioned_project
 from core.slicer_native_resolution import resolved_native_profile
@@ -94,6 +95,7 @@ def _support_auto_control_project(unpainted_project):
                         config.get("support_type") != "normal(manual)"):
                     raise ValueError("Support control requires manually enabled native supports.")
                 config["support_type"] = "normal(auto)"
+                _mark_creality_support_overrides(config, ("enable_support", "support_type"))
                 value = json.dumps(config, separators=(",", ":")).encode("utf-8")
                 replaced = True
             dest.writestr(info.filename, value)
@@ -116,8 +118,14 @@ def _native_support_settings(package):
     """Return bounded, non-sensitive support-only native project options."""
     with zipfile.ZipFile(io.BytesIO(package)) as archive:
         config = json.loads(archive.read("Metadata/project_settings.config"))
-    return {key: str(config[key])[:48] for key in _SUPPORT_DIAGNOSTIC_KEYS
-            if key in config and isinstance(config[key], (str, int, float, bool))}
+    result = {key: str(config[key])[:48] for key in _SUPPORT_DIAGNOSTIC_KEYS
+              if key in config and isinstance(config[key], (str, int, float, bool))}
+    differences = config.get("different_settings_to_system")
+    if isinstance(differences, list) and differences and isinstance(differences[0], str):
+        result["declared_support_process_overrides"] = sorted(
+            key for key in differences[0].split(";")
+            if key in _SUPPORT_DIAGNOSTIC_KEYS)
+    return result
 
 
 def _support_relaxed_auto_control_project(unpainted_auto_project):
@@ -153,6 +161,7 @@ def _support_relaxed_auto_control_project(unpainted_auto_project):
                         "support_type") != "normal(auto)":
                     raise ValueError("Relaxed control requires enabled automatic support.")
                 config.update(overrides)
+                _mark_creality_support_overrides(config, overrides)
                 value = json.dumps(config, separators=(",", ":")).encode("utf-8")
                 updated = True
             target.writestr(info.filename, value)
