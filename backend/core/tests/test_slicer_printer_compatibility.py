@@ -11,6 +11,7 @@ from core.management.commands.diagnose_slicer_printer_profiles import (
     _creality_flush_basis, _creality_control_project,
     _creality_flush_override_control, _validate_creality_override_pair,
     _creality_purge_route_control, _creality_purge_route_audit,
+    _validate_creality_purge_route_pair,
 )
 from core.slicer_plate_3mf import build_plate_3mf, NS
 
@@ -325,6 +326,35 @@ class PrinterCompatibilityFixtureTests(SimpleTestCase):
                 self.assertEqual(audit["prime_volume_mm3"], 45.0)
                 self.assertNotIn("secret native vendor macro", str(audit))
                 self.assertEqual(candidate, _creality_purge_route_control(candidate, enabled))
+
+    def test_route_isolation_compares_common_multiplier_parent_not_native_baseline(self):
+        def archive(config, geometry=b"same object"):
+            out = io.BytesIO()
+            with zipfile.ZipFile(out, "w") as z:
+                z.writestr("Metadata/project_settings.config", json.dumps(config))
+                for name in ("3D/3dmodel.model", "Metadata/model_settings.config",
+                             "Metadata/creality.config", "[Content_Types].xml", "_rels/.rels"):
+                    z.writestr(name, geometry)
+            return out.getvalue()
+
+        native = {"flush_volumes_matrix": ["0", "140"] + ["140"] * 14,
+                  "change_filament_gcode": "native immutable tool-change macro",
+                  "purge_in_prime_tower": "0"}
+        baseline = archive(native)
+        parent = archive({**native, "flush_multiplier": "2.0"})
+        for route in (False, True):
+            candidate = _creality_purge_route_control(parent, route)
+            self.assertTrue(_validate_creality_purge_route_pair(
+                baseline, parent, candidate, route))
+        tampered = archive({**native, "flush_multiplier": "2.0",
+                            "purge_in_prime_tower": "1",
+                            "prime_volume": "999"})
+        with self.assertRaises(ValueError):
+            _validate_creality_purge_route_pair(baseline, parent, tampered, True)
+        with self.assertRaises(ValueError):
+            _validate_creality_purge_route_pair(
+                baseline, parent, archive({**native, "flush_multiplier": "1.0",
+                                           "purge_in_prime_tower": "1"}), True)
 
     def test_purge_route_audit_rejects_unrecognised_values_without_leaking(self):
         audit = _creality_purge_route_audit({
