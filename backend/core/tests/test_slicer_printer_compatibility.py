@@ -14,7 +14,7 @@ from core.management.commands.diagnose_slicer_printer_profiles import (
     _validate_creality_purge_route_pair,
     _creality_emitted_setting_audit, _creality_emitted_comparison,
     _creality_prime_volume_control, _creality_control_project_with_extra,
-    _creality_mark_native_process_options,
+    _creality_mark_native_process_options, _creality_marked_result_comparison,
 )
 from core.slicer_plate_3mf import build_plate_3mf, NS
 
@@ -358,6 +358,47 @@ class PrinterCompatibilityFixtureTests(SimpleTestCase):
             _validate_creality_purge_route_pair(
                 baseline, parent, archive({**native, "flush_multiplier": "1.0",
                                            "purge_in_prime_tower": "1"}), True)
+
+    def test_marked_creality_result_comparison_uses_explicit_parent_names(self):
+        def record(motion, machine, tower, settings):
+            return {
+                "motion_sha256": motion,
+                "machine_command_sha256": machine,
+                "tower_deposition": {"positive_e_length_mm": tower},
+                "emitted_gcode_settings_comparison": {
+                    "candidate": {"settings": settings}},
+            }
+        original = record("same", "same-machine", 100.0, {"prime_volume": 45.0})
+        changed = record("changed", "same-machine", 180.0, {"prime_volume": 180.0})
+        controls = {
+            "prime_volume_positive_control": original,
+            "prime_volume_marked": changed,
+            "purge_route_tower": original,
+            "purge_route_tower_marked": original,
+            "multiplier_1_0": original,
+            "multiplier_1_0_marked": original,
+            "multiplier_2_0": original,
+            "multiplier_2_0_marked": original,
+        }
+        for marked, parent in (
+                ("multiplier_1_0_marked", "multiplier_1_0"),
+                ("multiplier_2_0_marked", "multiplier_2_0"),
+                ("prime_volume_marked", "prime_volume_positive_control"),
+                ("purge_route_tower_marked", "purge_route_tower")):
+            comparison = _creality_marked_result_comparison(controls, marked, parent)
+            if marked == "prime_volume_marked":
+                self.assertTrue(comparison["motion_changed_vs_unmarked"])
+                self.assertTrue(comparison["tower_extrusion_changed_vs_unmarked"])
+                self.assertEqual(comparison["emitted_keys_changed_vs_unmarked"],
+                                 ["prime_volume"])
+            else:
+                self.assertFalse(comparison["motion_changed_vs_unmarked"])
+                self.assertEqual(comparison["emitted_keys_changed_vs_unmarked"], [])
+        with self.assertRaises(ValueError):
+            _creality_marked_result_comparison(
+                controls, "prime_volume_marked", "prime_volume")
+        with self.assertRaises(ValueError):
+            _creality_marked_result_comparison(controls, "unknown", "multiplier_1_0")
 
     def test_creality_print_override_markers_preserve_numeric_options_and_macros(self):
         values = {
