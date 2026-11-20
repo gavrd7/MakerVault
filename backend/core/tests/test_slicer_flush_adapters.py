@@ -50,6 +50,112 @@ class FlushAdapterCapabilityTests(SimpleTestCase):
                             engine, topology, nozzle_count=nozzles,
                             material_count=materials)
 
+    def test_capability_is_only_encoding_not_firmware_or_physical_purge(self):
+        for engine in ("orcaslicer", "crealityprint"):
+            supported = resolve_flush_capability(
+                engine, "single_nozzle_changer",
+                nozzle_count=1, material_count=2)
+            self.assertTrue(supported.supported)
+            self.assertTrue(supported.supported_for_encoding_only)
+            self.assertEqual(supported.purge_validation, "native_unverified")
+            self.assertEqual(supported.reason, "")
+            for topology, nozzles, materials in (
+                ("independent_toolheads", 2, 2),
+                ("toolchanger", 4, 4),
+                ("idex", 2, 2),
+                ("manual_filament_change", 1, 2),
+                ("single_material", 1, 1),
+                ("unknown", 1, 2),
+            ):
+                with self.subTest(engine=engine, topology=topology):
+                    unsupported = resolve_flush_capability(
+                        engine, topology,
+                        nozzle_count=nozzles, material_count=materials)
+                    self.assertFalse(unsupported.supported_for_encoding_only)
+                    self.assertFalse(unsupported.supported)
+                    self.assertTrue(unsupported.reason)
+                    self.assertEqual(unsupported.purge_validation, "native_unverified")
+
+    def test_orca_variable_material_palettes_preserve_direction_and_defaults(self):
+        for tool_count in (2, 3, 4, 8, 16):
+            with self.subTest(materials=tool_count):
+                # Distinctive values ensure row/column transposition and
+                # accidental replacement of unselected pairs are detected.
+                matrix = [
+                    "0" if a == b else str(100 + a * 17 + b)
+                    for a in range(tool_count) for b in range(tool_count)
+                ]
+                native = json.dumps({
+                    "flush_volumes_matrix": matrix,
+                    "flush_multiplier": ["0.75"],
+                    "enable_prime_tower": "1",
+                    "change_filament_gcode": "NATIVE_TOOLCHANGE_UNCHANGED",
+                }).encode()
+                # The physical bay order deliberately differs from native
+                # T0..Tn assignment. A direction reversal must not transpose.
+                bindings = [
+                    SimpleNamespace(slot_id="bay-%d" % n,
+                                    tool_index=tool_count - n - 1)
+                    for n in range(tool_count)
+                ]
+                source = bindings[0]
+                dest = bindings[1]
+                value = 350 + tool_count
+                settings = {
+                    "multiplier": None, "prime_tower": "native",
+                    "transitions": [{
+                        "from_slot_id": source.slot_id,
+                        "to_slot_id": dest.slot_id,
+                        "volume_mm3": value,
+                    }],
+                }
+                output = json.loads(apply_orca_native_flush(
+                    native, settings, routes=bindings, tool_count=tool_count,
+                    topology="single_nozzle_changer"))
+                index = source.tool_index * tool_count + dest.tool_index
+                reverse_index = dest.tool_index * tool_count + source.tool_index
+                self.assertEqual(output["flush_volumes_matrix"][index], str(value))
+                self.assertEqual(output["flush_volumes_matrix"][reverse_index],
+                                 matrix[reverse_index])
+                self.assertEqual(output["flush_multiplier"], ["0.75"])
+                self.assertEqual(output["change_filament_gcode"],
+                                 "NATIVE_TOOLCHANGE_UNCHANGED")
+                self.assertEqual(len(output["flush_volumes_matrix"]),
+                                 tool_count * tool_count)
+                for a in range(tool_count):
+                    for b in range(tool_count):
+                        at = a * tool_count + b
+                        if at != index:
+                            self.assertEqual(output["flush_volumes_matrix"][at],
+                                             matrix[at])
+
+    def test_native_matrix_absent_requires_all_directional_pairs(self):
+        for count in (3, 4):
+            with self.subTest(materials=count):
+                routes = [SimpleNamespace(slot_id="slot-%d" % n, tool_index=n)
+                          for n in range(count)]
+                all_pairs = [
+                    {"from_slot_id": "slot-%d" % a,
+                     "to_slot_id": "slot-%d" % b,
+                     "volume_mm3": 200 + a * 10 + b}
+                    for a in range(count) for b in range(count) if a != b
+                ]
+                source = b'{"flush_multiplier":["1"],"native_custom":"preserved"}'
+                request = {"multiplier": None, "prime_tower": "native",
+                           "transitions": all_pairs[:-1]}
+                with self.assertRaisesRegex(
+                        MaterialRoutingError, "Missing native flush volumes"):
+                    apply_orca_native_flush(
+                        source, request, routes=routes,
+                        tool_count=count, topology="single_nozzle_changer")
+                request["transitions"] = all_pairs
+                final = json.loads(apply_orca_native_flush(
+                    source, request, routes=routes,
+                    tool_count=count, topology="single_nozzle_changer"))
+                self.assertEqual(final["native_custom"], "preserved")
+                self.assertEqual(len(final["flush_volumes_matrix"]), count * count)
+                self.assertEqual(final["flush_volumes_matrix"][1], "201")
+
     def test_orca_four_material_changer_does_not_require_four_nozzles(self):
         cap = require_flush_capability(
             "orcaslicer", "single_nozzle_changer",
