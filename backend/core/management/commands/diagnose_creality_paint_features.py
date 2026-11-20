@@ -22,6 +22,7 @@ from core.models import SliceJob, FileAsset
 from core.slicer_bed_dimensions import trusted_plate_dimensions
 from core.slicer_creality_project import (build_creality_project_candidate,
                                           _mark_creality_support_overrides)
+from core.slicer_flush_adapters import audit_native_flush_profile
 from core.slicer_execution import MAX_INPUT, _read_owned_file, verified_installation
 from core.slicer_multimaterial_execution import prepare_creality_positioned_project
 from core.slicer_native_resolution import resolved_native_profile
@@ -217,7 +218,7 @@ def _native_project_audit(package):
         "has_change_filament_gcode": bool(values.get("change_filament_gcode")),
         "change_gcode_uses_flush_length": (
             "flush_length" in str(values.get("change_filament_gcode", ""))),
-
+        "flush_profile_capabilities": audit_native_flush_profile(values),
     }
     matrix = values.get("flush_volumes_matrix")
     multiplier = values.get("flush_multiplier")
@@ -231,6 +232,13 @@ def _native_project_audit(package):
         except (ValueError, TypeError):
             pass
     audit["flush_volumes_changed"] = str(values.get("flush_volumes_changed", ""))
+    differences = values.get("different_settings_to_system")
+    if isinstance(differences, list) and differences and isinstance(differences[0], str):
+        audit["declared_flush_process_overrides"] = sorted(
+            key for key in differences[0].split(";")
+            if key in ("flush_volumes_matrix", "flush_multiplier",
+                       "flush_volumes_changed", "enable_prime_tower",
+                       "purge_in_prime_tower", "multicolor_method"))
     return audit
 
 
@@ -261,12 +269,21 @@ def _gcode_effective_settings(gcode):
             gcode)
         if match:
             found[key] = match.group(1).decode("ascii", errors="replace").strip()
-    # Do not expose the complete matrix in case the native footer changes
-    # format. A digest is sufficient to compare baseline vs override.
+    # Include only the two mapped T0/T1 directional entries (not the
+    # entire native matrix or any printer/profile G-code).
     match = re.search(rb"(?im)^;\s*flush_volumes_matrix\s*=\s*([^\r\n]{0,4096})", gcode)
     if match:
         found["flush_matrix_gcode_header_sha256"] = hashlib.sha256(
             match.group(1).strip()).hexdigest()
+        tokens = [item.strip() for item in match.group(1).split(b",")]
+        if len(tokens) == 16:
+            try:
+                t01, t10 = float(tokens[1]), float(tokens[4])
+                if all(math.isfinite(v) and 0 <= v <= 20000 for v in (t01, t10)):
+                    found["flush_matrix_t0_to_t1_raw_mm3"] = round(t01, 3)
+                    found["flush_matrix_t1_to_t0_raw_mm3"] = round(t10, 3)
+            except (ValueError, OverflowError):
+                pass
     return found
 
 
