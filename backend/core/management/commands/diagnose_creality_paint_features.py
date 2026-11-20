@@ -237,6 +237,13 @@ def _gcode_effective_settings(gcode):
         "enable_prime_tower", "purge_in_prime_tower", "prime_volume",
         "flush_multiplier", "flush_volumes_changed", "multicolor_method",
         "single_extruder_multi_material",
+        # Support settings in the emitted config footer distinguish a 3MF
+        # project that *contains* requested options from a CLI whose
+        # effective print configuration actually consumed them.
+        "enable_support", "support_type", "support_threshold_angle",
+        "minimum_support_area", "support_remove_small_overhang",
+        "support_on_build_plate_only", "support_critical_regions_only",
+        "bridge_no_support", "max_bridge_length", "support_style",
     )
     found = {}
     for key in safe_keys:
@@ -612,6 +619,10 @@ class Command(BaseCommand):
                 metrics = _metrics(data)
                 if feature == "support":
                     metrics["effective_support_settings"] = _native_support_settings(package)
+                    metrics["emitted_support_settings"] = {
+                        key: val for key, val in _gcode_effective_settings(data).items()
+                        if key in _SUPPORT_DIAGNOSTIC_KEYS
+                    }
                 if synthetic_fixture:
                     metrics["test_geometry"] = (
                         ("synthetic sloped underside cantilever (offline only)"
@@ -670,6 +681,10 @@ class Command(BaseCommand):
                     metrics["relaxed_auto_support_control"] = {
                         "diagnostic_only_not_printable": True,
                         "effective_support_settings": _native_support_settings(relaxed_project),
+                        "gcode_effective_support_settings": {
+                            key: value for key, value in _gcode_effective_settings(relaxed_data).items()
+                            if key in _SUPPORT_DIAGNOSTIC_KEYS
+                        },
                         "native_support_role_tags": sum(
                             relaxed_roles["recognized_role_tag_counts"].get(name, 0)
                             for name in ("support", "support interface", "support transition")),
@@ -684,6 +699,10 @@ class Command(BaseCommand):
                         "support_type": "normal(auto)",
                         "support_enabled": True,
                         "same_geometry_as_painted": True,
+                        "gcode_effective_support_settings": {
+                            key: value for key, value in _gcode_effective_settings(auto_data).items()
+                            if key in _SUPPORT_DIAGNOSTIC_KEYS
+                        },
                         "native_support_role_tags": (
                             auto_roles["recognized_role_tag_counts"].get("support", 0) +
                             auto_roles["recognized_role_tag_counts"].get("support interface", 0) +
