@@ -14,6 +14,7 @@ from core.management.commands.diagnose_creality_paint_features import (
     _cantilever_wall_marker, _support_auto_control_project,
     _native_support_settings, _support_relaxed_auto_control_project,
 )
+from core.slicer_creality_project import _mark_creality_support_overrides
 from core.slicer_approval import fixture_stl
 from core.slicer_mesh import inspect_stl
 from core.slicer_plate_3mf import _triangles
@@ -184,7 +185,8 @@ class CrealityPaintingDiagnosticTests(SimpleTestCase):
 
     def test_support_auto_control_only_switches_native_support_mode(self):
         settings = {"enable_support": "1", "support_type": "normal(manual)",
-                    "flush_multiplier": "1", "filament_map": [1, 2, 3, 4]}
+                    "flush_multiplier": "1", "filament_map": [1, 2, 3, 4],
+                    "filament_settings_id": ["T0", "T1", "T2", "T3"]}
         source = io.BytesIO()
         with zipfile.ZipFile(source, "w") as output:
             output.writestr("Metadata/project_settings.config", json.dumps(settings))
@@ -199,7 +201,9 @@ class CrealityPaintingDiagnosticTests(SimpleTestCase):
                 if path != "Metadata/project_settings.config":
                     self.assertEqual(previous.read(path), revised.read(path))
             actual = json.loads(revised.read("Metadata/project_settings.config"))
-        self.assertEqual(actual, {**settings, "support_type": "normal(auto)"})
+        self.assertEqual(actual, {**settings, "support_type": "normal(auto)",
+                                  "different_settings_to_system": [
+                                      "enable_support;support_type", "", "", "", "", ""]})
         self.assertEqual(json.loads(zipfile.ZipFile(io.BytesIO(original)).read(
             "Metadata/project_settings.config")), settings)
 
@@ -240,6 +244,7 @@ class CrealityPaintingDiagnosticTests(SimpleTestCase):
             "support_threshold_angle": "30", "minimum_support_area": "5",
             "max_bridge_length": "10", "flush_multiplier": "1.3",
             "filament_colour": ["#123456", "#789ABC"],
+            "filament_settings_id": ["T0", "T1", "T2", "T3"],
         }
         archive = io.BytesIO()
         with zipfile.ZipFile(archive, "w") as output:
@@ -281,3 +286,30 @@ class CrealityPaintingDiagnosticTests(SimpleTestCase):
                     for point in triangles[patch["face"]]}
         self.assertEqual(z_values, {19., 23.})
         self.assertNotEqual(model, _cantilever_fixture_stl())
+
+    def test_creality_support_overrides_survive_preset_reconstruction(self):
+        project = {
+            "filament_settings_id": ["T0", "T1", "T2", "T3"],
+            "different_settings_to_system": ["layer_height", "", "", "", "", "machine_other"],
+            "enable_support": "1",
+            "support_type": "normal(manual)",
+        }
+        _mark_creality_support_overrides(project, ("enable_support", "support_type"))
+        self.assertEqual(project["different_settings_to_system"], [
+            "layer_height;enable_support;support_type", "", "", "", "",
+            "machine_other",
+        ])
+        _mark_creality_support_overrides(project, ("enable_support", "support_type"))
+        self.assertEqual(project["different_settings_to_system"][0],
+                         "layer_height;enable_support;support_type")
+
+    def test_creality_support_overrides_require_verified_palette_and_keys(self):
+        for project, keys in (
+            ({"filament_settings_id": []}, ("enable_support",)),
+            ({"filament_settings_id": ["T0", "T1"]}, ("machine_start_gcode",)),
+            ({"filament_settings_id": ["T0", "T1"],
+              "different_settings_to_system": ["", ""]}, ("enable_support",)),
+        ):
+            with self.subTest(project=project, keys=keys):
+                with self.assertRaises(ValueError):
+                    _mark_creality_support_overrides(project, keys)
