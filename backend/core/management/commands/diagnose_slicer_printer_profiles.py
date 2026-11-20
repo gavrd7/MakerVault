@@ -30,6 +30,7 @@ from core.slicer_native_material_palette import _single_positive_diameter
 from core.slicer_native_resolution import resolved_native_profile
 from core.slicer_plate_3mf import build_plate_3mf
 from core.slicer_worker_client import run_remote_job
+from core.slicer_tower_diagnostics import tower_deposition_metrics
 
 
 SUPPORTED_TOPOLOGIES = ("single_nozzle_changer", "independent_toolheads",
@@ -374,10 +375,10 @@ class Command(BaseCommand):
             first_flush_volume, native_multiplier = _creality_flush_basis(baseline_config)
             if not 0 <= first_flush_volume <= 19950:
                 raise CommandError("Native Creality directional volume is outside safe A/B bounds.")
-            alternate_multiplier = 1.0 if native_multiplier != 1.0 else 1.3
-            if native_multiplier is None:
-                # Do not guess native engine multiplier defaults when missing.
-                alternate_multiplier = None
+            # The imported K2 preset has no native multiplier: test 1.00
+            # and 1.30 as EXPLICIT disposable controls, not inherited
+            # defaults or changes to the user's saved profiles.
+            multiplier_controls = (1.0, 1.3)
             def settings(multiplier=None, transition=None):
                 return {
                     "multiplier": multiplier, "prime_tower": "native",
@@ -392,10 +393,10 @@ class Command(BaseCommand):
                     transition=("fixture-slot-0", "fixture-slot-1",
                                 first_flush_volume + 25)))),
             ]
-            if alternate_multiplier is not None:
+            for requested in multiplier_controls:
                 creality_controls.append((
-                    "multiplier", build_creality(settings(
-                        multiplier=alternate_multiplier))))
+                    "multiplier_" + str(requested).replace(".", "_"),
+                    build_creality(settings(multiplier=requested))))
             for name, candidate in creality_controls:
                 original, changed, keys = _creality_control_project(model, candidate)
                 if name == "forward":
@@ -407,8 +408,9 @@ class Command(BaseCommand):
                     if changed.get("flush_multiplier") != original.get("flush_multiplier"):
                         raise CommandError("Creality native multiplier changed in directional fixture.")
                 else:
+                    requested = float(name.removeprefix("multiplier_").replace("_", "."))
                     if ("flush_volumes_matrix" in keys or
-                            float(changed["flush_multiplier"]) != alternate_multiplier):
+                            float(changed["flush_multiplier"]) != requested):
                         raise CommandError("Creality multiplier control changed directional volumes.")
         output = slice_native(native["process"])
         summary["native_run"] = "sliced"
@@ -458,12 +460,31 @@ class Command(BaseCommand):
                 "multiplier_default_known": native_multiplier is not None,
             }
             baseline_metrics = _metrics(output)
+            baseline_tower = tower_deposition_metrics(output)
+            summary["native_tower_deposition_baseline"] = baseline_tower
             summary["creality_flush_controls"] = {}
             for name, candidate in creality_controls:
                 result = slice_native(native["process"], candidate)
                 measured = _metrics(result)
+                tower = tower_deposition_metrics(result)
                 summary["creality_flush_controls"][name] = {
                     **_safe_native_result(result),
+                    "tower_deposition": tower,
+                    "tower_comparison_available": (
+                        baseline_tower["classification"] == "native_feature_marker"
+                        and tower["classification"] == "native_feature_marker"),
+                    "tower_xy_width_changed": (
+                        tower["xy_width_mm"] != baseline_tower["xy_width_mm"]
+                        if baseline_tower["classification"] == "native_feature_marker"
+                        and tower["classification"] == "native_feature_marker" else None),
+                    "tower_xy_depth_changed": (
+                        tower["xy_depth_mm"] != baseline_tower["xy_depth_mm"]
+                        if baseline_tower["classification"] == "native_feature_marker"
+                        and tower["classification"] == "native_feature_marker" else None),
+                    "tower_e_length_changed": (
+                        tower["positive_e_length_mm"] != baseline_tower["positive_e_length_mm"]
+                        if baseline_tower["classification"] == "native_feature_marker"
+                        and tower["classification"] == "native_feature_marker" else None),
                     "gcode_changed": hashlib.sha256(result).digest() != hashlib.sha256(output).digest(),
                     "motion_changed": measured["motion_sha256"] != baseline_metrics["motion_sha256"],
                     "machine_commands_changed": measured["machine_command_sha256"] !=
@@ -479,8 +500,11 @@ class Command(BaseCommand):
                     and baseline_metrics["tool1_selects"] > 0),
                 "note": "Native tool ID observations, NOT physical CFS tool-change or purge proof.",
             }
-            if alternate_multiplier is not None:
-                summary["creality_flush_controls"]["multiplier"]["requested_multiplier"] = alternate_multiplier
+            for requested in multiplier_controls:
+                name = "multiplier_" + str(requested).replace(".", "_")
+                summary["creality_flush_controls"][name]["requested_multiplier"] = requested
+            summary["creality_flush_basis"]["multiplier_control_origin"] = (
+                "explicit_disposable_1_00_vs_1_30_not_native_default")
         after = verified_installation().get(engine)
         if after != installed:
             raise CommandError("Pinned engine approval changed during offline diagnostics.")
