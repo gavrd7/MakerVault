@@ -243,6 +243,12 @@ def run_remote_job(job_id, engine, version, model, printer_profile, filament_pro
                     message += " Validation category: " + validation_category.replace("-", " ") + "."
                 if reason:
                     message += " [" + reason + "]"
+            # The worker already sends a fixed, allowlisted stage, not raw
+            # slicer output or private paths. Preserve it even for a generic
+            # validation-error, otherwise native project versus CLI failures
+            # become indistinguishable to the operator.
+            if stage is not None:
+                message += " Stage: " + stage + "."
             raise SlicerWorkerError(message)
         declared = response.headers.get("Content-Length")
         if declared and (not declared.isdecimal() or int(declared) > MAX_RESPONSE):
