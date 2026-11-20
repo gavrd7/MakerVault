@@ -554,7 +554,9 @@ def _metrics(gcode):
         "machine_command_sha256": machine_digest.hexdigest(),
         "bytes": len(gcode),
         "g1_with_extrusion": len(re.findall(
-            r"(?im)^\s*G0?1\s+[^\r\n]*\bE[-+]?\d", text)),
+            # Use the same accepted extrusion syntax as _approved_gcode:
+            # Creality emits values such as E.25 and E-.25, not only E0.25.
+            r"(?im)^\s*G0?1\s+[^\r\n]*\bE[-+\d.]+", text)),
         "tool0_selects": len(re.findall(r"(?im)^\s*T0(?:\s|$)", text)),
         "tool1_selects": len(re.findall(r"(?im)^\s*T1(?:\s|$)", text)),
         "support_type_markers": len(re.findall(
