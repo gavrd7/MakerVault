@@ -141,13 +141,16 @@ class CrealityPaintingDiagnosticTests(SimpleTestCase):
         signature, _face, _polygon, height = _patch_for_model(first)
         self.assertEqual(marker["signature"], signature)
         self.assertEqual(height, 25.0)
-        patch = marker["regions"][0]["patches"][0]
-        triangle = list(_triangles(first))[patch["face"]]
-        self.assertTrue(all(abs(vertex[2] - 20.) < 1e-5
-                            for vertex in triangle))
-        self.assertTrue(all(abs(point[2] - 20.) < 1e-5
-                            for point in patch["polygon"]))
-        self.assertGreater(sum(vertex[0] for vertex in triangle) / 3, 13)
+        patches = marker["regions"][0]["patches"]
+        self.assertEqual(len(patches), 2)
+        self.assertEqual(len(set(patch["face"] for patch in patches)), 2)
+        for patch in patches:
+            triangle = list(_triangles(first))[patch["face"]]
+            self.assertTrue(all(abs(vertex[2] - 20.) < 1e-5
+                                for vertex in triangle))
+            self.assertTrue(all(abs(point[2] - 20.) < 1e-5
+                                for point in patch["polygon"]))
+            self.assertGreater(sum(vertex[0] for vertex in triangle) / 3, 13)
 
     def test_wall_fixture_targets_exterior_vertical_face(self):
         mesh = _cantilever_fixture_stl()
