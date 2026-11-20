@@ -993,3 +993,105 @@ These changes are backend capability and tests only. They do not
 modify any machine G-code, native engine binaries, worker code or
 printer. Public PR #171 remains draft and requires the new tests to
 pass on Debian staging.
+
+
+### Non-K2 printer-profile native compatibility suite — 20 November 2026
+
+A separate CLI diagnostic is available at
+`backend/core/management/commands/diagnose_slicer_printer_profiles.py`.
+This is an **offline-only**, user-selected native compatibility fixture
+that makes no changes to imported files, the database, worker, printer
+profiles, vendor macros, physical printers, or firmware. It never stores
+or submits printable G-code.
+
+**Intended first profile families (source-verified, not yet runtime
+validated by MakerVault's pinned worker):**
+
+- [OrcaSlicer v2.4.2 Bambu Lab A1 0.4 mm](https://github.com/OrcaSlicer/OrcaSlicer/blob/v2.4.2/resources/profiles/BBL/machine/Bambu%20Lab%20A1%200.4%20nozzle.json),
+  which declares a single `nozzle_diameter=["0.4"]`. Test two
+  distinct logical filament assignments and then three/four with
+  separately selected, compatible native filament presets to exercise
+  the same one-nozzle directional matrix contract.
+- [OrcaSlicer v2.4.2 Snapmaker U1 0.4 mm](https://github.com/OrcaSlicer/OrcaSlicer/blob/v2.4.2/resources/profiles/Snapmaker/machine/Snapmaker%20U1%20%280.4%20nozzle%29.json),
+  which declares four native `nozzle_diameter` entries. Test the
+  independent toolhead boundary with **four** explicitly selected
+  native filament assignments. This topology must not receive a
+  single-nozzle flushing matrix override.
+- A second verified **Creality Print** machine profile (if imported)
+  may be smoke-tested with one filament or its existing verified
+  two-material single-nozzle project builder. It must never
+  inherit a K2-specific purge override merely because the engine
+  is Creality.
+
+The command enforces exact owner/engine/version matching, approved
+native import resolution/integrity, native nozzle counts, verified
+origin-aligned rectangular beds and 1–4 bounded fixture models.
+For a one-nozzle changer it may compare a **single T0→T1** native
+directional matrix adjustment of **+25 mm³** *only when the complete
+original native matrix exists*. All remaining transitions are
+inherited unchanged. No automatic colour-based estimates or zeros are
+invented. Existing original printer machine macros remain untouched.
+
+**Step 1: see which profiles actually exist in the user's database.**
+
+```bash
+sudo docker exec makervault python3 /app/backend/manage.py \
+  diagnose_slicer_printer_profiles --engine orcaslicer --list-profiles
+sudo docker exec makervault python3 /app/backend/manage.py \
+  diagnose_slicer_printer_profiles --engine crealityprint --list-profiles
+```
+
+These list imported profile UUIDs, versions, kinds and statuses.
+Import the selected **complete, correct-version** manufacturer/native
+profile pack and verify parent inheritance before attempting a slice.
+Never substitute a profile from another engine or version.
+
+**Step 2: read-only per-printer preflight (no native worker call).**
+
+```bash
+sudo docker exec makervault python3 /app/backend/manage.py \
+  diagnose_slicer_printer_profiles --engine orcaslicer \
+  --topology single_nozzle_changer \
+  --printer-profile-id <A1_PRINTER_UUID> \
+  --process-profile-id <A1_PROCESS_UUID> \
+  --filament-profile-id <FILAMENT_0_UUID> \
+  --filament-profile-id <FILAMENT_1_UUID>
+```
+
+**Step 3: repeat with `--native` to perform the actual pinned
+isolated worker slice.** Append `--test-flush` only for a one-nozzle
+Orca changer with a complete native matrix to perform an A/B slice.
+The resulting output reports bounded G-code size, SHA-256, canonical
+motion digest, machine-command digest and extrusion-count evidence;
+it never publishes raw G-code. A changed hash alone does **not**
+establish changed purge or physically honoured flushing.
+
+For the four-head U1 preflight, use
+`--topology independent_toolheads` with its U1 printer and process
+UUIDs plus four compatible filament UUIDs, then optionally
+`--native`. Do **not** pass `--test-flush`: its one-nozzle adapter
+must reject that topology. A successfully sliced multi-tool 3MF
+demonstrates worker/project compatibility only, not an authenticated
+printer submission route or physical toolchange safety.
+
+**Unit suite** (run after application-only staging update; no worker
+refresh needed):
+
+```bash
+sudo docker exec makervault python3 /app/backend/manage.py test \
+  core.tests.test_slicer_printer_compatibility \
+  core.tests.test_slicer_flush_adapters \
+  core.tests.test_slicer_flush_settings \
+  core.tests.test_slicer_creality_project \
+  core.tests.test_slicer_creality_paint_diagnostics \
+  core.tests.test_slicer_creality_profile_provenance --noinput
+```
+
+**Evidence boundary:** the unit tests use real 3MF fixture generation
+and verified routing but do not run the installed native binaries.
+The additional printer-native checks remain **unverified until
+executed on Debian against actually imported non-K2 profiles**. An
+unavailable profile is a blocked test rather than a compatibility
+failure; do not claim the user already has A1 or U1 profiles imported.
+No printer macro replacement, engine installation or hardware
+communication is authorised.
