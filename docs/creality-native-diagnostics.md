@@ -1024,8 +1024,9 @@ validated by MakerVault's pinned worker):**
   is Creality.
 
 The command enforces exact owner/engine/version matching, approved
-native import resolution/integrity, native nozzle counts, verified
-origin-aligned rectangular beds and 1–4 bounded fixture models.
+native import resolution/integrity, native nozzle counts, strictly
+matching native filament diameters, verified origin-aligned
+rectangular beds and 1–4 bounded fixture models.
 For a one-nozzle changer it may compare a **single T0→T1** native
 directional matrix adjustment of **+25 mm³** *only when the complete
 original native matrix exists*. All remaining transitions are
@@ -1041,7 +1042,11 @@ sudo docker exec makervault python3 /app/backend/manage.py \
   diagnose_slicer_printer_profiles --engine crealityprint --list-profiles
 ```
 
-These list imported profile UUIDs, versions, kinds and statuses.
+These list imported profile UUIDs, locally stored preset names,
+source scopes, versions, kinds and statuses. Where the database has
+many profiles, use `--name-contains "Bambu Lab A1"` or
+`--name-contains "Snapmaker U1"` with `--list-profiles` to find the
+exact native variant without dumping all imported profiles.
 Import the selected **complete, correct-version** manufacturer/native
 profile pack and verify parent inheritance before attempting a slice.
 Never substitute a profile from another engine or version.
