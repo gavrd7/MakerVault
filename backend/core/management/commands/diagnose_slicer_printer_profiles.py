@@ -218,6 +218,73 @@ def _creality_flush_override_control(project_blob):
     return data.getvalue()
 
 
+def _creality_purge_route_control(project_blob, enabled):
+    """Switch only the native purge destination on a disposable Creality 3MF."""
+    if type(enabled) is not bool:
+        raise ValueError("Purge route control requires an explicit boolean.")
+    config = _read_creality_project_settings(project_blob)
+    config["purge_in_prime_tower"] = "1" if enabled else "0"
+    result = io.BytesIO()
+    with zipfile.ZipFile(io.BytesIO(project_blob)) as source, zipfile.ZipFile(
+            result, "w", compression=zipfile.ZIP_DEFLATED, allowZip64=False) as target:
+        names = source.namelist()
+        if len(names) != len(set(names)) or len(names) not in (6, 7):
+            raise ValueError("Unsupported native Creality purge route archive.")
+        for item in source.infolist():
+            content = (json.dumps(config, separators=(",", ":")).encode()
+                       if item.filename == "Metadata/project_settings.config"
+                       else source.read(item.filename))
+            target.writestr(item, content)
+    candidate = result.getvalue()
+    original, changed, keys = _creality_control_project_with_extra(
+        project_blob, candidate, {"purge_in_prime_tower"})
+    if keys != {"purge_in_prime_tower"} or (
+            original.get("purge_in_prime_tower") == changed["purge_in_prime_tower"]):
+        raise ValueError("Purge routing control did not change only its target option.")
+    return candidate
+
+
+def _creality_purge_route_audit(config):
+    """Report a bounded project setting snapshot, not effective runtime values."""
+    if not isinstance(config, dict):
+        raise ValueError("Invalid Creality native project configuration.")
+    def flag(key):
+        value = config.get(key)
+        if value is None:
+            return "absent"
+        if value is True or value == "1" or (type(value) is int and value == 1):
+            return "enabled"
+        if value is False or value == "0" or (type(value) is int and value == 0):
+            return "disabled"
+        return "unrecognised"
+
+    def bounded_number(key):
+        value = config.get(key)
+        if value is None:
+            return None
+        if isinstance(value, (bool, list, dict)):
+            return None
+        try:
+            number = float(value)
+        except (ValueError, TypeError, OverflowError):
+            return None
+        return round(number, 4) if math.isfinite(number) and 0 <= number <= 20000 else None
+
+    return {
+        "evidence_source": "generated_native_3mf_not_runtime_effective_config",
+        "purge_in_prime_tower": flag("purge_in_prime_tower"),
+        "enable_prime_tower": flag("enable_prime_tower"),
+        "multicolor_method": flag("multicolor_method"),
+        "prime_volume_mm3": bounded_number("prime_volume"),
+        "filament_minimal_purge_on_wipe_tower_present": (
+            "filament_minimal_purge_on_wipe_tower" in config),
+        "flush_multiplier": bounded_number("flush_multiplier"),
+        "flush_matrix_present": isinstance(config.get("flush_volumes_matrix"), list)
+                                and len(config["flush_volumes_matrix"]) == 16,
+        "limitation": "Project encoding only; native loader and printer firmware may use different effective values.",
+    }
+
+
 def _validate_creality_override_pair(unmarked, marked):
     before, after, keys = _creality_control_project_with_extra(
         unmarked, marked, {"different_settings_to_system"})
@@ -476,10 +543,23 @@ class Command(BaseCommand):
                 marked = _creality_flush_override_control(source_control)
                 _validate_creality_override_pair(source_control, marked)
                 creality_controls.append((name + "_marked", marked))
+            # Source-backed route isolation: Creality's tower planner can
+            # substitute prime_volume when purge_in_prime_tower is disabled.
+            # Compare both routes at a fixed explicit 2.0 multiplier; do not
+            # change any manufacturer scripts or production flush adapter.
+            fixed_control = next(project for key, project in creality_controls
+                                 if key == "multiplier_2_0")
+            for route_enabled in (False, True):
+                route_name = "purge_route_" + ("tower" if route_enabled else "toolchange")
+                creality_controls.append((
+                    route_name, _creality_purge_route_control(
+                        fixed_control, route_enabled)))
             for name, candidate in creality_controls:
                 original, changed, keys = _creality_control_project_with_extra(
                     model, candidate,
-                    {"different_settings_to_system"} if name.endswith("_marked") else set())
+                    ({"different_settings_to_system"} if name.endswith("_marked")
+                     else {"purge_in_prime_tower"} if name.startswith("purge_route_")
+                     else set()))
                 if name == "forward":
                     if (float(changed["flush_volumes_matrix"][1]) !=
                             first_flush_volume + 25 or
@@ -488,6 +568,13 @@ class Command(BaseCommand):
                         raise CommandError("Creality forward directional fixture was not isolated.")
                     if changed.get("flush_multiplier") != original.get("flush_multiplier"):
                         raise CommandError("Creality native multiplier changed in directional fixture.")
+                elif name.startswith("purge_route_"):
+                    expected_route = "1" if name == "purge_route_tower" else "0"
+                    if (keys - {"purge_in_prime_tower"} or
+                            changed.get("purge_in_prime_tower") != expected_route or
+                            changed.get("flush_multiplier") != "2.0" or
+                            changed.get("flush_volumes_matrix") != original.get("flush_volumes_matrix")):
+                        raise CommandError("Creality purge route isolation failed.")
                 else:
                     raw_name = name.removeprefix("multiplier_").removesuffix("_marked")
                     requested = float(raw_name.replace("_", "."))
@@ -538,6 +625,8 @@ class Command(BaseCommand):
                 matrix_source = "resolved_native_printer"
             else:
                 matrix_source = "candidate_builder_140mm3_fallback_unverified"
+            summary["creality_purge_route_project_audit"] = (
+                _creality_purge_route_audit(_read_creality_project_settings(model)))
             summary["creality_flush_basis"] = {
                 "matrix_source": matrix_source,
                 "baseline_t0_to_t1_mm3": first_flush_volume,
@@ -554,6 +643,9 @@ class Command(BaseCommand):
                 tower = tower_deposition_metrics(result)
                 summary["creality_flush_controls"][name] = {
                     **_safe_native_result(result),
+                    "purge_route_project_audit": (
+                        _creality_purge_route_audit(_read_creality_project_settings(candidate))
+                        if name.startswith("purge_route_") else None),
                     "tower_deposition": tower,
                     "tower_comparison_available": (
                         baseline_tower["classification"] == "native_feature_marker"
@@ -576,6 +668,19 @@ class Command(BaseCommand):
                                                 baseline_metrics["machine_command_sha256"],
                     "note": "Offline native comparison only; physical purge is unverified.",
                 }
+            # Compare the two route controls directly to the same 2.0
+            # reference rather than only to a potentially different baseline.
+            route_reference = summary["creality_flush_controls"]["multiplier_2_0"]
+            for route_name in ("purge_route_tower", "purge_route_toolchange"):
+                current = summary["creality_flush_controls"][route_name]
+                current["motion_changed_vs_multiplier_2_0"] = (
+                    current["motion_sha256"] != route_reference["motion_sha256"])
+                current["machine_commands_changed_vs_multiplier_2_0"] = (
+                    current["machine_command_sha256"] !=
+                    route_reference["machine_command_sha256"])
+                current["tower_extrusion_changed_vs_multiplier_2_0"] = (
+                    current["tower_deposition"]["positive_e_length_mm"] !=
+                    route_reference["tower_deposition"]["positive_e_length_mm"])
             summary["creality_flush_controls"]["forward"]["requested_t0_to_t1_mm3"] = first_flush_volume + 25
             summary["native_tool_selects_observed"] = {
                 "t0": baseline_metrics["tool0_selects"],
