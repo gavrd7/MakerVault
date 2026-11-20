@@ -1564,3 +1564,62 @@ baseline/parent comparison and rejects unrelated configuration mutations.
 Do not reset/rebase the working tree blindly; if HEAD differs from the
 remote branch, inspect `git status` and switch only after checking any
 local modifications. The pinned worker remains unchanged.
+
+
+## Creality native generated-config sensitivity check (20 November 2026)
+
+The preceding eight-way K2 server run passed 56/56 tests and eight offline
+slices. Project flags explicitly toggled `purge_in_prime_tower`, yet executable
+motion, machine commands, tower size, and tagged tower E all remained identical.
+The project archive inspection proves **serialised settings**, not effective
+native `PrintConfig` values.
+
+A new offline-only check adds:
+
+- `creality_emitted_gcode_baseline_audit`: strict, redacted extraction of only
+  recognised scalar/boolean setting comments from returned native G-code;
+  excludes G-code lines, printer macros and whole flush matrices. Missing
+  comments are reported as absent, **not** as proof of ignored settings.
+- `emitted_gcode_settings_comparison` for each control: records only safe
+  sanitised numeric/boolean values and names of changed emitted settings.
+  This is emitted metadata, still **not direct introspection into Creality's
+  in-memory effective configuration**.
+- `prime_volume_positive_control`: one additional disposable native 3MF,
+  based on the exact multiplier-2.0 control, that changes only
+  `prime_volume=45→180` mm³ while leaving vendor scripts, geometry,
+  matrix, multiplier and tool mapping untouched. This source-backed setting
+  ordinarily affects prime tower generation; unchanged output is evidence
+  supporting a loader/override hypothesis, but is not conclusive if another
+  native minimum or purge mode dominates it.
+
+The diagnostic now has **nine** native slices total and the expected
+focused unit-test count is **59** (previous 56 plus 3). No worker, runtime
+binary or production adapter updates are needed. The positive control is
+never submitted to a printer.
+
+```bash
+cd ~/MakerVault-Staging
+git pull --ff-only origin feature/self-hosted-slicer-foundation
+sudo python3 scripts/install_slicer_staging.py update
+sudo docker exec makervault python3 /app/backend/manage.py test \
+  core.tests.test_slicer_printer_compatibility \
+  core.tests.test_slicer_tower_diagnostics \
+  core.tests.test_slicer_flush_adapters \
+  core.tests.test_slicer_creality_project --noinput
+sudo docker exec makervault python3 /app/backend/manage.py \
+  diagnose_slicer_printer_profiles \
+  --engine crealityprint --topology single_nozzle_changer \
+  --printer-profile-id 91b19730-66f5-4b5f-bd7d-b08fbb4ee768 \
+  --process-profile-id 0c90fa89-a193-48b6-ac94-a69792230163 \
+  --filament-profile-id e9c1274c-d95b-4592-87e5-03a645d699aa \
+  --filament-profile-id eb8473e9-f993-4c6e-8cc4-fb357e3ae782 \
+  --native --test-flush
+```
+
+Interpret in order: confirm `prime_volume_positive_control` executed,
+compare its native motion and tower extrusion against `multiplier_2_0`,
+then check whether any emitted setting comments track the 3MF changes. If
+no emitted settings are present, stop treating G-code metadata as effective
+configuration proof and move to a source-instrumented/round-trip loader
+probe in an independently approved worker build; do not change the pinned
+engine or claim a physical flushing fix.
