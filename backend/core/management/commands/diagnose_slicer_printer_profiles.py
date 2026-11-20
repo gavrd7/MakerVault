@@ -13,6 +13,7 @@ from django.core.management.base import BaseCommand, CommandError
 from core.models import SlicerProfile
 from core.slicer_approval import fixture_stl, _approved_gcode
 from core.slicer_bed_dimensions import trusted_plate_dimensions
+from core.management.commands.diagnose_creality_paint_features import _metrics
 from core.slicer_creality_project import (
     build_creality_positioned_plate, build_creality_project_candidate,
 )
@@ -50,10 +51,12 @@ def _fixture_items(count, width, depth):
 
 def _safe_native_result(data):
     """Report evidence without returning G-code, machine macros or paths."""
+    result = _metrics(data)
     return {"gcode_sha256": _approved_gcode(data),
             "gcode_bytes": len(data),
-            "toolchange_marker_count": sum(1 for line in data.splitlines()
-                                           if line.strip().startswith((b"T0", b"T1", b"T2", b"T3"))),
+            "motion_sha256": result["motion_sha256"],
+            "machine_command_sha256": result["machine_command_sha256"],
+            "g1_with_extrusion": result["g1_with_extrusion"],
             "note": "Native offline slicing; no physical printer validation."}
 
 
@@ -211,7 +214,11 @@ class Command(BaseCommand):
                 "requested_raw_mm3": first + 25,
                 **_safe_native_result(control),
                 "gcode_changed": hashlib.sha256(output).digest() != hashlib.sha256(control).digest(),
-                "note": "G-code byte difference is NOT proof of effective purge.",
+                "motion_changed": _metrics(output)["motion_sha256"] != _metrics(control)["motion_sha256"],
+                "machine_commands_changed": (
+                    _metrics(output)["machine_command_sha256"] !=
+                    _metrics(control)["machine_command_sha256"]),
+                "note": "Motion or command change is stronger than metadata difference, but is NOT physical purge validation.",
             }
         after = verified_installation().get(engine)
         if after != installed:
