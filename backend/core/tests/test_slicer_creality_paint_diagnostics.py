@@ -247,3 +247,21 @@ class CrealityPaintingDiagnosticTests(SimpleTestCase):
                             '{"enable_support":"1","support_type":"normal(manual)"}')
         with self.assertRaises(ValueError):
             _support_relaxed_auto_control_project(source.getvalue())
+
+    def test_sloped_support_fixture_crosses_multiple_z_slabs(self):
+        model = _cantilever_fixture_stl(sloped=True)
+        self.assertEqual(inspect_stl(model)["size_mm"], [30.0, 12.0, 25.0])
+        marker = _cantilever_support_marker(model, sloped=True)
+        self.assertEqual(marker["signature"], _patch_for_model(model)[0])
+        patches = marker["regions"][0]["patches"]
+        self.assertEqual(len(patches), 2)
+        self.assertEqual(len({p["face"] for p in patches}), 2)
+        triangles = list(_triangles(model))
+        for patch in patches:
+            for point in triangles[patch["face"]]:
+                self.assertGreaterEqual(point[0], 10.)
+                self.assertAlmostEqual(point[2], 19. + (point[0] - 10.) * .2)
+        z_values = {round(point[2], 4) for patch in patches
+                    for point in triangles[patch["face"]]}
+        self.assertEqual(z_values, {19., 23.})
+        self.assertNotEqual(model, _cantilever_fixture_stl())
