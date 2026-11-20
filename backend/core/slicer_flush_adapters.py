@@ -25,6 +25,10 @@ class FlushCapability:
     multiplier_encoding: str
     max_calculated_volume_mm3: int
     purge_validation: str = "native_unverified"
+    # A supported serializer only means MakerVault can encode the request.
+    # Physical delivery requires separate verified native/firmware evidence.
+    supported_for_encoding_only: bool = False
+    reason: str = ""
 
 
 _ENGINE_FLUSH_FORMATS = {
@@ -59,15 +63,28 @@ def resolve_flush_capability(engine, topology, *, nozzle_count, material_count):
             or type(material_count) is not int or not 1 <= material_count <= 16):
         raise MaterialRoutingError("Invalid verified nozzle/material counts.")
     multiplier, limit = _ENGINE_FLUSH_FORMATS[native]
-    supported = (topology == "single_nozzle_changer"
-                 and nozzle_count == 1 and material_count >= 2
-                 and (native != "crealityprint" or material_count == 2))
+    # This gate is intentionally printer-brand agnostic. It describes
+    # *serialization* support, never a validated printer firmware purge.
+    # Additional physical multi-tool purge adapters will be separate routes.
+    if topology != "single_nozzle_changer":
+        reason = "printer_topology_has_no_verified_single_nozzle_flush_adapter"
+    elif nozzle_count != 1:
+        reason = "single_nozzle_changer_requires_one_verified_nozzle"
+    elif material_count < 2:
+        reason = "directional_flush_requires_multiple_materials"
+    elif native == "crealityprint" and material_count != 2:
+        reason = "creality_candidate_currently_maps_two_logical_materials"
+    else:
+        reason = ""
+    supported = not reason
     return FlushCapability(
         engine=native, topology=topology, nozzle_count=nozzle_count,
         material_count=material_count, supported=supported,
         matrix_layout="directional_row_major",
         multiplier_encoding=multiplier,
         max_calculated_volume_mm3=limit,
+        supported_for_encoding_only=supported,
+        reason=reason,
     )
 
 
