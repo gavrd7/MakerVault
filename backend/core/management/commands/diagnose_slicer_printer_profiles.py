@@ -870,6 +870,11 @@ class Command(BaseCommand):
                             "purge_in_prime_tower", "not_explicit")),
                     "project_purge_in_prime_tower": str(
                         project_cfg.get("purge_in_prime_tower", "absent")),
+                    "source_multicolor_method": str(
+                        json.loads(native["printer"]).get(
+                            "multicolor_method", "not_explicit")),
+                    "project_multicolor_method": str(
+                        project_cfg.get("multicolor_method", "absent")),
                     "printer_override_marked": (
                         "purge_in_prime_tower" in override_rows[-1].split(";")),
                     "process_override_keys_present": sorted(expected),
