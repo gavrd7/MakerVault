@@ -35,7 +35,7 @@ class MaterialOutputVerificationTests(TestCase):
               </model>""")
         self.assertEqual(expected_native_tools(archive.getvalue()), {0, 1})
         self.assertTrue(verify_multi_material_output(
-            b"M83\\nT0\\nG1 X10 E0.4\\nT1\\nG1 X20 E0.5\\n", {0, 1}))
+            b"M83\nT0\nG1 X10 E0.4\nT1\nG1 X20 E0.5\n", {0, 1}))
 
     def test_painted_third_and_fourth_native_tools_are_audited(self):
         archive = io.BytesIO()
