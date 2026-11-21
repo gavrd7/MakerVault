@@ -1938,7 +1938,7 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
           .then(data => setEngines(data.engines || []))
           .catch(() => {})} />
       <div style={{paddingTop:"0.75rem"}}>
-        <a href="https://gavrd7.github.io/MakerVault-docs/slicer/"
+        <a href="https://github.com/gavrd7/MakerVault/blob/main/docs/guide/3d-printing/slicer.md"
           target="_blank" rel="noopener noreferrer">
           MakerVault Slicer guidance ↗
         </a>
