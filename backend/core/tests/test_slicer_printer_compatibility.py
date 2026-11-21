@@ -103,6 +103,16 @@ class PrinterCompatibilityFixtureTests(SimpleTestCase):
         self.assertEqual(audit["m8200_command_count"], 1)
         self.assertEqual(audit["set_velocity_limit_command_count"], 1)
         self.assertEqual(audit["tool_select_command_count"], 2)
+        self.assertTrue(audit["flush_markers_balanced"])
+        self.assertEqual(audit["completed_flush_sections"], 1)
+        for damaged in (
+                b"; FLUSH_START\n; FLUSH_START\n; FLUSH_END\n",
+                b"; FLUSH_END\n",
+                b"; FLUSH_START\n",
+                b"; FLUSH_START\n; FLUSH_END\n; FLUSH_END\n"):
+            with self.subTest(damaged=damaged):
+                self.assertFalse(_creality_toolchange_macro_audit(
+                    damaged)["flush_markers_balanced"])
         setting = _creality_emitted_setting_audit(gcode)
         self.assertEqual(setting["settings"]["multicolor_method"], "disabled")
         with self.assertRaises(ValueError):
