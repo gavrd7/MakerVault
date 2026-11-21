@@ -58,3 +58,13 @@ test("modal retains a guide link but drops outdated administrator deployment req
   assert.doesNotMatch(workbench,/Adding the slicer service to an existing MakerVault installation/);
   assert.doesNotMatch(workbench,/You can save drafts without an installed engine\. Slicing requires/);
 });
+
+test("engine cards use a compact two-row version and action layout",()=>{
+  assert.match(manager,/className="slicerEngineManagerRelease"/);
+  assert.match(manager,/className="slicerEngineManagerActions"/);
+  assert.match(manager,/gridTemplateColumns:installed\?"1fr 1fr":"1fr"/);
+  assert.match(manager,/gap:"0\.5rem"/);
+  assert.match(manager,/slicerEngineManagerActions"[\s\S]*?\{!current \? <button[\s\S]*?\{installed && <button/);
+  assert.doesNotMatch(manager,/slicerEngineManagerRemove/);
+  assert.doesNotMatch(manager,/CLI integration in testing/);
+});
