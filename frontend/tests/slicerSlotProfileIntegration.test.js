@@ -34,14 +34,14 @@ test("official catalogue search and import require an explicit slot selection",(
 });
 test("slot import reloads profiles without overwriting global native filament selection",()=>{
   assert.match(parent,/onFilamentProfilesReload=\{async imported => \{/);
-  assert.match(scene,/\.filter\(row => String\(row\.slot_id\) !== String\(slot\.id\)\)/);
+  assert.match(scene,/\.filter\(row=>String\(row\.slot_id\)!==slotId\)/);
   const handler=scene.slice(scene.indexOf("const importOfficialSlotProfile"), scene.indexOf("const [materialRefreshing"));
   assert.doesNotMatch(handler,/selectedProfiles\.filament_id\s*=/);
   assert.doesNotMatch(handler,/onChangeProfiles\(/);
 });
 test("profiles for unassigned loaded bays do not block one logical filament",()=>{
   assert.match(scene,/const activeSlotProfiles = slotFilamentProfiles\.filter/);
-  assert.match(scene,/const materialRoutingPending = requiredMultiSlots\\.length > 1/);
+  assert.match(scene,/const materialRoutingPending = requiredMultiSlots\.length > 1/);
   assert.match(scene,/: false;/);
   assert.match(scene,/assignedSlots\.every\(slot => String\(slot\.printer_id\)/);
 });
