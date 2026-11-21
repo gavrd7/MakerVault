@@ -2609,3 +2609,30 @@ Focused staging test (app-only update, **never** refresh pinned worker):
 sudo docker exec makervault python3 /app/backend/manage.py test \\
   core.tests.test_slicer_printer_compatibility --noinput
 ```
+
+## Additional explicit purge-length telemetry (21 Nov 2026)
+
+The offline K2 `toolchange_macro_audit` now also returns:
+`positive_extrusion_only_flush_moves`,
+`positive_extrusion_only_flush_length_mm`, and
+`unclassified_flush_g1_e_moves`.
+
+Only positive, extrusion-only `G1 E...` commands between exact native
+`FLUSH_START` and `FLUSH_END` comments contribute to the measured length.
+Negative/retraction moves are excluded; XY-containing or unsupported G1 E
+forms are counted as unclassified rather than misrepresented as explicit purge.
+No G-code lines or manufacturer macros are exposed. Existing sequencing
+checks still report `flush_markers_balanced` and
+`completed_flush_sections`.
+
+These measurements distinguish the 1.0/2.0 multiplier and directional matrix
+controls in generated *text*, where the official K2 macro emits explicit E
+moves. They DO NOT include printer-firmware-owned extrusion, establish
+absolute/relative extruder interpretation beyond the constrained matched
+commands, validate actual CFS slot mapping, or authorise print submission.
+Do not translate the diagnostic totals into a printer-ready claim.
+
+The source and fixtures were added to draft PR #171; execute staging regression
+tests and the previously used offline native comparison before interpreting
+new fields. The official stock K2 machine profile and pinned worker are
+unchanged.
