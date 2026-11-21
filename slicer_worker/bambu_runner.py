@@ -22,8 +22,18 @@ from .three_mf_validation import validate_worker_3mf
 def bambu_command(binary: Path, workdir: Path) -> list[str]:
     """Build fixed, documented Bambu CLI flags; no user-selected arguments."""
     binary = Path(binary)
-    if binary.is_symlink() or not binary.is_file() or not os.access(binary, os.X_OK):
+    if not binary.is_file() or not os.access(binary, os.X_OK):
         raise WorkerError("Reviewed Bambu Studio executable is unavailable.")
+    if binary.is_symlink():
+        # Official AppImage extraction may ship AppRun as a link to an
+        # executable inside the same extracted bundle. Never follow a link
+        # outside that bundle or accept symlinks under other entrypoint names.
+        try:
+            target = binary.resolve(strict=True)
+            if binary.name != "AppRun" or not target.is_relative_to(binary.parent.resolve(strict=True)):
+                raise WorkerError("Bambu Studio executable symlink escapes its bundle.")
+        except (OSError, RuntimeError, ValueError) as exc:
+            raise WorkerError("Bambu Studio executable symlink is invalid.") from exc
     workdir = Path(workdir).resolve(strict=True)
     stl = workdir / "input.stl"
     three_mf = workdir / "input.3mf"
