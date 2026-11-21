@@ -31,6 +31,7 @@ urlpatterns = [
     path("printing/slicer/profiles/<uuid:profile_id>/plate/", slicer_api.profile_plate, name="api-slicer-profile-plate"),
     path("printing/slicer/profiles/<uuid:profile_id>/artwork/", slicer_api.profile_artwork, name="api-slicer-profile-artwork"),
     path("printing/slicer/profiles/<uuid:profile_id>/bed-model/", slicer_api.profile_bed_model, name="api-slicer-profile-bed-model"),
+    path("printing/slicer/jobs/<uuid:job_id>/thumbnail/", slicer_job_bulk.job_thumbnail, name="api-slicer-job-thumbnail"),
     path("printing/slicer/jobs/<uuid:job_id>/", slicer_api.job_detail, name="api-slicer-job-detail"),
     path("printing/slicer/jobs/<uuid:job_id>/start/", slicer_api.job_start, name="api-slicer-job-start"),
     path("printing/slicer/jobs/<uuid:job_id>/export-project/", slicer_api.export_project_3mf, name="api-slicer-export-project"),
