@@ -1937,18 +1937,12 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
         onChanged={() => apiFetch("/api/printing/slicer/engines/")
           .then(data => setEngines(data.engines || []))
           .catch(() => {})} />
-      <div className="printingActionGroup">
-        <h4>Adding the slicer service to an existing MakerVault installation</h4>
-        <p>The optional service must be deployed once by the host administrator.
-          It does not require privileged mode or Docker socket access in MakerVault.
-          Your existing database, models, printers and G-code library are preserved.</p>
-        <a href="https://github.com/gavrd7/MakerVault/blob/feature/self-hosted-slicer-foundation/docs/guide/3d-printing/slicer.md#adding-the-slicer-container-to-an-existing-installation"
+      <div style={{paddingTop:"0.75rem"}}>
+        <a href="https://gavrd7.github.io/MakerVault-docs/slicer/"
           target="_blank" rel="noopener noreferrer">
-          Installation guidance for existing MakerVault installations ↗
+          MakerVault Slicer guidance ↗
         </a>
-        <small>The experimental OrcaSlicer staging installer is documented separately from the future production installation.</small>
       </div>
-      <p>You can save drafts without an installed engine. Slicing requires a verified runtime and compatible native profiles.</p>
     </Modal>}
     {profileModal === "search" && <Modal title="Search official profiles" onClose={() => setProfileModal("")} wide>
       <div className="slicerProfileNavigation">
