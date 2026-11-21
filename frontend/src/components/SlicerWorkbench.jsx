@@ -1841,7 +1841,7 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
         <p>Search available pinned official manufacturer catalogues. Bambu Studio and PrusaSlicer currently offer printer-model artwork records only; other engines may offer printer, filament and process presets. An engine may not provide a profile for every printer. Profiles are imported for your selected engine; profiles cannot be shared between engines.</p>
         {form.engine==="crealityprint" && officialSourceInfo?.source_engine_version &&
           officialSourceInfo.source_engine_version !== form.engine_version &&
-          <p role="status">Official profiles are sourced from Creality Print {officialSourceInfo.source_engine_version} and saved for your installed {form.engine_version} engine as candidates. Compatibility will be checked during slicing.</p>}
+          <p role="alert">Official Creality Print profile release {officialSourceInfo.source_engine_version} does not match selected engine {form.engine_version}. Matching native release is required before importing; choose the supported engine version.</p>}
         {officialSourceInfo && !officialSourceInfo.official_search_available && <p role="status">This engine does not yet have a verified upstream catalogue browser in MakerVault. You can still import native {officialSourceInfo.native_profile_format} profiles for this engine; the installed slicing engine must be available to run.</p>}
         <form className="formGrid" onSubmit={searchOfficialProfiles}>
           <label>Official source
@@ -2049,6 +2049,10 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
             <div className="cameraSourceIdentity">
               <strong title={profile.name}>{readableNativeProfile(profile).name} · {profile.kind}{profile.is_default ? " · Default" : ""}</strong>
               <small>{readableNativeProfile(profile).type} · {profile.engine} {profile.engine_version}</small>
+              {profile.engine === "crealityprint" &&
+                profile.engine_version === "7.3.1" &&
+                profile.source_scope?.startsWith("CrealityOfficial/CrealityPrint@v7.3.0/") &&
+                <small role="alert">Legacy v7.3.0 manufacturer preset under a 7.3.1 engine label. The K2 purge macro differs; import and select the matching v7.3.1 official profile instead. This saved preset has not been changed.</small>}
               {managingSavedProfiles && <small title={profile.provenance || ""}>Native name: {profile.name} · {profile.provenance || "No source supplied"}</small>}
               {isInternalNativeProfile(profile) && <small role="note">Internal native parent — retained for inheritance, not selectable for slicing</small>}
               {profileLineages[profile.id] && <small role="status">
