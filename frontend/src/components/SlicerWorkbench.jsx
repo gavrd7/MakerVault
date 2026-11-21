@@ -1019,6 +1019,8 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
     try {
       // A typed model search bypasses the catalogue model selection and
       // matches tokens anywhere in native preset names, in any order.
+      if (!form.engine_version || officialProfileVersion !== form.engine_version)
+        throw new Error("Selected slicer engine release changed; reopen official search to load its matching catalogue.");
       const q = [officialManualModel.trim(), officialQuery.trim()].filter(Boolean).join(" ").trim();
       if (q.length < 2 || q.length > 80) throw new Error("Enter 2–80 characters across the manual model and preset searches.");
       const params = new URLSearchParams({q, kind:importKind,vendor:officialVendor,
@@ -1057,6 +1059,8 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
     setOfficialError(""); setOfficialBusy(true);
     setOfficialImportTarget(candidate.sub_path);
     try {
+      if (!form.engine_version || officialProfileVersion !== form.engine_version)
+        throw new Error("Selected slicer release changed; reopen official search before importing a native profile.");
       const result = await apiFetch("/api/printing/slicer/official-profiles/", {
         method: "POST",
         body: {
@@ -1852,7 +1856,7 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
           <label>Matching official profile release
             <input aria-label="Official profile engine version"
               value={form.engine_version || ""} readOnly />
-            <small>Follows the selected slicing engine. Switch engine version above to use another verified native catalogue; unsupported releases are rejected.</small>
+            <small>Follows the selected slicing engine. Switch engine version above to use another verified native catalogue; unsupported releases are rejected.{officialProfileVersions.length > 1 ? " Approved releases: " + officialProfileVersions.join(", ") + "." : ""}</small>
           </label>
           <label>Manufacturer / upstream catalogue
             <select value={officialVendor} disabled={officialBusy || !officialVendors.length} onChange={e => {
