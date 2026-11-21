@@ -21,6 +21,48 @@ from core.slicer_plate_3mf import build_plate_3mf, NS
 
 
 class PrinterCompatibilityFixtureTests(SimpleTestCase):
+    def test_creality_disposable_multicolor_probe_preserves_native_project(self):
+        from core.management.commands.diagnose_slicer_printer_profiles import (
+            _creality_multicolor_project_probe)
+        config = {
+            "filament_settings_id": ["A", "B", "A", "B"],
+            "different_settings_to_system": [
+                "enable_support", "", "", "", "", "purge_in_prime_tower"],
+            "purge_in_prime_tower": "0",
+            "change_filament_gcode": "protected native toolchange script",
+        }
+        source = io.BytesIO()
+        with zipfile.ZipFile(source, "w") as zipped:
+            zipped.writestr("Metadata/project_settings.config", json.dumps(config))
+            for name in ("3D/3dmodel.model", "Metadata/model_settings.config",
+                         "Metadata/creality.config", "_rels/.rels",
+                         "[Content_Types].xml"):
+                zipped.writestr(name, b"exact original member")
+        blob = source.getvalue()
+        controlled = _creality_multicolor_project_probe(blob)
+        original, updated, changed = _creality_control_project_with_extra(
+            blob, controlled,
+            {"multicolor_method", "different_settings_to_system"})
+        self.assertEqual(changed, {"multicolor_method", "different_settings_to_system"})
+        self.assertNotIn("multicolor_method", original)
+        self.assertEqual(updated["multicolor_method"], "1")
+        self.assertEqual(updated["purge_in_prime_tower"], "0")
+        self.assertEqual(updated["change_filament_gcode"],
+                         "protected native toolchange script")
+        self.assertEqual(updated["different_settings_to_system"][0],
+                         config["different_settings_to_system"][0])
+        self.assertEqual(updated["different_settings_to_system"][1:-1],
+                         config["different_settings_to_system"][1:-1])
+        self.assertEqual(updated["different_settings_to_system"][-1],
+                         "purge_in_prime_tower;multicolor_method")
+        with zipfile.ZipFile(io.BytesIO(blob)) as before, zipfile.ZipFile(
+                io.BytesIO(controlled)) as after:
+            for name in before.namelist():
+                if name != "Metadata/project_settings.config":
+                    self.assertEqual(before.read(name), after.read(name))
+        with self.assertRaises(ValueError):
+            _creality_multicolor_project_probe(controlled)
+
     def test_creality_toolchange_macro_audit_counts_only_known_markers(self):
         from core.management.commands.diagnose_slicer_printer_profiles import (
             _creality_toolchange_macro_audit, _creality_emitted_setting_audit)
@@ -52,16 +94,23 @@ class PrinterCompatibilityFixtureTests(SimpleTestCase):
         Command().add_arguments(parser)
         options = parser.parse_args(["--engine", "crealityprint"])
         self.assertFalse(options.test_production_flush)
+        self.assertFalse(options.probe_multicolor_gate)
         options = parser.parse_args([
             "--engine", "crealityprint", "--native", "--test-production-flush"])
         self.assertTrue(options.test_production_flush)
         self.assertTrue(options.native)
+        options = parser.parse_args([
+            "--engine", "crealityprint", "--native",
+            "--test-production-flush", "--probe-multicolor-gate"])
+        self.assertTrue(options.probe_multicolor_gate)
         # Invalid CLI combinations are rejected before profile or worker access.
         for args in (
                 ["--engine", "crealityprint", "--test-production-flush"],
                 ["--engine", "orcaslicer", "--native", "--test-production-flush"],
                 ["--engine", "crealityprint", "--native",
-                 "--test-flush", "--test-production-flush"]):
+                 "--test-flush", "--test-production-flush"],
+                ["--engine", "crealityprint", "--native",
+                 "--probe-multicolor-gate"]):
             with self.subTest(args=args), self.assertRaises(CommandError):
                 Command().handle(**vars(parser.parse_args(args)))
 
