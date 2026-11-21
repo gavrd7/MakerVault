@@ -2542,3 +2542,40 @@ Use only `sudo python3 scripts/install_slicer_staging.py update`
 on the staging app, not `refresh-worker`. No printer settings,
 firmware, manufacturer's slicer scripts or generated physical
 print are changed. PR #171 remains a draft.
+
+
+## Genuine Creality v7.3.1 Generic PLA + Hyper PLA native default fix (21 Nov 2026)
+
+The read-only v7.3.1 K2 machine audit passed with the complete 7183-character
+manufacturer tool-change macro, but the first **normal production-builder**
+offline diagnostic stopped before the worker was contacted:
+
+`SlicerProfileError: Creality filament presets disagree on native setting
+customized_plate_temp (missing for T1).`
+
+Traced the **exact official CrealityPrint v7.3.1** upstream filament chains:
+`Generic PLA @Creality K2 0.4 nozzle` and
+`Hyper PLA @Creality K2 0.4 nozzle`, each inheriting
+`fdm_filament_pla` → `fdm_filament_common`.
+The only keys present in one full chain but absent in the other are
+`customized_plate_temp` and `customized_plate_temp_initial_layer`.
+Generic PLA sets each to **50°C**; Hyper PLA does not define either.
+Verified manufacturer source
+`CrealityOfficial/CrealityPrint@v7.3.1/src/libslic3r/PrintConfig.cpp`
+defines each of those `coInts` settings with the default
+`ConfigOptionInts{35}`. This is a **native engine default**, not
+MakerVault borrowing the other filament's 50°C value.
+
+The 3MF builder now materialises **only those two audited defaults**
+as `"35"` for missing per-tool entries, only at engine version 7.3.1.
+It retains explicitly set temperatures and still fails closed for any
+other missing per-tool thermal, flow, retract or purge setting.
+No imported preset/source bytes or manufacturer G-code scripts are changed.
+Added regression verifying both material orders, all four native palette
+slots, 7.3.2 refusal and missing nozzle-temperature refusal.
+
+**The fix was committed but not yet tested on Debian.** Update only the
+MakerVault app, leave pinned worker unchanged, run focused tests and then
+repeat `diagnose_slicer_printer_profiles --native --test-production-flush`
+with previously verified profile IDs. This compares three real normal
+builder cases; it does not force `multicolor_method` or approve printing.
