@@ -751,6 +751,10 @@ class Command(BaseCommand):
                     geometry, printer=native["printer"], process=native["process"],
                     filaments=native["filaments"], bed_width=width, bed_depth=depth,
                     version=version, flush_settings=flush,
+                    # Only diagnostic controls are intentionally UNMARKED.
+                    # Normal MakerVault project building defaults to marking
+                    # explicit native flush overrides for Creality's CLI.
+                    preserve_native_flush_overrides=False,
                     tool_bindings={"fixture-slot-0": 0, "fixture-slot-1": 1}
                     if flush is not None else None)
             model = build_creality()
