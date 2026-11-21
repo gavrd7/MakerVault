@@ -2,6 +2,7 @@ from django.urls import path
 from . import printer_gcode_api
 from . import home_assistant_api
 from . import slicer_api
+from . import slicer_job_bulk
 from . import slicer_engine_management_api
 from . import slicer_material_preferences
 from . import api_views, printed_parts, camera_views, reusable_spools, reusable_spool_discovery, api_key_views, device_api_views, device_pairing, device_measurements, device_tag_registration, device_tag_lookup, weight_history_views, tag_ndef, device_ndef_write, device_cfs_lookup, device_makertag_operations, device_pending_work
@@ -16,6 +17,8 @@ urlpatterns = [
     path("printing/slicer/paint-assets/", slicer_api.paint_assets, name="api-slicer-paint-assets"),
     path("printing/slicer/paint-assets/<uuid:asset_id>/", slicer_api.paint_asset_detail, name="api-slicer-paint-asset-detail"),
     path("printing/slicer/jobs/", slicer_api.jobs, name="api-slicer-jobs"),
+    path("printing/slicer/jobs/bulk-delete/", slicer_job_bulk.bulk_delete_jobs, name="api-slicer-bulk-delete-jobs"),
+    path("printing/slicer/jobs/remove-unsaved-gcode/", slicer_job_bulk.remove_unsaved_gcode, name="api-slicer-remove-unsaved-gcode"),
     path("printing/slicer/profiles/", slicer_api.profiles, name="api-slicer-profiles"),
     path("printing/slicer/profiles/<uuid:profile_id>/", slicer_api.delete_profile, name="api-slicer-delete-profile"),
     path("printing/slicer/profiles/<uuid:profile_id>/customise/", slicer_api.customise_profile, name="api-slicer-customise-profile"),
