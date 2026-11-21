@@ -95,3 +95,14 @@ test("saved slicer entries keep thumbnails and buttons aligned, with shaded 3D m
   assert.match(setup, /slicerSavedJobModelPreview/);
   assert.match(setup, /printing\/slicer\/jobs\/.*thumbnail\//);
 });
+
+test("saved draft status filter sits below the actions and right aligned above entries", () => {
+  const toolbar = setup.indexOf('<div className="settingsActions slicerSavedJobToolbar">');
+  const filter = setup.indexOf('<div className="slicerSavedJobFilterRow">');
+  const entries = setup.indexOf('{filteredSavedJobs.length ? <div className="printingStack">');
+  assert.ok(toolbar >= 0 && filter > toolbar && entries > filter);
+  const toolbarContents = setup.slice(toolbar, filter);
+  assert.match(toolbarContents, /Remove all unsaved G-code/);
+  assert.doesNotMatch(toolbarContents, /Filter saved drafts and slices/);
+  assert.match(setup.slice(filter, entries), /Filter saved drafts and slices/);
+});
