@@ -57,3 +57,11 @@ test("official catalogue version always follows selected slicer engine", () => {
   assert.doesNotMatch(setup, /Native OrcaSlicer profile release/);
   assert.doesNotMatch(setup, /"2\.5\.0"\) \? form\.engine_version : "2\.5\.0"/);
 });
+
+test("profile removal feedback is visible in the saved modal and requires server confirmation", () => {
+  assert.match(setup, /profileRemoveError && <p className="integrationError" role="alert">/);
+  assert.match(setup, /profileRemoveNotice && <p role="status">/);
+  assert.match(setup, /result\?\.removed !== true/);
+  assert.match(setup, /setProfileRemoveError\("Unable to remove/);
+  assert.match(setup, /setProfiles\(current => current\.filter/);
+});
