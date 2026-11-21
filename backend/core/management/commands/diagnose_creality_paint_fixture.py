@@ -139,8 +139,14 @@ class Command(BaseCommand):
         parser.add_argument("--only", choices=CASES[1:])
         parser.add_argument("--deep", action="store_true",
                             help="Compare each semantic feature against exact same-geometry control")
+        parser.add_argument("--spatial-only", action="store_true",
+                            help="Run baseline and spatial support/seam/fuzzy controls only")
 
     def handle(self, *args, **options):
+        if options["spatial_only"] and options["only"]:
+            raise CommandError("--spatial-only cannot be combined with --only.")
+        if options["spatial_only"] and not options["deep"]:
+            raise CommandError("--spatial-only requires --deep.")
         values = [options["printer_profile_id"], options["process_profile_id"],
                   *options["filament_profile_id"]]
         if len(values) != 4:
@@ -174,7 +180,10 @@ class Command(BaseCommand):
         if not engine or engine["version"] != version:
             raise CommandError("Approved Creality 7.3.1 worker unavailable.")
         source = _cantilever_fixture_stl()
-        scenario_names = ["baseline", options["only"]] if options["only"] else list(CASES)
+        scenario_names = (["baseline", "support", "seam", "fuzzy"]
+                          if options["spatial_only"] else
+                          ["baseline", options["only"]] if options["only"] else
+                          list(CASES))
         results = {}
         baseline = None
         for feature in scenario_names:
