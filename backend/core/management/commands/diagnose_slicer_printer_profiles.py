@@ -989,6 +989,46 @@ class Command(BaseCommand):
                         != reference["toolchange_macro_audit"]["m8200_command_count"]),
                 }
                 cases["experimental_multicolor_enabled"] = enabled
+                # Keep the native machine capability and all manufacturer
+                # scripts constant. Vary ONLY user-requested flush values
+                # through the ordinary 3MF builder, before applying the
+                # same disposable, never-print machine capability probe.
+                for label, multiplier, forward in (
+                        ("experimental_multicolor_multiplier_1_0", 1.0, None),
+                        ("experimental_multicolor_forward_2_0",
+                         2.0, raw_forward + 25)):
+                    unmodified_package, _ = normal_project(multiplier, forward)
+                    candidate = _creality_multicolor_project_probe(
+                        unmodified_package)
+                    raw_gcode = slice_native(native["process"], candidate)
+                    output = {
+                        **_safe_native_result(raw_gcode),
+                        "emitted_settings": _creality_emitted_setting_audit(raw_gcode),
+                        "toolchange_macro_audit": _creality_toolchange_macro_audit(raw_gcode),
+                        "tower_deposition": tower_deposition_metrics(raw_gcode),
+                        "experimental_machine_capability": "multicolor_method=1",
+                        "requested_multiplier": multiplier,
+                        "requested_t0_to_t1_mm3": forward,
+                        "production_config_modified": False,
+                        "physical_purge": "unverified",
+                        "warning": "DISPOSABLE ONLY; generated G-code must never be printed.",
+                    }
+                    output["vs_experimental_multiplier_2_0"] = {
+                        "motion_changed": (
+                            output["motion_sha256"] != enabled["motion_sha256"]),
+                        "machine_commands_changed": (
+                            output["machine_command_sha256"] !=
+                            enabled["machine_command_sha256"]),
+                        "flush_start_count_changed": (
+                            output["toolchange_macro_audit"]["flush_start_comment_count"]
+                            != enabled["toolchange_macro_audit"]["flush_start_comment_count"]),
+                        "m8200_count_changed": (
+                            output["toolchange_macro_audit"]["m8200_command_count"]
+                            != enabled["toolchange_macro_audit"]["m8200_command_count"]),
+                        "g1_extrusion_move_count_changed": (
+                            output["g1_with_extrusion"] != enabled["g1_with_extrusion"]),
+                    }
+                    cases[label] = output
             for label in ("normal_multiplier_1_0", "normal_forward_2_0"):
                 current = cases[label]
                 current["vs_multiplier_2_0"] = {
