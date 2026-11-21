@@ -20,7 +20,7 @@ test("engine installer shows actual approved releases and worker status",()=>{
 
 test("user-initiated engine installation uses a pinned release and confirmation",()=>{
   assert.match(manager,/window\.confirm/);
-  assert.match(manager,/release_sha256:release\.bundle_sha256/);
+  assert.match(manager,/release_sha256:action===/);
   assert.match(manager,/method:"POST"/);
   assert.match(manager,/installation_available/);
   assert.match(manager,/!!operation/);
@@ -40,7 +40,7 @@ test("installed OrcaSlicer never looks unavailable just because an update is abs
   assert.match(manager,/available\.length>1/);
   assert.doesNotMatch(manager,/Already installed — no newer version available/);
   assert.doesNotMatch(manager,/No approved installation release is available yet/);
-  assert.match(manager,/rollback_available/);
+  assert.match(manager,/installed_versions/);
 });
 
 test("version selector supports per-engine downgrade and uninstall",()=>{
