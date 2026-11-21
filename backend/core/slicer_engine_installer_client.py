@@ -26,7 +26,7 @@ def _connection():
 def installer_request(method, endpoint, payload=None):
     if (method, endpoint) not in {
         ("GET", "/catalog"), ("GET", "/status"), ("POST", "/install"),
-        ("POST", "/rollback")
+        ("POST", "/rollback"), ("POST", "/activate"), ("POST", "/uninstall")
     }:
         raise EngineInstallerUnavailable("Unsupported installer operation.")
     url, token = _connection()
