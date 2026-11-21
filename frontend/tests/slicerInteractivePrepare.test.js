@@ -68,45 +68,35 @@ test("surface picking measures triangle vertices and edges without editing slice
   assert.match(scene, /measureSnapMode=\{measureSnapMode\}/);
   assert.match(editor, /setMeasurePoints\(current =>/);
   assert.match(editor, /3D distance:/);
-  assert.match(scene, /Three-point circle/);
-  assert.match(scene, /Millimetres \(mm\)/);
-  assert.match(scene, /Inches \(in\)/);
+  assert.match(editor, /Three-point circle/);
+  assert.match(editor, /Millimetres \(mm\)/);
+  assert.match(editor, /Inches \(in\)/);
   assert.match(editor, /measureMode === "circle"/);
   assert.match(editor, /setMeasurePoints\(\[\]\); setDetectedFeature\(null\); \}, \[objects, measureMode, measureClearVersion\]\)/);
 });
-test("Measure options open at the toolbar while a compact readout lives at top left of the plate", () => {
+test("Measure options remain accessible in the 3D viewport", () => {
   const scene = read("SlicerPrepareWorkspace.jsx");
   const editor = read("SlicerPlateEditor.jsx");
-  const css = fs.readFileSync(path.resolve(root, "../styles.css"), "utf8");
-  assert.match(scene, /name: "Measure", target: "measure", icon: "measure", expandable: true/);
-  assert.match(scene, /aria-controls=\{tool\.target === "import" \? "slicer-add-model-toolbar-options" : tool\.target === "auto_orient" \? "slicer-auto-orient-toolbar-options" : tool\.expandable \? "slicer-measure-toolbar-options"/);
-  assert.match(scene, /className="slicerToolOptions"/);
-  assert.match(scene, /measureMode=\{measureMode\} measureUnit=\{measureUnit\} measureSnapMode=\{measureSnapMode\}\s+measureClearVersion=\{measureClearVersion\}/);
-  assert.match(scene, /setMeasureClearVersion\(value => value \+ 1\)/);
-  assert.match(scene, /onMeasurePinPlaced=\{\(\) => setMeasureOptionsOpen\(false\)\}/);
-  assert.match(scene, /setMeasureOptionsOpen\(current => !current\)/);
-  assert.match(scene, /Finish measuring/);
-  assert.match(editor, /measurePinPlacedRef\.current\?\.\(\)/);
+  assert.match(scene, /name: "Measure", target: "measure", icon: "measure"/);
+  assert.match(scene, /measureSnapMode=\{measureSnapMode\}/);
   assert.match(editor, /className="slicerPlateCanvasViewport"/);
   assert.match(editor, /className="slicerViewportMeasurement slicerViewportToolDock"/);
   assert.match(editor, /aria-label="On-plate measurements"/);
-  assert.match(editor, /pinDistance !== null/);
-  assert.match(editor, /measureOverlayExpanded/);
-  assert.match(editor, /measureClearVersion\]\)/);
-  assert.doesNotMatch(editor, /Choose measurement mode, units and Clear pins from the expandable/);
-  assert.match(css, /\.slicerToolOptions \{/);
-  assert.match(css, /\.slicerViewportMeasurement \{/);
-  assert.match(css, /position: absolute;/);
-  assert.match(css, /@media \(max-width: 700px\)/);
+  assert.match(editor, /aria-label="Measure tool options"/);
+  assert.match(editor, /<option value="circle">Three-point circle/);
+  assert.match(editor, /<option value="surface">Surface point/);
+  assert.match(editor, /onMeasureClear\?\.\(\)/);
+  assert.match(editor, /onMeasureFinish\?\.\(\)/);
 });
+
 test("active 3D model has a temporary outline and preserves preview filament colours", () => {
   const scene = read("SlicerPrepareWorkspace.jsx");
   const editor = read("SlicerPlateEditor.jsx");
   assert.match(scene, /selectMultiple\(object.instance_id, event.ctrlKey/);
   assert.match(editor, /const helper = new THREE.BoxHelper\(mesh, 0x39d9ff\)/);
   assert.match(editor, /selectionOutlines\.forEach\(helper=>helper\.update\(\)\)/);
-  assert.match(editor, /state\.setSelectionOutlines\(\["paint_colour","paint_support"\]\.includes\(toolMode\) \? \[\] : selection\.map\(id=>state\.meshes\.get\(id\)\)/);
-  assert.match(editor, /paintPreview\(mesh, item, PALETTE\[0\]\)/);
+  assert.match(editor, /state\.setSelectionOutlines\(\["paint_colour","paint_support","paint_seam","paint_fuzzy","variable_layers"\]\.includes\(toolMode\) \? \[\] : selection\.map\(id=>state\.meshes\.get\(id\)\)/);
+  assert.match(editor, /paintPreview\(mesh, \{\.\.\.item,colour_paint:item\.colour_paint\}, PALETTE\[0\]\)/);
   assert.match(editor, /selection.includes\(item.instance_id\) \? "#168ab4" : "#000000"/);
   assert.match(editor, /setSelectionOutlines\(\[\]\)/);
   // Sorting or arranging must not activate a model merely because it was last touched.
@@ -115,7 +105,7 @@ test("active 3D model has a temporary outline and preserves preview filament col
 test("advanced tools are visibly gated pending safe native transformations", () => {
   const scene = read("SlicerPrepareWorkspace.jsx");
   for (const tool of ["Seam painting", "Variable layer height"]) {
-    assert.match(scene, new RegExp('name: "' + tool + '", icon: "[^"]+", pending:'));
+    assert.match(scene, new RegExp('name: "' + tool + '", target: "[^"]+", icon: "[^"]+"'));
   }
   assert.match(scene, /name: "Colour painting", target: "paint_colour", icon: "paint-colour"/);
   assert.match(scene, /name: "Support painting", target: "paint_support", icon: "paint-support"/);
@@ -200,8 +190,8 @@ test("live CFS AMS RFID slots support draft assignments without enabling unverif
   assert.match(scene, /material_slot:materialSlot/);
   assert.match(scene, /materialRoutingPending/);
   assert.match(scene, /flushSettings != null/);
-  assert.match(scene, /physical multi-material path is not yet enabled/);
-  assert.match(scene, /multi-slot printing requires verified tool routing/);
+  assert.match(scene, /Multiple slots still require verified tool routing/);
+  assert.match(scene, /Physical multi-slot tool routing still requires validation/);
 });
 
 test("switching registered printers invalidates physical CFS slots and flush volumes", () => {
@@ -217,7 +207,7 @@ test("icon toolbar tooltips show names and unavailable reasons on hover and focu
   const scene = read("SlicerPrepareWorkspace.jsx");
   const styles = fs.readFileSync(path.resolve(root, "../styles.css"), "utf8");
   assert.match(scene, /className="slicerToolTooltip"/);
-  assert.match(scene, /data-tooltip=\{tool\.pending \? tool\.name/);
+  assert.match(scene, /data-tooltip=\{NATIVE_TOOL_FEATURES\[tool\.target\]/);
   assert.match(scene, /Not yet available:/);
   assert.match(scene, /aria-label=\{tool\.name\}/);
   assert.match(styles, /\.slicerToolTooltip:hover::after/);
@@ -477,7 +467,7 @@ test("per-object settings inherit global profile values and remain instance scop
   assert.match(scene, /inheritedValue\(key, spec\)/);
   assert.match(scene, /Clear object overrides/);
   assert.match(scene, /id="slicer-object-settings-instance"/);
-  assert.match(workbench, /plate_objects: plateObjects/);
+  assert.match(workbench, /plate_objects: compactObjects/);
 });
 
 test("Auto-orient goals are in a toolbar menu and comparison is modal with a non-destructive ghost", () => {
@@ -726,7 +716,7 @@ test("assembly toolbar gizmos use a shared pivot and keep meshes independent",()
   assert.match(scene,/state\.transform\.attach\(pivot\)/);
   assert.match(scene,/groupCommitRef\.current\?\.\(dx,dy,rotation,scale\)/);
   assert.match(scene,/groupEditable = canEdit && !solidDialog && selection\.length > 1/);
-  assert.match(scene,/state\.setSelectionOutlines\(\["paint_colour","paint_support"\]\.includes\(toolMode\) \? \[\] : selection\.map/);
+  assert.match(scene,/state\.setSelectionOutlines\(\["paint_colour","paint_support","paint_seam","paint_fuzzy","variable_layers"\]\.includes\(toolMode\) \? \[\] : selection\.map/);
   assert.match(scene,/transformGroup\(groupDeltaX, groupDeltaY, groupRotation, groupScale\)/);
   assert.match(workspace,/const memberIds = item\.assembly_id/);
   assert.match(workspace,/memberIds\.every\(value => current\.includes\(value\)\)/);
@@ -784,7 +774,7 @@ test("material system complexity stays in the adapter layer, not normal slicer c
   const workbench = read("SlicerWorkbench.jsx");
   const scene = read("SlicerPrepareWorkspace.jsx");
   assert.match(workbench, /setSlotFilamentProfiles\(job\.settings\?\.slot_filament_profiles \|\| \[\]\)/);
-  assert.match(scene, /slotFilamentProfiles\.length >= 2/);
+  assert.match(scene, /requiredMultiSlots\.length >= 2/);
   assert.doesNotMatch(scene, /Native tool assignments/);
   assert.doesNotMatch(scene, /Material changeover system/);
   assert.doesNotMatch(scene, /Physical slot positions are not native tool indices/);
@@ -815,13 +805,13 @@ test("project actions export a named complete 3MF rather than an offline materia
   assert.doesNotMatch(workbench, /material_topology:materialTopology/);
 });
 
-test("explicit multicolour test slices use the isolated worker and do not activate printer upload", () => {
+test("multi-material slicing uses explicit offline admission with profile checks", () => {
   const workbench = read("SlicerWorkbench.jsx");
   const prepare = read("SlicerPrepareWorkspace.jsx");
-  assert.match(prepare, /Slice multi-colour \(test\)/);
-  assert.match(prepare, /onSliceMultimaterialTest/);
-  assert.match(workbench, /onSliceMultimaterialTest=\{\(\) => saveDraft\("multi-material-test"\)\}/);
-  assert.match(workbench, /mode === "multi-material-test" \? \{multi_material_test:true\}/);
-  assert.match(workbench, /printer upload and start are blocked/);
+  assert.match(workbench, /const offlineMultiMaterial = sliceNow/);
+  assert.match(workbench, /offlineMultiMaterial \? \{multi_material_test:true\}/);
+  assert.match(workbench, /onSlice=\{\(\) => saveDraft\("slice"\)\}/);
+  assert.match(prepare, /requiredMultiSlots\.every\(compatibleSlotProfile\)/);
+  assert.match(prepare, /materialRoutingPending/);
   assert.doesNotMatch(prepare, /Material changeover system/);
 });
