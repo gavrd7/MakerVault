@@ -3,6 +3,10 @@
 Separate from OrcaSlicer; imported profiles remain unverified candidates.
 Profile sources follow the pinned Creality Print release, not printer brands.
 This source tag is for profile discovery only, not verified CLI execution.
+Pinning to 7.3.1 is essential: 7.3.0's K2 change_filament_gcode is 212
+characters, whereas 7.3.1's is 7183 and contains the vendor purge
+sequence. A native 7.3.1 engine must not silently import 7.3.0 machine
+scripts under a 7.3.1 version label.
 """
 from functools import lru_cache
 from pathlib import PurePosixPath
@@ -12,11 +16,11 @@ from .slicer_official_filter import narrow_catalogue, models_from_machines, fuzz
 from .slicer_official_profiles import OfficialProfileError, _get_json
 
 ENGINE = "crealityprint"
-ENGINE_VERSION = "7.3.0"
+ENGINE_VERSION = "7.3.1"
 SOURCE = "CrealityOfficial/CrealityPrint"
-REF = "v7.3.0"
+REF = "v7.3.1"
 BASE = f"https://raw.githubusercontent.com/{SOURCE}/{REF}/resources/profiles"
-# Pinned v7.3.0 manifest basenames, excluding non-profile metadata JSON.
+# Pinned v7.3.1 manifest basenames, excluding non-profile metadata JSON.
 VENDORS = ("Anker", "Anycubic", "Artillery", "BBL", "BIQU", "CONSTRUCT3D", "Comgrow", "Creality", "Custom", "Dremel", "Elegoo", "FLSun", "Flashforge", "FlyingBear", "Folgertech", "InfiMech", "Kingroon", "MagicMaker", "OrcaArena", "Peopoly", "Positron3D", "Prusa", "Qidi", "Raise3D", "Ratrig", "SecKit", "Snapmaker", "Sovol", "Tronxy", "TwoTrees", "UltiMaker", "Vivedino", "Voron", "Voxelab", "Vzbot", "Wanhao",)
 KINDS = {"printer": "machine_list", "filament": "filament_list", "process": "process_list"}
 MAX_INDEX = 512 * 1024
