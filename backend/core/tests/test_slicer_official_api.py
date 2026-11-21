@@ -180,7 +180,7 @@ class OfficialProfileApiTests(TestCase):
             response = self.post(selection)
         self.assertEqual(response.status_code, 201, response.content)
         chain.assert_called_once_with(
-            "crealityprint", "printer", selection["name"], selection["sub_path"], "Prusa"
+            "crealityprint", "printer", selection["name"], selection["sub_path"], "Prusa", version="7.3.1"
         )
         profile = SlicerProfile.objects.get(pk=response.json()["profile"]["id"])
         self.assertEqual(profile.engine, "crealityprint")
