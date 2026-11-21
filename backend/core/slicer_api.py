@@ -40,6 +40,9 @@ from .slicer_bed import inspect_orca_plate, inspect_creality_plate
 from .slicer_bed_artwork import (official_artwork_source, cached_official_artwork,
     official_bed_model_source, cached_official_bed_model)
 from .slicer_official_chain import official_profile_chain
+from .slicer_official_release_resolver import (
+    resolve_official_release, approved_catalogue_versions, default_catalogue_version,
+)
 from .slicer_creality_official_profiles import (
     search_creality_profiles, fetch_creality_profile, available_creality_vendors,
     official_catalogue_models as creality_catalogue_models,
@@ -1235,9 +1238,11 @@ def official_profiles(request):
     """Search/import native candidates from pinned official engine catalogues."""
     if request.method == "GET":
         selected = request.GET.get("engine", "orcaslicer")
-        version = request.GET.get("version", OFFICIAL_ORCA_VERSION)
-        if selected == "orcaslicer" and version not in ORCA_APPROVED_PROFILE_VERSIONS:
-            return _error("Choose an approved OrcaSlicer profile release.")
+        try:
+            version = request.GET.get("version") or default_catalogue_version(selected)
+            selected_release = resolve_official_release(selected, version)
+        except OfficialProfileError as exc:
+            return _error(str(exc))
         if request.GET.get("brands") == "1":
             if selected != "orcaslicer" or request.GET.get("vendor") != "OrcaFilamentLibrary":
                 return _error("Filament brand browsing requires the official Orca library.")
@@ -1261,10 +1266,10 @@ def official_profiles(request):
             return JsonResponse({
                 "engine": selected,
                 "vendors": (available_official_vendors(version) if selected == "orcaslicer" else provider[0]()) if provider else [],
-                "versions": ORCA_APPROVED_PROFILE_VERSIONS if selected == "orcaslicer" else [],
-                "selected_version": version if selected == "orcaslicer" else None,
-                "source_engine_version": OFFICIAL_CRE_VERSION if selected == "crealityprint" else None,
-                "ref": provider[1] if provider else None,
+                "versions": approved_catalogue_versions(selected),
+                "selected_version": version,
+                "source_engine_version": selected_release.version,
+                "ref": selected_release.ref,
                 "native_profile_format": native.profile_format,
                 "manual_import_available": True,
                 "official_search_available": bool(provider),
@@ -1369,24 +1374,11 @@ def official_profiles(request):
         if engine not in providers:
             return _error("Official import is not available for this engine.")
         version, source, ref, fetcher = providers[engine]
-        if engine == "orcaslicer":
-            version = selection.get("engine_version", OFFICIAL_ORCA_VERSION)
-            if version not in ORCA_APPROVED_PROFILE_VERSIONS:
-                raise ValueError("Unsupported OrcaSlicer official profile release.")
-            ref = "v" + version
-        elif engine == "crealityprint":
-            # An imported machine must originate from the exact matching
-            # Creality Print release. v7.3.0's K2 toolchange macro is only
-            # 212 chars; v7.3.1's official macro is 7183 chars and handles
-            # external flushing. Do not mislabel old source as v7.3.1.
-            target_version = selection.get("engine_version", version)
-            if target_version != OFFICIAL_CRE_VERSION:
-                raise ValueError(
-                    "Select the matching pinned Creality Print "
-                    + OFFICIAL_CRE_VERSION + " official profile release.")
-            version = OFFICIAL_CRE_VERSION
-        elif selection.get("engine_version", version) != version:
-            raise ValueError("This source does not provide the requested engine version.")
+        selected_version = selection.get("engine_version") or default_catalogue_version(engine)
+        release = resolve_official_release(engine, selected_version)
+        if (source, ref) != (release.source, release.ref) and engine != "orcaslicer":
+            raise ValueError("Official provider configuration differs from the reviewed release.")
+        version, source, ref = release.version, release.source, release.ref
         kind = selection.get("kind")
         vendor = selection.get("vendor", "Creality")
         name = selection.get("name")
@@ -1402,9 +1394,7 @@ def official_profiles(request):
                  if engine == "bambustudio" else
                  [(name, subpath, fetch_prusa_model(kind, name, subpath, vendor))]
                  if engine == "prusaslicer" else
-                 official_profile_chain(engine, kind, name, subpath, vendor, version=version)
-                 if engine == "orcaslicer" and version != OFFICIAL_ORCA_VERSION else
-                 official_profile_chain(engine, kind, name, subpath, vendor))
+                 official_profile_chain(engine, kind, name, subpath, vendor, version=version))
         # Official source identity is pinned to an engine repository/tag and
         # catalogue vendor, not merely to a potentially reused preset name.
         source_scope = f"{source}@{ref}/{vendor}"
