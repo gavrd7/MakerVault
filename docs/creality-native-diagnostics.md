@@ -2785,3 +2785,37 @@ New isolated tests:
 `core.tests.test_slicer_creality_spatial_audit`.
 These new commits are source changes awaiting staging tests; the
 previous 58-test run predates them.
+
+## Final production execution CFS safety integration (21 Nov 2026)
+
+Ordinary MakerVault Creality two-material execution now determines native
+`multicolor_method` from the exact **selected, resolved machine preset**.
+Missing/disabled capability remains disabled: **nothing is automatically
+enabled**, and the existing diagnostic-only model/project builder is unchanged.
+
+When an operator has selected an explicitly enabled native machine preset,
+ordinary slicer execution calls
+`build_creality_project_candidate(..., require_verified_multicolor_purge=True)`
+to demand the known native manufacturer's tool-change script structure and
+preserve its content unmodified. After the pinned native worker returns
+G-code, `audit_creality_multicolor_gcode` refuses to store a successful
+two-material result unless balanced, bounded FLUSH_START/FLUSH_END sections,
+actual positive extrusion-only native flush commands, M8200 commands, tool
+selection and explicit M83 relative extrusion are all observed. The gate
+rejects malformed sections, missing native purge and ambiguous extrusion
+state; it **does not** infer the source machine capability from model name
+or enable it on behalf of the operator.
+
+A successful audit only means the **offline slicing output** has passed
+these known structure checks. It does not establish physical CFS bay
+routing, exact purge volume or safe printer execution. MakerVault's
+existing multi-material printer-submission restrictions remain in force.
+The official stock K2 7.3.1 machine profile (whose multicolor_method is
+absent) is **not approved** to print multicolour jobs by this change.
+
+The printer-ready release still requires an **authentic selected native
+machine profile with explicitly enabled manufacturer capability**, CFS
+routing evidence and a separately authorised controlled physical print.
+New focused tests:
+`core.tests.test_slicer_creality_release_gate`. This is a bounded
+implementation pass, not an invitation to add further generic diagnostics.
