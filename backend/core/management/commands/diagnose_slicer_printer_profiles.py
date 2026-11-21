@@ -620,6 +620,8 @@ class Command(BaseCommand):
                             help="Send ONLY disposable offline fixture to approved worker")
         parser.add_argument("--test-flush", action="store_true",
                             help="Run bounded native A/B flushing controls for Orca or Creality single-nozzle changers")
+        parser.add_argument("--test-production-flush", action="store_true",
+                            help="Offline A/B test the ordinary marked Creality 3MF builder; no printer communication")
 
     def handle(self, *args, **opts):
         engine = opts["engine"]
@@ -642,6 +644,12 @@ class Command(BaseCommand):
             return
         if opts["test_flush"] and not opts["native"]:
             raise CommandError("--test-flush requires --native.")
+        if opts["test_production_flush"]:
+            if (not opts["native"] or opts["test_flush"]
+                    or engine != "crealityprint"):
+                raise CommandError(
+                    "--test-production-flush requires --engine crealityprint "
+                    "--native and cannot be combined with --test-flush.")
         if not opts["topology"]:
             raise CommandError("Explicit --topology required; printer names cannot imply topology.")
         source_ids = [opts["printer_profile_id"], opts["process_profile_id"],
@@ -721,6 +729,10 @@ class Command(BaseCommand):
         if opts["test_flush"] and (
                 not cap.supported_for_encoding_only or count < 2):
             raise CommandError("Native flushing A/B test requires a supported single-nozzle changer.")
+        if opts["test_production_flush"] and (
+                not cap.supported_for_encoding_only or count != 2
+                or opts["topology"] != "single_nozzle_changer"):
+            raise CommandError("Native production flush comparison requires the verified two-material Creality topology.")
         # Reject missing/incompatible matrices *before* using worker time.
         first_flush_volume = None
         if opts["test_flush"] and engine == "orcaslicer":
@@ -766,6 +778,111 @@ class Command(BaseCommand):
                 uuid.uuid4(), engine, version, model if model_blob is None else model_blob,
                 native["printer"], native["filaments"][0], process_blob,
                 timeout_seconds=900, **kwargs)
+        if opts["test_production_flush"]:
+            # Exercise the ordinary, default-preserving project builder—not
+            # the disposable negative-control/marker-patching helpers.
+            raw_project = _read_creality_project_settings(model)
+            raw_forward, _native_multiplier = _creality_flush_basis(raw_project)
+            if not 0 <= raw_forward <= 19950:
+                raise CommandError("Native production A/B source volume is invalid.")
+            bindings = {"fixture-slot-0": 0, "fixture-slot-1": 1}
+            def normal_project(multiplier, forward=None):
+                flush = {
+                    "multiplier": multiplier, "prime_tower": "native",
+                    "transitions": ([] if forward is None else [{
+                        "from_slot_id": "fixture-slot-0",
+                        "to_slot_id": "fixture-slot-1",
+                        "volume_mm3": forward,
+                    }]),
+                }
+                # The default builder must preserve explicit settings.
+                project_blob = build_creality_project_candidate(
+                    geometry, printer=native["printer"], process=native["process"],
+                    filaments=native["filaments"], bed_width=width,
+                    bed_depth=depth, version=version, flush_settings=flush,
+                    tool_bindings=bindings)
+                project_cfg = _read_creality_project_settings(project_blob)
+                override_rows = project_cfg.get("different_settings_to_system")
+                if (not isinstance(override_rows, list)
+                        or len(override_rows) != 6):
+                    raise CommandError("Ordinary Creality project has invalid preset overrides.")
+                process_override = set(override_rows[0].split(";"))
+                expected = {"flush_multiplier"}
+                if forward is not None:
+                    expected.update({"flush_volumes_matrix", "flush_volumes_changed"})
+                if not expected <= process_override:
+                    raise CommandError("Ordinary Creality project lost explicit flush markers.")
+                if (float(project_cfg.get("flush_multiplier", -1)) != multiplier
+                        or (forward is not None and
+                            float(project_cfg["flush_volumes_matrix"][1]) != forward)):
+                    raise CommandError("Ordinary Creality project lost selected flush values.")
+                # These are same real profile inputs; only native user-selected
+                # flush values/markers may differ. Do not enable purge on behalf
+                # of the user or change machine scripts.
+                return project_blob, {
+                    "source_purge_in_prime_tower": str(
+                        json.loads(native["printer"]).get(
+                            "purge_in_prime_tower", "not_explicit")),
+                    "project_purge_in_prime_tower": str(
+                        project_cfg.get("purge_in_prime_tower", "absent")),
+                    "printer_override_marked": (
+                        "purge_in_prime_tower" in override_rows[-1].split(";")),
+                    "process_override_keys_present": sorted(expected),
+                    "requested_multiplier": multiplier,
+                    "requested_t0_to_t1_mm3": forward,
+                    "effective_native_matrix_basis": (
+                        "candidate_fallback_unverified"
+                        if ("flush_volumes_matrix" not in json.loads(native["process"])
+                            and "flush_volumes_matrix" not in json.loads(native["printer"]))
+                        else "selected_native_preset"),
+                }
+            scenarios = [
+                ("normal_multiplier_1_0", 1.0, None),
+                ("normal_multiplier_2_0", 2.0, None),
+                ("normal_forward_2_0", 2.0, raw_forward + 25),
+            ]
+            cases = {}
+            for label, multiplier, forward in scenarios:
+                package, audit = normal_project(multiplier, forward)
+                gcode = slice_native(native["process"], package)
+                cases[label] = {
+                    **audit,
+                    **_safe_native_result(gcode),
+                    "emitted_settings": _creality_emitted_setting_audit(gcode),
+                    "tower_deposition": tower_deposition_metrics(gcode),
+                }
+            reference = cases["normal_multiplier_2_0"]
+            for label in ("normal_multiplier_1_0", "normal_forward_2_0"):
+                current = cases[label]
+                current["vs_multiplier_2_0"] = {
+                    "motion_changed": current["motion_sha256"] != reference["motion_sha256"],
+                    "machine_commands_changed": (
+                        current["machine_command_sha256"] != reference["machine_command_sha256"]),
+                    "tower_extrusion_changed": (
+                        current["tower_deposition"]["positive_e_length_mm"] !=
+                        reference["tower_deposition"]["positive_e_length_mm"]),
+                    "tower_xy_changed": (
+                        current["tower_deposition"]["xy_width_mm"] !=
+                        reference["tower_deposition"]["xy_width_mm"]
+                        or current["tower_deposition"]["xy_depth_mm"] !=
+                        reference["tower_deposition"]["xy_depth_mm"]),
+                }
+            if verified_installation().get(engine) != installed:
+                raise CommandError("Pinned native engine approval changed during production comparison.")
+            self.stdout.write(json.dumps({
+                **summary,
+                "native_run": "sliced",
+                "production_builder_offline_controls": cases,
+                "production_builder_used": True,
+                "printer_purge_mode_preserved": True,
+                "note": (
+                    "All scenarios built using the ordinary MakerVault project builder "
+                    "and selected native presets. Pinned worker offline-only. "
+                    "If source machine disables purge in tower, do not infer "
+                    "no flush response from tower motion. No printer command was sent."
+                ),
+            }, indent=2))
+            return
         # Validate Creality controls and baseline provenance before any worker
         # execution; generated zero/140 fallback values are NOT user defaults.
         creality_controls = None
