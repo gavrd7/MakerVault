@@ -110,9 +110,11 @@ def extract_single_bambu_gcode(sliced_project: Path, workdir: Path) -> Path:
             except BaseException:
                 output.unlink(missing_ok=True)
                 raise
+    except WorkerError:
+        raise
     except (zipfile.BadZipFile, EOFError, OSError, RuntimeError, ValueError) as exc:
         raise WorkerError("Bambu native 3MF output is invalid.") from exc
-    if not total or b"\\0" in head:
+    if not total or b"\0" in head:
         output.unlink(missing_ok=True)
         raise WorkerError("Bambu generated unsupported binary or empty G-code.")
     return output
