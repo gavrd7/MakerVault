@@ -73,8 +73,11 @@ def official_asset():
 
 def fetch_candidate(destination):
     """Stream, verify, and stage without replacing any existing engine."""
-    target = Path(destination).resolve()
-    if target.exists() and (target.is_symlink() or not target.is_dir() or any(target.iterdir())):
+    target = Path(destination)
+    if target.is_symlink():
+        raise ValueError("Refusing a symlinked engine bundle destination.")
+    target = target.resolve()
+    if target.exists() and (not target.is_dir() or any(target.iterdir())):
         raise ValueError("Refusing to replace an existing slicer engine bundle.")
     url = official_asset()
     with tempfile.TemporaryDirectory(prefix="makervault-bambu-download-") as scratch:
@@ -95,7 +98,7 @@ def fetch_candidate(destination):
         if not count or digest.hexdigest() != SHA256:
             raise ValueError("Bambu Studio AppImage SHA-256 verification failed.")
         # Official AppImage magic: ELF; checksum remains authoritative.
-        if asset.open("rb").read(4) != b"\\x7fELF":
+        if asset.open("rb").read(4) != b"\x7fELF":
             raise ValueError("Pinned Bambu Studio asset is not an ELF AppImage.")
         from slicer_worker.stage_engines import stage_engines
         return stage_engines([("bambustudio", VERSION, str(asset), SHA256)], target)
