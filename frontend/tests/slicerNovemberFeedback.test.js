@@ -71,11 +71,18 @@ test("saved slicing jobs support draft/slice filters and explicit bulk cleanup",
   assert.match(setup, /Drafts \(not sliced\)/);
   assert.match(setup, /Completed slices/);
   assert.match(setup, /Select all filtered/);
-  assert.match(setup, /Delete selected \(\{selectedSavedJobIds\.length\}\)/);
+  assert.match(setup, /Delete selected \(\{selectedSavedJobCount\}\)/);
   assert.match(setup, /Remove all drafts/);
   assert.match(setup, /Remove all slices/);
   assert.match(setup, /Remove all unsaved G-code/);
   assert.match(setup, /printing\/slicer\/jobs\/bulk-delete\//);
   assert.match(setup, /printing\/slicer\/jobs\/remove-unsaved-gcode\//);
   assert.match(setup, /if \(!window\.confirm\(/);
+});
+
+test("saved slices reuse owner-private generated G-code thumbnails", () => {
+  assert.match(setup, /function SlicerJobThumbnail\(\{ job \}\)/);
+  assert.match(setup, /SlicerJobThumbnail key=\{job\.id/);
+  assert.match(setup, /printing\/slicer\/jobs\/.*thumbnail\//);
+  assert.match(setup, /onError=\{\(\) => setUnavailable\(true\)\}/);
 });
