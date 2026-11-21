@@ -628,17 +628,29 @@ def build_creality_project_candidate(plate, *, printer, process, filaments,
                                    (0.0, float(bed_depth))}):
             raise SlicerProfileError("Native Creality project polygon does not match the verified bed.")
         project["printable_area"] = points
+    # Creality Print v7.3.1 src/libslic3r/PrintConfig.cpp declares both
+    # customized_plate_temp and customized_plate_temp_initial_layer as coInts
+    # with an explicit default of 35 C. Some genuine official filament
+    # presets leave these options absent while another material defines an
+    # override. Use only that audited engine default for the missing tool,
+    # never the OTHER material's temperature (and never a guessed default).
+    creality_native_defaults = {
+        "customized_plate_temp": "35",
+        "customized_plate_temp_initial_layer": "35",
+    }
     for key in _PER_TOOL_KEYS:
         present = [preset.get(key) for preset in filament_settings]
         if any(v is not None for v in present):
             if any(v is None for v in present):
-                # Creality Print's PrintConfig.cpp explicitly defines
-                # filament_shrinkage_compensation_z (coPercents) default 100%.
-                # Normalise ONLY this known, neutral native default; never
-                # infer missing temperature, flow, retract, or purge settings
-                # from another material's preset.
+                # Preserve explicit per-tool values; use only defaults
+                # verified in Creality Print's own v7.3.1 PrintConfig.cpp.
                 if key == "filament_shrinkage_compensation_z":
                     present = ["100%" if v is None else v for v in present]
+                elif version == "7.3.1" and key in creality_native_defaults:
+                    present = [
+                        creality_native_defaults[key] if v is None else v
+                        for v in present
+                    ]
                 else:
                     missing = ", ".join("T%d" % i for i, value in enumerate(present)
                                         if value is None)
