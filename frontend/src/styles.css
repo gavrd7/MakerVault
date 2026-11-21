@@ -2444,6 +2444,22 @@ main,section,article,form,.panel,.pagePanel,.catalogueLayout,.printingPage,.sett
   grid-column:-2/-1;justify-content:flex-end;align-items:center;
 }
 .slicerSavedJobRow>.cameraSourceIdentity{min-width:0}
+
+/* Use the existing on-demand 3D mesh render for unpainted single-object rows.
+   It renders with real normals and lighting, not flat fallback G-code lines. */
+.slicerSavedJobModelPreview{
+  width:96px;height:96px;min-width:96px;
+  border-radius:10px;overflow:hidden;
+  border:1px solid rgba(147,168,187,.23);
+  background:#111820;
+}
+.slicerSavedJobModelPreview .modelFileThumbnail{
+  width:100%;height:100%;
+}
+.slicerSavedJobModelPreview .modelFileThumbnail img{
+  width:100%;height:100%;object-fit:cover;
+}
+
 @media(max-width:1100px){
   .cameraSourceRow.slicerSavedJobRow{
     grid-template-columns:96px minmax(0,1fr);
@@ -2464,6 +2480,9 @@ main,section,article,form,.panel,.pagePanel,.catalogueLayout,.printingPage,.sett
   }
   .slicerSavedJobRow>img,.slicerSavedJobRow>div[aria-hidden="true"]{
     width:76px!important;height:76px!important;min-width:76px!important;
+  }
+  .slicerSavedJobModelPreview{
+    width:76px;height:76px;min-width:76px;
   }
   .slicerSavedJobRow>.cameraSourceActions button{flex:1 1 120px}
 }
