@@ -409,6 +409,7 @@ def _creality_emitted_setting_audit(gcode):
     recognised = {
         "flush_multiplier", "purge_in_prime_tower", "enable_prime_tower",
         "prime_volume", "prime_tower_width", "flush_volumes_matrix",
+        "multicolor_method",
     }
     pattern = re.compile(
         r"^;\s*(" + "|".join(sorted(recognised)) +
@@ -426,7 +427,8 @@ def _creality_emitted_setting_audit(gcode):
         if key == "flush_volumes_matrix":
             # Never expose a whole source matrix, including custom materials.
             value = "present" if raw else "empty"
-        elif key in {"purge_in_prime_tower", "enable_prime_tower"}:
+        elif key in {"purge_in_prime_tower", "enable_prime_tower",
+                         "multicolor_method"}:
             if raw in {"0", "1"}:
                 value = "enabled" if raw == "1" else "disabled"
         else:
@@ -453,6 +455,49 @@ def _creality_emitted_setting_audit(gcode):
         "limitation": "Only recognised emitted G-code comment values; absence does not prove settings were ignored.",
     }
 
+
+
+def _creality_toolchange_macro_audit(gcode):
+    """Report only safe presence/counts of K2 change-script indicators.
+
+    This is not a printer execution trace. Never expose native macro text
+    or assume a tool selection alone executed the change-filament script.
+    """
+    import re
+    if not isinstance(gcode, bytes) or not 0 < len(gcode) <= 64 * 1024 * 1024:
+        raise ValueError("Invalid bounded native toolchange audit input.")
+    counts = {
+        "flush_start_comment_count": 0,
+        "flush_end_comment_count": 0,
+        "m8200_command_count": 0,
+        "set_velocity_limit_command_count": 0,
+        "tool_select_command_count": 0,
+    }
+    for line in gcode.decode("utf-8", errors="replace").splitlines():
+        if len(line) > 8192:
+            continue
+        stripped = line.strip()
+        if re.fullmatch(r";\s*FLUSH_START\s*", stripped, re.I):
+            counts["flush_start_comment_count"] += 1
+        elif re.fullmatch(r";\s*FLUSH_END\s*", stripped, re.I):
+            counts["flush_end_comment_count"] += 1
+        if stripped.startswith(";"):
+            continue
+        if re.match(r"^M8200(?:\s|$)", stripped, re.I):
+            counts["m8200_command_count"] += 1
+        if re.match(r"^SET_VELOCITY_LIMIT(?:\s|$)", stripped, re.I):
+            counts["set_velocity_limit_command_count"] += 1
+        if re.match(r"^T\d+(?:\s|$)", stripped, re.I):
+            counts["tool_select_command_count"] += 1
+    return {
+        "evidence_source": "generated_gcode_exact_marker_counts_not_printer_execution",
+        **counts,
+        "limitations": (
+            "Tool selections alone do not establish execution of the "
+            "machine's change_filament_gcode. Marker absence only "
+            "applies to recognised K2 commands and comments."
+        ),
+    }
 
 
 def _creality_marked_result_comparison(controls, marked_name, parent_name):
@@ -849,6 +894,7 @@ class Command(BaseCommand):
                     **audit,
                     **_safe_native_result(gcode),
                     "emitted_settings": _creality_emitted_setting_audit(gcode),
+                    "toolchange_macro_audit": _creality_toolchange_macro_audit(gcode),
                     "tower_deposition": tower_deposition_metrics(gcode),
                 }
             reference = cases["normal_multiplier_2_0"]
