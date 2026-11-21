@@ -1927,7 +1927,8 @@ class SlicerEngineOperation(TimeStampedModel):
     contains no executable, URL, shell command or filesystem path.
     """
     ACTIONS = (("install", "Install"), ("update", "Update"),
-               ("rollback", "Rollback"))
+               ("rollback", "Rollback"), ("activate", "Switch version"),
+               ("uninstall", "Uninstall"))
     STATES = (("queued", "Queued"), ("downloading", "Downloading"),
               ("verifying", "Verifying"), ("staged", "Staged"),
               ("activating", "Activating"), ("completed", "Completed"),
