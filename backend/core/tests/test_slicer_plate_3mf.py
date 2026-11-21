@@ -93,8 +93,23 @@ class MultiPlateProject3MFTests(SimpleTestCase):
 
     def test_semantic_paint_sidecars_and_variable_bands_survive_export(self):
         shape = fixture_stl()
-        patch = {"face": 0, "polygon": [[0, 0, 0], [2, 0, 0], [0, 2, 0]]}
-        paint = {"version": 2, "signature": "1:abcdef01",
+        from core.slicer_plate_3mf import _triangles
+        from core.slicer_native_support_paint import _fingerprint
+        triangles = list(_triangles(shape))
+        minimum = [min(p[axis] for tri in triangles for p in tri)
+                   for axis in range(3)]
+        maximum = [max(p[axis] for tri in triangles for p in tri)
+                   for axis in range(3)]
+        origin = ((minimum[0] + maximum[0]) / 2,
+                  (minimum[1] + maximum[1]) / 2, minimum[2])
+        local = [[tuple(p[axis] - origin[axis] for axis in range(3))
+                  for p in tri] for tri in triangles]
+        face = local[0]
+        centre = [sum(p[axis] for p in face) / 3 for axis in range(3)]
+        patch = {"face": 0, "polygon": [
+            [(p[axis] + centre[axis]) / 2 for axis in range(3)]
+            for p in face]}
+        paint = {"version": 2, "signature": _fingerprint(local),
                  "regions": [{"slot": 0, "patches": [patch]}]}
         variable = {"version": 1, "bands": [
             {"from_mm": 0, "to_mm": 10, "layer_mm": 0.12}
