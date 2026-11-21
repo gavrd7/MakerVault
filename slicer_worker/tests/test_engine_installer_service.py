@@ -57,7 +57,38 @@ class InstallerTests(unittest.TestCase):
              patch.object(installer, "_request",
                           return_value=io.BytesIO(json.dumps(release()).encode())) as request:
             self.assertEqual(installer.release_catalogue(), installer.release_catalogue())
-            self.assertEqual(request.call_count, 1)
+            self.assertEqual(request.call_count, 3)
+
+    def test_orca_releases_are_only_offered_with_exact_pinned_sha(self):
+        from io import BytesIO
+        def upstream(url, **kwargs):
+            if "/releases/tags/v2." in url:
+                version = url.rsplit("v", 1)[-1]
+                digest = installer.APPROVED_ORCA[version]
+                asset = f"OrcaSlicer_Linux_AppImage_Ubuntu2404_V{version}.AppImage"
+                release = {"tag_name": "v" + version, "draft": False,
+                           "prerelease": False, "assets": [{
+                               "name": asset, "digest": "sha256:" + digest,
+                               "size": 180000000,
+                               "browser_download_url":
+                                   f"https://github.com/OrcaSlicer/OrcaSlicer/releases/download/v{version}/{asset}",
+                           }]}
+                return BytesIO(json.dumps(release).encode())
+            return BytesIO(json.dumps([]).encode())
+        with patch.object(installer.platform, "machine", return_value="x86_64"), \\
+             patch.object(installer, "_request", side_effect=upstream):
+            releases = installer.release_catalogue()
+        self.assertEqual({x["version"] for x in releases if x["engine"] == "orcaslicer"},
+                         {"2.4.2", "2.5.0"})
+        installer.RELEASE_CACHE["items"] = []
+        def altered(url, **kwargs):
+            data = json.loads(upstream(url).read())
+            if isinstance(data, dict):
+                data["assets"][0]["digest"] = "sha256:" + "0" * 64
+            return BytesIO(json.dumps(data).encode())
+        with patch.object(installer.platform, "machine", return_value="x86_64"), \\
+             patch.object(installer, "_request", side_effect=altered):
+            self.assertEqual(installer.release_catalogue(), [])
 
     def test_creality_cli_probe_uses_explicit_cli_switch(self):
         # Upstream requires --cli to avoid launching the wxWidgets GUI.
