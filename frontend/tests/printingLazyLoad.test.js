@@ -1,0 +1,135 @@
+import test from "node:test";
+import assert from "node:assert/strict";
+import fs from "node:fs";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+
+const source = fs.readFileSync(path.resolve(
+  path.dirname(fileURLToPath(import.meta.url)), "../src/components/PrintingPage.jsx"
+), "utf8");
+
+test("3D Printing does not eagerly import the slicer editor", () => {
+  assert.ok(!source.includes('import SlicerWorkbench from'));
+  assert.ok(!source.includes('import SavedSlicerJobsModal from'));
+  assert.ok(source.includes('const SlicerWorkbench = lazy(fetchSlicerWorkbench)'));
+  assert.ok(source.includes('const fetchSlicerWorkbench = () => import("./SlicerWorkbench")'));
+  assert.ok(source.includes("export function preloadSlicerWorkbench()"));
+  assert.ok(source.includes('lazy(() => import("./SavedSlicerJobsModal"))'));
+  assert.ok(source.includes('<Suspense fallback='));
+});
+
+test("overview defers huge filament and model file catalogues", () => {
+  assert.ok(source.includes('load({ includeFilaments: false, includeFiles: false })'));
+  assert.ok(source.includes('query.set("include_filaments", "0")'));
+  assert.ok(source.includes('query.set("include_files", "0")'));
+  assert.ok(source.includes('filamentFetchRef.current'));
+  assert.ok(source.includes('filesFetchRef.current'));
+  assert.ok(source.includes('Retry loading filament catalogue'));
+  assert.ok(source.includes('Retry loading model and G-code files'));
+});
+
+test("telemetry refresh preserves already fetched immutable catalogues", () => {
+  assert.ok(source.includes('load({includeFilaments:false, includeFiles:false})'));
+  assert.ok(source.includes('filaments: includeFilaments ? fresh.filaments : previous?.filaments || []'));
+  assert.ok(source.includes('gcode_files: includeFiles ? fresh.gcode_files : previous?.gcode_files || []'));
+  assert.ok(source.includes('model_files: includeFiles ? fresh.model_files : previous?.model_files || []'));
+});
+
+
+test("printer overview uses compact controls and camera without changing spool and model library",()=>{
+  const section=source.slice(source.indexOf('<h3>Printers &amp; live monitoring</h3>'),
+    source.indexOf('<h3>Spool inventory</h3>'));
+  assert.match(section,/printingPrinterCompactList/);
+  assert.match(section,/printingPrinterCompactIdentity/);
+  assert.match(section,/printingPrinterCompactControls/);
+  assert.match(section,/printingPrinterCompactCamera/);
+  assert.match(section,/<PrinterLiveSummary/);
+  assert.match(section,/<PrinterCameraPreview/);
+  assert.doesNotMatch(section,/className="printingSlotPanel"/);
+  assert.doesNotMatch(section,/>MakerTags<\/button>/);
+  assert.doesNotMatch(section,/>Camera setup<\/button>/);
+  assert.match(source,/<h3>Spool inventory<\/h3>/);
+  assert.match(source,/<h3>Model library<\/h3>/);
+});
+test("Manage printer delegates optional setup to dedicated actions",()=>{
+  assert.match(source,/function PrinterManageModal\(\{ printer, manufacturers, models, locations, canDelete, onClose, onSaved, onOpenMakerTags, onCameraSetup, onAddSource \}\)/);
+  assert.match(source,/className="printingPrinterManageSecondary full"/);
+  assert.match(source,/onClick=\{onOpenMakerTags\}>MakerTags/);
+  assert.match(source,/onClick=\{onCameraSetup\}>Camera setup/);
+  assert.match(source,/onClick=\{onAddSource\}>Add live source/);
+  assert.match(source,/addOnly && !!available\.length && <form/);
+  assert.match(source,/printingLiveFilamentPanel/);
+});
+
+test("overview cameras are compact while full monitor retains native controls",()=>{
+  const cameras=fs.readFileSync(path.resolve(
+    path.dirname(fileURLToPath(import.meta.url)), "../src/components/PrinterCameras.jsx"
+  ),"utf8");
+  assert.match(cameras,/compact = true/);
+  assert.match(cameras,/compact=\{compact\}/);
+  assert.match(source,/!addOnly && <PrinterCameraPreview compact=\{false\}/);
+  assert.match(source,/className="printingPrinterCompactCamera"/);
+  assert.match(source,/onClaimSlot=\{canAddSpool \? slot =>/);
+});
+
+
+test("compact printer styling preserves large controls and properly fills preview without changing full monitor",()=>{
+  const css=fs.readFileSync(path.resolve(
+    path.dirname(fileURLToPath(import.meta.url)), "../src/styles.css"
+  ),"utf8");
+  assert.match(css,/\.printingPrinterCompactCard \.printingPrinterImage \{\s*flex:0 0 84px/);
+  assert.match(css,/\.printingPrinterCompactActions \{\s*width:100%;\s*display:grid;\s*grid-template-columns:repeat\(2,minmax\(0,1fr\)\)/);
+  assert.match(css,/\.printingPrinterCompactCard \.printerLiveActions \{\s*margin:0;\s*display:flex/);
+  assert.match(css,/\.printingPrinterCompactCamera \.cameraGlance \.printerCameraViewport \{/);
+  assert.match(css,/object-fit:cover/);
+  assert.match(css,/@media\(max-width:850px\)/);
+  assert.match(css,/\.printingPrinterCompactCamera \.printerCameraPlaceholder/);
+});
+
+
+test("offline printer overview never exposes stale controls, progress or camera",()=>{
+  assert.match(source,/function printerLiveConnected\(printer\)/);
+  assert.match(source,/connection\.status === "connected" && !connection\.stale/);
+  assert.match(source,/if \(!connected\) return <div className="printerLiveSummary printerLiveSummary-error printerLiveOffline">/);
+  assert.match(source,/printerLiveConnected\(printer\) && <div className="printingPrinterCompactCamera"/);
+  assert.doesNotMatch(source,/className="printingPrinterImageCredit"/);
+  const css=fs.readFileSync(path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../src/styles.css"),"utf8");
+  assert.match(css,/\.printingPrinterCompactCard\.isOffline \{/);
+  assert.match(css,/\.printingPrinterCompactCard\.isOffline \.printerLiveOffline/);
+});
+test("live overview keeps progress and commands together and all stats in a scrolling single row",()=>{
+  assert.match(source,/className="printerLiveCommandRow"/);
+  assert.match(source,/className="printerLiveQuickStats"/);
+  const css=fs.readFileSync(path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../src/styles.css"),"utf8");
+  assert.match(css,/\.printingPrinterCompactCard \.printerLiveCommandRow \{/);
+  assert.match(css,/\.printingPrinterCompactCard \.printerLiveQuickStats \{\s*flex:none;\s*display:flex;\s*flex-wrap:nowrap;/);
+  assert.match(css,/overscroll-behavior-x:contain/);
+});
+
+
+test("printer overview shows identity and live status without administrative badges",()=>{
+  const start=source.indexOf('<h3>Printers &amp; live monitoring</h3>');
+  const end=source.indexOf('<h3>Spool inventory</h3>',start);
+  const overview=source.slice(start,end);
+  assert.ok(start>=0 && end>start);
+  assert.match(overview,/printingPrinterCompactIdentity/);
+  assert.match(overview,/printingPrinterCompactActions/);
+  assert.match(overview,/<PrinterLiveSummary/);
+  assert.doesNotMatch(overview,/className="printingPrinterStatus"/);
+  assert.doesNotMatch(overview,/<Badge/);
+  assert.match(source,/function PrinterConfigurationBadges\(\{ printer \}\)/);
+  assert.match(source,/function PrinterConnectionsModal[\s\S]*?!addOnly && <PrinterConfigurationBadges printer=\{printer\}/);
+  assert.match(source,/function PrinterManageModal[\s\S]*?<PrinterConfigurationBadges printer=\{printer\}/);
+  assert.match(source,/printer\.installed_multi_material_label/);
+  assert.match(source,/printer\.simplyprint\?\.external_id/);
+});
+
+
+test("mobile printer art fills identity height proportionally without altering desktop",()=>{
+  const css=fs.readFileSync(path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../src/styles.css"),"utf8");
+  assert.match(css,/@media \(max-width:520px\) \{\s*\.printingPrinterCompactCard \.printingPrinterCompactIdentity/);
+  assert.match(css,/flex:0 0 clamp\(98px,28vw,118px\)/);
+  assert.match(css,/aspect-ratio:4 \/ 5/);
+  assert.match(css,/\.printingPrinterCompactCard \.printingPrinterImage img \{[\s\S]*?object-fit:contain/);
+  assert.match(css,/align-self:center/);
+});

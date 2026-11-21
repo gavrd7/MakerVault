@@ -1,0 +1,184 @@
+"""Offline multi-material preflight: no printer commands or network transport."""
+from types import SimpleNamespace
+from unittest.mock import patch
+
+from django.test import SimpleTestCase
+
+from core.slicer_material_routing import MaterialRoutingError
+from core.slicer_multimaterial_execution import plan_native_multimaterial
+
+
+class MultiMaterialPreflightTests(SimpleTestCase):
+    def setUp(self):
+        # Native source and inheritance checks are tested independently.
+        native = patch("core.slicer_native_resolution.resolved_native_profile",
+                       return_value=b'{"filament_diameter":["1.75"]}')
+        native.start()
+        self.addCleanup(native.stop)
+        self.slots = [
+            {"printer_id": "printer", "slot_id": "cfs-bay-4", "slot_index": 3},
+            {"printer_id": "printer", "slot_id": "cfs-bay-1", "slot_index": 0},
+        ]
+        self.settings = {
+            "multi_material_test": True,
+            "plate_objects": [
+                {"instance_id": "a", "material_slot": self.slots[0]},
+                {"instance_id": "b", "material_slot": self.slots[1]},
+            ],
+            "slot_filament_profiles": [
+                {"slot_id": "cfs-bay-4", "profile_id": "blue"},
+                {"slot_id": "cfs-bay-1", "profile_id": "red"},
+            ],
+        }
+        self.job = SimpleNamespace(
+            engine="orcaslicer", engine_version="2.5.0",
+            printer_id="printer", owner_id="owner",
+            filament_profile_id="red", settings=self.settings,
+        )
+        self.presets = [
+            SimpleNamespace(pk="red", status="verified", engine="orcaslicer",
+                            engine_version="2.5.0", kind="filament"),
+            SimpleNamespace(pk="blue", status="verified", engine="orcaslicer",
+                            engine_version="2.5.0", kind="filament"),
+        ]
+        self.connection = SimpleNamespace(
+            enabled=True, status="connected", adapter="creality_local",
+            capabilities={"material_system": {"available": True,
+                "topology": "single_nozzle_changer",
+                "physical_toolchange_verified": False}},
+        )
+
+    @patch("core.slicer_multimaterial_execution.SlicerProfile.objects.filter")
+    @patch("core.slicer_multimaterial_execution.PrinterConnection.objects.filter")
+    def test_material_mapping_is_derived_from_main_filament_not_cfs_slot_order(self, sources, profiles):
+        sources.return_value = [self.connection]
+        profiles.return_value = self.presets
+        topology, bindings, palette = plan_native_multimaterial(self.job)
+        self.assertEqual(topology, "single_nozzle_changer")
+        self.assertEqual(bindings, {"cfs-bay-1": 0, "cfs-bay-4": 1})
+        self.assertEqual([p.pk for p in palette], ["red", "blue"])
+
+    @patch("core.slicer_multimaterial_execution.SlicerProfile.objects.filter")
+    @patch("core.slicer_multimaterial_execution.PrinterConnection.objects.filter")
+    def test_creality_selected_colours_follow_logical_tool_not_cfs_bay_index(self, sources, profiles):
+        from core.slicer_multimaterial_execution import creality_selected_tool_colours
+        source_models = [
+            ({"color": "#ffcc00", "material_slot": self.slots[0]}, b"stl"),
+            ({"color": "#777777", "material_slot": self.slots[1]}, b"stl"),
+        ]
+        # Bay 4 is logical T0 even though its physical slot index is 3.
+        self.assertEqual(
+            creality_selected_tool_colours(source_models, (0, 1)),
+            ("#FFCC00", "#777777"))
+        self.assertEqual(
+            creality_selected_tool_colours(source_models, (1, 0)),
+            ("#777777", "#FFCC00"))
+
+    def test_creality_conflicting_colours_for_one_tool_fail_closed(self):
+        from core.slicer_multimaterial_execution import creality_selected_tool_colours
+        source_models = [
+            ({"color": "#ffcc00"}, b"stl"),
+            ({"color": "#777777"}, b"stl"),
+            ({"color": "#123456"}, b"stl"),
+        ]
+        with self.assertRaisesRegex(MaterialRoutingError, "conflicting colours"):
+            creality_selected_tool_colours(source_models, (0, 1, 0))
+        with self.assertRaisesRegex(MaterialRoutingError, "two logical tools"):
+            creality_selected_tool_colours(source_models, (0, 0, 0))
+
+    @patch("core.slicer_multimaterial_execution.SlicerProfile.objects.filter")
+    @patch("core.slicer_multimaterial_execution.PrinterConnection.objects.filter")
+    def test_creality_uses_model_slot_profiles_even_when_setup_default_differs(self, sources, profiles):
+        sources.return_value = [self.connection]
+        self.job.engine = "crealityprint"
+        self.job.engine_version = "7.3.1"
+        self.job.filament_profile_id = "unrelated-main-profile"
+        self.presets[0].engine = self.presets[1].engine = "crealityprint"
+        self.presets[0].engine_version = self.presets[1].engine_version = "7.3.1"
+        profiles.return_value = self.presets
+        # The first model uses bay 4, so Creality's logical tool zero must
+        # use its actual native preset, not Setup's global filament.
+        _topology, bindings, palette = plan_native_multimaterial(self.job)
+        self.assertEqual(bindings, {"cfs-bay-4": 0, "cfs-bay-1": 1})
+        self.assertEqual([preset.pk for preset in palette], ["blue", "red"])
+        # A completely unused bay never enters the native palette.
+        self.settings["slot_filament_profiles"].append(
+            {"slot_id": "cfs-bay-2", "profile_id": "no-native-preset"}
+        )
+        _topology, bindings, palette = plan_native_multimaterial(self.job)
+        self.assertEqual([preset.pk for preset in palette], ["blue", "red"])
+
+    @patch("core.slicer_multimaterial_execution.PrinterConnection.objects.filter")
+    def test_missing_live_capability_blocks_multicolour(self, sources):
+        sources.return_value = []
+        with self.assertRaisesRegex(MaterialRoutingError, "No supported multi-material topology"):
+            plan_native_multimaterial(self.job)
+
+    @patch("core.slicer_multimaterial_execution.SlicerProfile.objects.filter")
+    @patch("core.slicer_multimaterial_execution.PrinterConnection.objects.filter")
+    def test_unknown_filament_preset_state_fails_closed(self, sources, profiles):
+        sources.return_value = [self.connection]
+        self.presets[1].status = "draft"
+        profiles.return_value = self.presets
+        with self.assertRaisesRegex(MaterialRoutingError, "incompatible"):
+            plan_native_multimaterial(self.job)
+
+    @patch("core.slicer_multimaterial_execution.SlicerProfile.objects.filter")
+    @patch("core.slicer_multimaterial_execution.PrinterConnection.objects.filter")
+    def test_imported_candidate_profiles_need_no_manual_approval(self, sources, profiles):
+        sources.return_value = [self.connection]
+        self.presets[0].status = "candidate"
+        self.presets[1].status = "candidate"
+        profiles.return_value = self.presets
+        _topology, bindings, palette = plan_native_multimaterial(self.job)
+        self.assertEqual(bindings["cfs-bay-1"], 0)
+        self.assertEqual([p.status for p in palette], ["candidate", "candidate"])
+
+    @patch("core.slicer_multimaterial_execution.SlicerProfile.objects.filter")
+    @patch("core.slicer_multimaterial_execution.PrinterConnection.objects.filter")
+    def test_unresolvable_imported_parent_still_fails_closed(self, sources, profiles):
+        from core.slicer_profiles import SlicerProfileError
+        sources.return_value = [self.connection]
+        profiles.return_value = self.presets
+        self.presets[0].status = "candidate"
+        with patch("core.slicer_native_resolution.resolved_native_profile",
+                   side_effect=SlicerProfileError("Missing required parent")):
+            with self.assertRaisesRegex(MaterialRoutingError, "missing native parents"):
+                plan_native_multimaterial(self.job)
+
+    @patch("core.slicer_multimaterial_execution.SlicerProfile.objects.filter")
+    @patch("core.slicer_multimaterial_execution.PrinterConnection.objects.filter")
+    def test_one_model_uses_base_slot_plus_surface_painted_slot(self, sources, profiles):
+        printer = "11111111-1111-4111-8111-111111111111"
+        self.job.printer_id = printer
+        self.settings["plate_objects"] = [{
+            "instance_id": "painted", "material_slot": {
+                "printer_id": printer, "slot_id": "cfs-bay-1", "slot_index": 0,
+            },
+            "colour_paint": {
+                "version": 2, "signature": "1:deadbeef",
+                "palette": [{
+                    "color": "#aabbcc", "label": "Blue", "printer_id": printer,
+                    "slot_id": "cfs-bay-4", "slot_index": 3,
+                }],
+                "regions": [{"slot": 0, "patches": [{
+                    "face": 0, "polygon": [[0, 0, 0], [1, 0, 0], [0, 1, 0]],
+                }]}],
+            },
+        }]
+        self.settings["slot_filament_profiles"].append({
+            "slot_id": "unused-bay", "profile_id": "unused"
+        })
+        sources.return_value = [self.connection]
+        profiles.return_value = self.presets
+        topology, bindings, palette = plan_native_multimaterial(self.job)
+        self.assertEqual(topology, "single_nozzle_changer")
+        self.assertEqual(bindings, {"cfs-bay-1": 0, "cfs-bay-4": 1})
+        self.assertEqual([preset.pk for preset in palette], ["red", "blue"])
+
+    @patch("core.slicer_multimaterial_execution.PrinterConnection.objects.filter")
+    def test_single_model_without_painted_second_tool_is_blocked(self, sources):
+        sources.return_value = [self.connection]
+        self.settings["plate_objects"] = [self.settings["plate_objects"][1]]
+        with self.assertRaisesRegex(MaterialRoutingError, "between two and sixteen"):
+            plan_native_multimaterial(self.job)

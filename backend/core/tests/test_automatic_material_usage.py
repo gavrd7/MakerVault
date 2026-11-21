@@ -28,7 +28,7 @@ class GcodeWeightParserTests(SimpleTestCase):
 
     @patch("core.printer_connectivity._get")
     def test_moonraker_length_conversion_is_labelled_estimated(self, get):
-        get.side_effect = [{"result": {}}, {"result": {"status": {"print_stats": {"filename": "folder/a b.gcode", "state": "printing", "filament_used": 500}}}}, {"result": {"filament_weight_total": 10, "filament_total": 1000}}]
+        get.side_effect = [{"result": {}}, {"result": {"status": {"print_stats": {"filename": "folder/a b.gcode", "state": "printing", "filament_used": 500}}}}, {"result": {"status": {"pause_resume": {"is_paused": False}}}}, {"result": {"filament_weight_total": 10, "filament_total": 1000}}]
         snapshot = poll_moonraker("http://printer.local")
         self.assertEqual(snapshot["job"]["filament_used_g"], 5)
         self.assertTrue(snapshot["job"]["filament_usage_estimated"])

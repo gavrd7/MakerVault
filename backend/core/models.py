@@ -535,6 +535,7 @@ class PrintingIntegrationSetting(TimeStampedModel):
         ("spoolman", "Spoolman"),
         ("simplyprint", "SimplyPrint"),
         ("creality_cfs", "Creality CFS"),
+        ("homeassistant", "Home Assistant · printer power"),
         ("bambu_ams", "Bambu Lab / AMS"),
         ("prusalink", "PrusaLink"),
         ("anycubic_ace", "Anycubic LAN / ACE"),
@@ -1128,11 +1129,172 @@ class PrinterGcodeSubmission(TimeStampedModel):
     original_path = models.CharField(max_length=512, blank=True)
     remote_path = models.CharField(max_length=512, blank=True)
     file_sha256 = models.CharField(max_length=64, blank=True)
+    # Exact scoped CFS mapping authorised for this one-shot submission.
+    # Persist before dispatch; never overwrite when start outcome is unknown.
+    cfs_mapping_audit = models.JSONField(default=dict, blank=True)
     status = models.CharField(max_length=12, choices=STATES, default="pending")
     message = models.TextField(blank=True)
 
     class Meta:
         ordering = ["-created_at"]
+
+
+
+
+class SlicerProfile(TimeStampedModel):
+    """A preserved engine-native preset, never executed or trusted on import."""
+
+    KINDS = [("printer", "Printer"), ("filament", "Filament"), ("process", "Process")]
+    STATES = [("candidate", "Not verified"), ("verified", "Verified for worker")]
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    owner = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="slicer_profiles"
+    )
+    engine = models.CharField(max_length=32)
+    engine_version = models.CharField(max_length=80)
+    kind = models.CharField(max_length=16, choices=KINDS)
+    name = models.CharField(max_length=200)
+    file_asset = models.ForeignKey(
+        FileAsset, on_delete=models.PROTECT, related_name="slicer_profile_links"
+    )
+    content_sha256 = models.CharField(max_length=64)
+    status = models.CharField(max_length=16, choices=STATES, default="candidate")
+    is_default = models.BooleanField(default=False, db_index=True)
+    provenance = models.CharField(max_length=200, blank=True)
+    source_scope = models.CharField(max_length=200, blank=True, default="", db_index=True)
+    verification_evidence = models.JSONField(default=dict, blank=True)
+    verified_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ["engine", "kind", "name", "-created_at"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["owner", "engine", "engine_version", "kind", "name", "source_scope"],
+                name="unique_slicer_profile_identity",
+            ),
+            models.UniqueConstraint(
+                fields=["owner", "engine", "engine_version", "kind"],
+                condition=models.Q(is_default=True),
+                name="unique_slicer_profile_default",
+            ),
+        ]
+
+    def clean(self):
+        if self.file_asset_id and self.owner_id and self.file_asset.owner_id != self.owner_id:
+            raise ValidationError({"file_asset": "Slicer profile file belongs to another account."})
+        if self.status not in dict(self.STATES):
+            raise ValidationError({"status": "Unknown profile verification status."})
+
+
+
+
+class SlicerMaterialProfilePreference(TimeStampedModel):
+    """Durable printer/material-to-native-preset choice, independent of drafts.
+
+    Keys describe the currently loaded material, not the physical slot
+    number: moving a spool to another bay must not lose its remembered preset.
+    Engine/version are isolated, and missing/stale presets cannot be applied.
+    """
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    printer = models.ForeignKey(
+        "Printer", on_delete=models.CASCADE, related_name="slicer_material_preferences"
+    )
+    material_key = models.CharField(max_length=64)
+    engine = models.CharField(max_length=32)
+    engine_version = models.CharField(max_length=80)
+    profile = models.ForeignKey(
+        "SlicerProfile", on_delete=models.CASCADE, related_name="material_preferences"
+    )
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["printer", "material_key", "engine", "engine_version"],
+                name="unique_slicer_material_preference",
+            ),
+        ]
+
+
+class SliceJob(TimeStampedModel):
+    """Private slicer job specification; this model never executes anything.
+
+    Creation stores a draft and does not start a queue worker or printer.
+    Worker execution is a separately gated milestone.
+    """
+
+    STATES = [
+        ("draft", "Draft"), ("queued", "Queued"), ("running", "Running"),
+        ("completed", "Completed"), ("failed", "Failed"),
+        ("cancelled", "Cancelled"), ("stale", "Stale"),
+    ]
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    owner = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="slicing_jobs"
+    )
+    input_asset = models.ForeignKey(
+        FileAsset, on_delete=models.PROTECT, related_name="slice_inputs"
+    )
+    printer_profile = models.ForeignKey(
+        "SlicerProfile", on_delete=models.PROTECT, null=True, blank=True,
+        related_name="printer_slice_jobs"
+    )
+    filament_profile = models.ForeignKey(
+        "SlicerProfile", on_delete=models.PROTECT, null=True, blank=True,
+        related_name="filament_slice_jobs"
+    )
+    process_profile = models.ForeignKey(
+        "SlicerProfile", on_delete=models.PROTECT, null=True, blank=True,
+        related_name="process_slice_jobs"
+    )
+    output_asset = models.ForeignKey(
+        FileAsset, on_delete=models.SET_NULL, null=True, blank=True, related_name="slice_outputs"
+    )
+    printer = models.ForeignKey(
+        "Printer", on_delete=models.PROTECT, related_name="slice_jobs"
+    )
+    spool = models.ForeignKey(
+        "Spool", on_delete=models.PROTECT, null=True, blank=True, related_name="slice_jobs"
+    )
+    engine = models.CharField(max_length=32)
+    engine_version = models.CharField(max_length=80)
+    printer_preset = models.CharField(max_length=200)
+    filament_preset = models.CharField(max_length=200)
+    process_preset = models.CharField(max_length=200)
+    nozzle_mm = models.DecimalField(max_digits=5, decimal_places=2)
+    plate = models.CharField(max_length=80, default="default")
+    settings = models.JSONField(default=dict, blank=True)
+    status = models.CharField(max_length=16, choices=STATES, default="draft", db_index=True)
+    progress = models.PositiveSmallIntegerField(default=0)
+    message = models.CharField(max_length=255, blank=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+        indexes = [models.Index(fields=["owner", "status"], name="slice_owner_status_idx")]
+
+    def clean(self):
+        if self.input_asset_id and self.owner_id and self.input_asset.owner_id != self.owner_id:
+            raise ValidationError({"input_asset": "Input asset must belong to the job owner."})
+        if self.output_asset_id and self.owner_id and self.output_asset.owner_id != self.owner_id:
+            raise ValidationError({"output_asset": "Output asset must belong to the job owner."})
+        if self.printer_id and self.owner_id and self.printer.owner_id != self.owner_id:
+            raise ValidationError({"printer": "Printer must belong to the job owner."})
+        if self.spool_id and self.owner_id and self.spool.owner_id != self.owner_id:
+            raise ValidationError({"spool": "Spool must belong to the job owner."})
+        if self.input_asset_id and self.input_asset.category not in {"mesh", "slicer"}:
+            raise ValidationError({"input_asset": "Select a model or slicer project file."})
+        for kind in ("printer", "filament", "process"):
+            profile = getattr(self, f"{kind}_profile", None)
+            if profile and (
+                profile.owner_id != self.owner_id
+                or profile.engine != self.engine
+                or profile.engine_version != self.engine_version
+                or profile.kind != kind
+            ):
+                raise ValidationError({f"{kind}_profile": "Native slicer profile does not match this job."})
+        if self.status == "draft" and self.output_asset_id:
+            raise ValidationError({"output_asset": "Draft slice jobs cannot have output G-code."})
+
 
 
 class PrinterFilamentSlot(TimeStampedModel):
@@ -1755,3 +1917,46 @@ class DevicePairing(TimeStampedModel):
 
     class Meta:
         ordering = ["-created_at"]
+
+
+class SlicerEngineOperation(TimeStampedModel):
+    """Durable admin-approved host-updater request, never executed by Django.
+
+    The host maintenance service must independently verify a pinned approved
+    release before touching the single shared engine store. A browser request
+    contains no executable, URL, shell command or filesystem path.
+    """
+    ACTIONS = (("install", "Install"), ("update", "Update"),
+               ("rollback", "Rollback"))
+    STATES = (("queued", "Queued"), ("downloading", "Downloading"),
+              ("verifying", "Verifying"), ("staged", "Staged"),
+              ("activating", "Activating"), ("completed", "Completed"),
+              ("failed", "Failed"), ("cancelled", "Cancelled"))
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    requested_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT,
+                                     related_name="slicer_engine_operations")
+    engine = models.CharField(max_length=32)
+    version = models.CharField(max_length=80)
+    action = models.CharField(max_length=16, choices=ACTIONS)
+    release_sha256 = models.CharField(max_length=64)
+    status = models.CharField(max_length=16, choices=STATES, default="queued")
+    progress = models.PositiveSmallIntegerField(default=0)
+    status_message = models.CharField(max_length=200, blank=True)
+    completed_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ("-created_at",)
+        indexes = [models.Index(fields=["status", "created_at"],
+                                name="slicer_engine_op_queue_idx")]
+
+
+class SlicerEngineAccessSettings(TimeStampedModel):
+    """Optional team policy; self-hosted users can manage engines by default."""
+    restrict_engine_management_to_admins = models.BooleanField(default=False)
+
+    class Meta:
+        verbose_name = "Slicer engine access settings"
+
+    @classmethod
+    def current(cls):
+        return cls.objects.order_by("pk").first() or cls()

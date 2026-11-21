@@ -2,6 +2,7 @@ from .creality_material_database import MaterialDatabaseError, pull_creality_mat
 from .models import PrinterMaterialDatabaseSnapshot
 from .filament_manufacturers import resolve_filament_manufacturer
 import hashlib
+import math
 import json
 import plistlib
 import uuid
@@ -47,6 +48,7 @@ from .filament_catalogue import (
 from .printing_catalogue_seed import COMMON_FILAMENT_MATERIALS
 from .model_analysis import ModelAnalysisError, analyse_file_asset
 from .print_material_reporting import capture_material, gcode_report, material_summary
+from .file_library_visibility import library_visible_assets
 from .printing_integrations import PrintingIntegrationError, probe_simplyprint, probe_spoolman
 from .printer_connectivity import (
     ADAPTERS as PRINTER_ADAPTERS,
@@ -2403,6 +2405,205 @@ def component_image(request, component_id):
 
 @login_required
 @require_http_methods(["GET"])
+def file_gcode_layer(request, asset_id):
+    """Read full-resolution extrusion paths for one layer of an owned G-code file.
+
+    Keep the indexed whole-model summary separate; only the selected layer is
+    returned at full resolution, avoiding the discontinuous global sample.
+    """
+    from .slicer_layer_preview import (
+        MAX_LAYER_SOURCE_BYTES, exact_layer_toolpaths,
+    )
+
+    asset = FileAsset.objects.filter(owner=request.user, pk=asset_id).first()
+    if asset is None:
+        return _error("G-code file not found.", status=404)
+    filename = str((asset.metadata or {}).get("original_name") or asset.name or "")
+    if (asset.metadata or {}).get("extension") != ".gcode" and not filename.lower().endswith(".gcode"):
+        return _error("Only plain-text G-code can be inspected.", status=400)
+    try:
+        layer_z = float(request.GET.get("z", ""))
+        if not 0 <= layer_z <= 2000 or not math.isfinite(layer_z):
+            raise ValueError()
+    except (ValueError, TypeError):
+        return _error("Choose a valid layer Z between 0 and 2000 mm.", status=400)
+    try:
+        with asset.file.storage.open(asset.file.name, "rb") as handle:
+            raw = handle.read(MAX_LAYER_SOURCE_BYTES + 1)
+    except (OSError, ValueError):
+        return _error("Stored G-code could not be opened.", status=404)
+    if len(raw) > MAX_LAYER_SOURCE_BYTES:
+        return _error("Full-resolution layer retrieval is unavailable for G-code larger than 32 MiB.", status=413)
+    if b"\x00" in raw:
+        return _error("Binary G-code is not supported by this viewer.", status=400)
+    try:
+        source = raw.decode("utf-8")
+    except UnicodeDecodeError:
+        return _error("Full-resolution layer retrieval requires UTF-8 G-code.", status=400)
+    result = exact_layer_toolpaths(source, layer_z)
+    response = JsonResponse(result)
+    response["Cache-Control"] = "private, no-store"
+    return response
+
+
+@login_required
+@require_http_methods(["GET"])
+def file_gcode_layers(request, asset_id):
+    """Fetch a bounded batch of exact layers for progressive, engine-neutral preview.
+
+    Uses the same ownership, plain-text and source-size safeguards as the
+    single-layer endpoint. Empty/oversized batches are rejected before I/O.
+    """
+    import time
+    begin = time.monotonic()
+    def respond(data, cache_status):
+        response = JsonResponse(data)
+        response["Cache-Control"] = "private, no-store"
+        response["X-MakerVault-Preview-Cache"] = cache_status
+        response["Server-Timing"] = f'preview;dur={(time.monotonic()-begin)*1000:.1f}'
+        return response
+    from .slicer_layer_preview import (
+        MAX_LAYER_SOURCE_BYTES, MAX_BATCH_LAYERS, layer_batch_toolpaths,
+    )
+
+    asset = FileAsset.objects.filter(owner=request.user, pk=asset_id).first()
+    if asset is None:
+        return _error("G-code file not found.", status=404)
+    filename = str((asset.metadata or {}).get("original_name") or asset.name or "")
+    if (asset.metadata or {}).get("extension") != ".gcode" and not filename.lower().endswith(".gcode"):
+        return _error("Only plain-text G-code can be inspected.", status=400)
+    raw_heights = request.GET.get("zs", "").split(",")
+    if not 1 <= len(raw_heights) <= MAX_BATCH_LAYERS:
+        return _error("Choose between 1 and 64 extrusion layers.", status=400)
+    try:
+        heights = [float(part) for part in raw_heights]
+        if (any(not math.isfinite(z) or not 0 <= z <= 2000 for z in heights)
+                or len(set(round(z, 3) for z in heights)) != len(heights)):
+            raise ValueError()
+    except (ValueError, TypeError):
+        return _error("Invalid or duplicate layer Z coordinate.", status=400)
+    high_fidelity = request.GET.get("quality") == "full"
+    overview = request.GET.get("overview") == "1" and not high_fidelity
+    try:
+        detail = int(request.GET.get("detail", "350")) if overview else 350
+        if overview and not 80 <= detail <= 450:
+            raise ValueError()
+    except (ValueError, TypeError):
+        return _error("Invalid preview detail level.", status=400)
+    index_key = None
+    all_heights = None
+    if overview or high_fidelity:
+        from .slicer_preview_cache import (
+            cached_batch, index_overview, preview_index_key, MAX_INDEX_LAYERS,
+        )
+        try:
+            index_key = preview_index_key(asset, "full-v1" if high_fidelity else detail)
+            cached = cached_batch(index_key, heights)
+            if cached is not None:
+                return respond(cached, "hit")
+            # Never build a 700-layer index synchronously in a web request.
+            # The HTTP caller may ask us to enqueue the existing Celery task.
+            # Return 202 promptly and let the client poll, with a direct
+            # bounded-batch fallback if the background worker is unavailable.
+            if request.GET.get("warm") == "1" and request.GET.get("direct") != "1":
+                from django.core.cache import cache
+                if not (high_fidelity and cache.get(index_key + ":unavailable")):
+                    from .tasks import warm_gcode_preview_task
+                    lock_key = index_key + ":warming"
+                    acquired = cache.add(lock_key, 1, timeout=300)
+                    if acquired:
+                        try:
+                            warm_gcode_preview_task.delay(str(asset.pk))
+                        except Exception:
+                            cache.delete(lock_key)
+                            return _error("Preview preparation worker is unavailable.", status=503)
+                    response = JsonResponse({"building": True}, status=202)
+                    response["Cache-Control"] = "private, no-store"
+                    response["Retry-After"] = "1"
+                    return response
+        except Exception:
+            # Redis/Celery backends raise their own exception subclasses.
+            # Always fall back to a bounded direct parse instead of returning
+            # a blank preview when cache infrastructure is unavailable.
+            index_key = None
+        raw_all = request.GET.get("all_zs")
+        if raw_all and len(raw_all) <= 16000:
+            try:
+                candidate = [float(part) for part in raw_all.split(",")]
+                if (not 1 <= len(candidate) <= MAX_INDEX_LAYERS
+                        or len({round(z, 3) for z in candidate}) != len(candidate)
+                        or any(not math.isfinite(z) or not 0 <= z <= 2000 for z in candidate)
+                        or [round(z, 3) for z in candidate[:len(heights)]]
+                           != [round(z, 3) for z in heights]):
+                    raise ValueError()
+                all_heights = candidate
+            except (ValueError, TypeError):
+                return _error("Invalid complete preview layer list.", status=400)
+    try:
+        with asset.file.storage.open(asset.file.name, "rb") as handle:
+            raw = handle.read(MAX_LAYER_SOURCE_BYTES + 1)
+    except (OSError, ValueError):
+        return _error("Stored G-code could not be opened.", status=404)
+    if len(raw) > MAX_LAYER_SOURCE_BYTES:
+        return _error("Exact progressive preview is unavailable for G-code larger than 32 MiB.", status=413)
+    if b"\x00" in raw:
+        return _error("Binary G-code is not supported by this viewer.", status=400)
+    try:
+        text = raw.decode("utf-8")
+    except UnicodeDecodeError:
+        return _error("Full-resolution preview requires UTF-8 G-code.", status=400)
+    if overview and index_key and all_heights:
+        try:
+            first = index_overview(index_key, text, all_heights, detail)
+            if first is not None:
+                return respond(first, "built")
+        except (ValueError, TypeError):
+            return _error("Invalid complete overview index.", status=400)
+    try:
+        from .slicer_layer_preview import MAX_FULL_PREVIEW_SEGMENTS, MAX_BATCH_SEGMENTS
+        result = layer_batch_toolpaths(
+            text, heights, overview=overview, overview_limit=detail,
+            high_fidelity=high_fidelity,
+            max_total_segments=(MAX_FULL_PREVIEW_SEGMENTS if high_fidelity else MAX_BATCH_SEGMENTS),
+        )
+    except (ValueError, TypeError):
+        return _error("Invalid preview detail level.", status=400)
+    return respond(result, "miss")
+
+
+@login_required
+@require_http_methods(["GET"])
+def file_gcode_source(request, asset_id):
+    """Stream the owner's complete original G-code, never the bounded inspection sample."""
+    asset = FileAsset.objects.filter(owner=request.user, pk=asset_id).first()
+    if not asset:
+        return _error("G-code file not found.", status=404)
+    filename = str((asset.metadata or {}).get("original_name") or asset.name or "")
+    if not filename.lower().endswith(".gcode"):
+        return _error("Only plain-text G-code is supported.", status=400)
+    try:
+        handle = asset.file.storage.open(asset.file.name, "rb")
+    except (OSError, ValueError):
+        return _error("Stored G-code could not be opened.", status=404)
+    # Django constructs and escapes Content-Disposition, preserving the source name.
+    # Safari/iOS may append .txt to unknown filename extensions when a
+    # text/plain attachment is saved. Use an opaque binary media type for
+    # downloads while retaining text/plain for deliberate inline inspection.
+    download = request.GET.get("download") == "1"
+    response = FileResponse(
+        handle,
+        as_attachment=download,
+        filename=Path(filename).name,
+        content_type=("application/octet-stream" if download
+                      else "text/plain; charset=utf-8"),
+    )
+    response["Cache-Control"] = "private, no-store"
+    response["X-Content-Type-Options"] = "nosniff"
+    return response
+
+
+@login_required
+@require_http_methods(["GET"])
 def file_gcode_inspect(request, asset_id):
     """Authenticated, owner-scoped read-only G-code report and source preview."""
     from .gcode_analysis import inspect_asset, compare_printer_metadata
@@ -2459,7 +2660,10 @@ def file_gcode_inspect(request, asset_id):
 @require_http_methods(["GET", "POST"])
 def files_lookup(request):
     if request.method == "GET":
-        qs = FileAsset.objects.filter(owner=request.user).exclude(category="image").filter(superseded_by__isnull=True).select_related(
+        qs = library_visible_assets(
+            FileAsset.objects.filter(owner=request.user).exclude(category="image").filter(superseded_by__isnull=True),
+            request.user,
+        ).select_related(
             "project", "board__manufacturer", "component__category"
         )
         query = request.GET.get("q", "").strip()
@@ -3653,7 +3857,7 @@ def _serialise_printing_integration(item):
     safe_config = {
         key: value
         for key, value in (item.config or {}).items()
-        if key not in {"pending_reviews", "api_key"}
+        if key not in {"pending_reviews", "api_key", "encrypted_token"}
     }
     if item.provider == "simplyprint":
         safe_config["api_key_configured"] = bool((item.config or {}).get("api_key"))
@@ -3742,6 +3946,8 @@ def printing_integration_settings(request):
 def printing_integration_detail(request, provider):
     if not can_manage_workspace_settings(request.user):
         return _error("Administrator access is required.", status=403)
+    if provider == "homeassistant":
+        return _error("Use the dedicated Home Assistant power settings.", status=409)
     if provider not in dict(PrintingIntegrationSetting.PROVIDERS):
         return _error("Unknown printing integration.", status=404)
     item, _ = PrintingIntegrationSetting.objects.get_or_create(
@@ -3848,6 +4054,8 @@ def printing_integration_detail(request, provider):
 def printing_integration_test(request, provider):
     if not can_manage_workspace_settings(request.user):
         return _error("Administrator access is required.", status=403)
+    if provider == "homeassistant":
+        return _error("Use the dedicated Home Assistant power settings.", status=409)
     if provider not in dict(PrintingIntegrationSetting.PROVIDERS):
         return _error("Unknown printing integration.", status=404)
     item, _ = PrintingIntegrationSetting.objects.get_or_create(
@@ -4706,17 +4914,21 @@ def printing_overview(request):
         "common_filament_materials": COMMON_FILAMENT_MATERIALS,
         "gcode_files": [
             _serialise_file_asset(asset)
-            for asset in FileAsset.objects.filter(owner=request.user, superseded_by__isnull=True, metadata__extension=".gcode").select_related("project", "board__manufacturer", "component__category")[:5000]
-        ],
+            for asset in library_visible_assets(
+                FileAsset.objects.filter(owner=request.user, superseded_by__isnull=True, category="gcode", metadata__extension=".gcode"),
+                request.user,
+            ).select_related("project", "board__manufacturer", "component__category")[:5000]
+        ] if request.GET.get("include_files") != "0" else [],
         "model_files": [
             _serialise_file_asset(asset)
-            for asset in FileAsset.objects.filter(owner=request.user).filter(
-                Q(category__in=["mesh", "slicer", "cad", "gcode"]) | Q(metadata__extension=".gcode"),
-                superseded_by__isnull=True,
+            for asset in library_visible_assets(
+                FileAsset.objects.filter(owner=request.user, superseded_by__isnull=True).filter(
+                    Q(category__in=["mesh", "slicer", "cad", "gcode"]) | Q(metadata__extension=".gcode"),
+                ), request.user,
             )
                 .select_related("project", "board__manufacturer", "component__category")
                 .order_by("category", "name")[:5000]
-        ],
+        ] if request.GET.get("include_files") != "0" else [],
         "models": [_serialise_printing_model(model) for model in models_3d],
         "recent_prints": [_serialise_print_job(job) for job in recent_prints],
         "analytics": _printing_analytics(request.user),
@@ -5491,7 +5703,16 @@ def printing_printer_connections(request, printer_id):
             enabled=payload.get("enabled") is not False,
             endpoint_url=endpoint_url,
             poll_interval_seconds=interval,
-            capabilities=dict(definition.capabilities),
+            capabilities={
+                **definition.capabilities,
+                # New connections expose the contract immediately. Polling
+                # replaces unknown with adapter-observed capability evidence.
+                "material_system": {
+                    "schema_version": 1, "available": False,
+                    "topology": "unknown", "detection": "unknown",
+                    "physical_toolchange_verified": False,
+                },
+            },
             config=config,
         )
         if not item.enabled:

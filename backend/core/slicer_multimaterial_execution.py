@@ -1,0 +1,350 @@
+"""Isolated, offline multi-filament preparation for Orca and Creality.
+
+The selected printer adapter must publish material architecture evidence.
+This intentionally does NOT establish firmware changeover support or allow
+printer transfer. Preview/painted facets require an independent integration.
+"""
+import re
+
+from .models import PrinterConnection, SlicerProfile
+from .slicer_colour_painting import validate_colour_paint
+from .slicer_material_routing import (
+    MaterialRoutingError, offline_material_system, derive_native_tool_order,
+)
+from .slicer_native_material_palette import (
+    ordered_material_profile_ids, prepare_multimaterial_plate,
+)
+
+
+def plan_native_multimaterial(job, *, settings=None):
+    settings = (job.settings or {}) if settings is None else settings
+    objects = settings.get("plate_objects") or []
+    if job.engine not in {"orcaslicer", "crealityprint"} or not 1 <= len(objects) <= 12:
+        raise MaterialRoutingError("Multi-colour test slicing requires an Orca model.")
+    if any(not isinstance(item, dict) for item in objects):
+        raise MaterialRoutingError("Multi-colour models are invalid.")
+    # Colour painting is now converted to Orca's native per-triangle
+    # paint_color states by prepare_multimaterial_plate. This remains an
+    # offline test; no G-code may be submitted to a printer.
+    painted_slot_ids = []
+    for item in objects:
+        painting = item.get("colour_paint") or {}
+        if not (painting.get("regions") or painting.get("faces")):
+            continue
+        validated = validate_colour_paint(painting)
+        if validated["version"] != 2:
+            raise MaterialRoutingError(
+                "Legacy whole-face colour painting needs surface-region conversion.")
+        for region in validated["regions"]:
+            swatch = validated["palette"][region["slot"]]
+            slot_id = swatch.get("slot_id")
+            if str(swatch.get("printer_id")) != str(job.printer_id) or not slot_id:
+                raise MaterialRoutingError(
+                    "Each painted colour must be assigned to a slot on the selected printer.")
+            if slot_id not in painted_slot_ids:
+                painted_slot_ids.append(slot_id)
+    connections = PrinterConnection.objects.filter(
+        printer_id=job.printer_id, enabled=True,
+    )
+    topology = offline_material_system(connections, printer=getattr(job, "printer", None))
+    profile_rows = settings.get("slot_filament_profiles") or []
+    primary_slots = {
+        row.get("slot_id") for row in profile_rows
+        if isinstance(row, dict)
+        and str(row.get("profile_id")) == str(job.filament_profile_id)
+    }
+    assigned = {
+        item["material_slot"]["slot_id"]
+        for item in objects if isinstance(item.get("material_slot"), dict)
+        and isinstance(item["material_slot"].get("slot_id"), str)
+    }
+    preferred = primary_slots & (assigned | set(painted_slot_ids))
+    if job.engine == "crealityprint":
+        # Creality multi-STL has explicit, per-model slot presets. A global
+        # setup filament may be different and must not override the assigned
+        # model's actual material. Tool 0 follows the first model, not a CFS
+        # bay index or an unrelated globally selected profile.
+        first_slot = objects[0].get("material_slot")
+        if not isinstance(first_slot, dict) or first_slot.get("slot_id") not in assigned:
+            raise MaterialRoutingError("Assign a filament slot to the first Creality model.")
+        preferred_slot = first_slot["slot_id"]
+    else:
+        if not preferred:
+            raise MaterialRoutingError(
+                "Assign your main native filament preset to at least one selected model."
+            )
+        preferred_slot = sorted(preferred)[0]
+    bindings = derive_native_tool_order(
+        objects, printer_id=job.printer_id, topology=topology,
+        preferred_slot_id=preferred_slot,
+        painted_slot_ids=painted_slot_ids,
+    )
+    rows = [{"slot_id": slot_id, "tool_index": index}
+            for slot_id, index in bindings.items()]
+    # The printer may have 4+ loaded filaments while a plate uses only two.
+    # Demand a profile for every used tool but do not confuse unrelated
+    # installed bay presets with slicer-native tools.
+    used_profile_rows = [row for row in profile_rows
+                         if isinstance(row, dict) and row.get("slot_id") in bindings]
+    if job.engine == "crealityprint":
+        first_profile = next(
+            (row["profile_id"] for row in used_profile_rows
+             if row.get("slot_id") == preferred_slot), None
+        )
+        if first_profile is None:
+            raise MaterialRoutingError(
+                "The first assigned Creality model needs a native filament preset."
+            )
+    else:
+        first_profile = job.filament_profile_id
+    profile_ids = ordered_material_profile_ids(
+        rows, used_profile_rows, main_profile_id=first_profile,
+    )
+    profiles = SlicerProfile.objects.filter(
+        owner_id=job.owner_id, pk__in=profile_ids, kind="filament",
+    )
+    by_id = {str(profile.pk): profile for profile in profiles}
+    if len(by_id) != len(set(str(pk) for pk in profile_ids)):
+        raise MaterialRoutingError("One or more native material presets were removed.")
+    palette = tuple(by_id[str(profile_id)] for profile_id in profile_ids)
+    if any(profile.kind != "filament"
+           or profile.status not in {"candidate", "verified"}
+           or profile.engine != job.engine
+           or profile.engine_version != job.engine_version
+           for profile in palette):
+        raise MaterialRoutingError("An assigned filament preset is incompatible with the selected slicing engine.")
+    # Manual worker fixture approval is not required. Resolve each candidate
+    # from its owned, hash-checked source and complete parent lineage before
+    # it reaches the isolated native tool palette.
+    from .slicer_native_resolution import resolved_native_profile
+    from .slicer_profiles import SlicerProfileError
+    try:
+        for profile in palette:
+            resolved_native_profile(profile)
+    except (SlicerProfileError, ValueError, OSError) as exc:
+        raise MaterialRoutingError(
+            "An assigned filament preset is invalid, has changed or is missing native parents: "
+            + str(exc)) from exc
+    return topology, bindings, palette
+
+
+def prepare_job_multimaterial(job, source_models, *, bed_width, bed_depth):
+    if job.engine != "orcaslicer":
+        raise MaterialRoutingError("Orca native 3MF preparation cannot be used for Creality Print.")
+    topology, bindings, profiles = plan_native_multimaterial(job)
+    result = prepare_multimaterial_plate(
+        source_models, bed_width=bed_width, bed_depth=bed_depth,
+        printer_id=job.printer_id, owner_id=job.owner_id,
+        engine=job.engine, engine_version=job.engine_version,
+        topology=topology, tool_bindings=bindings,
+        native_filament_profiles=profiles,
+    )
+    # Internal execution metadata: never a firmware-side slot mapping.
+    result["tool_bindings"] = bindings
+    return result
+
+
+def prepare_creality_multistl(job, source_models):
+    """Stage a two-STL Creality offline test with the existing CFS-neutral map.
+
+    Creality's multi-STL CLI arranges its own geometry. This explicitly
+    acknowledges auto-arrangement; it must not silently discard MakerVault
+    placement while presenting the result as an exact interactive plate.
+    """
+    settings = job.settings or {}
+    if job.engine != "crealityprint" or settings.get("creality_auto_arrange_offline") is not True:
+        raise MaterialRoutingError(
+            "Creality multi-STL slicing requires explicit offline auto-arrangement.")
+    if not isinstance(source_models, list) or len(source_models) != 2:
+        raise MaterialRoutingError("Creality offline material test requires exactly two STLs.")
+    objects = settings.get("plate_objects") or []
+    if len(objects) != len(source_models):
+        raise MaterialRoutingError("Creality native model list does not match the draft.")
+    for index, (item, raw) in enumerate(source_models):
+        if item != objects[index] or not isinstance(raw, bytes) or not raw:
+            raise MaterialRoutingError("Creality native STL identity is invalid.")
+        if (item.get("process_overrides") or
+            (item.get("support_paint") or {}).get("regions") or
+            (item.get("seam_paint") or {}).get("regions") or
+            (item.get("fuzzy_skin_paint") or {}).get("regions") or
+            (item.get("colour_paint") or {}).get("regions") or
+            (item.get("colour_paint") or {}).get("faces") or
+            (item.get("variable_layer_profile") or {}).get("bands")):
+            raise MaterialRoutingError(
+                "Creality offline STL mode does not support painted or per-object overrides.")
+        import math
+        angles = item.get("rotation_xyz_deg", [0, 0])
+        scales = item.get("scale_xyz_percent", [100, 100, 100])
+        if (not isinstance(angles, (list, tuple)) or len(angles) not in (2, 3)
+                or not isinstance(scales, (list, tuple)) or len(scales) != 3):
+            raise MaterialRoutingError("Creality STL transformation is malformed.")
+        try:
+            rotation = [float(item.get("rotation_deg", 0)), *map(float, angles)]
+            size = [float(item.get("scale_percent", 100)), *map(float, scales)]
+            z = float(item.get("z_mm", 0))
+        except (TypeError, ValueError):
+            raise MaterialRoutingError("Creality STL transformation is invalid.") from None
+        if (not all(math.isfinite(v) for v in [*rotation, *size, z])
+                or any(abs(v) > 1e-6 for v in rotation)
+                or any(abs(v - 100) > 1e-6 for v in size)
+                or abs(z) > 1e-6):
+            raise MaterialRoutingError(
+                "Creality multi-STL auto-arrangement cannot preserve transformed models.")
+    topology, bindings, profiles = plan_native_multimaterial(job)
+    from .slicer_native_resolution import resolved_native_profile
+    model_tools = [bindings[item["material_slot"]["slot_id"]] + 1
+                   for item, _raw in source_models]
+    if len(set(model_tools)) != 2:
+        raise MaterialRoutingError("Two distinct Creality logical filaments are required.")
+    palette = tuple(resolved_native_profile(profile) for profile in profiles)
+    return {
+        "model_stls": tuple(raw for _item, raw in source_models),
+        "tool_ids": tuple(model_tools),
+        "filament_profiles": palette,
+        "tool_bindings": bindings,
+        "topology": topology,
+        "expected_tools": set(tool - 1 for tool in model_tools),
+    }
+
+
+
+def creality_selected_tool_colours(source_models, tools):
+    """Resolve display colours by logical tool, never by physical bay number.
+
+    The caller must derive tools from verified slot_id bindings. This helper
+    only prepares offline native 3MF colour metadata, not printer commands.
+    """
+    if (len(source_models) != len(tools) or set(tools) != {0, 1}):
+        raise MaterialRoutingError("Creality colour palette needs two logical tools.")
+    tool_colours = {}
+    for (item, _raw), tool in zip(source_models, tools):
+        colour = item.get("color")
+        if (not isinstance(colour, str) or len(colour) != 7
+                or colour[0] != "#" or
+                any(ch not in "0123456789abcdefABCDEF" for ch in colour[1:])):
+            raise MaterialRoutingError("Creality model has no valid selected filament colour.")
+        colour = colour.upper()
+        previous = tool_colours.setdefault(tool, colour)
+        if previous != colour:
+            raise MaterialRoutingError(
+                "Models assigned to one Creality filament slot have conflicting colours.")
+    return tuple(tool_colours[i] for i in (0, 1))
+
+
+def _require_creality_two_material_single_nozzle(job, topology):
+    """Check engine-native machine topology, not a brand/model-name allowlist.
+
+    This is the currently implemented 7.3.x *two-material* project encoder,
+    not a statement about all printers supported by Creality Print.
+    """
+    import json
+    import math
+    from .slicer_native_resolution import resolved_native_profile
+    if topology != "single_nozzle_changer":
+        raise MaterialRoutingError(
+            "Creality's current two-material project encoder requires an "
+            "adapter-declared single-nozzle filament changer. Other native "
+            "machine topologies need their own verified project encoder.")
+    try:
+        machine = json.loads(resolved_native_profile(job.printer_profile))
+        diameters = machine.get("nozzle_diameter")
+        if (not isinstance(diameters, list) or len(diameters) != 1
+                or type(diameters[0]) not in (str, int, float)
+                or type(diameters[0]) is bool
+                or not math.isfinite(float(diameters[0]))
+                or not .1 <= float(diameters[0]) <= 3):
+            raise ValueError
+    except (AttributeError, TypeError, ValueError, OverflowError) as exc:
+        raise MaterialRoutingError(
+            "Selected Creality native machine must declare exactly one "
+            "verified nozzle for the two-material project encoder.") from exc
+
+
+def prepare_creality_positioned_project(job, source_models, *, bed_width, bed_depth):
+    """Prepare one painted or two independently assigned Creality 3MF objects.
+
+    A single painted model must reference both physically assigned CFS slots,
+    and its native paint_color facets are carried into the project unchanged.
+    This produces test G-code, NOT proof of printed paint boundaries.
+    """
+    from .slicer_creality_project import build_creality_positioned_plate
+    from .slicer_native_material_palette import native_colour_tool_maps
+    from .slicer_native_resolution import resolved_native_profile
+    from .slicer_variable_layers import orca_layer_config_ranges
+
+    settings = job.settings or {}
+    objects = settings.get("plate_objects") or []
+    if (job.engine != "crealityprint" or
+            not isinstance(source_models, list) or not 1 <= len(source_models) <= 2 or
+            len(objects) != len(source_models) or
+            any(item != objects[i] or not isinstance(raw, bytes)
+                for i, (item, raw) in enumerate(source_models))):
+        raise MaterialRoutingError("Creality plate requires one or two unchanged owned STLs.")
+    painted = []
+    for item, _raw in source_models:
+        colour = item.get("colour_paint") or {}
+        has_colour = bool(colour.get("regions") or colour.get("faces"))
+        painted.append(has_colour)
+        if item.get("process_overrides"):
+            raise MaterialRoutingError(
+                "Creality colour test cannot combine unverified per-object overrides.")
+        if any((item.get(key) or {}).get("regions")
+               for key in ("support_paint", "seam_paint", "fuzzy_skin_paint")) or (
+               (item.get("variable_layer_profile") or {}).get("bands")):
+            if len(objects) != 1 or not has_colour:
+                raise MaterialRoutingError(
+                    "Creality experimental surface painting and variable layers "
+                    "currently require one colour-painted two-filament model.")
+    if len(objects) == 1 and not painted[0]:
+        raise MaterialRoutingError("One Creality CFS model must include colour-painted regions.")
+    if len(objects) == 2 and any(painted):
+        raise MaterialRoutingError("Creality test painting currently requires one model only.")
+    topology, bindings, profiles = plan_native_multimaterial(job)
+    _require_creality_two_material_single_nozzle(job, topology)
+    tools = tuple(bindings[item["material_slot"]["slot_id"]] for item, _ in source_models)
+    colour_maps = native_colour_tool_maps(objects, printer_id=job.printer_id,
+                                          tool_bindings=bindings)
+    if set(tools) | {tool for mapping in colour_maps for tool in mapping.values()} != {0, 1}:
+        raise MaterialRoutingError("Creality plate requires two distinct native materials.")
+
+    if len(objects) == 1:
+        from .slicer_colour_painting import validate_colour_paint
+        painted_data = validate_colour_paint(objects[0]["colour_paint"])
+        # Both native palette positions must be bound to an actual selected
+        # printer slot. The object's base colour and the painted swatch must
+        # not guess an unassigned physical bay from an RGB value.
+        colours = {tools[0]: objects[0].get("color")}
+        for index, tool in colour_maps[0].items():
+            selected = painted_data["palette"][index]["color"]
+            current = colours.setdefault(tool, selected)
+            if (not isinstance(selected, str) or
+                    not isinstance(current, str) or
+                    current.upper() != selected.upper()):
+                raise MaterialRoutingError("Painted swatches conflict with the assigned filament colours.")
+        if set(colours) != {0, 1} or any(
+            not isinstance(value, str) or
+            not re.fullmatch(r"#[0-9A-Fa-f]{6}", value)
+            for value in colours.values()
+        ):
+            raise MaterialRoutingError("Creality painted colours require two valid selected filament colours.")
+        tool_colours = tuple(colours[tool].upper() for tool in (0, 1))
+    else:
+        tool_colours = creality_selected_tool_colours(source_models, tools)
+    project_geometry = build_creality_positioned_plate(
+        source_models, bed_width=bed_width, bed_depth=bed_depth, tool_ids=tools,
+        colour_tool_maps=colour_maps if len(objects) == 1 else None)
+    return {
+        "project_geometry": project_geometry,
+        "tool_colours": tool_colours,
+        "filament_profiles": tuple(resolved_native_profile(p) for p in profiles),
+        "tool_bindings": bindings,
+        "topology": topology,
+        "expected_tools": {0, 1},
+        "native_colour_paint_test": len(objects) == 1,
+        "layer_ranges": (
+            orca_layer_config_ranges(source_models)
+            if len(objects) == 1 and
+            (objects[0].get("variable_layer_profile") or {}).get("bands")
+            else None
+        ),
+    }

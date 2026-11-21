@@ -1,8 +1,11 @@
-"""Opt-in Moonraker G-code browsing and one-shot upload/print submission.
+"""Adapter-aware G-code browsing and one-shot upload/print submission.
 
-No raw G-code execution via MakerVault. Each printer operation has a durable
-receipt before I/O and is never automatically retried after an uncertain send.
-Other printer adapters must implement and validate their own transfer protocol.
+Slicer engines generate printer-neutral G-code artifacts; submission uses the
+selected printer connection's supported native, Moonraker, or other adapter
+protocol independently. A second read-only adapter may verify an upload only
+when it addresses the exact same physical printer and has fresh telemetry.
+Every printer operation has a durable receipt before I/O and is never
+automatically retried after an uncertain send.
 """
 import re
 import logging
@@ -354,8 +357,12 @@ def _verify_moonraker_upload(connection, remote_path, expected_size):
 
 
 def _verify_creality_upload(connection, remote_path, expected_size):
-    """Verify native HTTP-upload presence through an enabled Moonraker source
-    on the SAME printer. This never uploads or starts via the alternate source.
+    """Read-only verification of a native Creality upload.
+
+    Use an explicitly configured, fresh Moonraker source when available;
+    otherwise query the *same* printer's existing native file-list protocol.
+    Only exact filename and integer byte-size matches establish success.
+    Never retry an upload or start a print as part of verification.
     """
     moonraker_sources = PrinterConnection.objects.filter(
         printer_id=connection.printer_id, adapter="moonraker", enabled=True,
@@ -363,11 +370,41 @@ def _verify_creality_upload(connection, remote_path, expected_size):
     for source in moonraker_sources:
         if _online(source):
             return _verify_moonraker_upload(source, remote_path, expected_size)
+    from .creality_gcode import CrealityGcodeError, list_files
+    # Some stock K1 firmware revisions update the native storage index
+    # asynchronously after HTTP acceptance. Allow brief, read-only probes,
+    # but never repeat the upload or issue a print-start command.
+    import time
+    observations = set()
+    last_error = None
+    for attempt in range(3):
+        if attempt:
+            time.sleep(1)
+        try:
+            rows = list_files(connection)
+        except (CrealityGcodeError, OSError, ValueError) as exc:
+            observations.add("unavailable")
+            last_error = exc
+            continue
+        matches = [row for row in rows if row.get("path") == remote_path]
+        if len(matches) == 1 and type(matches[0].get("size_bytes")) is int:
+            if matches[0]["size_bytes"] == expected_size:
+                return matches[0]
+            observations.add("size-mismatch")
+        elif len(matches) > 1:
+            observations.add("ambiguous-duplicate")
+        elif matches:
+            observations.add("size-not-reported")
+        else:
+            observations.add("not-listed")
+    # Do not include file names, URLs, paths or raw firmware responses in
+    # receipts; these are bounded status categories only.
+    reasons = ", ".join(sorted(observations)) or "unknown"
     raise GcodeSubmissionError(
-        "Native Creality HTTP upload was attempted, but no fresh Moonraker storage "
-        "connection is available to verify the file. Inspect printer storage before retrying.", 502
-    )
-
+        "Native Creality HTTP upload was accepted, but K1 storage verification "
+        "remains uncertain (" + reasons + "). No print-start command was issued. "
+        "Inspect the printer's own files before retrying.", 502
+    ) from last_error
 
 def inspect_printer_file(connection, remote_path):
     """Optional, bounded, read-only G-code inspection over an existing Moonraker API.
@@ -524,6 +561,7 @@ def _mapped_cfs_entries(connection, requirements, requested):
         selections[index] = item["slot_label"]
     slots = {slot["label"]: slot for slot in context["slots"]}
     mapping = []
+    used_bays = set()
     for requirement in requirements:
         index = int(requirement["tool_index"])
         selected = slots.get(selections.get(index))
@@ -536,6 +574,11 @@ def _mapped_cfs_entries(connection, requirements, requested):
         colour = str(selected.get("color_hex") or "")
         if not re.fullmatch(r"#[0-9a-fA-F]{6}", colour):
             raise GcodeSubmissionError("Selected CFS slot colour is unreadable.", 409)
+        bay = (selected["box_id"], selected["slot_id"])
+        if bay in used_bays:
+            raise GcodeSubmissionError(
+                "Multiple logical tools cannot target the same physical CFS bay.", 409)
+        used_bays.add(bay)
         if not 0 <= index <= 3:
             raise GcodeSubmissionError("This K2 mapping supports slicer tools 0–3 only.", 409)
         mapping.append({"id": "T1" + "ABCD"[index], "type": actual, "color": colour,
@@ -543,11 +586,89 @@ def _mapped_cfs_entries(connection, requirements, requested):
     return mapping
 
 
+def _supervised_creality_test_preflight(connection, user, asset, payload):
+    """Strict test-only approval for one completed K2 slice, with no network writes.
+
+    This is deliberately distinct from generic mapped printing. The caller
+    repeats this preflight immediately before firmware start using fresh native
+    telemetry, after any upload has completed.
+    """
+    from .models import SliceJob, PrinterFilamentSlot
+    from .slicer_creality_cfs_audit import (
+        audit_creality_cfs_assignments, audit_creality_gcode_for_cfs,
+        creality_cfs_audit_objects, CrealityCfsAuditError,
+    )
+    if (payload.get("creality_supervised_test") is not True
+            or payload.get("creality_test_confirmed") is not True
+            or payload.get("cfs_mode") != "mapped"
+            or payload.get("action") != "print"
+            or payload.get("source") != "makervault"
+            or not _is_k2(connection)
+            or connection.adapter not in {"creality_local", "moonraker"}):
+        raise GcodeSubmissionError(
+            "This Creality two-colour test requires explicit K2 supervised confirmation.", 409)
+    metadata = asset.metadata or {}
+    if (metadata.get("multi_material_test") is not True
+            or metadata.get("engine") != "crealityprint"
+            or metadata.get("printer_submission_verified") is not False
+            or str(metadata.get("printer_id")) != str(connection.printer_id)
+            or str(payload.get("creality_test_sha256") or "") != str(asset.sha256)):
+        raise GcodeSubmissionError("Selected test G-code identity was not confirmed.", 409)
+    # Keep the initial physical validation deliberately small and reversible.
+    if not 0 < asset.file.size <= 2 * 1024 * 1024:
+        raise GcodeSubmissionError(
+            "Initial supervised CFS tests must use G-code at most 2 MiB.", 409)
+    job = SliceJob.objects.select_related("output_asset").filter(
+        owner=user, printer_id=connection.printer_id,
+        output_asset=asset, engine="crealityprint", status="completed",
+    ).first()
+    if job is None:
+        raise GcodeSubmissionError("A completed owned Creality slice is required.", 409)
+    from .slicer_paint_assets import expand_painted_settings
+    try:
+        # The stored job may contain a compact paint_asset_id rather than
+        # inline polygons. Rehydrate its owner-scoped mask without modifying
+        # the persisted job or trusting the browser's submitted mapping.
+        expanded_settings = expand_painted_settings(user, job.settings or {})
+        saved_objects = expanded_settings.get("plate_objects") or []
+        objects = creality_cfs_audit_objects(
+            saved_objects, printer_id=job.printer_id)
+    except (CrealityCfsAuditError, ValueError, OSError) as exc:
+        raise GcodeSubmissionError("Invalid saved CFS assignments: " + str(exc), 409) from exc
+    job.settings = expanded_settings  # in-memory only; audit real painted paths
+    ids = [
+        item.get("material_slot", {}).get("slot_id")
+        for item in objects if isinstance(item, dict)
+    ]
+    if len(ids) != 2 or any(not isinstance(value, str) for value in ids):
+        raise GcodeSubmissionError("Incomplete saved CFS slot assignments.", 409)
+    slots = list(PrinterFilamentSlot.objects.filter(
+        printer_id=connection.printer_id, pk__in=ids, system="creality_cfs"))
+    try:
+        report = audit_creality_cfs_assignments(
+            objects, slots, creality_cfs_context(connection),
+            printer_id=connection.printer_id,
+        )
+        with asset.file.storage.open(asset.file.name, "rb") as file:
+            raw = file.read(2 * 1024 * 1024 + 1)
+        report = audit_creality_gcode_for_cfs(job, report, raw)
+    except (CrealityCfsAuditError, OSError, ValueError) as exc:
+        raise GcodeSubmissionError("CFS supervised test preflight failed: " + str(exc), 409) from exc
+    expected = [
+        {"tool_index": row["tool_index"], "slot_label": row["slot_label"]}
+        for row in report["mapping"]
+    ]
+    if (payload.get("cfs_mapping") != expected
+            or report.get("gcode_material_preflight_passed") is not True):
+        raise GcodeSubmissionError("Selected mapping differs from the saved and verified slice.", 409)
+    return report
+
+
 def _printer_transfer_name(original_name, request_id):
     """Preserve the original name first, suffix with a stable job identity."""
     original = PurePosixPath(str(original_name or "job.gcode")).name
     stem = re.sub(r"[^A-Za-z0-9_.-]", "_", re.sub(r"(?i)\.gcode$", "", original))
-    stem = stem.strip("._")[:120] or "job"
+    stem = stem.strip("._")[:48] or "job"
     return f"{stem}-mv-{request_id.hex[:12]}.gcode"
 
 
@@ -613,6 +734,25 @@ def availability(connection):
         and cfs["slots"] and _ready_for_start(connection.last_snapshot)
         and not (connection.last_snapshot or {}).get("source_metadata", {}).get("power_loss_recovery")
     )
+    mapped_cfs_blockers = []
+    if cfs["applicable"] and _is_k2(connection):
+        if not online:
+            mapped_cfs_blockers.append("Printer status is offline or older than 60 seconds.")
+        if not authorised:
+            mapped_cfs_blockers.append("The selected connection is not enabled for submission.")
+        if adapter not in {"moonraker", "creality_local"}:
+            mapped_cfs_blockers.append("Mapped K2 submission needs a native Creality or Moonraker connection.")
+        if not cfs["verified"]:
+            mapped_cfs_blockers.append("Fresh native CFS telemetry is required.")
+        elif cfs["connected"] is not True:
+            mapped_cfs_blockers.append("The native connection does not report an attached CFS.")
+        elif not cfs["slots"]:
+            mapped_cfs_blockers.append("No loaded CFS filament slots were reported.")
+        if not _ready_for_start(connection.last_snapshot):
+            mapped_cfs_blockers.append("Printer is not confirmed idle (state: %s)." %
+                                       str((connection.last_snapshot or {}).get("state") or "unknown")[:32])
+        if (connection.last_snapshot or {}).get("source_metadata", {}).get("power_loss_recovery"):
+            mapped_cfs_blockers.append("Printer reports an active power-loss recovery state.")
     moonraker_for_sliced = (connection if adapter == "moonraker" else
                              _same_printer_moonraker(connection, require_controls=True)
                              if adapter == "creality_local" and cfs["applicable"] and cfs["connected"] is True else None)
@@ -677,6 +817,7 @@ def availability(connection):
         "supports_original_mapping": supports_original_mapping,
         "can_start_sliced_mapping": sliced_mapping_candidate,
         "can_start_mapped_cfs": mapped_mapping_candidate,
+        "mapped_cfs_blockers": mapped_cfs_blockers,
         "can_submit_from_printer": adapter in BROWSE_ADAPTERS and start_supported,
         "requires_opt_in": False,
         "requires_start_opt_in": False,
@@ -937,6 +1078,7 @@ def _receipt(row):
         "request_id": str(row.pk), "status": row.status,
         "action": row.action, "source": row.source,
         "remote_path": row.remote_path, "message": row.message,
+        "cfs_mapping_audit": row.cfs_mapping_audit if row.cfs_mapping_audit else None,
     }
 
 
@@ -977,6 +1119,43 @@ def submit(connection, user, payload):
         asset = FileAsset.objects.filter(owner=user, pk=aid, superseded_by__isnull=True).first()
         if not asset or (asset.metadata or {}).get("extension") != ".gcode":
             raise GcodeSubmissionError("Select an owned, current plain-text G-code file.", 404)
+        # Experimental multicolour slices are offline evidence only.
+        # No opt-in, adapter flag or CFS acknowledgement bypasses this guard.
+        if (asset.metadata or {}).get("multi_material_test") is True:
+            # The sole exception is a deliberately small, explicitly
+            # confirmed K2 hardware validation. It is revalidated against
+            # the owned saved job, exact G-code and fresh slots before start.
+            if not (payload.get("creality_supervised_test") is True
+                    and payload.get("creality_test_confirmed") is True
+                    and payload.get("cfs_mode") == "mapped"
+                    and action == "print"
+                    and source == "makervault"
+                    and (asset.metadata or {}).get("engine") == "crealityprint"):
+                raise GcodeSubmissionError(
+                    "Multi-colour test G-code is not approved for printer upload or print start. "
+                    "Complete manufacturer-specific toolchange verification first.", 409
+                )
+            _supervised_creality_test_preflight(connection, user, asset, payload)
+        if (asset.metadata or {}).get("variable_layer_test") is True:
+            raise GcodeSubmissionError(
+                "Variable layer-height test G-code is not approved for printer upload "
+                "or print start. Verify the native Orca layer transitions first.", 409
+            )
+        if (asset.metadata or {}).get("support_paint_test") is True:
+            raise GcodeSubmissionError(
+                "Painted-support test G-code is not approved for printer upload "
+                "or print start. Verify native support paths first.", 409
+            )
+        if (asset.metadata or {}).get("seam_paint_test") is True:
+            raise GcodeSubmissionError(
+                "Painted-seam test G-code is not approved for printer upload "
+                "or print start. Verify native seam placement first.", 409
+            )
+        if (asset.metadata or {}).get("fuzzy_skin_paint_test") is True:
+            raise GcodeSubmissionError(
+                "Selective fuzzy skin test G-code is not approved for printer upload "
+                "or print start. Verify painted-only surface texture first.", 409
+            )
         if asset.file.size > MAX_UPLOAD_BYTES:
             raise GcodeSubmissionError("This release supports printer transfers up to 64 MiB. Large files require the streaming transport.", 413)
         # Keep the original filename recognisable; suffix avoids overwrites.
@@ -1042,6 +1221,7 @@ def submit(connection, user, payload):
     mapping_entries = None
     stage = "Preparing submission"
     dispatch_attempted = False
+    confirmed_native_upload_path = None
 
     def progress(message):
         nonlocal stage
@@ -1147,7 +1327,8 @@ def submit(connection, user, payload):
                 _verify_moonraker_upload(connection, remote_path, asset.file.size)
             elif connection.adapter == "creality_local":
                 progress("Native Creality HTTP accepted the transfer. Checking printer storage.")
-                _verify_creality_upload(connection, remote_path, asset.file.size)
+                verified = _verify_creality_upload(connection, remote_path, asset.file.size)
+                confirmed_native_upload_path = verified["path"]
         if action == "print":
             progress("Upload checked. Confirming printer idle before print-start.")
             # Verify state a second time after file transfer, particularly when
@@ -1173,6 +1354,21 @@ def submit(connection, user, payload):
                 if connection.adapter == "creality_local":
                     connection.refresh_from_db()
                 mapping_entries = _mapped_cfs_entries(connection, (report.get("filaments") or {}).get("used_requirements"), payload.get("cfs_mapping"))
+                if asset is not None and (asset.metadata or {}).get("multi_material_test") is True:
+                    # Re-check the exact owned slice and its selected CFS bays
+                    # after the final telemetry refresh and file transfer.
+                    _supervised_creality_test_preflight(connection, user, asset, payload)
+                # Store the exact wire-level mapping before dispatch so an
+                # uncertain firmware response never erases the evidence.
+                row.cfs_mapping_audit = {
+                    "protocol": "creality_k2_colorMatch",
+                    "mapping": [dict(entry) for entry in mapping_entries],
+                    "verified_at": timezone.now().isoformat(),
+                    "file_sha256": asset.sha256 if asset else row.file_sha256,
+                    "supervised_test": bool(asset and (asset.metadata or {}).get("multi_material_test")),
+                    "recorded_before_dispatch": True,
+                }
+                row.save(update_fields=["cfs_mapping_audit", "updated_at"])
             progress("Sending the explicitly confirmed print-start command.")
             # Reconciliation only accepts an explicit successful dispatch. This
             # marker is persisted after dispatch and before polling starts.
@@ -1204,9 +1400,14 @@ def submit(connection, user, payload):
                     )
                 elif connection.adapter == "creality_local":
                     from .creality_gcode import start_single_spool
-                    # Reconfirm the exact file exists on printer before a fire-and-forget start.
-                    if remote_path not in {item["path"] for item in list_printer_gcodes(connection)}:
-                        raise GcodeSubmissionError("Creality did not confirm the expected printer file; no start sent.")
+                    # A newly uploaded file has already been confirmed by
+                    # an exact native path/byte-size readback above. Do not
+                    # require a second volatile K1 listing: legacy stock
+                    # firmware may omit the file on a subsequent probe.
+                    # Existing printer files still need a fresh listing.
+                    if confirmed_native_upload_path != remote_path:
+                        if remote_path not in {item["path"] for item in list_printer_gcodes(connection)}:
+                            raise GcodeSubmissionError("Creality did not confirm the expected printer file; no start sent.")
                     start_single_spool(connection, remote_path)
                     response = None
                 elif connection.adapter == "flashforge":

@@ -10,7 +10,7 @@ from django.http import HttpResponse, JsonResponse
 from django.views.decorators.http import require_http_methods
 
 from .api_views import _error, _read_json, _require_permission
-from .camera_relay import CameraRelayError, hls_master, hls_resource
+from .camera_relay import CameraRelayError, hls_master, hls_resource, webrtc_answer
 from .models import PrinterConnection
 from .printer_cameras import CameraError, discover_result, frame, negotiate, normalise_source, sources, provider_info, setup_presets
 
@@ -219,8 +219,40 @@ def _rewrite_hls_playlist(text, expected_resource=None):
             if resource not in {"playlist.m3u8", "init.mp4", "segment.m4s", "segment.ts"}:
                 rewritten.append(line)
                 continue
-        rewritten.append(f"{resource}?id={session_id}")
+        # go2rtc uses the monotonically increasing n parameter to identify
+        # distinct HLS segments. Dropping it makes all playlist entries point
+        # to the same URL, breaking ordering/caching (especially in Safari).
+        # Only preserve a bounded decimal sequence; never proxy arbitrary
+        # upstream query parameters.
+        sequence = ""
+        if resource in {"segment.m4s", "segment.ts"}:
+            for part in query.split("&"):
+                if part.startswith("n="):
+                    candidate = part[2:]
+                    if candidate.isascii() and candidate.isdecimal() and len(candidate) <= 18:
+                        sequence = candidate
+                    break
+        rewritten.append(f"{resource}?id={session_id}" + (f"&n={sequence}" if sequence else ""))
     return "\n".join(rewritten)
+
+
+
+@login_required
+@require_http_methods(["POST"])
+def camera_webrtc_offer(request, printer_id, connection_id, camera_id):
+    """Same-origin, owner-scoped WebRTC signalling. ICE media runs separately."""
+    connection, _source, error = _hls_camera(request, printer_id, connection_id, camera_id)
+    if error:
+        return private_response(error)
+    if request.content_type != "application/json" or len(request.body) > 70000:
+        return private_response(_error("Invalid WebRTC signalling request.", 400))
+    try:
+        payload = _read_json(request)
+        offer = payload.get("sdp") if isinstance(payload, dict) else None
+        answer = webrtc_answer(connection.pk, camera_id, offer)
+        return private_response(JsonResponse({"type": "answer", "sdp": answer}))
+    except (CameraRelayError, CameraError, ValueError, TypeError):
+        return private_response(_error("Camera WebRTC connection unavailable.", 502))
 
 
 @login_required
@@ -230,7 +262,8 @@ def camera_hls_master(request, printer_id, connection_id, camera_id):
     if error:
         return private_response(error)
     try:
-        playlist = hls_master(connection.pk, camera_id)
+        # iOS explicitly requests TS to bypass go2rtc's placeholder MP4 SPS.
+        playlist = hls_master(connection.pk, camera_id, mpeg_ts=True) if request.GET.get("format") == "ts" else hls_master(connection.pk, camera_id)
         session_ids = _playlist_session_ids(playlist)
         if not session_ids:
             raise CameraRelayError("The camera relay did not create an HLS session.")
@@ -257,12 +290,20 @@ def camera_hls_resource(request, printer_id, connection_id, camera_id, resource)
     if error:
         return private_response(error)
     session_id = str(request.GET.get("id") or "")
+    # HLS segment IDs must reach go2rtc unchanged: its sequence-based
+    # segment API is not interchangeable with the next-available segment.
+    sequence = str(request.GET.get("n") or "")
+    if sequence and (
+        resource not in {"segment.m4s", "segment.ts"}
+        or len(sequence) > 18 or not sequence.isascii() or not sequence.isdecimal()
+    ):
+        return private_response(_error("Invalid HLS segment sequence.", 400))
     key = _hls_session_key(request.user.pk, connection.pk, camera_id, session_id)
     try:
         if not session_id or cache.get(key) is not True:
             return private_response(_error("Camera relay session expired. Reconnect the camera.", 403))
         cache.set(key, True, timeout=120)
-        data, content_type = hls_resource(session_id, resource)
+        data, content_type = hls_resource(session_id, resource, sequence=sequence or None)
         if resource == "playlist.m3u8":
             try:
                 text = data.decode("utf-8")

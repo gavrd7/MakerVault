@@ -1,0 +1,788 @@
+"""Creality native plate geometry candidate retains exact positions and tools."""
+import io
+import json
+import zipfile
+from defusedxml import ElementTree as ET
+from django.test import SimpleTestCase
+
+from core.slicer_approval import fixture_stl
+from core.slicer_creality_project import build_creality_positioned_plate
+from core.slicer_plate_3mf import NS
+from core.slicer_profiles import SlicerProfileError
+
+
+class CrealityPositionedPlateTests(SimpleTestCase):
+    def _objects(self):
+        return [
+            ({"x_mm": -18, "y_mm": 0, "rotation_deg": 0,
+              "scale_percent": 100}, fixture_stl()),
+            ({"x_mm": 18, "y_mm": 0, "rotation_deg": 0,
+              "scale_percent": 100}, fixture_stl()),
+        ]
+
+    def test_native_machine_multicolor_requires_explicit_capability_and_script(self):
+        from core.slicer_creality_project import (
+            _preserve_creality_machine_multicolor_capability)
+        base = {
+            "filament_settings_id": ["A", "B", "A", "B"],
+            "different_settings_to_system": [
+                "enable_support", "", "", "", "", "purge_in_prime_tower"],
+            "change_filament_gcode": "unchanged manufacturer's script",
+        }
+        script = "{if multicolor_method}\nM8200 P S1\nG1 E{flush_length_1}\n{endif}"
+        missing = json.loads(json.dumps(base))
+        self.assertFalse(_preserve_creality_machine_multicolor_capability(
+            missing, {}))
+        self.assertEqual(missing, base)
+        with self.assertRaisesRegex(SlicerProfileError, "explicitly enabled"):
+            _preserve_creality_machine_multicolor_capability(
+                json.loads(json.dumps(base)), {}, require_verified=True)
+        for invalid in ("true", "auto", [], 2):
+            with self.subTest(invalid=invalid), self.assertRaises(SlicerProfileError):
+                _preserve_creality_machine_multicolor_capability(
+                    json.loads(json.dumps(base)),
+                    {"multicolor_method": invalid})
+        with self.assertRaisesRegex(SlicerProfileError, "disables"):
+            _preserve_creality_machine_multicolor_capability(
+                json.loads(json.dumps(base)),
+                {"multicolor_method": "0"}, require_verified=True)
+        with self.assertRaisesRegex(SlicerProfileError, "no verified native"):
+            _preserve_creality_machine_multicolor_capability(
+                json.loads(json.dumps(base)),
+                {"multicolor_method": "1", "change_filament_gcode": "T[next_extruder]"},
+                require_verified=True)
+        enabled = json.loads(json.dumps(base))
+        selected = {"multicolor_method": "1", "change_filament_gcode": script}
+        self.assertTrue(_preserve_creality_machine_multicolor_capability(
+            enabled, selected, require_verified=True))
+        self.assertEqual(enabled["multicolor_method"], "1")
+        self.assertEqual(enabled["different_settings_to_system"][0:5],
+                         base["different_settings_to_system"][0:5])
+        self.assertEqual(enabled["different_settings_to_system"][-1],
+                         "purge_in_prime_tower;multicolor_method")
+        self.assertEqual(enabled["change_filament_gcode"],
+                         base["change_filament_gcode"])
+        self.assertTrue(_preserve_creality_machine_multicolor_capability(
+            enabled, selected, require_verified=True))
+        self.assertEqual(enabled["different_settings_to_system"][-1].count(
+            "multicolor_method"), 1)
+
+    def test_real_project_preserves_selected_multicolor_machine_capability(self):
+        from core.slicer_creality_project import build_creality_project_candidate
+        plate = build_creality_positioned_plate(
+            self._objects(), bed_width=260, bed_depth=260, tool_ids=[0, 1])
+        machine = {
+            "type": "machine", "name": "Approved native machine",
+            "printable_height": "260",
+            "printable_area": ["0x0", "260x0", "260x260", "0x260"],
+            "single_extruder_multi_material": "1",
+            "purge_in_prime_tower": "0",
+            "multicolor_method": "1",
+            "change_filament_gcode": (
+                "{if multicolor_method}\nM8200 P S1\n"
+                "G1 E{flush_length_1}\n{endif}"),
+        }
+        process = {"type": "process", "name": "Native process",
+                   "enable_prime_tower": "1", "prime_tower_width": "40"}
+        filaments = [
+            json.dumps({"type": "filament", "name": name,
+                        "filament_type": "PLA",
+                        "nozzle_temperature": temp}).encode()
+            for name, temp in (("A", "210"), ("B", "220"))
+        ]
+        def build(selected):
+            return build_creality_project_candidate(
+                plate, printer=json.dumps(selected).encode(),
+                process=json.dumps(process).encode(), filaments=filaments,
+                require_verified_multicolor_purge=True,
+                bed_width=260, bed_depth=260)
+        with zipfile.ZipFile(io.BytesIO(build(machine))) as archive:
+            project = json.loads(archive.read(
+                "Metadata/project_settings.config"))
+        self.assertEqual(project["multicolor_method"], "1")
+        self.assertIn("multicolor_method",
+                      project["different_settings_to_system"][-1].split(";"))
+        self.assertEqual(project["purge_in_prime_tower"], "0")
+        self.assertEqual(project["change_filament_gcode"],
+                         machine["change_filament_gcode"])
+        for value in (None, "0"):
+            altered = dict(machine)
+            if value is None:
+                altered.pop("multicolor_method")
+            else:
+                altered["multicolor_method"] = value
+            with self.subTest(value=value), self.assertRaises(SlicerProfileError):
+                build(altered)
+
+    def test_flush_preset_markers_preserve_only_explicit_settings_and_printer_choice(self):
+        from core.slicer_creality_project import _mark_creality_flush_preset_overrides
+        settings = {
+            "multiplier": 2.0,
+            "prime_tower": "native",
+            "transitions": [{
+                "from_slot_id": "fixture-slot-0",
+                "to_slot_id": "fixture-slot-1",
+                "volume_mm3": 165.0,
+            }],
+        }
+        project = {
+            "filament_settings_id": ["A", "B", "A", "B"],
+            "different_settings_to_system": [
+                "enable_support;support_type", "slot-a", "slot-b",
+                "slot-c", "slot-d", "nozzle_diameter"],
+            "flush_multiplier": "2",
+            "flush_volumes_matrix": ["0", "165"] * 8,
+            "flush_volumes_changed": "1",
+            "prime_volume": "45",
+            "purge_in_prime_tower": "0",
+            "change_filament_gcode": "unchanged printer vendor script",
+        }
+        original = json.loads(json.dumps(project))
+        _mark_creality_flush_preset_overrides(
+            project, settings,
+            machine={"purge_in_prime_tower": "0"},
+            process={"prime_volume": "45"})
+        process = project["different_settings_to_system"][0].split(";")
+        self.assertTrue({"flush_multiplier", "flush_volumes_matrix",
+                         "flush_volumes_changed", "prime_volume"} <= set(process))
+        self.assertNotIn("purge_in_prime_tower", process)
+        self.assertIn("purge_in_prime_tower",
+                      project["different_settings_to_system"][-1].split(";"))
+        self.assertEqual(project["different_settings_to_system"][1:-1],
+                         original["different_settings_to_system"][1:-1])
+        self.assertEqual(project["purge_in_prime_tower"], "0")
+        self.assertEqual(project["change_filament_gcode"],
+                         "unchanged printer vendor script")
+        _mark_creality_flush_preset_overrides(
+            project, settings, machine={"purge_in_prime_tower": "0"},
+            process={"prime_volume": "45"})
+        self.assertEqual(len(project["different_settings_to_system"][0].split(";")),
+                         len(set(project["different_settings_to_system"][0].split(";"))))
+
+    def test_flush_marker_does_not_invent_missing_native_settings(self):
+        from core.slicer_creality_project import _mark_creality_flush_preset_overrides
+        original = {
+            "filament_settings_id": ["A", "B", "A", "B"],
+            "different_settings_to_system": ["", "", "", "", "", ""],
+            "flush_volumes_matrix": ["0"] * 16,
+        }
+        original_copy = json.loads(json.dumps(original))
+        _mark_creality_flush_preset_overrides(
+            original,
+            {"multiplier": None, "prime_tower": "native", "transitions": []},
+            machine={}, process={})
+        self.assertEqual(original, original_copy)
+        for bad in (
+                {"multiplier": 2.0, "prime_tower": "native", "transitions": []},
+                {"multiplier": None, "prime_tower": "enabled", "transitions": []},
+        ):
+            with self.subTest(settings=bad), self.assertRaises(SlicerProfileError):
+                _mark_creality_flush_preset_overrides(
+                    json.loads(json.dumps(original)), bad, machine={}, process={})
+
+    def test_positions_and_materials_remain_distinct(self):
+        project = build_creality_positioned_plate(
+            self._objects(), bed_width=260, bed_depth=260, tool_ids=[0, 1])
+        with zipfile.ZipFile(io.BytesIO(project)) as zipped:
+            root = ET.fromstring(zipped.read("3D/3dmodel.model"))
+            settings = ET.fromstring(zipped.read("Metadata/model_settings.config"))
+        ns = "{" + NS + "}"
+        objects = root.findall("./" + ns + "resources/" + ns + "object")
+        x_centres = []
+        for obj in objects:
+            xs = [float(v.attrib["x"]) for v in obj.findall(
+                "./" + ns + "mesh/" + ns + "vertices/" + ns + "vertex")]
+            x_centres.append((min(xs) + max(xs)) / 2)
+        self.assertAlmostEqual(x_centres[0], 112, places=3)
+        self.assertAlmostEqual(x_centres[1], 148, places=3)
+        tools = [
+            [m.attrib["value"] for m in obj.findall("metadata")
+             if m.attrib.get("key") == "extruder"]
+            for obj in settings.findall("object")
+        ]
+        self.assertEqual(tools, [["1"], ["2"]])
+
+    def test_creality_self_contained_project_embeds_profiles_and_bounded_tower(self):
+        import json
+        from core.slicer_creality_project import build_creality_project_candidate
+        plate = build_creality_positioned_plate(
+            self._objects(), bed_width=260, bed_depth=260, tool_ids=[0, 1])
+        printer = json.dumps({
+            "type": "machine", "name": "Creality K2 0.4 nozzle",
+            "printable_height": "260",
+            "printable_area": ["0x0", "260x0", "260x260", "0x260"],
+        }).encode()
+        process = json.dumps({
+            "type": "process", "name": "0.20mm Standard",
+            "enable_prime_tower": "1", "prime_tower_width": "40",
+            "layer_height": "0.2",
+        }).encode()
+        filament = lambda name, temp: json.dumps({
+            "type": "filament", "name": name,
+            "filament_type": "PLA", "nozzle_temperature": str(temp),
+        }).encode()
+        result = build_creality_project_candidate(
+            plate, printer=printer, process=process,
+            filaments=[filament("grey", 210), filament("yellow", 220)],
+            bed_width=260, bed_depth=260)
+        with zipfile.ZipFile(io.BytesIO(result)) as package:
+            self.assertEqual(len(package.namelist()), 6)
+            self.assertIn("Metadata/creality.config", package.namelist())
+            project = json.loads(package.read("Metadata/project_settings.config"))
+            model_root = ET.fromstring(package.read("3D/3dmodel.model"))
+            app = [n.text for n in model_root if n.tag.endswith("metadata")
+                   and n.attrib.get("name") == "Application"]
+            self.assertEqual(app, ["Creality_Print V7.3.1"])
+        self.assertEqual(project["filament_settings_id"], ["grey", "yellow", "grey", "yellow"])
+        self.assertEqual(project["nozzle_temperature"], ["210", "220", "210", "220"])
+        self.assertEqual(project["from"], "project")
+        self.assertEqual(project["name"], "project_settings")
+        self.assertEqual(len(project["wipe_tower_x"]), 1)
+        self.assertLess(float(project["wipe_tower_x"][0]), 260)
+        self.assertLess(float(project["wipe_tower_y"][0]), 260)
+        # Keep the tower off the front-left corner on a mostly empty K2
+        # plate, without claiming that this can replace cleaning the bed.
+        self.assertGreater(float(project["wipe_tower_y"][0]), 130)
+        self.assertGreater(float(project["wipe_tower_x"][0]), 130)
+
+    def test_optional_native_z_shrink_default_does_not_override_other_filament(self):
+        """Native Creality Print default is 100%; keep explicit compensation."""
+        import json
+        from core.slicer_creality_project import build_creality_project_candidate
+        plate = build_creality_positioned_plate(
+            self._objects(), bed_width=260, bed_depth=260, tool_ids=[0, 1])
+        machine = json.dumps({"type": "machine", "name": "K2"}).encode()
+        process = json.dumps({"type": "process", "name": "Standard",
+                              "enable_prime_tower": "1"}).encode()
+        def filament(name, shrink=None):
+            values = {"type": "filament", "name": name,
+                      "nozzle_temperature": "220"}
+            if shrink is not None:
+                values["filament_shrinkage_compensation_z"] = shrink
+            return json.dumps(values).encode()
+        for first, second, expected in [
+            (filament("Generic PLA", "100%"), filament("CR-PLA"),
+             ["100%", "100%", "100%", "100%"]),
+            (filament("Generic PLA", "98%"), filament("CR-PLA"),
+             ["98%", "100%", "98%", "100%"]),
+            (filament("CR-PLA"), filament("Generic PLA", "99%"),
+             ["100%", "99%", "100%", "99%"]),
+        ]:
+            with self.subTest(expected=expected):
+                result = build_creality_project_candidate(
+                    plate, printer=machine, process=process,
+                    filaments=[first, second], bed_width=260, bed_depth=260,
+                    prime_tower={"x": 45, "y": 84})
+                with zipfile.ZipFile(io.BytesIO(result)) as archive:
+                    config = json.loads(archive.read("Metadata/project_settings.config"))
+                self.assertEqual(config["filament_shrinkage_compensation_z"],
+                                 expected)
+                self.assertEqual(config["wipe_tower_x"], ["45"])
+                self.assertEqual(config["wipe_tower_y"], ["84"])
+
+    def test_731_custom_plate_missing_slot_uses_native_default_not_other_filament(self):
+        """Generic PLA=50; missing Hyper PLA=35 per native v7.3.1 default."""
+        from core.slicer_creality_project import build_creality_project_candidate
+        plate = build_creality_positioned_plate(
+            self._objects(), bed_width=260, bed_depth=260, tool_ids=[0, 1])
+        machine = json.dumps({"type": "machine", "name": "K2"}).encode()
+        process = json.dumps({"type": "process", "name": "Standard",
+                              "enable_prime_tower": "1"}).encode()
+        explicit = {"type": "filament", "name": "Generic PLA",
+                    "nozzle_temperature": "215",
+                    "customized_plate_temp": "50",
+                    "customized_plate_temp_initial_layer": "50"}
+        missing = {"type": "filament", "name": "Hyper PLA",
+                   "nozzle_temperature": "220"}
+        def build(filaments, version="7.3.1"):
+            return build_creality_project_candidate(
+                plate, printer=machine, process=process,
+                filaments=[json.dumps(row).encode() for row in filaments],
+                version=version, bed_width=260, bed_depth=260,
+                prime_tower={"x": 45, "y": 84})
+        for order, expected in (
+            ([explicit, missing], ["50", "35", "50", "35"]),
+            ([missing, explicit], ["35", "50", "35", "50"]),
+        ):
+            with self.subTest(expected=expected):
+                with zipfile.ZipFile(io.BytesIO(build(order))) as archive:
+                    project = json.loads(archive.read(
+                        "Metadata/project_settings.config"))
+                self.assertEqual(project["customized_plate_temp"], expected)
+                self.assertEqual(
+                    project["customized_plate_temp_initial_layer"], expected)
+                self.assertEqual(project["nozzle_temperature"],
+                                 ["215", "220", "215", "220"]
+                                 if order[0] is explicit else
+                                 ["220", "215", "220", "215"])
+        # Defaults above are approved for exactly the reviewed 7.3.1 source;
+        # a different native release still rejects missing thermal fields.
+        with self.assertRaisesRegex(
+                SlicerProfileError, "customized_plate_temp"):
+            build([explicit, missing], version="7.3.2")
+        # There is no approved fallback for temperatures used during printing.
+        with self.assertRaisesRegex(
+                SlicerProfileError, "nozzle_temperature"):
+            build([explicit, {"type": "filament", "name": "Bad",
+                               "customized_plate_temp": "35",
+                               "customized_plate_temp_initial_layer": "35"}])
+
+    def test_mismatched_creality_filament_profiles_name_missing_native_key(self):
+        """Never borrow missing filament settings across physical CFS tools."""
+        import json
+        from core.slicer_creality_project import build_creality_project_candidate
+        plate = build_creality_positioned_plate(
+            self._objects(), bed_width=260, bed_depth=260, tool_ids=[0, 1])
+        printer = json.dumps({"type": "machine", "name": "K2"}).encode()
+        process = json.dumps({"type": "process", "name": "Standard",
+                              "enable_prime_tower": "1"}).encode()
+        grey = json.dumps({"type": "filament", "name": "Grey",
+                           "nozzle_temperature": "210"}).encode()
+        yellow = json.dumps({"type": "filament", "name": "Yellow"}).encode()
+        with self.assertRaisesMessage(
+                SlicerProfileError,
+                "Creality filament presets disagree on native setting "
+                "nozzle_temperature (missing for T1)"):
+            build_creality_project_candidate(
+                plate, printer=printer, process=process,
+                filaments=[grey, yellow], bed_width=260, bed_depth=260,
+                prime_tower={"x": 45, "y": 84})
+        with self.assertRaisesMessage(
+                SlicerProfileError,
+                "Creality filament presets disagree on native setting "
+                "nozzle_temperature (missing for T0)"):
+            build_creality_project_candidate(
+                plate, printer=printer, process=process,
+                filaments=[yellow, grey], bed_width=260, bed_depth=260)
+
+    def test_creality_native_project_preserves_explicit_tower_and_directional_flush(self):
+        import json
+        from core.slicer_creality_project import build_creality_project_candidate
+        plate = build_creality_positioned_plate(
+            self._objects(), bed_width=260, bed_depth=260, tool_ids=[0, 1])
+        printer = json.dumps({
+            "type": "machine", "name": "Creality K2",
+            "printable_area": ["0x0", "260x0", "260x260", "0x260"],
+        }).encode()
+        process = json.dumps({
+            "type": "process", "name": "0.20mm Standard",
+            "enable_prime_tower": "1", "prime_tower_width": "40",
+            "flush_volumes_matrix": ["0", "140", "140", "0"],
+        }).encode()
+        filament = lambda name: json.dumps({
+            "type": "filament", "name": name,
+            "filament_type": "PLA", "nozzle_temperature": "210",
+        }).encode()
+        setting = {
+            "multiplier": None, "prime_tower": "enabled",
+            "transitions": [
+                {"from_slot_id": "grey-id", "to_slot_id": "yellow-id", "volume_mm3": 370},
+                {"from_slot_id": "yellow-id", "to_slot_id": "grey-id", "volume_mm3": 175},
+            ],
+        }
+        def build(settings=setting, bindings=None):
+            return build_creality_project_candidate(
+                plate, printer=printer, process=process,
+                filaments=[filament("grey"), filament("yellow")],
+                prime_tower={"x": 170, "y": 170}, bed_width=260, bed_depth=260,
+                flush_settings=settings, tool_bindings=bindings or {
+                    "grey-id": 0, "yellow-id": 1,
+                })
+        with zipfile.ZipFile(io.BytesIO(build())) as package:
+            result = json.loads(package.read("Metadata/project_settings.config"))
+        self.assertEqual(result["wipe_tower_x"], ["170"])
+        self.assertEqual(result["wipe_tower_y"], ["170"])
+        self.assertEqual(result["enable_prime_tower"], "1")
+        self.assertEqual(result["flush_volumes_matrix"][1], "370.0")
+        self.assertEqual(result["flush_volumes_matrix"][4], "175.0")
+        self.assertEqual(result["flush_volumes_changed"], "1")
+        self.assertTrue({"flush_volumes_matrix", "flush_volumes_changed",
+                         "enable_prime_tower"} <=
+                        set(result["different_settings_to_system"][0].split(";")))
+        self.assertEqual(result["different_settings_to_system"][-1], "")
+        self.assertEqual(result["flush_volumes_matrix"][2], "0")
+        self.assertEqual(len(result["flush_volumes_matrix"]), 16)
+        with self.assertRaisesMessage(SlicerProfileError, "unmapped physical"):
+            build({**setting, "transitions": [{
+                "from_slot_id": "unrelated-slot", "to_slot_id": "yellow-id",
+                "volume_mm3": 300,
+            }]})
+        with zipfile.ZipFile(io.BytesIO(
+                build({**setting, "multiplier": 1.5}))) as package:
+            customised = json.loads(package.read("Metadata/project_settings.config"))
+        self.assertEqual(customised["flush_multiplier"], "1.5")
+        self.assertIn("flush_multiplier",
+                      customised["different_settings_to_system"][0].split(";"))
+        self.assertEqual(customised["flush_volumes_matrix"][1], "370.0")
+        self.assertEqual(customised["flush_volumes_matrix"][4], "175.0")
+        # Negative-control compatibility: historical diagnostic fixture
+        # deliberately leaves multiplier/matrix unmarked; normal output
+        # always preserves the explicitly selected settings.
+        unmarked = build_creality_project_candidate(
+            plate, printer=printer, process=process,
+            filaments=[filament("grey"), filament("yellow")],
+            prime_tower={"x": 170, "y": 170}, bed_width=260, bed_depth=260,
+            flush_settings={**setting, "multiplier": 1.5},
+            tool_bindings={"grey-id": 0, "yellow-id": 1},
+            preserve_native_flush_overrides=False)
+        with zipfile.ZipFile(io.BytesIO(unmarked)) as package:
+            negative = json.loads(package.read("Metadata/project_settings.config"))
+        self.assertEqual(negative["flush_multiplier"], "1.5")
+        self.assertNotIn("flush_multiplier",
+                         negative["different_settings_to_system"][0].split(";"))
+        self.assertNotIn("flush_volumes_matrix",
+                         negative["different_settings_to_system"][0].split(";"))
+        with self.assertRaises(SlicerProfileError):
+            build_creality_project_candidate(
+                plate, printer=printer, process=process,
+                filaments=[filament("grey"), filament("yellow")],
+                prime_tower={"x": 170, "y": 170}, bed_width=260, bed_depth=260,
+                preserve_native_flush_overrides="off")
+        with zipfile.ZipFile(io.BytesIO(
+                build({**setting, "multiplier": 0.75, "transitions": []}))) as package:
+            multiplier_only = json.loads(package.read("Metadata/project_settings.config"))
+        self.assertEqual(multiplier_only["flush_multiplier"], "0.75")
+        self.assertNotEqual(multiplier_only.get("flush_volumes_changed"), "1")
+        with self.assertRaisesMessage(SlicerProfileError, "two verified"):
+            build(bindings={"grey-id": 0, "yellow-id": 0})
+
+    def test_one_painted_model_retains_native_facets_in_final_creality_project(self):
+        """Creality must receive one object and real colour facet metadata."""
+        import json
+        from core.slicer_creality_project import (
+            build_creality_project_candidate, build_creality_positioned_plate,
+        )
+        from core.tests.test_slicer_colour_native_3mf import fixture_paint, PRINTER_ID
+        raw, paint = fixture_paint()
+        # The shared Orca fixture intentionally contains unused swatches with
+        # placeholder printer IDs. Creality must receive a fully valid palette,
+        # even when only one secondary swatch is painted.
+        for swatch in paint["palette"]:
+            swatch["printer_id"] = PRINTER_ID
+        paint["palette"][2].update({
+            "printer_id": PRINTER_ID,
+            "slot_id": "bay-2",
+            "slot_index": 1,
+            "color": "#FADD4D",
+        })
+        item = {
+            "x_mm": 0, "y_mm": 0, "rotation_deg": 0,
+            "scale_percent": 100, "color": "#111111",
+            "material_slot": {
+                "printer_id": PRINTER_ID,
+                "slot_id": "bay-1", "slot_index": 0,
+            },
+            "colour_paint": paint,
+        }
+        geometry = build_creality_positioned_plate(
+            [(item, raw)], bed_width=260, bed_depth=260,
+            tool_ids=[0], colour_tool_maps=({2: 1},),
+        )
+        with zipfile.ZipFile(io.BytesIO(geometry)) as package:
+            root = ET.fromstring(package.read("3D/3dmodel.model"))
+            settings = ET.fromstring(package.read("Metadata/model_settings.config"))
+        triangles = root.findall(".//{%s}triangle" % NS)
+        self.assertTrue(any(face.attrib.get("paint_color") == "8" for face in triangles))
+        self.assertTrue(any("paint_color" not in face.attrib for face in triangles))
+        self.assertEqual(len(settings.findall("object")), 1)
+        printer = json.dumps({
+            "type": "machine", "name": "Creality K2 0.4 nozzle",
+            "printable_height": "260",
+            "printable_area": ["0x0", "260x0", "260x260", "0x260"],
+        }).encode()
+        process = json.dumps({
+            "type": "process", "name": "Standard",
+            "enable_prime_tower": "1", "prime_tower_width": "40",
+        }).encode()
+        filament = lambda name: json.dumps({
+            "type": "filament", "name": name, "filament_type": "PLA",
+            "nozzle_temperature": "210",
+        }).encode()
+        project = build_creality_project_candidate(
+            geometry, printer=printer, process=process,
+            filaments=[filament("grey"), filament("yellow")],
+            tool_colours=("#111111", "#FADD4D"),
+            bed_width=260, bed_depth=260,
+        )
+        with zipfile.ZipFile(io.BytesIO(project)) as package:
+            final = ET.fromstring(package.read("3D/3dmodel.model"))
+            config = ET.fromstring(package.read("Metadata/model_settings.config"))
+        self.assertEqual(len(config.findall("object")), 1)
+        self.assertTrue(any(
+            face.attrib.get("paint_color") == "8"
+            for face in final.findall(".//{%s}triangle" % NS)
+        ))
+
+    def test_creality_cfs_project_preserves_combined_painted_facets_and_layer_ranges(self):
+        """Native 3MF contains every experimental annotation, never just colour."""
+        import json
+        from core.tests.test_slicer_combined_paint_3mf import _fixture
+        from core.tests.test_slicer_colour_native_3mf import fixture_paint
+        from core.slicer_variable_layers import orca_layer_config_ranges
+        from core.slicer_creality_project import (
+            build_creality_positioned_plate, build_creality_project_candidate,
+        )
+        raw, signature, patch = _fixture()
+        painted_raw, colour = fixture_paint()
+        self.assertEqual(raw, painted_raw)
+        from core.tests.test_slicer_colour_native_3mf import PRINTER_ID
+        # All swatches must be valid owned printer references, including
+        # palette entries not used by this small painted fixture.
+        for swatch in colour["palette"]:
+            swatch["printer_id"] = PRINTER_ID
+        def painted(slot):
+            return {"version": 2, "signature": signature,
+                    "regions": [{"slot": slot, "patches": [
+                        {"face": 0, "polygon": patch}]}]}
+        item = {
+            "x_mm": 0, "y_mm": 0, "rotation_deg": 0,
+            "rotation_xyz_deg": [0, 0], "scale_percent": 100,
+            "colour_paint": colour,
+            "support_paint": painted(0),
+            "seam_paint": painted(1),
+            "fuzzy_skin_paint": painted(0),
+            "variable_layer_profile": {"version": 1, "bands": [
+                {"from_mm": 1, "to_mm": 3, "layer_mm": 0.12}]},
+        }
+        geometry = build_creality_positioned_plate(
+            [(item, raw)], bed_width=260, bed_depth=260,
+            tool_ids=[0], colour_tool_maps=({2: 1},))
+        layers = orca_layer_config_ranges([(item, raw)])
+        self.assertIsNotNone(layers)
+        machine = json.dumps({"type": "machine", "name": "K2"}).encode()
+        process = json.dumps({"type": "process", "name": "Standard",
+                              "enable_prime_tower": "1"}).encode()
+        filament = lambda name: json.dumps({
+            "type": "filament", "name": name,
+            "nozzle_temperature": "220"}).encode()
+        project = build_creality_project_candidate(
+            geometry, printer=machine, process=process,
+            filaments=[filament("Generic PLA"), filament("CR-PLA")],
+            layer_ranges=layers, bed_width=260, bed_depth=260)
+        with zipfile.ZipFile(io.BytesIO(project)) as archive:
+            root = ET.fromstring(archive.read("3D/3dmodel.model"))
+            ranges = ET.fromstring(archive.read("Metadata/layer_config_ranges.xml"))
+        faces = root.findall(".//{%s}triangle" % NS)
+        self.assertTrue(any(all(face.attrib.get(key) == value for key, value in (
+            ("paint_supports", "4"), ("paint_seam", "8"),
+            ("paint_fuzzy_skin", "4"), ("paint_color", "8")))
+            for face in faces))
+        self.assertEqual(ranges.find("object/range/option").text, "0.120")
+        with self.assertRaisesMessage(SlicerProfileError, "layer range"):
+            build_creality_project_candidate(
+                geometry, printer=machine, process=process,
+                filaments=[filament("Generic PLA"), filament("CR-PLA")],
+                layer_ranges=b"<wrong/>")
+
+    def test_single_creality_model_without_paint_cannot_invent_second_tool(self):
+        from core.slicer_creality_project import build_creality_positioned_plate
+        with self.assertRaises(SlicerProfileError):
+            build_creality_positioned_plate(
+                [(self._objects()[0][0], fixture_stl())],
+                bed_width=260, bed_depth=260, tool_ids=[0],
+            )
+
+    def test_filament_option_merge_flattens_native_singleton_vectors(self):
+        import json
+        from core.slicer_creality_project import build_creality_project_candidate
+        plate = build_creality_positioned_plate(
+            self._objects(), bed_width=260, bed_depth=260, tool_ids=[0, 1])
+        printer = json.dumps({
+            "type": "machine", "name": "Creality K2",
+            "nozzle_diameter": ["0.4"],
+        }).encode()
+        process = json.dumps({
+            "type": "process", "name": "0.20mm",
+            "enable_prime_tower": "0",
+        }).encode()
+        filament = lambda name, temp: json.dumps({
+            "type": "filament", "name": name,
+            "filament_type": ["PLA"], "filament_diameter": ["1.75"],
+            "nozzle_temperature": [str(temp)],
+            "fan_cooling_layer_time": ["12"],
+            "filament_minimal_purge_on_wipe_tower": ["15"],
+            "filament_shrinkage_compensation_z": ["100%"],
+        }).encode()
+        result = build_creality_project_candidate(
+            plate, printer=printer, process=process,
+            filaments=[filament("grey", 210), filament("yellow", 220)])
+        with zipfile.ZipFile(io.BytesIO(result)) as package:
+            config = json.loads(package.read("Metadata/project_settings.config"))
+        self.assertEqual(config["nozzle_temperature"], ["210", "220", "210", "220"])
+        self.assertEqual(config["filament_diameter"], ["1.75", "1.75", "1.75", "1.75"])
+        self.assertEqual(config["fan_cooling_layer_time"], ["12", "12", "12", "12"])
+        self.assertEqual(config["filament_minimal_purge_on_wipe_tower"], ["15", "15", "15", "15"])
+        self.assertEqual(config["filament_shrinkage_compensation_z"], ["100%", "100%", "100%", "100%"])
+        self.assertEqual(config["nozzle_diameter"], ["0.4"])
+        self.assertEqual(config["filament_map"], ["1", "1", "1", "1"])
+        self.assertEqual(len(config["flush_volumes_matrix"]), 16)
+        self.assertEqual(len(config["flush_volumes_vector"]), 8)
+
+    def test_native_object_parts_and_assembly_preserve_exact_positions(self):
+        import json
+        from core.slicer_creality_project import build_creality_project_candidate
+        source = build_creality_positioned_plate(
+            self._objects(), bed_width=260, bed_depth=260, tool_ids=[0, 1])
+        printer = json.dumps({"type": "machine", "name": "K2", "nozzle_diameter": ["0.4"]}).encode()
+        process = json.dumps({"type": "process", "name": "Standard", "enable_prime_tower": "0"}).encode()
+        filament = lambda name: json.dumps({
+            "type": "filament", "name": name, "filament_type": ["PLA"]}).encode()
+        result = build_creality_project_candidate(
+            source, printer=printer, process=process,
+            filaments=[filament("grey"), filament("yellow")])
+        with zipfile.ZipFile(io.BytesIO(source)) as z:
+            original = ET.fromstring(z.read("3D/3dmodel.model"))
+        with zipfile.ZipFile(io.BytesIO(result)) as z:
+            model = ET.fromstring(z.read("3D/3dmodel.model"))
+            settings = ET.fromstring(z.read("Metadata/model_settings.config"))
+        ns = "{" + NS + "}"
+        self.assertEqual(
+            [v.attrib for v in original.findall(".//" + ns + "vertex")],
+            [v.attrib for v in model.findall(".//" + ns + "vertex")])
+        self.assertEqual([obj.find("part").get("subtype")
+                          for obj in settings.findall("object")],
+                         ["normal_part", "normal_part"])
+        self.assertEqual(len(settings.findall("./assemble/assemble_item")), 2)
+        self.assertEqual(
+            [row.get("value") for obj in settings.findall("object")
+             for row in obj.findall("metadata") if row.get("key") == "extruder"],
+            ["1", "2"])
+
+    def test_two_slot_flush_matrix_expands_without_erasing_transitions(self):
+        from core.slicer_creality_project import _native_palette_settings
+        project = {
+            "filament_settings_id": ["PLA grey", "PLA yellow"],
+            "filament_type": ["PLA", "PLA"],
+            "flush_volumes_matrix": ["0", "180", "210", "0"],
+            "flush_volumes_vector": ["140", "140", "140", "140"],
+        }
+        self.assertEqual(_native_palette_settings(project, [None, None]), 4)
+        self.assertEqual(project["filament_settings_id"],
+                         ["PLA grey", "PLA yellow", "PLA grey", "PLA yellow"])
+        self.assertEqual(project["flush_volumes_matrix"][1], "180")
+        self.assertEqual(project["flush_volumes_matrix"][4], "210")
+        self.assertEqual(project["flush_volumes_matrix"][11], "180")
+        self.assertEqual(len(project["flush_volumes_vector"]), 8)
+        self.assertEqual(project["filament_type"], ["PLA"] * 4)
+
+    def test_reference_schema_required_cfs_keys(self):
+        import json
+        from core.slicer_creality_project import build_creality_project_candidate
+        plate = build_creality_positioned_plate(
+            self._objects(), bed_width=260, bed_depth=260, tool_ids=[0, 1])
+        printer = json.dumps({"type": "machine", "name": "K2",
+                              "nozzle_diameter": ["0.4"]}).encode()
+        process = json.dumps({"type": "process", "name": "Standard",
+                              "enable_prime_tower": "0"}).encode()
+        filament = lambda name: json.dumps({
+            "type": "filament", "name": name,
+            "filament_type": ["PLA"], "nozzle_temperature": ["220"]}).encode()
+        result = build_creality_project_candidate(
+            plate, printer=printer, process=process,
+            filaments=[filament("grey"), filament("yellow")])
+        with zipfile.ZipFile(io.BytesIO(result)) as package:
+            config = json.loads(package.read("Metadata/project_settings.config"))
+        # Structure observed in a native Creality Print 7.3.2 K2 3MF,
+        # without copying any user-specific source settings or scripts.
+        expected_lengths = {
+            "filament_settings_id": 4, "filament_map": 4,
+            "filament_map_2": 4, "filament_colour_type": 4,
+            "filament_volume_map": 4, "nozzle_temperature": 4,
+            "filament_type": 4, "flush_volumes_matrix": 16,
+            "flush_volumes_vector": 8,
+        }
+        for key, count in expected_lengths.items():
+            self.assertIn(key, config)
+            self.assertEqual(len(config[key]), count, key)
+        self.assertEqual(config["filament_map_mode"], "AutoForSaving")
+
+    def test_creality_machine_polygon_is_serialised_as_project_vector(self):
+        import json
+        from core.slicer_creality_project import build_creality_project_candidate
+        plate = build_creality_positioned_plate(
+            self._objects(), bed_width=260, bed_depth=260, tool_ids=[0, 1])
+        process = json.dumps({"type": "process", "enable_prime_tower": "0"}).encode()
+        filaments = [json.dumps({"type": "filament", "name": name,
+                                  "filament_type": ["PLA"]}).encode()
+                     for name in ("grey", "yellow")]
+        machine = json.dumps({
+            "type": "machine", "name": "K2",
+            "printable_area": "0x0,260x0,260x260,0x260"}).encode()
+        project = build_creality_project_candidate(
+            plate, printer=machine, process=process, filaments=filaments,
+            bed_width=260, bed_depth=260)
+        with zipfile.ZipFile(io.BytesIO(project)) as archive:
+            settings = json.loads(archive.read("Metadata/project_settings.config"))
+        self.assertEqual(settings["printable_area"],
+                         ["0x0", "260x0", "260x260", "0x260"])
+        wrong_bed = json.dumps({
+            "type": "machine", "printable_area": "0x0,300x0,300x300,0x300"}).encode()
+        with self.assertRaisesRegex(SlicerProfileError, "verified bed"):
+            build_creality_project_candidate(
+                plate, printer=wrong_bed, process=process,
+                filaments=filaments, bed_width=260, bed_depth=260)
+
+    def test_physical_filament_colour_vector_matches_four_native_slots(self):
+        from core.slicer_creality_project import _native_palette_settings
+        project = {
+            "filament_settings_id": ["Grey PLA", "Yellow PLA"],
+            "filament_diameter": ["1.75", "1.75"],
+            "default_filament_colour": ["#808080", "#FFFF00"],
+        }
+        _native_palette_settings(project, [None, None])
+        self.assertEqual(project["filament_colour"],
+                         ["#808080", "#FFFF00", "#808080", "#FFFF00"])
+        self.assertEqual(len(project["filament_diameter"]), 4)
+        self.assertEqual(len(project["filament_settings_id"]), 4)
+
+    def test_missing_source_colours_keep_full_physical_material_count(self):
+        from core.slicer_creality_project import _native_palette_settings
+        project = {"filament_settings_id": ["A", "B"],
+                   "filament_type": ["PLA", "PLA"]}
+        _native_palette_settings(project, [None, None])
+        self.assertEqual(project["filament_colour"], ["#FFFFFF"] * 4)
+
+    def test_invalid_palette_fails_before_native_engine(self):
+        with self.assertRaises(SlicerProfileError):
+            build_creality_positioned_plate(
+                self._objects(), bed_width=260, bed_depth=260, tool_ids=[0, 0])
+
+    def test_selected_colours_override_neutral_profile_colours_without_changing_nozzle_map(self):
+        import json
+        from core.slicer_creality_project import build_creality_project_candidate
+        plate = build_creality_positioned_plate(
+            self._objects(), bed_width=260, bed_depth=260, tool_ids=[0, 1])
+        printer = json.dumps({"type": "machine", "name": "K2",
+                              "nozzle_diameter": ["0.4"]}).encode()
+        process = json.dumps({"type": "process", "name": "Standard",
+                              "enable_prime_tower": "0"}).encode()
+        filaments = [json.dumps({"type": "filament", "name": name,
+                                  "filament_type": ["PLA-Silk"],
+                                  "filament_colour": ["#FFFFFF"]}).encode()
+                     for name in ("Grey", "Yellow")]
+        result = build_creality_project_candidate(
+            plate, printer=printer, process=process, filaments=filaments,
+            tool_colours=("#777777", "#ffcc00"))
+        with zipfile.ZipFile(io.BytesIO(result)) as archive:
+            settings = json.loads(archive.read("Metadata/project_settings.config"))
+        self.assertEqual(settings["filament_colour"],
+                         ["#777777", "#FFCC00", "#777777", "#FFCC00"])
+        self.assertEqual(settings["filament_map"], ["1", "1", "1", "1"])
+        self.assertEqual(settings["filament_type"], ["PLA-Silk"] * 4)
+
+    def test_invalid_selected_colours_fail_closed(self):
+        import json
+        from core.slicer_creality_project import build_creality_project_candidate
+        plate = build_creality_positioned_plate(
+            self._objects(), bed_width=260, bed_depth=260, tool_ids=[0, 1])
+        machine = json.dumps({"type": "machine", "nozzle_diameter": ["0.4"]}).encode()
+        process = json.dumps({"type": "process", "enable_prime_tower": "0"}).encode()
+        filaments = [json.dumps({"type": "filament", "name": name}).encode()
+                     for name in ("A", "B")]
+        for colours in (("#FFFFFF",), ("red", "#FFFFFF"),
+                        ("#FFFFFF", "#GGGGGG"), ("#FFFFFF", None)):
+            with self.subTest(colours=colours):
+                with self.assertRaises(SlicerProfileError):
+                    build_creality_project_candidate(
+                        plate, printer=machine, process=process,
+                        filaments=filaments, tool_colours=colours)

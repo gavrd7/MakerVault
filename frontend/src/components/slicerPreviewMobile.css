@@ -1,0 +1,748 @@
+/* Mobile-specific G-code review. Desktop layout is deliberately unchanged. */
+.slicerPreviewNav, .slicerPreviewPanelHeader, .slicerPreviewToolButtons,
+.slicerMobileViewToggle, .slicerMobileStepsToggle, .slicerGcodeQuickSummary { display: none; }
+.slicerToolpathViewOptions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.slicerToolpathViewOptions button { flex: 0 1 auto; }
+
+@media (max-width: 700px) {
+  .slicerPreviewModal .modalBody { padding: 10px 12px; }
+  .slicerPreviewModal h3 { margin: 4px 0 10px; font-size: 1rem; overflow-wrap: anywhere; }
+  .slicerPreviewNav { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 7px; margin: 6px 0 10px; }
+  .slicerPreviewNav button { padding: 9px 4px; min-width: 0; font-size: .88rem; }
+  .slicerMobileDownload { display: flex; justify-content: center; align-items: center; padding: 8px 3px; min-width: 0; text-align: center; font-size: .82rem; }
+  .slicerGcodeDesktopActions { display: none !important; }
+  .slicerGcodeQuickSummary {
+    display: flex; flex-wrap: wrap; gap: 7px; font-size: .85rem;
+    margin: 0 0 10px; align-items: center;
+  }
+  .slicerGcodeQuickSummary span { background: var(--surface,#162333); border: 1px solid var(--border,#394958); border-radius: 7px; padding: 5px 8px; }
+  .slicerGcodeCompactLayout .slicerGcodeMetadata { display: none; }
+  .slicerGcodeCompactLayout .slicerGcodeMetadata.mobileOpen {
+    display: block; position: fixed; z-index: 10050; inset: 5dvh 8px 4dvh;
+    overflow-y: auto; padding: 14px; border: 1px solid var(--border,#394958);
+    background: var(--panel,#101923); border-radius: 14px;
+    box-shadow: 0 15px 50px #000b;
+  }
+  .slicerPreviewPanelHeader { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 14px; }
+  .slicerPreviewPanelHeader strong { font-size: 1.05rem; }
+  .slicerPreviewPanelHeader button { flex: 0 0 auto; }
+  .slicerPreviewBackdrop { display: block; position: fixed; z-index: 10040; inset: 0; background: #0009; }
+  .slicerResultPreview { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+  .slicerResultStats { order: 1; display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 7px; margin: 0 0 6px; }
+  .slicerResultStats > div { padding: 9px 10px; gap: 3px; }
+  .slicerResultStats > div:nth-child(2), .slicerResultStats > div:nth-child(4),
+  .slicerResultStats > div:nth-child(5), .slicerResultStats > div:nth-child(6),
+  .slicerResultStats > div:nth-child(7) { display: none; }
+  .slicerResultStats strong { font-size: 1.06rem; }
+  .slicerResultStats small { font-size: .72rem; }
+  .slicerResultLayerLayout { order: 2; margin: 0; width: 100%; max-width: none; gap: 7px; grid-template-columns: minmax(0,1fr) 54px; }
+  .slicerToolpath3DCanvas, .slicerPreviewModal .slicerToolpath3DCanvas {
+    height: clamp(290px, 43dvh, 450px); width: 100%;
+  }
+  .slicerResultLayerSlider { padding: 5px 2px; font-size: .72rem; }
+  .slicerResultLayerSlider input[type="range"] { min-height: 260px; }
+  .slicerResultViewport { min-width: 0; }
+  .slicerPreviewToolButtons { display: grid; order: 3; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 7px; }
+  .slicerPreviewToolButtons button { padding: 9px 4px; font-size: .86rem; }
+  .slicerPreviewToolButtons button[aria-expanded="true"] { border-color: var(--accent,#7859ee); }
+  .slicerResultModeRow, .slicerResultVisibility {
+    display: none !important;
+  }
+  .slicerResultModeRow.mobileOpen, .slicerResultVisibility.mobileOpen {
+    display: flex !important; position: fixed; z-index: 10050;
+    inset: 8dvh 10px 5dvh; padding: 16px;
+    overflow-y: auto; background: var(--panel,#101923);
+    border: 1px solid var(--border,#394958); border-radius: 14px;
+    align-content: flex-start; align-items: stretch; flex-direction: column; flex-wrap: nowrap;
+    gap: 13px; margin: 0;
+  }
+  .slicerResultVisibility.mobileOpen { display: block !important; }
+  .slicerResultModeRow.mobileOpen > label { display: flex !important; flex-direction: column; align-items: stretch !important; width: 100%; }
+  .slicerResultModeRow.mobileOpen > label.checkRow { flex-direction: row; align-items: center !important; }
+  .slicerResultModeRow.mobileOpen select { width: 100%; max-width: none; }
+  .slicerResultVisibility.mobileOpen label { display: flex; padding: 2px 0; min-height: 32px; align-items: center; gap: 9px; }
+  .slicerResultSteps { display: block; padding: 6px 2px; }
+  .slicerResultSteps .settingsActions { display: none; }
+  .slicerToolpathViewBar { display: block; text-align: center; }
+  .slicerMobileViewToggle { display: inline-flex; margin: 7px 0; padding: 8px 14px; }
+  .slicerToolpathViewBar .slicerToolpathViewOptions { display: none; }
+  .slicerToolpathViewBar .slicerToolpathViewOptions.mobileOpen {
+    display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 8px; justify-items: stretch; align-items: center;
+  }
+  .slicerToolpathViewOptions label { justify-content: center; }
+  .slicerToolpath3D > small, .slicerResultPreview > small,
+  .slicerResultPreview > .projectUploadHint, .slicerResultPreview > .slicerPreviewCoverage,
+  .slicerResultPreview > p.slicerPreviewCoverage { display: none; }
+  .slicerResultPreview > .slicerPreviewBackdrop { display: block; }
+  .slicerResultPreview > .slicerResultVisibility { order: 5; }
+  .slicerResultPreview > .slicerResultModeRow { order: 4; }
+  .slicerResultPreview > .slicerPreviewToolButtons { order: 3; }
+  .slicerResultLayerLayout .slicerResultSteps { margin: 0; }
+}
+
+/* Compact preview moves controls out of the visualisation's way. */
+@media (max-width: 700px) {
+  .slicerGcodeCompactLayout > h3 { display: none; }
+  .slicerGcodeCompactLayout > .slicerGcodeMetadata.mobileOpen p { margin: 10px 0; }
+  .slicerGcodeCompactLayout > .slicerGcodeMetadata.mobileOpen .dataTable { font-size: .83rem; }
+  .slicerGcodeCompactLayout .slicerGcodeQuickSummary { order: 0; }
+}
+
+.slicerMobileJobActions { display: contents; }
+.slicerMobileActionsToggle { display: none; }
+
+@media (max-width: 700px) {
+  .slicerMobileJobActions { display: block; margin: 3px 0 10px; }
+  .slicerMobileActionsToggle {
+    display: block; width: 100%; text-align: center; padding: 9px;
+    border: 1px solid var(--border,#394958);
+    background: var(--surface,#172331); border-radius: 9px; font-weight: 600;
+  }
+  .slicerMobileActionsToggle::after { content: "  ▾"; }
+  .slicerMobileActionsToggle[aria-expanded="true"]::after { content: "  ▴"; }
+  .slicerMobileActionContents { display: none !important; }
+  .slicerMobileActionContents.mobileOpen {
+    display: flex !important; flex-direction: column; gap: 8px; margin-top: 8px;
+  }
+  .slicerMobileActionContents > * { width: 100%; text-align: center; }
+  .slicerPreviewModal .slicerGcodeCompactLayout { min-width: 0; }
+}
+
+/* Range thumb centres must sit at the real zero/max track endpoints on iOS. */
+.slicerResultPreview .slicerFullRange {
+  box-sizing: border-box;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  margin-inline: 0;
+}
+.slicerResultLayerSlider input.slicerFullRange {
+  width: 28px;
+  height: 100%;
+  min-height: 0;
+  margin: 0 auto;
+  flex: 1 1 0;
+}
+.slicerResultSteps input.slicerFullRange { width: 100%; margin: 8px 0; }
+@media (max-width: 700px) {
+  .slicerResultLayerSlider {
+    display: flex; flex-direction: column; justify-content: stretch;
+    padding: 8px 1px; gap: 5px;
+  }
+  .slicerResultLayerSlider span { flex: 0 0 auto; }
+  .slicerResultLayerSlider input.slicerFullRange {
+    writing-mode: vertical-lr; direction: rtl;
+    min-height: 0; height: 100%; flex: 1 1 0;
+    touch-action: none;
+  }
+  .slicerResultSteps input.slicerFullRange { touch-action: pan-y; }
+  .slicerResultVisibility.mobileOpen { padding: 9px 12px; }
+  .slicerResultVisibility.mobileOpen legend { display: none; }
+  .slicerResultVisibility.mobileOpen .slicerPreviewPanelHeader { margin-bottom: 8px; }
+  .slicerToolpathViewOptions.mobileOpen label { justify-content: center; }
+}
+
+/* Consistent download-action typography on both desktop and mobile. */
+.slicerGcodeDownloadAction {
+  display: inline-flex; justify-content: center; align-items: center;
+  font: inherit; font-size: inherit; font-weight: 600; line-height: 1.3;
+  min-height: 40px; padding: 10px 16px; text-decoration: none;
+  color: inherit; border: 1px solid var(--border,#394958);
+  border-radius: 9px; background: var(--surface,#172331);
+}
+.slicerGcodeDownloadAction:hover { background: var(--surface-hover,#203044); }
+.slicerGcodeDetailRow { margin: 0; }
+.slicerGcodeDetailRow > strong { font-weight: 600; }
+@media (max-width: 700px) {
+  .slicerGcodeDetailCards.mobileOpen {
+    display: flex !important; flex-direction: column; gap: 8px;
+  }
+  .slicerGcodeDetailCards.mobileOpen .slicerGcodeDetailRow {
+    display: flex; flex-direction: column; gap: 5px; padding: 11px 12px;
+    background: var(--surface,#172331); border: 1px solid var(--border,#394958);
+    border-radius: 10px; margin: 0;
+  }
+  .slicerGcodeDetailCards.mobileOpen .slicerGcodeDetailRow > strong {
+    font-size: .8rem; color: var(--muted,#95a6b7);
+  }
+  .slicerGcodeDetailCards.mobileOpen .slicerGcodeDetailRow > span {
+    line-height: 1.4; overflow-wrap: anywhere;
+  }
+  .slicerGcodeDetailCards.mobileOpen .settingsCallout { margin-top: 8px; }
+  .slicerMobileActionContents .slicerGcodeDownloadAction {
+    width: 100%; font-size: 1rem; min-height: 44px;
+  }
+}
+
+/* iOS WebKit's native range track extends beyond where a thumb can reach.
+   Draw both rails with the same half-thumb inset so max/min visually align. */
+.slicerResultPreview input.slicerFullRange {
+  -webkit-appearance: none;
+  appearance: none;
+  background: transparent;
+}
+.slicerResultSteps input.slicerFullRange {
+  height: 26px;
+  background: linear-gradient(90deg, transparent 11px, #1688ee 11px,
+    #1688ee calc(100% - 11px), transparent calc(100% - 11px)) center / 100% 5px no-repeat;
+}
+.slicerResultPreview input.slicerFullRange::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 22px; height: 22px;
+  border: 2px solid #fff; border-radius: 9px;
+  background: #fff; box-shadow: 0 0 0 1px #243548;
+}
+.slicerResultSteps input.slicerFullRange::-webkit-slider-runnable-track {
+  -webkit-appearance: none; appearance: none;
+  height: 5px; border: 0; background: transparent;
+}
+@media (max-width: 700px) {
+  .slicerResultLayerSlider input.slicerFullRange {
+    width: 28px; min-height: 230px;
+    background: linear-gradient(180deg, transparent 11px, #1688ee 11px,
+      #1688ee calc(100% - 11px), transparent calc(100% - 11px))
+      center / 5px 100% no-repeat;
+  }
+  .slicerResultLayerSlider input.slicerFullRange::-webkit-slider-runnable-track {
+    -webkit-appearance: none; appearance: none;
+    width: 5px; border: 0; background: transparent;
+  }
+}
+
+/* Fit details to their content rather than a tall near-empty full-screen sheet. */
+@media (max-width: 700px) {
+  .slicerGcodeCompactLayout .slicerGcodeMetadata.mobileOpen {
+    inset: auto;
+    top: 50%; left: 50%;
+    transform: translate(-50%, -50%);
+    width: calc(100vw - 24px);
+    max-width: 580px; max-height: 82dvh;
+    height: auto; box-sizing: border-box;
+  }
+}
+
+/* Desktop and mobile share an uncluttered G-code inspection hierarchy.
+   The selected-layer viewport, movement slider and print summary stay primary. */
+.slicerPreviewNav {
+  display: flex; align-items: center; justify-content: flex-start; gap: 8px;
+  margin: 4px 0 10px;
+}
+.slicerPreviewNav button { min-width: 110px; }
+.slicerGcodeQuickSummary {
+  display: flex; flex-wrap: wrap; gap: 8px; margin: 6px 0 10px;
+}
+.slicerGcodeQuickSummary span {
+  border: 1px solid var(--border,#394958);
+  background: var(--surface,#162333);
+  border-radius: 8px; padding: 6px 11px;
+}
+.slicerGcodeCompactLayout .slicerGcodeDesktopActions { display: none !important; }
+.slicerGcodeCompactLayout .slicerGcodeMetadata:not(.mobileOpen) { display: none; }
+.slicerPreviewToolButtons {
+  display: flex; align-items: center; justify-content: flex-end;
+  gap: 10px; margin: 0 0 4px;
+}
+.slicerPreviewToolButtons button { min-width: 140px; }
+.slicerPreviewBackdrop {
+  display: block; position: fixed; z-index: 10040; inset: 0;
+  background: #0009;
+}
+.slicerPreviewPanelHeader {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 12px; margin-bottom: 12px;
+}
+.slicerPreviewPanelHeader strong { font-size: 1.06rem; }
+.slicerPreviewOptionsPanel:not(.mobileOpen) { display: none !important; }
+.slicerPreviewOptionsPanel.mobileOpen,
+.slicerGcodeCompactLayout .slicerGcodeMetadata.mobileOpen {
+  display: flex !important; flex-direction: column; gap: 10px;
+  position: fixed; z-index: 10050;
+  left: 50%; top: 50%; transform: translate(-50%,-50%);
+  width: min(560px,calc(100vw - 28px)); max-height: 82dvh;
+  box-sizing: border-box; overflow-y: auto;
+  padding: 18px; margin: 0;
+  background: var(--panel,#101923);
+  border: 1px solid var(--border,#394958); border-radius: 14px;
+  box-shadow: 0 18px 60px #000a;
+}
+.slicerResultVisibility.slicerPreviewOptionsPanel.mobileOpen { display: block !important; }
+.slicerResultVisibility.slicerPreviewOptionsPanel.mobileOpen legend { display: none; }
+.slicerResultVisibility.slicerPreviewOptionsPanel.mobileOpen label {
+  display: flex; align-items: center; gap: 9px; padding: 3px 0;
+  min-height: 30px; width: 100%; white-space: normal;
+}
+.slicerResultModeRow.slicerPreviewOptionsPanel.mobileOpen > label {
+  display: flex; flex-direction: column; align-items: stretch; gap: 6px;
+}
+.slicerResultModeRow.slicerPreviewOptionsPanel.mobileOpen > label.checkRow {
+  flex-direction: row; align-items: center; justify-content: flex-start;
+}
+.slicerResultModeRow.slicerPreviewOptionsPanel.mobileOpen select {
+  width: 100%; max-width: none;
+}
+.slicerGcodeDetailCards.mobileOpen .slicerGcodeDetailRow {
+  display: flex; flex-direction: column; gap: 5px;
+  padding: 10px 12px; margin: 0;
+  border: 1px solid var(--border,#394958);
+  border-radius: 9px; background: var(--surface,#172331);
+}
+.slicerGcodeDetailCards.mobileOpen .slicerGcodeDetailRow > strong {
+  color: var(--muted,#9aacbc); font-size: .81rem;
+}
+.slicerGcodeDetailCards.mobileOpen .slicerGcodeDetailRow > span {
+  overflow-wrap: anywhere;
+}
+ .slicerResultPreview > .slicerResultStats {
+  display: grid; grid-template-columns: repeat(3,minmax(0,1fr));
+  gap: 9px; margin: 6px 0 8px;
+}
+.slicerResultPreview > .slicerResultStats > div:nth-child(2),
+.slicerResultPreview > .slicerResultStats > div:nth-child(4),
+.slicerResultPreview > .slicerResultStats > div:nth-child(6),
+.slicerResultPreview > .slicerResultStats > div:nth-child(7) { display: none; }
+/* Top-level camera and bed choices can be revealed without occupying a row
+   permanently under a large 3D viewport. */
+.slicerToolpathViewBar { display: flex; justify-content: center; flex-direction: column; }
+.slicerMobileViewToggle { display: inline-flex; align-self: center; }
+.slicerToolpathViewBar .slicerToolpathViewOptions { display: none; }
+.slicerToolpathViewBar .slicerToolpathViewOptions.mobileOpen {
+  display: flex; justify-content: center; align-items: center;
+  flex-wrap: wrap; gap: 8px;
+}
+.slicerToolpathViewBar .slicerToolpathViewOptions.mobileOpen label { justify-content: center; }
+.slicerMobileJobActions { display: block; margin: 4px 0 12px; }
+.slicerMobileActionsToggle {
+  display: block; min-width: 210px; margin: 0;
+  text-align: center; font-weight: 600;
+}
+.slicerMobileActionContents { display: none !important; }
+.slicerMobileActionContents.mobileOpen {
+  display: flex !important; justify-content: flex-start;
+  align-items: center; gap: 8px; flex-wrap: wrap; margin-top: 9px;
+}
+@media (min-width: 701px) {
+  .slicerPreviewModal .slicerResultLayerLayout { max-width: none; }
+  .slicerPreviewModal .slicerResultViewport .slicerResultToolpath { width: 100%; max-width: none; }
+  .slicerPreviewModal .slicerResultLayerLayout { grid-template-columns: minmax(0,1fr) 82px; }
+  .slicerPreviewModal .slicerGcodeDetailCards.mobileOpen { width: min(700px,calc(100vw - 32px)); }
+}
+
+@media (max-width: 700px) {
+  .slicerPreviewNav {
+    display: grid; grid-template-columns: repeat(3,minmax(0,1fr));
+    gap: 7px; margin: 6px 0 10px;
+  }
+  .slicerPreviewNav button { min-width: 0; padding: 9px 4px; }
+  .slicerResultPreview > .slicerResultStats {
+    grid-template-columns: repeat(2,minmax(0,1fr));
+  }
+  .slicerResultPreview > .slicerResultStats > div:nth-child(5) { display: none; }
+  .slicerPreviewToolButtons {
+    display: grid; grid-template-columns: repeat(2,minmax(0,1fr));
+    gap: 7px; justify-content: stretch;
+  }
+  .slicerPreviewToolButtons button { min-width: 0; }
+}
+
+/* 2026-11-17 mobile review consolidation. Override legacy row layouts within
+   the floating dialog only; never affect the ordinary slicer settings page. */
+@media (max-width: 700px) {
+  .slicerPreviewNav {
+    width: 100%;
+    display: flex !important;
+    align-items: stretch;
+    justify-content: center;
+    gap: 8px;
+    margin: 8px auto 12px;
+  }
+  .slicerPreviewNav button {
+    flex: 0 1 150px;
+    min-width: 0;
+    text-align: center;
+    margin: 0;
+    padding: 9px 6px;
+  }
+  .slicerGcodeQuickSummary {
+    justify-content: center;
+    align-items: center;
+    margin: 4px auto 10px;
+  }
+  .slicerUnifiedViewActions {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 7px;
+    width: 100%;
+    margin: 8px auto 4px;
+  }
+  .slicerUnifiedViewActions > button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex: 1 1 0;
+    min-width: 0;
+    max-width: 170px;
+    padding: 9px 5px;
+    margin: 0;
+    font-size: .82rem;
+    white-space: nowrap;
+  }
+  .slicerResultModeRow.slicerPreviewOptionsPanel.mobileOpen {
+    display: flex !important;
+    flex-direction: column !important;
+    flex-wrap: nowrap !important;
+    align-items: stretch !important;
+    justify-content: flex-start !important;
+    gap: 12px !important;
+    inset: auto !important;
+    top: 50% !important;
+    left: 50% !important;
+    right: auto !important;
+    bottom: auto !important;
+    transform: translate(-50%, -50%) !important;
+    width: min(540px, calc(100vw - 24px)) !important;
+    min-width: 0 !important;
+    max-width: calc(100vw - 24px) !important;
+    max-height: 82dvh !important;
+    box-sizing: border-box !important;
+    overflow-x: hidden !important;
+    overflow-y: auto !important;
+    padding: 16px !important;
+  }
+  .slicerResultModeRow.slicerPreviewOptionsPanel.mobileOpen > label {
+    display: flex !important;
+    flex-direction: column !important;
+    flex: none !important;
+    flex-wrap: nowrap !important;
+    align-items: stretch !important;
+    justify-content: flex-start !important;
+    gap: 5px !important;
+    min-width: 0 !important;
+    width: 100% !important;
+    margin: 0 !important;
+  }
+  .slicerResultModeRow.slicerPreviewOptionsPanel.mobileOpen > label.checkRow {
+    flex-direction: row !important;
+    align-items: center !important;
+  }
+  .slicerResultModeRow.slicerPreviewOptionsPanel.mobileOpen select {
+    display: block;
+    width: 100% !important;
+    min-width: 0 !important;
+    max-width: 100% !important;
+    box-sizing: border-box;
+  }
+  .slicerPreviewOptionsPanel .slicerPreviewPanelHeader {
+    position: relative;
+    display: flex !important;
+    flex-direction: row !important;
+    align-items: center !important;
+    justify-content: space-between !important;
+    flex: none !important;
+    width: 100% !important;
+    gap: 10px;
+    margin: 0 0 8px;
+  }
+  .slicerPreviewOptionsPanel .slicerPreviewPanelHeader button {
+    margin-left: auto;
+    flex: 0 0 auto;
+  }
+  .slicerPreviewOptionsPanel.mobileOpen > .slicerPreviewPanelHeader {
+    order: -1;
+  }
+  .slicerToolpathViewBar .slicerToolpathViewOptions.mobileOpen {
+    display: grid;
+    width: min(360px,100%);
+    margin: 4px auto 0;
+    justify-content: center;
+    justify-items: stretch;
+    gap: 8px;
+  }
+  .slicerToolpathViewBar .slicerToolpathViewOptions.mobileOpen button,
+  .slicerToolpathViewBar .slicerToolpathViewOptions.mobileOpen label {
+    text-align: center;
+    justify-content: center;
+    width: 100%;
+  }
+  .slicerResultSteps .settingsActions { display: none !important; }
+  .slicerResultSteps input.slicerFullRange {
+    width: 100%;
+    box-sizing: border-box;
+  }
+  .slicerResultLayerSlider input.slicerFullRange {
+    box-sizing: border-box;
+    margin-inline: auto !important;
+  }
+}
+/* The rails are painted on the range's native track rather than on the input
+   background. Avoid dual inset gradients which misalign with WebKit thumbs. */
+.slicerResultSteps input.slicerFullRange {
+  background: transparent !important;
+}
+.slicerResultSteps input.slicerFullRange::-webkit-slider-runnable-track {
+  height: 5px;
+  background: #1688ee;
+  border-radius: 5px;
+}
+.slicerResultSteps input.slicerFullRange::-moz-range-track {
+  height: 5px;
+  background: #1688ee;
+  border-radius: 5px;
+}
+@media (max-width: 700px) {
+  .slicerResultLayerSlider input.slicerFullRange {
+    background: transparent !important;
+  }
+  .slicerResultLayerSlider input.slicerFullRange::-webkit-slider-runnable-track {
+    width: 5px;
+    background: #1688ee;
+    border-radius: 5px;
+  }
+  .slicerResultLayerSlider input.slicerFullRange::-moz-range-track {
+    width: 5px;
+    background: #1688ee;
+    border-radius: 5px;
+  }
+}
+
+/* Finish iOS range geometry. WebKit aligns the native thumb's top/left edge
+   with the rail in writing-mode: vertical-lr rather than its centre. Correct
+   ONLY the cross-axis; leave native min/max travel untouched. */
+@media (max-width: 700px) {
+  .slicerResultSteps input.slicerFullRange::-webkit-slider-thumb {
+    transform: translateY(-11px);
+  }
+  .slicerResultLayerSlider input.slicerFullRange::-webkit-slider-thumb {
+    transform: translateX(-11px);
+  }
+
+  /* Size both columns from the same CSS grid row. The left column's
+     actual viewport + view controls + move slider determines the height;
+     the right layer-slider border must end at that exact bottom edge.
+     Avoid a viewport-dependent guessed height, which drifted on iOS. */
+  .slicerResultLayerLayout {
+    align-items: stretch;
+  }
+  .slicerResultLayerLayout > .slicerResultViewport {
+    min-width: 0;
+    align-self: stretch;
+  }
+  .slicerResultLayerLayout > .slicerResultLayerSlider {
+    align-self: stretch;
+    height: auto;
+    min-height: 0;
+    max-height: none;
+    box-sizing: border-box;
+  }
+  .slicerResultLayerSlider input.slicerFullRange {
+    height: auto;
+    min-height: 0;
+    flex: 1 1 0;
+  }
+}
+
+/* G-code review: consistent controls, compact reading order and modal spacing. */
+.slicerGcodeDownloadAction,
+.slicerGcodeCompactLayout .slicerGcodeDownloadAction,
+.slicerFullSourceFileActions .slicerGcodeDownloadAction {
+  display:inline-flex; align-items:center; justify-content:center;
+  box-sizing:border-box; min-height:42px; padding:9px 14px;
+  font:inherit; font-size:inherit; font-weight:600; line-height:1.3;
+  white-space:normal; text-align:center; text-decoration:none;
+}
+.slicerGcodeSourceView { display:flex; flex-direction:column; gap:14px; min-width:0; }
+.slicerGcodeSourceModeActions {
+  display:flex; gap:9px; justify-content:flex-end; align-items:center;
+  flex-wrap:wrap; padding:6px 0 2px;
+}
+.slicerGcodeSourceModeActions button { min-height:42px; margin:0; }
+.slicerGcodeSourceView > textarea { margin:0; }
+.gcodeFullSource {display:flex;flex-direction:column;gap:12px;min-width:0}
+.slicerFullSourceHeader {display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap}
+.slicerFullSourceHeader p {margin:0;color:var(--muted,#9aafc3)}
+.slicerFullSourceFileActions {display:flex;gap:8px;flex-wrap:wrap;align-items:stretch}
+.slicerFullSourceFileActions > button,.slicerFullSourceFileActions > a {min-height:42px; margin:0}
+.slicerFullSourceSearch {
+  display:flex;flex-wrap:wrap;align-items:end;gap:9px 12px;
+  padding:12px;border:1px solid var(--border,#394958);border-radius:10px;
+  background:var(--surface,#142131)
+}
+.slicerFullSourceSearch > label {display:flex;flex:1 1 220px;min-width:0;flex-direction:column;gap:5px;margin:0}
+.slicerFullSourceSearch > label:nth-of-type(2) {flex:0 1 145px}
+.slicerFullSourceSearch input {width:100%;min-width:0;box-sizing:border-box;min-height:42px;margin:0}
+.slicerFullSourceSearch > button {min-height:42px;margin:0}
+.slicerFullSourceCode {
+  width:100%;box-sizing:border-box;min-height:320px;
+  font-family:ui-monospace,SFMono-Regular,Consolas,monospace;font-size:.81rem;
+  line-height:1.5;margin:0;resize:vertical
+}
+.slicerFullSourcePagination {
+  display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;
+  padding:2px 0;
+}
+.slicerFullSourcePagination > button {min-height:40px}
+.slicerFullSourcePagination span {flex:1 1 auto;text-align:center;font-size:.88rem}
+.slicerGcodeSavedSettings {margin-top:12px;padding:13px;border:1px solid var(--border,#394958);border-radius:10px;min-width:0}
+.slicerGcodeSavedSettings h4 {margin:0 0 11px}
+.slicerGcodeSavedSettingsScroll {max-width:100%;overflow-x:auto}
+.slicerGcodeSavedSettings .dataTable {width:100%;min-width:480px;border-collapse:collapse;table-layout:auto}
+.slicerGcodeSavedSettings .dataTable th,.slicerGcodeSavedSettings .dataTable td {
+  padding:10px 12px;text-align:left;vertical-align:top;border-bottom:1px solid var(--border,#394958);
+  overflow-wrap:anywhere
+}
+.slicerGcodeSavedSettings .dataTable th {font-size:.82rem;color:var(--muted,#9aafc3)}
+.slicerGcodeSavedSettings .dataTable tbody tr:last-child td {border-bottom:0}
+.slicerResultModeRow.slicerPreviewOptionsPanel > label {
+  display:flex;flex-direction:column;align-items:stretch;gap:5px;
+  min-width:0;flex:1 1 190px;text-align:left;
+}
+.slicerResultModeRow.slicerPreviewOptionsPanel > label.checkRow {
+  flex:1 1 100%;flex-direction:row;align-items:center;justify-content:flex-start;
+  text-align:left;gap:9px
+}
+.slicerResultModeRow.slicerPreviewOptionsPanel select {width:100%;max-width:100%;min-width:0}
+@media(min-width:701px) {
+  /* The layer control must share the left viewport+move control's grid height. */
+  .slicerResultPreview .slicerResultLayerLayout {align-items:stretch;grid-auto-rows:minmax(0,auto)}
+  .slicerResultPreview .slicerResultViewport {display:flex;flex-direction:column;min-height:0}
+  .slicerResultPreview .slicerResultSteps {flex:0 0 auto;padding:8px 0 0}
+  .slicerResultPreview .slicerResultLayerSlider {
+    align-self:stretch;height:auto;max-height:100%;min-height:0;overflow:hidden;box-sizing:border-box;
+  }
+  .slicerResultPreview .slicerResultLayerSlider input.slicerFullRange {
+    flex:1 1 0;height:0;min-height:0;max-height:100%;
+    margin:5px auto;background:transparent!important;
+  }
+  .slicerResultPreview .slicerResultLayerSlider input.slicerFullRange::-webkit-slider-runnable-track {
+    -webkit-appearance:none;width:5px;background:#1688ee;border-radius:5px;border:0;
+  }
+  .slicerResultPreview .slicerResultLayerSlider input.slicerFullRange::-moz-range-track {
+    width:5px;background:#1688ee;border-radius:5px;border:0;
+  }
+}
+@media(max-width:700px) {
+  .slicerFullSourceHeader {align-items:stretch}
+  .slicerFullSourceFileActions {display:grid;grid-template-columns:repeat(2,minmax(0,1fr));width:100%}
+  .slicerFullSourceFileActions>* {width:100%;min-width:0}
+  .slicerFullSourceSearch {display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px}
+  .slicerFullSourceSearch > label,.slicerFullSourceSearch > label:nth-of-type(2) {flex:none;min-width:0}
+  .slicerFullSourceSearch > button {min-width:60px}
+  .slicerFullSourcePagination {display:grid;grid-template-columns:1fr 1fr;gap:8px}
+  .slicerFullSourcePagination span {grid-column:1/-1;grid-row:1}
+  .slicerGcodeSourceModeActions {justify-content:flex-end}
+  .slicerGcodeSavedSettings {padding:10px}
+  .slicerGcodeSavedSettings .dataTable {min-width:460px;font-size:.83rem}
+  .slicerGcodeQuickSummary {flex-wrap:wrap}
+}
+
+/* Override the smaller library asset-link typography inside slicer review. */
+.slicerWorkbenchRoot a.assetButton.slicerGcodeDownloadAction,
+.slicerGcodeCompactLayout a.assetButton.slicerGcodeDownloadAction,
+.slicerFullSourceFileActions a.assetButton.slicerGcodeDownloadAction {
+  font-family:inherit;font-size:.94rem;font-weight:600;
+  min-height:42px;padding:9px 14px;line-height:1.3;
+}
+@media(max-width:700px){
+  /* Mobile quick-summary chips show all three temperatures; the compact
+     statistics strip hides the duplicate temperature detail cards. */
+  .slicerResultPreview > .slicerResultStats > div:nth-child(8) {display:none}
+}
+
+/* Correct the display-panel regression: its labels were flex items with a
+   190px flex basis in a COLUMN, producing enormous vertical blank space. */
+.slicerResultModeRow.slicerPreviewOptionsPanel.mobileOpen {
+  display:flex!important;
+  flex-direction:column!important;
+  flex-wrap:nowrap!important;
+  align-items:stretch!important;
+  justify-content:flex-start!important;
+  align-content:start!important;
+  height:max-content!important;
+  min-height:0!important;
+  max-height:min(82dvh,760px)!important;
+  gap:11px!important;
+}
+.slicerResultModeRow.slicerPreviewOptionsPanel.mobileOpen > label {
+  flex:0 0 auto!important;
+  width:100%!important;
+  height:auto!important;
+  min-height:0!important;
+  margin:0!important;
+  display:flex!important;
+  flex-direction:column!important;
+  justify-content:flex-start!important;
+  align-items:stretch!important;
+  gap:5px!important;
+  text-align:left!important;
+}
+.slicerResultModeRow.slicerPreviewOptionsPanel.mobileOpen > label.checkRow {
+  flex:0 0 auto!important;
+  flex-direction:row!important;
+  align-items:center!important;
+  justify-content:flex-start!important;
+  gap:9px!important;
+}
+.slicerResultModeRow.slicerPreviewOptionsPanel.mobileOpen > label.checkRow input {
+  flex:0 0 auto!important;
+  width:auto!important;
+  margin:0!important;
+}
+.slicerResultModeRow.slicerPreviewOptionsPanel.mobileOpen > .slicerPreviewPanelHeader {
+  display:flex!important;
+  flex:0 0 auto!important;
+  flex-direction:row!important;
+  justify-content:space-between!important;
+  align-items:center!important;
+  gap:12px!important;
+  margin:0 0 4px!important;
+}
+.slicerResultModeRow.slicerPreviewOptionsPanel.mobileOpen select {
+  width:100%!important;
+  flex:none!important;
+  min-height:42px;
+  margin:0!important;
+}
+
+/* Progressive full-resolution toolpaths: describe precisely how much original
+   extrusion data has loaded, instead of presenting a sparse sample as solid. */
+.slicerWholeModelProgress {
+  display:flex;
+  align-items:center;
+  flex-wrap:wrap;
+  gap:8px 14px;
+  padding:8px 2px 2px;
+  font-size:.81rem;
+  color:var(--muted,#a9bbcb);
+}
+.slicerWholeModelProgress progress {
+  flex:1 1 120px;
+  max-width:320px;
+  height:6px;
+  accent-color:#7258e8;
+}
+.slicerWholeModelProgress small {
+  flex-basis:100%;
+  line-height:1.4;
+}
+
+/* Cold-cache preparation is visible rather than appearing as an empty plate.
+   Never intercept orbit, zoom, pan or layer-slider pointer gestures. */
+.slicerResultViewport { position:relative; }
+.slicerPreviewLoadOverlay {
+  position:absolute;
+  z-index:4;
+  top:14px;
+  left:14px;
+  right:14px;
+  max-width:380px;
+  padding:10px 13px;
+  border:1px solid var(--border,#394958);
+  border-radius:10px;
+  background:rgba(16,27,40,.94);
+  color:var(--text,#d9e2ec);
+  font-size:.84rem;
+  line-height:1.4;
+  pointer-events:none;
+}

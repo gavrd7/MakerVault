@@ -33,6 +33,7 @@ from core.printer_connectivity import (
     normalise_creality_snapshot,
     normalise_moonraker_endpoint,
     poll_connection,
+    material_capability_report,
     poll_moonraker,
     poll_octoprint,
 )
@@ -73,6 +74,7 @@ class PrinterConnectivityAdapterTests(TestCase):
 
     @patch("core.printer_connectivity.requests.get")
     def test_moonraker_normalises_live_snapshot(self, get_mock):
+        paused = [False]
         def side_effect(url, **kwargs):
             if url.endswith("/server/info"):
                 return self.response({
@@ -86,6 +88,7 @@ class PrinterConnectivityAdapterTests(TestCase):
                 return self.response({
                     "result": {
                         "status": {
+                            "pause_resume": {"is_paused": paused[0]},
                             "print_stats": {
                                 "state": "printing",
                                 "filename": "Benchy.gcode",
@@ -117,6 +120,11 @@ class PrinterConnectivityAdapterTests(TestCase):
         self.assertEqual(snapshot["warnings"], ["Test warning"])
         self.assertEqual(snapshot["source_metadata"]["klippy_state"], "ready")
         self.assertTrue(all(call.kwargs["headers"]["X-Api-Key"] == "secret" for call in get_mock.call_args_list))
+        self.assertTrue(any("pause_resume" in call.args[0] for call in get_mock.call_args_list))
+        paused[0] = True
+        snapshot = poll_moonraker("http://moonraker.local:7125", {"api_key": "secret"})
+        self.assertEqual(snapshot["state"], "paused")
+        self.assertEqual(snapshot["job"]["file_name"], "Benchy.gcode")
 
     def test_native_creality_idle_reconciliation_requires_clear_independent_signals(self):
         from types import SimpleNamespace
@@ -165,6 +173,130 @@ class PrinterConnectivityAdapterTests(TestCase):
         active = deepcopy(old)
         active["online"] = False
         self.assertEqual(_reconcile_creality_processing(native, active), active)
+
+    def test_creality_latched_cancelled_job_clears_only_after_stable_inactive_window(self):
+        from copy import deepcopy
+        from datetime import timedelta
+        from types import SimpleNamespace
+        from core.printer_connectivity import (
+            _reconcile_creality_processing, CREALITY_LATCHED_IDLE_MIN_SECONDS,
+        )
+        now = timezone.now()
+        old_job = {
+            "online": True, "state": "processing", "state_label": "Preparing",
+            "captured_at": (now - timedelta(seconds=220)).isoformat(),
+            "job": {"file_name": "cancelled-mv.gcode", "progress": 18,
+                    "elapsed_seconds": 0, "remaining_seconds": 2243,
+                    "current_layer": 0, "total_layers": 151},
+            "temperatures": {"tool0": {"target_c": 0, "actual_c": 25},
+                             "bed": {"target_c": 0, "actual_c": 23}},
+            "source_metadata": {
+                "raw_state": 0, "device_state": 0, "material_status": 0,
+                "power_loss_recovery": False, "activity_state": "processing",
+                "print_id": "old", "print_start_time": 123,
+            },
+        }
+        connection = SimpleNamespace(last_snapshot={})
+        first = _reconcile_creality_processing(connection, deepcopy(old_job))
+        self.assertEqual(first["state"], "processing")
+        self.assertIn("idle_candidate_since", first["source_metadata"])
+        connection.last_snapshot = deepcopy(first)
+        candidate = connection.last_snapshot["source_metadata"]
+        candidate["idle_candidate_since"] = (
+            now - timedelta(seconds=CREALITY_LATCHED_IDLE_MIN_SECONDS + 10)
+        ).isoformat()
+        clear = _reconcile_creality_processing(connection, deepcopy(old_job))
+        self.assertEqual(clear["state"], "idle")
+        self.assertEqual(clear["job"]["file_name"], "")
+        self.assertIsNone(clear["job"]["progress"])
+        self.assertEqual(clear["source_metadata"]["native_idle_reason"],
+                         "latched_job_inactive_180s")
+        self.assertEqual(clear["source_metadata"]["activity_state"], "idle")
+        self.assertNotIn("idle_candidate_since", clear["source_metadata"])
+        self.assertEqual(old_job["state"], "processing")
+        # Regression: the K2 may repeat the same stale 18%/2243s frame
+        # indefinitely. Once independently confirmed idle, it MUST stay idle
+        # until the hardware reports a genuinely changed state/job.
+        connection.last_snapshot = deepcopy(clear)
+        again = _reconcile_creality_processing(connection, deepcopy(old_job))
+        self.assertEqual(again["state"], "idle")
+        self.assertEqual(again["source_metadata"]["native_idle_reason"],
+                         "latched_job_inactive_180s")
+        connection.last_snapshot = deepcopy(again)
+        third = _reconcile_creality_processing(connection, deepcopy(old_job))
+        self.assertEqual(third["state"], "idle")
+        # New job identity or progress cancels the persisted confirmation.
+        for section, key, value in (
+            ("job", "file_name", "new-model.gcode"),
+            ("job", "progress", 19),
+            ("job", "remaining_seconds", 1999),
+            ("source_metadata", "print_id", "new"),
+            ("source_metadata", "raw_state", 1),
+            ("source_metadata", "material_status", 1),
+            ("temperatures", "tool0", {"target_c": 210}),
+        ):
+            with self.subTest(key=key):
+                changed = deepcopy(old_job)
+                changed[section][key] = value
+                result = _reconcile_creality_processing(connection, changed)
+                self.assertNotEqual(result["state"], "idle")
+                self.assertNotIn("latched_idle_signature",
+                                 result.get("source_metadata") or {})
+
+    def test_creality_latched_idle_rejects_changed_or_active_telemetry(self):
+        from copy import deepcopy
+        from datetime import timedelta
+        from types import SimpleNamespace
+        from core.printer_connectivity import (
+            _reconcile_creality_processing, _creality_latched_idle_signature,
+        )
+        now = timezone.now()
+        snap = {
+            "online": True, "state": "processing", "state_label": "Preparing",
+            "captured_at": (now - timedelta(seconds=20)).isoformat(),
+            "job": {"file_name": "old.gcode", "progress": 18,
+                    "elapsed_seconds": 0, "remaining_seconds": 2243,
+                    "current_layer": 0},
+            "temperatures": {"tool0": {"target_c": 0}, "bed": {"target_c": 0}},
+            "source_metadata": {
+                "raw_state": 0, "device_state": 0, "material_status": 0,
+                "power_loss_recovery": False, "activity_state": "processing",
+            },
+        }
+        signature = _creality_latched_idle_signature(snap)
+        self.assertIsNotNone(signature)
+        previous = deepcopy(snap)
+        previous["source_metadata"]["idle_candidate_signature"] = signature
+        previous["source_metadata"]["idle_candidate_since"] = (
+            now - timedelta(minutes=6)
+        ).isoformat()
+        connection = SimpleNamespace(last_snapshot=previous)
+        for section, key, value in (
+            ("job", "progress", 19),
+            ("job", "remaining_seconds", 2100),
+            ("job", "file_name", "new.gcode"),
+            ("job", "current_layer", 1),
+            ("job", "elapsed_seconds", 1),
+            ("temperatures", "tool0", {"target_c": 220}),
+            ("temperatures", "bed", {"target_c": 50}),
+            ("source_metadata", "raw_state", 1),
+            ("source_metadata", "device_state", 1),
+            ("source_metadata", "material_status", 1),
+            ("source_metadata", "power_loss_recovery", True),
+            ("source_metadata", "print_id", "new"),
+        ):
+            with self.subTest(key=key, value=value):
+                current = deepcopy(snap)
+                current[section][key] = value
+                result = _reconcile_creality_processing(connection, current)
+                self.assertNotEqual(result["state"], "idle")
+        # An updated progress value must reset the entire observation window.
+        changed = deepcopy(snap)
+        changed["job"]["progress"] = 19
+        restarted = _reconcile_creality_processing(connection, changed)
+        self.assertEqual(restarted["state"], "processing")
+        self.assertNotEqual(restarted["source_metadata"].get("idle_candidate_since"),
+                            previous["source_metadata"]["idle_candidate_since"])
 
     def test_creality_endpoint_accepts_existing_host_field(self):
         self.assertEqual(
@@ -284,9 +416,69 @@ class PrinterConnectivityAdapterTests(TestCase):
             "state": 1,
             "err": {"errcode": 500, "key": 121},
         })
-        self.assertEqual(errored["state"], "error")
+        self.assertEqual(errored["state"], "printing")
         self.assertEqual(errored["source_metadata"]["activity_state"], "printing")
         self.assertEqual(errored["warnings"], ["Creality error 500 (key 121)"])
+
+    def test_creality_active_error_warning_retained_on_resume_but_paused_error_still_reported(self):
+        common = {
+            "connect": 1, "printFileName": "part.gcode", "printProgress": 5,
+            "err": {"errcode": 500, "key": 121},
+        }
+        resumed = normalise_creality_snapshot({**common, "state": 1})
+        self.assertEqual(resumed["state"], "printing")
+        self.assertEqual(resumed["job"]["progress"], 5)
+        self.assertIn("Creality error 500 (key 121)", resumed["warnings"])
+        paused = normalise_creality_snapshot({**common, "state": 5})
+        self.assertEqual(paused["state"], "error")
+        self.assertEqual(paused["source_metadata"]["activity_state"], "paused")
+        unknown = normalise_creality_snapshot({**common, "state": 9})
+        self.assertEqual(unknown["state"], "error")
+
+    def test_creality_completed_job_overrides_latched_error_only_with_completion_evidence(self):
+        previous_error = {
+            "connect": 1,
+            "printFileName": "finished.gcode",
+            "printProgress": 100,
+            "dProgress": 100,
+            "err": {"errcode": 101, "key": 104},
+            "nozzleTemp": 35,
+            "targetNozzleTemp": 0,
+            "bedTemp0": 33,
+            "targetBedTemp0": 0,
+        }
+        for native_state in (0, 1):
+            with self.subTest(native_state=native_state):
+                finished = normalise_creality_snapshot({
+                    **previous_error, "state": native_state,
+                })
+                self.assertEqual(finished["state"], "complete")
+                self.assertEqual(finished["state_label"], "Complete")
+                self.assertEqual(finished["job"]["progress"], 100)
+                self.assertEqual(finished["warnings"], ["Creality error 101 (key 104)"])
+                self.assertEqual(finished["source_metadata"]["activity_state"], "complete")
+
+        # A cancellation or pause must not be marked successful just because
+        # the firmware has left a 100% counter and a filename in memory.
+        for native_state in (4, 5, 9):
+            with self.subTest(native_state=native_state):
+                interrupted = normalise_creality_snapshot({
+                    **previous_error, "state": native_state,
+                })
+                self.assertEqual(interrupted["state"], "error")
+
+        interrupted_without_error = normalise_creality_snapshot({
+            **previous_error, "state": 4, "err": {"errcode": 0},
+        })
+        self.assertEqual(interrupted_without_error["state"], "cancelled")
+        self.assertEqual(normalise_creality_snapshot({
+            **previous_error, "state": 5, "err": {"errcode": 0},
+        })["state"], "paused")
+
+        incomplete = normalise_creality_snapshot({
+            **previous_error, "state": 0, "printProgress": 99,
+        })
+        self.assertEqual(incomplete["state"], "error")
 
     def test_manufacturer_mqtt_identity_rejects_topic_wildcards(self):
         self.assertEqual(_mqtt_identifier("01P00TESTSERIAL", "Serial"), "01P00TESTSERIAL")
@@ -1013,6 +1205,9 @@ class PrinterConnectivityApiTests(TestCase):
         item = response.json()["item"]
         self.assertEqual(item["adapter"], "moonraker")
         self.assertEqual(item["endpoint_url"], "http://192.168.1.44:7125")
+        self.assertEqual(item["capabilities"]["material_system"]["schema_version"], 1)
+        self.assertEqual(item["capabilities"]["material_system"]["topology"], "unknown")
+        self.assertFalse(item["capabilities"]["material_system"]["available"])
         self.assertEqual(item["status"], "disconnected")
         self.assertTrue(item["supported"])
         self.assertTrue(item["local_first"])
@@ -1294,6 +1489,70 @@ class PrinterConnectivityApiTests(TestCase):
         with self.assertRaises(PrinterConnectionError):
             poll_connection(connection)
 
+
+    def test_every_supported_adapter_exposes_versioned_material_capability(self):
+        from core.printer_connectivity import ADAPTERS, POLLERS
+        snapshot = {"source_metadata": {}, "materials": []}
+        for adapter in POLLERS:
+            with self.subTest(adapter=adapter):
+                connection = PrinterConnection(printer=self.printer, adapter=adapter)
+                result = material_capability_report(connection, snapshot)
+                self.assertEqual(result["schema_version"], 1)
+                self.assertFalse(result["available"])
+                self.assertEqual(result["topology"], "unknown")
+                self.assertFalse(result["physical_toolchange_verified"])
+
+    def test_report_detects_live_feeders_not_model_assumptions(self):
+        for adapter, flag in (
+            ("creality_local", "cfs_connected"),
+            ("bambu_local", "ams_connected"),
+            ("flashforge", "material_station_connected"),
+            ("anycubic", "ace_connected"),
+        ):
+            with self.subTest(adapter=adapter):
+                connection = PrinterConnection(printer=self.printer, adapter=adapter)
+                result = material_capability_report(
+                    connection, {"source_metadata": {flag: True}, "materials": []})
+                self.assertTrue(result["available"])
+                self.assertEqual(result["topology"], "single_nozzle_changer")
+                self.assertEqual(result["detection"], "live_telemetry")
+                self.assertFalse(result["physical_toolchange_verified"])
+
+    def test_moonraker_multiple_heaters_reports_unknown_topology(self):
+        connection = PrinterConnection(printer=self.printer, adapter="moonraker")
+        result = material_capability_report(connection, {
+            "source_metadata": {"tool_names": {"tool0": "extruder", "tool1": "extruder1"}},
+            "materials": [],
+        })
+        self.assertTrue(result["available"])
+        self.assertEqual(result["topology"], "unknown")
+
+    @patch("core.tasks.live_printer_connection_poll_task.delay")
+    def test_upgrade_queues_read_only_capability_refresh_without_reconnect(self, delay_mock):
+        item = PrinterConnection.objects.create(
+            printer=self.printer, adapter="moonraker",
+            endpoint_url="http://printer.local:7125",
+            poll_interval_seconds=3600, status="connected",
+            last_checked_at=timezone.now() - timedelta(seconds=130),
+            capabilities={"job": True},
+        )
+        result = live_printer_connections_tick()
+        self.assertEqual(result["count"], 1)
+        delay_mock.assert_called_once_with(item.pk)
+        item.refresh_from_db()
+        self.assertEqual(item.status, "connecting")
+
+    @patch("core.tasks.live_printer_connection_poll_task.delay")
+    def test_upgrade_refresh_is_bounded_and_does_not_repeat_every_tick(self, delay_mock):
+        PrinterConnection.objects.create(
+            printer=self.printer, adapter="moonraker",
+            endpoint_url="http://printer.local:7125",
+            poll_interval_seconds=3600, status="connected",
+            last_checked_at=timezone.now() - timedelta(seconds=10),
+            capabilities={"job": True},
+        )
+        self.assertEqual(live_printer_connections_tick()["count"], 0)
+        delay_mock.assert_not_called()
 
     @patch("core.tasks.live_printer_connection_poll_task.delay")
     def test_scheduler_queues_only_due_supported_connections(self, delay_mock):

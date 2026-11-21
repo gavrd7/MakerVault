@@ -30,6 +30,41 @@ NOZZLE_KEYS = {"nozzle_diameter", "nozzle diameter", "nozzle_size", "nozzle size
 BED_KEYS = {"curr_bed_type", "bed_type", "bed type", "plate_type", "plate type", "build_plate_type", "build plate type"}
 
 
+def _requested_start_temperatures(text):
+    """Extract requested start temperatures, never measured printer telemetry.
+
+    START_PRINT arguments take precedence for Klipper/Creality profiles.
+    Explicit positive M109/M104 and M190/M140 commands are fallbacks.
+    Ignore initial M104 S0/M140 S0 reset commands and temperature changes
+    during later layers. Report only plausible numeric Celsius values.
+    """
+    found = {}
+    for raw in text.splitlines()[:4000]:
+        if re.match(r"^;\s*(?:LAYER_CHANGE|LAYER:)", raw.strip(), re.I):
+            break
+        line = raw.split(";", 1)[0].strip()
+        if not line:
+            continue
+        if re.match(r"^START_PRINT(?:\s|$)", line, re.I):
+            for kind, label in (("EXTRUDER_TEMP", "nozzle"), ("BED_TEMP", "bed"), ("CHAMBER_TEMP", "chamber")):
+                match = re.search(r"(?:^|\s)" + kind + r"\s*=\s*(\d+(?:\.\d+)?)", line, re.I)
+                if match:
+                    value = float(match.group(1))
+                    if 0 < value <= (500 if label == "nozzle" else 120 if label == "chamber" else 200):
+                        found[label] = value
+        command = re.match(r"^(M104|M109|M140|M190|M141|M191)(?:\s|$)", line, re.I)
+        if command:
+            label = ("nozzle" if command.group(1).upper() in ("M104", "M109")
+                     else "chamber" if command.group(1).upper() in ("M141", "M191") else "bed")
+            match = re.search(r"(?:^|\s)S\s*(\d+(?:\.\d+)?)", line, re.I)
+            if match and label not in found:
+                value = float(match.group(1))
+                if 0 < value <= (500 if label == "nozzle" else 120 if label == "chamber" else 200):
+                    found[label] = value
+    return {"nozzle_c": found.get("nozzle"), "bed_c": found.get("bed"),
+            "chamber_c": found.get("chamber"),
+            "source": "requested_start_gcode" if found else None}
+
 def _print_setup(text):
     """Extract only explicit slicer-declared nozzle and build-plate metadata."""
     nozzle = []
@@ -64,7 +99,8 @@ def _print_setup(text):
             # A label is not evidence of the plate physically fitted.
             bed_type = value
             sources["bed_type"] = key
-    return {"nozzle_diameters_mm": nozzle, "bed_type": bed_type, "sources": sources}
+    return {"nozzle_diameters_mm": nozzle, "bed_type": bed_type, "sources": sources,
+            "temperatures_c": _requested_start_temperatures(text)}
 
 
 HEX_COLOUR = re.compile(r"^#[0-9A-Fa-f]{6}$")
@@ -400,6 +436,9 @@ def inspect_asset(asset):
         raise ValueError("Binary G-code cannot be shown as editable text.")
     text = sample.decode("utf-8", errors="replace")
     report = analyse_text(text, truncated=truncated)
+    if (asset.metadata or {}).get("generated_by") == "makervault-slicer":
+        from .slicer_preview import generated_preview
+        report["slicer_preview"] = generated_preview(text, truncated=truncated)
     preview = sample[:MAX_PREVIEW_BYTES].decode("utf-8", errors="replace")
     if len(sample) > MAX_PREVIEW_BYTES:
         preview = preview.rsplit("\n", 1)[0]

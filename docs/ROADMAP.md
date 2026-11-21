@@ -109,14 +109,41 @@ These are not delivered capabilities or mandatory additions to the v1.0 scope:
 
 Printer maintenance logs, schedules and reminders were removed from the planned milestone at the owner's request. Camera development replaced that scope; maintenance is not silently reintroduced here.
 
-## Future FDM workflow — G-code and local slicing (unscheduled)
+## v1.7.0 — MakerVault Slicer Beta (planned)
 
-Two independently deliverable linked features agreed on 30 October 2026. The first is delivered in v1.6.0; the separate self-hosted slicing engine remains future work:
+The owner-approved release order is to finish the existing **OrcaSlicer +
+Creality Print** integration, then introduce a **working Bambu Studio**
+engine in **v1.7.0**. The slicer UI and all unverified native capabilities
+must be clearly marked **Beta**, with explicit per-engine and per-feature
+limitations. Existing printer/G-code workflows must remain operable without
+the optional slicer worker. Bambu Studio's current catalogue-only support
+does **not** meet the working-engine acceptance condition: a pinned,
+isolated native runner, verified full profiles and real G-code output
+are still required.
+
+**Follow-on plan:** release the next reviewed engine in **v1.7.1**,
+then subsequent engines incrementally in **v1.7.2, ...**, rather than
+blocking v1.7.0 for every upstream slicer. The current PrusaSlicer
+worker prototype is a sensible first follow-on candidate but requires
+its own exact-binary acceptance before the engine is advertised.
+Printer communication remains a separate adapter from offline slicing.
+
+PR #171 is a long-lived draft foundation branch including unrelated
+non-slicer changes. Reconcile its main-branch divergence and isolate
+release scope before merging. Preserve working multi-colour printing
+and manufacturer scripts; retire obsolete diagnostic restrictions only
+when their corresponding production path is confirmed. Release guidance
+and acceptance criteria: [v1.7.0 Slicer Beta release plan](development/slicer-v1.7-beta-release-plan.md).
+
+## Future FDM workflow — G-code and local slicing (background)
+
+
+The v1.6.0 G-code milestone is delivered. **Current next priority: #156, the self-hosted multi-engine MakerVault Slicer**, followed by the connected **MakerVault Weigh Station**. Other planned QoL enhancements rank lower unless reliability/security requires them. The slicer is a separate major milestone and remains incomplete until an end-to-end isolated worker is validated:
 
 1. **[G-code Library and explicit Print Submission (#155)](https://github.com/gavrd7/MakerVault/issues/155):** **Delivered in v1.6.0.** Shared private G-code assets, project/model-revision links, bounded source/XY inspection, immutable edited versions, compatible printer file browsing and upload-only or explicitly confirmed print-start. The release includes printer identity/metadata preflight, readiness checks, a durable command journal and uncertain-outcome handling. Stock K1 native print-start completed a hardware print on clean firmware; K2 mapped-CFS native start and several experimental manufacturers still need hardware validation. No automatic spool-stock deduction or slicing engine. See [implementation and compatibility boundaries](development/gcode-library-and-print-submission.md).
-2. **[Self-Hosted Multi-Engine FDM Slicer (#156)](https://github.com/gavrd7/MakerVault/issues/156):** One responsive MakerVault Slicer UI and one optional local slicing service with individually installable, pinned and isolated engine versions. Evaluate OrcaSlicer and PrusaSlicer first; subsequently Creality Print, Bambu Studio, CuraEngine, ElegooSlicer, Snapmaker Orca and Anycubic Slicer Next, subject to validated headless CLI operation, licensing and profile support. Support printer/plate/nozzle, engine-specific filament/process profiles linked to physical MakerVault inventory, and searchable Basic/Simple/Advanced settings; model manipulation and multimaterial incrementally.
+2. **[Self-Hosted Multi-Engine FDM Slicer (#156)](https://github.com/gavrd7/MakerVault/issues/156):** One responsive MakerVault Slicer UI and one optional local slicing service with individually installable, pinned and isolated engine versions. Prioritise an independently verified OrcaSlicer worker (the default), followed by Creality Print, Bambu Studio, PrusaSlicer, Snapmaker Orca, and then CuraEngine, ElegooSlicer, Anycubic Slicer Next and other useful engines, subject to validated headless CLI operation, licensing and profile support. Support printer/plate/nozzle, engine-specific filament/process profiles linked to physical MakerVault inventory, and searchable Basic/Simple/Advanced settings; model manipulation and multimaterial incrementally.
 
-**Design principles:** Slicing computation runs only on the self-hoster's own infrastructure, not MakerVault-hosted cloud infrastructure; the main application remains operable without the optional restricted worker. Reuse existing file, model, filament and printer infrastructure. The SimplyPrint mobile multi-engine UX is a functional reference, not a request to reproduce its UI. Start G-code work first; defer slicer implementation until current hardware/MakerTags work is stable.
+**Design principles:** Slicing computation runs only on the self-hoster's own infrastructure, not MakerVault-hosted cloud infrastructure; the main application remains operable without the optional restricted worker. Reuse existing file, model, filament and printer infrastructure. The SimplyPrint mobile multi-engine UX is a functional reference, not a request to reproduce its UI. G-code work is complete in v1.6.0; slicer development starts in the isolated [foundation branch](https://github.com/gavrd7/MakerVault/tree/feature/self-hosted-slicer-foundation), with the worker and UI enabled only after acceptance gates. See [slicer architecture and acceptance plan](development/self-hosted-slicer.md).
 
 ## Post-v1 exploration — optional hardware tag reader
 

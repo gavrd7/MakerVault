@@ -12,6 +12,7 @@ from core.camera_relay import (
     hls_resource,
     stream_name,
     valid_bridge_signature,
+    webrtc_answer,
 )
 from core.models import Printer, PrinterConnection
 
@@ -55,6 +56,39 @@ class CameraRelayHelperTests(SimpleTestCase):
         self.assertEqual(bounded.call_args.kwargs["params"]["src"], "makervault_test")
 
     @patch("core.camera_relay._bounded_get")
+    @patch("core.camera_relay.ensure_stream", return_value="makervault_test")
+    def test_ios_transport_uses_mpeg_ts_without_mp4_flag(self, ensure, bounded):
+        bounded.return_value = (b"#EXTM3U\\n#EXT-X-STREAM-INF:BANDWIDTH=1000000\\nhls/playlist.m3u8?id=test123\\n", "application/vnd.apple.mpegurl")
+        hls_master(uuid.uuid4(), "camera-1", mpeg_ts=True)
+        self.assertEqual(bounded.call_args.kwargs["params"], {"src": "makervault_test"})
+
+    @patch("core.camera_relay.ensure_stream", return_value="makervault_test")
+    @patch("core.camera_relay._SESSION.post")
+    def test_webrtc_offer_exchange_is_private_and_bounded(self, post, ensure):
+        reply = MagicMock(status_code=200, content=b"v=0\\r\\nm=video 9 UDP/TLS/RTP/SAVPF 96\\r\\n")
+        post.return_value = reply
+        offer = "v=0\\r\\nm=video 9 UDP/TLS/RTP/SAVPF 96\\r\\n"
+        answer = webrtc_answer(uuid.uuid4(), "camera-1", offer)
+        self.assertEqual(answer, reply.content.decode())
+        self.assertEqual(post.call_args.kwargs["params"], {"src": "makervault_test"})
+        self.assertEqual(post.call_args.kwargs["headers"], {"Content-Type": "application/sdp"})
+        self.assertFalse(post.call_args.kwargs["allow_redirects"])
+        reply.close.assert_called_once()
+        with self.assertRaisesMessage(ValueError, "Only receive-only video"):
+            webrtc_answer(uuid.uuid4(), "camera-1", offer + "m=audio 9 UDP 0\\r\\n")
+
+    @patch("core.camera_relay._bounded_get")
+    def test_segment_sequence_is_forwarded_to_go2rtc(self, bounded):
+        bounded.return_value = (b"segment", "video/iso.segment")
+        data, _ = hls_resource("abc123", "segment.m4s", sequence="1042")
+        self.assertEqual(data, b"segment")
+        self.assertEqual(bounded.call_args.kwargs["params"], {"id": "abc123", "n": "1042"})
+        with self.assertRaisesMessage(ValueError, "Invalid HLS segment sequence"):
+            hls_resource("abc123", "segment.m4s", sequence="../test")
+        with self.assertRaisesMessage(ValueError, "Invalid HLS segment sequence"):
+            hls_resource("abc123", "playlist.m3u8", sequence="1042")
+
+    @patch("core.camera_relay._bounded_get")
     def test_hls_resource_rejects_unknown_resource(self, bounded):
         with self.assertRaisesMessage(ValueError, "Unsupported camera relay resource"):
             hls_resource("abc123", "debug")
@@ -93,6 +127,33 @@ class CameraRelayApiTests(TestCase):
         )
         self.client.force_login(self.owner)
 
+    @patch("core.camera_views.webrtc_answer", return_value="v=0\\r\\nm=video 9 UDP 96\\r\\n")
+    def test_webRTC_signalling_is_owner_scoped_and_uses_existing_source(self, answer):
+        url = self.base.replace("hls/", "webrtc/offer/")
+        offer = "v=0\\r\\nm=video 9 UDP 96\\r\\n"
+        result = self.client.post(url, {"sdp": offer}, content_type="application/json")
+        self.assertEqual(result.status_code, 200, result.content)
+        self.assertEqual(result.json()["type"], "answer")
+        answer.assert_called_once_with(self.connection.pk, "k2-camera", offer)
+        self.client.force_login(self.other)
+        self.assertEqual(self.client.post(url, {"sdp": offer}, content_type="application/json").status_code, 404)
+        answer.assert_called_once()
+
+    @patch("core.camera_views.webrtc_answer")
+    def test_webrtc_signalling_rejects_disabled_and_non_webrtc_sources(self, answer):
+        url = self.base.replace("hls/", "webrtc/offer/")
+        offer = "v=0\\r\\nm=video 9 UDP 96\\r\\n"
+        self.connection.enabled = False
+        self.connection.save(update_fields=["enabled"])
+        self.assertEqual(self.client.post(url, {"sdp": offer}, content_type="application/json").status_code, 409)
+        self.connection.enabled = True
+        config = dict(self.connection.config)
+        config["cameras"] = [{**config["cameras"][0], "mode": "snapshot", "url": "http://printer.lan/snap.jpg"}]
+        self.connection.config = config
+        self.connection.save(update_fields=["enabled", "config"])
+        self.assertEqual(self.client.post(url, {"sdp": offer}, content_type="application/json").status_code, 400)
+        answer.assert_not_called()
+
     @patch("core.camera_views.hls_master")
     def test_owner_can_start_authenticated_hls_session(self, master):
         master.return_value = (
@@ -104,6 +165,39 @@ class CameraRelayApiTests(TestCase):
         self.assertIn(b"playlist.m3u8?id=abc123", response.content)
         self.assertNotIn(b"hls/playlist", response.content)
         master.assert_called_once_with(self.connection.pk, "k2-camera")
+
+    @patch("core.camera_views.hls_master")
+    def test_explicit_ts_master_request_is_isolated_from_default(self, master):
+        master.return_value = "#EXTM3U\n#EXT-X-STREAM-INF:BANDWIDTH=1000000\nhls/playlist.m3u8?id=abc123\n"
+        self.assertEqual(self.client.get(self.base + "master.m3u8?format=ts").status_code, 200)
+        master.assert_called_once_with(self.connection.pk, "k2-camera", mpeg_ts=True)
+        master.reset_mock()
+        self.assertEqual(self.client.get(self.base + "master.m3u8").status_code, 200)
+        master.assert_called_once_with(self.connection.pk, "k2-camera")
+
+    @patch("core.camera_views.hls_resource")
+    @patch("core.camera_views.hls_master")
+    def test_segment_uris_retain_distinct_sequence_values(self, master, resource):
+        master.return_value = "#EXTM3U\n#EXT-X-STREAM-INF:BANDWIDTH=1000000\nhls/playlist.m3u8?id=abc123\n"
+        self.client.get(self.base + "master.m3u8")
+        resource.return_value = (
+            b'#EXTM3U\n#EXT-X-MEDIA-SEQUENCE:1042\n'
+            b'#EXT-X-MAP:URI="init.mp4?id=abc123"\n'
+            b'#EXTINF:0.5,\nsegment.m4s?id=abc123&n=1042\n'
+            b'#EXTINF:0.5,\nsegment.m4s?id=abc123&n=1043\n',
+            "application/vnd.apple.mpegurl",
+        )
+        playlist = self.client.get(self.base + "playlist.m3u8?id=abc123")
+        self.assertEqual(playlist.status_code, 200)
+        self.assertIn(b"segment.m4s?id=abc123&n=1042", playlist.content)
+        self.assertIn(b"segment.m4s?id=abc123&n=1043", playlist.content)
+        self.assertNotIn(b"hls/segment.m4s", playlist.content)
+        resource.return_value = (b"segment", "video/iso.segment")
+        response = self.client.get(self.base + "segment.m4s?id=abc123&n=1042")
+        self.assertEqual(response.status_code, 200)
+        resource.assert_called_with("abc123", "segment.m4s", sequence="1042")
+        denied = self.client.get(self.base + "segment.m4s?id=abc123&n=../test")
+        self.assertEqual(denied.status_code, 400)
 
     @patch("core.camera_views.hls_resource")
     @patch("core.camera_views.hls_master")
@@ -117,7 +211,7 @@ class CameraRelayApiTests(TestCase):
         response = self.client.get(self.base + "playlist.m3u8?id=abc123")
         self.assertEqual(response.status_code, 200, response.content)
         self.assertIn(b"segment.m4s?id=abc123", response.content)
-        resource.assert_called_once_with("abc123", "playlist.m3u8")
+        resource.assert_called_once_with("abc123", "playlist.m3u8", sequence=None)
 
         self.client.force_login(self.other)
         denied = self.client.get(self.base + "playlist.m3u8?id=abc123")

@@ -438,6 +438,17 @@ def live_printer_connections_tick():
                     if item.last_checked_at + timedelta(seconds=lease_seconds) > now:
                         continue
                 next_due = item.last_checked_at + timedelta(seconds=item.poll_interval_seconds)
+                report = (item.capabilities or {}).get("material_system")
+                schema_old = not isinstance(report, dict) or report.get("schema_version") != 1
+                if schema_old:
+                    # A once-per-upgrade read-only poll refreshes legacy
+                    # capability data without a reconnect or manual action.
+                    # Bound retries on unreachable printers to >=120 seconds
+                    # instead of polling them on every scheduler tick.
+                    refresh_due = item.last_checked_at + timedelta(
+                        seconds=min(item.poll_interval_seconds, 120))
+                    if refresh_due <= now:
+                        next_due = refresh_due
                 if next_due > now:
                     continue
             # Reserve the poll window before queueing so a 10-second beat does
@@ -486,3 +497,36 @@ def scheduled_creality_material_database_tick():
         except MaterialDatabaseError:
             failed += 1
     return {"checked": checked, "failed": failed}
+
+
+@shared_task(bind=True, max_retries=0, acks_late=True, reject_on_worker_lost=False)
+def execute_slice_job_task(self, job_id):
+    """One explicit slicing attempt; never automatically retry or print."""
+    from .slicer_execution import process_queued_job
+    return process_queued_job(job_id)
+
+
+@shared_task(bind=True, max_retries=0, acks_late=True, reject_on_worker_lost=False)
+def warm_gcode_preview_task(self, asset_id):
+    """Best-effort cache preparation after G-code is safely stored.
+
+    Does not modify the G-code or affect slicing/printing success. The source
+    remains owner-scoped; cache keys include file identity and owner.
+    """
+    import logging
+    from .models import FileAsset
+    from .slicer_preview_cache import warm_asset_high_fidelity
+    log = logging.getLogger(__name__)
+    asset = FileAsset.objects.filter(pk=asset_id).first()
+    if not asset or (asset.metadata or {}).get("extension") != ".gcode":
+        return {"status": "skipped"}
+    try:
+        with asset.file.storage.open(asset.file.name, "rb") as handle:
+            raw = handle.read(32 * 1024 * 1024 + 1)
+        if len(raw) > 32 * 1024 * 1024:
+            return {"status": "unsupported_size"}
+        ok = warm_asset_high_fidelity(asset, raw)
+        return {"status": "ready" if ok else "skipped"}
+    except (OSError, UnicodeError, ValueError) as exc:
+        log.warning("Preview cache warmup skipped for %s: %s", asset_id, type(exc).__name__)
+        return {"status": "skipped"}

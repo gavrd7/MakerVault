@@ -19,6 +19,188 @@ from core.printer_gcode_submission import (
 )
 
 
+class SupervisedCrealityTestPreflightTests(SimpleTestCase):
+    """A supervised test may be reviewed without sending any printer command."""
+
+    @patch("core.printer_gcode_submission.creality_cfs_context")
+    @patch("core.models.PrinterFilamentSlot.objects.filter")
+    @patch("core.models.SliceJob.objects.select_related")
+    def test_exact_small_owned_slice_and_live_bays_required(self, fetch_job, fetch_slots, context):
+        import hashlib
+        from core.printer_gcode_submission import _supervised_creality_test_preflight
+        raw = (
+            b"; filament_type = PLA;PLA;PLA;PLA\n"
+            b"; filament_colour = #7C7D7E;#FADD4D;#7C7D7E;#FADD4D\n"
+            b"T0\nM83\nG1 X1 Y1 E0.1\nT1\nG1 X2 Y2 E0.1\n"
+        )
+        sha = hashlib.sha256(raw).hexdigest()
+        asset = SimpleNamespace(
+            sha256=sha,
+            metadata={"multi_material_test": True,
+                      "engine": "crealityprint",
+                      "printer_submission_verified": False,
+                      "printer_id": "k2", "slice_job_id": "job"},
+            file=SimpleNamespace(
+                size=len(raw), name="owned.gcode",
+                storage=SimpleNamespace(open=lambda *_: BytesIO(raw)),
+            ),
+        )
+        slot = lambda name, index, color: {
+            "printer_id": "k2", "slot_id": name, "slot_index": index,
+        }
+        objects = [
+            {"color": "#7C7D7E", "material_slot": slot("grey", 2, "#7C7D7E")},
+            {"color": "#FADD4D", "material_slot": slot("yellow", 3, "#FADD4D")},
+        ]
+        job = SimpleNamespace(pk="job", printer_id="k2",
+                              engine="crealityprint", status="completed",
+                              output_asset=asset,
+                              settings={"plate_objects": objects})
+        fetch_job.return_value.filter.return_value.first.return_value = job
+        fetch_slots.return_value = [
+            SimpleNamespace(pk="grey", printer_id="k2", system="creality_cfs",
+                            is_loaded=True, unit_index=0, slot_index=2),
+            SimpleNamespace(pk="yellow", printer_id="k2", system="creality_cfs",
+                            is_loaded=True, unit_index=0, slot_index=3),
+        ]
+        context.return_value = {"verified": True, "connected": True, "slots": [
+            {"box_id": 1, "slot_id": 2, "label": "1C",
+             "material": "PLA", "color_hex": "#7C7D7E"},
+            {"box_id": 1, "slot_id": 3, "label": "1D",
+             "material": "PLA", "color_hex": "#FADD4D"},
+        ]}
+        printer = connection("creality_local")
+        printer.printer = SimpleNamespace(model="K2", catalog_model=None)
+        printer.printer_id = "k2"
+        payload = {
+            "creality_supervised_test": True,
+            "creality_test_confirmed": True,
+            "creality_test_sha256": sha,
+            "cfs_mode": "mapped", "action": "print", "source": "makervault",
+            "cfs_mapping": [
+                {"tool_index": 0, "slot_label": "1C"},
+                {"tool_index": 1, "slot_label": "1D"},
+            ],
+        }
+        user = SimpleNamespace(pk="owner")
+        report = _supervised_creality_test_preflight(printer, user, asset, payload)
+        self.assertTrue(report["gcode_material_preflight_passed"])
+        self.assertFalse(report["printer_submission_verified"])
+        for changed, reason in (
+            ({"creality_test_sha256": "0"*64}, "identity"),
+            ({"creality_test_confirmed": False}, "explicit"),
+            ({"cfs_mapping": [
+                {"tool_index": 0, "slot_label": "1D"},
+                {"tool_index": 1, "slot_label": "1C"},
+            ]}, "differs"),
+        ):
+            with self.subTest(changed=changed):
+                with self.assertRaisesRegex(GcodeSubmissionError, reason):
+                    _supervised_creality_test_preflight(
+                        printer, user, asset, {**payload, **changed})
+        context.return_value["verified"] = False
+        with self.assertRaisesRegex(GcodeSubmissionError, "preflight failed"):
+            _supervised_creality_test_preflight(printer, user, asset, payload)
+        asset.file.size = 3 * 1024 * 1024
+        with self.assertRaisesRegex(GcodeSubmissionError, "2 MiB"):
+            _supervised_creality_test_preflight(printer, user, asset, payload)
+
+
+class UnverifiedMaterialSubmissionTests(SimpleTestCase):
+    @patch("core.printer_gcode_submission.FileAsset.objects.filter")
+    def test_multicolour_test_gcode_cannot_be_uploaded_or_started(self, fetch):
+        import uuid
+        from core.printer_gcode_submission import submit
+        asset = SimpleNamespace(
+            metadata={"extension": ".gcode", "multi_material_test": True},
+            file=SimpleNamespace(size=1024),
+        )
+        fetch.return_value.first.return_value = asset
+        for action in ("upload", "print"):
+            with self.subTest(action=action):
+                with self.assertRaisesRegex(GcodeSubmissionError, "not approved"):
+                    submit(SimpleNamespace(), SimpleNamespace(), {
+                        "confirmed": True, "source": "makervault", "action": action,
+                        "request_id": str(uuid.uuid4()),
+                        "file_asset_id": str(uuid.uuid4()),
+                    })
+
+
+    @patch("core.printer_gcode_submission.FileAsset.objects.filter")
+    def test_variable_height_test_gcode_cannot_be_uploaded_or_started(self, fetch):
+        import uuid
+        from core.printer_gcode_submission import submit
+        asset = SimpleNamespace(
+            metadata={"extension": ".gcode", "variable_layer_test": True},
+            file=SimpleNamespace(size=1024),
+        )
+        fetch.return_value.first.return_value = asset
+        for action in ("upload", "print"):
+            with self.subTest(action=action):
+                with self.assertRaisesRegex(GcodeSubmissionError, "not approved"):
+                    submit(SimpleNamespace(), SimpleNamespace(), {
+                        "confirmed": True, "source": "makervault", "action": action,
+                        "request_id": str(uuid.uuid4()),
+                        "file_asset_id": str(uuid.uuid4()),
+                    })
+
+    @patch("core.printer_gcode_submission.FileAsset.objects.filter")
+    def test_support_paint_test_gcode_cannot_be_uploaded_or_started(self, fetch):
+        import uuid
+        from core.printer_gcode_submission import submit
+        asset = SimpleNamespace(
+            metadata={"extension": ".gcode", "support_paint_test": True},
+            file=SimpleNamespace(size=1024),
+        )
+        fetch.return_value.first.return_value = asset
+        for action in ("upload", "print"):
+            with self.subTest(action=action):
+                with self.assertRaisesRegex(GcodeSubmissionError, "not approved"):
+                    submit(SimpleNamespace(), SimpleNamespace(), {
+                        "confirmed": True, "source": "makervault", "action": action,
+                        "request_id": str(uuid.uuid4()),
+                        "file_asset_id": str(uuid.uuid4()),
+                    })
+
+    @patch("core.printer_gcode_submission.FileAsset.objects.filter")
+    def test_seam_paint_test_gcode_cannot_be_uploaded_or_started(self, fetch):
+        import uuid
+        from core.printer_gcode_submission import submit
+        asset = SimpleNamespace(
+            metadata={"extension": ".gcode", "seam_paint_test": True},
+            file=SimpleNamespace(size=1024),
+        )
+        fetch.return_value.first.return_value = asset
+        for action in ("upload", "print"):
+            with self.subTest(action=action):
+                with self.assertRaisesRegex(GcodeSubmissionError, "not approved"):
+                    submit(SimpleNamespace(), SimpleNamespace(), {
+                        "confirmed": True, "source": "makervault", "action": action,
+                        "request_id": str(uuid.uuid4()),
+                        "file_asset_id": str(uuid.uuid4()),
+                    })
+
+
+    @patch("core.printer_gcode_submission.FileAsset.objects.filter")
+    def test_fuzzy_skin_paint_test_gcode_cannot_be_uploaded_or_started(self, fetch):
+        import uuid
+        from core.printer_gcode_submission import submit
+        asset=SimpleNamespace(
+            metadata={"extension":".gcode", "fuzzy_skin_paint_test":True},
+            file=SimpleNamespace(size=1024),
+        )
+        fetch.return_value.first.return_value=asset
+        for action in ("upload","print"):
+            with self.subTest(action=action):
+                with self.assertRaisesRegex(GcodeSubmissionError, "not approved"):
+                    submit(SimpleNamespace(),SimpleNamespace(),{
+                        "confirmed":True,"source":"makervault","action":action,
+                        "request_id":str(uuid.uuid4()),
+                        "file_asset_id":str(uuid.uuid4()),
+                    })
+
+
+
 def connection(adapter, *, enabled=True, status="connected", state="idle"):
     return SimpleNamespace(
         adapter=adapter,
@@ -335,6 +517,35 @@ class GcodePrinterContractTests(SimpleTestCase):
         _require_action_ready(native, "print", use_sliced_cfs=True)
         moon.controls_enabled = False
         self.assertFalse(availability(native)["can_start_sliced_mapping"])
+
+    @patch("core.printer_gcode_submission.PrinterConnection.objects.filter")
+    def test_k2_mapped_readiness_explains_stale_or_busy_state(self, filtered):
+        from datetime import timedelta
+        native = connection("creality_local")
+        native.printer = SimpleNamespace(model="K2", catalog_model=None)
+        native.printer_id = "printer-one"
+        native.last_snapshot["source_metadata"] = {"cfs_connected": True}
+        native.last_snapshot["materials"] = [{
+            "system": "creality_cfs", "unit_index": 0, "slot_index": 2,
+            "material": "PLA", "color_hex": "#7C7D7E",
+        }]
+        filtered.return_value.order_by.return_value = []
+        ready = availability(native)
+        self.assertTrue(ready["can_start_mapped_cfs"])
+        self.assertEqual(ready["mapped_cfs_blockers"], [])
+        native.last_snapshot["state"] = "printing"
+        busy = availability(native)
+        self.assertFalse(busy["can_start_mapped_cfs"])
+        self.assertTrue(any("not confirmed idle" in reason
+                            for reason in busy["mapped_cfs_blockers"]))
+        native.last_snapshot["state"] = "idle"
+        native.last_seen_at = timezone.now() - timedelta(minutes=3)
+        stale = availability(native)
+        self.assertFalse(stale["can_start_mapped_cfs"])
+        self.assertTrue(any("older than 60 seconds" in reason
+                            for reason in stale["mapped_cfs_blockers"]))
+        self.assertTrue(any("Fresh native CFS" in reason
+                            for reason in stale["mapped_cfs_blockers"]))
 
     @patch("core.printer_gcode_submission.PrinterConnection.objects.filter")
     def test_original_mapping_option_persists_when_printer_is_busy(self, filtered):
@@ -780,6 +991,17 @@ class NativeGcodeAdapterTests(SimpleTestCase):
         self.assertEqual(mapped, [{
             "id": "T1A", "type": "PLA", "color": "#ffffff", "boxId": 1, "materialId": 2,
         }])
+        # Distinct sliced tools cannot both target the same physical bay,
+        # even when their materials and colours happen to agree.
+        two_requirements = [
+            {"tool_index": 0, "material": "PLA", "color_hex": "#ffffff"},
+            {"tool_index": 1, "material": "PLA", "color_hex": "#ffffff"},
+        ]
+        with self.assertRaisesRegex(GcodeSubmissionError, "same physical CFS bay"):
+            _mapped_cfs_entries(moon, two_requirements, [
+                {"tool_index": 0, "slot_label": "1C"},
+                {"tool_index": 1, "slot_label": "1C"},
+            ])
         req[0]["material"] = "PETG"
         with self.assertRaisesRegex(GcodeSubmissionError, "Material mismatch"):
             _mapped_cfs_entries(moon, req, chosen)
@@ -789,6 +1011,27 @@ class NativeGcodeAdapterTests(SimpleTestCase):
         native.last_seen_at = timezone.now() - timezone.timedelta(minutes=5)
         with self.assertRaises(GcodeSubmissionError):
             _mapped_cfs_entries(moon, req, chosen)
+
+    @patch("core.creality_gcode.asyncio.run")
+    def test_ambiguous_creality_cfs_mapping_rejected_before_network(self, run):
+        from core.creality_gcode import start_cfs_mapped
+        native = connection("creality_local")
+        first = {"id": "T1A", "type": "PLA", "color": "#7C7D7E",
+                 "boxId": 1, "materialId": 2}
+        second = {"id": "T1B", "type": "PLA", "color": "#FADD4D",
+                  "boxId": 1, "materialId": 3}
+        for invalid in (
+            [first, {**second, "id": "T1A"}],
+            [first, {**second, "materialId": 2}],
+            [{**first, "boxId": True}],
+            [{**first, "materialId": False}],
+            [{**first, "color": None}],
+            [{**first, "type": 123}],
+        ):
+            with self.subTest(mapping=invalid):
+                with self.assertRaises(CrealityGcodeError):
+                    start_cfs_mapped(native, "fixture.gcode", invalid)
+        run.assert_not_called()
 
     @patch("core.creality_gcode.websockets.connect")
     def test_mapped_creality_command_sequence_once(self, connect):
@@ -846,8 +1089,65 @@ class NativeGcodeAdapterTests(SimpleTestCase):
         verify.assert_called_once_with(moon, "mv_ghost.gcode", 1200)
         self.assertEqual(filtered.call_args.kwargs["printer_id"], "one-printer")
         moon.status = "disconnected"
+        with patch("core.creality_gcode.list_files", return_value=[
+            {"path": "mv_ghost.gcode", "size_bytes": 1200}
+        ]) as native_list:
+            self.assertEqual(
+                _verify_creality_upload(native, "mv_ghost.gcode", 1200)["size_bytes"], 1200
+            )
+            native_list.assert_called_once_with(native)
+
+    @patch("time.sleep")
+    @patch("core.printer_gcode_submission.PrinterConnection.objects.filter")
+    @patch("core.creality_gcode.list_files")
+    def test_native_creality_upload_needs_exact_file_and_size(self, browse, filtered, pause):
+        native = connection("creality_local")
+        native.printer_id = "one-printer"
+        filtered.return_value.order_by.return_value = []
+        for rows in (
+            [], [{"path": "mv_ghost.gcode", "size_bytes": None}],
+            [{"path": "mv_ghost.gcode", "size_bytes": 1199}],
+            [{"path": "other.gcode", "size_bytes": 1200}],
+            [{"path": "mv_ghost.gcode", "size_bytes": 1200},
+             {"path": "mv_ghost.gcode", "size_bytes": 1200}],
+        ):
+            with self.subTest(rows=rows):
+                browse.return_value = rows
+                with self.assertRaises(GcodeSubmissionError):
+                    _verify_creality_upload(native, "mv_ghost.gcode", 1200)
+        browse.side_effect = CrealityGcodeError("Unrecognised reply")
         with self.assertRaises(GcodeSubmissionError):
             _verify_creality_upload(native, "mv_ghost.gcode", 1200)
+
+    @patch("time.sleep")
+    @patch("core.printer_gcode_submission.PrinterConnection.objects.filter")
+    @patch("core.creality_gcode.list_files")
+    def test_native_creality_eventual_consistency_uses_read_only_probes(self, browse, filtered, pause):
+        native = connection("creality_local")
+        native.printer_id = "one-printer"
+        filtered.return_value.order_by.return_value = []
+        browse.side_effect = [
+            [],
+            [{"path": "mv_ghost.gcode", "size_bytes": None}],
+            [{"path": "mv_ghost.gcode", "size_bytes": 1200}],
+        ]
+        result = _verify_creality_upload(native, "mv_ghost.gcode", 1200)
+        self.assertEqual(result["size_bytes"], 1200)
+        self.assertEqual(browse.call_count, 3)
+        self.assertEqual(pause.call_count, 2)
+
+    @patch("time.sleep")
+    @patch("core.printer_gcode_submission.PrinterConnection.objects.filter")
+    @patch("core.creality_gcode.list_files")
+    def test_native_creality_unverified_upload_reports_safe_reason(self, browse, filtered, pause):
+        native = connection("creality_local")
+        native.printer_id = "one-printer"
+        filtered.return_value.order_by.return_value = []
+        browse.return_value = [{"path": "mv_ghost.gcode", "size_bytes": None}]
+        with self.assertRaisesRegex(GcodeSubmissionError, "size-not-reported") as caught:
+            _verify_creality_upload(native, "mv_ghost.gcode", 1200)
+        self.assertNotIn("mv_ghost.gcode", str(caught.exception))
+        self.assertEqual(browse.call_count, 3)
 
     @patch("core.creality_gcode.asyncio.run")
     def test_creality_start_rejects_path_traversal_without_websocket(self, worker):
@@ -872,7 +1172,12 @@ class NativeGcodeAdapterTests(SimpleTestCase):
     def test_creality_browser_preserves_real_error(self, run):
         from core.creality_gcode import list_files
         printer = connection("creality_local")
-        run.side_effect = CrealityGcodeError("Unrecognized printer file list")
+        def fail_after_closing_coroutine(coroutine):
+            # The mocked event-loop runner does not consume its coroutine.
+            # Close it explicitly so the test cannot leak a RuntimeWarning.
+            coroutine.close()
+            raise CrealityGcodeError("Unrecognized printer file list")
+        run.side_effect = fail_after_closing_coroutine
         with self.assertRaisesRegex(CrealityGcodeError, "Unrecognized printer"):
             list_files(printer)
 

@@ -534,6 +534,17 @@ def poll_moonraker(endpoint_url: str, config: dict | None = None) -> dict:
     status = result.get("status") or {}
     print_stats = status.get("print_stats") or {}
     print_info = print_stats.get("info") or {}
+    pause_resume = {}
+    # pause_resume is a Klipper optional object. Query it separately only
+    # when print_stats indicates an active job, so a printer without the
+    # module never loses its whole telemetry snapshot.
+    if (str(print_stats.get("state") or "").strip().lower() == "printing"
+            and print_stats.get("filename")):
+        try:
+            optional = _get(base + "/printer/objects/query?pause_resume", headers=headers)
+            pause_resume = ((optional.get("result") or {}).get("status") or {}).get("pause_resume") or {}
+        except PrinterConnectionError:
+            pause_resume = {}
     display = status.get("display_status") or {}
     virtual_sd = status.get("virtual_sdcard") or {}
     extruder = status.get("extruder") or {}
@@ -579,6 +590,14 @@ def poll_moonraker(endpoint_url: str, config: dict | None = None) -> dict:
         "error": "error",
     }
     normalised_state = state_map.get(state, state)
+    # Klipper can signal a paused macro through pause_resume while print_stats
+    # still reflects the last reported 'printing' status. Trust the explicit
+    # flag only for a currently identified, nonterminal print.
+    if (normalised_state in {"printing", "paused"}
+            and print_stats.get("filename")
+            and isinstance(pause_resume, dict)
+            and pause_resume.get("is_paused") is True):
+        normalised_state = "paused"
     progress = _number(virtual_sd.get("progress"))
     if progress is None:
         progress = _number(display.get("progress"))
@@ -731,10 +750,6 @@ def _creality_state(payload: dict, *, ignore_error=False) -> str:
     if not ignore_error and errcode not in (None, 0):
         return "error"
 
-    self_test = _finite_number(payload.get("withSelfTest"))
-    if self_test is not None and 1 <= self_test <= 99:
-        return "self-testing"
-
     filename = str(payload.get("printFileName") or "").strip()
     progress = _finite_number(
         payload.get("printProgress")
@@ -744,13 +759,20 @@ def _creality_state(payload: dict, *, ignore_error=False) -> str:
     raw_state = _finite_number(payload.get("state"))
     raw_state = int(raw_state) if raw_state is not None else None
 
+    # A K2 can pause during self-test before G-code extrusion begins. The
+    # explicit paused state must win over the self-test progress marker so
+    # Resume remains available when the operator clears a build-plate warning.
+    if filename and raw_state == 5:
+        return "paused"
+    if filename and raw_state == 4:
+        return "cancelled"
+    self_test = _finite_number(payload.get("withSelfTest"))
+    if self_test is not None and 1 <= self_test <= 99:
+        return "self-testing"
+
     if filename:
         if progress is not None and progress >= 100:
             return "complete"
-        if raw_state == 5:
-            return "paused"
-        if raw_state == 4:
-            return "cancelled"
         if raw_state == 1:
             return "printing"
         if raw_state == 0:
@@ -839,6 +861,19 @@ def normalise_creality_snapshot(payload: dict) -> dict:
 
     state = _creality_state(payload)
     activity_state = _creality_state(payload, ignore_error=True)
+    # K-series firmware may keep an old errcode latched after the user
+    # dismisses a warning. Trust *unambiguous* job telemetry over that
+    # historical error while retaining the raw warning for diagnostics.
+    # Do not let 100% alone override an explicit pause/cancel/failure state:
+    # those signals may remain after an interrupted print.
+    raw_state = _finite_number(payload.get("state"))
+    raw_state = int(raw_state) if raw_state is not None else None
+    filename_present = bool(str(payload.get("printFileName") or "").strip())
+    if state == "error" and filename_present:
+        if activity_state == "printing" and raw_state == 1:
+            state = "printing"
+        elif activity_state == "complete" and raw_state in (0, 1):
+            state = "complete"
     progress = _finite_number(
         payload.get("printProgress")
         if payload.get("printProgress") is not None
@@ -1048,9 +1083,107 @@ def _creality_native_idle_evidence(snapshot):
     return True
 
 
+CREALITY_LATCHED_IDLE_MIN_SECONDS = 180
+
+
+def _creality_latched_idle_signature(snapshot):
+    """Return the complete inactive, *latched* job identity or fail closed.
+
+    K2 firmware can retain a cancelled file's progress/remaining values while
+    state=0, deviceState=0, heaters=off and the touchscreen/app show Idle.
+    Neither counters nor a screen label alone proves a new print is safe.
+    """
+    if not isinstance(snapshot, dict) or snapshot.get("online") is not True:
+        return None
+    if snapshot.get("state") != "processing":
+        return None
+    meta = snapshot.get("source_metadata") or {}
+    if meta.get("raw_state") != 0 or meta.get("device_state") != 0:
+        return None
+    if meta.get("power_loss_recovery"):
+        return None
+    if str(meta.get("material_status")) not in {"0", "0.0"}:
+        return None
+    if meta.get("activity_state") != "processing":
+        return None
+    temps = snapshot.get("temperatures") or {}
+    for key in ("tool0", "bed"):
+        target = _finite_number((temps.get(key) or {}).get("target_c"))
+        if target is None or target != 0:
+            return None
+    job = snapshot.get("job") or {}
+    if not job.get("file_name"):
+        return None
+    if _finite_number(job.get("elapsed_seconds")) != 0:
+        return None
+    if _finite_number(job.get("current_layer")) != 0:
+        return None
+    progress = _finite_number(job.get("progress"))
+    remaining = _finite_number(job.get("remaining_seconds"))
+    if progress is None or not 0 < progress < 100 or remaining is None or remaining <= 0:
+        return None
+    # Use all job identity and counter signals, so any new activity resets
+    # the countdown even if Creality keeps the same file name.
+    return [str(job["file_name"]), progress, remaining,
+            str(meta.get("print_id") or ""), str(meta.get("print_start_time") or "")]
+
+
+def _creality_latched_idle_evidence(connection, snapshot):
+    """Require an unchanged, independent native poll history for 3 minutes."""
+    signature = _creality_latched_idle_signature(snapshot)
+    if signature is None:
+        return False, None, None
+    previous = (getattr(connection, "last_snapshot", None) or {}).get("source_metadata") or {}
+    previous_signature = previous.get("idle_candidate_signature")
+    previous_since = previous.get("idle_candidate_since")
+    now = timezone.now()
+    # Once the same inactive, latched printer response has been confirmed,
+    # keep it idle on subsequent independent polls. Previously the first
+    # confirmed poll discarded the candidate and the very next poll returned
+    # to "Preparing" with the same unchanged old job counters.
+    # Any changed signature or active state invalidates this confirmation.
+    if (previous.get("native_idle_confirmed") is True
+            and previous.get("native_idle_reason") == "latched_job_inactive_180s"
+            and previous.get("latched_idle_signature") == signature
+            and (getattr(connection, "last_snapshot", None) or {}).get("state") == "idle"):
+        return True, None, signature
+    if previous_signature != signature or not isinstance(previous_since, str):
+        return False, now.isoformat(), signature
+    try:
+        since = timezone.datetime.fromisoformat(previous_since)
+    except ValueError:
+        return False, now.isoformat(), signature
+    if timezone.is_naive(since) or since > now:
+        return False, now.isoformat(), signature
+    # The last comparison is with previously persisted telemetry; a repeat
+    # of the same payload within a single poll cannot self-authorise idle.
+    previous_at = (getattr(connection, "last_snapshot", None) or {}).get("captured_at")
+    try:
+        observed = timezone.datetime.fromisoformat(previous_at)
+    except (TypeError, ValueError):
+        return False, now.isoformat(), signature
+    if timezone.is_naive(observed) or observed >= now:
+        return False, now.isoformat(), signature
+    return (now - since).total_seconds() >= CREALITY_LATCHED_IDLE_MIN_SECONDS, previous_since, signature
+
+
 def _reconcile_creality_processing(connection, snapshot):
-    """Remove a stale job filename only on direct native idle evidence."""
-    if not _creality_native_idle_evidence(snapshot):
+    """Clear a latched job only after independent, inactive native evidence."""
+    direct = _creality_native_idle_evidence(snapshot)
+    confirmed, candidate_since, signature = (
+        (False, None, None) if direct else
+        _creality_latched_idle_evidence(connection, snapshot)
+    )
+    if not direct and not confirmed:
+        # Carry the observation window through the normal persisted snapshot.
+        # Any active/changed state clears it; no state is forced to idle.
+        if candidate_since is not None:
+            result = dict(snapshot)
+            metadata = dict(result.get("source_metadata") or {})
+            metadata["idle_candidate_since"] = candidate_since
+            metadata["idle_candidate_signature"] = signature
+            result["source_metadata"] = metadata
+            return result
         return snapshot
     result = dict(snapshot)
     result["state"] = "idle"
@@ -1061,10 +1194,70 @@ def _reconcile_creality_processing(connection, snapshot):
                 "remaining_seconds": None, "current_layer": None, "total_layers": None})
     result["job"] = job
     metadata = dict(result.get("source_metadata") or {})
+    metadata.pop("idle_candidate_since", None)
+    metadata.pop("idle_candidate_signature", None)
+    if confirmed:
+        metadata["latched_idle_signature"] = signature
     metadata.update({"native_idle_confirmed": True,
-                     "previous_job_filename": previous_filename})
+                     "native_idle_reason": "latched_job_inactive_180s" if confirmed else "cleared_job_counters",
+                     "previous_job_filename": previous_filename,
+                     # Downstream live history must never treat a stale
+                     # cancelled print as a successful completion.
+                     "activity_state": "idle"})
     result["source_metadata"] = metadata
     return result
+
+
+# Versioned, read-only capability report. Every supported live adapter writes
+# this on the next successful poll after an upgrade. Unknown is a valid result,
+# and must never silently imply a physical toolchange.
+MATERIAL_CAPABILITY_SCHEMA = 1
+AUTOMATIC_FEEDERS = {
+    "creality_local": "cfs_connected",
+    "bambu_local": "ams_connected",
+    "flashforge": "material_station_connected",
+    "anycubic": "ace_connected",
+}
+MULTI_TOOL_ADAPTERS = {
+    "moonraker", "prusa", "snapmaker", "elegoo", "qidi",
+    "sovol", "voron", "octoprint", "other",
+}
+
+
+def material_capability_report(connection, snapshot):
+    """Normalise material architecture evidence, never printer permissions."""
+    metadata = snapshot.get("source_metadata") or {}
+    metadata = metadata if isinstance(metadata, dict) else {}
+    materials = snapshot.get("materials") or []
+    materials = materials if isinstance(materials, list) else []
+    report = {
+        "schema_version": MATERIAL_CAPABILITY_SCHEMA,
+        "available": False,
+        "topology": "unknown",
+        "detection": "unknown",
+        "physical_toolchange_verified": False,
+    }
+    adapter = connection.adapter
+    feeder_key = AUTOMATIC_FEEDERS.get(adapter)
+    if feeder_key:
+        # Positive observations from the adapter or actual discovered bays.
+        # Do not infer from the printer model or an opt-in product flag.
+        if metadata.get(feeder_key) is True or bool(materials):
+            report.update(available=True, topology="single_nozzle_changer",
+                          detection="live_telemetry")
+        elif metadata.get(feeder_key) is False:
+            report["detection"] = "not_observed"
+        return report
+    if adapter in MULTI_TOOL_ADAPTERS:
+        tool_names = metadata.get("tool_names")
+        if isinstance(tool_names, dict) and len(tool_names) > 1:
+            # Multiple observed extruders prove multiple available tools,
+            # but cannot distinguish IDEX from a toolchanger. Defer topology
+            # selection to a capable adapter rather than guessing commands.
+            report.update(available=True, topology="unknown",
+                          detection="live_tool_inventory")
+        return report
+    return report
 
 
 def poll_connection(connection) -> dict:
@@ -1145,6 +1338,11 @@ def poll_connection(connection) -> dict:
         capabilities["materials"] = bool(
             metadata.get("ace_connected") or snapshot.get("materials")
         )
+    # Always report a versioned capability, even when hardware details are
+    # unknown; never convert "unknown" into asserted multi-material support.
+    capabilities["material_system"] = material_capability_report(
+        connection, snapshot
+    )
     connection.capabilities = capabilities
     connection.last_snapshot = snapshot
     connection.save(update_fields=[

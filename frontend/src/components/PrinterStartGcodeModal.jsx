@@ -3,9 +3,9 @@ import { apiFetch } from "../api";
 import { findSlicedRequirement } from "../utils/gcodeMapping";
 import { Modal } from "./Common";
 
-export default function PrinterStartGcodeModal({ printer, connection, canEdit, onConfigureMoonraker, onClose, onChanged, initialAsset = null }) {
+export default function PrinterStartGcodeModal({ printer, connection, canEdit, onConfigureMoonraker, onClose, onChanged, onSubmissionConfirmed, initialAsset = null, initialAction = "upload" }) {
   const [source, setSource] = useState("makervault");
-  const [action, setAction] = useState("upload");
+  const [action, setAction] = useState(initialAction === "print" ? "print" : "upload");
   const [files, setFiles] = useState([]);
   const [remoteFiles, setRemoteFiles] = useState([]);
   const [assetId, setAssetId] = useState(initialAsset?.id ? String(initialAsset.id) : "");
@@ -28,8 +28,17 @@ export default function PrinterStartGcodeModal({ printer, connection, canEdit, o
   const [printerInspecting, setPrinterInspecting] = useState(false);
   const [cfsAssignments, setCfsAssignments] = useState({});
   const [mappingMode, setMappingMode] = useState("mapped");
+  const [supervisedConfirmed, setSupervisedConfirmed] = useState(false);
 
 
+  // Do not treat a transport acknowledgement or uncertain CFS dispatch as
+  // proof that a print actually started. Only surface confirmed outcomes.
+  const isConfirmedSubmission = (submission, submittedAction) => {
+    if (submittedAction === "upload") return submission?.status === "uploaded";
+    if (submission?.status !== "started") return false;
+    const message = String(submission.message || "").toLowerCase();
+    return !(/awaiting .*verif|without acknowledgement|awaiting live job|commands dispatched|not acknowledge|unknown outcome|check the k2 display|verify on printer/.test(message));
+  };
   const base = "/api/printing/printers/" + printer.id + "/connections/" + connection.id + "/gcode";
   const cfs = capabilities?.cfs || null;
   const cfsSlicedAvailable = Boolean(capabilities?.can_start_sliced_mapping);
@@ -48,17 +57,57 @@ export default function PrinterStartGcodeModal({ printer, connection, canEdit, o
     slot.color_hex?.toLowerCase() === requirement.color_hex.toLowerCase()
   )?.label || "";
   const current = files.find(f => String(f.id) === String(assetId)) || (initialAsset && String(initialAsset.id) === String(assetId) ? initialAsset : null);
+  const supervisedTestEligible = source === "makervault" &&
+    typeof current?.creality_test_sha256 === "string" &&
+    /^[a-f0-9]{64}$/i.test(current.creality_test_sha256) &&
+    Number(current.size_bytes) > 0 && Number(current.size_bytes) <= 2 * 1024 * 1024;
 
   async function load(refreshStatus = false) {
     // A broken printer-side file API must not hide perfectly valid MakerVault files.
-    const [local, remote] = await Promise.allSettled([
-      apiFetch("/api/files/"),
+    const [local, privateSlices, remote] = await Promise.allSettled([
+      // Library G-code is independent of the selected printer adapter.
+      apiFetch("/api/files/?category=gcode"),
+      // Completed private slice outputs remain selectable for an explicit
+      // printer transfer without being silently saved into the G-code library.
+      apiFetch("/api/printing/slicer/jobs/"),
       apiFetch(base + (refreshStatus === true ? "/files/?refresh_status=1" : "/files/")),
     ]);
-    if (local.status === "fulfilled") {
-      setFiles((local.value.rows || []).filter(f => (f.filename || "").toLowerCase().endsWith(".gcode")));
-    } else {
-      setError("MakerVault file list unavailable: " + local.reason.message);
+    const libraryFiles = local.status === "fulfilled"
+      ? (local.value.rows || []).filter(f => f.category === "gcode")
+      : [];
+    const completed = privateSlices.status === "fulfilled"
+      ? (privateSlices.value.jobs || []).filter(job => job.status === "completed" && job.output_asset?.id)
+      : [];
+    const eligibleById = new Map(completed.map(job => [
+      String(job.output_asset.id),
+      { creality_test_sha256: job.output_asset.creality_test_sha256,
+        size_bytes: job.output_asset.size_bytes },
+    ]));
+    const pendingFiles = completed
+      .filter(job => !job.gcode_in_library)
+      .map(job => ({
+        ...job.output_asset,
+        category: "other",
+        privateSlice: true,
+        project: "Private sliced output",
+      }));
+    const knownIds = new Set(libraryFiles.map(file => String(file.id)));
+    const allFiles = libraryFiles.map(file => ({
+      ...file, ...(eligibleById.get(String(file.id)) || {}),
+    }));
+    for (const file of pendingFiles) {
+      if (!knownIds.has(String(file.id))) {
+        knownIds.add(String(file.id));
+        allFiles.push(file);
+      }
+    }
+    setFiles(allFiles);
+    if (local.status === "rejected" && privateSlices.status === "rejected") {
+      setError("MakerVault G-code sources unavailable: " + local.reason.message);
+    } else if (local.status === "rejected") {
+      setNotice("Saved G-code library could not be loaded; private slices remain available.");
+    } else if (privateSlices.status === "rejected") {
+      setNotice("Private slicing jobs could not be loaded; saved G-code remains available.");
     }
     if (remote.status === "fulfilled") {
       setRemoteFiles(remote.value.rows || []);
@@ -70,7 +119,10 @@ export default function PrinterStartGcodeModal({ printer, connection, canEdit, o
       setError(remote.reason.message);
     }
   }
-  useEffect(() => { load(); }, [printer.id, connection.id]);
+  // CFS mapping needs native telemetry less than 60 seconds old. The slicer
+  // preview can stay open much longer than that, so a cached first load
+  // incorrectly hides mapped start for an otherwise idle K2.
+  useEffect(() => { load(connection.adapter === "creality_local"); }, [printer.id, connection.id]);
   useEffect(() => {
     // A Creality print-start may be confirmed by a later normal telemetry
     // poll. Read only the existing receipt; never re-submit the command.
@@ -100,6 +152,7 @@ export default function PrinterStartGcodeModal({ printer, connection, canEdit, o
             setError("");
             setNotice("Print start verified using the printer's live job status.");
             onChanged?.();
+            onSubmissionConfirmed?.(updated);
           }
         }
       } catch (_err) {
@@ -117,6 +170,7 @@ export default function PrinterStartGcodeModal({ printer, connection, canEdit, o
     setFilamentAnalysis(null);
     setSlicedPrintSetup(null);
     setCfsAssignments({});
+    setSupervisedConfirmed(false);
 
     if (source !== "makervault" || !assetId) return () => { active = false; };
     setChecking(true);
@@ -181,6 +235,7 @@ export default function PrinterStartGcodeModal({ printer, connection, canEdit, o
     const mappedCfs = operation === "print" && mappingMode === "mapped" && cfsMappedAvailable && requirements.length > 0 && !usageUnknown && (source === "printer" ? !!printerInspection : !!assetId);
     const originalSelected = operation === "print" && mappingMode === "original" && cfs?.connected === true;
     const slicedCfs = originalSelected && cfsSlicedAvailable;
+    const supervisedTest = supervisedTestEligible && mappedCfs;
     if (originalSelected && !cfsSlicedAvailable) {
       setError(cfsOriginalSupported
         ? "Original slicer mapping is supported, but the printer is not ready. Refresh its status after the current print finishes."
@@ -202,6 +257,9 @@ export default function PrinterStartGcodeModal({ printer, connection, canEdit, o
         }
       }
     }
+    if (supervisedTest && !supervisedConfirmed) {
+      setError("Confirm that this is a supervised K2 two-colour hardware test."); return;
+    }
     if (!name) { setError("Select a G-code file."); return; }
     if (operation === "print" && !capabilities?.can_start && !slicedCfs && !mappedCfs) { setError("Choose a supported print mode first."); return; }
 
@@ -214,7 +272,11 @@ export default function PrinterStartGcodeModal({ printer, connection, canEdit, o
       (mappingSummary ? "\n\nCFS mapping:\n" + mappingSummary : "") +
       (mappedCfs ? "\n\nK2 native start has no command acknowledgement. Check the selected filament on the printer." : "") +
 
+      (supervisedTest ? "\n\nSUPERVISED TEST: This will upload the G-code and start the physical printer. Stay with the K2 and verify both spools." : "") +
       "\n\nContinue?")) return;
+    if (supervisedTest && window.prompt(
+      "Supervised Creality K2 test: type START K2 TEST to authorise a single physical print-start."
+    ) !== "START K2 TEST") return;
     setBusy(true); setError(""); setReceipt(null);
     setTransferStage("Submitting request and checking printer readiness…");
     const requestId = window.crypto.randomUUID();
@@ -237,6 +299,9 @@ export default function PrinterStartGcodeModal({ printer, connection, canEdit, o
           cfs_mode: mappedCfs ? "mapped" : slicedCfs ? "use_sliced" : null,
           cfs_acknowledged: slicedCfs,
           cfs_mapping: mappedCfs ? selections : [],
+          creality_supervised_test: supervisedTest,
+          creality_test_confirmed: supervisedTest && supervisedConfirmed,
+          creality_test_sha256: supervisedTest ? current.creality_test_sha256 : null,
         },
       });
       setReceipt(result.submission);
@@ -251,7 +316,12 @@ export default function PrinterStartGcodeModal({ printer, connection, canEdit, o
           setError("Printer outcome is uncertain. Inspect the printer before trying anything else.");
         }
       }
-      await onChanged?.();
+      // A temporary UI refresh failure must not turn a confirmed submission
+      // into an apparent printer error or tempt a second submission.
+      try { await onChanged?.(); } catch (_refreshError) { /* Submission receipt is authoritative. */ }
+      if (isConfirmedSubmission(result.submission, operation)) {
+        onSubmissionConfirmed?.(result.submission);
+      }
     } catch (err) { setError(err.message); setTransferStage("Submission failed or could not be verified."); }
     finally { window.clearInterval(statusTimer); setBusy(false); }
   }
@@ -298,11 +368,14 @@ export default function PrinterStartGcodeModal({ printer, connection, canEdit, o
         <small>This ad-hoc file is saved in MakerVault Files before transfer. It can be linked to a project or model later.</small>
         <button type="button" className="primary" disabled={!newFile || busy || !canEdit} onClick={saveNew}>Save and review</button>
       </div>}
-      {source === "makervault" && <label>MakerVault file<select value={assetId} onChange={e => setAssetId(e.target.value)}>
-        <option value="">Choose a G-code file…</option>
-        {initialAsset && !files.some(f => String(f.id) === String(initialAsset.id)) && <option value={initialAsset.id}>{initialAsset.name} · selected G-code</option>}
-        {files.map(f => <option value={f.id} key={f.id}>{f.name} · {f.project || "Standalone"}</option>)}
-      </select></label>}
+      {source === "makervault" && <>
+        <label>MakerVault file<select value={assetId} onChange={e => setAssetId(e.target.value)}>
+          <option value="">Choose a G-code file…</option>
+          {initialAsset && !files.some(f => String(f.id) === String(initialAsset.id)) && <option value={initialAsset.id}>{initialAsset.name} · selected G-code</option>}
+          {files.map(f => <option value={f.id} key={f.id}>{f.name} · {f.privateSlice ? "Private slice (not in library)" : (f.project || "Standalone")}</option>)}
+        </select></label>
+        {!files.length && !initialAsset && <p role="status">No library G-code or completed private slices were returned. Check the G-code Library and slicing jobs.</p>}
+      </>}
       {source === "printer" && <>
         <label>Printer storage<select value={remotePath} onChange={e => setRemotePath(e.target.value)}>
           <option value="">Choose a printer file…</option>
@@ -327,7 +400,7 @@ export default function PrinterStartGcodeModal({ printer, connection, canEdit, o
       {cfs.connected === true && <>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
           <strong>Current CFS inventory</strong>
-          <button type="button" onClick={load} disabled={busy}>Refresh CFS snapshot</button>
+          <button type="button" onClick={() => load(true)} disabled={busy}>Refresh CFS snapshot</button>
         </div>
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(215px, 1fr))", gap: 10, margin: "12px 0" }}>
           {(cfs.slots || []).map(slot => <div key={slot.label} style={{ display: "flex", alignItems: "center", gap: 10, padding: 12, border: "1px solid var(--border-color, #344255)", borderRadius: 10 }}>
@@ -374,7 +447,7 @@ export default function PrinterStartGcodeModal({ printer, connection, canEdit, o
         <small>In mapped-print mode, selections are sent to the K2. The proprietary protocol does not confirm acceptance, so check its display after submitting.</small>
       </>}
     </div>}
-    {source !== "new" && (cfs?.connected === true || cfsOriginalSupported || cfsMappedAvailable) && <div className="settingsCallout">
+    {source !== "new" && (cfs?.applicable || cfsOriginalSupported || cfsMappedAvailable) && <div className="settingsCallout">
       <strong>CFS print preparation</strong>
       <p>Review the sliced filament and select the correct loaded CFS slot. You can send these selections to the K2 or use its original slicer mapping.</p>
       <label>Filament mapping
@@ -383,12 +456,31 @@ export default function PrinterStartGcodeModal({ printer, connection, canEdit, o
           <option value="original" disabled={!cfsOriginalSupported}>Use original mapping embedded by the slicer{!cfsOriginalSupported ? " — unavailable on this connection" : ""}</option>
         </select>
       </label>
-      <small>{requirements.length > 0 && mappingMode === "mapped"
+      {!cfsMappedAvailable && cfs?.applicable && <div role="status" style={{marginTop: 10}}>
+        <strong>CFS start not ready</strong>
+        <p>{capabilities?.mapped_cfs_blockers?.join(" ") || cfs.reason || "Fresh, idle native CFS status is required."}</p>
+        <button type="button" disabled={busy} onClick={() => load(true)}>
+          Refresh K2 CFS readiness (read-only)
+        </button>
+      </div>}
+      <small>{requirements.length > 0 && mappingMode === "mapped" && cfsMappedAvailable
         ? "MakerVault will send a new native K2 filament mapping before print-start. Check the printer display."
         : cfsOriginalSupported
           ? "The original slicer assignments are retained." + (!cfsSlicedAvailable ? " Wait until the printer is ready before starting." : "")
           : "Original mapping requires a supported printer connection; you can still choose loaded CFS slots manually."}</small>
     </div>}
+      {supervisedTestEligible && source === "makervault" && action === "print" &&
+        mappingMode === "mapped" && cfsMappedAvailable && <div className="settingsCallout">
+        <strong>Supervised K2 two-colour hardware test</strong>
+        <p>This small completed Creality slice is eligible for an explicitly authorised test.
+          Its exact SHA-256 and saved model-to-CFS assignments will be checked against fresh
+          printer telemetry before submission and again before print-start. No automatic retry is made.</p>
+        <label><input type="checkbox" checked={supervisedConfirmed}
+          onChange={event => setSupervisedConfirmed(event.target.checked)} />
+          I will supervise the K2 and verify that each selected CFS slot is loaded correctly.</label>
+        <small>Only the original saved slot mapping is accepted. The firmware does not provide
+          a correlated acknowledgement for the initial colour-mapping command.</small>
+      </div>}
       {source === "makervault" && (checking ? <p>Analysing printer metadata…</p> : verdict && <div className="settingsCallout" role="status">
         <strong>{verdict.status === "mismatch" ? "Printer mismatch — blocked" : verdict.status === "metadata_match" ? "Printer name matches; full safety not verified" : "Printer identity unknown"}</strong>
         <p>{verdict.reason}</p>
