@@ -403,9 +403,9 @@ def _feature_role_audit(gcode):
             continue
         command = line.partition(b";")[0].strip().upper()
         if (re.match(rb"^G0?1(?:\s|$)", command) and
-                re.search(rb"(?:^|\s)E[-+]?\d", command) and
-                (re.search(rb"(?:^|\s)X[-+]?\d", command) or
-                 re.search(rb"(?:^|\s)Y[-+]?\d", command))):
+                re.search(rb"(?:^|\s)E[-+]?(?:\d|\.\d)", command) and
+                (re.search(rb"(?:^|\s)X[-+]?(?:\d|\.\d)", command) or
+                 re.search(rb"(?:^|\s)Y[-+]?(?:\d|\.\d)", command))):
             bucket = ("support" if "support" in role else
                       "outer_wall" if any(term in role for term in
                                           ("outer wall", "external perimeter")) else "other")
