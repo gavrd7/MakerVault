@@ -54,7 +54,9 @@ test("official catalogue version always follows selected slicer engine", () => {
   assert.match(setup, /const targetVersion = form\.engine_version;/);
   assert.match(setup, /engine_version: form\.engine_version,/);
   assert.match(setup, /Matching official profile release/);
-  assert.match(setup, /Follows the selected slicing engine/);
+  assert.doesNotMatch(setup, /Follows the selected slicing engine/);
+  assert.match(setup, /className="slicerOfficialSourceField">Official source/);
+  assert.match(setup, /className="slicerOfficialSourceField">Matching official profile release/);
   assert.doesNotMatch(setup, /Native OrcaSlicer profile release/);
   assert.doesNotMatch(setup, /"2\.5\.0"\) \? form\.engine_version : "2\.5\.0"/);
 });
@@ -122,4 +124,15 @@ test("bulk selection actions have dedicated spaced row and readable help below",
   assert.match(styles, /\.slicerSavedJobSelectionBar\{[\s\S]*?column-gap:12px;row-gap:10px;[\s\S]*?margin:16px 0 18px;/);
   assert.match(styles, /\.slicerSavedJobSelectionHelp\{[\s\S]*?flex-basis:100%/);
   assert.match(styles, /\.settingsActions\.slicerSavedJobToolbar\{[\s\S]*?flex-wrap:wrap/);
+});
+
+test("official source and matching release controls use equal height without caption stretching", () => {
+  assert.doesNotMatch(setup, /Switch engine version above to use another verified native catalogue/);
+  assert.match(styles, /\.formGrid>\.slicerOfficialSourceField/);
+  assert.match(styles, /height:48px;/);
+  const source = setup.indexOf('className="slicerOfficialSourceField">Official source');
+  const version = setup.indexOf('className="slicerOfficialSourceField">Matching official profile release');
+  const following = setup.indexOf('Manufacturer / upstream catalogue', version);
+  assert.ok(source >= 0 && version > source && following > version);
+  assert.doesNotMatch(setup.slice(version, following), /<small>/);
 });
