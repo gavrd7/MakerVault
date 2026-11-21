@@ -871,9 +871,9 @@ class Command(BaseCommand):
                         or "purge_in_prime_tower" not in declarations[-1].split(";")):
                     raise CommandError("Native tower flush override declarations are missing.")
                 _creality_flush_basis(changed)
-            if (_read_creality_project_settings(flush_forward_two)
-                    ["flush_volumes_matrix"][1]
-                    != str(first_flush_volume + 25)):
+            if (float(_read_creality_project_settings(flush_forward_two)
+                      ["flush_volumes_matrix"][1])
+                    != first_flush_volume + 25):
                 raise CommandError("Native tower directional matrix control was not isolated.")
             for name, candidate in creality_controls:
                 original, changed, keys = _creality_control_project_with_extra(
