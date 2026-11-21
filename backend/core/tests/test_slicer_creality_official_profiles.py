@@ -23,7 +23,7 @@ class PinnedCrealityProfileTests(SimpleTestCase):
         manifest.return_value = self.manifest
         found = search_creality_profiles("Creality", "printer")
         self.assertEqual(found["engine"], "crealityprint")
-        self.assertEqual(found["engine_version"], "7.3.0")
+        self.assertEqual(found["engine_version"], "7.3.1")
         self.assertEqual(found["total_matches"], 2)
         self.assertFalse(any("private" in row["sub_path"] for row in found["profiles"]))
 
@@ -56,7 +56,7 @@ class PinnedCrealityProfileTests(SimpleTestCase):
         raw = fetch_creality_profile("printer", "Prusa MK4 0.4 nozzle",
                                      "machine/Prusa MK4 0.4 nozzle.json", "Prusa")
         self.assertIn(b"fdm_machine_common", raw)
-        self.assertIn("CrealityOfficial/CrealityPrint/v7.3.0/resources/profiles/Prusa/",
+        self.assertIn("CrealityOfficial/CrealityPrint/v7.3.1/resources/profiles/Prusa/",
                       get.call_args.args[0])
         with self.assertRaises(OfficialProfileError):
             fetch_creality_profile("printer", "Prusa MK4 0.4 nozzle",
@@ -71,7 +71,7 @@ class PinnedCrealityProfileTests(SimpleTestCase):
             "printer", "Creality K1 0.4 nozzle", "machine/Creality K1 0.4 nozzle.json"
         )
         self.assertEqual(raw, b'{"type":"machine"}')
-        self.assertIn("/v7.3.0/resources/profiles/Creality/", get.call_args.args[0])
+        self.assertIn("/v7.3.1/resources/profiles/Creality/", get.call_args.args[0])
         with self.assertRaises(OfficialProfileError):
             fetch_creality_profile("printer", "Creality K1 0.4 nozzle", "../private.json")
         get.return_value = ({"type": "filament"}, b'{}')
