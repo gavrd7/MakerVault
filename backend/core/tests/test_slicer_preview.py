@@ -58,8 +58,8 @@ G1 X10 Y20 E2.0
     def test_native_arc_extrusion_is_rendered_as_curved_path_not_chord(self):
         import math
         result=generated_preview(
-            "G90\\nM83\\nG1 X10 Y0 Z0.2\\n"
-            ";TYPE:Outer wall\\nG3 X0 Y10 I-10 J0 E1\\n"
+            "G90\nM83\nG1 X10 Y0 Z0.2\n"
+            ";TYPE:Outer wall\nG3 X0 Y10 I-10 J0 E1\n"
         )
         self.assertGreater(result["segment_count"], 20)
         self.assertFalse(result["sampled"])
@@ -73,13 +73,13 @@ G1 X10 Y20 E2.0
 
     def test_radius_format_arc_and_absolute_arc_centres(self):
         radius=generated_preview(
-            "G90\\nM83\\nG1 X10 Y0 Z0.2\\n"
-            "G3 X0 Y10 R10 E1\\n"
+            "G90\nM83\nG1 X10 Y0 Z0.2\n"
+            "G3 X0 Y10 R10 E1\n"
         )
         self.assertGreater(len(radius["segments"]),20)
         absolute=generated_preview(
-            "G90\\nG90.1\\nM83\\nG1 X10 Y0 Z0.2\\n"
-            "G3 X0 Y10 I0 J0 E1\\n"
+            "G90\nG90.1\nM83\nG1 X10 Y0 Z0.2\n"
+            "G3 X0 Y10 I0 J0 E1\n"
         )
         self.assertGreater(len(absolute["segments"]),20)
         self.assertEqual(radius["unresolved_arc_moves"],0)
@@ -87,18 +87,18 @@ G1 X10 Y20 E2.0
 
     def test_non_extruding_arcs_do_not_create_false_bridges(self):
         result=generated_preview(
-            "G90\\nM83\\nG1 X10 Y0 Z0.2\\n"
-            "G3 X0 Y10 I-10 J0\\n"
-            "G1 X0 Y15 E1\\n"
+            "G90\nM83\nG1 X10 Y0 Z0.2\n"
+            "G3 X0 Y10 I-10 J0\n"
+            "G1 X0 Y15 E1\n"
         )
         self.assertEqual(result["segment_count"],1)
         self.assertEqual(result["segments"][0][:4],[0.0,10.0,0.0,15.0])
 
     def test_malformed_arc_never_creates_straight_extrusion_chord(self):
         result=generated_preview(
-            "G90\\nM83\\nG1 X10 Y0 Z0.2\\n"
-            "G2 X30 Y10 R1 E1\\n"
-            "G1 X32 Y10 E1\\n"
+            "G90\nM83\nG1 X10 Y0 Z0.2\n"
+            "G2 X30 Y10 R1 E1\n"
+            "G1 X32 Y10 E1\n"
         )
         self.assertEqual(result["segment_count"],1)
         self.assertEqual(result["segments"][0][:4],[30.0,10.0,32.0,10.0])
