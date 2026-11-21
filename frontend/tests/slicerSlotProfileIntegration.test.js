@@ -41,7 +41,7 @@ test("slot import reloads profiles without overwriting global native filament se
 });
 test("profiles for unassigned loaded bays do not block one logical filament",()=>{
   assert.match(scene,/const activeSlotProfiles = slotFilamentProfiles\.filter/);
-  assert.match(scene,/const materialRoutingPending = assignedSlots\.length > 0/);
+  assert.match(scene,/const materialRoutingPending = requiredMultiSlots\\.length > 1/);
   assert.match(scene,/: false;/);
   assert.match(scene,/assignedSlots\.every\(slot => String\(slot\.printer_id\)/);
 });
