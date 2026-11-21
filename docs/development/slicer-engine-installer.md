@@ -1,32 +1,54 @@
-# In-browser slicer engine installation — staging foundation
+# In-browser slicer engine installation — four-container staging
 
-MakerVault's browser uses one shared isolated slicer worker for all engines.
-The optional `slicer-engine-installer` service is a separate container with
-**write** access only to the versioned slicer-engine Docker volume. The worker
-has **read-only** access to that same volume. No Docker socket, host shell,
-printer access, media folder or database credentials are mounted into the installer.
+MakerVault runs **four long-running containers**: application, PostgreSQL,
+Redis and **one combined slicer runtime** (`slicer-worker`). The runtime
+supervises two unprivileged subprocesses on separate UIDs: the slicer HTTP
+worker (10001, port 8088) and the authenticated engine installer (10002,
+port 8091). The shared versioned engine store is owned by installer UID
+10002 and readable but **not writable** by worker UID 10001. The worker's
+permanent Linux seccomp filter denies outbound `connect(2)`, including to
+child slicer binaries; the installer retains verified release downloads.
+Worker and installer tokens are removed from the other process's environment.
+No Docker socket, app database, media or printer mounts are provided.
 
-## First enablement on existing staging
+Unlike the original two-container setup, the combined container has a
+shared network namespace and a root PID-1 supervisor with only SETUID and
+SETGID capabilities. The UID, environment and seccomp restrictions are
+security measures, not full equivalence to separate-container isolation.
+Do not deploy without passing container integration checks and staging
+acceptance. The `slicer-engine-store-init` Compose helper is a short-lived
+**exited** permission-migration task, not a fifth running service.
 
-After updating the app and retaining the functioning OrcaSlicer environment:
+## Migrate an existing staging installation
+
+**Only after PR #192 CI passes**, from the checked-out PR branch:
 
 ```sh
 cd ~/MakerVault-Staging
-git pull --ff-only origin main
+git pull --ff-only
+sudo python3 scripts/install_slicer_staging.py consolidate-slicer
 sudo python3 scripts/install_slicer_staging.py update
-sudo python3 scripts/install_slicer_staging.py enable-engine-installer
 ```
 
-The second command is needed **once**. It creates a private installer token in
-`.slicer-staging.env`, rebuilds the isolated worker wrapper to understand the
-shared engine store, imports the **existing staging Orca** binary with its
-recorded checksum, builds the restricted installer and links MakerVault to it.
+The migration checks the full Compose configuration, stops the **old**
+standalone engine installer, stops the previous worker, adjusts permissions
+on the existing versioned volume **without deleting it**, then builds and
+starts the combined `slicer-worker`. It does not change printer or inventory
+data, user G-code or tokens. Check `sudo docker compose ... ps` and verify
+both installer connectivity and K2/Creality slicing. The old installer remains
+as a **stopped** rollback container until explicitly removed.
 
-No existing slicing job is started by this command. An already-sliced G-code
-file is unchanged. Previous Orca version data are kept.
+After successful acceptance only, remove the stopped legacy container:
 
-Subsequent app updates use the normal `update` command. Engine downloads and
-upgrades are initiated by users in **Slicer setup → View engine installations**.
+```sh
+sudo docker rm makervault-slicer-engine-installer-1
+```
+
+Never use `docker compose down -v` or `docker system prune` for this
+migration. On subsequent UI-only changes, `update` rebuilds the main app;
+slicer code changes use `refresh-worker` to rebuild the combined image.
+Existing staging users should **not** run the old five-container installer
+build command again.
 
 ## Engine installation and version management
 
@@ -48,7 +70,7 @@ download URLs, commands and filesystem paths are not accepted.
 2. MakerVault sends an authenticated request to the installer (internal network only).
 3. The installer downloads official bytes with bounded redirects and size,
    compares the final SHA-256 against the official release metadata and
-   extracts the AppImage inside its restricted container.
+   extracts the AppImage inside the installer child process.
 4. It attempts a fixed, bounded headless CLI compatibility check (`--help` for Orca, `--cli --help` for Creality).
 5. Only a successful smoke check permits atomic activation. Older engine
    directories and the previous active selection remain available for rollback.
@@ -72,9 +94,9 @@ The Creality K2's native profile specifies `retraction_distances_when_cut = 30 m
 
 Reviewed AppImage SHA-256: `b30b0ae933e653692cf85a493287a949215ae4c14d547a00203d16dfcadb8054`.
 
-**No extra release or container is required.** The single generic worker and its separate host-side installer are both built from `slicer_worker/Dockerfile.generic`, which pins the reviewed Orca bootstrap image by **immutable GHCR manifest digest** (`ghcr.io/gavrd7/makervault-slicer-orca@sha256:7f12df990d059d6a5e889c3cff6ebacd3a7c627fee28ff75e8696bee9c3423f4`). The installer checks the bundled `/opt/engines/orcaslicer.AppImage` against that approved SHA-256, copies it into the versioned engine volume, checks the copy again, and activates the known-good runtime. **It never downloads the stock upstream 2.5.0 AppImage**, and refuses installation if the bundled source is missing or modified.
+**No extra release or container is required.** The combined slicer runtime is built from `slicer_worker/Dockerfile.generic`, which pins the reviewed Orca bootstrap image by **immutable GHCR manifest digest** (`ghcr.io/gavrd7/makervault-slicer-orca@sha256:7f12df990d059d6a5e889c3cff6ebacd3a7c627fee28ff75e8696bee9c3423f4`). The installer checks the bundled `/opt/engines/orcaslicer.AppImage` against that approved SHA-256, copies it into the versioned engine volume, checks the copy again, and activates the known-good runtime. **It never downloads the stock upstream 2.5.0 AppImage**, and refuses installation if the bundled source is missing or modified.
 
-For a staging checkout that previously installed the incompatible stock Orca 2.5.0, first update/rebuild the main application and the **installer service** from this PR, then explicitly uninstall only Orca from the browser and reinstall 2.5.0 through the version dropdown. Existing Creality installations and MakerVault records must remain untouched. The installer will not silently overwrite an existing version directory. Verify the original Creality K2 native profile can generate a real Benchy G-code before marking the PR merge-ready.
+For a staging checkout that previously installed the incompatible stock Orca 2.5.0, first deploy/rebuild the **combined slicer runtime** and main application from this PR, then explicitly uninstall only Orca from the browser and reinstall 2.5.0 through the version dropdown. Existing Creality installations and MakerVault records must remain untouched. The installer will not silently overwrite an existing version directory. Verify the original Creality K2 native profile can generate a real Benchy G-code before marking the PR merge-ready.
 
 Orca 2.4.2 is a separate pinned upstream version, **not K2-approved** for the 30 mm cut retraction compatibility issue. Other engines still use checksum-verified native release downloads. Keep one shared slicer worker container; do not add a new Orca container, Docker socket access or host write privileges to the web app.
 
@@ -98,9 +120,9 @@ Orca 2.4.2 is a separate pinned upstream version, **not K2-approved** for the 30
   installed versions without a recoverable SHA-256 identity are deliberately
   excluded until independently verified.
 
-A missing **installer service** prevents installations, removals and switches,
-but does not disable an already healthy worker. Initial opt-in deployment of
-that separate service is a one-time infrastructure task; regular engine
+An unhealthy **installer child** prevents installations, removals and switches;
+the combined container health requires both processes. Initial four-container
+migration is a one-time infrastructure task; regular engine
 management is browser-operated and **does not require the user to be a host
 administrator**.
 
@@ -113,7 +135,7 @@ automatically; they are not approval tasks for end users.
 
 ## Troubleshooting
 
-- **Installer not connected:** verify the opt-in service started with the
+- **Installer not connected:** verify the combined runtime started with the
   private token and is healthy; it has no exposed host port.
 - **No releases listed:** GitHub release API may be unavailable or no supported
   official Linux asset with a SHA-256 digest was found.
