@@ -2579,3 +2579,33 @@ MakerVault app, leave pinned worker unchanged, run focused tests and then
 repeat `diagnose_slicer_printer_profiles --native --test-production-flush`
 with previously verified profile IDs. This compares three real normal
 builder cases; it does not force `multicolor_method` or approve printing.
+
+## K2 offline flush marker sequence audit (21 Nov 2026)
+
+The read-only `diagnose_slicer_printer_profiles --native --test-production-flush`
+output now includes `toolchange_macro_audit.flush_markers_balanced` and
+`toolchange_macro_audit.completed_flush_sections`. In addition to counting
+exact `; FLUSH_START` / `; FLUSH_END` comments, the audit detects a nested
+start, an end without a start, or an unclosed start, even if aggregate counts
+happen to match. These checks inspect generated G-code bytes only; no worker
+image, printer profile, vendor G-code script or printer firmware changes.
+A balanced marker sequence is **necessary diagnostic evidence, not sufficient
+safety proof**: it cannot establish actual physical material routing, amount
+purged, firmware command semantics, or safe CFS operation.
+
+The official v7.3.1 GUI implementation
+(`src/slic3r/GUI/GUI_Factories.cpp`, function
+`sync_multicolor_method_to_flush_into_skeleton`) sets the edited **printer**
+preset's `multicolor_method` according to whether `flush_into_skeleton`
+is enabled. Thus a disposable `multicolor_method=1` 3MF probe must not be
+promoted to a production capability, nor should MakerVault enable the
+separate skeleton flushing feature automatically. Require an authentic
+source-backed machine configuration, consistent G-code audits, explicit
+user confirmation and later physical validation before printer dispatch.
+
+Focused staging test (app-only update, **never** refresh pinned worker):
+
+```bash
+sudo docker exec makervault python3 /app/backend/manage.py test \\
+  core.tests.test_slicer_printer_compatibility --noinput
+```
