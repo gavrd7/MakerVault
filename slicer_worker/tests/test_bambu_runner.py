@@ -123,6 +123,12 @@ class BambuRunnerContractTests(TestCase):
         self.assertEqual(popen.call_args.kwargs["stdout"], __import__("subprocess").DEVNULL)
         self.assertEqual(popen.call_args.kwargs["stderr"], __import__("subprocess").DEVNULL)
         self.assertTrue(popen.call_args.kwargs["start_new_session"])
+        env = popen.call_args.kwargs["env"]
+        self.assertEqual(env["QT_QPA_PLATFORM"], "offscreen")
+        self.assertEqual(env["SSL_CERT_FILE"], "/etc/ssl/certs/ca-certificates.crt")
+        self.assertEqual(env["HOME"], str(self.root))
+        self.assertNotIn("HTTP_PROXY", env)
+
 
     def test_candidate_runner_rejects_failed_cli_and_invalid_timeout(self):
         process = MagicMock()
