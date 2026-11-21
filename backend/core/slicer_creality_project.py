@@ -458,6 +458,63 @@ def _mark_creality_support_overrides(project, keys):
     project["different_settings_to_system"] = value
 
 
+
+def _mark_creality_flush_preset_overrides(project, settings, *, machine, process):
+    """Declare exactly the user-selected flush settings in native preset slots.
+
+    The Creality CLI recreates process and machine presets from system defaults.
+    The embedded values only survive as explicit different_settings_to_system
+    overrides in their correct respective preset categories.
+    """
+    from .slicer_flush_settings import validate_flush_settings
+    from .slicer_material_routing import MaterialRoutingError
+    try:
+        selected = validate_flush_settings(settings)
+    except MaterialRoutingError as exc:
+        raise SlicerProfileError(str(exc)) from exc
+    if selected is None:
+        return
+    palette = project.get("filament_settings_id")
+    if not isinstance(palette, list) or len(palette) != 4:
+        raise SlicerProfileError("Creality flush overrides require a verified four-slot palette.")
+    rows = project.get("different_settings_to_system")
+    if (not isinstance(rows, list) or len(rows) != len(palette) + 2
+            or any(not isinstance(row, str) or len(row) > 8192 for row in rows)):
+        raise SlicerProfileError("Invalid native Creality flush override vector.")
+    updated = list(rows)
+    process_keys = set()
+    if selected["multiplier"] is not None:
+        process_keys.add("flush_multiplier")
+    if selected["transitions"]:
+        process_keys.update({"flush_volumes_matrix", "flush_volumes_changed"})
+    if selected["prime_tower"] != "native":
+        process_keys.add("enable_prime_tower")
+    # Only retain an explicitly selected process profile value; do not invent
+    # a prime volume or overwrite vendor printer macros.
+    if "prime_volume" in process:
+        process_keys.add("prime_volume")
+    printer_keys = set()
+    # The route belongs to machine settings. Keep its original value,
+    # including disabled, rather than silently enabling purge in tower.
+    if "purge_in_prime_tower" in machine:
+        printer_keys.add("purge_in_prime_tower")
+    for index, keys in ((0, process_keys), (len(palette) + 1, printer_keys)):
+        if not keys:
+            continue
+        existing = [key for key in updated[index].split(";") if key]
+        if any(not re.fullmatch(r"[a-z][a-z0-9_]{0,79}", key) for key in existing):
+            raise SlicerProfileError("Malformed native Creality flush override key.")
+        for key in sorted(keys):
+            if key not in project:
+                raise SlicerProfileError("Missing requested native Creality flush option.")
+            if key not in existing:
+                existing.append(key)
+        updated[index] = ";".join(existing)
+        if len(updated[index]) > 8192:
+            raise SlicerProfileError("Native Creality flush override list is too long.")
+    project["different_settings_to_system"] = updated
+
+
 def build_creality_project_candidate(plate, *, printer, process, filaments,
                                     version="7.3.1", prime_tower=None,
                                     tool_colours=None, flush_settings=None,
@@ -548,6 +605,8 @@ def build_creality_project_candidate(plate, *, printer, process, filaments,
         project, ("enable_support", "support_type"))
     if flush_settings is not None:
         _apply_creality_flush_settings(project, flush_settings, tool_bindings)
+        _mark_creality_flush_preset_overrides(
+            project, flush_settings, machine=machine, process=print_settings)
     # Creality 7.3.1 uses one-based physical nozzle routing. A K2/CFS
     # changes filament through a single physical nozzle; it does not have
     # two physical nozzle_diameter entries. Native upstream tests explicitly
