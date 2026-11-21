@@ -2402,3 +2402,32 @@ using read-only audit; compare the generated normal 3MF offline
 before any print approval. **Do not** change stock K2's native
 `multicolor_method=0` automatically and do not merge PR #171
 or submit experimental print G-code.
+
+
+### Safety/UX follow-up: visible legacy profile warning
+
+Official v7.3.1 source is now also the default browser source
+for the **actual** Creality Print v7.3.1 installed engine.
+The saved profiles view warns specifically when a previously
+imported `CrealityOfficial/CrealityPrint@v7.3.0/...` record has
+been labelled `engine_version=7.3.1`; it does not remove,
+modify, hide or auto-replace that record. The official search
+dialog now treats any future Creality catalogue/engine release
+mismatch as an error instead of promising that mismatched
+presets can simply be imported. Source identities and tagged
+release are returned from the API.
+
+Frontend source assertions added to
+`frontend/tests/slicerNovemberFeedback.test.js`.
+
+**On staging:** the previous K2 profile's own script hash
+`d848d81e...` matches Creality's original `v7.3.0`
+`change_filament_gcode` precisely. No ambiguity remains
+about that script's release, but the source_scope of the selected
+profile itself should be verified with the new read-only
+`official_source_release` diagnostic field.
+
+No Creality code is changed, no printer scripts rewritten,
+and no physical tests approved. The new v7.3.1 source is not
+a guarantee that `multicolor_method` is enabled:
+the user's original desktop export itself says `0`.
