@@ -7,7 +7,7 @@ services:
     environment:
       MAKERVAULT_SLICER_PREVIEW_ENABLED: "1"
       MAKERVAULT_SLICER_HOST_UPDATER_ENABLED: ${MAKERVAULT_SLICER_HOST_UPDATER_ENABLED:-0}
-      MAKERVAULT_SLICER_INSTALLER_URL: http://slicer-engine-installer:8091
+      MAKERVAULT_SLICER_INSTALLER_URL: http://slicer-worker:8091
       MAKERVAULT_SLICER_INSTALLER_TOKEN: ${MAKERVAULT_SLICER_INSTALLER_TOKEN:-disabled}
       MAKERVAULT_SLICER_EXECUTION_ENABLED: ${MAKERVAULT_SLICER_EXECUTION_ENABLED:-0}
       MAKERVAULT_SLICER_WORKER_URL: http://slicer-worker:8088
@@ -19,44 +19,9 @@ services:
       - makervault_backend
       - makervault_slicer
 
-  slicer-worker:
-    image: ${MAKERVAULT_SLICER_WORKER_IMAGE:?Pinned local image ID required}
-    pull_policy: never
-    restart: unless-stopped
-    user: "10001:10001"
-    init: true
-    read_only: true
-    cap_drop: [ALL]
-    security_opt:
-      - no-new-privileges:true
-    pids_limit: 96
-    mem_limit: 3g
-    cpus: 2
-    # AppImage needs executable scratch for its extraction runtime. This is
-    # restricted to this worker, not a host bind mount or MakerVault's media.
-    tmpfs:
-      - /tmp:rw,nosuid,size=1g,mode=1777
-    # Persistent engine inventory shared by all engines; worker cannot modify it.
-    volumes:
-      - makervault_slicer_engines:/opt/engine-store:ro
-    environment:
-      SLICER_WORKER_ENABLED: "1"
-      SLICER_WORKER_TOKEN: ${MAKERVAULT_SLICER_WORKER_TOKEN:?Worker token required}
-      SLICER_ENGINES_JSON: ${SLICER_ENGINES_JSON:?Verified engine registry required}
-    networks:
-      - makervault_slicer
-    healthcheck:
-      test: ["CMD", "python3", "-c", "import urllib.request,json,sys; s=json.load(urllib.request.urlopen('http://127.0.0.1:8088/health',timeout=2)); sys.exit(0 if s.get('ready') else 1)"]
-      interval: 30s
-      timeout: 5s
-      retries: 3
-      start_period: 60s
-    # Deliberately no exposed ports, app secrets, Docker socket or host mount.
-
   slicer-engine-store-init:
-    profiles: ["engine-installer"]
     image: busybox:1.37.0
-    command: ["sh", "-c", "chown -R 10001:10001 /engine-store"]
+    command: ["sh", "-c", "chown -R 10002:10002 /engine-store && chmod 0755 /engine-store"]
     user: "0:0"
     restart: "no"
     cap_drop: [ALL]
@@ -66,42 +31,50 @@ services:
     volumes:
       - makervault_slicer_engines:/engine-store:rw
 
-  slicer-engine-installer:
-    profiles: ["engine-installer"]
-    image: makervault-engine-installer:staging
+  slicer-worker:
+    # The single slicer container runs one non-writable, egress-blocked
+    # worker UID 10001 and one installer UID 10002 as distinct processes.
+    image: makervault-slicer-combined:staging
     build:
       context: .
       dockerfile: slicer_worker/Dockerfile.generic
-    command: ["python3", "-m", "slicer_worker.engine_installer_service"]
+    command: ["python3", "-m", "slicer_worker.combined_service"]
     restart: unless-stopped
     depends_on:
       slicer-engine-store-init:
         condition: service_completed_successfully
-    user: "10001:10001"
+    user: "0:0"
     init: true
     read_only: true
     cap_drop: [ALL]
-    security_opt: ["no-new-privileges:true"]
-    pids_limit: 48
-    mem_limit: 1g
-    cpus: 1.0
+    cap_add: [SETUID, SETGID]
+    security_opt:
+      - no-new-privileges:true
+    pids_limit: 144
+    mem_limit: 4g
+    cpus: 3
     tmpfs:
-      - /tmp:rw,nosuid,size=256m,mode=1777
+      - /tmp:rw,nosuid,size=1g,mode=1777
     volumes:
       - makervault_slicer_engines:/opt/engine-store:rw
       - ./slicer-engine-assets:/opt/staging-orca:ro
     environment:
-      SLICER_INSTALLER_TOKEN: ${MAKERVAULT_SLICER_INSTALLER_TOKEN:-disabled}
+      SLICER_WORKER_ENABLED: "1"
+      SLICER_WORKER_TOKEN: ${MAKERVAULT_SLICER_WORKER_TOKEN:?Worker token required}
+      SLICER_ENGINES_JSON: ${SLICER_ENGINES_JSON:?Verified engine registry required}
+      SLICER_INSTALLER_TOKEN: ${MAKERVAULT_SLICER_INSTALLER_TOKEN:?Installer token required}
     networks:
       - makervault_slicer
       - makervault_installer_egress
     healthcheck:
-      test: ["CMD", "python3", "-c", "import socket; s=socket.socket(); s.settimeout(2); s.connect(('127.0.0.1',8091)); s.close()"]
+      test: ["CMD", "python3", "-c", "import urllib.request,socket,json,sys; d=json.load(urllib.request.urlopen('http://127.0.0.1:8088/health',timeout=2)); s=socket.create_connection(('127.0.0.1',8091),timeout=2); s.close(); sys.exit(0 if d.get('ready') else 1)"]
       interval: 30s
       timeout: 5s
       retries: 3
       start_period: 120s
-    # No published ports, Docker socket, database, printer or media access.
+    # Docker socket, application database, printer and media remain isolated.
+    # Worker cannot write the engine volume (different UID) or connect out
+    # (seccomp filter inherited by slicer binaries).
 
 networks:
   makervault_slicer:
