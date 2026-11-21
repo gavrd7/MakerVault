@@ -1923,3 +1923,62 @@ controls as production verification, first run the focused Django suites
 (**66 expected**) after updating, and separately perform an offline
 MakerVault slice generated through the regular (default-preserving)
 project-builder path with explicit flushing. Do not send a print job.
+
+
+## Focused ordinary production-builder offline verification (21 Nov 2026)
+
+Latest user's `Pasted text(20261121-003437).txt` confirms app-only
+Debian staging `df41dc7b..1aee2a32`, the verified pinned worker
+`sha256:7a3120b320dc5a0e26147c32bbe620bf094574b26d8f06247589ead2feba24b8`
+unchanged and healthy, and **66/66 focused Django tests PASS**.
+This validates regression coverage but is not end-to-end proof of native
+production 3MF slicing.
+
+To close that distinction, new `--test-production-flush` command option
+runs exactly **three offline native slices** using
+`build_creality_project_candidate` with its normal
+`preserve_native_flush_overrides=True` default, rather than disposable
+post-build marker edits. Selects the same two approved filament profile
+identities and two object geometry placements; retains manufacturer
+printer/filament scripts.
+
+The three A/B scenarios: multiplier 1.0; multiplier 2.0; multiplier 2.0
+with only T0→T1 increased by 25 mm³ from the *project's actual source
+matrix entry*. It requires `--engine crealityprint --native`, refuses
+`--test-flush` and unsupported topologies, validates process marker
+presence and requested matrix values *before slicing*, and rechecks the
+pinned engine manifest afterwards. It does not submit any printer job.
+It reports the selected machine profile's original
+`purge_in_prime_tower` and whether the regular builder marked that
+printer override, but **does not force it enabled**. If the original
+native printer profile disables it, tower motion sensitivity is not
+guaranteed; this is expected and should not be falsely called a failure.
+`normal_multiplier_2_0` is the common comparison parent; reports
+safe emitted settings, tagged-tower geometry/positive E, executable
+motion/M-command hashes and differences.
+
+Run after staging app-only update and focused tests
+(**67 expected, up from verified 66**):
+
+```bash
+cd ~/MakerVault-Staging
+git pull --ff-only origin feature/self-hosted-slicer-foundation
+sudo python3 scripts/install_slicer_staging.py update
+sudo docker exec makervault python3 /app/backend/manage.py test \
+  core.tests.test_slicer_printer_compatibility \
+  core.tests.test_slicer_tower_diagnostics \
+  core.tests.test_slicer_flush_adapters \
+  core.tests.test_slicer_creality_project --noinput
+sudo docker exec makervault python3 /app/backend/manage.py \
+  diagnose_slicer_printer_profiles \
+  --engine crealityprint --topology single_nozzle_changer \
+  --printer-profile-id 91b19730-66f5-4b5f-bd7d-b08fbb4ee768 \
+  --process-profile-id 0c90fa89-a193-48b6-ac94-a69792230163 \
+  --filament-profile-id e9c1274c-d95b-4592-87e5-03a645d699aa \
+  --filament-profile-id eb8473e9-f993-4c6e-8cc4-fb357e3ae782 \
+  --native --test-production-flush
+```
+
+This flag/test is **not yet verified on Debian**. Keep PR #171
+draft; physical CFS purge, printer firmware behaviour and final
+production dispatch safety remain unverified.
