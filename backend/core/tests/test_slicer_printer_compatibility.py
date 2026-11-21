@@ -118,6 +118,26 @@ class PrinterCompatibilityFixtureTests(SimpleTestCase):
         with self.assertRaises(ValueError):
             _creality_toolchange_macro_audit(b"")
 
+    def test_creality_flush_extrusion_metrics_are_bounded_and_redacted(self):
+        from core.management.commands.diagnose_slicer_printer_profiles import (
+            _creality_toolchange_macro_audit)
+        gcode = (
+            b"; FLUSH_START\\n"
+            b"G1 E12.5 F600\\nG1 E-3 F600\\nG1 E7.25\\n"
+            b"G1 X20 E99\\n"
+            b"; FLUSH_END\\n"
+        )
+        metrics = _creality_toolchange_macro_audit(gcode)
+        self.assertTrue(metrics["flush_markers_balanced"])
+        self.assertEqual(metrics["completed_flush_sections"], 1)
+        self.assertEqual(metrics["positive_extrusion_only_flush_moves"], 2)
+        self.assertEqual(metrics["positive_extrusion_only_flush_length_mm"], 19.75)
+        self.assertEqual(metrics["unclassified_flush_g1_e_moves"], 1)
+        self.assertNotIn("G1", str(metrics))
+        empty = _creality_toolchange_macro_audit(b"T0\\nT1\\n")
+        self.assertEqual(empty["positive_extrusion_only_flush_moves"], 0)
+        self.assertEqual(empty["positive_extrusion_only_flush_length_mm"], 0.0)
+
     def test_native_machine_capability_audit_is_read_only_opt_in(self):
         from django.core.management import CommandError
         from django.core.management.base import CommandParser
