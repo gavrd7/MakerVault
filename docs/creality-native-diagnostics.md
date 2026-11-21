@@ -2156,3 +2156,54 @@ normal profiles or submit any print.
 
 Retain PR #171 as draft; do not merge until machine-capability
 provenance is understood and physical printer safety is checked.
+
+
+## Confirmed K2 external purge-code sensitivity with gated native positive control (21 Nov 2026)
+
+User's `Pasted text(20261121-005517).txt` shows successful
+app-only staging update `62fc1381..4da21c60`, unchanged healthy
+pinned worker, and all **six offline** native Creality 3MF slices
+completed; no new Django test command shown in this attachment.
+Latest confirmed focused tests remain **69/69** from the preceding
+uploaded log.
+
+For ordinary real K2 project 3MF, `multicolor_method` remains
+disabled, `purge_in_prime_tower=0`, K2 native purge macro markers
+remain absent, and changing multiplier 1↔2 or T0→T1 raw directional
+140↔165mm³ produces identical executable motion and M-command
+digests. The same inputs through the ordinary MakerVault builder,
+with the **test-only** machine capability `multicolor_method=1`
+applied to otherwise identical disposable 3MF, prove BOTH controls
+alter executable G-code:
+
+| Gated offline control | Multiplier | T0→T1 | FLUSH_START/END | M8200 | G1 extrusion moves | Actual motion and M SHA |
+| --- | --- | --- | --- | --- | --- | --- |
+| `experimental_multicolor_multiplier_1_0` | 1.0 | 140mm³ fallback | 50/50 | 287 | 6020 | Different vs gated 2.0 |
+| `experimental_multicolor_enabled` | 2.0 | 140mm³ fallback | 50/50 | 287 | 6020 | Reference |
+| `experimental_multicolor_forward_2_0` | 2.0 | 165mm³ fallback | **74/74** | 287 | **6284** | Different vs gated 2.0 |
+
+The identical flush-start/M8200 counts for the multiplier comparison
+do **NOT** invalidate the result: its G0/G1 motion and machine-command
+hashes differ, consistent with changed extrusion command values
+without changing the number of native operations. The directional
+matrix test also creates 24 additional flush start/end sections and
+264 extrusion moves. Tagged tower positive E stays 1090.971mm,
+XY22.898×22.898mm, as expected with K2's original
+`purge_in_prime_tower=0`. All G-code values are offline-only and
+**not physically calibrated purge volumes**; default 140mm³ is a
+builder diagnostic fallback, not an official K2 matrix default.
+No printer sent any commands.
+
+Remaining engineering decision is **where a legitimate
+`multicolor_method=1` machine capability originates** in
+Creality's official preset-selection flow. Upstream
+`PresetBundle.cpp` excludes this capability from project options
+and expects it from a printer profile. The selected resolved
+imported machine has no explicit capability and generates
+`multicolor_method=0`. Do not generalise the synthetic 3MF
+positive-control override into all production jobs, change native
+vendor macros, or declare physical validation complete. PR #171
+remains draft; K2 printer dispatch of unverified generated
+multi-colour jobs must remain blocked until a supported machine
+capability source, approved purge quantity and physical test path
+are established.
