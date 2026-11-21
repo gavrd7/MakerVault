@@ -306,11 +306,11 @@ class BuildPlate3MFTests(SimpleTestCase):
         with zipfile.ZipFile(io.BytesIO(archive_bytes)) as archive:
             mesh = ET.fromstring(archive.read("3D/3dmodel.model"))
             triangles = mesh.findall(".//{%s}triangle" % NS)
-            native = ET.fromstring(archive.read("Metadata/model_settings.config"))
+            self.assertNotIn("Metadata/model_settings.config", archive.namelist())
         self.assertGreater(len(triangles),len(source))
         self.assertTrue(any(face.attrib.get("paint_supports")=="4" for face in triangles))
         self.assertTrue(any("paint_supports" not in face.attrib for face in triangles))
-        self.assertEqual(len(native.find("plate").findall("model_instance")),1)
+        # A single default-tool object requires no native instance override.
 
     def test_variable_layer_ranges_are_native_orca_3mf_per_object(self):
         base = {"x_mm": 0, "y_mm": 0, "rotation_deg": 0,
