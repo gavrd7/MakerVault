@@ -529,7 +529,8 @@ def build_makervault_project_3mf(plates_with_stl, *, bed_width, bed_depth, metad
                     "paint_sidecar": name,
                 })
             else:
-                portable_plate["objects"].append(row)
+                # Sidecar removal must never mutate the caller-owned draft.
+                portable_plate["objects"].append(dict(row))
             # Support annotations have their own semantic sidecar. Never
             # encode these as filament colour or native slicer metadata.
             support = row.get("support_paint")
