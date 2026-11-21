@@ -138,18 +138,22 @@ def remove_unsaved_gcode(request):
                 continue
             # For an orphaned output, exact generated_by/extension/job ID and
             # unsaved category are still required. Library G-code never matches.
-            for job in refs:
-                job.output_asset = None
-                job.status = "stale"
-                job.message = "Private unsaved G-code removed; slice history retained."
-                job.save(update_fields=["output_asset", "status", "message", "updated_at"])
             storage = asset.file.storage if asset.file else None
             name = asset.file.name if asset.file else ""
             try:
-                asset.delete()
+                # A savepoint protects any linked history if another module
+                # references this file with a PROTECT foreign key.
+                with transaction.atomic():
+                    for job in refs:
+                        job.output_asset = None
+                        job.status = "stale"
+                        job.message = "Private unsaved G-code removed; slice history retained."
+                        job.save(update_fields=[
+                            "output_asset", "status", "message", "updated_at"])
+                    asset.delete()
             except ProtectedError:
-                # A protected external relationship must not be bypassed.
-                raise
+                # Leave protected asset + slice history completely unchanged.
+                continue
             if storage and name:
                 def erase(st=storage, filename=name):
                     try:
