@@ -138,6 +138,37 @@ class PrinterCompatibilityFixtureTests(SimpleTestCase):
         self.assertEqual(empty["positive_extrusion_only_flush_moves"], 0)
         self.assertEqual(empty["positive_extrusion_only_flush_length_mm"], 0.0)
 
+    def test_creality_anonymous_flush_sections_and_extruder_modes(self):
+        from core.management.commands.diagnose_slicer_printer_profiles import (
+            _creality_toolchange_macro_audit)
+        gcode = (
+            b"M83\nT0\n; FLUSH_START\nG1 E3 F600\nG1 E7\n"
+            b"; FLUSH_END\nT1\nM82\n; FLUSH_START\nG92 E0\n"
+            b"G1 E14\n; FLUSH_END\n"
+        )
+        audit = _creality_toolchange_macro_audit(gcode)
+        self.assertTrue(audit["flush_markers_balanced"])
+        self.assertEqual(audit["anonymous_flush_section_lengths_mm"], [10.0, 14.0])
+        self.assertEqual(audit["positive_extrusion_only_flush_length_mm"], 24.0)
+        self.assertEqual(audit["extrusion_modes_observed_in_flush"],
+                         ["absolute", "relative"])
+        self.assertEqual(audit["extruder_position_resets_in_flush"], 1)
+        self.assertEqual(audit["tool_select_command_count"], 2)
+        self.assertEqual(audit["positive_length_semantics"],
+                         "gcode_e_field_sum_not_net_filament_motion")
+        self.assertTrue(audit["flush_section_count_bounded"])
+        self.assertNotIn("tool_transition_mapping", audit)
+
+    def test_creality_anonymous_flush_sections_reject_unbounded_report(self):
+        from core.management.commands.diagnose_slicer_printer_profiles import (
+            _creality_toolchange_macro_audit)
+        repeated = b"; FLUSH_START\nG1 E1\n; FLUSH_END\n" * 257
+        audit = _creality_toolchange_macro_audit(repeated)
+        self.assertFalse(audit["flush_section_count_bounded"])
+        self.assertFalse(audit["flush_markers_balanced"])
+        self.assertEqual(len(audit["anonymous_flush_section_lengths_mm"]), 256)
+        self.assertEqual(audit["flush_start_comment_count"], 257)
+
     def test_native_machine_capability_audit_is_read_only_opt_in(self):
         from django.core.management import CommandError
         from django.core.management.base import CommandParser
