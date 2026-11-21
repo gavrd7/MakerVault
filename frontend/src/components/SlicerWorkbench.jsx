@@ -2253,7 +2253,7 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
           <button type="button" disabled={busy} onClick={removeAllUnsavedGcode}>Remove all unsaved G-code</button>
         </>}
       </div>
-      {selectSavedJobs && mayDeleteDraft && <div className="settingsActions slicerSavedJobToolbar" role="group" aria-label="Select saved slicing entries">
+      {selectSavedJobs && mayDeleteDraft && <div className="slicerSavedJobSelectionBar" role="group" aria-label="Select saved slicing entries">
         <button type="button" disabled={busy || !filteredSelectableJobs.length}
           onClick={() => setSelectedSavedJobIds(current => [...new Set([
             ...current, ...filteredSelectableJobs.map(job => job.id),
@@ -2262,7 +2262,7 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
           onClick={() => setSelectedSavedJobIds([])}>Clear selection</button>
         <button type="button" disabled={busy || !selectedSavedJobCount}
           onClick={() => bulkRemoveSavedJobs("selected")}>Delete selected ({selectedSavedJobCount})</button>
-        <small>Only inactive jobs can be selected. Selection covers the loaded list; remove-all buttons cover older entries too.</small>
+        <small className="slicerSavedJobSelectionHelp">Only inactive jobs can be selected. Selection covers the loaded list; remove-all buttons cover older entries too.</small>
       </div>}
       <h3>Saved slicing drafts and slices</h3>
       <div className="slicerSavedJobFilterRow">
@@ -2279,7 +2279,7 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
       </div>
       {filteredSavedJobs.length ? <div className="printingStack">{filteredSavedJobs.slice(0, visibleDraftCount).map(job =>
         <div key={job.id} className="cameraSourceRow slicerSavedJobRow">
-          {selectSavedJobs && mayDeleteDraft && <label className="checkRow" aria-label={"Select slicing entry " + (job.input_asset?.name || job.id)}>
+          {selectSavedJobs && mayDeleteDraft && <label className="slicerSavedJobCheckbox" aria-label={"Select slicing entry " + (job.input_asset?.name || job.id)}>
             <input type="checkbox" checked={selectedSavedJobIds.includes(job.id)}
               disabled={busy || !deletableJobStatuses.includes(job.status)}
               onChange={e => setSelectedSavedJobIds(current => e.target.checked
