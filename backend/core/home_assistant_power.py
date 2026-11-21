@@ -99,6 +99,12 @@ def validate_url(value):
     if literal is not None:
         if not _safe_private_ip(literal):
             raise HomeAssistantPowerError("Use a private network IP, or a trusted HTTPS domain.")
+    elif parsed.scheme == "http":
+        # Plain HTTP hostnames can rebind between validation and the socket
+        # connection, exposing the bearer token to a different LAN service.
+        # Require an explicit private IP for HTTP until DNS-pinned transports
+        # are supported. HTTPS hostnames retain certificate authentication.
+        raise HomeAssistantPowerError("Use a private IP address for HTTP Home Assistant URLs, or use HTTPS.")
     elif "." not in host and host != "localhost":
         # A single-label LAN hostname is still valid (Docker DNS, for example).
         if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9-]{0,252}", host):
@@ -187,7 +193,9 @@ def printer_is_busy(printer):
     history_active = printer.print_jobs.filter(status="printing").exists()
     now = timezone.now()
     verified_idle = False
+    has_connection = False
     for connection in printer.live_connections.filter(enabled=True):
+        has_connection = True
         snapshot = connection.last_snapshot or {}
         job = snapshot.get("job")
         if not isinstance(job, dict):
@@ -208,7 +216,11 @@ def printer_is_busy(printer):
                 and str(snapshot.get("state") or "").strip().casefold()
                 in {"idle", "ready", "standby", "complete", "completed"}):
             verified_idle = True
-    return history_active and not verified_idle
+    # Unknown/stale telemetry is not evidence that the printer is safe to
+    # power down. Require a fresh idle snapshot for connected printers; for
+    # deliberately offline/unmonitored printers only explicit UI confirmation
+    # remains available, and a recorded active job still blocks shutdown.
+    return (not verified_idle if has_connection else history_active)
 
 def set_switch(setting, entity, desired):
     if desired not in {"on", "off"} or not valid_entity(entity):
