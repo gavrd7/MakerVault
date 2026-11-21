@@ -268,6 +268,7 @@ class OfficialProfileApiTests(TestCase):
         search.assert_called_once_with(
             "PLA", "filament", "OrcaFilamentLibrary",
             printer_model=None, version="2.5.0", brand="eSUN",
+            slot_discovery=False, material="", manufacturer="",
         )
         invalid = self.client.get(self.url, {
             "engine": "orcaslicer", "version": "2.6.0", "catalogues": "1",
