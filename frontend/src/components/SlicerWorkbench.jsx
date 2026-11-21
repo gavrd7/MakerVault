@@ -2243,15 +2243,7 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
       {notice && <p role="status">{notice}</p>}
       <div className="settingsActions slicerSavedJobToolbar">
         <button type="button" disabled={loading || busy} onClick={refresh}>Refresh entries</button>
-        <label>Show
-          <select aria-label="Filter saved drafts and slices" value={savedJobFilter}
-            onChange={e => { setSavedJobFilter(e.target.value); setVisibleDraftCount(15); setSelectedSavedJobIds([]); }}>
-            <option value="all">All entries</option>
-            <option value="drafts">Drafts (not sliced)</option>
-            <option value="slices">Completed slices</option>
-            <option value="other">Failed / inactive / active</option>
-          </select>
-        </label>
+
         {mayDeleteDraft && <>
           <button type="button" disabled={busy} onClick={() => {
             setSelectSavedJobs(value => !value); setSelectedSavedJobIds([]);
@@ -2273,7 +2265,18 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
         <small>Only inactive jobs can be selected. Selection covers the loaded list; remove-all buttons cover older entries too.</small>
       </div>}
       <h3>Saved slicing drafts and slices</h3>
-      <p role="status">Showing {filteredSavedJobs.length} of {jobs.length} loaded entries.</p>
+      <div className="slicerSavedJobFilterRow">
+        <p role="status">Showing {filteredSavedJobs.length} of {jobs.length} loaded entries.</p>
+        <label>Show
+          <select aria-label="Filter saved drafts and slices" value={savedJobFilter}
+            onChange={e => { setSavedJobFilter(e.target.value); setVisibleDraftCount(15); setSelectedSavedJobIds([]); }}>
+            <option value="all">All entries</option>
+            <option value="drafts">Drafts (not sliced)</option>
+            <option value="slices">Completed slices</option>
+            <option value="other">Failed / inactive / active</option>
+          </select>
+        </label>
+      </div>
       {filteredSavedJobs.length ? <div className="printingStack">{filteredSavedJobs.slice(0, visibleDraftCount).map(job =>
         <div key={job.id} className="cameraSourceRow slicerSavedJobRow">
           {selectSavedJobs && mayDeleteDraft && <label className="checkRow" aria-label={"Select slicing entry " + (job.input_asset?.name || job.id)}>
