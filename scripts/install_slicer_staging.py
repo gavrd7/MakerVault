@@ -237,44 +237,15 @@ def prepare_orca(version=VERSION):
 
 
 def refresh_worker():
-    """Rebuild only the wrapper over the same checksum-verified engine bundle.
+    """Rebuild the combined runtime without changing engine data or tokens."""
+    _read_env()
+    args = _compose_args()
+    _run(args + ["config", "--quiet"])
+    print("Rebuilding the combined slicer runtime from the pinned reviewed image...")
+    _run(args + ["up", "-d", "--build", "--no-deps", "slicer-worker"])
+    _run(args + ["ps", "slicer-worker"])
+    print("Combined worker/installer rebuilt. Verify both service endpoints are healthy.")
 
-    Preserve the authentication token and exact official binary hashes.
-    Never start an image until the new immutable image ID is recorded.
-    """
-    envtext = _read_env()
-    _resume_staged_bundle()
-    def installed(key):
-        for line in envtext.splitlines():
-            if line.startswith(key + "="):
-                return line.partition("=")[2]
-        raise ValueError("Missing prepared slicer setting: " + key)
-
-    old_image = installed("MAKERVAULT_SLICER_WORKER_IMAGE")
-    old_digest = installed("MAKERVAULT_SLICER_ENGINE_IMAGE_DIGEST")
-    if old_image != old_digest or not old_image.startswith("sha256:"):
-        raise ValueError("Existing worker image identity does not match its digest.")
-    print("Rebuilding isolated worker with existing pinned OrcaSlicer binary…")
-    _run(["docker", "build", "-f", "slicer_worker/Dockerfile.bundle",
-          "-t", "makervault-slicer-worker:staging", "."])
-    new_image = _run(["docker", "image", "inspect", "--format", "{{.Id}}",
-                      "makervault-slicer-worker:staging"], capture=True)
-    if (not new_image.startswith("sha256:") or len(new_image) != 71
-            or any(ch not in "0123456789abcdef" for ch in new_image[7:])):
-        raise ValueError("Rebuilt worker has no valid immutable image ID.")
-    if new_image != old_image:
-        updated = envtext.replace(
-            "MAKERVAULT_SLICER_WORKER_IMAGE=" + old_image,
-            "MAKERVAULT_SLICER_WORKER_IMAGE=" + new_image
-        ).replace(
-            "MAKERVAULT_SLICER_ENGINE_IMAGE_DIGEST=" + old_digest,
-            "MAKERVAULT_SLICER_ENGINE_IMAGE_DIGEST=" + new_image
-        )
-        _save_env(updated)
-    _run(_compose_args() + ["config", "--quiet"])
-    _run(_compose_args() + ["up", "-d", "--build", "--force-recreate"])
-    _run(_compose_args() + ["ps", "makervault", "slicer-worker"])
-    print("Refreshed staging worker; engine binary hash and token preserved.")
 
 
 def upgrade_orca(version=VERSION, *, reviewed_appimage=None, expected_sha=None):
@@ -410,37 +381,57 @@ def upgrade_orca(version=VERSION, *, reviewed_appimage=None, expected_sha=None):
     print("Reverify the engine and native profiles in MakerVault before slicing.")
 
 
-def enable_engine_installer():
-    """One-time opt-in: configure and start the restricted in-browser installer.
+def consolidate_slicer():
+    """Explicit migration of existing five-container staging to four.
 
-    Does not replace the pinned Orca binary or change the existing print queue.
-    The worker must support the versioned, read-only engine store. Rebuild the
-    wrapper first if upgrading an older staging installation.
+    Stop the old installer before changing engine-volume ownership; do not
+    delete its data volume, other engines, images or private application data.
+    If the combined container fails its health check, do not delete the old
+    stopped installer: operators can still restore their prior checkout.
     """
-    current = _read_env()
-    if "MAKERVAULT_SLICER_INSTALLER_TOKEN=" not in current:
-        token = secrets.token_urlsafe(48)
-        current = current.rstrip() + "\nMAKERVAULT_SLICER_INSTALLER_TOKEN=" + token + "\n"
-    if "MAKERVAULT_SLICER_HOST_UPDATER_ENABLED=" not in current:
-        current = current.rstrip() + "\nMAKERVAULT_SLICER_HOST_UPDATER_ENABLED=1\n"
-    else:
-        current = current.replace("MAKERVAULT_SLICER_HOST_UPDATER_ENABLED=0",
-                                  "MAKERVAULT_SLICER_HOST_UPDATER_ENABLED=1")
-    _save_env(current)
-    # Existing staging installs may still use an older worker image that has
-    # no active-manifest support. Rebuild the worker wrapper once, preserving
-    # the exact Orca binary and hash, before activating an extra engine.
-    refresh_worker()
+    env = _read_env()
+    if "MAKERVAULT_SLICER_INSTALLER_TOKEN=" not in env:
+        raise ValueError("Set up the existing installer token before consolidation.")
     args = _compose_args()
     _run(args + ["config", "--quiet"])
-    print("Starting restricted engine installer with no published ports…")
-    _run(args + ["--profile", "engine-installer", "up", "-d", "--build",
-                 "slicer-engine-store-init", "slicer-engine-installer"])
-    print("Refreshing MakerVault installer API configuration…")
-    _run(args + ["up", "-d", "--no-deps", "--force-recreate", "makervault"])
-    _run(args + ["ps", "makervault", "slicer-worker", "slicer-engine-installer"])
-    print("Installer enabled. Check Engine Installations in MakerVault.")
-    print("Creality Print activates only after its official AppImage passes the CLI check.")
+    # Exact old Compose service/container identifier. Never delete unnamed
+    # containers or volume data and never run a project-wide prune/down -v.
+    old = "makervault-slicer-engine-installer-1"
+    existing = _run(["docker", "container", "inspect",
+                     "--format", "{{.Name}}", old], capture=True) if _container_exists(old) else ""
+    if existing:
+        print("Stopping the old standalone engine installer (engine data preserved)...")
+        _run(["docker", "stop", old])
+    print("Stopping the old worker before changing engine volume permissions...")
+    _run(args + ["stop", "slicer-worker"])
+    print("Starting one hardened combined slicer container...")
+    _run(args + ["up", "-d", "--build", "slicer-worker"])
+    _run(args + ["ps", "slicer-worker"])
+    print("After verifying the new container is healthy, remove the stopped")
+    print("legacy installer with: sudo docker rm " + old)
+    print("No storage volumes were deleted. Creality and Orca registrations are preserved.")
+
+
+def _container_exists(name):
+    result = subprocess.run(["docker", "container", "inspect", name],
+                            cwd=ROOT, stdout=subprocess.DEVNULL,
+                            stderr=subprocess.DEVNULL, check=False)
+    return result.returncode == 0
+
+
+def enable_engine_installer():
+    """Legacy command name: the browser installer now shares slicer-worker."""
+    env = _read_env()
+    if "MAKERVAULT_SLICER_INSTALLER_TOKEN=" not in env:
+        env = env.rstrip() + "\\nMAKERVAULT_SLICER_INSTALLER_TOKEN=" + secrets.token_urlsafe(48) + "\\n"
+    if "MAKERVAULT_SLICER_HOST_UPDATER_ENABLED=" not in env:
+        env = env.rstrip() + "MAKERVAULT_SLICER_HOST_UPDATER_ENABLED=1\\n"
+    else:
+        env = env.replace("MAKERVAULT_SLICER_HOST_UPDATER_ENABLED=0",
+                          "MAKERVAULT_SLICER_HOST_UPDATER_ENABLED=1")
+    _save_env(env)
+    consolidate_slicer()
+
 
 
 def update():
@@ -503,7 +494,7 @@ def status():
 
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("action", choices=["prepare-orca", "enable", "disable", "status", "refresh-worker", "upgrade-orca", "upgrade-reviewed-orca", "update", "enable-engine-installer"])
+    parser.add_argument("action", choices=["prepare-orca", "enable", "disable", "status", "refresh-worker", "upgrade-orca", "upgrade-reviewed-orca", "update", "enable-engine-installer", "consolidate-slicer"])
     parser.add_argument("--version", default=VERSION,
                         help="Approved Orca release for prepare-orca and upgrade-orca (default: 2.5.0)")
     parser.add_argument("--reviewed-appimage", type=Path,
@@ -531,7 +522,8 @@ def main(argv=None):
         {"enable": enable,
          "disable": disable, "status": status,
          "refresh-worker": refresh_worker, "update": update,
-         "enable-engine-installer": enable_engine_installer}[args.action]()
+         "enable-engine-installer": enable_engine_installer,
+          "consolidate-slicer": consolidate_slicer}[args.action]()
     except (ValueError, OSError, subprocess.CalledProcessError) as exc:
         print("Slicer staging installation failed: " + str(exc), file=sys.stderr)
         return 1
