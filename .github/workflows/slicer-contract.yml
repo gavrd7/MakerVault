@@ -75,6 +75,8 @@ jobs:
           MAKERVAULT_SLICER_ENGINE_IMAGE_DIGEST: "sha256:0000000000000000000000000000000000000000000000000000000000000000"
           MAKERVAULT_SLICER_ENGINE_BINARY_SHA256: "0000000000000000000000000000000000000000000000000000000000000000"
           MAKERVAULT_SLICER_ENGINE_VERSION: "ci-only-placeholder"
+          MAKERVAULT_SLICER_ENGINES_JSON: '{"orcaslicer":{"version":"2.4.2","binary_sha256":"0000000000000000000000000000000000000000000000000000000000000000"}}'
+          SLICER_ENGINES_JSON: '{"orcaslicer":{"binary":"/opt/engines/orcaslicer.AppImage","version":"2.4.2","binary_sha256":"0000000000000000000000000000000000000000000000000000000000000000"}}'
         run: |
           printf 'POSTGRES_PASSWORD=ci-only-placeholder\n' > .env
           docker compose -f compose.yaml -f compose.slicer.yaml --profile slicer config --quiet
