@@ -34,6 +34,17 @@ RUN if [ -f /opt/engines/orcaslicer.AppImage ]; then \
       chmod -R a+rX squashfs-root && \
       test -x squashfs-root/AppRun; \
     fi
+# Bambu Studio is a separate opt-in candidate. Extract the independently
+# SHA-256-pinned AppImage in its own directory to keep Orca assets intact.
+# Merely bundling this executable does NOT admit or enable Bambu worker jobs.
+RUN if [ -f /opt/engines/bambustudio.AppImage ]; then \
+      mkdir -p /opt/engines/bambu-root && \
+      cd /opt/engines/bambu-root && \
+      ../bambustudio.AppImage --appimage-extract >/dev/null && \
+      test -x squashfs-root/AppRun && \
+      test -d squashfs-root/usr && \
+      chmod -R a+rX squashfs-root; \
+    fi
 RUN python3 -m compileall -q /opt/makervault-slicer/slicer_worker && \
     test -f /opt/engines/manifest.json
 ENV PYTHONPATH=/opt/makervault-slicer PYTHONDONTWRITEBYTECODE=1
