@@ -1160,6 +1160,14 @@ class Command(BaseCommand):
                                 "positive_extrusion_only_flush_length_mm"] !=
                             enabled["toolchange_macro_audit"][
                                 "positive_extrusion_only_flush_length_mm"]),
+                        "anonymous_flush_sections_changed": (
+                            output["toolchange_macro_audit"][
+                                "anonymous_flush_section_lengths_mm"] !=
+                            enabled["toolchange_macro_audit"][
+                                "anonymous_flush_section_lengths_mm"]),
+                        "extrusion_modes_observed": (
+                            output["toolchange_macro_audit"][
+                                "extrusion_modes_observed_in_flush"]),
                         "flush_markers_balanced_both": (
                             output["toolchange_macro_audit"]["flush_markers_balanced"]
                             and enabled["toolchange_macro_audit"]["flush_markers_balanced"]),
