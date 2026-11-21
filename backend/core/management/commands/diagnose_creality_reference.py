@@ -7,6 +7,7 @@ No database changes, printer actions, or permanent exports.
 import uuid
 import zipfile
 import io
+import tempfile
 from pathlib import Path
 
 from django.core.management.base import BaseCommand, CommandError
@@ -30,7 +31,7 @@ class Command(BaseCommand):
 
     def handle(self, *args, **options):
         output = Path(options["output"])
-        if (output.parent != Path("/tmp") or output.suffix.lower() != ".3mf"
+        if (output.parent != Path(tempfile.gettempdir()) or output.suffix.lower() != ".3mf"
                 or output.exists() or output.is_symlink()):
             raise CommandError("Choose a fresh private /tmp/*.3mf output path.")
         jobs = SliceJob.objects.filter(

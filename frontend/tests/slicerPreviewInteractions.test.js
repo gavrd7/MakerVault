@@ -42,7 +42,7 @@ test("visualiser renders 3D extrusion geometry rather than top-down SVG", () => 
   assert.match(renderer, /new THREE\.WebGLRenderer/);
   assert.match(renderer, /new OrbitControls\(camera, renderer\.domElement\)/);
   assert.match(renderer, /new THREE\.LineSegments\(geometry/);
-  assert.match(renderer, /new THREE\.Vector3\(segment\[0\], segment\[4\], segment\[1\]\)/);
+  assert.match(renderer, /new THREE\.Vector3\(segment\[0\], segment\[4\], -segment\[1\]\)/);
   assert.match(renderer, /marker\.position\.set\(\.\.\.lastStep\)/);
   assert.match(renderer, /observer\?\.disconnect\(\)/);
   assert.match(renderer, /renderer\.dispose\(\)/);

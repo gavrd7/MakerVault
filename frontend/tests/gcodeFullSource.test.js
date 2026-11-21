@@ -25,10 +25,9 @@ test("large files are paged and the copy action references the entire stored sou
   assert.match(full, /Download complete G-code/);
 });
 
-test("per-object evidence is distinguished from settings saved in the slicer job", () => {
-  assert.match(full, /EXCLUDE_OBJECT_START/);
-  assert.match(full, /Per-object toolpath evidence/);
-  assert.match(full, /not wall-loop counts or infill percentages/);
+test("read-only source does not claim inferred per-object deposition; saved object settings remain separate", () => {
+  assert.doesNotMatch(full, /Per-object toolpath evidence/);
+  assert.match(full, /Complete stored G-code/);
   assert.match(viewer, /Settings saved with this slicing job/);
   assert.match(viewer, /overrides.wall_loops/);
   assert.match(viewer, /overrides.sparse_infill_density/);

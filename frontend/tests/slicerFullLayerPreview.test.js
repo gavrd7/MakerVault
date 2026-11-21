@@ -27,7 +27,7 @@ test("progressive full-quality preview reports limited geometry separately from 
   assert.match(preview, /slicerWholeModelProgress/);
   assert.match(preview, /wholeModel\.loadedLayers/);
   assert.match(preview, /The preview reached its resource budget/);
-  assert.match(preview, /const previous = wholeModel\.segments\.filter/);
+  assert.match(preview, /const previous = wholeModel\.chunks\.flat\(\)\.filter/);
   assert.match(preview, /framingSegments=/);
   assert.match(toolpath, /cameraSource = framingSegments\.length/);
   assert.match(toolpath, /layerDisplay = "current"/);
@@ -72,7 +72,7 @@ test("whole-print layer scrubbing changes a GPU clipping plane rather than geome
   assert.match(toolpath, /const geometryStep = progressiveMode \? -1 : activeStep/);
   assert.match(toolpath, /clippingPlanes:\s*\[view\.layerClipPlane\]/);
   const geometryEffect = toolpath.slice(toolpath.indexOf("const geometryLayer = progressiveMode"));
-  assert.match(geometryEffect, /\[segments, layers, geometryLayer, geometryStep,/);
+  assert.match(geometryEffect, /\[segments, segmentChunks, layers, geometryLayer, geometryStep,/);
   assert.doesNotMatch(geometryEffect, /\[segments, layers, activeLayer, activeStep,/);
 });
 

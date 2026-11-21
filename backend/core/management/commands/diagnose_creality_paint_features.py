@@ -15,6 +15,7 @@ import io
 import zipfile
 import struct
 from xml.etree import ElementTree as ET
+from defusedxml import ElementTree as SafeET
 
 from django.core.management.base import BaseCommand, CommandError
 
@@ -59,7 +60,7 @@ def _geometry_control_project(project, feature):
         for info in source.infolist():
             body = source.read(info.filename)
             if info.filename == "3D/3dmodel.model":
-                root = ET.fromstring(body)
+                root = SafeET.fromstring(body)
                 for triangle in root.iter(_CORE_NS + "triangle"):
                     if attribute in triangle.attrib:
                         triangle.attrib.pop(attribute)

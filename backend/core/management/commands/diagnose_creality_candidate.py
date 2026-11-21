@@ -8,6 +8,7 @@ import hashlib
 import json
 from pathlib import Path
 import uuid
+import tempfile
 
 from django.core.management.base import BaseCommand, CommandError
 
@@ -68,7 +69,7 @@ class Command(BaseCommand):
 
     def handle(self, *args, **options):
         path = Path(options["output"])
-        if (path.parent != Path("/tmp") or path.suffix != ".3mf"
+        if (path.parent != Path(tempfile.gettempdir()) or path.suffix != ".3mf"
                 or path.exists() or path.is_symlink()):
             raise CommandError("Choose a fresh private /tmp/*.3mf path.")
         if options["job_id"]:

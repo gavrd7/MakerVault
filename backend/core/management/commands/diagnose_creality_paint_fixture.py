@@ -9,7 +9,7 @@ import io
 import json
 import uuid
 import zipfile
-from xml.etree import ElementTree as ET
+from defusedxml import ElementTree as ET
 
 from django.core.management.base import BaseCommand, CommandError
 

@@ -60,7 +60,7 @@ class MultiMaterialPreflightTests(SimpleTestCase):
 
     @patch("core.slicer_multimaterial_execution.SlicerProfile.objects.filter")
     @patch("core.slicer_multimaterial_execution.PrinterConnection.objects.filter")
-    def test_creality_selected_colours_follow_logical_tool_not_cfs_bay_index(self):
+    def test_creality_selected_colours_follow_logical_tool_not_cfs_bay_index(self, sources, profiles):
         from core.slicer_multimaterial_execution import creality_selected_tool_colours
         source_models = [
             ({"color": "#ffcc00", "material_slot": self.slots[0]}, b"stl"),
@@ -86,6 +86,8 @@ class MultiMaterialPreflightTests(SimpleTestCase):
         with self.assertRaisesRegex(MaterialRoutingError, "two logical tools"):
             creality_selected_tool_colours(source_models, (0, 0, 0))
 
+    @patch("core.slicer_multimaterial_execution.SlicerProfile.objects.filter")
+    @patch("core.slicer_multimaterial_execution.PrinterConnection.objects.filter")
     def test_creality_uses_model_slot_profiles_even_when_setup_default_differs(self, sources, profiles):
         sources.return_value = [self.connection]
         self.job.engine = "crealityprint"
@@ -109,7 +111,7 @@ class MultiMaterialPreflightTests(SimpleTestCase):
     @patch("core.slicer_multimaterial_execution.PrinterConnection.objects.filter")
     def test_missing_live_capability_blocks_multicolour(self, sources):
         sources.return_value = []
-        with self.assertRaisesRegex(MaterialRoutingError, "could not be confirmed"):
+        with self.assertRaisesRegex(MaterialRoutingError, "No supported multi-material topology"):
             plan_native_multimaterial(self.job)
 
     @patch("core.slicer_multimaterial_execution.SlicerProfile.objects.filter")

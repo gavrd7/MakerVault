@@ -178,7 +178,7 @@ def printer_power(request, printer_id):
         if set(data) - {"action", "confirm"} or data.get("action") not in {"on", "off"}:
             raise HomeAssistantPowerError("Choose power on or off.")
         if data["action"] == "off" and data.get("confirm") is not True:
-            raise HomeAssistantPowerError("Explicit confirmation is required before cutting printer power.")
+            return _error("Explicit confirmation is required before cutting printer power.", 400)
         if data["action"] == "off" and printer_is_busy(printer):
             return _error("Printer is active or cooling. Power off is blocked.", 409)
         state = set_switch(row, entity, data["action"])

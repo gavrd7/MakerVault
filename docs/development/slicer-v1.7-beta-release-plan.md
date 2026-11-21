@@ -9,12 +9,15 @@ with separate compatibility notes and pinned binaries.
 ## Reviewed branch state (21 November 2026)
 
 - PR [#171](https://github.com/gavrd7/MakerVault/pull/171) is a large,
-  long-lived **draft** foundation branch. The comparison with main was
-  **3,456 commits ahead, 11 behind** and the API's first 300 changed-file
-  entries already included unrelated camera, power, Home Assistant and
-  dashboard changes. Those are not all slicer-release code. The result
-  requires integration-branch reconciliation and independent release
-  scope review before any merge.
+  long-lived **draft** foundation branch. On 21 November, reconciliation
+  merge commit `684b9869` incorporated all then-current changes from
+  `main` (including improved Orca CI, current README/support contacts,
+  partners page and cover artwork) without rewriting feature history.
+  Verification afterwards showed **0 commits behind main**. The PR still
+  changes **441 files**, including camera, Home Assistant printer power,
+  dashboard and printer-connection code not exclusively about slicing.
+  This remains a **review scope and regression concern**, even though
+  branch ancestry is now reconciled.
 - The owner reports earlier successful MakerVault physical multi-colour
   Creality/K2 test cubes. Preserve that working route. Current Creality
   multiplier, directional flush matrix and project override code exists;
@@ -72,11 +75,14 @@ is applied end-to-end.
    an approved installed engine; feature status reflects native verified
    engine/version/geometry boundaries. Unsupported operations should
    state *which* capability is missing, not silently flatten edits.
-5. **Split the integration change set**: compare every touched file
-   against main, separate unrelated camera/Home Assistant changes and
-   investigate branch divergence, keep migrations in dependency order.
-   Do not squash or force-push #171 without an explicit branch recovery
-   plan and review of all dependent changes.
+5. **Track non-slicer changes explicitly**: include independent review of
+   camera, Home Assistant printer power and dashboard changes. Migration
+   `0081_home_assistant_printer_power_provider` is on the linear
+   dependency path between slicer migrations `0080` and `0082`, so
+   do not delete or move it without a deliberate migration-history
+   rewrite and matching regression plan. Other non-slicer changes can
+   be extracted only after verifying cross-feature dependencies.
+   Keep current branch history stable; no force-push or blind squash.
 
 ## Next engine: Bambu Studio v02.09.01.70 baseline
 
@@ -120,3 +126,20 @@ followed by separate increments for Snapmaker Orca and remaining
 engines. Release notes must distinguish *slicer slicing support* from
 manufacturer *printer-control* support and mark exact engine versions,
 supported operations and beta caveats.
+
+
+## Foundation reconciliation checkpoint — 21 November 2026
+
+- Merge commit: `684b98694176a178385efa64bc21a5e48125a5cc`.
+- Ancestor check: `main` is included in the PR branch, **0 behind**.
+- Source changes intentionally preserved; updated reviewed Orca CI
+  workflow and project outreach/support assets brought from `main`.
+- Review still required: 441 changed files, coupled migration
+  `0081`, unrelated camera/HA/power/dashboard changes and any other
+  cross-feature file modifications. The merge is not final release
+  acceptance.
+- PR #191 Bambu branch remains a dependent separate draft, not
+  included in PR #171.
+- After final cleanup, require one bounded backend/frontend, migration,
+  packaging and security validation pass. Existing focused 61/61 and 4/4
+  tests should not be repeated as substitute for a release-wide pass.

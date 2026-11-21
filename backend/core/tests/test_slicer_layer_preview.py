@@ -43,12 +43,12 @@ class FullLayerParserTests(SimpleTestCase):
 
     def test_high_fidelity_preserves_geometry_and_only_merges_collinear_runs(self):
         source = (
-            "G90\\nM83\\nG1 X0 Y0 Z0.2\\n;TYPE:Outer wall\\n"
-            "G1 X5 Y0 E0.1\\nG1 X10 Y0 E0.1\\n"
-            "G0 X20 Y0\\nG1 X25 Y0 E0.1\\n"
-            "G1 X25 Y5 E0.1\\n"
-            ";TYPE:Support material\\nG1 X25 Y10 E0.1\\n"
-            ";TYPE:Prime tower\\nG1 X25 Y15 E0.1\\n"
+            "G90\nM83\nG1 X0 Y0 Z0.2\n;TYPE:Outer wall\n"
+            "G1 X5 Y0 E0.1\nG1 X10 Y0 E0.1\n"
+            "G0 X20 Y0\nG1 X25 Y0 E0.1\n"
+            "G1 X25 Y5 E0.1\n"
+            ";TYPE:Support material\nG1 X25 Y10 E0.1\n"
+            ";TYPE:Prime tower\nG1 X25 Y15 E0.1\n"
         )
         full = layer_batch_toolpaths(source, [0.2], high_fidelity=True)
         exact = exact_layer_toolpaths(source, 0.2)
@@ -65,8 +65,8 @@ class FullLayerParserTests(SimpleTestCase):
                          ["Support material", "Prime tower"])
 
     def test_high_fidelity_never_marks_truncated_geometry_complete(self):
-        source = ("G90\\nM83\\nG1 X0 Y0 Z0.2\\n;TYPE:Outer wall\\n"
-                  + "".join(f"G1 X{i+1} Y{i%2} E0.1\\n" for i in range(20)))
+        source = ("G90\nM83\nG1 X0 Y0 Z0.2\n;TYPE:Outer wall\n"
+                  + "".join(f"G1 X{i+1} Y{i%2} E0.1\n" for i in range(20)))
         result = layer_batch_toolpaths(source, [0.2], high_fidelity=True,
                                        max_total_segments=2)
         self.assertFalse(result["complete"])
@@ -235,9 +235,9 @@ class FullLayerParserTests(SimpleTestCase):
 
     def test_exact_layer_restores_smokestack_arc_extrusions(self):
         import math
-        gcode=("G90\\nM83\\nG1 X10 Y0 Z20\\n"
-               ";TYPE:Outer wall\\nG3 X0 Y10 I-10 J0 E0.5\\n"
-               "G3 X-10 Y0 I0 J-10 E0.5\\n")
+        gcode=("G90\nM83\nG1 X10 Y0 Z20\n"
+               ";TYPE:Outer wall\nG3 X0 Y10 I-10 J0 E0.5\n"
+               "G3 X-10 Y0 I0 J-10 E0.5\n")
         result=exact_layer_toolpaths(gcode,20)
         self.assertGreater(result["segment_count"], 40)
         self.assertTrue(result["complete"])
@@ -246,9 +246,9 @@ class FullLayerParserTests(SimpleTestCase):
                             for a in result["segments"]))
 
     def test_preview_preserves_unextruded_travel_arc_without_fake_strand(self):
-        gcode=("G90\\nM83\\nG1 X10 Y0 Z0.2\\n"
-               "G3 X0 Y10 I-10 J0\\n"
-               "G1 X0 Y20 E0.5\\n")
+        gcode=("G90\nM83\nG1 X10 Y0 Z0.2\n"
+               "G3 X0 Y10 I-10 J0\n"
+               "G1 X0 Y20 E0.5\n")
         result=exact_layer_toolpaths(gcode,0.2)
         self.assertEqual(result["segment_count"],1)
         self.assertEqual(result["segments"][0][:4],[0.0,10.0,0.0,20.0])

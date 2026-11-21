@@ -10,7 +10,7 @@ const plate = fs.readFileSync(path.join(root, "SlicerPlateEditor.jsx"), "utf8");
 
 test("measurement toolbar supports explicitly selected snapping behaviour", () => {
   for (const mode of ["auto", "vertex", "edge", "surface"])
-    assert.match(toolbar, new RegExp('value="' + mode + '"'));
+    assert.match(plate, new RegExp('value="' + mode + '"'));
   assert.match(toolbar, /measureSnapMode=\{measureSnapMode\}/);
   assert.match(plate, /latestMeasurementRef\.current\.snapMode !== "surface"/);
   assert.match(plate, /latestMeasurementRef\.current\.snapMode !== "edge"/);

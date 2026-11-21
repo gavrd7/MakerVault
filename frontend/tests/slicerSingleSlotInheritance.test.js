@@ -25,9 +25,11 @@ test("different physical slots and unrelated profiles stay blocked", () => {
   assert.match(scene, /assignedSlots\.length === objects\.length/);
   assert.match(scene, /slot\.slot_id === assignedSlots\[0\]\.slot_id/);
   assert.match(scene, /slot\.slot_index === assignedSlots\[0\]\.slot_index/);
-  assert.match(scene, /const materialRoutingPending = assignedSlots\.length > 0/);
+  assert.match(scene, /const materialRoutingPending = requiredMultiSlots\.length > 1/);
   assert.match(scene, /\!\(hasSingleSlot && singleSlotProfileMatches\)/);
-  assert.match(scene, /disabled=\{!activePlateReady \|\| !profilesReady \|\| !workerConfigured \|\| conflictsBlockSlice \|\| objectSettingsPending \|\| materialRoutingPending\}/);
+  assert.match(scene, /disabled=\{!activePlateReady \|\| !profilesReady \|\| !workerConfigured \|\| conflictsBlockSlice \|\| objectSettingsPending/);
+  assert.match(scene, /hasPaintedColours && !paintedNativeReady/);
+  assert.match(scene, /\|\| materialRoutingPending\}/);
 });
 
 test("slot profile and main profile both reach backend for authoritative resolution", () => {

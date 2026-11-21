@@ -10,7 +10,7 @@ const read=name=>fs.readFileSync(path.join(base,name),"utf8");
 test("painting palette and icon tools are anchored beside the camera toolbar",()=>{
   const workspace=read("SlicerPrepareWorkspace.jsx");
   const editor=read("SlicerPlateEditor.jsx");
-  assert.match(workspace,/paintControls=\{paintPanel\}/);
+  assert.match(workspace,/paintControls=\{variableLayerPanel \|\| paintPanel\}/);
   assert.match(editor,/\{paintControls\}[\s\S]*?className="slicerPlateCameraToolbar"/);
   assert.match(workspace,/role="group" aria-label="Painting tools"/);
   assert.doesNotMatch(workspace,/\["circle","paint-disc"/);
@@ -26,8 +26,8 @@ test("paint mode restores right-mouse navigation and hides non-paint selection o
   const editor=read("SlicerPlateEditor.jsx");
   assert.match(editor,/controls\.mouseButtons\.RIGHT = THREE\.MOUSE\.PAN/);
   assert.match(editor,/state\.controls\.enabled = true/);
-  assert.match(editor,/\["paint_colour","paint_support"\]\.includes\(toolMode\) \? \[\] : selection/);
-  assert.match(editor,/\["paint_colour","paint_support"\]\.includes\(toolMode\) \? 0 : conflictIds/);
+  assert.match(editor,/\["paint_colour","paint_support","paint_seam","paint_fuzzy","variable_layers"\]\.includes\(toolMode\) \? \[\] : selection/);
+  assert.match(editor,/\["paint_colour","paint_support","paint_seam","paint_fuzzy","variable_layers"\]\.includes\(toolMode\) \? "#000000" : conflictIds/);
   assert.match(editor,/previewPaintGuide\(hit\)/);
   assert.match(editor,/latestPaintHeightPickRef\.current\?\.\(next\)/);
 });

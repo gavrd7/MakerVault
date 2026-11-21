@@ -9,7 +9,7 @@ const scene = fs.readFileSync(path.join(root, "SlicerPrepareWorkspace.jsx"), "ut
 const parent = fs.readFileSync(path.join(root, "SlicerWorkbench.jsx"), "utf8");
 
 test("existing matching slot profiles are assigned only when an exact unique match exists",()=>{
-  assert.match(scene,/matchLoadedSlotProfiles\(slot, filamentProfiles/);
+  assert.match(scene,/matchLoadedSlotProfiles\(resolveSlotLibrarySpool\(slot,spools\)\.slot, filamentProfiles/);
   assert.match(scene,/\.filter\(\(\{match\}\) => match\.level === "exact"\)/);
   assert.match(scene,/const existing = new Set\(slotFilamentProfiles\.map/);
   assert.match(scene,/!existing\.has\(String\(slot\.id\)\)/);
@@ -20,7 +20,7 @@ test("slot discovery filters before importing by authenticated printer and linke
   assert.match(scene,/printer_id: String\(printerId\)/);
   assert.match(scene,/resolveSlotLibrarySpool\(slot,spools\)/);
   assert.match(scene,/manufacturer: matchingSlot\.manufacturer/);
-  assert.match(scene,/Official native filament candidates/);
+  assert.match(scene,/Available official profiles|Available profiles/);
   assert.match(scene,/Import & assign/);
 });
 test("official catalogue search and import require an explicit slot selection",()=>{
@@ -29,19 +29,19 @@ test("official catalogue search and import require an explicit slot selection",(
   assert.match(scene,/importOfficialSlotProfile = async \(slot, candidate\)/);
   assert.match(scene,/window\.confirm\("Import "/);
   assert.match(scene,/candidate\.vendor/);
-  assert.match(scene,/onFilamentProfilesReload\?\.\(\)/);
+  assert.match(scene,/onFilamentProfilesReload\?\.\(imported\)/);
   assert.doesNotMatch(scene,/onChange\(.*\bdownloadLatestEngine\b/);
 });
 test("slot import reloads profiles without overwriting global native filament selection",()=>{
-  assert.match(parent,/onFilamentProfilesReload=\{async \(\) => \{/);
-  assert.match(scene,/\.filter\(row => String\(row\.slot_id\) !== String\(slot\.id\)\)/);
+  assert.match(parent,/onFilamentProfilesReload=\{async imported => \{/);
+  assert.match(scene,/\.filter\(row=>String\(row\.slot_id\)!==slotId\)/);
   const handler=scene.slice(scene.indexOf("const importOfficialSlotProfile"), scene.indexOf("const [materialRefreshing"));
   assert.doesNotMatch(handler,/selectedProfiles\.filament_id\s*=/);
   assert.doesNotMatch(handler,/onChangeProfiles\(/);
 });
 test("profiles for unassigned loaded bays do not block one logical filament",()=>{
   assert.match(scene,/const activeSlotProfiles = slotFilamentProfiles\.filter/);
-  assert.match(scene,/const materialRoutingPending = assignedSlots\.length > 0/);
+  assert.match(scene,/const materialRoutingPending = requiredMultiSlots\.length > 1/);
   assert.match(scene,/: false;/);
   assert.match(scene,/assignedSlots\.every\(slot => String\(slot\.printer_id\)/);
 });

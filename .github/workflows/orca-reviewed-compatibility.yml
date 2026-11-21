@@ -46,33 +46,54 @@ jobs:
         id: deps-cache
         uses: actions/cache/restore@v4
         with:
-          path: upstream-orca/deps/build/destdir
-          key: orca-v2.5.0-40ecc66f-ubuntu2404-gcc-deps-v1
+          path: upstream-orca/deps/build/OrcaSlicer_dep
+          key: orca-v2.5.0-40ecc66f-ubuntu2404-gcc-deps-v2
       - name: Build Orca dependencies on cache miss
         if: steps.deps-cache.outputs.cache-hit != 'true'
         run: |
           cd upstream-orca
           ./build_linux.sh -g -r -j 2 -d
-          test -d deps/build/destdir
-          test -n "$(find deps/build/destdir -mindepth 1 -maxdepth 3 -print -quit)"
+          test -d deps/build/OrcaSlicer_dep/usr/local/lib
+          test -n "$(find deps/build/OrcaSlicer_dep/usr/local/lib -mindepth 1 -maxdepth 1 -print -quit)"
       - name: Preserve built Orca dependencies before compiling application
         if: steps.deps-cache.outputs.cache-hit != 'true'
         uses: actions/cache/save@v4
         with:
-          path: upstream-orca/deps/build/destdir
-          key: orca-v2.5.0-40ecc66f-ubuntu2404-gcc-deps-v1
+          path: upstream-orca/deps/build/OrcaSlicer_dep
+          key: orca-v2.5.0-40ecc66f-ubuntu2404-gcc-deps-v2
+      # Keep the source-built executable after compilation, not only after
+      # acceptance tests. This saves another >1h rebuild if a later gate fails.
+      # The key is specific to the pinned Orca source and reviewed patch v1.
+      - name: Restore reviewed Orca AppImage candidate
+        id: appimage-cache
+        uses: actions/cache/restore@v4
+        with:
+          path: upstream-orca/build/OrcaSlicer_Linux_V*.AppImage
+          key: orca-v2.5.0-40ecc66f-ubuntu2404-reviewed-appimage-v1
       - name: Compile isolated Orca AppImage from patched source
+        if: steps.appimage-cache.outputs.cache-hit != 'true'
         run: |
           cd upstream-orca
           # Dependency build is omitted intentionally: the exact-version
           # installed dependencies were either restored or compiled above.
           ./build_linux.sh -g -r -j 2 -si
+          # Upstream names the finished file OrcaSlicer_Linux_V*.AppImage.
+          # appimagetool.AppImage is only the packaging utility, not Orca.
+          find build -maxdepth 1 -type f -name 'OrcaSlicer_Linux_V*.AppImage' -size +100M -print -quit | grep -q .
+      - name: Preserve built Orca AppImage before acceptance tests
+        if: steps.appimage-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: upstream-orca/build/OrcaSlicer_Linux_V*.AppImage
+          key: orca-v2.5.0-40ecc66f-ubuntu2404-reviewed-appimage-v1
       - name: Find and checksum source-built AppImage
         id: built
         shell: bash
         run: |
           set -euo pipefail
-          mapfile -t assets < <(find upstream-orca/build -type f -name '*.AppImage' -size +10M)
+          # Do not include build/appimagetool.AppImage (a ~15 MB helper).
+          mapfile -t assets < <(find upstream-orca/build -maxdepth 1 -type f -name 'OrcaSlicer_Linux_V*.AppImage' -size +100M)
+          printf 'OrcaSlicer candidates: %s\n' "${assets[@]}"
           test "${#assets[@]}" -eq 1
           asset="${assets[0]}"
           sha=$(sha256sum "$asset" | cut -d ' ' -f 1)
@@ -96,9 +117,15 @@ jobs:
           chmod 600 .slicer-staging.env
       - name: Fetch unmodified official profile fixtures
         run: |
-          python3 scripts/build_orca_reference_fixture.py --printer k1 --output /tmp/orca-official-k1 --preserve-official-values
-          python3 scripts/build_orca_reference_fixture.py --printer k2 --output /tmp/orca-official-k2 --preserve-official-values
-          python3 scripts/build_slicer_multimodel_fixture.py --output /tmp/orca-plate.3mf --material-output /tmp/orca-two-tool.3mf
+          # Production 3MF builder imports defusedxml. The ephemeral Actions
+          # host does not inherit backend/container Python dependencies.
+          # Isolate test-only Python packages; do not modify the Orca image.
+          python3 -m venv /tmp/makervault-orca-fixtures
+          /tmp/makervault-orca-fixtures/bin/python -m pip install --disable-pip-version-check 'defusedxml==0.7.1'
+          /tmp/makervault-orca-fixtures/bin/python -c 'import defusedxml.ElementTree'
+          /tmp/makervault-orca-fixtures/bin/python scripts/build_orca_reference_fixture.py --printer k1 --output /tmp/orca-official-k1 --preserve-official-values
+          /tmp/makervault-orca-fixtures/bin/python scripts/build_orca_reference_fixture.py --printer k2 --output /tmp/orca-official-k2 --preserve-official-values
+          /tmp/makervault-orca-fixtures/bin/python scripts/build_slicer_multimodel_fixture.py --output /tmp/orca-plate.3mf --material-output /tmp/orca-two-tool.3mf
       - name: Require unmodified K1 and K2 profiles to produce real G-code
         run: |
           python3 scripts/probe_slicer_staging.py \

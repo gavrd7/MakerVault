@@ -30,9 +30,9 @@ def fixture_paint():
     swatches = [
         {"color": "#111111", "label": "Black", "printer_id": PRINTER_ID,
          "slot_id": "bay-1", "slot_index": 0},
-        {"color": "#eeeeee", "label": "White", "printer_id": "printer",
+        {"color": "#eeeeee", "label": "White", "printer_id": PRINTER_ID,
          "slot_id": "bay-2", "slot_index": 1},
-        {"color": "#123456", "label": "Blue", "printer_id": "printer",
+        {"color": "#123456", "label": "Blue", "printer_id": PRINTER_ID,
          "slot_id": "bay-3", "slot_index": 2},
     ]
     painting = {"version": 2, "signature": _fingerprint(local),
@@ -104,7 +104,7 @@ class NativeColourRegionTests(SimpleTestCase):
     def test_fails_closed_on_wrong_printer(self):
         _raw, painting = fixture_paint()
         with self.assertRaisesRegex(MaterialRoutingError, "this printer"):
-            native_colour_tool_maps([{"colour_paint": painting}], printer_id="other",
+            native_colour_tool_maps([{"colour_paint": painting}], printer_id="22222222-2222-4222-8222-222222222222",
                                     tool_bindings={"bay-3": 2})
 
     def test_legacy_paint_is_not_silently_dropped(self):
