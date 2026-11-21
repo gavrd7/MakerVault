@@ -100,6 +100,10 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
   const [editProfileError, setEditProfileError] = useState("");
   const [showDrafts, setShowDrafts] = useState(false);
   const [visibleDraftCount, setVisibleDraftCount] = useState(15);
+  const [savedJobFilter, setSavedJobFilter] = useState("all");
+  const [selectSavedJobs, setSelectSavedJobs] = useState(false);
+  const [selectedSavedJobIds, setSelectedSavedJobIds] = useState([]);
+
   const [mobileActionsOpen, setMobileActionsOpen] = useState(false);
   const [previewJobId, setPreviewJobId] = useState(null);
   const awaitingSlicePreviewRef = useRef(null);
@@ -632,6 +636,14 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
 
   useEffect(() => { refresh(); }, []);
 
+  const deletableJobStatuses = ["draft", "failed", "cancelled", "stale", "completed"];
+  const filteredSavedJobs = jobs.filter(job =>
+    savedJobFilter === "drafts" ? job.status === "draft" :
+    savedJobFilter === "slices" ? job.status === "completed" :
+    savedJobFilter === "other" ? !["draft", "completed"].includes(job.status) : true);
+  const filteredSelectableJobs = filteredSavedJobs.filter(job => deletableJobStatuses.includes(job.status));
+  const selectedSavedJobCount = selectedSavedJobIds.filter(id =>
+    filteredSelectableJobs.some(job => job.id === id)).length;
   const previewJob = jobs.find(job => job.id === previewJobId && job.status === "completed" && job.output_asset?.id);
   const running = jobs.some(job => job.status === "queued" || job.status === "running");
   useEffect(() => {
@@ -675,6 +687,67 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
       setNotice("Slicing entry deleted. Separately saved files were preserved.");
     } catch (err) {
       setError(err.message || "Could not delete this slicing entry.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function bulkRemoveSavedJobs(mode) {
+    if (!mayDeleteDraft || busy) return;
+    const ids = mode === "selected"
+      ? selectedSavedJobIds.filter(id => jobs.some(job =>
+          job.id === id && deletableJobStatuses.includes(job.status)))
+      : null;
+    if (mode === "selected" && !ids.length) {
+      setError("Select at least one inactive draft or completed slice to delete.");
+      return;
+    }
+    const target = mode === "drafts" ? "ALL saved, unsliced drafts (including older entries)" :
+      mode === "slices" ? "ALL completed slicing entries (including older entries)" :
+      ids.length + " selected slicing entries";
+    if (!window.confirm("Permanently remove " + target +
+        "? Original models, G-code already added to the library, and private generated G-code files will be preserved. This cannot be undone.")) return;
+    setError(""); setNotice(""); setBusy(true);
+    try {
+      const result = await apiFetch("/api/printing/slicer/jobs/bulk-delete/", {
+        method: "POST", body: {mode, ids},
+      });
+      if (!Number.isInteger(result?.deleted) || !Array.isArray(result.deleted_ids))
+        throw new Error("The server did not confirm bulk deletion.");
+      const next = await apiFetch("/api/printing/slicer/jobs/");
+      setJobs(next.jobs || []);
+      setMayDeleteDraft(next.can_delete === true);
+      setMayCancel(next.can_cancel === true);
+      setSelectedSavedJobIds([]);
+      setNotice(result.deleted + " slicing entr" + (result.deleted === 1 ? "y" : "ies") +
+        " removed. Separately stored files were preserved.");
+    } catch (err) {
+      setError(err.message || "Bulk slicing entry removal failed.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function removeAllUnsavedGcode() {
+    if (!mayDeleteDraft || busy) return;
+    if (!window.confirm("Remove ALL private slicer-generated G-code that has NOT been added to the G-code library? " +
+        "Completed jobs will remain as history without a G-code preview. Library G-code and source models are preserved. This cannot be undone.")) return;
+    setError(""); setNotice(""); setBusy(true);
+    try {
+      const result = await apiFetch("/api/printing/slicer/jobs/remove-unsaved-gcode/", {
+        method: "POST", body: {},
+      });
+      if (!Number.isInteger(result?.removed) || result.saved_library_preserved !== true)
+        throw new Error("The server did not confirm private G-code cleanup.");
+      const next = await apiFetch("/api/printing/slicer/jobs/");
+      setJobs(next.jobs || []);
+      setMayDeleteDraft(next.can_delete === true);
+      setMayCancel(next.can_cancel === true);
+      setSelectedSavedJobIds([]);
+      setNotice(result.removed + " unsaved private G-code file" +
+        (result.removed === 1 ? "" : "s") + " removed. Library G-code and models were preserved.");
+    } catch (err) {
+      setError(err.message || "Could not remove unsaved private G-code.");
     } finally {
       setBusy(false);
     }
@@ -2130,10 +2203,48 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
       </> : <>
       {error && <p className="integrationError" role="alert">{error}</p>}
       {notice && <p role="status">{notice}</p>}
-      <button type="button" disabled={loading} onClick={refresh}>Refresh drafts</button>
-      <h3>Saved slicing drafts</h3>
-      {jobs.length ? <div className="printingStack">{jobs.slice(0, visibleDraftCount).map(job =>
+      <div className="settingsActions slicerSavedJobToolbar">
+        <button type="button" disabled={loading || busy} onClick={refresh}>Refresh entries</button>
+        <label>Show
+          <select aria-label="Filter saved drafts and slices" value={savedJobFilter}
+            onChange={e => { setSavedJobFilter(e.target.value); setVisibleDraftCount(15); }}>
+            <option value="all">All entries</option>
+            <option value="drafts">Drafts (not sliced)</option>
+            <option value="slices">Completed slices</option>
+            <option value="other">Failed / inactive / active</option>
+          </select>
+        </label>
+        {mayDeleteDraft && <>
+          <button type="button" disabled={busy} onClick={() => {
+            setSelectSavedJobs(value => !value); setSelectedSavedJobIds([]);
+          }}>{selectSavedJobs ? "Cancel selection" : "Select entries"}</button>
+          <button type="button" disabled={busy} onClick={() => bulkRemoveSavedJobs("drafts")}>Remove all drafts</button>
+          <button type="button" disabled={busy} onClick={() => bulkRemoveSavedJobs("slices")}>Remove all slices</button>
+          <button type="button" disabled={busy} onClick={removeAllUnsavedGcode}>Remove all unsaved G-code</button>
+        </>}
+      </div>
+      {selectSavedJobs && mayDeleteDraft && <div className="settingsActions slicerSavedJobToolbar" role="group" aria-label="Select saved slicing entries">
+        <button type="button" disabled={busy || !filteredSelectableJobs.length}
+          onClick={() => setSelectedSavedJobIds(current => [...new Set([
+            ...current, ...filteredSelectableJobs.map(job => job.id),
+          ])])}>Select all filtered</button>
+        <button type="button" disabled={busy || !selectedSavedJobIds.length}
+          onClick={() => setSelectedSavedJobIds([])}>Clear selection</button>
+        <button type="button" disabled={busy || !selectedSavedJobIds.length}
+          onClick={() => bulkRemoveSavedJobs("selected")}>Delete selected ({selectedSavedJobIds.length})</button>
+        <small>Only inactive jobs can be selected. Selection covers the loaded list; remove-all buttons cover older entries too.</small>
+      </div>}
+      <h3>Saved slicing drafts and slices</h3>
+      <p role="status">Showing {filteredSavedJobs.length} of {jobs.length} loaded entries.</p>
+      {filteredSavedJobs.length ? <div className="printingStack">{filteredSavedJobs.slice(0, visibleDraftCount).map(job =>
         <div key={job.id} className="cameraSourceRow">
+          {selectSavedJobs && mayDeleteDraft && <label className="checkRow" aria-label={"Select slicing entry " + (job.input_asset?.name || job.id)}>
+            <input type="checkbox" checked={selectedSavedJobIds.includes(job.id)}
+              disabled={busy || !deletableJobStatuses.includes(job.status)}
+              onChange={e => setSelectedSavedJobIds(current => e.target.checked
+                ? [...new Set([...current, job.id])]
+                : current.filter(id => id !== job.id))}/>
+          </label>}
           <div className="cameraSourceIdentity">
             <strong>{job.input_asset?.name || "Model"} · {job.printer?.name || "Printer"}</strong>
             <small>{job.engine} {job.engine_version} · {job.status} · {job.process_preset}</small>
@@ -2215,11 +2326,11 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
           </div>
         </div>
       )}
-      {jobs.length > visibleDraftCount && <button type="button"
+      {filteredSavedJobs.length > visibleDraftCount && <button type="button"
         onClick={() => setVisibleDraftCount(count => count + 15)}>
-        Show older drafts ({jobs.length - visibleDraftCount} remaining)
+        Show older entries ({filteredSavedJobs.length - visibleDraftCount} remaining)
       </button>}
-      </div> : <p>No slicing drafts saved yet.</p>}
+      </div> : <p>No {savedJobFilter === "all" ? "slicing entries" : savedJobFilter} found.</p>}
       </>}
     </Modal>}
     {projectNameAction && <Modal title={projectNameAction==="project"?"Save project (.3mf)":"Export Project (.3mf)"}
