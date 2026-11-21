@@ -1730,3 +1730,62 @@ until the corrected command completes.
 Use the same staged update, test command, and K2 native diagnostic
 command shown above; no worker refresh, physical printer operation or
 production adapter modification.
+
+
+## Verified prime-volume override, machine-owned purge route follow-up (21 Nov 2026)
+
+User Debian staging validated updated diagnostics at commit `51a03db9`:
+**62/62 tests passed**, **11 offline Creality native slices completed**, pinned
+worker image unchanged. `prime_volume_marked` set `prime_volume=180`
+in emitted G-code and changed executable motion and tower deposition:
+tower positive-E **1090.971 -> 3953.060 mm**, footprint
+**22.898×22.898 -> 38.898×38.398 mm**, motion/M-command hashes changed.
+The exact same project at 180 mm³ **without** a process override marker
+emitted the restored **45 mm³** and unchanged tower. The override-marker
+contract is therefore empirically proven for native `prime_volume`.
+
+The earlier process-marked `purge_in_prime_tower=1` control still emitted
+`0`, with no G-code motion or tower change. Official Creality v7.3.1
+`Preset.cpp`, `PrimeTowerOptions.hpp`, machine profile presets, and
+parameter metadata place this option in the **printer/machine** preset,
+NOT the process preset. `PresetBundle.cpp::load_config_file_config`
+uses `different_settings_to_system[num_filaments + 1]` for printer
+overrides, versus index zero for process overrides.
+
+New **disposable** `purge_route_tower_printer_marked` control uses the
+same purge-route-enabled, multiplier-2.0 3MF and changes **only** the last
+element of `different_settings_to_system` to include
+`purge_in_prime_tower`. The process and four filament entries are
+unchanged, native printer macros and other archive entries byte-preserved.
+It directly compares to the unmarked `purge_route_tower` for emitted
+`purge_in_prime_tower` value, native motion, M commands and tagged tower
+E. Keep `purge_route_tower_marked` as the known negative/process control.
+
+Expected focused test count **63**; expected **12** native offline
+slices. These new results are **not yet run on Debian**. Do not refresh
+the worker or permit physical printing.
+
+```bash
+cd ~/MakerVault-Staging
+git pull --ff-only origin feature/self-hosted-slicer-foundation
+sudo python3 scripts/install_slicer_staging.py update
+sudo docker exec makervault python3 /app/backend/manage.py test \
+  core.tests.test_slicer_printer_compatibility \
+  core.tests.test_slicer_tower_diagnostics \
+  core.tests.test_slicer_flush_adapters \
+  core.tests.test_slicer_creality_project --noinput
+sudo docker exec makervault python3 /app/backend/manage.py \
+  diagnose_slicer_printer_profiles \
+  --engine crealityprint --topology single_nozzle_changer \
+  --printer-profile-id 91b19730-66f5-4b5f-bd7d-b08fbb4ee768 \
+  --process-profile-id 0c90fa89-a193-48b6-ac94-a69792230163 \
+  --filament-profile-id e9c1274c-d95b-4592-87e5-03a645d699aa \
+  --filament-profile-id eb8473e9-f993-4c6e-8cc4-fb357e3ae782 \
+  --native --test-flush
+```
+
+If the printer-marked case retains purge routing and changes emitted
+motion, next compare native flush matrix vs multiplier at a fixed verified
+route, with bounded physical purge validation kept separate. Even when
+tower changes, printer-side purge, physical CFS routing and safe purge
+amounts remain unverified.
