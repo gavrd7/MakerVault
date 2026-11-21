@@ -47,56 +47,35 @@ APPROVED_ORCA = {
 }
 REVIEWED_ORCA_VERSION = "2.5.0"
 REVIEWED_ORCA_SHA256 = EXPECTED_ORCA_SHA
-REVIEWED_ORCA_TAG = "orca-2.5.0-mv1"
-REVIEWED_ORCA_ASSET = "MakerVault-OrcaSlicer-2.5.0-mv1.AppImage"
-REVIEWED_ORCA_REPO = "gavrd7/MakerVault"
-REVIEWED_ORCA_RELEASE_URL = (
-    "https://api.github.com/repos/" + REVIEWED_ORCA_REPO +
-    "/releases/tags/" + REVIEWED_ORCA_TAG
-)
-REVIEWED_ORCA_DOWNLOAD_URL = (
-    "https://github.com/" + REVIEWED_ORCA_REPO + "/releases/download/" +
-    REVIEWED_ORCA_TAG + "/" + REVIEWED_ORCA_ASSET
-)
+# Dockerfile.generic is based on the exact approved, immutable reviewed
+# Orca bootstrap image. The installer runs from that image too: reinstallation
+# copies its own bundled AppImage after checking the audited checksum.
+# Do not depend on expiring Actions artifacts or an unneeded Github release.
+REVIEWED_ORCA_SOURCE = Path("/opt/engines/orcaslicer.AppImage")
+REVIEWED_ORCA_APPDIR = Path("/opt/engines/squashfs-root")
 
 
 def _reviewed_orca_release():
-    """Offer ONLY the exact source-patched binary once durably published.
-
-    GitHub Actions ephemeral archives are NOT used: the reviewed artifact
-    expires on 2026-11-23 and cannot support reproducible reinstalls.
-    """
+    """Offer reviewed 2.5.0 only when the embedded source passes SHA-256."""
+    if (REVIEWED_ORCA_SOURCE.is_symlink() or not REVIEWED_ORCA_SOURCE.is_file()
+            or REVIEWED_ORCA_APPDIR.is_symlink()
+            or not (REVIEWED_ORCA_APPDIR / "AppRun").is_file()):
+        return None
     try:
-        with _request(REVIEWED_ORCA_RELEASE_URL) as response:
-            metadata = json.load(response)
-    except (OSError, ValueError, urllib.error.URLError):
-        return None
-    if (not isinstance(metadata, dict) or metadata.get("draft")
-            or metadata.get("tag_name") != REVIEWED_ORCA_TAG):
-        return None
-    assets = metadata.get("assets", [])
-    if not isinstance(assets, list):
-        return None
-    matches = [
-        a for a in assets if isinstance(a, dict) and a.get("name") == REVIEWED_ORCA_ASSET
-    ]
-    if len(matches) != 1:
-        return None
-    asset = matches[0]
-    if (asset.get("digest") != "sha256:" + REVIEWED_ORCA_SHA256
-            or asset.get("browser_download_url") != REVIEWED_ORCA_DOWNLOAD_URL
-            or type(asset.get("size")) is not int
-            or not 10_000_000 <= asset["size"] <= MAX_BYTES):
+        if _sha256(REVIEWED_ORCA_SOURCE) != REVIEWED_ORCA_SHA256:
+            return None
+    except OSError:
         return None
     return {
         "engine": "orcaslicer", "version": REVIEWED_ORCA_VERSION,
         "bundle_sha256": REVIEWED_ORCA_SHA256,
-        "bundle_url": REVIEWED_ORCA_DOWNLOAD_URL,
-        "binary_sha256": REVIEWED_ORCA_SHA256,
+        "bundle_url": None, "binary_sha256": REVIEWED_ORCA_SHA256,
         "architecture": "linux/amd64",
-        "notes": "MakerVault K2-compatible source build (30 mm cut retraction; reviewed)",
-        "asset_size": asset["size"],
+        "notes": "MakerVault-reviewed OrcaSlicer 2.5.0 (K2 30 mm compatible)",
+        "asset_size": REVIEWED_ORCA_SOURCE.stat().st_size,
+        "source": "bundled-reviewed-image",
     }
+
 MAX_BYTES = 650 * 1024 * 1024
 VERSION = re.compile(r"^v?(\d+\.\d+\.\d+)$")
 HEX = re.compile(r"^[a-f0-9]{64}$")
@@ -285,7 +264,10 @@ def _install(op_id, release):
     target = base / version
     stage = None
     try:
-        _write_operation(op_id, status="downloading", progress=2, message="Downloading official release")
+        bundled_orca = (engine == "orcaslicer" and version == REVIEWED_ORCA_VERSION)
+        _write_operation(op_id, status="verifying" if bundled_orca else "downloading",
+                         progress=2, message=("Checking bundled MakerVault-reviewed Orca"
+                                              if bundled_orca else "Downloading official release"))
         base.mkdir(parents=True, exist_ok=True)
         if STORE.is_symlink() or base.is_symlink() or target.is_symlink():
             raise ValueError("Unsafe engine store path.")
@@ -293,14 +275,21 @@ def _install(op_id, release):
             raise ValueError("This engine version is already installed.")
         stage = Path(tempfile.mkdtemp(prefix=".stage-", dir=base))
         image = stage / (engine + ".AppImage")
-        if engine == "orcaslicer" and version == REVIEWED_ORCA_VERSION:
-            if (release.get("bundle_sha256") != REVIEWED_ORCA_SHA256
-                    or release.get("bundle_url") != REVIEWED_ORCA_DOWNLOAD_URL):
-                raise ValueError("Unreviewed Orca 2.5.0 package refused.")
-        _download(release, image, lambda n: _write_operation(op_id, progress=n))
-        if engine == "orcaslicer" and version == REVIEWED_ORCA_VERSION:
+        if bundled_orca:
+            # Source is inside the immutable GHCR bootstrap image (not a user
+            # path or an upstream official AppImage). Check the actual bytes
+            # before copying, then verify the copy again before extraction.
+            if (release.get("source") != "bundled-reviewed-image"
+                    or release.get("bundle_sha256") != REVIEWED_ORCA_SHA256
+                    or release.get("bundle_url") is not None
+                    or REVIEWED_ORCA_SOURCE.is_symlink()
+                    or _sha256(REVIEWED_ORCA_SOURCE) != REVIEWED_ORCA_SHA256):
+                raise ValueError("MakerVault-reviewed Orca 2.5.0 source is unavailable or modified.")
+            shutil.copyfile(REVIEWED_ORCA_SOURCE, image)
             if _sha256(image) != REVIEWED_ORCA_SHA256:
-                raise ValueError("Downloaded Orca 2.5.0 is not the MakerVault-reviewed build.")
+                raise ValueError("Copied Orca 2.5.0 does not match the reviewed build.")
+        else:
+            _download(release, image, lambda n: _write_operation(op_id, progress=n))
         _write_operation(op_id, status="verifying", progress=70,
                          message="Checking downloaded binary")
         with image.open("rb") as source:
@@ -311,11 +300,20 @@ def _install(op_id, release):
         # The AppImage runtime extracts its payload without requiring FUSE.
         # This is restricted to the installer sandbox and a bounded scratch.
         try:
-            extracted = subprocess.run([str(image), "--appimage-extract"],
-                cwd=stage, env={"HOME": str(stage), "TMPDIR": str(stage),
-                                "PATH": "/usr/bin:/bin", "LANG": "C.UTF-8"},
-                stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
-                stderr=subprocess.PIPE, timeout=180, check=False)
+            if bundled_orca:
+                # The same immutable image already contains the extracted
+                # approved runtime. Copy it, avoiding a second extraction
+                # and refusing symlinks escaping the source bundle.
+                if REVIEWED_ORCA_APPDIR.is_symlink() or not REVIEWED_ORCA_APPDIR.is_dir():
+                    raise ValueError("Bundled reviewed Orca runtime is unavailable.")
+                shutil.copytree(REVIEWED_ORCA_APPDIR, stage / "squashfs-root", symlinks=True)
+                extracted = subprocess.CompletedProcess([], 0)
+            else:
+                extracted = subprocess.run([str(image), "--appimage-extract"],
+                    cwd=stage, env={"HOME": str(stage), "TMPDIR": str(stage),
+                                    "PATH": "/usr/bin:/bin", "LANG": "C.UTF-8"},
+                    stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
+                    stderr=subprocess.PIPE, timeout=180, check=False)
         except subprocess.TimeoutExpired as exc:
             raise ValueError("AppImage extraction timed out after 180 seconds.") from exc
         except OSError as exc:
@@ -409,7 +407,7 @@ def start_install(engine, version, digest):
     release = next((row for row in releases if row["engine"] == engine and
                     row["version"] == version and row["bundle_sha256"] == digest), None)
     if not release:
-        raise ValueError("This version is not in the official release catalogue.")
+        raise ValueError("This engine version is not in the approved release catalogue.")
     op_id = str(uuid.uuid4())
     with LOCK:
         OPERATIONS[op_id] = {"id": op_id, "engine": engine, "version": version,
