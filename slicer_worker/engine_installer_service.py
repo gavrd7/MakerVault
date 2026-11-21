@@ -37,11 +37,67 @@ STORE = Path(os.environ.get("SLICER_ENGINE_STORE", "/opt/engine-store"))
 TOKEN = os.environ.get("SLICER_INSTALLER_TOKEN", "")
 SUPPORTED = {"crealityprint": "CrealityOfficial/CrealityPrint",
              "orcaslicer": "OrcaSlicer/OrcaSlicer"}
-# Only these independently SHA-256-reviewed Orca versions may be offered.
+# Orca 2.5.0 is NOT compatible with the native Creality K2 profile as
+# published upstream: the profile asks for 30 mm cut retraction while the
+# official executable caps it at 18 mm. Never substitute the stock AppImage
+# for the independently reviewed, source-patched MakerVault build.
+# 2.4.2 is an upstream-only version, with NO K2 compatibility approval.
 APPROVED_ORCA = {
     "2.4.2": "d12fb8c8eac1aecd2dfb6377acd48f994f8fa439ed5292fa532dd82880f029fd",
-    "2.5.0": "d13eb0a9cd618ed080ab6b82c64c0a60c4501aac91e88d5ac2c3b526fb141a7c",
 }
+REVIEWED_ORCA_VERSION = "2.5.0"
+REVIEWED_ORCA_SHA256 = EXPECTED_ORCA_SHA
+REVIEWED_ORCA_TAG = "orca-2.5.0-mv1"
+REVIEWED_ORCA_ASSET = "MakerVault-OrcaSlicer-2.5.0-mv1.AppImage"
+REVIEWED_ORCA_REPO = "gavrd7/MakerVault"
+REVIEWED_ORCA_RELEASE_URL = (
+    "https://api.github.com/repos/" + REVIEWED_ORCA_REPO +
+    "/releases/tags/" + REVIEWED_ORCA_TAG
+)
+REVIEWED_ORCA_DOWNLOAD_URL = (
+    "https://github.com/" + REVIEWED_ORCA_REPO + "/releases/download/" +
+    REVIEWED_ORCA_TAG + "/" + REVIEWED_ORCA_ASSET
+)
+
+
+def _reviewed_orca_release():
+    """Offer ONLY the exact source-patched binary once durably published.
+
+    GitHub Actions ephemeral archives are NOT used: the reviewed artifact
+    expires on 2026-11-23 and cannot support reproducible reinstalls.
+    """
+    try:
+        with _request(REVIEWED_ORCA_RELEASE_URL) as response:
+            metadata = json.load(response)
+    except (OSError, ValueError, urllib.error.URLError):
+        return None
+    if (not isinstance(metadata, dict) or metadata.get("draft")
+            or metadata.get("prerelease")
+            or metadata.get("tag_name") != REVIEWED_ORCA_TAG):
+        return None
+    assets = metadata.get("assets", [])
+    if not isinstance(assets, list):
+        return None
+    matches = [
+        a for a in assets if isinstance(a, dict) and a.get("name") == REVIEWED_ORCA_ASSET
+    ]
+    if len(matches) != 1:
+        return None
+    asset = matches[0]
+    if (asset.get("digest") != "sha256:" + REVIEWED_ORCA_SHA256
+            or asset.get("browser_download_url") != REVIEWED_ORCA_DOWNLOAD_URL
+            or type(asset.get("size")) is not int
+            or not 10_000_000 <= asset["size"] <= MAX_BYTES):
+        return None
+    return {
+        "engine": "orcaslicer", "version": REVIEWED_ORCA_VERSION,
+        "bundle_sha256": REVIEWED_ORCA_SHA256,
+        "bundle_url": REVIEWED_ORCA_DOWNLOAD_URL,
+        "binary_sha256": REVIEWED_ORCA_SHA256,
+        "architecture": "linux/amd64",
+        "notes": "MakerVault-reviewed OrcaSlicer 2.5.0 (Creality K2 30 mm compatibility)",
+        "asset_size": asset["size"],
+    }
 MAX_BYTES = 650 * 1024 * 1024
 VERSION = re.compile(r"^v?(\d+\.\d+\.\d+)$")
 HEX = re.compile(r"^[a-f0-9]{64}$")
@@ -116,6 +172,9 @@ def release_catalogue():
     releases = []
     for engine, repo in SUPPORTED.items():
         if engine == "orcaslicer":
+            reviewed = _reviewed_orca_release()
+            if reviewed is not None:
+                releases.append(reviewed)
             for version, approved_digest in APPROVED_ORCA.items():
                 tag = "v" + version
                 asset_name = f"OrcaSlicer_Linux_AppImage_Ubuntu2404_V{version}.AppImage"
@@ -235,7 +294,14 @@ def _install(op_id, release):
             raise ValueError("This engine version is already installed.")
         stage = Path(tempfile.mkdtemp(prefix=".stage-", dir=base))
         image = stage / (engine + ".AppImage")
+        if engine == "orcaslicer" and version == REVIEWED_ORCA_VERSION:
+            if (release.get("bundle_sha256") != REVIEWED_ORCA_SHA256
+                    or release.get("bundle_url") != REVIEWED_ORCA_DOWNLOAD_URL):
+                raise ValueError("Unreviewed Orca 2.5.0 package refused.")
         _download(release, image, lambda n: _write_operation(op_id, progress=n))
+        if engine == "orcaslicer" and version == REVIEWED_ORCA_VERSION:
+            if _sha256(image) != REVIEWED_ORCA_SHA256:
+                raise ValueError("Downloaded Orca 2.5.0 is not the MakerVault-reviewed build.")
         _write_operation(op_id, status="verifying", progress=70,
                          message="Checking downloaded binary")
         with image.open("rb") as source:
