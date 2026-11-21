@@ -1904,3 +1904,22 @@ diagnostic uses its own disposable marker controls and therefore
 does NOT by itself validate the new production 3MF marker path.
 Keep PR in draft until end-to-end production 3MF slicing evidence and
 physical CFS verification are collected.
+
+
+### Separating corrected project generation from historical negative controls
+
+The regular `build_creality_project_candidate(...)` now defaults to
+`preserve_native_flush_overrides=True`. Diagnostic fixtures which
+deliberately test the consequences of *omitted* process markers explicitly
+use `preserve_native_flush_overrides=False`; their existing positive/negative
+A/B comparisons are therefore unchanged. No UI caller opts out. The
+parameter is strictly boolean and is regression-tested along with the
+real builder's explicit marker output. Production-path native slicing is
+still **not yet server-verified**. App-only staging update remains required;
+do not refresh or rebuild the pinned native worker.
+
+To avoid accidentally treating a successful repetition of the disposable
+controls as production verification, first run the focused Django suites
+(**66 expected**) after updating, and separately perform an offline
+MakerVault slice generated through the regular (default-preserving)
+project-builder path with explicit flushing. Do not send a print job.
