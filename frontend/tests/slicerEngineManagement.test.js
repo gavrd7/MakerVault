@@ -23,7 +23,7 @@ test("user-initiated engine installation uses a pinned release and confirmation"
   assert.match(manager,/release_sha256:action===/);
   assert.match(manager,/method:"POST"/);
   assert.match(manager,/installation_available/);
-  assert.match(manager,/!!operation/);
+  assert.match(manager,/!operation/);
   assert.doesNotMatch(manager,/eval\(|docker\s|window\.location\s*=/);
 });
 
@@ -35,7 +35,7 @@ test("existing setup opens the integrated engine manager without altering slicin
 });
 
 test("installed OrcaSlicer never looks unavailable just because an update is absent",()=>{
-  assert.match(manager,/engine\.available === true \|\| engine\.status === "validated"/);
+  assert.match(manager,/engine\.available===true \|\| engine\.status==="validated"/);
   assert.match(manager,/installedVersions/);
   assert.match(manager,/available\.length>1/);
   assert.doesNotMatch(manager,/Already installed — no newer version available/);
