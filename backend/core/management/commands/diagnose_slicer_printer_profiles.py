@@ -569,19 +569,19 @@ def _creality_toolchange_macro_audit(gcode):
             continue
         if open_flush:
             command = stripped.split(";", 1)[0].strip()
-            if re.match(r"^G0?1(?:\\s|$)", command, re.I):
+            if re.match(r"^G0?1(?:\s|$)", command, re.I):
                 # A G1 with XY or other axes is not an extrusion-only purge;
                 # malformed E-only instructions are flagged rather than ignored.
                 match = re.fullmatch(
-                    r"G0?1\\s+E([+-]?(?:\\d+(?:\\.\\d*)?|\\.\\d+))"
-                    r"(?:\\s+F(?:\\d+(?:\\.\\d*)?|\\.\\d+))?\\s*",
+                    r"G0?1\s+E([+-]?(?:\d+(?:\.\d*)?|\.\d+))"
+                    r"(?:\s+F(?:\d+(?:\.\d*)?|\.\d+))?\s*",
                     command, re.I)
                 if match:
                     value = float(match.group(1))
                     if math.isfinite(value) and value > 0:
                         positive_flush_e_mm += value
                         positive_flush_e_moves += 1
-                elif re.search(r"(?:^|\\s)E\\S*", command, re.I):
+                elif re.search(r"(?:^|\s)E\S*", command, re.I):
                     malformed_flush_e_moves += 1
         if re.match(r"^M8200(?:\s|$)", stripped, re.I):
             counts["m8200_command_count"] += 1
