@@ -25,7 +25,7 @@ services:
     user: "0:0"
     restart: "no"
     cap_drop: [ALL]
-    cap_add: [CHOWN]
+    cap_add: [CHOWN, FOWNER]
     security_opt: ["no-new-privileges:true"]
     network_mode: "none"
     volumes:
