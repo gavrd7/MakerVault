@@ -2488,3 +2488,57 @@ chain before downloads), and
 selection/no fallback). Source code committed to draft PR #171.
 **Not yet validated on Debian**: run these tests after app-only
 update; no isolated slicer-worker refresh.
+
+
+## Slicer history housekeeping and thumbnails (21 Nov 2026)
+
+Draft PR #171 adds controls at the **top of Saved slicing drafts**:
+
+- Filter: All / unsliced drafts / completed slices / other active+inactive.
+- Select entries (checkboxes on loaded rows), Select all filtered,
+  Clear selection and Delete selected, with a confirmation that
+  names the number of entries.
+- Remove all drafts and Remove all slices explicitly include older
+  entries beyond the current visible page; the backend uses a
+  bounded, owner-only transactional delete. Queued/running jobs
+  cannot be deleted. Failed/cancelled/stale jobs can be selected.
+- Remove all unsaved G-code is a **separate**, explicitly confirmed
+  operation: it removes only owner-private generated
+  `FileAsset(category="other")` with
+  `generated_by=makervault-slicer`, `extension=.gcode` and
+  a matching `slice_job_id`, and never `FileAsset(category="gcode")`
+  promoted into the G-code library, nor STL/3MF source files.
+  Completed jobs whose unsaved output is removed remain in
+  `stale` history without a preview. Orphaned private G-code
+  remaining after deleting completed jobs can also be cleared.
+  Protected or conflicting files are skipped and not detached.
+- Ordinary single or bulk draft/job deletion **preserves** generated
+  private G-code and existing library files; users explicitly
+  choose the separate unsaved-output cleanup if desired.
+- Completed sliced G-code no longer keeps source `SlicerProfile`
+  records artificially locked. On explicit profile deletion,
+  completed SliceJob foreign keys to that profile are detached,
+  preserving the existing name/version snapshot, output file and
+  history. Unfinished, active or retryable jobs and native parent
+  dependencies still block profile deletion; no printer dispatch
+  or profile automation changes.
+
+Each saved completed slice now shows the **existing embedded PNG
+thumbnail from its G-code**, served by a new private, owner-checked,
+bounded (2 MiB header) read-only thumbnail endpoint. No image is
+generated at view time and no new printer G-code is created.
+Unavailable images use a compact visual placeholder; non-completed
+drafts show a placeholder. Existing 96x96/300x300 G-code header
+blocks are parsed and base64-decoded only within strict size limits.
+
+Regression additions:
+`core.tests.test_slicer_job_bulk`,
+two completed-versus-draft profile-deletion cases in
+`test_slicer_official_api`, and
+`frontend/tests/slicerNovemberFeedback.test.js` source assertions.
+
+**The new changes have not yet been run or deployed on Debian.**
+Use only `sudo python3 scripts/install_slicer_staging.py update`
+on the staging app, not `refresh-worker`. No printer settings,
+firmware, manufacturer's slicer scripts or generated physical
+print are changed. PR #171 remains a draft.
