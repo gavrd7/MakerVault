@@ -34,8 +34,8 @@ test("mobile slicer tabs expose plate, models, and settings without unmounting t
 test("default G-code view is full printed overview while layer-only inspection remains optional", () => {
   assert.match(viewer, /const \[layerDisplay, setLayerDisplay\] = useState\("all"\)/);
   assert.match(viewer, /<option value="current">Current layer only/);
-  assert.match(viewer, /<option value="all">All earlier layers/);
-  assert.match(viewer, /Earlier layers are still a sampled orientation reference/);
+  assert.match(viewer, /<option value="all">Whole print · full-detail paths/);
+  assert.match(viewer, /The preview reached its resource budget/);
 });
 
 test("mobile G-code controls are compact without changing desktop layout", () => {
@@ -96,7 +96,7 @@ test("flushing settings and CFS profile controls use the new modal rather than a
   assert.match(workspace,/processProfileId=\{selectedProfiles\?\.process_id\}/);
   assert.match(workspace,/className="slicerLiveMaterialSwatch slicerLiveMaterialSwatchRound"/);
   assert.match(workspace,/setEditingSlotProfile\(String\(slot.id\)\)/);
-  assert.match(workspace,/onSlotFilamentProfilesChange\?\.\(updated\)/);
+  assert.match(workspace,/onSlotFilamentProfilesChange\?\.\(current=>/);
   assert.match(flushing,/aria-haspopup="dialog"/);
   assert.match(flushing,/createPortal\(/);
   assert.match(flushing,/className="slicerFlushModal"/);
@@ -188,7 +188,7 @@ test("settings categories are visible in both compact and expanded views", () =>
 
 test("painting toolbar uses complete action names", () => {
   for (const label of ["Support painting", "Seam painting", "Variable layer height"])
-    assert.match(editor, new RegExp('"' + label + '":"' + label + '"'));
+    assert.match(editor, new RegExp('name: "' + label + '"'));
 });
 
 test("mobile mesh tools dock inside the 3D viewport alongside Measure", () => {
