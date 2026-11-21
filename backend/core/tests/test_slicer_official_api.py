@@ -209,6 +209,33 @@ class OfficialProfileApiTests(TestCase):
         self.assertEqual(job.printer_preset, profile.name)
         self.assertIsNone(job.printer_profile_id)
 
+    def test_purged_completed_slice_does_not_lock_profiles(self):
+        """Cleanup of private output must not reintroduce an old profile lock."""
+        from core.models import SliceJob
+        self.client.force_login(self.user)
+        with patch("core.slicer_api.fetch_official_profile", return_value=self.native):
+            response = self.post()
+        self.assertEqual(response.status_code, 201, response.content)
+        profile = SlicerProfile.objects.get(pk=response.json()["profile"]["id"])
+        self.addCleanup(lambda file=profile.file_asset.file: file.delete(save=False))
+        printer = Printer.objects.create(owner=self.user, name="K2", model="Creality K2")
+        mesh = FileAsset.objects.create(owner=self.user, name="box.stl",
+            category="mesh", metadata={"extension": ".stl"})
+        job = SliceJob.objects.create(
+            owner=self.user, input_asset=mesh, printer=printer,
+            engine="orcaslicer", engine_version="2.4.2",
+            printer_preset=profile.name, filament_preset="PLA",
+            process_preset="0.20mm", nozzle_mm="0.4", printer_profile=profile,
+            status="stale",
+            message="Private unsaved G-code removed; slice history retained.")
+        removed = self.client.delete(
+            "/api/printing/slicer/profiles/" + str(profile.pk) + "/")
+        self.assertEqual(removed.status_code, 200, removed.content)
+        job.refresh_from_db()
+        self.assertEqual(job.status, "stale")
+        self.assertEqual(job.printer_preset, profile.name)
+        self.assertIsNone(job.printer_profile_id)
+
     def test_unsliced_job_still_protects_native_profile(self):
         from core.models import SliceJob
         self.client.force_login(self.user)
