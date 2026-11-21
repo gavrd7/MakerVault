@@ -107,6 +107,44 @@ class BulkSlicerCleanupTests(TestCase):
         self.assertEqual(saved.output_asset_id, library.pk)
         self.assertTrue(on_commit.called)
 
+    def test_thumbnail_parser_uses_embedded_png_and_rejects_invalid_blocks(self):
+        import base64
+        from core.slicer_job_bulk import _embedded_thumbnail
+        png = b"\\x89PNG\\r\\n\\x1a\\n" + b"dummy"
+        data = base64.b64encode(png)
+        header = (b"; HEADER_BLOCK_START\\n"
+            + b"; thumbnail begin 96x96 " + str(len(data)).encode() + b"\\n"
+            + b"; " + data + b"\\n; thumbnail end\\n; HEADER_BLOCK_END\\n")
+        self.assertEqual(_embedded_thumbnail(header), png)
+        self.assertIsNone(_embedded_thumbnail(header.replace(b"; thumbnail end", b"; bad end")))
+        self.assertIsNone(_embedded_thumbnail(header.replace(
+            str(len(data)).encode(), b"999", 1)))
+        self.assertIsNone(_embedded_thumbnail(b"; thumbnail begin 96x96 500001\\n"))
+
+    def test_thumbnail_url_is_private_and_serves_existing_embedded_png(self):
+        import base64
+        from django.core.files.base import ContentFile
+        job = self.job("completed")
+        png = b"\\x89PNG\\r\\n\\x1a\\n" + b"generated-thumbnail"
+        encoded = base64.b64encode(png)
+        gcode = (b"; thumbnail begin 96x96 " + str(len(encoded)).encode()
+            + b"\\n; " + encoded + b"\\n; thumbnail end\\nG1 X0 Y1\\n")
+        asset = FileAsset(owner=self.owner, name="slice.gcode", category="other",
+            metadata={"generated_by": "makervault-slicer", "extension": ".gcode",
+                      "slice_job_id": str(job.pk)})
+        asset.file.save("slicer-thumbnail-test.gcode", ContentFile(gcode), save=False)
+        asset.save()
+        self.addCleanup(lambda item=asset: item.file.delete(save=False))
+        job.output_asset = asset
+        job.save(update_fields=["output_asset"])
+        url = "/api/printing/slicer/jobs/" + str(job.pk) + "/thumbnail/"
+        image = self.client.get(url)
+        self.assertEqual(image.status_code, 200, image.content)
+        self.assertEqual(image["Content-Type"], "image/png")
+        self.assertEqual(image.content, png)
+        self.client.force_login(self.other)
+        self.assertEqual(self.client.get(url).status_code, 404)
+
     def test_bulk_methods_enforce_permission_and_scope(self):
         draft = self.job()
         self.client.force_login(self.other)
