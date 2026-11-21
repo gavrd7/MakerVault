@@ -2,7 +2,7 @@
 import io
 import json
 import zipfile
-from xml.etree import ElementTree as ET
+from defusedxml import ElementTree as ET
 
 from django.test import SimpleTestCase
 
