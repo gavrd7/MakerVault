@@ -80,7 +80,7 @@ test("printer send modal includes completed private slices without promoting the
   const modal = read("PrinterStartGcodeModal.jsx");
   assert.match(modal, /apiFetch\("\/api\/files\/\?category=gcode"\)/);
   assert.match(modal, /apiFetch\("\/api\/printing\/slicer\/jobs\/"\)/);
-  assert.match(modal, /job\.status === "completed" && !job\.gcode_in_library && job\.output_asset\?\.id/);
+  assert.match(modal, /job\.status === "completed" && job\.output_asset\?\.id/);
   assert.match(modal, /Private slice \(not in library\)/);
   assert.match(modal, /const knownIds = new Set\(libraryFiles\.map/);
   assert.doesNotMatch(modal, /save-gcode\/.*await.*load/s);
