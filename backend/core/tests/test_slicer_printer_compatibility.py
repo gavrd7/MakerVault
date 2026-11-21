@@ -21,6 +21,27 @@ from core.slicer_plate_3mf import build_plate_3mf, NS
 
 
 class PrinterCompatibilityFixtureTests(SimpleTestCase):
+    def test_production_flush_diagnostic_flag_is_explicit_opt_in(self):
+        from django.core.management import CommandError
+        from core.management.commands.diagnose_slicer_printer_profiles import Command
+        from django.core.management.base import CommandParser
+        parser = CommandParser(prog="diagnose_slicer_printer_profiles")
+        Command().add_arguments(parser)
+        options = parser.parse_args(["--engine", "crealityprint"])
+        self.assertFalse(options.test_production_flush)
+        options = parser.parse_args([
+            "--engine", "crealityprint", "--native", "--test-production-flush"])
+        self.assertTrue(options.test_production_flush)
+        self.assertTrue(options.native)
+        # Invalid CLI combinations are rejected before profile or worker access.
+        for args in (
+                ["--engine", "crealityprint", "--test-production-flush"],
+                ["--engine", "orcaslicer", "--native", "--test-production-flush"],
+                ["--engine", "crealityprint", "--native",
+                 "--test-flush", "--test-production-flush"]):
+            with self.subTest(args=args), self.assertRaises(CommandError):
+                Command().handle(**vars(parser.parse_args(args)))
+
     def test_distinct_2_3_4_material_fixtures_on_verified_beds(self):
         for count in (2, 3, 4):
             for width, depth in ((90, 90), (180, 180), (350, 350)):
