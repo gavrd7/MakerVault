@@ -1378,7 +1378,8 @@ def official_profiles(request):
         selected_version = (selection["engine_version"] if "engine_version" in selection
                             else default_catalogue_version(engine))
         release = resolve_official_release(engine, selected_version)
-        if (source, ref) != (release.source, release.ref) and engine != "orcaslicer":
+        if (source != release.source
+                or (ref != release.ref and engine != "orcaslicer")):
             raise ValueError("Official provider configuration differs from the reviewed release.")
         version, source, ref = release.version, release.source, release.ref
         kind = selection.get("kind")
