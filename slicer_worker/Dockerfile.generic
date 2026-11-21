@@ -7,7 +7,8 @@ USER root
 COPY --chown=10001:10001 slicer_worker/ /opt/makervault-slicer/slicer_worker/
 RUN python3 -m compileall -q /opt/makervault-slicer/slicer_worker && \
     test -f /opt/engines/manifest.json && \
-    test -x /opt/engines/squashfs-root/AppRun
+    test -x /opt/engines/squashfs-root/AppRun && \
+    echo 'b30b0ae933e653692cf85a493287a949215ae4c14d547a00203d16dfcadb8054  /opt/engines/orcaslicer.AppImage' | sha256sum --check --status
 LABEL org.opencontainers.image.title="MakerVault Slicer" \
       org.opencontainers.image.description="One worker runtime with independent verified engine installations" \
       org.opencontainers.image.version="0.1.0"
