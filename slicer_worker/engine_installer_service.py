@@ -30,7 +30,7 @@ from .engine_store_admin import (
     _manifest, _write, _sha256, seed_bundled_orca, activate,
     EXPECTED_ORCA_SHA, APPROVAL_VERSION, rollback as rollback_store,
 )
-from .engine_store_lifecycle import installed_versions, activate_installed, uninstall_engine, IDENTITY
+from .engine_store_lifecycle import installed_versions, activate_installed, uninstall_engine, preserve_active_identities, IDENTITY
 from .engine_registry import SUPPORTED as INSTALLED_ENGINE_TYPES
 
 STORE = Path(os.environ.get("SLICER_ENGINE_STORE", "/opt/engine-store"))
@@ -314,6 +314,7 @@ def _install(op_id, release):
         new_manifest = {"schema_version": 1,
                         "engines": {**existing, engine: new_record}}
         if existing:
+            preserve_active_identities(STORE)
             _write(STORE, current)  # Ensure manifest formatting is consistent.
             previous = STORE / "previous.json"
             previous.write_text(json.dumps(current, separators=(",", ":")), encoding="utf-8")
