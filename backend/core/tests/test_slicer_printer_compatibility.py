@@ -86,6 +86,27 @@ class PrinterCompatibilityFixtureTests(SimpleTestCase):
         with self.assertRaises(ValueError):
             _creality_toolchange_macro_audit(b"")
 
+    def test_native_machine_capability_audit_is_read_only_opt_in(self):
+        from django.core.management import CommandError
+        from django.core.management.base import CommandParser
+        from core.management.commands.diagnose_slicer_printer_profiles import Command
+        parser = CommandParser(prog="diagnose_slicer_printer_profiles")
+        Command().add_arguments(parser)
+        defaults = parser.parse_args(["--engine", "crealityprint"])
+        self.assertFalse(defaults.audit_machine_capability)
+        enabled = parser.parse_args([
+            "--engine", "crealityprint", "--audit-machine-capability"])
+        self.assertTrue(enabled.audit_machine_capability)
+        # All forbidden combinations must fail before UUID, DB or worker
+        # operations: never combine a provenance inspection with native jobs.
+        for args in (
+                ["--engine", "orcaslicer", "--audit-machine-capability"],
+                ["--engine", "crealityprint", "--audit-machine-capability", "--native"],
+                ["--engine", "crealityprint", "--audit-machine-capability",
+                 "--test-production-flush"]):
+            with self.subTest(args=args), self.assertRaises(CommandError):
+                Command().handle(**vars(parser.parse_args(args)))
+
     def test_production_flush_diagnostic_flag_is_explicit_opt_in(self):
         from django.core.management import CommandError
         from core.management.commands.diagnose_slicer_printer_profiles import Command
