@@ -39,6 +39,12 @@ class HomeAssistantPowerUnitTests(SimpleTestCase):
                          "http://192.168.1.4:8123")
 
     @patch("core.home_assistant_power.socket.getaddrinfo")
+    def test_plain_http_hostname_rejected_before_dns_lookup(self, dns):
+        with self.assertRaisesRegex(HomeAssistantPowerError, "private IP address"):
+            validate_url("http://homeassistant.local:8123")
+        dns.assert_not_called()
+
+    @patch("core.home_assistant_power.socket.getaddrinfo")
     def test_public_https_reverse_proxy_domain_is_accepted(self, dns):
         dns.return_value = [
             (2, 1, 6, "", ("104.21.70.99", 443)),
@@ -81,6 +87,23 @@ class HomeAssistantPowerUnitTests(SimpleTestCase):
         )
         self.assertTrue(printer_is_busy(printer))
 
+
+    def test_unknown_or_stale_live_telemetry_blocks_power_off(self):
+        now = timezone.now()
+        def printer_with_snapshot(snapshot, checked, status="connected"):
+            return SimpleNamespace(
+                print_jobs=SimpleNamespace(filter=lambda **kw: SimpleNamespace(exists=lambda: False)),
+                live_connections=SimpleNamespace(filter=lambda **kw: [SimpleNamespace(
+                    last_snapshot=snapshot, status=status,
+                    last_checked_at=checked, poll_interval_seconds=30,
+                )]),
+            )
+        self.assertTrue(printer_is_busy(printer_with_snapshot({}, None)))
+        self.assertTrue(printer_is_busy(printer_with_snapshot(
+            {"state": "idle"}, now - timedelta(minutes=10))))
+        self.assertTrue(printer_is_busy(printer_with_snapshot(
+            {"state": "idle"}, now, status="disconnected")))
+        self.assertFalse(printer_is_busy(printer_with_snapshot({"state": "idle"}, now)))
 
     def test_stale_print_history_does_not_override_fresh_idle_telemetry(self):
         now = timezone.now()
