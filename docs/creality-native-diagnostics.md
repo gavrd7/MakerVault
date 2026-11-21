@@ -2667,3 +2667,44 @@ flushing tests process override behaviour. Without the fixture, the
 command fails closed rather than making up a valid user model/job.
 Do not infer spatial paint correctness merely from a changed hash.
 Experimental multicolour gate output must never be printed.
+
+
+## Synthetic Creality painting matrix without a saved job (21 Nov 2026)
+
+The existing job-backed `diagnose_creality_paint_features --deep`
+correctly refuses to run without a completed one-object colour-painted
+test job. To avoid requiring a user to print, upload, or save a dummy job,
+there is now a **separate** offline-only
+`diagnose_creality_paint_fixture` management command. It requires four
+existing, same-owner Creality Print 7.3.1 profile identities (one printer,
+one process, two native filament presets), one nozzle and the approved
+isolated worker. It constructs a disposable two-colour 3MF cantilever from
+code and runs baseline, support, seam, fuzzy, variable and flushing
+scenarios without saving any SliceJob, FileAsset or preset.
+
+Example:
+
+```bash
+sudo docker exec makervault python3 /app/backend/manage.py \
+  diagnose_creality_paint_fixture \
+  --printer-profile-id 580c1d65-ee1f-4919-b2ea-93a98cd33e1a \
+  --process-profile-id 42b0025a-20f2-485e-8ca4-7caca3e994f9 \
+  --filament-profile-id cf892271-178c-4c6a-a104-58c8d016acc8 \
+  --filament-profile-id b00a0dc9-fe2c-4653-a1df-dfb8d7429a3e \
+  --deep
+```
+
+`--only support|seam|fuzzy|variable|flushing` runs only that variant
+plus baseline. `--deep` performs identical-geometry semantic facet
+comparisons for support, seam and fuzzy skin. The command reports redacted
+fixture metrics and fails each scenario separately. It never activates the
+experimental multicolour gate, writes to the database, sends G-code to a
+printer or modifies the pinned worker. A changed motion hash only shows a
+slicer response, not correct spatial painting; manual or subsequent
+machine-readable toolpath analysis and physical CFS tests remain required.
+Never print diagnostic output. The existing job-backed command remains
+unchanged.
+
+Focused tests: `core.tests.test_slicer_creality_paint_fixture`. This
+new code is committed on draft PR #171 but was **not yet run on Debian**
+as of the initial implementation.
