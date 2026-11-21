@@ -31,7 +31,7 @@ class CrealitySyntheticPaintFixtureTests(SimpleTestCase):
         }).encode()
         self.filaments = [
             json.dumps({
-                "type": "filament", "name": name,
+                "type": "filament", "name": name, "filament_type": "PLA",
                 "nozzle_temperature": temperature,
             }).encode()
             for name, temperature in (("Dark", "210"), ("Light", "220"))
