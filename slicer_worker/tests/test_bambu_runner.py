@@ -7,8 +7,9 @@ import zipfile
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from unittest import TestCase
+from unittest.mock import patch, MagicMock
 
-from slicer_worker.bambu_runner import bambu_command, extract_single_bambu_gcode
+from slicer_worker.bambu_runner import bambu_command, extract_single_bambu_gcode, run_bambu
 from slicer_worker.runner import WorkerError
 
 
@@ -96,3 +97,55 @@ class BambuRunnerContractTests(TestCase):
             self.assertEqual(len(zf.namelist()), 1)
         self.assertGreater(MAX_GCODE_BYTES, 1024)
         self.assertFalse((self.root / "output.gcode").exists())
+
+    def test_duplicate_zip_members_are_rejected(self):
+        import warnings
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", UserWarning)
+            self._archive([
+                ("Metadata/plate_1.gcode", b"G1 E1\\n"),
+                ("Metadata/plate_1.gcode", b"G1 E2\\n"),
+            ])
+        with self.assertRaisesRegex(WorkerError, "duplicate"):
+            extract_single_bambu_gcode(self.root / "bambu-sliced.3mf", self.root)
+        self.assertFalse((self.root / "output.gcode").exists())
+
+    def test_candidate_runner_writes_no_untrusted_stdout_and_accepts_one_plate(self):
+        self._archive([("Metadata/plate_1.gcode", b"; test\\nG28\\n")])
+        process = MagicMock()
+        process.returncode = 0
+        with patch("slicer_worker.bambu_runner.subprocess.Popen", return_value=process) as popen:
+            result = run_bambu(self.binary, self.root)
+        self.assertEqual(result["status"], "completed")
+        self.assertEqual(result["bytes"], len(b"; test\\nG28\\n"))
+        self.assertEqual(popen.call_args.kwargs["stdout"], __import__("subprocess").DEVNULL)
+        self.assertEqual(popen.call_args.kwargs["stderr"], __import__("subprocess").DEVNULL)
+        self.assertTrue(popen.call_args.kwargs["start_new_session"])
+
+    def test_candidate_runner_rejects_failed_cli_and_invalid_timeout(self):
+        process = MagicMock()
+        process.returncode = 42
+        with patch("slicer_worker.bambu_runner.subprocess.Popen", return_value=process):
+            with self.assertRaisesRegex(WorkerError, "rejected"):
+                run_bambu(self.binary, self.root)
+        for timeout in (0, 901, True, "30"):
+            with self.subTest(timeout=timeout):
+                with self.assertRaisesRegex(WorkerError, "timeout"):
+                    run_bambu(self.binary, self.root, timeout_seconds=timeout)
+
+    def test_candidate_runner_stays_disconnected_from_worker_admission(self):
+        from slicer_worker.engine_registry import SUPPORTED
+        from slicer_worker.service import _decode_payload
+        import base64
+        import uuid
+        self.assertNotIn("bambustudio", SUPPORTED)
+        payload = {
+            "job_id": str(uuid.uuid4()), "engine": "bambustudio",
+            "engine_version": "02.09.01.70",
+            "model": base64.b64encode(fixture_stl()).decode(),
+            "printer_profile": base64.b64encode(b"{}").decode(),
+            "filament_profile": base64.b64encode(b"{}").decode(),
+            "process_profile": base64.b64encode(b"{}").decode(),
+        }
+        with self.assertRaises(WorkerError):
+            _decode_payload(payload)
