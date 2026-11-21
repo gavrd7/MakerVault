@@ -67,8 +67,16 @@ def _read_source(path, limit):
 
 def _fingerprint(path):
     file = Path(path)
-    if not file.is_absolute() or file.is_symlink() or not file.is_file() or not os.access(file, os.X_OK):
-        raise WorkerError("Select an executable, absolute, non-symlinked binary path.")
+    if not file.is_absolute() or not file.is_file() or not os.access(file, os.X_OK):
+        raise WorkerError("Select an executable, absolute binary path.")
+    if file.is_symlink():
+        # Only AppRun may link to its own extracted AppImage contents.
+        try:
+            if (file.name != "AppRun" or not file.resolve(strict=True).is_relative_to(
+                    file.parent.resolve(strict=True))):
+                raise WorkerError("Fixture binary link escapes its extracted AppImage.")
+        except (OSError, RuntimeError, ValueError) as exc:
+            raise WorkerError("Fixture executable link is invalid.") from exc
     digest = hashlib.sha256()
     with file.open("rb") as stream:
         while chunk := stream.read(1024 * 1024):
