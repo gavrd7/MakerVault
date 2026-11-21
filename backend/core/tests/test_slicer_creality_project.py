@@ -280,6 +280,53 @@ class CrealityPositionedPlateTests(SimpleTestCase):
                 self.assertEqual(config["wipe_tower_x"], ["45"])
                 self.assertEqual(config["wipe_tower_y"], ["84"])
 
+    def test_731_custom_plate_missing_slot_uses_native_default_not_other_filament(self):
+        """Generic PLA=50; missing Hyper PLA=35 per native v7.3.1 default."""
+        from core.slicer_creality_project import build_creality_project_candidate
+        plate = build_creality_positioned_plate(
+            self._objects(), bed_width=260, bed_depth=260, tool_ids=[0, 1])
+        machine = json.dumps({"type": "machine", "name": "K2"}).encode()
+        process = json.dumps({"type": "process", "name": "Standard",
+                              "enable_prime_tower": "1"}).encode()
+        explicit = {"type": "filament", "name": "Generic PLA",
+                    "nozzle_temperature": "215",
+                    "customized_plate_temp": "50",
+                    "customized_plate_temp_initial_layer": "50"}
+        missing = {"type": "filament", "name": "Hyper PLA",
+                   "nozzle_temperature": "220"}
+        def build(filaments, version="7.3.1"):
+            return build_creality_project_candidate(
+                plate, printer=machine, process=process,
+                filaments=[json.dumps(row).encode() for row in filaments],
+                version=version, bed_width=260, bed_depth=260,
+                prime_tower={"x": 45, "y": 84})
+        for order, expected in (
+            ([explicit, missing], ["50", "35", "50", "35"]),
+            ([missing, explicit], ["35", "50", "35", "50"]),
+        ):
+            with self.subTest(expected=expected):
+                with zipfile.ZipFile(io.BytesIO(build(order))) as archive:
+                    project = json.loads(archive.read(
+                        "Metadata/project_settings.config"))
+                self.assertEqual(project["customized_plate_temp"], expected)
+                self.assertEqual(
+                    project["customized_plate_temp_initial_layer"], expected)
+                self.assertEqual(project["nozzle_temperature"],
+                                 ["215", "220", "215", "220"]
+                                 if order[0] is explicit else
+                                 ["220", "215", "220", "215"])
+        # Defaults above are approved for exactly the reviewed 7.3.1 source;
+        # a different native release still rejects missing thermal fields.
+        with self.assertRaisesRegex(
+                SlicerProfileError, "customized_plate_temp"):
+            build([explicit, missing], version="7.3.2")
+        # There is no approved fallback for temperatures used during printing.
+        with self.assertRaisesRegex(
+                SlicerProfileError, "nozzle_temperature"):
+            build([explicit, {"type": "filament", "name": "Bad",
+                               "customized_plate_temp": "35",
+                               "customized_plate_temp_initial_layer": "35"}])
+
     def test_mismatched_creality_filament_profiles_name_missing_native_key(self):
         """Never borrow missing filament settings across physical CFS tools."""
         import json
