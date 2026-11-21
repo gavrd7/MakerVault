@@ -32,7 +32,7 @@ upgrades are initiated by users in **Slicer setup → View engine installations*
 
 The installer discovers **Creality Print** releases through the official
 `CrealityOfficial/CrealityPrint` GitHub releases API, checking each Linux
-x86-64 AppImage against its published SHA-256. **OrcaSlicer** offers the reviewed MakerVault K2-compatible source build 2.5.0 (when its binary prerelease is published), plus separately pinned upstream version 2.4.2 for unvalidated older-version selection. This includes
+x86-64 AppImage against its published SHA-256. **OrcaSlicer** offers the reviewed MakerVault K2-compatible 2.5.0 binary embedded in its immutable GHCR-based installer image, plus independently pinned upstream 2.4.2 for deliberate older-version selection. This includes
 earlier versions, not just updates newer than the current installation.
 
 A single version dropdown on each engine card lists the current version,
@@ -66,17 +66,17 @@ production print.
 
 The engine is never allowed to start a printer automatically.
 
-## MakerVault-reviewed OrcaSlicer 2.5.0 — K2 compatibility
+## MakerVault-reviewed OrcaSlicer 2.5.0 — safe reinstall
 
-**Never substitute the stock upstream OrcaSlicer 2.5.0 AppImage for the Creality K2 profile.** Creality's K2 machine preset specifies `retraction_distances_when_cut = 30 mm`, whereas stock Orca 2.5.0 rejects values above 18 mm. Our independently compiled binary adjusts exactly that source validation maximum to 30 mm without editing official profiles, and passed native K1, K2 and two-tool G-code tests in [Actions run 43789319270](https://github.com/gavrd7/MakerVault/actions/runs/43789319270).
+The Creality K2's native profile specifies `retraction_distances_when_cut = 30 mm` but the stock OrcaSlicer 2.5.0 binary rejects values above 18 mm. MakerVault compiled the reviewed source correction which changes that **one validation limit** to 30 mm, while preserving the manufacturer profile. The reviewed binary passed K1, K2 and two-tool CLI slicing acceptance in [Actions run 43789319270](https://github.com/gavrd7/MakerVault/actions/runs/43789319270).
 
 Reviewed AppImage SHA-256: `b30b0ae933e653692cf85a493287a949215ae4c14d547a00203d16dfcadb8054`.
 
-The browser installer must resolve **only** the dedicated reviewed binary prerelease tag `orca-2.5.0-mv1`, asset `MakerVault-OrcaSlicer-2.5.0-mv1.AppImage`. The official GitHub release API's asset digest must match the pinned SHA-256, and the streamed download is verified a second time before extraction and activation. **If that audited prerelease does not exist, is unreachable or has a different checksum, version 2.5.0 must not be offered.**
+**No extra release or container is required.** The single generic worker and its separate host-side installer are both built from `slicer_worker/Dockerfile.generic`, which pins the reviewed Orca bootstrap image by **immutable GHCR manifest digest** (`ghcr.io/gavrd7/makervault-slicer-orca@sha256:7f12df990d059d6a5e889c3cff6ebacd3a7c627fee28ff75e8696bee9c3423f4`). The installer checks the bundled `/opt/engines/orcaslicer.AppImage` against that approved SHA-256, copies it into the versioned engine volume, checks the copy again, and activates the known-good runtime. **It never downloads the stock upstream 2.5.0 AppImage**, and refuses installation if the bundled source is missing or modified.
 
-The passing build artifact expires **23 November 2026 at 01:59 UTC**. To make the reviewed executable durably available, an authorised maintainer must register and manually run `.github/workflows/orca-reviewed-release.yml` on the default branch with approval text `PUBLISH-ORCA-2.5.0-MV1` **before that expiry**. The workflow retrieves only the exact reviewed Actions run and refuses to publish a different SHA-256; it creates an isolated binary prerelease, **not** MakerVault v1.7.0, and never auto-enables an engine. Do not merge unfinished engine-management changes solely to register this release workflow; use a separate workflow-only PR if needed before artifact expiry.
+For a staging checkout that previously installed the incompatible stock Orca 2.5.0, first update/rebuild the main application and the **installer service** from this PR, then explicitly uninstall only Orca from the browser and reinstall 2.5.0 through the version dropdown. Existing Creality installations and MakerVault records must remain untouched. The installer will not silently overwrite an existing version directory. Verify the original Creality K2 native profile can generate a real Benchy G-code before marking the PR merge-ready.
 
-Orca 2.4.2 remains an intentionally separate, pinned **upstream** option for deliberate version downgrade. It has **not** been K2-source-patched or validated for this native 30 mm cut-retraction case. Future custom engine builds must receive a distinct independently pinned release and compatibility acceptance.
+Orca 2.4.2 is a separate pinned upstream version, **not K2-approved** for the 30 mm cut retraction compatibility issue. Other engines still use checksum-verified native release downloads. Keep one shared slicer worker container; do not add a new Orca container, Docker socket access or host write privileges to the web app.
 
 ## Switching versions and uninstalling
 
