@@ -48,3 +48,12 @@ test("Creality v7.3.0 legacy imports are explicitly flagged, never silently rela
   assert.match(setup, /Matching native release is required before importing/);
   assert.match(setup, /This saved preset has not been changed/);
 });
+
+test("official catalogue version always follows selected slicer engine", () => {
+  assert.match(setup, /const targetVersion = form\.engine_version;/);
+  assert.match(setup, /engine_version: form\.engine_version,/);
+  assert.match(setup, /Matching official profile release/);
+  assert.match(setup, /Follows the selected slicing engine/);
+  assert.doesNotMatch(setup, /Native OrcaSlicer profile release/);
+  assert.doesNotMatch(setup, /"2\.5\.0"\) \? form\.engine_version : "2\.5\.0"/);
+});
