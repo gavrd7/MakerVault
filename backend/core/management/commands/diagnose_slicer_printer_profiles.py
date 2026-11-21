@@ -48,7 +48,7 @@ def _creality_official_source_release(scope, runtime_version):
         return {"kind": "manual_or_other", "source_release": None,
                 "matches_engine": None}
     version = scope[len(prefix):].split("/", 1)[0]
-    if not version or not re.fullmatch(r"\\d+\\.\\d+\\.\\d+", version):
+    if not version or not re.fullmatch(r"\d+\.\d+\.\d+", version):
         return {"kind": "unrecognised_official", "source_release": None,
                 "matches_engine": False}
     return {"kind": "official_creality", "source_release": version,
