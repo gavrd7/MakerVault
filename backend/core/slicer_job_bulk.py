@@ -211,7 +211,7 @@ def _embedded_thumbnail(data):
                 except (ValueError, base64.binascii.Error):
                     png = None
                 if (png is not None and len(png) <= 400 * 1024
-                        and png.startswith(b"\\x89PNG\\r\\n\\x1a\\n")):
+                        and png.startswith(b"\x89PNG\r\n\x1a\n")):
                     if size == b"300x300":
                         return png
                     if small is None:
