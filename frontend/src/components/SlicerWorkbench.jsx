@@ -1967,15 +1967,14 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
           <p role="alert">Official profile release {officialSourceInfo.source_engine_version} does not match selected engine {form.engine_version}. Matching native release is required before importing; choose the supported engine version.</p>}
         {officialSourceInfo && !officialSourceInfo.official_search_available && <p role="status">This engine does not yet have a verified upstream catalogue browser in MakerVault. You can still import native {officialSourceInfo.native_profile_format} profiles for this engine; the installed slicing engine must be available to run.</p>}
         <form className="formGrid" onSubmit={searchOfficialProfiles}>
-          <label>Official source
+          <label className="slicerOfficialSourceField">Official source
             <select value={form.engine} disabled>
               <option value={form.engine}>{engines.find(engine => engine.key === form.engine)?.label || form.engine}</option>
             </select>
           </label>
-          <label>Matching official profile release
+          <label className="slicerOfficialSourceField">Matching official profile release
             <input aria-label="Official profile engine version"
               value={form.engine_version || ""} readOnly />
-            <small>Follows the selected slicing engine. Switch engine version above to use another verified native catalogue; unsupported releases are rejected.{officialProfileVersions.length > 1 ? " Approved releases: " + officialProfileVersions.join(", ") + "." : ""}</small>
           </label>
           <label>Manufacturer / upstream catalogue
             <select value={officialVendor} disabled={officialBusy || !officialVendors.length} onChange={e => {
