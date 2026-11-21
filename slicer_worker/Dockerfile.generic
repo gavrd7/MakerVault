@@ -12,5 +12,7 @@ RUN python3 -m compileall -q /opt/makervault-slicer/slicer_worker && \
 LABEL org.opencontainers.image.title="MakerVault Slicer" \
       org.opencontainers.image.description="One worker runtime with independent verified engine installations" \
       org.opencontainers.image.version="0.1.0"
-USER 10001:10001
-CMD ["python3", "-m", "slicer_worker.service"]
+# Only PID 1 runs with limited SETUID/SETGID capabilities; child processes
+# run as separate unprivileged users (10001 slicer / 10002 installer).
+USER 0:0
+CMD ["python3", "-m", "slicer_worker.combined_service"]
