@@ -111,9 +111,11 @@ class BambuRunnerContractTests(TestCase):
         self.assertFalse((self.root / "output.gcode").exists())
 
     def test_candidate_runner_writes_no_untrusted_stdout_and_accepts_one_plate(self):
-        self._archive([("Metadata/plate_1.gcode", b"; test\\nG28\\n")])
         process = MagicMock()
         process.returncode = 0
+        # The CLI must create output after validation, not before launch.
+        process.communicate.side_effect = lambda **kwargs: self._archive([
+            ("Metadata/plate_1.gcode", b"; test\\nG28\\n")])
         with patch("slicer_worker.bambu_runner.subprocess.Popen", return_value=process) as popen:
             result = run_bambu(self.binary, self.root)
         self.assertEqual(result["status"], "completed")
