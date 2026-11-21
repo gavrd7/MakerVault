@@ -65,3 +65,17 @@ test("profile removal feedback is visible in the saved modal and requires server
   assert.match(setup, /setProfileRemoveError\("Unable to remove/);
   assert.match(setup, /setProfiles\(current => current\.filter/);
 });
+
+test("saved slicing jobs support draft/slice filters and explicit bulk cleanup", () => {
+  assert.match(setup, /Filter saved drafts and slices/);
+  assert.match(setup, /Drafts \(not sliced\)/);
+  assert.match(setup, /Completed slices/);
+  assert.match(setup, /Select all filtered/);
+  assert.match(setup, /Delete selected \(\{selectedSavedJobIds\.length\}\)/);
+  assert.match(setup, /Remove all drafts/);
+  assert.match(setup, /Remove all slices/);
+  assert.match(setup, /Remove all unsaved G-code/);
+  assert.match(setup, /printing\/slicer\/jobs\/bulk-delete\//);
+  assert.match(setup, /printing\/slicer\/jobs\/remove-unsaved-gcode\//);
+  assert.match(setup, /if \(!window\.confirm\(/);
+});
