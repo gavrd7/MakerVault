@@ -70,7 +70,7 @@ class NativeOrcaSupportPaintTests(SimpleTestCase):
         painted_area = sum(_area(tri, (0., 0., 1.))
                            for tri, state in painted if state == "4")
         self.assertAlmostEqual(painted_area, 2., places=5)
-        with self.assertRaisesRegex(ValueError, "only the painted state"):
+        with self.assertRaisesRegex(ValueError, "Invalid surface region slot"):
             native_support_triangles(self.source, self.paint(slot=1), kind="fuzzy")
 
     def test_selective_fuzzy_skin_rejects_stale_source_mesh(self):
