@@ -1061,7 +1061,7 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
         method: "POST",
         body: {
           kind: importKind, vendor: officialVendor, engine: form.engine,
-          engine_version: form.engine==="orcaslicer" ? officialProfileVersion : form.engine_version,
+          engine_version: form.engine_version,
           name: candidate.name, sub_path: candidate.sub_path,
         },
       });
@@ -1260,9 +1260,9 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
   function openOfficialSearch(kind = materialHint ? "filament" : form.printer_id ? "printer" : "process") {
     setImportKind(["bambustudio", "prusaslicer"].includes(form.engine) ? "printer" : kind);
     setOfficialVendor("");
-    const targetVersion = form.engine==="orcaslicer"
-      ? (["2.4.2","2.5.0"].includes(form.engine_version) ? form.engine_version : "2.5.0")
-      : form.engine_version;
+    // The catalogue must always follow the exact selected slicer release.
+    // Never replace an unsupported installed version with a nearby preset.
+    const targetVersion = form.engine_version;
     setOfficialProfileVersion(targetVersion);
     setOfficialProfileVersions([]);setOfficialBrand("");setOfficialBrands([]);
     setOfficialModel("");
@@ -1839,9 +1839,9 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
       <div className="printingActionGroup" aria-labelledby="slicer-official-profiles-heading">
         <h4 id="slicer-official-profiles-heading">Search official slicer profiles</h4>
         <p>Search available pinned official manufacturer catalogues. Bambu Studio and PrusaSlicer currently offer printer-model artwork records only; other engines may offer printer, filament and process presets. An engine may not provide a profile for every printer. Profiles are imported for your selected engine; profiles cannot be shared between engines.</p>
-        {form.engine==="crealityprint" && officialSourceInfo?.source_engine_version &&
+        {officialSourceInfo?.source_engine_version &&
           officialSourceInfo.source_engine_version !== form.engine_version &&
-          <p role="alert">Official Creality Print profile release {officialSourceInfo.source_engine_version} does not match selected engine {form.engine_version}. Matching native release is required before importing; choose the supported engine version.</p>}
+          <p role="alert">Official profile release {officialSourceInfo.source_engine_version} does not match selected engine {form.engine_version}. Matching native release is required before importing; choose the supported engine version.</p>}
         {officialSourceInfo && !officialSourceInfo.official_search_available && <p role="status">This engine does not yet have a verified upstream catalogue browser in MakerVault. You can still import native {officialSourceInfo.native_profile_format} profiles for this engine; the installed slicing engine must be available to run.</p>}
         <form className="formGrid" onSubmit={searchOfficialProfiles}>
           <label>Official source
@@ -1849,18 +1849,11 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
               <option value={form.engine}>{engines.find(engine => engine.key === form.engine)?.label || form.engine}</option>
             </select>
           </label>
-          {form.engine==="orcaslicer" && <label>Native OrcaSlicer profile release
-            <select aria-label="Official OrcaSlicer profile version"
-              value={officialProfileVersion} disabled={officialBusy}
-              onChange={e=>{
-                setOfficialProfileVersion(e.target.value);setOfficialVendor("");
-                setOfficialBrand("");setOfficialModels([]);setOfficialResults(null);
-                loadOfficialVendors(e.target.value,importKind);
-              }}>
-              {(officialProfileVersions.length?officialProfileVersions:["2.4.2","2.5.0"])
-                .map(version=><option key={version} value={version}>{version}</option>)}
-            </select>
-          </label>}
+          <label>Matching official profile release
+            <input aria-label="Official profile engine version"
+              value={form.engine_version || ""} readOnly />
+            <small>Follows the selected slicing engine. Switch engine version above to use another verified native catalogue; unsupported releases are rejected.</small>
+          </label>
           <label>Manufacturer / upstream catalogue
             <select value={officialVendor} disabled={officialBusy || !officialVendors.length} onChange={e => {
               setOfficialVendor(e.target.value);setOfficialBrand("");setOfficialResults(null);
