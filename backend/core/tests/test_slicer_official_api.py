@@ -162,6 +162,53 @@ class OfficialProfileApiTests(TestCase):
         self.assertEqual(duplicate.json()["profile"]["id"], str(profile.pk))
         self.assertEqual(duplicate.json()["imported_profiles"], [])
 
+    def test_import_capable_owner_can_remove_unused_native_profile(self):
+        """Profile management permission must permit removing own unused presets."""
+        self.client.force_login(self.user)
+        with patch("core.slicer_api.fetch_official_profile", return_value=self.native):
+            response = self.post()
+        self.assertEqual(response.status_code, 201, response.content)
+        profile = SlicerProfile.objects.get(pk=response.json()["profile"]["id"])
+        asset = profile.file_asset
+        self.addCleanup(lambda file=asset.file: file.delete(save=False))
+        self.assertFalse(self.user.has_perm("core.delete_slicerprofile"))
+        url = "/api/printing/slicer/profiles/" + str(profile.pk) + "/"
+        removed = self.client.delete(url)
+        self.assertEqual(removed.status_code, 200, removed.content)
+        self.assertTrue(removed.json()["removed"])
+        self.assertEqual(removed.json()["profile_id"], str(profile.pk))
+        self.assertTrue(removed.json()["source_file_preserved"])
+        self.assertFalse(SlicerProfile.objects.filter(pk=profile.pk).exists())
+        self.assertTrue(FileAsset.objects.filter(pk=asset.pk).exists())
+
+    def test_native_profile_delete_does_not_allow_another_owner(self):
+        self.client.force_login(self.user)
+        with patch("core.slicer_api.fetch_official_profile", return_value=self.native):
+            response = self.post()
+        self.assertEqual(response.status_code, 201, response.content)
+        profile = SlicerProfile.objects.get(pk=response.json()["profile"]["id"])
+        self.addCleanup(lambda file=profile.file_asset.file: file.delete(save=False))
+        url = "/api/printing/slicer/profiles/" + str(profile.pk) + "/"
+        self.other.user_permissions.add(Permission.objects.get(codename="add_fileasset"))
+        self.client.force_login(self.other)
+        denied = self.client.delete(url)
+        self.assertEqual(denied.status_code, 404, denied.content)
+        self.assertTrue(SlicerProfile.objects.filter(pk=profile.pk).exists())
+
+    def test_native_profile_delete_rejects_without_permissions(self):
+        self.client.force_login(self.user)
+        with patch("core.slicer_api.fetch_official_profile", return_value=self.native):
+            response = self.post()
+        self.assertEqual(response.status_code, 201, response.content)
+        profile = SlicerProfile.objects.get(pk=response.json()["profile"]["id"])
+        self.addCleanup(lambda file=profile.file_asset.file: file.delete(save=False))
+        url = "/api/printing/slicer/profiles/" + str(profile.pk) + "/"
+        self.other.user_permissions.clear()
+        self.client.force_login(self.other)
+        denied = self.client.delete(url)
+        self.assertEqual(denied.status_code, 403, denied.content)
+        self.assertTrue(SlicerProfile.objects.filter(pk=profile.pk).exists())
+
     def test_cross_manufacturer_crealityprint_import_stays_native_and_unverified(self):
         self.client.force_login(self.user)
         raw = json.dumps({
