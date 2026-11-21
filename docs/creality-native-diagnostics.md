@@ -2331,3 +2331,74 @@ native script/purge route, then import separately and run the
 ordinary 3MF native **offline** path with
 `require_verified_multicolor_purge=True` before considering
 printer dispatch. Keep PR #171 draft, pinned worker untouched.
+
+
+## Root cause established: Creality official profile catalogue pinned to wrong release (21 Nov 2026)
+
+User asked whether MakerVault profiles came directly from Creality Print.
+**YES**: MakerVault's official Creality catalogue uses the genuine
+`CrealityOfficial/CrealityPrint` GitHub repository. But inspection
+of `backend/core/slicer_creality_official_profiles.py` found it
+**pinned to the upstream `v7.3.0` tag**, and
+`slicer_api.py` intentionally allowed those v7.3.0 source bytes
+to be imported under the `7.3.1` runtime/version label. The
+actual isolated Creality engine is v7.3.1; **this version mismatch
+explains the missing K2 external purge macro**.
+
+Verified exact Creality upstream file
+`resources/profiles/Creality/machine/Creality K2 0.4 nozzle.json`:
+- Upstream `v7.3.0`: `change_filament_gcode` **212 characters**
+  with SHA-256 **`d848d81ee40a47a4483b85e232b4a583afa05fe9663e4272ebfd10b19f16a54b`**.
+- The exact same **SHA-256** was reported by Debian
+  `--audit-machine-capability` for selected old K2 profile
+  `91b19730-66f5-4b5f-bd7d-b08fbb4ee768`, defined on that
+  selected profile at parent depth zero. **This is definitively
+  the old manufacturer's v7.3.0 script, not a truncated script
+  or a faulty ZIP conversion.**
+- Upstream `v7.3.1`: manufacturer K2
+  `change_filament_gcode` **7183 characters**, including the
+  native `{if multicolor_method}` gate, `M8200`,
+  `flush_length_1..5`, `FLUSH_START` and `FLUSH_END`
+  sections; corresponds in length and shape to user desktop
+  Creality Print v7.3.1 exported K2 configuration.
+- Upstream official `Creality.json` manifests have K2 entry in
+  both releases (v7.3.0: 94 machine /1497 filament/293 process;
+  v7.3.1: 101 machine/1579 filament/308 process).
+- Desktop exported **v7.3.1** machine still has
+  `multicolor_method=0`. Do not infer disabled gate should be
+  forced on automatically. Separate supported capability
+  configuration and offline validation is still necessary.
+
+**Fix on draft PR #171**:
+- Pin Creality official catalogue `ENGINE_VERSION=7.3.1`,
+  `REF=v7.3.1`; all official machine, process, filament and
+  parent-chain downloads now use matching Creality engine release.
+- Remove the old special case in the official-profile import API
+  that let source v7.3.0 content masquerade as v7.3.1. Now
+  explicit old release selections are rejected.
+- New official imports are stored at distinct
+  `source_scope=CrealityOfficial/CrealityPrint@v7.3.1/Creality`.
+  Existing old `@v7.3.0` records and imported profile bytes
+  **are preserved unchanged**; no automatic DB migrations,
+  profile replacement, or grandfathered execution approval.
+- Tests have been updated to assert v7.3.1 source and engine,
+  reject explicit 7.3.0 selection before network/storage access,
+  and recognise old vs new catalogue provenance via the optional
+  read-only `--audit-machine-capability` command.
+  `official_source_release` distinguishes source tag from
+  stored engine version in the audit output. No printer calls.
+
+After installing the **app-only** update in staging (do not
+`refresh-worker`), run focused regression suites:
+`core.tests.test_slicer_creality_official_profiles`,
+`core.tests.test_slicer_official_api`,
+`core.tests.test_slicer_printer_compatibility`,
+`core.tests.test_slicer_creality_project`.
+Then use the built-in MakerVault official profile search to
+**reimport K2 machine, selected process and filaments from
+v7.3.1 as separate candidate profiles** with their native
+inheritance chains. Confirm the new machine script length/shape
+using read-only audit; compare the generated normal 3MF offline
+before any print approval. **Do not** change stock K2's native
+`multicolor_method=0` automatically and do not merge PR #171
+or submit experimental print G-code.
