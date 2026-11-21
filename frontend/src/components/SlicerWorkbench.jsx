@@ -2353,7 +2353,7 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
             {mayCancel && (job.status === "draft" || job.status === "queued") && <button type="button" disabled={busy} onClick={() => cancelPending(job)}>Cancel {job.status === "queued" ? "queued slice" : "draft"}</button>}
             {job.status === "completed" && job.output_asset?.id &&
               <button type="button" onClick={() => setPreviewJobId(job.id)}>Preview G-code</button>}
-            {job.settings?.workflow !== "quick" && job.status === "completed" && job.output_asset?.id && job.gcode_in_library && canPrint && <button type="button" className="primary" disabled={busy} onClick={() => requestPrint(job)}>Print from slicer</button>}
+            {job.settings?.workflow !== "quick" && job.status === "completed" && job.output_asset?.id && canPrint && <button type="button" className="primary" disabled={busy} onClick={() => requestPrint(job)}>Print from slicer</button>}
             {job.settings?.workflow !== "quick" && job.status === "completed" && job.output_asset_id && !job.gcode_in_library &&
               <button type="button" disabled={busy} onClick={() => saveOutputToLibrary(job)}>Add G-code to library</button>}
             {job.settings?.workflow !== "quick" && job.status === "completed" && job.output_asset_id && job.gcode_in_library &&
