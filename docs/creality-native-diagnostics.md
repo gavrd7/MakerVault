@@ -2207,3 +2207,62 @@ remains draft; K2 printer dispatch of unverified generated
 multi-colour jobs must remain blocked until a supported machine
 capability source, approved purge quantity and physical test path
 are established.
+
+
+## Production-path machine capability preservation (21 Nov 2026)
+
+Upstream Creality Print 7.3.1 `src/libslic3r/PresetBundle.cpp`
+explicitly treats `multicolor_method` as **machine-preset** state,
+not an ordinary project option. Its GUI
+`src/slic3r/GUI/GUI_Factories.cpp` updates the **edited printer
+preset's** `multicolor_method` in connection with
+`flush_into_skeleton`; that UI path does NOT establish that every
+K2/CFS printer should be forcibly enabled, nor a safe physical
+purge volume. The stock K2 0.4-nozzle preset does not declare
+`multicolor_method`, even though its native unchanged
+`change_filament_gcode` is gated on that setting.
+
+The ordinary MakerVault Creality 3MF builder now:
+- propagates an explicitly present, type-validated
+  `multicolor_method=0/1` from the **selected resolved machine preset**
+  into the native printer settings override slot
+  `different_settings_to_system[-1]`, without duplicates;
+- preserves the selected K2 printer's original
+  `purge_in_prime_tower=0`, physical/nozzle mapping,
+  material assignments, and **byte-identical native vendor
+  change-filament script**;
+- does NOT infer `multicolor_method=1` from printer name, CFS
+  topology, painted model, flush multiplier or diagnostic examples;
+- optionally supports a **strict** builder mode
+  `require_verified_multicolor_purge=True` for a future
+  printer-ready route. It rejects missing/disabled machine capability
+  and rejects a machine profile lacking an expected native
+  `{if multicolor_method}`, `flush_length_1` and `M8200`
+  macro structure. This is only a source-structure check, **not
+  physical approval**. The opt-in strict mode must be used by any
+  future dispatch path before printing; current diagnostic candidates
+  retain their original behaviour, so the negative controls
+  remain valid.
+- keeps synthetic `--probe-multicolor-gate` a separate
+  explicitly opted-in, **offline-only**, never-print test.
+
+Additional Django unit tests cover missing/invalid/disabled
+capabilities, exact native printer-slot marking, idempotence,
+fail-closed strict source checks, and real 3MF builder preservation
+of the original script and printer purge route.
+
+**Current selected K2 profile still lacks an explicit capability**.
+No unverified capability is written into the user's imported profile
+or database, so we have deliberately not enabled live K2
+multicolour print submission or declared physical compatibility.
+To advance: obtain/derive a **manufacturer-configured, explicit
+printer preset** via a supported Creality Print UI/profile workflow,
+verify it reflects the intended K2/CFS operating mode, import
+it as a new profile (preserving the stock reference), and then
+run an end-to-end **offline** slice with strict capability validation
+and native K2 purge-marker/motion audit. Finally perform a
+separately authorised controlled printer test.
+
+Public PR #171 remains **draft**. These changes touch app-side
+native 3MF builder, tests and documentation only; the pinned
+worker, native binary, firmware and printer remain unchanged.
