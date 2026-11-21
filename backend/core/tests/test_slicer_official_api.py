@@ -184,11 +184,26 @@ class OfficialProfileApiTests(TestCase):
         )
         profile = SlicerProfile.objects.get(pk=response.json()["profile"]["id"])
         self.assertEqual(profile.engine, "crealityprint")
-        self.assertEqual(profile.engine_version, "7.3.0")
+        self.assertEqual(profile.engine_version, "7.3.1")
         self.assertEqual(profile.status, "candidate")
-        self.assertIn("CrealityOfficial/CrealityPrint@v7.3.0/Prusa/", profile.provenance)
+        self.assertIn("CrealityOfficial/CrealityPrint@v7.3.1/Prusa/", profile.provenance)
         self.assertFalse(response.json()["execution_available"])
         self.addCleanup(lambda asset=profile.file_asset: asset.file.delete(save=False))
+
+    def test_creality_official_import_rejects_older_profile_version(self):
+        self.client.force_login(self.user)
+        selection = {
+            "engine": "crealityprint", "kind": "printer", "vendor": "Creality",
+            "name": "Creality K2 0.4 nozzle",
+            "sub_path": "machine/Creality K2 0.4 nozzle.json",
+            "engine_version": "7.3.0",
+        }
+        # Reject before network access, database mutations, or file imports.
+        with patch("core.slicer_api.official_profile_chain") as chain:
+            response = self.post(selection)
+        self.assertEqual(response.status_code, 400, response.content)
+        chain.assert_not_called()
+        self.assertIn("7.3.1", str(response.content))
 
     def test_orca_25_catalogue_search_and_manufacturer_brand_filter(self):
         self.client.force_login(self.user)
