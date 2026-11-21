@@ -31,30 +31,31 @@ function EngineReleasePicker({engine, releases, installedVersions, installed, di
   if (!chosen) return <small>Installation package not yet available.</small>;
   const current = installed && chosen.version === activeVersion;
   const canSelect = available.length>1 || !current;
-  return <div className="slicerEngineManagerControls">
-    <div className="slicerEngineManagerRelease" style={{display:"flex",alignItems:"center",gap:"0.75rem",flexWrap:"wrap"}}>
-      <label style={{display:"flex",alignItems:"center",gap:"0.5rem",flex:"1 1 11rem",minWidth:0}}>
-        <span>Version</span>
-        <select aria-label={engine.label+" version"} value={chosen.version}
-          onChange={event=>setSelection(event.target.value)}
-          disabled={disabled || !canSelect} style={{minWidth:0,width:"100%"}}>
-          {available.map(row=><option key={row.version} value={row.version}>
-            {row.version}{installed && activeVersion===row.version ? " (installed)" : row.local ? " (available locally)" : ""}
-          </option>)}
-        </select>
-      </label>
-      {!current && <button type="button" disabled={disabled}
+  return <div className="slicerEngineManagerControls" style={{display:"flex",flexDirection:"column",gap:"0.5rem"}}>
+    <label className="slicerEngineManagerRelease"
+      style={{display:"flex",alignItems:"center",gap:"0.5rem",minWidth:0}}>
+      <span>Version</span>
+      <select aria-label={engine.label+" version"} value={chosen.version}
+        onChange={event=>setSelection(event.target.value)}
+        disabled={disabled || !canSelect}
+        style={{flex:"1 1 auto",minWidth:0,width:"100%"}}>
+        {available.map(row=><option key={row.version} value={row.version}>
+          {row.version}{installed && activeVersion===row.version ? " (installed)" : row.local ? " (available locally)" : ""}
+        </option>)}
+      </select>
+    </label>
+    <div className="slicerEngineManagerActions"
+      style={{display:"grid",gridTemplateColumns:installed?"1fr 1fr":"1fr",gap:"0.5rem",minWidth:0}}>
+      {!current ? <button type="button" disabled={disabled}
         onClick={()=>onRequest(engine.key, chosen.version,
           chosen.local ? "activate" : installed ? "update" : "install",chosen.digest)}>
         {chosen.local ? "Switch" : installed ? "Update" : "Install"}
-      </button>}
-    </div>
-    {installed && <div className="slicerEngineManagerRemove" style={{display:"flex",justifyContent:"flex-end",marginTop:"0.5rem"}}>
-      <button type="button" disabled={disabled} className="secondary"
+      </button> : installed ? <span aria-hidden="true"/> : null}
+      {installed && <button type="button" disabled={disabled} className="secondary"
         onClick={()=>onRequest(engine.key,"all","uninstall","")}>
         Uninstall
-      </button>
-    </div>}
+      </button>}
+    </div>
   </div>;
 }
 
@@ -140,8 +141,7 @@ export default function SlicerEngineManager({engines = [], onChanged}) {
             <SlicerEngineLogo engine={engine.key} label={engine.label} size="small"/>
             <div><strong>{engine.label}</strong>
               <small>{installed
-                ? "Installed · "+(engine.installed_version||versions.find(row=>row.active)?.version||"Current")+
-                  (engine.key==="crealityprint"?" · CLI integration in testing":"")
+                ? "Installed · "+(engine.installed_version||versions.find(row=>row.active)?.version||"Current")
                 : "Not installed"}</small>
             </div>
           </div>
