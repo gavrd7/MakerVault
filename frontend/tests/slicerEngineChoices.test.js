@@ -41,12 +41,13 @@ test("one reusable engine branding component is used by both selection and insta
   assert.match(widget, /engine\.available === true \|\| engine\.status === "validated"/);
 });
 
-test("engine installation view links to instructions for existing MakerVault deployments", () => {
+test("engine manager keeps a simple guidance link without the obsolete host deployment box", () => {
   const workbench = fs.readFileSync(path.join(frontend, "src/components/SlicerWorkbench.jsx"), "utf8");
-  assert.match(workbench, /Adding the slicer service to an existing MakerVault installation/);
-  assert.match(workbench, /slicer\.md#adding-the-slicer-container-to-an-existing-installation/);
+  assert.match(workbench, /MakerVault Slicer guidance/);
+  assert.match(workbench, /docs\\/guide\\/3d-printing\\/slicer\\.md/);
   assert.match(workbench, /rel="noopener noreferrer"/);
-  assert.match(workbench, /Docker socket access/);
+  assert.doesNotMatch(workbench, /Adding the slicer service to an existing MakerVault installation/);
+  assert.doesNotMatch(workbench, /You can save drafts without an installed engine/);
 });
 
 test("mobile slicer engine cards keep native radio indicator compact and card tappable", () => {
