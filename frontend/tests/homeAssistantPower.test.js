@@ -33,9 +33,9 @@ test("button confirms by animation rather than red inline text", () => {
 });
 
 test("button labels describe the action rather than the current state", () => {
-  assert.match(button, /power === "on" \? "Turn off" : power === "off" \? "Turn on"/);
+  assert.match(button, /effectivePower === "on" \? "Turn off" : effectivePower === "off" \? "Turn on"/);
   assert.match(button, /Home Assistant reports power/);
-  assert.match(button, /power === "on" \? "off" : "on"/);
+  assert.match(button, /effectivePower === "on" \? "off" : "on"/);
 });
 
 test("saving a switch assignment immediately refreshes the matching printer control", () => {
