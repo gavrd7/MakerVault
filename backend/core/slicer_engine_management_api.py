@@ -62,11 +62,13 @@ def engine_operations(request):
 
     if request.method == "GET":
         releases, connected, rollback_available = [], False, False
+        installed = {}
         if enabled:
             try:
                 report = installer_request("GET", "/status")
                 _sync_operations(report.get("operations", []))
                 rollback_available = report.get("rollback_available") is True
+                installed = report.get("installed_versions", {})
                 connected = True
             except EngineInstallerUnavailable:
                 pass
@@ -78,6 +80,7 @@ def engine_operations(request):
                     releases = []
         return JsonResponse({
             "approved_releases": releases if isinstance(releases, list) else [],
+            "installed_versions": installed if isinstance(installed, dict) else {},
             "can_manage": can_manage,
             "restrict_to_admins": policy.restrict_engine_management_to_admins,
             "operations": [_serialize(op) for op in
@@ -101,7 +104,7 @@ def engine_operations(request):
         data["engine"], data["version"], data["action"], data["release_sha256"])
     if any(not isinstance(x, str) for x in (engine, version, action, digest)):
         return JsonResponse({"error": "Invalid engine request."}, status=400)
-    if action not in {"install", "update", "rollback"}:
+    if action not in {"install", "update", "rollback", "activate", "uninstall"}:
         return JsonResponse({"error": "Unsupported engine operation."}, status=400)
     try:
         get_engine(engine)
@@ -126,6 +129,14 @@ def engine_operations(request):
                 if engine != "crealityprint" or version != "previous" or digest != "0" * 64:
                     return JsonResponse({"error": "Invalid rollback request."}, status=400)
                 response = installer_request("POST", "/rollback")
+            elif action in {"activate", "uninstall"}:
+                if (engine not in {"orcaslicer", "crealityprint"}
+                        or digest != "0" * 64
+                        or (action == "uninstall" and version != "all")):
+                    return JsonResponse({"error": "Invalid installed-engine operation."}, status=400)
+                response = installer_request("POST", "/" + action, {
+                    "engine": engine, "version": version,
+                })
             else:
                 response = installer_request("POST", "/install", {
                     "engine": engine, "version": version, "bundle_sha256": digest,
@@ -142,6 +153,7 @@ def engine_operations(request):
         record = SlicerEngineOperation.objects.create(
             id=identity, requested_by=request.user, engine=engine,
             version=version, action=action, release_sha256=digest,
-            status="queued", status_message="Preparing official engine download",
+            status="queued", status_message=("Preparing official engine download"
+                  if action in {"install", "update"} else "Preparing installed engine change"),
         )
     return JsonResponse({"operation": _serialize(record)}, status=202)
