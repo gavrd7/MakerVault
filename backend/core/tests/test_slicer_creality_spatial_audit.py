@@ -104,3 +104,22 @@ class CrealitySpatialAuditTests(SimpleTestCase):
                 self.assertLessEqual(bounds["y_mm"][0], bounds["y_mm"][1])
                 self.assertTrue(0 <= bounds["z_mm"][0] <= 260)
                 self.assertTrue(0 <= bounds["z_mm"][1] <= 260)
+
+    def test_spatial_only_cli_requires_deep_and_rejects_only(self):
+        from django.core.management.base import CommandParser, CommandError
+        from core.management.commands.diagnose_creality_paint_fixture import Command
+        parser = CommandParser(prog="diagnose_creality_paint_fixture")
+        Command().add_arguments(parser)
+        ids = [
+            "--printer-profile-id", "580c1d65-ee1f-4919-b2ea-93a98cd33e1a",
+            "--process-profile-id", "42b0025a-20f2-485e-8ca4-7caca3e994f9",
+            "--filament-profile-id", "cf892271-178c-4c6a-a104-58c8d016acc8",
+            "--filament-profile-id", "b00a0dc9-fe2c-4653-a1df-dfb8d7429a3e",
+        ]
+        for args in (["--spatial-only"], ["--deep", "--spatial-only",
+                                          "--only", "support"]):
+            with self.subTest(flags=args), self.assertRaises(CommandError):
+                Command().handle(**vars(parser.parse_args(ids + args)))
+        valid = vars(parser.parse_args(ids + ["--spatial-only", "--deep"]))
+        self.assertTrue(valid["spatial_only"])
+        self.assertTrue(valid["deep"])
