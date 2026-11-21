@@ -30,8 +30,10 @@ automatic shutdown, G-code edits, Home Assistant add-ons, or extra containers.
   a re-read after every request. The state is **not** changed optimistically.
 - Off requires confirmation; MakerVault blocks off while it detects an
   active/paused/heating/cooling job in the known printer state. When a
-  printer is offline or its telemetry is stale, MakerVault cannot prove
-  the hardware has cooled, so the operator must verify this manually.
+  printer has an enabled live connection but its telemetry is stale or
+  unverified, MakerVault blocks power-off instead of assuming it is idle.
+  Printers deliberately configured without live connections still require
+  explicit confirmation; operators must verify they are cooled and inactive.
   Never use the plug as a regular means of stopping a live print.
 - Only authenticated printer owners with `change_printer` permission can
   operate a plug. Administrator-level workspace permissions are required
@@ -43,8 +45,11 @@ automatic shutdown, G-code edits, Home Assistant add-ons, or extra containers.
   serializers, and existing generic integration PATCH routes cannot modify
   Home Assistant's endpoint.
 - The server refuses arbitrary public and metadata URLs, userinfo,
-  embedded paths, redirects and non-switch entities. Home Assistant is
-  intended to be on a trusted LAN.
+  embedded paths, redirects and non-switch entities. To prevent DNS rebinding
+  on unencrypted requests, HTTP requires a private IP address (such as
+  `http://192.168.1.20:8123`), not a hostname; HTTPS hostnames are permitted
+  with normal certificate validation. Home Assistant is intended to be on a
+  trusted LAN.
 - No automatic on/off, no timers, no polling loop beyond explicit component
   reads/actions.
 
@@ -56,6 +61,7 @@ automatic shutdown, G-code edits, Home Assistant add-ons, or extra containers.
 - [ ] Power on: switch changes and state is re-read from Home Assistant.
 - [ ] Power off: confirmation required; cancel does nothing.
 - [ ] Printing or cooling: power-off request refused.
+- [ ] Stale, missing or disconnected live printer telemetry: power-off refused.
 - [ ] API or plug unreachable: error is shown; UI does not claim success.
 - [ ] Viewer without change permission sees no action.
 - [ ] Restart MakerVault: token, enabled state and printer assignment persist.
