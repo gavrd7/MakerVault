@@ -2266,3 +2266,68 @@ separately authorised controlled printer test.
 Public PR #171 remains **draft**. These changes touch app-side
 native 3MF builder, tests and documentation only; the pinned
 worker, native binary, firmware and printer remain unchanged.
+
+
+## Inspect a real exported Creality Print 7.3.1 K2 printer preset (21 Nov 2026)
+
+Creality Print 7 supports **File → Export → Export Presets**;
+the user should select the actual saved **K2 0.4 mm printer preset**
+on their desktop, export it without editing the stock machine
+settings, and supply it for inspection/import as a separate
+candidate. **Do not turn on Flush into skeleton just to activate
+`multicolor_method`**: upstream GUI
+`sync_multicolor_method_to_flush_into_skeleton()` mutates the
+printer preset based on that choice and this may also affect
+geometry/flush deposition options. Exported formats may vary;
+inspect the export before interpreting as a native JSON printer
+profile or importing it into MakerVault. Do not upload printer
+credentials, tokens or network secrets.
+
+New **`--audit-machine-capability`** mode in existing
+`diagnose_slicer_printer_profiles` is completely read-only and
+requires `--engine crealityprint` with explicit existing selected
+K2 printer, process and two filament profile IDs and topology.
+It rejects all native slicing flags. It reports the effective
+selected printer `multicolor_method`, original
+`purge_in_prime_tower`, whether the unchanged vendor
+`change_filament_gcode` has the known K2 macro structure and
+a hash/nearest-ancestor field provenance using the existing
+`audit_creality_profile_origins`. It never returns macro text,
+calls the slicer, writes a profile, modifies printer firmware,
+or communicates with a physical printer.
+`printer_ready_candidate` means *structurally eligible for
+further offline tests* only, while `printer_ready` stays
+**false** categorically until printer safety validation.
+
+```bash
+cd ~/MakerVault-Staging
+git pull --ff-only origin feature/self-hosted-slicer-foundation
+sudo python3 scripts/install_slicer_staging.py update
+sudo docker exec makervault python3 /app/backend/manage.py test \
+  core.tests.test_slicer_printer_compatibility \
+  core.tests.test_slicer_tower_diagnostics \
+  core.tests.test_slicer_flush_adapters \
+  core.tests.test_slicer_creality_project --noinput
+sudo docker exec makervault python3 /app/backend/manage.py \
+  diagnose_slicer_printer_profiles \
+  --engine crealityprint --topology single_nozzle_changer \
+  --printer-profile-id 91b19730-66f5-4b5f-bd7d-b08fbb4ee768 \
+  --process-profile-id 0c90fa89-a193-48b6-ac94-a69792230163 \
+  --filament-profile-id e9c1274c-d95b-4592-87e5-03a645d699aa \
+  --filament-profile-id eb8473e9-f993-4c6e-8cc4-fb357e3ae782 \
+  --audit-machine-capability
+```
+
+Expected **72** focused Django test methods: prior verified 71
+plus one new CLI flag regression. New command has **not yet been
+run** on Debian. Existing original K2 preset should report
+`source_multicolor_method=not_explicit`,
+`printer_ready_candidate=false`. This is the desired fail-closed
+baseline; don't fix it by synthesising a value.
+
+After a genuine manufacturer-configured machine preset is supplied,
+inspect its provenance, confirm exact version/name/conditional
+native script/purge route, then import separately and run the
+ordinary 3MF native **offline** path with
+`require_verified_multicolor_purge=True` before considering
+printer dispatch. Keep PR #171 draft, pinned worker untouched.
