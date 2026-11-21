@@ -4,7 +4,6 @@ Offline slicing validation only; nothing here approves printer transfer or
 changes the printer, native presets, vendor macros or worker installation.
 """
 import json
-import re
 
 
 class CrealityCfsGateError(ValueError):
@@ -21,10 +20,14 @@ def selected_creality_multicolor_capability(printer_profile):
     if not isinstance(config, dict):
         raise CrealityCfsGateError("Selected Creality machine settings are invalid.")
     selected = config.get("multicolor_method")
-    if selected is None or selected is False or selected == "0" or selected == 0:
+    if selected is None:
         return False
-    if selected is True or selected == "1" or selected == 1:
-        return True
+    if type(selected) is bool:
+        return selected
+    if type(selected) is int and selected in (0, 1):
+        return selected == 1
+    if type(selected) is str and selected in ("0", "1"):
+        return selected == "1"
     raise CrealityCfsGateError(
         "Selected Creality machine has an invalid multicolour capability.")
 
