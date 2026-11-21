@@ -4397,6 +4397,20 @@ a:focus-visible,
 }
 /* Keep native profile-file alternative separated from the official search
    submit button even though these are separate form/action containers. */
+/* Official search: a disabled source select and readonly version field should
+   form one level, consistent row even when surrounding form rows wrap. */
+.formGrid>.slicerOfficialSourceField{
+  min-width:0;
+  align-self:start;
+}
+.formGrid>.slicerOfficialSourceField>select,
+.formGrid>.slicerOfficialSourceField>input{
+  display:block;
+  width:100%;
+  height:48px;
+  min-height:48px;
+  box-sizing:border-box;
+}
 .slicerOfficialImportAlternative{margin:20px 0 22px;gap:12px}
 @media(max-width:700px){
   .slicerSavedProfileToolbar{display:flex!important;flex-direction:column;align-items:stretch}
