@@ -167,9 +167,9 @@ def remove_unsaved_gcode(request):
 # Extract only the already embedded thumbnail. Generating thumbnail previews
 # from arbitrary G-code on a web request would be expensive and unnecessary.
 _THUMBNAIL_START = re.compile(
-    rb"^;\\s*thumbnail(?:_PNG)?\\s+begin\\s+(96x96|300x300)\\s+([0-9]{1,7})\\s*$", re.I)
-_THUMBNAIL_END = re.compile(rb"^;\\s*thumbnail(?:_PNG)?\\s+end\\s*$", re.I)
-_B64_LINE = re.compile(rb"^;\\s*([A-Za-z0-9+/=]+)\\s*$")
+    rb"^;\s*thumbnail(?:_PNG)?\s+begin\s+(96x96|300x300)\s+([0-9]{1,7})\s*$", re.I)
+_THUMBNAIL_END = re.compile(rb"^;\s*thumbnail(?:_PNG)?\s+end\s*$", re.I)
+_B64_LINE = re.compile(rb"^;\s*([A-Za-z0-9+/=]+)\s*$")
 _MAX_THUMBNAIL_SCAN = 2 * 1024 * 1024
 _MAX_THUMBNAIL_B64 = 500 * 1024
 
@@ -197,7 +197,7 @@ def _embedded_thumbnail(data):
                 png = base64.b64decode(b"".join(chunks), validate=True)
             except (ValueError, base64.binascii.Error):
                 return None
-            if len(png) > 400 * 1024 or not png.startswith(b"\\x89PNG\\r\\n\\x1a\\n"):
+            if len(png) > 400 * 1024 or not png.startswith(b"\x89PNG\r\n\x1a\n"):
                 return None
             return png
         group = _B64_LINE.fullmatch(line)
