@@ -211,6 +211,20 @@ class Command(BaseCommand):
                 if feature == "variable":
                     output["observed_layer_steps_mm"] = metrics[
                         "observed_layer_steps_mm"]
+                    output["requested_0_12mm_layer_step_observed"] = (
+                        0.12 in metrics["observed_layer_steps_mm"])
+                if feature == "flushing":
+                    # Stock K2 multicolor_method absent/disabled must remain
+                    # distinguishable from activated native purge; a successful
+                    # slice alone is not a successful flushing test.
+                    flush_audit = _creality_toolchange_macro_audit(data)
+                    output["native_flush_effect_observed"] = (
+                        flush_audit["completed_flush_sections"] > 0
+                        and flush_audit["m8200_command_count"] > 0
+                        and flush_audit["flush_markers_balanced"])
+                    output["inactive_machine_gate_expected"] = (
+                        str(json.loads(native[0]).get(
+                            "multicolor_method", "0")) == "0")
                 if feature == "baseline":
                     baseline = metrics
                 else:
