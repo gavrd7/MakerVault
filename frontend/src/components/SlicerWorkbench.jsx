@@ -83,6 +83,8 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
   const [profiles, setProfiles] = useState([]);
   const [profileModal, setProfileModal] = useState("");
   const [managingSavedProfiles, setManagingSavedProfiles] = useState(false);
+  const [profileRemoveError, setProfileRemoveError] = useState("");
+  const [profileRemoveNotice, setProfileRemoveNotice] = useState("");
   const [showProfileDependencies, setShowProfileDependencies] = useState(false);
   const [savedProfileKind, setSavedProfileKind] = useState("all");
   const [savedProfileVendor, setSavedProfileVendor] = useState("all");
@@ -1286,15 +1288,21 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
 
   async function removeProfile(profile) {
     if (!window.confirm("Remove saved " + profile.kind + " profile \"" + profile.name + "\"? Existing source files remain in MakerVault Files. Profiles referenced by slicing jobs cannot be removed.")) return;
+    setProfileRemoveError(""); setProfileRemoveNotice("");
     setError(""); setBusy(true);
     try {
-      await apiFetch("/api/printing/slicer/profiles/" + profile.id + "/", { method: "DELETE" });
+      const result = await apiFetch("/api/printing/slicer/profiles/" + profile.id + "/", { method: "DELETE" });
+      if (result?.removed !== true || String(result.profile_id) !== String(profile.id))
+        throw new Error("The server did not confirm profile removal. Reload the profile list before retrying.");
       setProfiles(current => current.filter(item => item.id !== profile.id));
       setForm(current => current[profile.kind + "_profile_id"] === profile.id
         ? { ...current, [profile.kind + "_profile_id"]: "" } : current);
+      setProfileRemoveNotice("Removed \"" + profile.name + "\". The original source file was preserved.");
       setNotice("Profile registration removed. Its source file was preserved.");
     } catch (err) {
-      setError(err.message || "Could not remove this profile.");
+      const message = err.message || "Could not remove this profile.";
+      setProfileRemoveError("Unable to remove \"" + profile.name + "\": " + message);
+      setError(message);
     } finally {
       setBusy(false);
     }
@@ -1976,6 +1984,8 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
 
     </Modal>}
     {profileModal === "saved" && <Modal title="Saved slicer profiles" onClose={() => setProfileModal("")} wide>
+      {profileRemoveError && <p className="integrationError" role="alert">{profileRemoveError}</p>}
+      {profileRemoveNotice && <p role="status">{profileRemoveNotice}</p>}
       <p>Showing profiles for <strong>{engines.find(engine => engine.key === form.engine)?.label || form.engine}</strong>
         {" · "}<strong>{form.engine_version || "No engine version selected"}</strong>.
         Profiles for other engines and versions are retained but hidden automatically.
