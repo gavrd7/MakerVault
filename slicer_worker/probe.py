@@ -74,9 +74,9 @@ def _fingerprint(path):
         try:
             if (file.name != "AppRun" or not file.resolve(strict=True).is_relative_to(
                     file.parent.resolve(strict=True))):
-                raise WorkerError("Fixture binary link escapes its extracted AppImage.")
+                raise WorkerError("Fixture executable is symlinked outside its extracted AppImage.")
         except (OSError, RuntimeError, ValueError) as exc:
-            raise WorkerError("Fixture executable link is invalid.") from exc
+            raise WorkerError("Fixture executable is symlinked or invalid.") from exc
     digest = hashlib.sha256()
     with file.open("rb") as stream:
         while chunk := stream.read(1024 * 1024):
