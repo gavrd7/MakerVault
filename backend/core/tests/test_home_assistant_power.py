@@ -105,6 +105,22 @@ class HomeAssistantPowerUnitTests(SimpleTestCase):
             {"state": "idle"}, now, status="disconnected")))
         self.assertFalse(printer_is_busy(printer_with_snapshot({"state": "idle"}, now)))
 
+    def test_multiple_connections_must_all_confirm_idle(self):
+        now = timezone.now()
+        def connection(state, checked=now):
+            return SimpleNamespace(
+                last_snapshot={"state": state}, status="connected",
+                last_checked_at=checked, poll_interval_seconds=30,
+            )
+        printer = SimpleNamespace(
+            print_jobs=SimpleNamespace(filter=lambda **kw: SimpleNamespace(exists=lambda: False)),
+            live_connections=SimpleNamespace(filter=lambda **kw: [
+                connection("idle"),
+                connection("idle", now - timedelta(minutes=10)),
+            ]),
+        )
+        self.assertTrue(printer_is_busy(printer))
+
     def test_stale_print_history_does_not_override_fresh_idle_telemetry(self):
         now = timezone.now()
         active_history = SimpleNamespace(filter=lambda **kw: SimpleNamespace(exists=lambda: True))
