@@ -34,7 +34,13 @@ from .engine_store_lifecycle import installed_versions, activate_installed, unin
 
 STORE = Path(os.environ.get("SLICER_ENGINE_STORE", "/opt/engine-store"))
 TOKEN = os.environ.get("SLICER_INSTALLER_TOKEN", "")
-SUPPORTED = {"crealityprint": "CrealityOfficial/CrealityPrint"}
+SUPPORTED = {"crealityprint": "CrealityOfficial/CrealityPrint",
+             "orcaslicer": "OrcaSlicer/OrcaSlicer"}
+# Only these independently SHA-256-reviewed Orca versions may be offered.
+APPROVED_ORCA = {
+    "2.4.2": "d12fb8c8eac1aecd2dfb6377acd48f994f8fa439ed5292fa532dd82880f029fd",
+    "2.5.0": "d13eb0a9cd618ed080ab6b82c64c0a60c4501aac91e88d5ac2c3b526fb141a7c",
+}
 MAX_BYTES = 650 * 1024 * 1024
 VERSION = re.compile(r"^v?(\d+\.\d+\.\d+)$")
 HEX = re.compile(r"^[a-f0-9]{64}$")
@@ -108,6 +114,36 @@ def release_catalogue():
             return list(RELEASE_CACHE["items"])
     releases = []
     for engine, repo in SUPPORTED.items():
+        if engine == "orcaslicer":
+            for version, approved_digest in APPROVED_ORCA.items():
+                tag = "v" + version
+                asset_name = f"OrcaSlicer_Linux_AppImage_Ubuntu2404_V{version}.AppImage"
+                url = f"https://api.github.com/repos/{repo}/releases/tags/{tag}"
+                try:
+                    with _request(url) as response:
+                        release = json.load(response)
+                except (OSError, ValueError, urllib.error.URLError):
+                    continue
+                if not isinstance(release, dict) or release.get("draft") or release.get("prerelease"):
+                    continue
+                expected_url = f"https://github.com/{repo}/releases/download/{tag}/{asset_name}"
+                matches = [item for item in release.get("assets", []) if isinstance(item, dict)
+                           and item.get("name") == asset_name]
+                if len(matches) != 1:
+                    continue
+                item = matches[0]
+                if (item.get("digest") != "sha256:" + approved_digest
+                        or item.get("browser_download_url") != expected_url
+                        or type(item.get("size")) is not int
+                        or not 10_000_000 <= item["size"] <= MAX_BYTES):
+                    continue
+                releases.append({
+                    "engine": engine, "version": version,
+                    "bundle_sha256": approved_digest, "bundle_url": expected_url,
+                    "binary_sha256": approved_digest, "architecture": "linux/amd64",
+                    "notes": "OrcaSlicer " + version, "asset_size": item["size"],
+                })
+            continue
         url = "https://api.github.com/repos/" + repo + "/releases?per_page=10"
         with _request(url) as response:
             data = json.load(response)
@@ -237,20 +273,22 @@ def _install(op_id, release):
         # Never mark a release available solely because it downloaded.
         # Known Creality builds can hang by opening the GUI instead of slicing.
         try:
-            probe = subprocess.run([str(app_run), "--cli", "--help"], cwd=stage,
+            probe_args = ([str(app_run), "--cli", "--help"] if engine == "crealityprint"
+                          else [str(app_run), "--help"])
+            probe = subprocess.run(probe_args, cwd=stage,
                 env={"HOME": str(stage), "TMPDIR": str(stage),
                      "PATH": "/usr/bin:/bin", "LANG": "C.UTF-8",
                      "DISPLAY": "", "QT_QPA_PLATFORM": "offscreen"},
                 stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
                 stderr=subprocess.PIPE, timeout=18, check=False)
         except subprocess.TimeoutExpired as exc:
-            raise ValueError("Creality Print CLI headless check timed out (18 seconds).") from exc
+            raise ValueError("Engine CLI headless check timed out (18 seconds).") from exc
         except OSError as exc:
             raise ValueError(
-                f"Creality Print CLI could not start ({type(exc).__name__}, errno {exc.errno})."
+                f"Engine CLI could not start ({type(exc).__name__}, errno {exc.errno})."
             ) from exc
         if probe.returncode != 0:
-            raise ValueError(f"Creality Print CLI check exited with status {probe.returncode}.")
+            raise ValueError(f"Engine CLI check exited with status {probe.returncode}.")
         # Stage a complete version before publishing it; preserve all older
         # engines and use a single atomic manifest rename for activation.
         binary_hash = _sha256(runtime)
