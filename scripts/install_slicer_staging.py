@@ -423,9 +423,9 @@ def enable_engine_installer():
     """Legacy command name: the browser installer now shares slicer-worker."""
     env = _read_env()
     if "MAKERVAULT_SLICER_INSTALLER_TOKEN=" not in env:
-        env = env.rstrip() + "\\nMAKERVAULT_SLICER_INSTALLER_TOKEN=" + secrets.token_urlsafe(48) + "\\n"
+        env = env.rstrip() + "\nMAKERVAULT_SLICER_INSTALLER_TOKEN=" + secrets.token_urlsafe(48) + "\n"
     if "MAKERVAULT_SLICER_HOST_UPDATER_ENABLED=" not in env:
-        env = env.rstrip() + "MAKERVAULT_SLICER_HOST_UPDATER_ENABLED=1\\n"
+        env = env.rstrip() + "MAKERVAULT_SLICER_HOST_UPDATER_ENABLED=1\n"
     else:
         env = env.replace("MAKERVAULT_SLICER_HOST_UPDATER_ENABLED=0",
                           "MAKERVAULT_SLICER_HOST_UPDATER_ENABLED=1")
