@@ -765,6 +765,7 @@ class Command(BaseCommand):
         # Validate Creality controls and baseline provenance before any worker
         # execution; generated zero/140 fallback values are NOT user defaults.
         creality_controls = None
+        creality_route_flush_controls = None
         if opts["test_flush"] and engine == "crealityprint":
             baseline_config = _read_creality_project_settings(model)
             first_flush_volume, native_multiplier = _creality_flush_basis(baseline_config)
@@ -828,6 +829,52 @@ class Command(BaseCommand):
             creality_controls.append((
                 "purge_route_tower_printer_marked",
                 _creality_mark_native_printer_purge(tower_source)))
+            # Now isolate the directional flush matrix and scalar multiplier
+            # ONLY while the printer-level purge route is preserved.
+            # The native preset merger also needs process-level declarations
+            # for the matrix; no production profile or script is modified.
+            flush_at_two = _creality_mark_native_printer_purge(
+                _creality_flush_override_control(tower_source))
+            flush_at_one_source = _creality_purge_route_control(
+                next(project for key, project in creality_controls
+                     if key == "multiplier_1_0"), True)
+            flush_at_one = _creality_mark_native_printer_purge(
+                _creality_flush_override_control(flush_at_one_source))
+            forward_two_source = build_creality(settings(
+                multiplier=2.0, transition=(
+                    "fixture-slot-0", "fixture-slot-1",
+                    first_flush_volume + 25)))
+            forward_two_route = _creality_purge_route_control(
+                forward_two_source, True)
+            flush_forward_two = _creality_mark_native_printer_purge(
+                _creality_flush_override_control(forward_two_route))
+            creality_route_flush_controls = [
+                ("tower_flush_multiplier_1_0", flush_at_one),
+                ("tower_flush_multiplier_2_0", flush_at_two),
+                ("tower_flush_forward_2_0", flush_forward_two),
+            ]
+            for label, candidate, source in (
+                    ("tower_flush_multiplier_1_0", flush_at_one, flush_at_one_source),
+                    ("tower_flush_multiplier_2_0", flush_at_two, tower_source),
+                    ("tower_flush_forward_2_0", flush_forward_two, forward_two_route)):
+                original, changed, differences = _creality_control_project_with_extra(
+                    source, candidate, {"different_settings_to_system"})
+                if (differences - {"different_settings_to_system"}
+                        or original["flush_volumes_matrix"] != changed["flush_volumes_matrix"]
+                        or changed.get("purge_in_prime_tower") != "1"):
+                    raise CommandError("Native tower flush control changed unrelated fields.")
+                # The process and printer declarations must both be present.
+                declarations = changed["different_settings_to_system"]
+                if (not isinstance(declarations, list)
+                        or "flush_volumes_matrix" not in declarations[0].split(";")
+                        or "flush_multiplier" not in declarations[0].split(";")
+                        or "purge_in_prime_tower" not in declarations[-1].split(";")):
+                    raise CommandError("Native tower flush override declarations are missing.")
+                _creality_flush_basis(changed)
+            if (_read_creality_project_settings(flush_forward_two)
+                    ["flush_volumes_matrix"][1]
+                    != str(first_flush_volume + 25)):
+                raise CommandError("Native tower directional matrix control was not isolated.")
             for name, candidate in creality_controls:
                 original, changed, keys = _creality_control_project_with_extra(
                     model, candidate,
@@ -969,6 +1016,44 @@ class Command(BaseCommand):
                     "machine_commands_changed": measured["machine_command_sha256"] !=
                                                 baseline_metrics["machine_command_sha256"],
                     "note": "Offline native comparison only; physical purge is unverified.",
+                }
+            if creality_route_flush_controls is not None:
+                summary["creality_tower_flush_sensitivity"] = {}
+                for name, candidate in creality_route_flush_controls:
+                    native_output = slice_native(native["process"], candidate)
+                    summary["creality_tower_flush_sensitivity"][name] = {
+                        **_safe_native_result(native_output),
+                        "emitted_gcode_setting_audit": _creality_emitted_setting_audit(
+                            native_output),
+                        "tower_deposition": tower_deposition_metrics(native_output),
+                        "note": "Offline isolated source-setting comparison; not validated purge volume.",
+                    }
+                controls = summary["creality_tower_flush_sensitivity"]
+                for name, parent_name in (
+                        ("tower_flush_multiplier_1_0", "tower_flush_multiplier_2_0"),
+                        ("tower_flush_forward_2_0", "tower_flush_multiplier_2_0")):
+                    current = controls[name]
+                    parent = controls[parent_name]
+                    current["vs_multiplier_2_0"] = {
+                        "motion_changed": current["motion_sha256"] != parent["motion_sha256"],
+                        "machine_commands_changed": (
+                            current["machine_command_sha256"] != parent["machine_command_sha256"]),
+                        "tower_extrusion_changed": (
+                            current["tower_deposition"]["positive_e_length_mm"] !=
+                            parent["tower_deposition"]["positive_e_length_mm"]),
+                        "tower_xy_changed": (
+                            current["tower_deposition"]["xy_width_mm"] !=
+                            parent["tower_deposition"]["xy_width_mm"]
+                            or current["tower_deposition"]["xy_depth_mm"] !=
+                            parent["tower_deposition"]["xy_depth_mm"]),
+                    }
+                summary["creality_tower_flush_sensitivity"]["provenance"] = {
+                    "matrix_source": "candidate_builder_140mm3_fallback_unverified"
+                    if matrix_source == "candidate_builder_140mm3_fallback_unverified"
+                    else matrix_source,
+                    "directional_control": "t0_to_t1_plus_25_mm3_at_multiplier_2_0",
+                    "scope": "disposable_native_3mf_with_printer_purge_and_process_flush_markers",
+                    "physical_purge": "unverified",
                 }
             # Compare the two route controls directly to the same 2.0
             # reference rather than only to a potentially different baseline.
