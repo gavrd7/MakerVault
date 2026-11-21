@@ -1,5 +1,6 @@
 """Creality native plate geometry candidate retains exact positions and tools."""
 import io
+import json
 import zipfile
 from defusedxml import ElementTree as ET
 from django.test import SimpleTestCase
@@ -18,6 +19,72 @@ class CrealityPositionedPlateTests(SimpleTestCase):
             ({"x_mm": 18, "y_mm": 0, "rotation_deg": 0,
               "scale_percent": 100}, fixture_stl()),
         ]
+
+    def test_flush_preset_markers_preserve_only_explicit_settings_and_printer_choice(self):
+        from core.slicer_creality_project import _mark_creality_flush_preset_overrides
+        settings = {
+            "multiplier": 2.0,
+            "prime_tower": "native",
+            "transitions": [{
+                "from_slot_id": "fixture-slot-0",
+                "to_slot_id": "fixture-slot-1",
+                "volume_mm3": 165.0,
+            }],
+        }
+        project = {
+            "filament_settings_id": ["A", "B", "A", "B"],
+            "different_settings_to_system": [
+                "enable_support;support_type", "slot-a", "slot-b",
+                "slot-c", "slot-d", "nozzle_diameter"],
+            "flush_multiplier": "2",
+            "flush_volumes_matrix": ["0", "165"] * 8,
+            "flush_volumes_changed": "1",
+            "prime_volume": "45",
+            "purge_in_prime_tower": "0",
+            "change_filament_gcode": "unchanged printer vendor script",
+        }
+        original = json.loads(json.dumps(project))
+        _mark_creality_flush_preset_overrides(
+            project, settings,
+            machine={"purge_in_prime_tower": "0"},
+            process={"prime_volume": "45"})
+        process = project["different_settings_to_system"][0].split(";")
+        self.assertTrue({"flush_multiplier", "flush_volumes_matrix",
+                         "flush_volumes_changed", "prime_volume"} <= set(process))
+        self.assertNotIn("purge_in_prime_tower", process)
+        self.assertIn("purge_in_prime_tower",
+                      project["different_settings_to_system"][-1].split(";"))
+        self.assertEqual(project["different_settings_to_system"][1:-1],
+                         original["different_settings_to_system"][1:-1])
+        self.assertEqual(project["purge_in_prime_tower"], "0")
+        self.assertEqual(project["change_filament_gcode"],
+                         "unchanged printer vendor script")
+        _mark_creality_flush_preset_overrides(
+            project, settings, machine={"purge_in_prime_tower": "0"},
+            process={"prime_volume": "45"})
+        self.assertEqual(len(project["different_settings_to_system"][0].split(";")),
+                         len(set(project["different_settings_to_system"][0].split(";"))))
+
+    def test_flush_marker_does_not_invent_missing_native_settings(self):
+        from core.slicer_creality_project import _mark_creality_flush_preset_overrides
+        original = {
+            "filament_settings_id": ["A", "B", "A", "B"],
+            "different_settings_to_system": ["", "", "", "", "", ""],
+            "flush_volumes_matrix": ["0"] * 16,
+        }
+        original_copy = json.loads(json.dumps(original))
+        _mark_creality_flush_preset_overrides(
+            original,
+            {"multiplier": None, "prime_tower": "native", "transitions": []},
+            machine={}, process={})
+        self.assertEqual(original, original_copy)
+        for bad in (
+                {"multiplier": 2.0, "prime_tower": "native", "transitions": []},
+                {"multiplier": None, "prime_tower": "enabled", "transitions": []},
+        ):
+            with self.subTest(settings=bad), self.assertRaises(SlicerProfileError):
+                _mark_creality_flush_preset_overrides(
+                    json.loads(json.dumps(original)), bad, machine={}, process={})
 
     def test_positions_and_materials_remain_distinct(self):
         project = build_creality_positioned_plate(
