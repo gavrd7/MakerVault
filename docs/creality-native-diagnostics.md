@@ -2033,3 +2033,81 @@ macro markers are emitted, diagnose missing/disabled native machine
 capability or CLI macro invocation; **do not treat identical G-code
 hashes as correct printer-side flushing**. Still no physical printer
 safety/flush validation and PR remains draft.
+
+
+## K2 native filament-change macro not emitted; opt-in offline multicolor gate probe (21 Nov 2026)
+
+User uploaded `Pasted text(20261121-004307).txt`, which confirms
+staging app-only `38720482..31a88439` succeeded with worker image
+`sha256:7a3120b320dc5a0e26147c32bbe620bf094574b26d8f06247589ead2feba24b8`
+untouched and healthy. The user repeated the *three* ordinary
+production 3MF offline slices, all completed. The shared source
+machine and project have `purge_in_prime_tower=0`, source
+`multicolor_method=not_explicit`, and project
+`multicolor_method=absent`. The emitted G-code comment audit reports
+`multicolor_method=disabled` in all three cases. There are 48 native
+T selections, **ZERO** exact `FLUSH_START`/`FLUSH_END` markers and
+**ZERO** `M8200` commands. Tower deposition and actual G0/G1 and
+M-command hashes remain identical across multiplier 1→2 and
+directional T0→T1 140→165mm³. Source K2 0.4 machine's native
+`change_filament_gcode` starts with `{if multicolor_method}`
+and includes `flush_length_1..5` and M8200 purge operations.
+Thus the expected K2-script purge path is absent from these
+G-code outputs; tool select count alone is not reliable proof.
+
+No *new* Django test run is shown in this attachment. Previous
+verified 67/67 remains the latest displayed complete run.
+
+Official `CrealityOfficial/CrealityPrint` 7.3.1
+`PresetBundle.cpp` explicitly documents `multicolor_method` as a
+**machine capability**, not a normal project option. Original selected
+K2 machine profile lacks an explicit value, and its source
+`purge_in_prime_tower=0` must be respected. Do not silently
+set `multicolor_method=1` or `purge_in_prime_tower=1` in
+production, modify vendor toolchange macros or submit G-code.
+
+New **explicit opt-in** `--probe-multicolor-gate` may be used only
+with `--engine crealityprint --native --test-production-flush`.
+It adds **one extra disposable native offline slice**, based on the
+same ordinary K2 project at multiplier 2.0; its test-only 3MF
+contains `multicolor_method=1` in the last/printer override slot,
+with the vendor scripts, geometry, other fields and 3MF members
+byte-preserved. This is a **positive control**, NOT a fix, not a
+verified native printer capability and **never safe to print**. The
+report adds `experimental_multicolor_enabled` alongside three
+standard cases and checks emitted setting and count of genuine
+vendor purge markers/M8200 commands vs standard multiplier 2.0.
+It does not save or alter any imported printer profile or native
+worker code.
+
+The new regression tests ensure field isolation, no duplications,
+byte-identical non-project ZIP members and CLI opt-in.
+Expected 69 focused tests (latest verified 67 + two new tests
+since previous verified run: prior macro audit + this positive control)
+and **four offline native slices** on opt-in. These are **not yet run
+on the user's Debian staging**.
+
+```bash
+cd ~/MakerVault-Staging
+git pull --ff-only origin feature/self-hosted-slicer-foundation
+sudo python3 scripts/install_slicer_staging.py update
+sudo docker exec makervault python3 /app/backend/manage.py test \
+  core.tests.test_slicer_printer_compatibility \
+  core.tests.test_slicer_tower_diagnostics \
+  core.tests.test_slicer_flush_adapters \
+  core.tests.test_slicer_creality_project --noinput
+sudo docker exec makervault python3 /app/backend/manage.py \
+  diagnose_slicer_printer_profiles \
+  --engine crealityprint --topology single_nozzle_changer \
+  --printer-profile-id 91b19730-66f5-4b5f-bd7d-b08fbb4ee768 \
+  --process-profile-id 0c90fa89-a193-48b6-ac94-a69792230163 \
+  --filament-profile-id e9c1274c-d95b-4592-87e5-03a645d699aa \
+  --filament-profile-id eb8473e9-f993-4c6e-8cc4-fb357e3ae782 \
+  --native --test-production-flush --probe-multicolor-gate
+```
+
+A positive probe still does NOT prove physical K2 CFS flush routing,
+and a negative probe warrants investigating the 7.3.1 CLI
+printer-preset effective value, not manufacturing custom purge code.
+Keep PR draft and print dispatch blocked pending source and
+physical validation.
