@@ -2636,3 +2636,34 @@ The source and fixtures were added to draft PR #171; execute staging regression
 tests and the previously used offline native comparison before interpreting
 new fields. The official stock K2 machine profile and pinned worker are
 unchanged.
+
+## Section-level K2 flush telemetry and E-mode evidence (21 Nov 2026)
+
+The same offline-only native diagnostic now emits bounded, anonymous ordered
+flush sections in toolchange_macro_audit:
+
+- anonymous_flush_section_lengths_mm (at most 256 sections, ordered)
+- flush_section_count_bounded (false if more than 256 start markers)
+- extrusion_modes_observed_in_flush (absolute, relative, unspecified)
+- extruder_position_resets_in_flush (observed G92 E commands)
+- positive_length_semantics=gcode_e_field_sum_not_net_filament_motion
+
+These sections are NOT assumed T0-to-T1 or T1-to-T0 physical transitions:
+K2 machine scripts can emit several flush sections per tool change, and
+firmware-side material routing is not observable from G-code. Under M82
+absolute extrusion or an unspecified mode, summing positive E values is
+NOT the actual filament extrusion length. M83 relative commands still
+cannot account for firmware-owned purging. More than 256 flush starts
+fails the bounded audit and sets flush_markers_balanced=false.
+No manufacturer macros, imported presets, firmware, physical printer or
+pinned worker are changed.
+
+Creality painting regression already has the OFFLINE
+diagnose_creality_paint_features management command. It requires an
+existing completed, one-object, colour-painted Creality CFS test slice.
+With such a fixture, --deep compares support/seam/fuzzy paint against
+identical-geometry unpainted controls; variable tests layer-band changes;
+flushing tests process override behaviour. Without the fixture, the
+command fails closed rather than making up a valid user model/job.
+Do not infer spatial paint correctness merely from a changed hash.
+Experimental multicolour gate output must never be printed.
