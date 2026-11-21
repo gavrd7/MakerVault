@@ -36,7 +36,25 @@ test("existing setup opens the integrated engine manager without altering slicin
 
 test("installed OrcaSlicer never looks unavailable just because an update is absent",()=>{
   assert.match(manager,/engine\.available === true \|\| engine\.status === "validated"/);
-  assert.match(manager,/Already installed — no newer version available/);
+  assert.match(manager,/installedVersions/);
+  assert.match(manager,/available\.length>1/);
+  assert.doesNotMatch(manager,/Already installed — no newer version available/);
   assert.doesNotMatch(manager,/No approved installation release is available yet/);
   assert.match(manager,/rollback_available/);
+});
+
+test("version selector supports per-engine downgrade and uninstall",()=>{
+  assert.match(manager,/installed_versions/);
+  assert.match(manager,/chosen\.local \? "activate"/);
+  assert.match(manager,/"Switch"/);
+  assert.match(manager,/Uninstall/);
+  assert.match(manager,/version,"all"|engine\.key,"all"/);
+  assert.match(manager,/window\.confirm\(question\)/);
+  assert.doesNotMatch(manager,/Restore previous engine version/);
+});
+
+test("modal retains a guide link but drops outdated administrator deployment requirement",()=>{
+  assert.match(workbench,/MakerVault Slicer guidance/);
+  assert.doesNotMatch(workbench,/Adding the slicer service to an existing MakerVault installation/);
+  assert.doesNotMatch(workbench,/You can save drafts without an installed engine\. Slicing requires/);
 });
