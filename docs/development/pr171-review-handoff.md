@@ -104,3 +104,25 @@ behaviour are not established by source inspection alone**.
 - [v1.7.0 Slicer Beta release plan](slicer-v1.7-beta-release-plan.md)
 - [Cross-printer slicer compatibility](../slicer-printer-compatibility-contract.md)
 - [Bambu Studio dependent PR #191](https://github.com/gavrd7/MakerVault/pull/191)
+
+## Worker contract CI issue found and fixed on reconciliation
+
+The reconciled head `684b9869` ran **155 worker unit tests**:
+3 assertions failed and 1 test errored, all investigated via the
+GitHub Actions worker-unit job log. These were not ignored:
+
+- `test_material_gcode_audit.py`'s one-colour painted-model fixture
+  contained literal backslash-n sequences rather than real G-code
+  newlines, so the strict tool-change parser correctly rejected it.
+  Corrected only the test's escaped input in commit `605af246`.
+- Three fixed static rejections from
+  `three_mf_validation.py` had no corresponding safe machine-readable
+  reason in `service.py`. Added bounded mappings for the Creality
+  single-object, two-tool and variable-layer restrictions in
+  commit `fb449286`. No validator or physical print constraints
+  were loosened.
+
+The earlier merge-head documentation and Orca real-engine smoke checks
+were successful; the earlier app CI was cancelled due to newer pushes.
+The new worker-contract and full app CI results must be checked on the
+**latest** commit, not inferred from those earlier runs.
