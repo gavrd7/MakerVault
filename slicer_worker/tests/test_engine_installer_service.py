@@ -75,7 +75,7 @@ class InstallerTests(unittest.TestCase):
                            }]}
                 return BytesIO(json.dumps(release).encode())
             return BytesIO(json.dumps([]).encode())
-        with patch.object(installer.platform, "machine", return_value="x86_64"), \\
+        with patch.object(installer.platform, "machine", return_value="x86_64"), \
              patch.object(installer, "_request", side_effect=upstream):
             releases = installer.release_catalogue()
         self.assertEqual({x["version"] for x in releases if x["engine"] == "orcaslicer"},
@@ -86,7 +86,7 @@ class InstallerTests(unittest.TestCase):
             if isinstance(data, dict):
                 data["assets"][0]["digest"] = "sha256:" + "0" * 64
             return BytesIO(json.dumps(data).encode())
-        with patch.object(installer.platform, "machine", return_value="x86_64"), \\
+        with patch.object(installer.platform, "machine", return_value="x86_64"), \
              patch.object(installer, "_request", side_effect=altered):
             self.assertEqual(installer.release_catalogue(), [])
 
