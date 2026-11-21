@@ -5,12 +5,14 @@ This module never acts on printer submissions. G-code saved in the library
 """
 import logging
 import uuid
+import base64
+import re
 
 from django.contrib.auth.decorators import login_required
 from django.db import transaction
 from django.db.models.deletion import ProtectedError
-from django.http import JsonResponse
-from django.views.decorators.http import require_POST
+from django.http import JsonResponse, HttpResponse
+from django.views.decorators.http import require_POST, require_GET
 
 from .models import FileAsset, SliceJob
 
@@ -160,3 +162,77 @@ def remove_unsaved_gcode(request):
         "removed": len(removed_ids), "removed_ids": removed_ids,
         "saved_library_preserved": True, "source_files_preserved": True,
     })
+
+
+# Extract only the already embedded thumbnail. Generating thumbnail previews
+# from arbitrary G-code on a web request would be expensive and unnecessary.
+_THUMBNAIL_START = re.compile(
+    rb"^;\\s*thumbnail(?:_PNG)?\\s+begin\\s+(96x96|300x300)\\s+([0-9]{1,7})\\s*$", re.I)
+_THUMBNAIL_END = re.compile(rb"^;\\s*thumbnail(?:_PNG)?\\s+end\\s*$", re.I)
+_B64_LINE = re.compile(rb"^;\\s*([A-Za-z0-9+/=]+)\\s*$")
+_MAX_THUMBNAIL_SCAN = 2 * 1024 * 1024
+_MAX_THUMBNAIL_B64 = 500 * 1024
+
+
+def _embedded_thumbnail(data):
+    """Read 96x96/300x300 base64 PNG thumbnails in the existing G-code header."""
+    active = False
+    length = 0
+    chunks = []
+    total = 0
+    for raw_line in data.splitlines():
+        line = raw_line.strip()
+        if not active:
+            found = _THUMBNAIL_START.fullmatch(line)
+            if found:
+                length = int(found.group(2))
+                if not 0 < length <= _MAX_THUMBNAIL_B64:
+                    continue
+                active = True
+            continue
+        if _THUMBNAIL_END.fullmatch(line):
+            if total != length:
+                return None
+            try:
+                png = base64.b64decode(b"".join(chunks), validate=True)
+            except (ValueError, base64.binascii.Error):
+                return None
+            if len(png) > 400 * 1024 or not png.startswith(b"\\x89PNG\\r\\n\\x1a\\n"):
+                return None
+            return png
+        group = _B64_LINE.fullmatch(line)
+        if not group:
+            return None
+        part = group.group(1)
+        total += len(part)
+        if total > length:
+            return None
+        chunks.append(part)
+    return None
+
+
+@login_required
+@require_GET
+def job_thumbnail(request, job_id):
+    """Owner-only read of a generated G-code's existing embedded PNG thumbnail."""
+    job = SliceJob.objects.select_related("output_asset").filter(
+        pk=job_id, owner=request.user, status="completed",
+        output_asset__owner=request.user,
+    ).first()
+    if not job or not job.output_asset_id:
+        return _error("No completed generated G-code thumbnail.", 404)
+    asset = job.output_asset
+    if not asset.file or asset.category not in {"other", "gcode"}:
+        return _error("No generated G-code thumbnail.", 404)
+    try:
+        with asset.file.open("rb") as stream:
+            header = stream.read(_MAX_THUMBNAIL_SCAN)
+    except OSError:
+        return _error("G-code thumbnail unavailable.", 404)
+    png = _embedded_thumbnail(header)
+    if not png:
+        return _error("This slice has no embedded PNG thumbnail.", 404)
+    response = HttpResponse(png, content_type="image/png")
+    response["Cache-Control"] = "private, max-age=300"
+    response["X-Content-Type-Options"] = "nosniff"
+    return response
