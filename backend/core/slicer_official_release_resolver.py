@@ -48,9 +48,11 @@ def resolve_official_release(engine, version):
         raise OfficialProfileError("Select an exact slicer engine and release.")
     source_ref = _RELEASES.get(engine, {}).get(version)
     if source_ref is None:
+        supported = ", ".join(approved_catalogue_versions(engine)) or "none"
         raise OfficialProfileError(
             "No approved official profile catalogue matches "
             + engine[:48] + " " + version[:48]
+            + ". Approved releases: " + supported
             + ". Select a supported engine release or import a "
             "separately reviewed native preset.")
     return CatalogueRelease(engine, version, *source_ref)
