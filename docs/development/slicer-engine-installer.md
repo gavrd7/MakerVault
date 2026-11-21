@@ -12,7 +12,7 @@ After updating the app and retaining the functioning OrcaSlicer environment:
 
 ```sh
 cd ~/MakerVault-Staging
-git pull --ff-only origin feature/self-hosted-slicer-foundation
+git pull --ff-only origin main
 sudo python3 scripts/install_slicer_staging.py update
 sudo python3 scripts/install_slicer_staging.py enable-engine-installer
 ```
@@ -28,20 +28,30 @@ file is unchanged. Previous Orca version data are kept.
 Subsequent app updates use the normal `update` command. Engine downloads and
 upgrades are initiated by users in **Slicer setup → View engine installations**.
 
-## Creality Print first candidate
+## Engine installation and version management
 
-The source is exclusively the official
-`CrealityOfficial/CrealityPrint` GitHub releases API. Only released, non-beta
-Linux x86-64 AppImages with a published GitHub SHA-256 digest appear as
-installation candidates. The release metadata is cached for ten minutes.
-Direct user-provided download URLs, commands and paths are not accepted.
+The installer discovers **Creality Print** releases through the official
+`CrealityOfficial/CrealityPrint` GitHub releases API, checking each Linux
+x86-64 AppImage against its published SHA-256. **OrcaSlicer** offers the
+independently pinned official Ubuntu 24 AppImages for versions 2.4.2 and
+2.5.0, with an additional fixed reviewed checksum gate. This includes
+earlier versions, not just updates newer than the current installation.
+
+A single version dropdown on each engine card lists the current version,
+other locally installed versions and verified downloadable versions. Selecting
+an earlier **local** version switches the active engine only after checking
+its saved executable identity and SHA-256; selecting an **uninstalled**
+version downloads and verifies the pinned official AppImage before activating.
+When the selected version is already current, no redundant Installed button
+is shown. Release metadata is cached for ten minutes. Direct user-provided
+download URLs, commands and filesystem paths are not accepted.
 
 1. The user chooses an available version and clicks **Install**.
 2. MakerVault sends an authenticated request to the installer (internal network only).
 3. The installer downloads official bytes with bounded redirects and size,
    compares the final SHA-256 against the official release metadata and
    extracts the AppImage inside its restricted container.
-4. It attempts the fixed, bounded headless `AppRun --help` compatibility check.
+4. It attempts a fixed, bounded headless CLI compatibility check (`--help` for Orca, `--cli --help` for Creality).
 5. Only a successful smoke check permits atomic activation. Older engine
    directories and the previous active selection remain available for rollback.
 6. MakerVault polls installation status. The worker independently checks the
@@ -57,6 +67,32 @@ Creality integration complete. Do not rely on a smoke check alone for a
 production print.
 
 The engine is never allowed to start a printer automatically.
+
+## Switching versions and uninstalling
+
+- **Switch** selects an older (or newer) *already installed* engine version.
+  The installer re-hashes the exact recorded executable before activation and
+  leaves the other engine selections and binaries untouched.
+- **Update / Install** obtains a previously uninstalled official version with
+  the same independent integrity checks. An installed engine's previous
+  version remains on disk for later selection.
+- **Uninstall** requires a separate confirmation and removes the selected
+  engine's installed versions, not the other engines. All existing MakerVault
+  models, G-code files, user libraries and printer records are preserved.
+  A deleted engine must be reinstalled before it can slice again.
+- Active queued/running slicing jobs block engine changes; concurrent engine
+  operations are also blocked. The service uses an atomic active-manifest
+  update and checks version-directory safety before removing the selected
+  engine's files.
+- Only verified historical versions appear as switch candidates. Legacy
+  installed versions without a recoverable SHA-256 identity are deliberately
+  excluded until independently verified.
+
+A missing **installer service** prevents installations, removals and switches,
+but does not disable an already healthy worker. Initial opt-in deployment of
+that separate service is a one-time infrastructure task; regular engine
+management is browser-operated and **does not require the user to be a host
+administrator**.
 
 ## Access policy
 
