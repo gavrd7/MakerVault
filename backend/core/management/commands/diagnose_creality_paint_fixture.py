@@ -23,6 +23,9 @@ from core.slicer_native_compatibility import check_native_compatibility
 from core.slicer_native_resolution import resolved_native_profile
 from core.slicer_variable_layers import orca_layer_config_ranges
 from core.slicer_worker_client import run_remote_job
+from core.slicer_creality_spatial_audit import (
+    painted_triangle_bounds, spatial_comparison, spatial_deposition_cells,
+)
 from core.slicer_execution import verified_installation
 from core.management.commands.diagnose_slicer_printer_profiles import (
     _same_native_pair, _native_nozzle_count, _creality_toolchange_macro_audit,
@@ -208,6 +211,22 @@ class Command(BaseCommand):
                         )
                     },
                 }
+                if feature == "baseline":
+                    colour_bounds = painted_triangle_bounds(project, "paint_color")
+                    colour_usage = spatial_deposition_cells(
+                        data, bounds=colour_bounds, tool=1)
+                    output["colour_spatial_observation"] = {
+                        "painted_tag_bounds_mm": colour_bounds,
+                        "tool1_deposition_moves_in_painted_xy": (
+                            colour_usage["inside_painted_xy_moves"]),
+                        "tool1_deposition_moves_outside_painted_xy": (
+                            colour_usage["outside_painted_xy_moves"]),
+                        "tool1_spatial_presence_observed": (
+                            colour_usage["inside_painted_xy_moves"] > 0),
+                        "limitations": (
+                            "Native tool ID is a logical filament, not a CFS bay. "
+                            "Spatial presence is not proof of exact painted boundaries."),
+                    }
                 if feature == "variable":
                     output["observed_layer_steps_mm"] = metrics[
                         "observed_layer_steps_mm"]
@@ -243,6 +262,16 @@ class Command(BaseCommand):
                             metrics["g1_with_extrusion"] -
                             control_metrics["g1_with_extrusion"]),
                     }
+                    attribute = {
+                        "support": "paint_supports",
+                        "seam": "paint_seam",
+                        "fuzzy": "paint_fuzzy_skin",
+                    }[feature]
+                    bounds = painted_triangle_bounds(project, attribute)
+                    output["spatial_geometry_control"] = spatial_comparison(
+                        data, control_data, bounds,
+                        role="support" if feature == "support" else "outer_wall",
+                    )
                 results[feature] = output
             except Exception as exc:
                 # Error summaries are bounded and deliberately omit raw private
