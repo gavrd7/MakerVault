@@ -30,6 +30,7 @@ from .engine_store_admin import (
     _manifest, _write, _sha256, seed_bundled_orca, activate,
     EXPECTED_ORCA_SHA, APPROVAL_VERSION, rollback as rollback_store,
 )
+from .engine_store_lifecycle import installed_versions, activate_installed, uninstall_engine, IDENTITY
 
 STORE = Path(os.environ.get("SLICER_ENGINE_STORE", "/opt/engine-store"))
 TOKEN = os.environ.get("SLICER_INSTALLER_TOKEN", "")
@@ -255,6 +256,11 @@ def _install(op_id, release):
         binary_hash = _sha256(runtime)
         if not HEX.fullmatch(binary_hash):
             raise ValueError("Engine runtime digest unavailable.")
+        (stage / IDENTITY).write_text(json.dumps({
+            "engine": engine, "version": version,
+            "binary": str(target / "squashfs-root" / "AppRun"),
+            "binary_sha256": binary_hash,
+        }, separators=(",", ":")), encoding="utf-8")
         os.rename(stage, target)
         stage = None
         _write_operation(op_id, status="activating", progress=94,
@@ -344,6 +350,53 @@ def start_rollback():
     return dict(OPERATIONS[op_id])
 
 
+
+def _lifecycle_operation(op_id, engine, version, action):
+    try:
+        _write_operation(op_id, status="verifying", progress=30,
+                         message="Checking installed engine versions")
+        if action == "activate":
+            activate_installed(STORE, engine, version)
+            message = "Installed version activated"
+        elif action == "uninstall":
+            uninstall_engine(STORE, engine)
+            message = "Engine uninstalled; other engines preserved"
+        else:
+            raise ValueError("Unsupported engine operation.")
+        _write_operation(op_id, status="completed", progress=100, message=message)
+    except Exception as exc:
+        LOGGER.warning("Engine %s %s failed: %s", action, engine, type(exc).__name__)
+        _write_operation(op_id, status="failed", progress=0,
+                         message="Engine operation refused; check the installed version and active jobs.")
+
+
+def start_lifecycle(engine, version, action):
+    if action not in {"activate", "uninstall"} or engine not in {
+            "orcaslicer", "crealityprint"}:
+        raise ValueError("Unsupported engine operation.")
+    if not isinstance(version, str) or (action == "activate" and not VERSION.fullmatch(version)):
+        raise ValueError("Invalid installed engine version.")
+    if action == "uninstall" and version != "all":
+        raise ValueError("Uninstall requires an explicit all-versions selection.")
+    choices = installed_versions(STORE).get(engine, [])
+    if not choices or (action == "activate" and version not in {
+            entry["version"] for entry in choices if not entry["active"]}):
+        raise ValueError("Installed version is unavailable.")
+    with LOCK:
+        if any(op["status"] not in {"completed", "failed"} for op in OPERATIONS.values()):
+            raise ValueError("Another engine change is running.")
+        op_id = str(uuid.uuid4())
+        OPERATIONS[op_id] = {
+            "id": op_id, "engine": engine, "version": version,
+            "action": action, "status": "queued", "progress": 0,
+            "message": "Waiting for engine change",
+        }
+        _persist_operations()
+    Thread(target=_lifecycle_operation,
+           args=(op_id, engine, version, action), daemon=True).start()
+    return dict(OPERATIONS[op_id])
+
+
 class Handler(BaseHTTPRequestHandler):
     server_version = "MakerVaultEngineInstaller/1"
     def log_message(self, *args):
@@ -370,10 +423,11 @@ class Handler(BaseHTTPRequestHandler):
         if self.path == "/status":
             with LOCK:
                 return self.respond(200, {"operations": list(OPERATIONS.values())[-30:],
+                                          "installed_versions": installed_versions(STORE),
                                           "rollback_available": (STORE / "previous.json").is_file()})
         return self.respond(404, {"error": "Not found"})
     def do_POST(self):
-        if self.path not in {"/install", "/rollback"} or not self.authenticated():
+        if self.path not in {"/install", "/rollback", "/activate", "/uninstall"} or not self.authenticated():
             return self.respond(403, {"error": "Unauthorized"})
         if self.path == "/rollback":
             try:
@@ -385,9 +439,17 @@ class Handler(BaseHTTPRequestHandler):
             if not 0 < length <= 2048:
                 return self.respond(413, {"error": "Invalid request size"})
             data = json.loads(self.rfile.read(length))
-            if not isinstance(data, dict) or set(data) != {"engine", "version", "bundle_sha256"}:
-                raise ValueError("Invalid release selection.")
-            result = start_install(data["engine"], data["version"], data["bundle_sha256"])
+            if not isinstance(data, dict):
+                raise ValueError("Invalid engine selection.")
+            if self.path == "/install":
+                if set(data) != {"engine", "version", "bundle_sha256"}:
+                    raise ValueError("Invalid release selection.")
+                result = start_install(data["engine"], data["version"], data["bundle_sha256"])
+            else:
+                if set(data) != {"engine", "version"}:
+                    raise ValueError("Invalid installed engine selection.")
+                result = start_lifecycle(data["engine"], data["version"],
+                                         self.path.removeprefix("/"))
         except (ValueError, KeyError, TypeError):
             return self.respond(400, {"error": "Requested version is not available or another update is running."})
         except Exception:
