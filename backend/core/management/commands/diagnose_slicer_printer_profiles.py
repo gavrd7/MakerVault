@@ -549,6 +549,14 @@ def _creality_toolchange_macro_audit(gcode):
     positive_flush_e_mm = 0.0
     positive_flush_e_moves = 0
     malformed_flush_e_moves = 0
+    # Anonymous ordered flush phases, NOT physical filament transitions.
+    # The vendor macro may emit several FLUSH sections per tool selection.
+    section_lengths = []
+    section_length = 0.0
+    section_moves = 0
+    extrusion_mode = "unspecified"
+    modes_seen_in_flush = set()
+    resets_in_flush = 0
     for line in gcode.decode("utf-8", errors="replace").splitlines():
         if len(line) > 8192:
             continue
@@ -558,16 +566,31 @@ def _creality_toolchange_macro_audit(gcode):
             if open_flush:
                 markers_well_formed = False
             open_flush = True
+            section_length = 0.0
+            section_moves = 0
+            if len(section_lengths) >= 256:
+                markers_well_formed = False
         elif re.fullmatch(r";\s*FLUSH_END\s*", stripped, re.I):
             counts["flush_end_comment_count"] += 1
             if not open_flush:
                 markers_well_formed = False
             else:
                 completed_flush_sections += 1
+                if len(section_lengths) < 256:
+                    section_lengths.append(round(section_length, 3))
             open_flush = False
         if stripped.startswith(";"):
             continue
+        command = stripped.split(";", 1)[0].strip()
+        if re.fullmatch(r"M8[23](?:\s.*)?", command, re.I):
+            # M82 means absolute E; M83 means relative E. Preserve the
+            # observed mode as evidence, never convert positive E blindly.
+            extrusion_mode = "absolute" if command.upper().startswith("M82") else "relative"
         if open_flush:
+            modes_seen_in_flush.add(extrusion_mode)
+            if re.match(r"^G92(?:\s|$)", command, re.I) and re.search(
+                    r"(?:^|\s)E[-+]?\d", command, re.I):
+                resets_in_flush += 1
             command = stripped.split(";", 1)[0].strip()
             if re.match(r"^G0?1(?:\s|$)", command, re.I):
                 # A G1 with XY or other axes is not an extrusion-only purge;
@@ -581,6 +604,8 @@ def _creality_toolchange_macro_audit(gcode):
                     if math.isfinite(value) and value > 0:
                         positive_flush_e_mm += value
                         positive_flush_e_moves += 1
+                        section_length += value
+                        section_moves += 1
                 elif re.search(r"(?:^|\s)E\S*", command, re.I):
                     malformed_flush_e_moves += 1
         if re.match(r"^M8200(?:\s|$)", stripped, re.I):
@@ -597,6 +622,11 @@ def _creality_toolchange_macro_audit(gcode):
         "positive_extrusion_only_flush_moves": positive_flush_e_moves,
         "positive_extrusion_only_flush_length_mm": round(positive_flush_e_mm, 3),
         "unclassified_flush_g1_e_moves": malformed_flush_e_moves,
+        "anonymous_flush_section_lengths_mm": section_lengths,
+        "flush_section_count_bounded": len(section_lengths) <= 256,
+        "extrusion_modes_observed_in_flush": sorted(modes_seen_in_flush),
+        "extruder_position_resets_in_flush": resets_in_flush,
+        "positive_length_semantics": "gcode_e_field_sum_not_net_filament_motion",
         "limitations": (
             "Tool selections alone do not establish execution of the "
             "machine's change_filament_gcode. Marker absence only "
