@@ -2448,20 +2448,65 @@ main,section,article,form,.panel,.pagePanel,.catalogueLayout,.printingPage,.sett
   .slicerSavedJobFilterRow select{flex:1;min-width:0;max-width:260px}
 }
 
-/* Saved slicer entries: keep the 96px G-code preview, metadata, and action
-   buttons in one aligned row instead of making each preview a separate column
-   that pushes the action buttons below it. */
+/* Saved slicing entry layout: the checkbox is positioned within a
+   permanently reserved gutter, so toggling selection never creates a grid
+   column or moves the preview, metadata or action buttons. */
 .cameraSourceRow.slicerSavedJobRow{
+  position:relative;
+  padding-left:44px;
   grid-template-columns:96px minmax(0,1fr) auto;
-  gap:16px;align-items:center;
+  gap:16px;
+  align-items:center;
 }
-.cameraSourceRow.slicerSavedJobRow:has(> label.checkRow){
-  grid-template-columns:28px 96px minmax(0,1fr) auto;
+.slicerSavedJobRow>.slicerSavedJobCheckbox{
+  position:absolute;
+  inset-inline-start:12px;
+  top:50%;
+  transform:translateY(-50%);
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  width:22px;
+  height:30px;
+  margin:0;
+  z-index:1;
+}
+.slicerSavedJobCheckbox input[type="checkbox"]{
+  width:18px;height:18px;min-width:18px;
+  margin:0;cursor:pointer;
 }
 .slicerSavedJobRow>.cameraSourceActions{
   grid-column:-2/-1;justify-content:flex-end;align-items:center;
 }
 .slicerSavedJobRow>.cameraSourceIdentity{min-width:0}
+
+/* Keep the bulk operations on their own distinct rows, with enough
+   space for readable buttons rather than overlapping the primary toolbar. */
+.settingsActions.slicerSavedJobToolbar{
+  display:flex;flex-wrap:wrap;gap:12px;
+  justify-content:flex-start;align-items:stretch;
+}
+.slicerSavedJobToolbar>button{
+  flex:1 1 150px;min-width:145px;
+  white-space:normal;
+}
+.slicerSavedJobSelectionBar{
+  display:flex;flex-wrap:wrap;align-items:center;
+  justify-content:flex-start;
+  column-gap:12px;row-gap:10px;
+  margin:16px 0 18px;
+  padding:14px 0 0;
+  border-top:1px solid #29313c;
+}
+.slicerSavedJobSelectionBar>button{
+  flex:0 1 180px;min-width:150px;
+  white-space:normal;
+}
+.slicerSavedJobSelectionHelp{
+  display:block;flex-basis:100%;
+  line-height:1.45;
+  color:#8995a7;
+}
 
 /* Use the existing on-demand 3D mesh render for unpainted single-object rows.
    It renders with real normals and lighting, not flat fallback G-code lines. */
@@ -2482,20 +2527,29 @@ main,section,article,form,.panel,.pagePanel,.catalogueLayout,.printingPage,.sett
   .cameraSourceRow.slicerSavedJobRow{
     grid-template-columns:96px minmax(0,1fr);
   }
-  .cameraSourceRow.slicerSavedJobRow:has(> label.checkRow){
-    grid-template-columns:28px 96px minmax(0,1fr);
-  }
   .slicerSavedJobRow>.cameraSourceActions{
     grid-column:2/-1;justify-content:flex-start;
   }
 }
+@media(max-width:700px){
+  .settingsActions.slicerSavedJobToolbar{
+    display:flex!important;
+    flex-wrap:wrap;
+  }
+  .settingsActions.slicerSavedJobToolbar>button{
+    flex:1 1 145px;width:auto;
+  }
+  .slicerSavedJobSelectionBar>button{
+    flex:1 1 145px;
+  }
+}
 @media(max-width:580px){
   .cameraSourceRow.slicerSavedJobRow{
-    gap:10px;grid-template-columns:76px minmax(0,1fr);
+    padding-left:36px;
+    gap:10px;
+    grid-template-columns:76px minmax(0,1fr);
   }
-  .cameraSourceRow.slicerSavedJobRow:has(> label.checkRow){
-    grid-template-columns:24px 76px minmax(0,1fr);
-  }
+  .slicerSavedJobRow>.slicerSavedJobCheckbox{inset-inline-start:8px}
   .slicerSavedJobRow>img,.slicerSavedJobRow>div[aria-hidden="true"]{
     width:76px!important;height:76px!important;min-width:76px!important;
   }
@@ -2504,8 +2558,11 @@ main,section,article,form,.panel,.pagePanel,.catalogueLayout,.printingPage,.sett
   }
   .slicerSavedJobRow>.cameraSourceActions button{flex:1 1 120px}
 }
-
-@media(max-width:720px){.cameraSourceRow{grid-template-columns:1fr}.cameraSourceActions{justify-content:stretch}.cameraSourceActions button{flex:1 1 140px}}
+@media(max-width:720px){
+  .cameraSourceRow.slicerSavedJobRow{
+    display:grid;
+  }
+}
 
 /* v1 accessibility baseline */
 button:focus-visible,
