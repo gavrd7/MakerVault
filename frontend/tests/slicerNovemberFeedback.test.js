@@ -7,6 +7,7 @@ import { fileURLToPath } from "node:url";
 const base = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../src/components");
 const read = name => fs.readFileSync(path.join(base,name),"utf8");
 const setup = read("SlicerWorkbench.jsx");
+const styles = fs.readFileSync(path.resolve(base, "../styles.css"), "utf8");
 const prepare = read("SlicerPrepareWorkspace.jsx");
 const plate = read("SlicerPlateEditor.jsx");
 
@@ -105,4 +106,20 @@ test("saved draft status filter sits below the actions and right aligned above e
   assert.match(toolbarContents, /Remove all unsaved G-code/);
   assert.doesNotMatch(toolbarContents, /Filter saved drafts and slices/);
   assert.match(setup.slice(filter, entries), /Filter saved drafts and slices/);
+});
+
+test("selection checkbox is absolutely placed in a reserved gutter, never changes saved row columns", () => {
+  assert.match(setup, /className="slicerSavedJobCheckbox"/);
+  assert.match(styles, /\.cameraSourceRow\.slicerSavedJobRow\{[\s\S]*?position:relative;[\s\S]*?padding-left:44px;/);
+  assert.match(styles, /\.slicerSavedJobRow>\.slicerSavedJobCheckbox\{[\s\S]*?position:absolute;/);
+  assert.doesNotMatch(styles, /slicerSavedJobRow:has\(> label\.checkRow\)/);
+  assert.match(styles, /@media\(max-width:1100px\)\{[\s\S]*?slicerSavedJobRow>[.]cameraSourceActions/);
+});
+
+test("bulk selection actions have dedicated spaced row and readable help below", () => {
+  assert.match(setup, /className="slicerSavedJobSelectionBar" role="group"/);
+  assert.match(setup, /className="slicerSavedJobSelectionHelp"/);
+  assert.match(styles, /\.slicerSavedJobSelectionBar\{[\s\S]*?column-gap:12px;row-gap:10px;[\s\S]*?margin:16px 0 18px;/);
+  assert.match(styles, /\.slicerSavedJobSelectionHelp\{[\s\S]*?flex-basis:100%/);
+  assert.match(styles, /\.settingsActions\.slicerSavedJobToolbar\{[\s\S]*?flex-wrap:wrap/);
 });
