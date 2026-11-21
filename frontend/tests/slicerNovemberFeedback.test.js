@@ -24,7 +24,7 @@ test("named imported material profile is available to assigned slot even when re
   assert.match(setup, /filamentProfiles=\{slotFilamentChoices\}/);
   assert.ok(setup.includes(String.raw`!/@\s*.*\bbase\s*$/i.test(profile.name`));
   assert.match(prepare, /onFilamentProfilesReload\?\.\(imported\)/);
-  assert.match(prepare, /profile_id: String\(imported\.id\)/);
+  assert.match(prepare, /assignLoadedSlotProfile\(slot,String\(imported\.id\)\)/);
   assert.match(prepare, /Import & assign/);
 });
 
