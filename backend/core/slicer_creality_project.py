@@ -303,8 +303,10 @@ def _one_filament_value(value, key):
 def _native_palette_settings(project, filaments, *, palette_slots=4):
     """Add Creality 7.3.x CFS-compatible vector and matrix dimensions.
 
-    The native K2 reference has four logical filament positions even when
-    only two are assigned to models. Unused positions are filled from an
+    The currently verified Creality 7.3.x single-nozzle native project
+    format has four logical filament positions even when only two are
+    assigned to models. This is a bounded encoder, not a K2 model allowlist
+    or a universal Creality machine layout. Unused positions are filled from an
     already-resolved and hash-checked native preset, not from any unknown
     CFS spool. They are not assigned to geometry and cannot start prints.
     """
@@ -530,8 +532,9 @@ def _preserve_creality_machine_multicolor_capability(project, machine, *,
         if require_verified:
             raise SlicerProfileError(
                 "Creality multicolour requires a selected native machine preset "
-                "with explicitly enabled multicolor_method; the original K2 "
-                "profile has no such capability. Do not print this slice.")
+                "with explicitly enabled multicolor_method. "
+                "The selected profile does not advertise this capability; "
+                "do not print this slice.")
         return False
     if type(selected) is bool:
         enabled = selected
