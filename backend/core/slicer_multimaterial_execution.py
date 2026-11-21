@@ -231,6 +231,35 @@ def creality_selected_tool_colours(source_models, tools):
     return tuple(tool_colours[i] for i in (0, 1))
 
 
+def _require_creality_two_material_single_nozzle(job, topology):
+    """Check engine-native machine topology, not a brand/model-name allowlist.
+
+    This is the currently implemented 7.3.x *two-material* project encoder,
+    not a statement about all printers supported by Creality Print.
+    """
+    import json
+    import math
+    from .slicer_native_resolution import resolved_native_profile
+    if topology != "single_nozzle_changer":
+        raise MaterialRoutingError(
+            "Creality's current two-material project encoder requires an "
+            "adapter-declared single-nozzle filament changer. Other native "
+            "machine topologies need their own verified project encoder.")
+    try:
+        machine = json.loads(resolved_native_profile(job.printer_profile))
+        diameters = machine.get("nozzle_diameter")
+        if (not isinstance(diameters, list) or len(diameters) != 1
+                or type(diameters[0]) not in (str, int, float)
+                or type(diameters[0]) is bool
+                or not math.isfinite(float(diameters[0]))
+                or not .1 <= float(diameters[0]) <= 3):
+            raise ValueError
+    except (AttributeError, TypeError, ValueError, OverflowError) as exc:
+        raise MaterialRoutingError(
+            "Selected Creality native machine must declare exactly one "
+            "verified nozzle for the two-material project encoder.") from exc
+
+
 def prepare_creality_positioned_project(job, source_models, *, bed_width, bed_depth):
     """Prepare one painted or two independently assigned Creality 3MF objects.
 
@@ -271,6 +300,7 @@ def prepare_creality_positioned_project(job, source_models, *, bed_width, bed_de
     if len(objects) == 2 and any(painted):
         raise MaterialRoutingError("Creality test painting currently requires one model only.")
     topology, bindings, profiles = plan_native_multimaterial(job)
+    _require_creality_two_material_single_nozzle(job, topology)
     tools = tuple(bindings[item["material_slot"]["slot_id"]] for item, _ in source_models)
     colour_maps = native_colour_tool_maps(objects, printer_id=job.printer_id,
                                           tool_bindings=bindings)
