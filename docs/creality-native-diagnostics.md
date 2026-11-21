@@ -1982,3 +1982,54 @@ sudo docker exec makervault python3 /app/backend/manage.py \
 This flag/test is **not yet verified on Debian**. Keep PR #171
 draft; physical CFS purge, printer firmware behaviour and final
 production dispatch safety remain unverified.
+
+
+## Real production A/B confirms native K2 route is off; audit manufacturer macro next (21 Nov 2026)
+
+User log `Pasted text(20261121-003805).txt` confirms app-only staging
+updated to `38720482`, isolated pinned worker image unchanged/healthy,
+**67/67 focused Django tests PASS**, and all **three real production
+3MF builder native offline slices succeeded**. Every normal builder
+case preserves selected machine profile `purge_in_prime_tower=0`
+(including printer override declaration), returns 24 T0 and 24 T1
+selects, and produces identical executable G0/G1 and M-command hashes
+and identical marked tower deposition: **1090.971 mm positive-E**,
+**22.898×22.898 mm XY**. A multiplier of 1.0 vs 2.0, and raw fixture
+T0→T1 140→165 mm³ with multiplier 2.0, still change G-code comment
+metadata and project setting keys, **not motion or machine commands**.
+This is expected with source printer profile's tower purge disabled,
+NOT proof of physical flushing and NOT validation of user-changeable
+purge volume at the K2's external flush location.
+
+Review of exact upstream `CrealityOfficial/CrealityPrint` v7.3.1
+`resources/profiles/Creality/machine/Creality K2 0.4 nozzle.json`
+confirms `purge_in_prime_tower=0` and an unmodified
+`change_filament_gcode` containing `flush_length_1` through
+`flush_length_5` and Creality `M8200` commands. Critically, the K2
+script begins with the `{if multicolor_method}` condition, so a native
+print may have tool selects without executing the manufacturer's full
+change/purge macro. The K2 leaf machine preset does not itself define
+`multicolor_method` (it may be inherited/resolved elsewhere; do NOT
+infer its runtime value from omission). Upstream `PresetBundle.cpp`
+classifies `multicolor_method` as a machine capability, not a project
+option, so do not inject it into a 3MF to force the script.
+
+New read-only diagnostic addition to the existing 3-slice
+`--test-production-flush`: emitted `multicolor_method` comment
+(if present and a valid 0/1 flag), safe source/project flag presence,
+and **counts only** of exact G-code `; FLUSH_START`,
+`; FLUSH_END`, `M8200`, `SET_VELOCITY_LIMIT`, and
+`T<number>` markers. It does not return any proprietary vendor
+scripts, alter macros, change native worker, select a different printer
+or enable CFS. A unit test validates counts and excludes comments
+which merely mention machine commands.
+
+Expected focused Django tests: **68** (67 verified + 1 newly added).
+For minimal repeat, after app-only update run the four focused suites
+and `--native --test-production-flush` again (3 native slices).
+Inspect `production_builder_offline_controls` emitted
+`multicolor_method` and `toolchange_macro_audit`. If no K2 change
+macro markers are emitted, diagnose missing/disabled native machine
+capability or CLI macro invocation; **do not treat identical G-code
+hashes as correct printer-side flushing**. Still no physical printer
+safety/flush validation and PR remains draft.
