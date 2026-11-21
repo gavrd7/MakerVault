@@ -6,11 +6,13 @@ The approved isolated worker must provide a reviewed Bambu executable.
 """
 import os
 import re
+import signal
 import stat
+import subprocess
 import zipfile
 from pathlib import Path
 
-from .runner import MAX_GCODE_BYTES, MAX_MODEL_BYTES, MAX_PROFILE_BYTES
+from .runner import MAX_GCODE_BYTES, MAX_MODEL_BYTES, MAX_PROFILE_BYTES, DEFAULT_TIMEOUT_SECONDS
 from .runner import WorkerError, _regular_file, _output_path
 from .orca_runner import _native_json
 from .stl_validation import StlValidationError, validate_stl
@@ -76,8 +78,12 @@ def extract_single_bambu_gcode(sliced_project: Path, workdir: Path) -> Path:
             if len(zf.infolist()) > 2000:
                 raise WorkerError("Bambu native 3MF has too many entries.")
             matches = []
+            seen_names = set()
             for info in zf.infolist():
                 name = info.filename
+                if name in seen_names:
+                    raise WorkerError("Bambu native 3MF contains duplicate entries.")
+                seen_names.add(name)
                 if (name.startswith("Metadata/plate_") and
                         re.fullmatch(r"Metadata/plate_[1-9][0-9]*\.gcode", name)):
                     if info.file_size <= 0 or info.file_size > MAX_GCODE_BYTES:
@@ -88,12 +94,62 @@ def extract_single_bambu_gcode(sliced_project: Path, workdir: Path) -> Path:
             if len(matches) != 1:
                 raise WorkerError(
                     "Bambu native output must contain exactly one G-code plate.")
-            raw = zf.read(matches[0])
-    except (zipfile.BadZipFile, EOFError, OSError, RuntimeError) as exc:
+            output = _output_path(workdir)
+            total = 0
+            head = b""
+            # Read only one plate in chunks; do not trust ZIP header sizes.
+            try:
+                with zf.open(matches[0]) as source, output.open("xb") as target:
+                    while block := source.read(65536):
+                        total += len(block)
+                        if total > MAX_GCODE_BYTES:
+                            raise WorkerError("Bambu G-code exceeds size limits.")
+                        if len(head) < 4096:
+                            head += block[:4096 - len(head)]
+                        target.write(block)
+            except BaseException:
+                output.unlink(missing_ok=True)
+                raise
+    except (zipfile.BadZipFile, EOFError, OSError, RuntimeError, ValueError) as exc:
         raise WorkerError("Bambu native 3MF output is invalid.") from exc
-    if not raw or len(raw) > MAX_GCODE_BYTES or b"\0" in raw[:4096]:
+    if not total or b"\\0" in head:
+        output.unlink(missing_ok=True)
         raise WorkerError("Bambu generated unsupported binary or empty G-code.")
-    output = _output_path(workdir)
-    with output.open("xb") as stream:
-        stream.write(raw)
     return output
+
+
+def run_bambu(binary: Path, workdir: Path, *, timeout_seconds: int = DEFAULT_TIMEOUT_SECONDS) -> dict:
+    """Candidate isolated executor; not registered for production admission.
+
+    The worker container, not this helper, is responsible for filesystem,
+    network, identity and resource isolation. Real Bambu CLI acceptance is
+    required before the service may route jobs here.
+    """
+    if type(timeout_seconds) is not int or not 1 <= timeout_seconds <= 900:
+        raise WorkerError("Invalid Bambu slice timeout.")
+    workdir = Path(workdir).resolve(strict=True)
+    if not workdir.is_dir():
+        raise WorkerError("Worker scratch directory is invalid.")
+    command = bambu_command(binary, workdir)
+    try:
+        proc = subprocess.Popen(
+            command, cwd=str(workdir),
+            env={"HOME": str(workdir), "TMPDIR": str(workdir),
+                 "LANG": "C.UTF-8", "LC_ALL": "C.UTF-8",
+                 "PATH": "/usr/bin:/bin"},
+            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+            start_new_session=True,
+        )
+        try:
+            proc.communicate(timeout=timeout_seconds)
+        except subprocess.TimeoutExpired:
+            os.killpg(proc.pid, signal.SIGKILL)
+            proc.communicate()
+            raise WorkerError("Bambu Studio slicing timed out.") from None
+        if proc.returncode != 0:
+            raise WorkerError("Bambu Studio CLI rejected the native profiles or model.")
+        output = extract_single_bambu_gcode(workdir / "bambu-sliced.3mf", workdir)
+        return {"status": "completed", "gcode_path": str(output),
+                "bytes": output.stat().st_size}
+    except OSError as exc:
+        raise WorkerError("Isolated worker could not execute Bambu Studio.") from exc
