@@ -7,15 +7,15 @@ services:
   makervault:
     environment:
       MAKERVAULT_SLICER_PREVIEW_ENABLED: "1"
-      MAKERVAULT_SLICER_HOST_UPDATER_ENABLED: ${MAKERVAULT_SLICER_HOST_UPDATER_ENABLED:-0}
+      MAKERVAULT_SLICER_HOST_UPDATER_ENABLED: "${MAKERVAULT_SLICER_HOST_UPDATER_ENABLED:-0}"
       MAKERVAULT_SLICER_INSTALLER_URL: http://slicer-engine-installer:8091
-      MAKERVAULT_SLICER_INSTALLER_TOKEN: ${MAKERVAULT_SLICER_INSTALLER_TOKEN:-disabled}
+      MAKERVAULT_SLICER_INSTALLER_TOKEN: "${MAKERVAULT_SLICER_INSTALLER_TOKEN:-disabled}"
       MAKERVAULT_SLICER_WORKER_URL: http://slicer-worker:8088
-      MAKERVAULT_SLICER_WORKER_TOKEN: ${MAKERVAULT_SLICER_WORKER_TOKEN:?Configure a unique worker token}
-      MAKERVAULT_SLICER_EXECUTION_ENABLED: ${MAKERVAULT_SLICER_EXECUTION_ENABLED:-0}
-      MAKERVAULT_SLICER_WORKER_IMAGE: ${MAKERVAULT_SLICER_WORKER_IMAGE:?Set a reviewed GHCR image@sha256: digest}
-      MAKERVAULT_SLICER_ENGINE_IMAGE_DIGEST: ${MAKERVAULT_SLICER_ENGINE_IMAGE_DIGEST:?Set the exact registry SHA-256 digest}
-      MAKERVAULT_SLICER_ENGINES_JSON: ${MAKERVAULT_SLICER_ENGINES_JSON:?Approve each native engine binary SHA-256}
+      MAKERVAULT_SLICER_WORKER_TOKEN: "${MAKERVAULT_SLICER_WORKER_TOKEN:?Configure a unique worker token}"
+      MAKERVAULT_SLICER_EXECUTION_ENABLED: "${MAKERVAULT_SLICER_EXECUTION_ENABLED:-0}"
+      MAKERVAULT_SLICER_WORKER_IMAGE: "${MAKERVAULT_SLICER_WORKER_IMAGE:?Set a reviewed GHCR image@sha256: digest}"
+      MAKERVAULT_SLICER_ENGINE_IMAGE_DIGEST: "${MAKERVAULT_SLICER_ENGINE_IMAGE_DIGEST:?Set the exact registry SHA-256 digest}"
+      MAKERVAULT_SLICER_ENGINES_JSON: "${MAKERVAULT_SLICER_ENGINES_JSON:?Approve each native engine binary SHA-256}"
     networks:
       - makervault_backend
       - makervault_slicer
@@ -40,8 +40,8 @@ services:
       - makervault_slicer_engines:/opt/engine-store:ro
     environment:
       SLICER_WORKER_ENABLED: "1"
-      SLICER_WORKER_TOKEN: ${MAKERVAULT_SLICER_WORKER_TOKEN:?Configure a unique worker token}
-      SLICER_ENGINES_JSON: ${SLICER_ENGINES_JSON:?Provide exact approved binary paths and checksums}
+      SLICER_WORKER_TOKEN: "${MAKERVAULT_SLICER_WORKER_TOKEN:?Configure a unique worker token}"
+      SLICER_ENGINES_JSON: "${SLICER_ENGINES_JSON:?Provide exact approved binary paths and checksums}"
     networks:
       - makervault_slicer
     healthcheck:
@@ -89,7 +89,7 @@ services:
     volumes:
       - makervault_slicer_engines:/opt/engine-store:rw
     environment:
-      SLICER_INSTALLER_TOKEN: ${MAKERVAULT_SLICER_INSTALLER_TOKEN:-disabled}
+      SLICER_INSTALLER_TOKEN: "${MAKERVAULT_SLICER_INSTALLER_TOKEN:-disabled}"
     networks:
       - makervault_slicer
       - makervault_installer_egress
