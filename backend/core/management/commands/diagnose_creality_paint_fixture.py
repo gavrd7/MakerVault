@@ -195,8 +195,22 @@ class Command(BaseCommand):
                     "tool1_selects": metrics["tool1_selects"],
                     "extrusion_moves": metrics["g1_with_extrusion"],
                     "feature_role_audit": _feature_role_audit(data),
-                    "flush_audit": _creality_toolchange_macro_audit(data),
+                    "flush_audit": {
+                        key: value for key, value in
+                        _creality_toolchange_macro_audit(data).items()
+                        if key in (
+                            "flush_start_comment_count", "flush_end_comment_count",
+                            "flush_markers_balanced", "completed_flush_sections",
+                            "m8200_command_count",
+                            "positive_extrusion_only_flush_length_mm",
+                            "extrusion_modes_observed_in_flush",
+                            "unclassified_flush_g1_e_moves",
+                        )
+                    },
                 }
+                if feature == "variable":
+                    output["observed_layer_steps_mm"] = metrics[
+                        "observed_layer_steps_mm"]
                 if feature == "baseline":
                     baseline = metrics
                 else:
