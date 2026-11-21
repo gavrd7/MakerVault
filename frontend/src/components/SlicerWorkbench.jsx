@@ -2228,7 +2228,7 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
         <button type="button" disabled={loading || busy} onClick={refresh}>Refresh entries</button>
         <label>Show
           <select aria-label="Filter saved drafts and slices" value={savedJobFilter}
-            onChange={e => { setSavedJobFilter(e.target.value); setVisibleDraftCount(15); }}>
+            onChange={e => { setSavedJobFilter(e.target.value); setVisibleDraftCount(15); setSelectedSavedJobIds([]); }}>
             <option value="all">All entries</option>
             <option value="drafts">Drafts (not sliced)</option>
             <option value="slices">Completed slices</option>
@@ -2251,8 +2251,8 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
           ])])}>Select all filtered</button>
         <button type="button" disabled={busy || !selectedSavedJobIds.length}
           onClick={() => setSelectedSavedJobIds([])}>Clear selection</button>
-        <button type="button" disabled={busy || !selectedSavedJobIds.length}
-          onClick={() => bulkRemoveSavedJobs("selected")}>Delete selected ({selectedSavedJobIds.length})</button>
+        <button type="button" disabled={busy || !selectedSavedJobCount}
+          onClick={() => bulkRemoveSavedJobs("selected")}>Delete selected ({selectedSavedJobCount})</button>
         <small>Only inactive jobs can be selected. Selection covers the loaded list; remove-all buttons cover older entries too.</small>
       </div>}
       <h3>Saved slicing drafts and slices</h3>
