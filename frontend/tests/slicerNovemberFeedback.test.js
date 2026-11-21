@@ -20,10 +20,10 @@ test("engine version is selected from known discovered versions, not typed", () 
 });
 
 test("named imported material profile is available to assigned slot even when reused as parent", () => {
-  assert.match(setup, /const slotFilamentChoices = profiles\.filter/);
+  assert.match(setup, /const slotFilamentChoices = useMemo\(\(\) => profiles\.filter/);
   assert.match(setup, /filamentProfiles=\{slotFilamentChoices\}/);
   assert.ok(setup.includes(String.raw`!/@\s*.*\bbase\s*$/i.test(profile.name`));
-  assert.match(prepare, /onFilamentProfilesReload\?\.\(\)/);
+  assert.match(prepare, /onFilamentProfilesReload\?\.\(imported\)/);
   assert.match(prepare, /profile_id: String\(imported\.id\)/);
   assert.match(prepare, /Import & assign/);
 });
@@ -35,11 +35,11 @@ test("variable layer editor can position a selected thickness band", () => {
   assert.match(prepare, /onVariableLayerHeightPick=\{z=>/);
 });
 
-test("painted surface annotations are hidden until their tool is active", () => {
+test("semantic painting is tool-specific while coloured preview is retained", () => {
   assert.match(plate, /toolMode==="paint_support"\?item\.support_paint:null/);
   assert.match(plate, /toolMode==="paint_seam"\?item\.seam_paint:null/);
   assert.match(plate, /toolMode==="paint_fuzzy"\?item\.fuzzy_skin_paint:null/);
-  assert.match(plate, /toolMode==="paint_colour"\?item\.colour_paint:null/);
+  assert.match(plate, /paintPreview\(mesh, \{\.\.\.item,colour_paint:item\.colour_paint\}/);
   assert.match(plate, /latestToolModeRef\.current==="paint_support"/);
 });
 
