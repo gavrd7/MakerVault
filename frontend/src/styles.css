@@ -2429,6 +2429,45 @@ main,section,article,form,.panel,.pagePanel,.catalogueLayout,.printingPage,.sett
 .cameraSourceIdentity small{color:#8995a7}
 .cameraSourceIdentity code{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#aeb9ca;font-size:11px}
 .cameraSourceActions{display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end}
+
+/* Saved slicer entries: keep the 96px G-code preview, metadata, and action
+   buttons in one aligned row instead of making each preview a separate column
+   that pushes the action buttons below it. */
+.cameraSourceRow.slicerSavedJobRow{
+  grid-template-columns:96px minmax(0,1fr) auto;
+  gap:16px;align-items:center;
+}
+.cameraSourceRow.slicerSavedJobRow:has(> label.checkRow){
+  grid-template-columns:28px 96px minmax(0,1fr) auto;
+}
+.slicerSavedJobRow>.cameraSourceActions{
+  grid-column:-2/-1;justify-content:flex-end;align-items:center;
+}
+.slicerSavedJobRow>.cameraSourceIdentity{min-width:0}
+@media(max-width:1100px){
+  .cameraSourceRow.slicerSavedJobRow{
+    grid-template-columns:96px minmax(0,1fr);
+  }
+  .cameraSourceRow.slicerSavedJobRow:has(> label.checkRow){
+    grid-template-columns:28px 96px minmax(0,1fr);
+  }
+  .slicerSavedJobRow>.cameraSourceActions{
+    grid-column:2/-1;justify-content:flex-start;
+  }
+}
+@media(max-width:580px){
+  .cameraSourceRow.slicerSavedJobRow{
+    gap:10px;grid-template-columns:76px minmax(0,1fr);
+  }
+  .cameraSourceRow.slicerSavedJobRow:has(> label.checkRow){
+    grid-template-columns:24px 76px minmax(0,1fr);
+  }
+  .slicerSavedJobRow>img,.slicerSavedJobRow>div[aria-hidden="true"]{
+    width:76px!important;height:76px!important;min-width:76px!important;
+  }
+  .slicerSavedJobRow>.cameraSourceActions button{flex:1 1 120px}
+}
+
 @media(max-width:720px){.cameraSourceRow{grid-template-columns:1fr}.cameraSourceActions{justify-content:stretch}.cameraSourceActions button{flex:1 1 140px}}
 
 /* v1 accessibility baseline */
