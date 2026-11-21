@@ -1239,7 +1239,8 @@ def official_profiles(request):
     if request.method == "GET":
         selected = request.GET.get("engine", "orcaslicer")
         try:
-            version = request.GET.get("version") or default_catalogue_version(selected)
+            version = (request.GET["version"] if "version" in request.GET
+                       else default_catalogue_version(selected))
             selected_release = resolve_official_release(selected, version)
         except OfficialProfileError as exc:
             return _error(str(exc))
@@ -1374,7 +1375,8 @@ def official_profiles(request):
         if engine not in providers:
             return _error("Official import is not available for this engine.")
         version, source, ref, fetcher = providers[engine]
-        selected_version = selection.get("engine_version") or default_catalogue_version(engine)
+        selected_version = (selection["engine_version"] if "engine_version" in selection
+                            else default_catalogue_version(engine))
         release = resolve_official_release(engine, selected_version)
         if (source, ref) != (release.source, release.ref) and engine != "orcaslicer":
             raise ValueError("Official provider configuration differs from the reviewed release.")
