@@ -1,0 +1,70 @@
+name: Publish reviewed OrcaSlicer 2.5.0 K2 compatibility asset
+
+# Manual distribution of the exact binary which already passed real K1/K2
+# and two-tool CLI acceptance in run 43789319270. No app release or engine
+# activation. The Actions artifact expires 2026-11-23 UTC: publish before then.
+on:
+  workflow_dispatch:
+    inputs:
+      approval:
+        description: Type PUBLISH-ORCA-2.5.0-MV1 to publish the exact reviewed binary
+        required: true
+        type: string
+
+permissions:
+  contents: write
+  actions: read
+
+jobs:
+  publish:
+    if: ${{ inputs.approval == 'PUBLISH-ORCA-2.5.0-MV1' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: Retrieve exact successful reviewed-binary run
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          test "$(gh api repos/gavrd7/MakerVault/actions/runs/43789319270 --jq .conclusion)" = success
+          gh run download 43789319270 --repo gavrd7/MakerVault \
+            --name orcaslicer-2.5.0-reviewed-compatibility-candidate \
+            --dir "$RUNNER_TEMP/reviewed"
+      - name: Independently check the compiled AppImage SHA-256
+        id: binary
+        shell: bash
+        run: |
+          set -euo pipefail
+          mapfile -t files < <(find "$RUNNER_TEMP/reviewed" -type f -name '*.AppImage')
+          test "${#files[@]}" -eq 1
+          echo "b30b0ae933e653692cf85a493287a949215ae4c14d547a00203d16dfcadb8054  ${files[0]}" | sha256sum -c -
+          test "$(head -c 4 "${files[0]}" | od -An -tx1 | tr -d ' \n')" = 7f454c46
+          cp -- "${files[0]}" "$RUNNER_TEMP/MakerVault-OrcaSlicer-2.5.0-mv1.AppImage"
+          echo "asset=$RUNNER_TEMP/MakerVault-OrcaSlicer-2.5.0-mv1.AppImage" >> "$GITHUB_OUTPUT"
+      - name: Publish a separate prerelease artifact (not MakerVault v1.7.0)
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          if gh release view orca-2.5.0-mv1 --repo gavrd7/MakerVault >/dev/null 2>&1; then
+            echo "Reviewed asset release already exists; refusing to replace it."
+            exit 1
+          fi
+          gh release create orca-2.5.0-mv1 \
+            "${{ steps.binary.outputs.asset }}" \
+            --repo gavrd7/MakerVault \
+            --target main \
+            --title "MakerVault-reviewed OrcaSlicer 2.5.0 (K2 compatibility)" \
+            --notes "Independently reviewed OrcaSlicer v2.5.0 source build for MakerVault. Based on upstream commit 40ecc66f78ed72dc368e0c1ebe40d77f00cc8a19. Adjusts ONLY the native retraction_distances_when_cut validation maximum from 18 to 30 mm for the unmodified Creality K2 profile. Passed official K1/K2 and two-tool offline slicing acceptance in GitHub Actions run 43789319270. SHA-256 b30b0ae933e653692cf85a493287a949215ae4c14d547a00203d16dfcadb8054. This is a binary prerequisite; it is NOT the MakerVault v1.7.0 application release." \
+            --prerelease --latest=false
+      - name: Require published release API digest and file identity
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          tag=$(gh api repos/gavrd7/MakerVault/releases/tags/orca-2.5.0-mv1 --jq .tag_name)
+          digest=$(gh api repos/gavrd7/MakerVault/releases/tags/orca-2.5.0-mv1 \
+            --jq '.assets[] | select(.name == "MakerVault-OrcaSlicer-2.5.0-mv1.AppImage") | .digest')
+          test "$tag" = orca-2.5.0-mv1
+          test "$digest" = "sha256:b30b0ae933e653692cf85a493287a949215ae4c14d547a00203d16dfcadb8054"
