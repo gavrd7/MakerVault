@@ -21,6 +21,28 @@ from core.slicer_plate_3mf import build_plate_3mf, NS
 
 
 class PrinterCompatibilityFixtureTests(SimpleTestCase):
+    def test_creality_official_profile_release_mismatch_is_explicit(self):
+        from core.management.commands.diagnose_slicer_printer_profiles import (
+            _creality_official_source_release)
+        old = _creality_official_source_release(
+            "CrealityOfficial/CrealityPrint@v7.3.0/Creality", "7.3.1")
+        self.assertEqual(old, {
+            "kind": "official_creality",
+            "source_release": "7.3.0",
+            "matches_engine": False,
+        })
+        new = _creality_official_source_release(
+            "CrealityOfficial/CrealityPrint@v7.3.1/Creality", "7.3.1")
+        self.assertTrue(new["matches_engine"])
+        self.assertEqual(new["source_release"], "7.3.1")
+        unknown = _creality_official_source_release(
+            "manual-user-export", "7.3.1")
+        self.assertIsNone(unknown["matches_engine"])
+        malformed = _creality_official_source_release(
+            "CrealityOfficial/CrealityPrint@v7.3.not/Creality", "7.3.1")
+        self.assertFalse(malformed["matches_engine"])
+        self.assertIsNone(malformed["source_release"])
+
     def test_creality_disposable_multicolor_probe_preserves_native_project(self):
         from core.management.commands.diagnose_slicer_printer_profiles import (
             _creality_multicolor_project_probe)
