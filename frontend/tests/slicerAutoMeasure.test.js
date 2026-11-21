@@ -45,7 +45,7 @@ test("auto detect reports a boundary mesh edge and converts units", () => {
 });
 
 test("auto detection is wired into toolbar and read-only viewport controls", () => {
-  assert.match(toolbar, /Auto-detect mesh edge \/ face/);
+  assert.match(toolbar, /measureSnapMode=\{measureSnapMode\}/);
   assert.match(plate, /detectMeshMeasurement\(target, hit, tolerance\)/);
   assert.match(plate, /DetectedFeature|detectedFeature/);
   assert.match(plate, /formatDetectedMeasurement\(detectedFeature, measureUnit\)/);
