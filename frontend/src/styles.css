@@ -2430,6 +2430,24 @@ main,section,article,form,.panel,.pagePanel,.catalogueLayout,.printingPage,.sett
 .cameraSourceIdentity code{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#aeb9ca;font-size:11px}
 .cameraSourceActions{display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end}
 
+/* Separate the status/count from the filter, pinned to the right above
+   saved job rows instead of squeezing the bulk-action button toolbar. */
+.slicerSavedJobFilterRow{
+  display:flex;align-items:center;justify-content:space-between;
+  gap:12px;flex-wrap:wrap;
+  margin:4px 0 12px;
+}
+.slicerSavedJobFilterRow>p{margin:0}
+.slicerSavedJobFilterRow>label{
+  margin-left:auto;display:flex;align-items:center;
+  justify-content:flex-end;gap:10px;white-space:nowrap;
+}
+.slicerSavedJobFilterRow select{width:auto;min-width:195px;max-width:100%}
+@media(max-width:580px){
+  .slicerSavedJobFilterRow>label{width:100%;justify-content:flex-end}
+  .slicerSavedJobFilterRow select{flex:1;min-width:0;max-width:260px}
+}
+
 /* Saved slicer entries: keep the 96px G-code preview, metadata, and action
    buttons in one aligned row instead of making each preview a separate column
    that pushes the action buttons below it. */
