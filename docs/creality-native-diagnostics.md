@@ -2431,3 +2431,60 @@ No Creality code is changed, no printer scripts rewritten,
 and no physical tests approved. The new v7.3.1 source is not
 a guarantee that `multicolor_method` is enabled:
 the user's original desktop export itself says `0`.
+
+
+## Shared exact-version official catalogue resolver (21 Nov 2026)
+
+Following the Creality v7.3.0/v7.3.1 purge-macro mismatch,
+MakerVault's official source selection now uses
+`backend/core/slicer_official_release_resolver.py` for all
+**five** supported native catalogue integrations. The browser,
+native inheritance-chain importer and POST import route must
+all match the selected `engine/version` to a **reviewed upstream
+tag**, not the latest/default release or an unrelated slicer's
+profiles. Both GET and POST reject unsupported and explicitly
+blank version selections *before network or database mutations*.
+No URL is assembled from an unapproved version.
+
+| Engine | Reviewed exact version(s) | Upstream ref(s) | Catalogue |
+| --- | --- | --- | --- |
+| OrcaSlicer | 2.4.2, 2.5.0 | v2.4.2, v2.5.0 | OrcaSlicer/OrcaSlicer |
+| Creality Print | 7.3.1 | v7.3.1 | CrealityOfficial/CrealityPrint |
+| Bambu Studio | 02.09.01.70 | v02.09.01.70 | bambulab/BambuStudio |
+| PrusaSlicer | 2.9.6 | version_2.9.6 | prusa3d/PrusaSlicer |
+| Snapmaker Orca | 2.4.1 | v2.4.1 | Snapmaker/OrcaSlicer |
+
+**Only approved, available engine releases are supported.**
+The resolver will not assume every engine release has a matching
+profile tree or compatible format. Adding a new release requires
+reviewing that engine's upstream tag and manifest layout and
+extending the tested mapping. Bambu and Prusa integrations
+currently import only manufacturer model-level records, not
+native printer/process/filament slices.
+
+The official-profile UI displays the exact selected slicer version
+as read-only catalogue release, including for Orca; it no longer
+silently substitutes Orca 2.5.0 for an unsupported engine version.
+The UI refuses to search/import if the slicer release changed
+after opening the modal. API response includes approved versions
+and source ref, and rejects an unsupported release rather than
+returning results from another engine/version.
+
+Orca's two *explicitly approved* releases still work: their
+manifest and dependency fetcher are version-parameterised.
+Creality's K2 v7.3.1 full manufacturer filament-change macro is
+used for **newly imported** records from that release. All
+imported child/parent profiles share owner, engine, exact version
+and source scope, and existing imported 7.3.0 records and saved
+jobs are NOT migrated, overwritten or given new approval.
+The immutable isolated worker and printer/firmware aren't touched.
+
+Regression coverage: `test_slicer_official_release_resolver`
+(new), `test_slicer_official_api` (all-engine GET/POST rejection
+and accurate source-ref reporting),
+`test_slicer_official_chain` (reject cross-release parent
+chain before downloads), and
+`frontend/tests/slicerNovemberFeedback.test.js` (matching UI
+selection/no fallback). Source code committed to draft PR #171.
+**Not yet validated on Debian**: run these tests after app-only
+update; no isolated slicer-worker refresh.
