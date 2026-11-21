@@ -32,7 +32,8 @@ def official_profile_chain(engine, kind, name, subpath, vendor="Creality", versi
         raise OfficialProfileError("Unknown official slicer profile engine.")
     # Every dependency in this chain must be resolved from the same reviewed
     # version. Reject cross-release requests even for a known preset name.
-    version = version or default_catalogue_version(engine)
+    if version is None:
+        version = default_catalogue_version(engine)
     resolve_official_release(engine, version)
     if kind not in {"printer", "filament", "process"}:
         raise OfficialProfileError("Unsupported official profile family.")
