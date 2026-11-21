@@ -538,14 +538,28 @@ def _creality_toolchange_macro_audit(gcode):
         "set_velocity_limit_command_count": 0,
         "tool_select_command_count": 0,
     }
+    # The marker counts alone can appear plausible even when the generated
+    # tool-change sequence has a missing, nested or orphaned flush boundary.
+    # Audit sequencing as *offline evidence*, never printer approval.
+    open_flush = False
+    markers_well_formed = True
+    completed_flush_sections = 0
     for line in gcode.decode("utf-8", errors="replace").splitlines():
         if len(line) > 8192:
             continue
         stripped = line.strip()
         if re.fullmatch(r";\s*FLUSH_START\s*", stripped, re.I):
             counts["flush_start_comment_count"] += 1
+            if open_flush:
+                markers_well_formed = False
+            open_flush = True
         elif re.fullmatch(r";\s*FLUSH_END\s*", stripped, re.I):
             counts["flush_end_comment_count"] += 1
+            if not open_flush:
+                markers_well_formed = False
+            else:
+                completed_flush_sections += 1
+            open_flush = False
         if stripped.startswith(";"):
             continue
         if re.match(r"^M8200(?:\s|$)", stripped, re.I):
@@ -557,6 +571,8 @@ def _creality_toolchange_macro_audit(gcode):
     return {
         "evidence_source": "generated_gcode_exact_marker_counts_not_printer_execution",
         **counts,
+        "flush_markers_balanced": (markers_well_formed and not open_flush),
+        "completed_flush_sections": completed_flush_sections,
         "limitations": (
             "Tool selections alone do not establish execution of the "
             "machine's change_filament_gcode. Marker absence only "
