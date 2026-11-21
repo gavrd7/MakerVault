@@ -44,7 +44,7 @@ test("one reusable engine branding component is used by both selection and insta
 test("engine manager keeps a simple guidance link without the obsolete host deployment box", () => {
   const workbench = fs.readFileSync(path.join(frontend, "src/components/SlicerWorkbench.jsx"), "utf8");
   assert.match(workbench, /MakerVault Slicer guidance/);
-  assert.match(workbench, /docs\\/guide\\/3d-printing\\/slicer\\.md/);
+  assert.ok(workbench.includes("docs/guide/3d-printing/slicer.md"));
   assert.match(workbench, /rel="noopener noreferrer"/);
   assert.doesNotMatch(workbench, /Adding the slicer service to an existing MakerVault installation/);
   assert.doesNotMatch(workbench, /You can save drafts without an installed engine/);
