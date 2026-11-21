@@ -1,3 +1,12 @@
+import test from "node:test";
+import assert from "node:assert/strict";
+import {readFileSync} from "node:fs";
+const read = path => readFileSync(new URL(path, import.meta.url), "utf8");
+const viewport = read("../src/components/SlicerToolpath3D.jsx");
+const preview = read("../src/components/SlicerGcodePreview.jsx");
+const viewer = read("../src/components/GcodeViewerModal.jsx");
+const mobileCss = read("../src/components/slicerPreviewMobile.css");
+
 test("K2 print modal refreshes CFS before checking mapped-print availability", () => {
   const modal = read("../src/components/PrinterStartGcodeModal.jsx");
   assert.match(modal, /load\(connection\.adapter === "creality_local"\)/);
