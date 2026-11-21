@@ -20,7 +20,7 @@ import re
 import shutil
 import sys
 
-ENGINES = frozenset({"orcaslicer", "crealityprint"})
+ENGINES = frozenset({"orcaslicer", "crealityprint", "bambustudio"})
 HEX = re.compile(r"^[0-9a-f]{64}$")
 VERSION = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._+-]{0,79}$")
 LIMIT_BYTES = 1024 * 1024 * 1024
@@ -29,11 +29,11 @@ LIMIT_BYTES = 1024 * 1024 * 1024
 def stage_engines(selections, destination):
     """Stage each independently selected binary into a local ignored directory."""
     if not selections or len(selections) > len(ENGINES):
-        raise ValueError("Select one or two independent engines.")
+        raise ValueError("Select one to three independent engines.")
     requested = {}
     for engine, version, filename, checksum in selections:
         if engine not in ENGINES or engine in requested:
-            raise ValueError("Select unique OrcaSlicer or Creality Print engines.")
+            raise ValueError("Select unique OrcaSlicer, Creality Print or Bambu Studio engines.")
         if not VERSION.fullmatch(version) or not HEX.fullmatch(checksum):
             raise ValueError("Engine version and SHA-256 are required.")
         source = Path(filename)
