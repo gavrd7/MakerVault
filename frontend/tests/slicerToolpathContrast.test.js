@@ -15,7 +15,7 @@ test("outer wall contrast is optional and display-only", () => {
   assert.match(preview, /outerContrast=\{outerContrast\}/);
   assert.match(viewer, /featureFamily\(feature\) === "outer"/);
   assert.match(viewer, /hex\.set\("#ffd166"\)/);
-  assert.match(viewer, /outerContrast, bedSize/);
+  assert.match(viewer, /outerContrast, progressiveMode, bedSize/);
 });
 
 test("outer-wall inspection uses complete current layer lines and restores mode", () => {
