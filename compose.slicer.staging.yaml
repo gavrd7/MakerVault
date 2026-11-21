@@ -21,7 +21,7 @@ services:
 
   slicer-engine-store-init:
     image: busybox:1.37.0
-    command: ["sh", "-c", "chown -R 10002:10002 /engine-store && chmod 0755 /engine-store"]
+    command: ["sh", "-ec", "chown -R 10002:10002 /engine-store; find /engine-store -type d -exec chmod 0755 {} +; find /engine-store -type f -exec chmod a+r {} +"]
     user: "0:0"
     restart: "no"
     cap_drop: [ALL]
