@@ -1789,3 +1789,64 @@ motion, next compare native flush matrix vs multiplier at a fixed verified
 route, with bounded physical purge validation kept separate. Even when
 tower changes, printer-side purge, physical CFS routing and safe purge
 amounts remain unverified.
+
+
+## Confirmed native printer-slot purge retention; controlled flush sensitivity (21 Nov 2026)
+
+The user's completed 12-slice offline diagnostic confirms the remaining
+printer-slot override. `purge_route_tower_printer_marked`, produced from
+exactly the same enabled-route 3MF as the unmarked/process-marked controls,
+retains `purge_in_prime_tower=1` in G-code settings and changes *executable*
+G-code. Tower positive-E moves from **1090.971 to 6011.448 mm**, tower
+footprint from **22.898×22.898 to 47.398×45.398 mm** and tower-tagged
+deposition moves from **3247 to 7477**. G0/G1 and M-command digests both
+change. The wrong-slot `purge_route_tower_marked` is unchanged and emits
+`purge_in_prime_tower=0`. This validates native machine-setting override
+placement; physical purge remains unverified.
+
+New disposable-only native matrix/multiplier sensitivity run retains
+`purge_in_prime_tower=1` in the **last/printer** override slot and marks
+`flush_multiplier`, `flush_volumes_matrix`, and
+`flush_volumes_changed` in the **first/process** override slot. All
+vendor scripts, geometry, printer and filament profiles are preserved.
+
+Three additional native slices:
+- `tower_flush_multiplier_1_0`: directional matrix unchanged,
+  explicit multiplier 1.0.
+- `tower_flush_multiplier_2_0`: same matrix and purge route,
+  multiplier 2.0.
+- `tower_flush_forward_2_0`: same multiplier 2.0 and purge route,
+  only directional T0→T1 increased from fixture raw **140 to 165 mm³**.
+  Fixture 140 mm³ is a conservative builder fallback, *not a proven
+  manufacturer-recommended value*.
+
+The `creality_tower_flush_sensitivity` summary reports sanitised
+emitted settings and source-tagged tower movement/E plus a direct
+comparison against the multiplier-2.0 control. Interpret changes in G-code
+motion or tower deposition as evidence of native response, not numerical
+proof of real flush volume or firmware-side purge. A new regression test
+checks both override slots and byte-preserved non-project ZIP entries.
+
+Expected focused Django tests: **64** (previous 63 + one).
+Expected native Creality offline slices: **15** (previous 12 + three).
+**The new controls have not yet been run on Debian.** Keep the
+worker pinned and do not submit diagnostic G-code to any printer.
+
+```bash
+cd ~/MakerVault-Staging
+git pull --ff-only origin feature/self-hosted-slicer-foundation
+sudo python3 scripts/install_slicer_staging.py update
+sudo docker exec makervault python3 /app/backend/manage.py test \
+  core.tests.test_slicer_printer_compatibility \
+  core.tests.test_slicer_tower_diagnostics \
+  core.tests.test_slicer_flush_adapters \
+  core.tests.test_slicer_creality_project --noinput
+sudo docker exec makervault python3 /app/backend/manage.py \
+  diagnose_slicer_printer_profiles \
+  --engine crealityprint --topology single_nozzle_changer \
+  --printer-profile-id 91b19730-66f5-4b5f-bd7d-b08fbb4ee768 \
+  --process-profile-id 0c90fa89-a193-48b6-ac94-a69792230163 \
+  --filament-profile-id e9c1274c-d95b-4592-87e5-03a645d699aa \
+  --filament-profile-id eb8473e9-f993-4c6e-8cc4-fb357e3ae782 \
+  --native --test-flush
+```
