@@ -394,6 +394,10 @@ def consolidate_slicer():
         raise ValueError("Set up the existing installer token before consolidation.")
     args = _compose_args()
     _run(args + ["config", "--quiet"])
+    # Build first: refuse unverified binaries or broken Dockerfiles BEFORE
+    # stopping either of the currently healthy legacy services.
+    print("Prebuilding the checksum-verified combined image...")
+    _run(args + ["build", "slicer-worker"])
     # Exact old Compose service/container identifier. Never delete unnamed
     # containers or volume data and never run a project-wide prune/down -v.
     old = "makervault-slicer-engine-installer-1"
@@ -405,7 +409,7 @@ def consolidate_slicer():
     print("Stopping the old worker before changing engine volume permissions...")
     _run(args + ["stop", "slicer-worker"])
     print("Starting one hardened combined slicer container...")
-    _run(args + ["up", "-d", "--build", "slicer-worker"])
+    _run(args + ["up", "-d", "--no-build", "--wait", "--wait-timeout", "180", "slicer-worker"])
     _run(args + ["ps", "slicer-worker"])
     print("After verifying the new container is healthy, remove the stopped")
     print("legacy installer with: sudo docker rm " + old)
