@@ -81,6 +81,40 @@ def _approved_versions(store, engine):
     return sorted(results, key=lambda row: row["version"], reverse=True)
 
 
+def preserve_active_identities(store):
+    """Record SHA-checked active versions before a later update obscures them.
+
+    Older installations predate the per-version identity file. Preserve each
+    verified active selection once, so multiple upgrades do not erase the
+    ability to return to those original binaries.
+    """
+    for engine, row in _manifest(store)["engines"].items():
+        if engine not in SUPPORTED or not isinstance(row, dict):
+            continue
+        version = row.get("version")
+        if not isinstance(version, str) or not VERSION_RE.fullmatch(version):
+            raise ValueError("Active engine version is invalid.")
+        base = _engine_root(store, engine) / version
+        identity = base / IDENTITY
+        if identity.exists() or identity.is_symlink():
+            if identity.is_symlink() or not identity.is_file():
+                raise ValueError("Unsafe existing engine identity.")
+            continue
+        binary = Path(row.get("binary", ""))
+        digest = row.get("binary_sha256")
+        if (not binary.is_absolute() or not isinstance(digest, str)
+                or not HEX.fullmatch(digest) or not binary.is_file()):
+            raise ValueError("Active engine identity is incomplete.")
+        if (base.is_symlink() or not binary.resolve(strict=True).is_relative_to(base.resolve(strict=True))
+                or (binary.is_symlink() and binary.name != "AppRun")
+                or _sha256(binary) != digest):
+            raise ValueError("Active engine identity no longer matches the binary.")
+        identity.write_text(json.dumps({
+            "engine": engine, "version": version, "binary": str(binary),
+            "binary_sha256": digest,
+        }, separators=(",", ":")), encoding="utf-8")
+
+
 def installed_versions(store):
     return {engine: _approved_versions(store, engine) for engine in sorted(SUPPORTED)}
 
@@ -114,6 +148,7 @@ def activate_installed(store, engine, version):
         raise ValueError("Installed version no longer matches its approved SHA-256.")
     if current["engines"].get(engine) == {"binary": str(binary), "version": version, "binary_sha256": digest}:
         raise ValueError("This engine version is already active.")
+    preserve_active_identities(store)
     previous = Path(store) / "previous.json"
     if current["engines"]:
         previous.write_text(json.dumps(current, separators=(",", ":")), encoding="utf-8")
