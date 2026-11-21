@@ -515,12 +515,72 @@ def _mark_creality_flush_preset_overrides(project, settings, *, machine, process
     project["different_settings_to_system"] = updated
 
 
+def _preserve_creality_machine_multicolor_capability(project, machine, *,
+                                                  require_verified=False):
+    """Preserve explicitly selected *machine* capability through the 3MF CLI.
+
+    Creality's GUI edits this property on its machine preset. A default,
+    missing, inferred-from-printer-name, or experimental value is not an
+    approved source. The toolchange script must remain vendor-authored.
+    """
+    if type(require_verified) is not bool:
+        raise SlicerProfileError("Invalid Creality machine capability validation mode.")
+    selected = machine.get("multicolor_method")
+    if selected is None:
+        if require_verified:
+            raise SlicerProfileError(
+                "Creality multicolour requires a selected native machine preset "
+                "with explicitly enabled multicolor_method; the original K2 "
+                "profile has no such capability. Do not print this slice.")
+        return False
+    if type(selected) is bool:
+        enabled = selected
+    elif type(selected) is str and selected in {"0", "1"}:
+        enabled = selected == "1"
+    elif type(selected) is int and selected in (0, 1):
+        enabled = selected == 1
+    else:
+        raise SlicerProfileError("Invalid native Creality multicolor_method machine value.")
+    if require_verified and not enabled:
+        raise SlicerProfileError(
+            "Selected Creality machine preset disables manufacturer multicolour purge.")
+    # Never synthesize a script or a capability. For a printer-ready
+    # validation demand, require the manufacturer's known gating structure.
+    script = machine.get("change_filament_gcode")
+    if require_verified and (
+            not isinstance(script, str)
+            or not script.lstrip().startswith("{if multicolor_method}")
+            or "flush_length_1" not in script
+            or "M8200" not in script):
+        raise SlicerProfileError(
+            "Selected Creality machine preset has no verified native "
+            "multicolour purge script; printer-ready slicing is blocked.")
+    rows = project.get("different_settings_to_system")
+    palette = project.get("filament_settings_id")
+    if (not isinstance(palette, list) or len(palette) != 4
+            or not isinstance(rows, list) or len(rows) != len(palette) + 2
+            or any(not isinstance(row, str) or len(row) > 8192 for row in rows)):
+        raise SlicerProfileError("Invalid Creality native printer capability overrides.")
+    marker = "multicolor_method"
+    existing = [key for key in rows[-1].split(";") if key]
+    if any(not re.fullmatch(r"[a-z][a-z0-9_]{0,79}", key) for key in existing):
+        raise SlicerProfileError("Invalid Creality printer setting override key.")
+    if marker not in existing:
+        existing.append(marker)
+    rows = list(rows)
+    rows[-1] = ";".join(existing)
+    project["different_settings_to_system"] = rows
+    project[marker] = "1" if enabled else "0"
+    return enabled
+
+
 def build_creality_project_candidate(plate, *, printer, process, filaments,
                                     version="7.3.1", prime_tower=None,
                                     tool_colours=None, flush_settings=None,
                                     tool_bindings=None, layer_ranges=None,
                                     bed_width=260, bed_depth=260,
-                                    preserve_native_flush_overrides=True):
+                                    preserve_native_flush_overrides=True,
+                                    require_verified_multicolor_purge=False):
     """Create a self-contained *candidate* Creality project 3MF.
 
     Deliberately not a verified CLI route. Project settings must first pass
@@ -528,6 +588,8 @@ def build_creality_project_candidate(plate, *, printer, process, filaments,
     """
     if type(preserve_native_flush_overrides) is not bool:
         raise SlicerProfileError("Invalid native Creality flush override preservation mode.")
+    if type(require_verified_multicolor_purge) is not bool:
+        raise SlicerProfileError("Invalid native Creality machine purge requirement.")
     if not isinstance(plate, bytes) or len(plate) > _MAX_PROJECT:
         raise SlicerProfileError("Invalid Creality plate archive.")
     if not isinstance(filaments, (list, tuple)) or len(filaments) != 2:
@@ -606,6 +668,10 @@ def build_creality_project_candidate(plate, *, printer, process, filaments,
     # JSON or printer/filament G-code settings.
     _mark_creality_support_overrides(
         project, ("enable_support", "support_type"))
+    # Preserve only the selected machine preset's explicit capability. Never
+    # infer it from a K2 name, CFS material count, or the diagnostic probe.
+    _preserve_creality_machine_multicolor_capability(
+        project, machine, require_verified=require_verified_multicolor_purge)
     if flush_settings is not None:
         _apply_creality_flush_settings(project, flush_settings, tool_bindings)
         # The ordinary builder retains native values through the CLI preset
