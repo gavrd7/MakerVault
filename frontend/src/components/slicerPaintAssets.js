@@ -1,7 +1,7 @@
 /** Private mask assets: the STL remains its own owned mesh asset.
  * Large brush polygons are saved once, never repeated in slice job JSON.
  */
-import {apiFetch} from "../api";
+import {apiFetch} from "../api.js";
 
 export const PAINT_FIELDS=[
   "colour_paint","support_paint","seam_paint",
