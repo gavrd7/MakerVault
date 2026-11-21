@@ -72,7 +72,6 @@ def _reviewed_orca_release():
     except (OSError, ValueError, urllib.error.URLError):
         return None
     if (not isinstance(metadata, dict) or metadata.get("draft")
-            or metadata.get("prerelease")
             or metadata.get("tag_name") != REVIEWED_ORCA_TAG):
         return None
     assets = metadata.get("assets", [])
@@ -95,7 +94,7 @@ def _reviewed_orca_release():
         "bundle_url": REVIEWED_ORCA_DOWNLOAD_URL,
         "binary_sha256": REVIEWED_ORCA_SHA256,
         "architecture": "linux/amd64",
-        "notes": "MakerVault-reviewed OrcaSlicer 2.5.0 (Creality K2 30 mm compatibility)",
+        "notes": "MakerVault K2-compatible source build (30 mm cut retraction; reviewed)",
         "asset_size": asset["size"],
     }
 MAX_BYTES = 650 * 1024 * 1024
