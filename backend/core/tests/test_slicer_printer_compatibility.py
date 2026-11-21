@@ -15,6 +15,7 @@ from core.management.commands.diagnose_slicer_printer_profiles import (
     _creality_emitted_setting_audit, _creality_emitted_comparison,
     _creality_prime_volume_control, _creality_control_project_with_extra,
     _creality_mark_native_process_options, _creality_marked_result_comparison,
+    _creality_mark_native_printer_purge,
 )
 from core.slicer_plate_3mf import build_plate_3mf, NS
 
@@ -375,6 +376,7 @@ class PrinterCompatibilityFixtureTests(SimpleTestCase):
             "prime_volume_marked": changed,
             "purge_route_tower": original,
             "purge_route_tower_marked": original,
+            "purge_route_tower_printer_marked": original,
             "multiplier_1_0": original,
             "multiplier_1_0_marked": original,
             "multiplier_2_0": original,
@@ -384,7 +386,8 @@ class PrinterCompatibilityFixtureTests(SimpleTestCase):
                 ("multiplier_1_0_marked", "multiplier_1_0"),
                 ("multiplier_2_0_marked", "multiplier_2_0"),
                 ("prime_volume_marked", "prime_volume_positive_control"),
-                ("purge_route_tower_marked", "purge_route_tower")):
+                ("purge_route_tower_marked", "purge_route_tower"),
+                ("purge_route_tower_printer_marked", "purge_route_tower")):
             comparison = _creality_marked_result_comparison(controls, marked, parent)
             if marked == "prime_volume_marked":
                 self.assertTrue(comparison["motion_changed_vs_unmarked"])
@@ -399,6 +402,48 @@ class PrinterCompatibilityFixtureTests(SimpleTestCase):
                 controls, "prime_volume_marked", "prime_volume")
         with self.assertRaises(ValueError):
             _creality_marked_result_comparison(controls, "unknown", "multiplier_1_0")
+
+    def test_creality_printer_purge_override_uses_last_vector_slot_only(self):
+        project = {
+            "filament_settings_id": ["A", "B", "A", "B"],
+            "different_settings_to_system": [
+                "prime_volume", "f1", "f2", "f3", "f4", "nozzle_diameter"],
+            "purge_in_prime_tower": "1",
+            "flush_multiplier": "2.0",
+            "change_filament_gcode": "untouched vendor macro",
+        }
+        archive = io.BytesIO()
+        with zipfile.ZipFile(archive, "w") as z:
+            z.writestr("Metadata/project_settings.config", json.dumps(project))
+            for name in ("3D/3dmodel.model", "Metadata/model_settings.config",
+                         "Metadata/creality.config", "[Content_Types].xml", "_rels/.rels"):
+                z.writestr(name, b"unchanged fixture")
+        original = archive.getvalue()
+        altered = _creality_mark_native_printer_purge(original)
+        before, after, keys = _creality_control_project_with_extra(
+            original, altered, {"different_settings_to_system"})
+        self.assertEqual(keys, {"different_settings_to_system"})
+        self.assertEqual(after["different_settings_to_system"][:-1],
+                         project["different_settings_to_system"][:-1])
+        self.assertEqual(after["different_settings_to_system"][-1],
+                         "nozzle_diameter;purge_in_prime_tower")
+        self.assertEqual(after["purge_in_prime_tower"], "1")
+        self.assertEqual(after["change_filament_gcode"], "untouched vendor macro")
+        self.assertEqual(after["flush_multiplier"], "2.0")
+        self.assertEqual(altered, _creality_mark_native_printer_purge(altered))
+        with zipfile.ZipFile(io.BytesIO(original)) as z0, zipfile.ZipFile(io.BytesIO(altered)) as z1:
+            for name in z0.namelist():
+                if name != "Metadata/project_settings.config":
+                    self.assertEqual(z0.read(name), z1.read(name))
+        project["purge_in_prime_tower"] = "0"
+        invalid = io.BytesIO()
+        with zipfile.ZipFile(invalid, "w") as z:
+            z.writestr("Metadata/project_settings.config", json.dumps(project))
+            for name in ("3D/3dmodel.model", "Metadata/model_settings.config",
+                         "Metadata/creality.config", "[Content_Types].xml", "_rels/.rels"):
+                z.writestr(name, b"unchanged fixture")
+        with self.assertRaises(ValueError):
+            _creality_mark_native_printer_purge(invalid.getvalue())
 
     def test_creality_print_override_markers_preserve_numeric_options_and_macros(self):
         values = {
