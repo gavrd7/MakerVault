@@ -133,8 +133,7 @@ def engine_operations(request):
                     return JsonResponse({"error": "Invalid rollback request."}, status=400)
                 response = installer_request("POST", "/rollback")
             elif action in {"activate", "uninstall"}:
-                if (engine not in {"orcaslicer", "crealityprint"}
-                        or digest != "0" * 64
+                if (digest != "0" * 64
                         or (action == "uninstall" and version != "all")):
                     return JsonResponse({"error": "Invalid installed-engine operation."}, status=400)
                 response = installer_request("POST", "/" + action, {
