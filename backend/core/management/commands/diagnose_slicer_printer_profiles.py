@@ -8,6 +8,7 @@ import hashlib
 import io
 import json
 import math
+import re
 import uuid
 import zipfile
 from types import SimpleNamespace
@@ -38,6 +39,20 @@ from core.slicer_tower_diagnostics import tower_deposition_metrics
 SUPPORTED_TOPOLOGIES = ("single_nozzle_changer", "independent_toolheads",
                         "toolchanger", "idex", "manual_filament_change",
                         "single_material", "unknown")
+
+
+def _creality_official_source_release(scope, runtime_version):
+    """Read-only release provenance; no network, DB changes, or trust upgrade."""
+    prefix = "CrealityOfficial/CrealityPrint@v"
+    if not isinstance(scope, str) or not scope.startswith(prefix):
+        return {"kind": "manual_or_other", "source_release": None,
+                "matches_engine": None}
+    version = scope[len(prefix):].split("/", 1)[0]
+    if not version or not re.fullmatch(r"\\d+\\.\\d+\\.\\d+", version):
+        return {"kind": "unrecognised_official", "source_release": None,
+                "matches_engine": False}
+    return {"kind": "official_creality", "source_release": version,
+            "matches_engine": version == runtime_version}
 
 
 def _fixture_items(count, width, depth):
@@ -838,6 +853,8 @@ class Command(BaseCommand):
             self.stdout.write(json.dumps({
                 **summary,
                 "profile_id": str(printer.pk),
+                "official_source_release": _creality_official_source_release(
+                    printer.source_scope, version),
                 "native_run": "not_requested",
                 "source_multicolor_method": (
                     "not_explicit" if selected_method is None
