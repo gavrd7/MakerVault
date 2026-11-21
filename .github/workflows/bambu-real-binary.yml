@@ -1,0 +1,50 @@
+name: Bambu Studio pinned Linux AppImage candidate
+
+on:
+  pull_request:
+    paths:
+      - 'scripts/prepare_bambu_staging.py'
+      - 'slicer_worker/bambu_runner.py'
+      - 'slicer_worker/stage_engines.py'
+      - 'slicer_worker/probe.py'
+      - 'slicer_worker/tests/test_bambu*.py'
+      - 'slicer_worker/Dockerfile.bundle'
+      - '.github/workflows/bambu-real-binary.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify-pinned-bambu-asset:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check Bambu candidate unit tests
+        run: python3 -m unittest discover -s slicer_worker/tests -p 'test_bambu*.py' -v
+      - name: Download and verify official Bambu Studio AppImage
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 scripts/prepare_bambu_staging.py
+      - name: Verify the exact pinned executable
+        run: |
+          echo '668dabb1be53c758189ed6bc89935285dea5e0af46216546b1bafd6882e9aff0  slicer-engine-assets/bambustudio.AppImage' | sha256sum --check --status
+          test -f slicer-engine-assets/manifest.json
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          doc = json.loads(Path('slicer-engine-assets/manifest.json').read_text())
+          assert doc.get('fixture_approved') is False
+          entry = doc['engines']['bambustudio']
+          assert entry['version'] == '02.09.01.70'
+          assert entry['binary_sha256'] == '668dabb1be53c758189ed6bc89935285dea5e0af46216546b1bafd6882e9aff0'
+          PY
+      - name: Extract native AppRun and resources without enabling worker
+        run: |
+          mkdir -p /tmp/bambu-appimage-acceptance
+          cd /tmp/bambu-appimage-acceptance
+          "$GITHUB_WORKSPACE/slicer-engine-assets/bambustudio.AppImage" --appimage-extract >/dev/null
+          test -x squashfs-root/AppRun
+          test -d squashfs-root/usr
+          echo 'Official pinned Bambu Studio AppImage verified and extracted; no engine was enabled or print started.'
