@@ -57,3 +57,28 @@ class CrealityReleaseGateTests(SimpleTestCase):
         )
         with self.assertRaises(CrealityCfsGateError):
             audit_creality_multicolor_gcode(gcode)
+
+    def test_two_material_encoder_checks_native_nozzles_not_printer_names(self):
+        from types import SimpleNamespace
+        from unittest.mock import patch
+        from core.slicer_multimaterial_execution import (
+            _require_creality_two_material_single_nozzle)
+        from core.slicer_material_routing import MaterialRoutingError
+        job = SimpleNamespace(printer_profile=SimpleNamespace(name="any printer"))
+        with patch("core.slicer_native_resolution.resolved_native_profile",
+                   return_value=json.dumps({
+                       "name": "Non-K2 native single-nozzle machine",
+                       "nozzle_diameter": ["0.4"]}).encode()):
+            self.assertIsNone(_require_creality_two_material_single_nozzle(
+                job, "single_nozzle_changer"))
+            with self.assertRaises(MaterialRoutingError):
+                _require_creality_two_material_single_nozzle(
+                    job, "independent_toolheads")
+        for nozzle_set in (["0.4", "0.4"], [], ["invalid"]):
+            with self.subTest(nozzle_set=nozzle_set), patch(
+                    "core.slicer_native_resolution.resolved_native_profile",
+                    return_value=json.dumps({
+                        "nozzle_diameter": nozzle_set}).encode()):
+                with self.assertRaises(MaterialRoutingError):
+                    _require_creality_two_material_single_nozzle(
+                        job, "single_nozzle_changer")
