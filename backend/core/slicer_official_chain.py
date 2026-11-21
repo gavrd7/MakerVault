@@ -6,7 +6,7 @@ Returned parents are ordered base-first and remain unverified candidates.
 """
 import json
 
-from .slicer_official_release_resolver import resolve_official_release
+from .slicer_official_release_resolver import resolve_official_release, default_catalogue_version
 
 from .slicer_official_profiles import (
     OfficialProfileError, _entries as orca_entries,
@@ -26,12 +26,13 @@ MAX_CHAIN = 12
 MAX_CHAIN_BYTES = 4 * 1024 * 1024
 
 
-def official_profile_chain(engine, kind, name, subpath, vendor="Creality", version="2.4.2"):
+def official_profile_chain(engine, kind, name, subpath, vendor="Creality", version=None):
     """Return [(native_name, pinned_subpath, bytes)] ordered parent-first."""
     if engine not in {"orcaslicer", "crealityprint", "snapmakerorca"}:
         raise OfficialProfileError("Unknown official slicer profile engine.")
     # Every dependency in this chain must be resolved from the same reviewed
     # version. Reject cross-release requests even for a known preset name.
+    version = version or default_catalogue_version(engine)
     resolve_official_release(engine, version)
     if kind not in {"printer", "filament", "process"}:
         raise OfficialProfileError("Unsupported official profile family.")
