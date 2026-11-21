@@ -26,11 +26,13 @@ from xml.etree import ElementTree as ET
 from .runner import MAX_PROFILE_BYTES, MAX_GCODE_BYTES, WorkerError
 from .orca_runner import run_orca
 from .creality_runner import run_creality
+from .bambu_runner import run_bambu
 from .three_mf_validation import validate_worker_3mf
 from .material_gcode_audit import verify_multi_material_output, expected_native_tools, verify_two_object_tool_regions, verify_k2_fixture_purge_tower_evidence
 from .k2_cfs_acceptance import k2_offline_profile_evidence
 
-ENGINES = {"orcaslicer": run_orca, "crealityprint": run_creality}
+ENGINES = {"orcaslicer": run_orca, "crealityprint": run_creality,
+           "bambustudio": run_bambu}
 GCODE_EXTRUSION = re.compile(
     rb"(?m)^\s*G0?1\s+[^\r\n]*\bE[-+]?(?:\d+(?:\.\d*)?|\.\d+)(?:\s|$)", re.I
 )
@@ -180,7 +182,11 @@ def run_probe(*, engine, version, binary, printer, filament, process, timeout=12
     No mock success, no automatic deployment and no stored G-code artifact.
     """
     if engine not in ENGINES:
-        raise WorkerError("Only OrcaSlicer and Creality Print are supported by this probe.")
+        raise WorkerError("Only approved candidate engine identifiers are supported by this probe.")
+    if engine == "bambustudio" and (version != "02.09.01.70" or expected_objects != 1
+            or expected_islands != 1 or model is not None or second_filament is not None
+            or audit_changeovers or verify_object_effects):
+        raise WorkerError("Bambu probe requires pinned v02.09.01.70, a single STL and single filament.")
     if not isinstance(version, str) or not 1 <= len(version) <= 80:
         raise WorkerError("A pinned engine version is required.")
     if not isinstance(timeout, int) or not 1 <= timeout <= 900:
@@ -259,7 +265,7 @@ def run_probe(*, engine, version, binary, printer, filament, process, timeout=12
                            for key, data in inputs.items()},
         **output,
         **({"k2_profile_evidence": k2_profile} if k2_profile is not None else {}),
-        "note": "Evidence only; no engine was installed, approved or enabled in MakerVault.",
+        "note": "Offline candidate acceptance evidence only; no engine was approved, worker-enabled or printer-dispatched.",
     }
 
 
