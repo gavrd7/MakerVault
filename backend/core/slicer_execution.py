@@ -842,9 +842,13 @@ def process_queued_job(job_id):
             profiles[1] = apply_creality_plate(
                 profiles[2], material_result["filament_profiles"][0],
                 job.plate, job.printer_profile)[1]
+        selected_creality_multicolor = False
         if material_result is not None and job.engine == "crealityprint":
             stage = "building self-contained Creality native 3MF project"
             from .slicer_creality_project import build_creality_project_candidate
+            from .slicer_creality_release_gate import selected_creality_multicolor_capability
+            selected_creality_multicolor = selected_creality_multicolor_capability(
+                profiles[0])
             width, depth = trusted_plate_dimensions(job.printer_profile)
             model = build_creality_project_candidate(
                 material_result["project_geometry"],
@@ -856,7 +860,8 @@ def process_queued_job(job_id):
                 flush_settings=(job.settings or {}).get("flush_settings"),
                 tool_bindings=material_result["tool_bindings"],
                 layer_ranges=material_result.get("layer_ranges"),
-                bed_width=width, bed_depth=depth)
+                bed_width=width, bed_depth=depth,
+                require_verified_multicolor_purge=selected_creality_multicolor)
             model_format = "3mf"
         if model_format == "stl" and job.input_asset.sha256 and hashlib.sha256(model).hexdigest() != job.input_asset.sha256:
             raise SlicerExecutionError("Model contents changed since the job was prepared.")
@@ -881,6 +886,18 @@ def process_queued_job(job_id):
                 raise SlicerExecutionError(
                     "Multi-colour test G-code did not pass the native tool/extrusion audit."
                 ) from exc
+        if material_result is not None and job.engine == "crealityprint" and selected_creality_multicolor:
+            # An operator-selected native machine gate may be accepted only
+            # when the real offline worker output contains balanced vendor
+            # flushing. A failing candidate must never be stored as a
+            # successful CFS slice; this is NOT printer dispatch approval.
+            stage = "verifying native Creality multicolour purge evidence"
+            from .slicer_creality_release_gate import (
+                audit_creality_multicolor_gcode, CrealityCfsGateError)
+            try:
+                audit_creality_multicolor_gcode(output)
+            except CrealityCfsGateError as exc:
+                raise SlicerExecutionError(str(exc)) from exc
         if material_result is not None and job.engine == "crealityprint":
             # Multi-STL auto-arrangement is native and cannot be inferred from
             # MakerVault's original plate coordinates. At minimum, prevent
@@ -970,6 +987,8 @@ def process_queued_job(job_id):
             diagnostic = str(exc)[:180]
         elif stage == "auditing native variable layer height" and isinstance(exc, SlicerExecutionError):
             diagnostic = str(exc)[:180]
+        elif stage == "verifying native Creality multicolour purge evidence" and isinstance(exc, SlicerExecutionError):
+            diagnostic = str(exc)[:180]
         elif stage == "checking Creality multi-material extrusion bounds" and isinstance(exc, SlicerExecutionError):
             # Server-authored, bounded diagnostic only; no G-code or profile
             # contents are returned to the frontend.
@@ -988,6 +1007,8 @@ def process_queued_job(job_id):
                     if diagnostic and stage == "checking native printer/process compatibility"
                     else ("Variable layer test failed: " + diagnostic)
                     if diagnostic and stage == "auditing native variable layer height"
+                    else ("Creality native CFS validation: " + diagnostic)
+                    if diagnostic and stage == "verifying native Creality multicolour purge evidence"
                     else ("Creality multi-material bounds check: " + diagnostic)
                     if diagnostic and stage == "checking Creality multi-material extrusion bounds"
                     else "Slicing failed during " + stage +
