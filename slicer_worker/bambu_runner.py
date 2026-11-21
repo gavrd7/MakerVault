@@ -15,6 +15,7 @@ from pathlib import Path
 from .runner import MAX_GCODE_BYTES, MAX_MODEL_BYTES, MAX_PROFILE_BYTES, DEFAULT_TIMEOUT_SECONDS
 from .runner import WorkerError, _regular_file, _output_path
 from .orca_runner import _native_json
+from .headless_env import slicing_environment
 from .stl_validation import StlValidationError, validate_stl
 from .three_mf_validation import validate_worker_3mf
 
@@ -146,9 +147,11 @@ def run_bambu(binary: Path, workdir: Path, *, timeout_seconds: int = DEFAULT_TIM
     try:
         proc = subprocess.Popen(
             command, cwd=str(workdir),
-            env={"HOME": str(workdir), "TMPDIR": str(workdir),
-                 "LANG": "C.UTF-8", "LC_ALL": "C.UTF-8",
-                 "PATH": "/usr/bin:/bin"},
+            env={**slicing_environment(workdir),
+                 # Bambu 2.9.x can dereference a missing SSL_CERT_FILE even
+                 # in headless/offline CLI startup. This is a fixed public
+                 # system CA path, not a network or credential setting.
+                 "SSL_CERT_FILE": "/etc/ssl/certs/ca-certificates.crt"},
             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
             start_new_session=True,
         )
