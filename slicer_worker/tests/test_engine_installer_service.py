@@ -57,38 +57,89 @@ class InstallerTests(unittest.TestCase):
              patch.object(installer, "_request",
                           return_value=io.BytesIO(json.dumps(release()).encode())) as request:
             self.assertEqual(installer.release_catalogue(), installer.release_catalogue())
-            self.assertEqual(request.call_count, 3)
+            self.assertEqual(request.call_count, 4)
 
-    def test_orca_releases_are_only_offered_with_exact_pinned_sha(self):
+    def test_only_source_patched_orca_250_is_offered_for_k2(self):
         from io import BytesIO
+
         def upstream(url, **kwargs):
-            if "/releases/tags/v2." in url:
-                version = url.rsplit("v", 1)[-1]
-                digest = installer.APPROVED_ORCA[version]
-                asset = f"OrcaSlicer_Linux_AppImage_Ubuntu2404_V{version}.AppImage"
-                release = {"tag_name": "v" + version, "draft": False,
-                           "prerelease": False, "assets": [{
-                               "name": asset, "digest": "sha256:" + digest,
-                               "size": 180000000,
-                               "browser_download_url":
-                                   f"https://github.com/OrcaSlicer/OrcaSlicer/releases/download/v{version}/{asset}",
-                           }]}
-                return BytesIO(json.dumps(release).encode())
-            return BytesIO(json.dumps([]).encode())
-        with patch.object(installer.platform, "machine", return_value="x86_64"), \
+            if url == installer.REVIEWED_ORCA_RELEASE_URL:
+                return BytesIO(json.dumps({
+                    "tag_name": installer.REVIEWED_ORCA_TAG,
+                    "draft": False, "prerelease": False,
+                    "assets": [{
+                        "name": installer.REVIEWED_ORCA_ASSET,
+                        "digest": "sha256:" + installer.REVIEWED_ORCA_SHA256,
+                        "size": 227926146,
+                        "browser_download_url": installer.REVIEWED_ORCA_DOWNLOAD_URL,
+                    }],
+                }).encode())
+            if url.endswith("/releases/tags/v2.4.2"):
+                asset = "OrcaSlicer_Linux_AppImage_Ubuntu2404_V2.4.2.AppImage"
+                return BytesIO(json.dumps({
+                    "tag_name": "v2.4.2", "draft": False, "prerelease": False,
+                    "assets": [{
+                        "name": asset, "digest": "sha256:" + installer.APPROVED_ORCA["2.4.2"],
+                        "size": 180000000,
+                        "browser_download_url":
+                            "https://github.com/OrcaSlicer/OrcaSlicer/releases/download/v2.4.2/" + asset,
+                    }],
+                }).encode())
+            return BytesIO(json.dumps(release()).encode())
+
+        with patch.object(installer.platform, "machine", return_value="x86_64"), \\
              patch.object(installer, "_request", side_effect=upstream):
             releases = installer.release_catalogue()
-        self.assertEqual({x["version"] for x in releases if x["engine"] == "orcaslicer"},
-                         {"2.4.2", "2.5.0"})
-        installer.RELEASE_CACHE["items"] = []
-        def altered(url, **kwargs):
-            data = json.loads(upstream(url).read())
-            if isinstance(data, dict):
-                data["assets"][0]["digest"] = "sha256:" + "0" * 64
-            return BytesIO(json.dumps(data).encode())
-        with patch.object(installer.platform, "machine", return_value="x86_64"), \
-             patch.object(installer, "_request", side_effect=altered):
-            self.assertEqual(installer.release_catalogue(), [])
+        orca = {row["version"]: row for row in releases if row["engine"] == "orcaslicer"}
+        self.assertEqual(set(orca), {"2.4.2", "2.5.0"})
+        self.assertEqual(orca["2.5.0"]["bundle_sha256"], installer.EXPECTED_ORCA_SHA)
+        self.assertEqual(orca["2.5.0"]["bundle_url"], installer.REVIEWED_ORCA_DOWNLOAD_URL)
+        self.assertNotEqual(orca["2.5.0"]["bundle_sha256"],
+                            "d13eb0a9cd618ed080ab6b82c64c0a60c4501aac91e88d5ac2c3b526fb141a7c")
+        self.assertEqual(orca["2.4.2"]["bundle_sha256"], installer.APPROVED_ORCA["2.4.2"])
+
+    def test_absent_or_tampered_reviewed_release_never_falls_back_to_stock_orca_250(self):
+        from io import BytesIO
+
+        for variant in ("not-published", "wrong-checksum", "wrong-url", "draft"):
+            with self.subTest(variant=variant):
+                installer.RELEASE_CACHE["items"] = []
+                metadata = {
+                    "tag_name": installer.REVIEWED_ORCA_TAG,
+                    "draft": variant == "draft",
+                    "assets": [{
+                        "name": installer.REVIEWED_ORCA_ASSET,
+                        "digest": "sha256:" + (
+                            "0" * 64 if variant == "wrong-checksum"
+                            else installer.REVIEWED_ORCA_SHA256
+                        ),
+                        "browser_download_url": (
+                            "https://example.invalid/substituted.AppImage"
+                            if variant == "wrong-url"
+                            else installer.REVIEWED_ORCA_DOWNLOAD_URL
+                        ),
+                        "size": 227926146,
+                    }],
+                }
+                def fetch(url, **kwargs):
+                    if url == installer.REVIEWED_ORCA_RELEASE_URL:
+                        if variant == "not-published":
+                            raise OSError("GitHub release not published")
+                        return BytesIO(json.dumps(metadata).encode())
+                    if "/releases/tags/v2.4.2" in url:
+                        return BytesIO(json.dumps({"assets": []}).encode())
+                    return BytesIO(json.dumps(release()).encode())
+                with patch.object(installer.platform, "machine", return_value="x86_64"), \\
+                     patch.object(installer, "_request", side_effect=fetch):
+                    items = installer.release_catalogue()
+                self.assertFalse(any(row["engine"] == "orcaslicer"
+                                     and row["version"] == "2.5.0" for row in items))
+
+    def test_incorrect_orca_250_binary_is_rejected_before_extraction(self):
+        from inspect import getsource
+        source = getsource(installer._install)
+        self.assertIn('release.get("bundle_sha256") != REVIEWED_ORCA_SHA256', source)
+        self.assertIn('if _sha256(image) != REVIEWED_ORCA_SHA256', source)
 
     def test_creality_cli_probe_uses_explicit_cli_switch(self):
         # Upstream requires --cli to avoid launching the wxWidgets GUI.
