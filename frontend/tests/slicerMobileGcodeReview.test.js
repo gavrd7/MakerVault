@@ -5,6 +5,7 @@ const read = path => readFileSync(new URL(path, import.meta.url), "utf8");
 const viewport = read("../src/components/SlicerToolpath3D.jsx");
 const preview = read("../src/components/SlicerGcodePreview.jsx");
 const viewer = read("../src/components/GcodeViewerModal.jsx");
+const workbench = read("../src/components/SlicerWorkbench.jsx");
 const mobileCss = read("../src/components/slicerPreviewMobile.css");
 
 test("K2 print modal refreshes CFS before checking mapped-print availability", () => {
