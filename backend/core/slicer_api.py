@@ -1831,12 +1831,34 @@ def delete_profile(request, profile_id):
             ". Delete or replace its dependent profiles first; the parent was preserved.",
             409,
         )
-    try:
-        profile.delete()
-    except ProtectedError:
-        return _error("This profile is referenced by saved slicing jobs and cannot be removed.", 409)
+    # Completed G-code does not need the original profile row forever.
+    # SliceJob stores the original native preset names and engine version;
+    # leave its completed result, output asset and history untouched.
+    # Draft/queued/running/failed jobs remain protected until separately
+    # resolved because they may be reopened or retried.
+    with transaction.atomic():
+        refs = SliceJob.objects.select_for_update().filter(owner=request.user)
+        from django.db.models import Q
+        linked = refs.filter(
+            Q(printer_profile_id=profile.pk) |
+            Q(filament_profile_id=profile.pk) |
+            Q(process_profile_id=profile.pk))
+        if linked.exclude(status="completed").exists():
+            return _error(
+                "This profile is still required by an unsliced, active or retryable "
+                "slicing job. Delete or reassign those entries first.", 409)
+        linked.filter(status="completed", printer_profile_id=profile.pk).update(printer_profile=None)
+        linked.filter(status="completed", filament_profile_id=profile.pk).update(filament_profile=None)
+        linked.filter(status="completed", process_profile_id=profile.pk).update(process_profile=None)
+        try:
+            profile.delete()
+        except ProtectedError:
+            return _error(
+                "This profile is referenced by another protected record "
+                "and cannot be removed.", 409)
     return JsonResponse({"removed": True, "profile_id": str(profile_id),
-                         "source_file_preserved": True})
+                         "source_file_preserved": True,
+                         "completed_history_preserved": True})
 
 
 @login_required
