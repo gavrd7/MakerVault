@@ -65,3 +65,16 @@ class BambuStagingTests(TestCase):
         link.symlink_to(target, target_is_directory=True)
         with self.assertRaisesRegex(ValueError, "symlinked"):
             staging.fetch_candidate(link)
+
+    def test_real_bambu_probe_rejects_unverified_version_and_multimaterial(self):
+        from slicer_worker.probe import run_probe
+        from slicer_worker.runner import WorkerError
+        common = dict(engine="bambustudio", version=staging.VERSION,
+                      binary="/nonexistent", printer="/nonexistent",
+                      filament="/nonexistent", process="/nonexistent")
+        with self.assertRaisesRegex(WorkerError, "pinned"):
+            run_probe(**{**common, "version": "02.08.01.55"})
+        with self.assertRaisesRegex(WorkerError, "single STL"):
+            run_probe(**{**common, "second_filament": "/nonexistent"})
+        with self.assertRaisesRegex(WorkerError, "single STL"):
+            run_probe(**{**common, "model": "/nonexistent.3mf"})
