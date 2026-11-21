@@ -86,10 +86,11 @@ class CrealitySpatialAuditTests(SimpleTestCase):
         }).encode()
         filaments = [
             json.dumps({
-                "type": "filament", "name": "PLA", "filament_type": "PLA",
-                "nozzle_temperature": "210",
-            }).encode(),
-        ] * 2
+                "type": "filament", "name": name, "filament_type": "PLA",
+                "nozzle_temperature": temp,
+            }).encode()
+            for name, temp in (("Dark", "210"), ("Light", "220"))
+        ]
         for feature, attribute in (
                 ("baseline", "paint_color"), ("support", "paint_supports"),
                 ("seam", "paint_seam"), ("fuzzy", "paint_fuzzy_skin")):
