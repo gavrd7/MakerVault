@@ -121,6 +121,22 @@ class BulkSlicerCleanupTests(TestCase):
             str(len(data)).encode(), b"999", 1)))
         self.assertIsNone(_embedded_thumbnail(b"; thumbnail begin 96x96 500001\n"))
 
+    def test_saved_slice_preview_prefers_full_resolution_thumbnail(self):
+        import base64
+        from core.slicer_job_bulk import _embedded_thumbnail
+        small = b"\x89PNG\r\n\x1a\nsmall"
+        large = b"\x89PNG\r\n\x1a\nlarge"
+        def block(size, image):
+            payload = base64.b64encode(image)
+            return (b"; thumbnail begin " + size
+                    + b" " + str(len(payload)).encode() + b"\n"
+                    + b"; " + payload + b"\n; thumbnail end\n")
+        # Existing printer G-code commonly places the 96px icon before
+        # the larger 300px thumbnail. The UI should use the larger asset.
+        header = block(b"96x96", small) + block(b"300x300", large)
+        self.assertEqual(_embedded_thumbnail(header), large)
+        self.assertEqual(_embedded_thumbnail(block(b"96x96", small)), small)
+
     def test_thumbnail_url_is_private_and_serves_existing_embedded_png(self):
         import base64
         from django.core.files.base import ContentFile
