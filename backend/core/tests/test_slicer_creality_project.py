@@ -274,6 +274,29 @@ class CrealityPositionedPlateTests(SimpleTestCase):
                       customised["different_settings_to_system"][0].split(";"))
         self.assertEqual(customised["flush_volumes_matrix"][1], "370.0")
         self.assertEqual(customised["flush_volumes_matrix"][4], "175.0")
+        # Negative-control compatibility: historical diagnostic fixture
+        # deliberately leaves multiplier/matrix unmarked; normal output
+        # always preserves the explicitly selected settings.
+        unmarked = build_creality_project_candidate(
+            plate, printer=printer, process=process,
+            filaments=[filament("grey"), filament("yellow")],
+            prime_tower={"x": 170, "y": 170}, bed_width=260, bed_depth=260,
+            flush_settings={**setting, "multiplier": 1.5},
+            tool_bindings={"grey-id": 0, "yellow-id": 1},
+            preserve_native_flush_overrides=False)
+        with zipfile.ZipFile(io.BytesIO(unmarked)) as package:
+            negative = json.loads(package.read("Metadata/project_settings.config"))
+        self.assertEqual(negative["flush_multiplier"], "1.5")
+        self.assertNotIn("flush_multiplier",
+                         negative["different_settings_to_system"][0].split(";"))
+        self.assertNotIn("flush_volumes_matrix",
+                         negative["different_settings_to_system"][0].split(";"))
+        with self.assertRaises(SlicerProfileError):
+            build_creality_project_candidate(
+                plate, printer=printer, process=process,
+                filaments=[filament("grey"), filament("yellow")],
+                prime_tower={"x": 170, "y": 170}, bed_width=260, bed_depth=260,
+                preserve_native_flush_overrides="off")
         with zipfile.ZipFile(io.BytesIO(
                 build({**setting, "multiplier": 0.75, "transitions": []}))) as package:
             multiplier_only = json.loads(package.read("Metadata/project_settings.config"))
