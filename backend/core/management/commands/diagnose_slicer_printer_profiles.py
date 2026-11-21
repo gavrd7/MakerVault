@@ -315,6 +315,53 @@ def _creality_mark_native_process_options(project_blob, keys):
     return candidate
 
 
+def _creality_mark_native_printer_purge(project_blob):
+    """Mark the machine-owned purge route only in the printer override slot.
+
+    Creality v7.3.1 treats purge_in_prime_tower as a machine setting.
+    Keep process and filament override vectors untouched.
+    """
+    import re
+    project = _read_creality_project_settings(project_blob)
+    names = project.get("filament_settings_id")
+    rows = project.get("different_settings_to_system")
+    if (not isinstance(names, list) or len(names) != 4
+            or not isinstance(rows, list) or len(rows) != len(names) + 2
+            or any(not isinstance(row, str) or len(row) > 8192 for row in rows)
+            or project.get("purge_in_prime_tower") != "1"):
+        raise ValueError("Invalid native printer purge marker input.")
+    index = len(names) + 1
+    existing = [value for value in rows[index].split(";") if value]
+    if any(not re.fullmatch(r"[a-z][a-z0-9_]{0,79}", key) for key in existing):
+        raise ValueError("Untrusted native printer override name.")
+    if "purge_in_prime_tower" not in existing:
+        existing.append("purge_in_prime_tower")
+    updated = dict(project)
+    updated_rows = rows[:]
+    updated_rows[index] = ";".join(existing)
+    updated["different_settings_to_system"] = updated_rows
+    output = io.BytesIO()
+    with zipfile.ZipFile(io.BytesIO(project_blob)) as source, zipfile.ZipFile(
+            output, "w", compression=zipfile.ZIP_DEFLATED, allowZip64=False) as target:
+        members = source.namelist()
+        if len(members) != len(set(members)) or len(members) not in (6, 7):
+            raise ValueError("Invalid native printer marker archive.")
+        for member in source.infolist():
+            data = (json.dumps(updated, separators=(",", ":")).encode()
+                    if member.filename == "Metadata/project_settings.config"
+                    else source.read(member.filename))
+            target.writestr(member, data)
+    candidate = output.getvalue()
+    before, after, keys = _creality_control_project_with_extra(
+        project_blob, candidate, {"different_settings_to_system"})
+    if (keys - {"different_settings_to_system"}
+            or after["different_settings_to_system"][:-1] != rows[:-1]
+            or after.get("purge_in_prime_tower") != "1"
+            or before.get("change_filament_gcode") != after.get("change_filament_gcode")):
+        raise ValueError("Native printer purge marker altered unrelated settings.")
+    return candidate
+
+
 def _creality_prime_volume_control(project_blob, volume_mm3=180):
     """Create an offline positive control without changing native scripts."""
     if type(volume_mm3) is not int or not 90 <= volume_mm3 <= 300:
@@ -778,11 +825,15 @@ class Command(BaseCommand):
                 "purge_route_tower_marked",
                 _creality_mark_native_process_options(
                     tower_source, ["purge_in_prime_tower"])))
+            creality_controls.append((
+                "purge_route_tower_printer_marked",
+                _creality_mark_native_printer_purge(tower_source)))
             for name, candidate in creality_controls:
                 original, changed, keys = _creality_control_project_with_extra(
                     model, candidate,
                     ({"purge_in_prime_tower", "different_settings_to_system"}
-                     if name == "purge_route_tower_marked"
+                     if name in {"purge_route_tower_marked",
+                                 "purge_route_tower_printer_marked"}
                      else {"different_settings_to_system", "prime_volume"}
                      if name == "prime_volume_marked"
                      else {"different_settings_to_system"} if name.endswith("_marked")
@@ -802,7 +853,8 @@ class Command(BaseCommand):
                         positive_control, candidate, {"different_settings_to_system"})
                     if marker_keys - {"different_settings_to_system"}:
                         raise CommandError("Creality prime volume marker isolation failed.")
-                elif name == "purge_route_tower_marked":
+                elif name in {"purge_route_tower_marked",
+                                "purge_route_tower_printer_marked"}:
                     _original, _marked, marker_keys = _creality_control_project_with_extra(
                         tower_source, candidate, {"different_settings_to_system"})
                     if marker_keys - {"different_settings_to_system"}:
@@ -947,7 +999,8 @@ class Command(BaseCommand):
                     ("multiplier_1_0_marked", "multiplier_1_0"),
                     ("multiplier_2_0_marked", "multiplier_2_0"),
                     ("prime_volume_marked", "prime_volume_positive_control"),
-                    ("purge_route_tower_marked", "purge_route_tower")):
+                    ("purge_route_tower_marked", "purge_route_tower"),
+                    ("purge_route_tower_printer_marked", "purge_route_tower")):
                 summary["creality_flush_controls"][marked_name].update(
                     _creality_marked_result_comparison(
                         summary["creality_flush_controls"], marked_name, parent_name))
