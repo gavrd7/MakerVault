@@ -22,6 +22,14 @@ test("power button is absent until server confirms integration and assignment", 
   assert.doesNotMatch(button, /setInterval\(/);
 });
 
+test("unknown Home Assistant switch state cannot enable commands from printer connectivity", () => {
+  assert.match(button, /const effectivePower = power/);
+  assert.match(button, /const available = power === "on" \|\| power === "off"/);
+  assert.match(button, /disabled={busy \|\| !available}/);
+  assert.doesNotMatch(button, /connectionHint\s*\?\s*connectionHint|includes\(connectionHint\)/);
+  assert.match(button, /Power commands are disabled until the actual switch state is known/);
+});
+
 test("button confirms by animation rather than red inline text", () => {
   assert.match(button, /feedback \? " feedback-" \+ feedback/);
   assert.match(button, /setFeedback\("success"\)/);
