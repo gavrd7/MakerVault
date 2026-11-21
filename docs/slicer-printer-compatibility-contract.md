@@ -78,3 +78,58 @@ printer test. Do not automatically turn experimental slices into approved
 printer jobs. Additional models require representative real hardware/profiles
 before being marked verified; lack of such evidence should appear as
 "not yet verified", not "unsupported by Creality Print".
+
+## Reference activation evidence: Creality Print GUI versus native CLI
+
+Before a printer-specific physical print, establish the **actual**
+CFS-enabled slicing path using a small two-material model in the
+manufacturer's Creality Print 7.3.1 desktop application, selecting
+the correct printer and attached CFS. The physical CFS slots must be
+confirmed in Creality's native Device/Filament mapping workflow.
+This is not a change to the stored MakerVault machine profile.
+
+**Single offline reference capture (no print submission):**
+
+1. In Creality Print 7.3.1, select the matching manufacturer's
+   machine preset and a connected CFS-capable printer, assign two
+   native filaments to a small model, and verify the displayed
+   filament mapping. Do not change any machine start/tool-change script.
+2. Slice in the GUI, review the native toolpath preview, use
+   **Export to Local** to save the exact CFS-enabled G-code, and save
+   the matching project as a local 3MF where supported. **Do not
+   click One-click Print, Send or start a physical print.**
+3. Review the project's effective `multicolor_method`, native
+   `change_filament_gcode` lineage, native filament/first-load
+   assignments and generated G-code's initial CFS load, T selects,
+   M8200, FLUSH_START/END and M83 state. Compare with the pinned
+   offline MakerVault engine's existing output. Be alert to
+   `wall_filament=0` or other invalid initial tool assignment,
+   which users have reported as a historical CFS failure mode.
+4. Only then adjust the **generic Creality capability adapter**
+   if a stable native distinction is demonstrated. Preserve
+   manufacturer scripts and apply changes only to explicitly
+   compatible printer profiles. No implicit K2-derived feature
+   selection and no automatic physical printer submission.
+
+Sources, accessed 21 Nov 2026:
+- Manufacturer [K2 series multicolour guide](https://www.creality.com/blog/k2-series-multi-color-printing-guide):
+  CFS enabled at print selection; file-to-CFS slot mapping is a
+  distinct operation. Without CFS enabled, the manual says
+  multicolour files may be treated as single-colour.
+- Manufacturer [CFS management guide](https://www.creality.com/help/help-guide-to-using-cfs-on-the-creality-print):
+  connecting the printer and selecting Auto Mapping matches
+  detected CFS filaments to native presets.
+- Manufacturer [Creality Print quick-start guide](https://www.creality.com/uk/help/help-creality-print-quick-start-guide):
+  GUI supports local G-code export without LAN Print.
+- [Creality community comparison of versions](https://forum.creality.com/t/k2-plus-starts-to-print-without-loading-filament/51844):
+  users reported incorrect `wall_filament=0` and different
+  `multicolor_method` values in older version G-code; these are
+  anecdotal/version-specific, not a proof about 7.3.1.
+
+**Known blocker:** No authentic CFS-enabled desktop-generated 7.3.1
+G-code/project sample for this exact user-selected printer has been
+provided or verified yet. The existing `multicolor_method=1`
+in-memory diagnostic is *not* equivalent to this reference. The
+official baseline profile must remain unchanged. A successful
+offline macro audit alone must not be interpreted as CFS physical
+routing approval.
