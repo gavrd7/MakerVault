@@ -457,6 +457,54 @@ def _creality_emitted_setting_audit(gcode):
 
 
 
+def _creality_multicolor_project_probe(original_blob):
+    """DISPOSABLE positive control for Creality machine capability only.
+
+    A normal K2 project must not synthesise multicolor_method. For this
+    offline test only, mark an explicit true machine value in the printer
+    override slot, preserving every other project value, script and ZIP entry.
+    """
+    config = _read_creality_project_settings(original_blob)
+    if "multicolor_method" in config:
+        raise ValueError("Multicolor probe requires an original project without this option.")
+    slots = config.get("filament_settings_id")
+    rows = config.get("different_settings_to_system")
+    if (not isinstance(slots, list) or len(slots) != 4
+            or not isinstance(rows, list) or len(rows) != len(slots) + 2
+            or any(not isinstance(v, str) or len(v) > 8192 for v in rows)):
+        raise ValueError("Multicolor probe cannot verify printer override slot.")
+    import re
+    flags = [key for key in rows[-1].split(";") if key]
+    if any(not re.fullmatch(r"[a-z][a-z0-9_]{0,79}", key) for key in flags):
+        raise ValueError("Multicolor probe has an invalid existing printer marker.")
+    if "multicolor_method" not in flags:
+        flags.append("multicolor_method")
+    rows = list(rows)
+    rows[-1] = ";".join(flags)
+    config["multicolor_method"] = "1"
+    config["different_settings_to_system"] = rows
+    data = io.BytesIO()
+    with zipfile.ZipFile(io.BytesIO(original_blob)) as source, zipfile.ZipFile(
+            data, "w", compression=zipfile.ZIP_DEFLATED, allowZip64=False) as target:
+        names = source.namelist()
+        if len(names) != len(set(names)) or len(names) not in (6, 7):
+            raise ValueError("Unsupported Creality multicolor probe archive.")
+        for item in source.infolist():
+            body = (json.dumps(config, separators=(",", ":")).encode("utf-8")
+                    if item.filename == "Metadata/project_settings.config"
+                    else source.read(item.filename))
+            target.writestr(item, body)
+    new_blob = data.getvalue()
+    before, after, changed = _creality_control_project_with_extra(
+        original_blob, new_blob,
+        {"different_settings_to_system", "multicolor_method"})
+    if (changed != {"different_settings_to_system", "multicolor_method"}
+            or after["multicolor_method"] != "1"
+            or before.get("change_filament_gcode") != after.get("change_filament_gcode")):
+        raise ValueError("Multicolor probe changed unrelated machine settings.")
+    return new_blob
+
+
 def _creality_toolchange_macro_audit(gcode):
     """Report only safe presence/counts of K2 change-script indicators.
 
@@ -667,6 +715,8 @@ class Command(BaseCommand):
                             help="Run bounded native A/B flushing controls for Orca or Creality single-nozzle changers")
         parser.add_argument("--test-production-flush", action="store_true",
                             help="Offline A/B test the ordinary marked Creality 3MF builder; no printer communication")
+        parser.add_argument("--probe-multicolor-gate", action="store_true",
+                            help="With --test-production-flush only, add one disposable offline K2 machine capability positive control")
 
     def handle(self, *args, **opts):
         engine = opts["engine"]
@@ -689,6 +739,8 @@ class Command(BaseCommand):
             return
         if opts["test_flush"] and not opts["native"]:
             raise CommandError("--test-flush requires --native.")
+        if opts["probe_multicolor_gate"] and not opts["test_production_flush"]:
+            raise CommandError("--probe-multicolor-gate requires --test-production-flush.")
         if opts["test_production_flush"]:
             if (not opts["native"] or opts["test_flush"]
                     or engine != "crealityprint"):
@@ -903,6 +955,40 @@ class Command(BaseCommand):
                     "tower_deposition": tower_deposition_metrics(gcode),
                 }
             reference = cases["normal_multiplier_2_0"]
+            if opts["probe_multicolor_gate"]:
+                # A separate experimental, never-print candidate. Do not
+                # save a profile or pass altered machine capabilities through
+                # the normal project-builder path.
+                baseline_package, _audit = normal_project(2.0)
+                enabled_package = _creality_multicolor_project_probe(
+                    baseline_package)
+                enabled_gcode = slice_native(native["process"], enabled_package)
+                enabled = {
+                    **_safe_native_result(enabled_gcode),
+                    "emitted_settings": _creality_emitted_setting_audit(enabled_gcode),
+                    "toolchange_macro_audit": _creality_toolchange_macro_audit(
+                        enabled_gcode),
+                    "tower_deposition": tower_deposition_metrics(enabled_gcode),
+                    "experimental_machine_capability": "multicolor_method=1",
+                    "production_config_modified": False,
+                    "physical_purge": "unverified",
+                    "warning": (
+                        "Disposal-only native positive control; never send "
+                        "generated G-code to a printer or use it as a preset."),
+                }
+                enabled["vs_normal_multiplier_2_0"] = {
+                    "motion_changed": enabled["motion_sha256"] != reference["motion_sha256"],
+                    "machine_commands_changed": (
+                        enabled["machine_command_sha256"] !=
+                        reference["machine_command_sha256"]),
+                    "flush_marker_count_changed": (
+                        enabled["toolchange_macro_audit"]["flush_start_comment_count"]
+                        != reference["toolchange_macro_audit"]["flush_start_comment_count"]),
+                    "m8200_count_changed": (
+                        enabled["toolchange_macro_audit"]["m8200_command_count"]
+                        != reference["toolchange_macro_audit"]["m8200_command_count"]),
+                }
+                cases["experimental_multicolor_enabled"] = enabled
             for label in ("normal_multiplier_1_0", "normal_forward_2_0"):
                 current = cases[label]
                 current["vs_multiplier_2_0"] = {
