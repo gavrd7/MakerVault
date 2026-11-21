@@ -41,3 +41,10 @@ test("painted surface annotations are hidden until their tool is active", () => 
   assert.match(plate, /toolMode==="paint_colour"\?item\.colour_paint:null/);
   assert.match(plate, /latestToolModeRef\.current==="paint_support"/);
 });
+
+test("Creality v7.3.0 legacy imports are explicitly flagged, never silently relabelled as 7.3.1", () => {
+  assert.match(setup, /CrealityOfficial\/CrealityPrint@v7\.3\.0\//);
+  assert.match(setup, /Legacy v7\.3\.0 manufacturer preset under a 7\.3\.1 engine label/);
+  assert.match(setup, /Matching native release is required before importing/);
+  assert.match(setup, /This saved preset has not been changed/);
+});
