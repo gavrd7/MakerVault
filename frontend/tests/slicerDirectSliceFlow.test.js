@@ -115,7 +115,7 @@ test("multi-plate projects preserve every plate but slice only the active plate"
   assert.match(source,/const \[activePlateId,setActivePlateId\]/);
   assert.match(source,/plates:compactPlates\.map/);
   assert.match(source,/active_plate_id:activePlateId/);
-  assert.match(source,/plate_objects: plateObjects/);
+  assert.match(source,/plate_objects: compactObjects/);
   assert.match(source,/setProjectPlates\(restored\)/);
 });
 
