@@ -42,11 +42,10 @@ export default function PrinterPowerButton({printerId, compact = false, connecti
     };
   }, [printerId]);
   if (power == null) return null;
-  // Home Assistant is authoritative. Reachability is only a display/action hint
-  // when its switch state is unknown; offline does not prove mains power is off.
-  const inferred = power !== "on" && power !== "off";
-  const effectivePower = inferred && ["on", "off"].includes(connectionHint) ? connectionHint : power;
-  const available = effectivePower === "on" || effectivePower === "off";
+  // Only the actual Home Assistant switch state may authorise a command.
+  // Printer connectivity does not establish whether mains power is on or off.
+  const effectivePower = power;
+  const available = power === "on" || power === "off";
   const turn = async () => {
     if (busy || !available) return;
     const action = effectivePower === "on" ? "off" : "on";
@@ -80,7 +79,7 @@ export default function PrinterPowerButton({printerId, compact = false, connecti
         if (event.target === event.currentTarget) setFeedback("");
       }}
       aria-label={busy ? "Switching printer power" : effectivePower === "on" ? "Turn printer power off" : available ? "Turn printer power on" : "Printer power state unavailable"}
-      title={error || (inferred ? (available ? "Home Assistant switch state unavailable. Button uses printer connection status as an estimate; offline does not necessarily mean powered off." : "Home Assistant switch state unavailable.") : "Home Assistant reports power " + power + ". Click to turn " + (power === "on" ? "off" : "on") + ".")}>
+      title={error || (!available ? "Home Assistant switch state unavailable. Power commands are disabled until the actual switch state is known." : "Home Assistant reports power " + power + ". Click to turn " + (power === "on" ? "off" : "on") + ".")}>
       <span className="printerPowerGlyph" aria-hidden="true">{feedback === "success" ? "✓" : feedback === "error" ? "!" : "⏻"}</span>
       <span className="printerPowerLabel">{busy ? "Switching…" : effectivePower === "on" ? "Turn off" : effectivePower === "off" ? "Turn on" : "Unavailable"}</span>
     </button>
