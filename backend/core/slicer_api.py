@@ -1809,7 +1809,12 @@ def delete_profile(request, profile_id):
     Slices retain immutable native-profile references. Protected records cannot
     be removed until their dependent jobs have been resolved separately.
     """
-    if not request.user.has_perm("core.delete_slicerprofile"):
+    # The owner who can import/manage their native presets must also be able
+    # to remove their own unused registrations. The dedicated delete permission
+    # remains supported for administrators; neither permission grants access to
+    # another owner's profiles or bypasses native-parent/job safeguards.
+    if not (request.user.has_perm("core.delete_slicerprofile")
+            or request.user.has_perm("core.add_fileasset")):
         return _error("You do not have permission to remove slicer profiles.", 403)
     profile = SlicerProfile.objects.filter(pk=profile_id, owner=request.user).first()
     if profile is None:
