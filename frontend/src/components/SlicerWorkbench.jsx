@@ -18,6 +18,27 @@ import { spoolMaterial, chooseSuggestedProfile, defaultOfficialSearch, suggestOf
 import { availableSlicerPrintConnections, preferredSlicerPrintConnection } from "./slicerPrintRouting";
 import { profilesForEngineVersion, isInternalNativeProfile, readableNativeProfile } from "./slicerSavedProfileFilter";
 
+function SlicerJobThumbnail({ job }) {
+  const [unavailable, setUnavailable] = useState(false);
+  const hasOutput = job.status === "completed" && Boolean(job.output_asset_id);
+  const style = {
+    width: 82, height: 82, minWidth: 82, borderRadius: 10,
+    objectFit: "contain", background: "rgba(102, 132, 164, 0.09)",
+    border: "1px solid rgba(147, 168, 187, 0.23)",
+  };
+  if (!hasOutput || unavailable) return (
+    <div aria-hidden="true" style={{
+      ...style, display: "flex", alignItems: "center",
+      justifyContent: "center", fontSize: 30, opacity: 0.65,
+    }}> {hasOutput ? "▤" : "▧"} </div>
+  );
+  return <img key={job.output_asset_id} alt={"Sliced G-code thumbnail for " +
+    (job.input_asset?.name || "saved slicing result")}
+    loading="lazy" style={style}
+    src={"/api/printing/slicer/jobs/" + encodeURIComponent(job.id) + "/thumbnail/"}
+    onError={() => setUnavailable(true)}/>;
+}
+
 function ProfileActionIcon({ name }) {
   return <svg viewBox="0 0 24 24" width="18" height="18" fill="none"
     stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"
@@ -2245,6 +2266,7 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
                 ? [...new Set([...current, job.id])]
                 : current.filter(id => id !== job.id))}/>
           </label>}
+          <SlicerJobThumbnail key={job.id + ":" + (job.output_asset_id || "none")} job={job}/>
           <div className="cameraSourceIdentity">
             <strong>{job.input_asset?.name || "Model"} · {job.printer?.name || "Printer"}</strong>
             <small>{job.engine} {job.engine_version} · {job.status} · {job.process_preset}</small>
