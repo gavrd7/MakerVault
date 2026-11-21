@@ -41,9 +41,9 @@ test("Creality Print exposes the existing draggable tower with native X/Y persis
   assert.doesNotMatch(workbench,/\(\(!singlePainted && !twoPlain\) \|\| flushSettings\)/);
 });
 
-test("Creality flush modal forbids unvalidated global multiplier and unmapped slot edits",()=>{
+test("Creality flush modal retains a native multiplier and blocks unmapped slot edits",()=>{
   const modal=readFileSync(new URL("../src/components/SlicerFlushVolumes.jsx",import.meta.url),"utf8");
-  assert.match(modal,/disabled=\{disabled \|\| creality\}/);
+  assert.match(modal,/id="slicer-flush-multiplier"[^]*?disabled=\{disabled\}/);
   assert.match(modal,/disabled=\{disabled \|\| !editableTransition\(from,to\)\}/);
   assert.match(modal,/Selected process profile belongs to a different slicer engine/);
 });
