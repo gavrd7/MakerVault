@@ -179,41 +179,59 @@ _MAX_THUMBNAIL_B64 = 500 * 1024
 
 
 def _embedded_thumbnail(data):
-    """Read 96x96/300x300 base64 PNG thumbnails in the existing G-code header."""
+    """Prefer the full 300px native/embedded PNG over the first 96px icon.
+
+    Some printers expect the small block first; that ordering must not force
+    MakerVault's saved-slice UI to show the poorest-resolution version.
+    The larger image is only decoded in the private preview endpoint.
+    """
     active = False
     length = 0
     chunks = []
     total = 0
+    size = b""
+    small = None
     for raw_line in data.splitlines():
         line = raw_line.strip()
         if not active:
             found = _THUMBNAIL_START.fullmatch(line)
             if found:
+                size = found.group(1).lower()
                 length = int(found.group(2))
                 if not 0 < length <= _MAX_THUMBNAIL_B64:
                     continue
                 active = True
+                total = 0
+                chunks = []
             continue
         if _THUMBNAIL_END.fullmatch(line):
-            if total != length:
-                return None
-            try:
-                png = base64.b64decode(b"".join(chunks), validate=True)
-            except (ValueError, base64.binascii.Error):
-                return None
-            if len(png) > 400 * 1024 or not png.startswith(b"\x89PNG\r\n\x1a\n"):
-                return None
-            return png
+            if total == length:
+                try:
+                    png = base64.b64decode(b"".join(chunks), validate=True)
+                except (ValueError, base64.binascii.Error):
+                    png = None
+                if (png is not None and len(png) <= 400 * 1024
+                        and png.startswith(b"\\x89PNG\\r\\n\\x1a\\n")):
+                    if size == b"300x300":
+                        return png
+                    if small is None:
+                        small = png
+            active = False
+            chunks = []
+            continue
         group = _B64_LINE.fullmatch(line)
         if not group:
-            return None
+            active = False
+            chunks = []
+            continue
         part = group.group(1)
         total += len(part)
         if total > length:
-            return None
+            active = False
+            chunks = []
+            continue
         chunks.append(part)
-    return None
-
+    return small
 
 @login_required
 @require_GET
