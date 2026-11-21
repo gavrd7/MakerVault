@@ -87,7 +87,7 @@ class InstallerTests(unittest.TestCase):
                 }).encode())
             return BytesIO(json.dumps(release()).encode())
 
-        with patch.object(installer.platform, "machine", return_value="x86_64"), \\
+        with patch.object(installer.platform, "machine", return_value="x86_64"), \
              patch.object(installer, "_request", side_effect=upstream):
             releases = installer.release_catalogue()
         orca = {row["version"]: row for row in releases if row["engine"] == "orcaslicer"}
@@ -129,7 +129,7 @@ class InstallerTests(unittest.TestCase):
                     if "/releases/tags/v2.4.2" in url:
                         return BytesIO(json.dumps({"assets": []}).encode())
                     return BytesIO(json.dumps(release()).encode())
-                with patch.object(installer.platform, "machine", return_value="x86_64"), \\
+                with patch.object(installer.platform, "machine", return_value="x86_64"), \
                      patch.object(installer, "_request", side_effect=fetch):
                     items = installer.release_catalogue()
                 self.assertFalse(any(row["engine"] == "orcaslicer"
