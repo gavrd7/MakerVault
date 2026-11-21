@@ -22,7 +22,7 @@ function SlicerJobThumbnail({ job }) {
   const [unavailable, setUnavailable] = useState(false);
   const hasOutput = job.status === "completed" && Boolean(job.output_asset_id);
   const style = {
-    width: 82, height: 82, minWidth: 82, borderRadius: 10,
+    width: 96, height: 96, minWidth: 96, borderRadius: 10,
     objectFit: "contain", background: "rgba(102, 132, 164, 0.09)",
     border: "1px solid rgba(147, 168, 187, 0.23)",
   };
@@ -32,7 +32,7 @@ function SlicerJobThumbnail({ job }) {
       justifyContent: "center", fontSize: 30, opacity: 0.65,
     }}> {hasOutput ? "▤" : "▧"} </div>
   );
-  return <img key={job.output_asset_id} alt={"Sliced G-code thumbnail for " +
+  return <img key={job.output_asset_id} alt={"Sliced G-code preview for " +
     (job.input_asset?.name || "saved slicing result")}
     loading="lazy" style={style}
     src={"/api/printing/slicer/jobs/" + encodeURIComponent(job.id) + "/thumbnail/"}
@@ -2258,7 +2258,7 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
       <h3>Saved slicing drafts and slices</h3>
       <p role="status">Showing {filteredSavedJobs.length} of {jobs.length} loaded entries.</p>
       {filteredSavedJobs.length ? <div className="printingStack">{filteredSavedJobs.slice(0, visibleDraftCount).map(job =>
-        <div key={job.id} className="cameraSourceRow">
+        <div key={job.id} className="cameraSourceRow slicerSavedJobRow">
           {selectSavedJobs && mayDeleteDraft && <label className="checkRow" aria-label={"Select slicing entry " + (job.input_asset?.name || job.id)}>
             <input type="checkbox" checked={selectedSavedJobIds.includes(job.id)}
               disabled={busy || !deletableJobStatuses.includes(job.status)}
