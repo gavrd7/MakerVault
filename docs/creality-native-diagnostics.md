@@ -2740,3 +2740,48 @@ is separate and still strictly disposable.
 Latest fix commits include e2d9a2c6 (native role-decimal recognition),
 1509d9da (regression test), and 9686293f (explicit inactive flushing
 interpretation). These commits still require Debian tests.
+
+## Offline spatial painting evidence (21 Nov 2026)
+
+`diagnose_creality_paint_fixture` now offers a targeted spatial audit:
+
+```bash
+sudo docker exec makervault python3 /app/backend/manage.py \
+  diagnose_creality_paint_fixture \
+  --printer-profile-id 580c1d65-ee1f-4919-b2ea-93a98cd33e1a \
+  --process-profile-id 42b0025a-20f2-485e-8ca4-7caca3e994f9 \
+  --filament-profile-id cf892271-178c-4c6a-a104-58c8d016acc8 \
+  --filament-profile-id b00a0dc9-fe2c-4653-a1df-dfb8d7429a3e \
+  --deep --spatial-only
+```
+
+This runs **baseline, support, seam and fuzzy skin** only. It does not
+re-run already verified variable layers or the inactive stock-profile
+flushing negative control. The offline fixture builds the same final
+3MF project as before, extracts baked coordinates of triangles carrying
+Creality's native paint_color, paint_supports, paint_seam and
+paint_fuzzy_skin attributes, and counts positive G-code XY extrusion
+moves by native feature role and coarse 2 x 2 x 1 mm voxels. The
+support/seam/fuzzy run compares each painted project with the identical
+3MF geometry with *only* the matching semantic tag removed, preserving
+colour, settings and mesh triangulation. It reports anonymous voxel
+change counts **inside versus outside** the painted XY bounds and the
+native logical tool-1 deposition presence inside the colour region.
+
+Audit parser handles M82 (absolute E), M83 (relative E), G90/G91 XY,
+G92 coordinate resets, native signed fractional E/XY coordinates, and
+FEATURE/TYPE role comments. It rejects large/nonfinite input and
+returns summaries, not G-code or private model paths. The reported
+bounds and counts do **NOT** prove the native slicer preserved a common
+3MF-to-G-code coordinate frame, exact XY surface-paint fidelity, CFS
+physical bay mapping or printer safety. In particular, support
+deposition below a painted overhang and native motion auto-arrangement
+may create a spatial effect outside the selected 2D region; those are
+review findings, not automatic failures. The colour summary is only
+native tool-1 XY presence, not a comparison to a full unpainted colour
+project. No new approval or printer-sending route is introduced.
+
+New isolated tests:
+`core.tests.test_slicer_creality_spatial_audit`.
+These new commits are source changes awaiting staging tests; the
+previous 58-test run predates them.
