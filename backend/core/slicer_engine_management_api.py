@@ -1,6 +1,7 @@
 """Browser engine installation controller; never runs downloaded executables."""
 import json
 import os
+import re
 import uuid
 from django.contrib.auth.decorators import login_required
 from django.db import connection, transaction
@@ -106,6 +107,8 @@ def engine_operations(request):
         return JsonResponse({"error": "Invalid engine request."}, status=400)
     if action not in {"install", "update", "rollback", "activate", "uninstall"}:
         return JsonResponse({"error": "Unsupported engine operation."}, status=400)
+    if action == "activate" and not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._+-]{0,79}", version):
+        return JsonResponse({"error": "Invalid installed-engine version."}, status=400)
     try:
         get_engine(engine)
     except ValueError:
