@@ -2111,3 +2111,48 @@ and a negative probe warrants investigating the 7.3.1 CLI
 printer-preset effective value, not manufacturing custom purge code.
 Keep PR draft and print dispatch blocked pending source and
 physical validation.
+
+
+## Multicolor gate positive result; isolated external K2 flush sensitivity (21 Nov 2026)
+
+User log `Pasted text(20261121-005129).txt` confirms staging
+`31a88439..62fc1381` app-only update succeeded with the pinned
+worker unchanged/healthy, **69/69 focused Django tests PASS**, and
+all four offline native 3MF slices complete. At multiplier 2.0:
+original K2 native project (`multicolor_method` absent, emitted
+disabled) produces **zero** `FLUSH_START`/`FLUSH_END` and
+**zero** `M8200` commands, 48 T selects and tower positive E
+1090.971mm. The **disposable diagnostic-only** project carrying
+`multicolor_method=1` in printer override slot produces
+**50 FLUSH_START + 50 FLUSH_END**, **287 M8200 commands**,
+6020 rather than 5470 G1 extrusion moves and different executable
+motion and machine command digests; emitted `multicolor_method` is
+enabled. Both retain `purge_in_prime_tower=0`, and tagged prime
+tower output is unchanged. This establishes that the K2's
+manufacturer change-filament script is gated by multicolor_method;
+it does not establish printer/firmware safety, valid purge amounts,
+or the source of the supported machine capability.
+
+An optional follow-on, still within **the same existing explicitly
+opted-in `--probe-multicolor-gate`**, adds two disposable-only 3MF
+slices in addition to the existing 4: `experimental_multicolor_multiplier_1_0`
+compares 1.0 to 2.0 with the machine capability and source matrix
+held constant; `experimental_multicolor_forward_2_0` increases
+T0→T1 by 25 mm³ at multiplier 2.0, keeping the capability
+constant. The source machine profile, vendor change_filament_gcode,
+geometry, worker and actual printer remain unmodified. It compares
+**executable motion/M-command SHA** and scrubbed K2 macro counts,
+not just comments or tagged prime-tower E. These controls are
+**not yet run on Debian** and must NEVER be printed.
+
+Run the focused suite (69 expected, unchanged) and existing
+`--native --test-production-flush --probe-multicolor-gate`
+with the approved K2 profile IDs. **6 offline slices expected**:
+3 original-project controls plus 3 machine-capability-enabled
+disposable controls. Verify that multiplier/matrix changes affect
+actual external K2 flushing script generation. Even a positive
+result is not permission to enable this unverified capability in
+normal profiles or submit any print.
+
+Retain PR #171 as draft; do not merge until machine-capability
+provenance is understood and physical printer safety is checked.
