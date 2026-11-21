@@ -153,7 +153,15 @@ def serialise(job, installed=None, temp_assets=None, *, list_view=False):
         "printer_profile_id": str(job.printer_profile_id) if job.printer_profile_id else None,
         "filament_profile_id": str(job.filament_profile_id) if job.filament_profile_id else None,
         "process_profile_id": str(job.process_profile_id) if job.process_profile_id else None,
-        "input_asset": {"id": str(job.input_asset_id), "name": job.input_asset.name},
+        "input_asset": {
+            "id": str(job.input_asset_id),
+            "name": job.input_asset.name,
+            "filename": str((job.input_asset.metadata or {}).get("original_name")
+                            or job.input_asset.name),
+            # Only the authenticated owner can list this job or its source.
+            # Use the same private URL convention as temporary_inputs.
+            "url": job.input_asset.file.url if job.input_asset.file else "",
+        },
         "printer": {"id": str(job.printer_id), "name": job.printer.name},
         "spool": {"id": str(job.spool_id), "name": job.spool.spool_id} if job.spool_id else None,
         "output_asset_id": str(job.output_asset_id) if job.output_asset_id else None,
