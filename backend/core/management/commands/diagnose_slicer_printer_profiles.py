@@ -544,6 +544,11 @@ def _creality_toolchange_macro_audit(gcode):
     open_flush = False
     markers_well_formed = True
     completed_flush_sections = 0
+    # Count only explicit positive extrusion-only G1 E moves inside native
+    # FLUSH_START/FLUSH_END sections; firmware-side purge is unobservable.
+    positive_flush_e_mm = 0.0
+    positive_flush_e_moves = 0
+    malformed_flush_e_moves = 0
     for line in gcode.decode("utf-8", errors="replace").splitlines():
         if len(line) > 8192:
             continue
@@ -562,6 +567,22 @@ def _creality_toolchange_macro_audit(gcode):
             open_flush = False
         if stripped.startswith(";"):
             continue
+        if open_flush:
+            command = stripped.split(";", 1)[0].strip()
+            if re.match(r"^G0?1(?:\\s|$)", command, re.I):
+                # A G1 with XY or other axes is not an extrusion-only purge;
+                # malformed E-only instructions are flagged rather than ignored.
+                match = re.fullmatch(
+                    r"G0?1\\s+E([+-]?(?:\\d+(?:\\.\\d*)?|\\.\\d+))"
+                    r"(?:\\s+F(?:\\d+(?:\\.\\d*)?|\\.\\d+))?\\s*",
+                    command, re.I)
+                if match:
+                    value = float(match.group(1))
+                    if math.isfinite(value) and value > 0:
+                        positive_flush_e_mm += value
+                        positive_flush_e_moves += 1
+                elif re.search(r"(?:^|\\s)E\\S*", command, re.I):
+                    malformed_flush_e_moves += 1
         if re.match(r"^M8200(?:\s|$)", stripped, re.I):
             counts["m8200_command_count"] += 1
         if re.match(r"^SET_VELOCITY_LIMIT(?:\s|$)", stripped, re.I):
@@ -573,6 +594,9 @@ def _creality_toolchange_macro_audit(gcode):
         **counts,
         "flush_markers_balanced": (markers_well_formed and not open_flush),
         "completed_flush_sections": completed_flush_sections,
+        "positive_extrusion_only_flush_moves": positive_flush_e_moves,
+        "positive_extrusion_only_flush_length_mm": round(positive_flush_e_mm, 3),
+        "unclassified_flush_g1_e_moves": malformed_flush_e_moves,
         "limitations": (
             "Tool selections alone do not establish execution of the "
             "machine's change_filament_gcode. Marker absence only "
