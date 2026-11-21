@@ -24,11 +24,12 @@ function EngineReleasePicker({engine, releases, installedVersions, installed, di
     }
     return options.sort((a,b)=>b.version.localeCompare(a.version,undefined,{numeric:true}));
   },[installedVersions,releases,installed,engine.installed_version]);
+  const activeVersion = engine.installed_version || installedVersions.find(row=>row.active)?.version;
   const chosen = available.find(row=>row.version===selection) ||
-    available.find(row=>row.version===engine.installed_version) || available[0];
+    available.find(row=>row.version===activeVersion) || available[0];
 
   if (!chosen) return <small>Installation package not yet available.</small>;
-  const current = installed && chosen.version === engine.installed_version;
+  const current = installed && chosen.version === activeVersion;
   const canSelect = available.length>1 || !current;
   return <div className="slicerEngineManagerControls">
     <div className="slicerEngineManagerRelease" style={{display:"flex",alignItems:"center",gap:"0.75rem",flexWrap:"wrap"}}>
@@ -38,7 +39,7 @@ function EngineReleasePicker({engine, releases, installedVersions, installed, di
           onChange={event=>setSelection(event.target.value)}
           disabled={disabled || !canSelect} style={{minWidth:0,width:"100%"}}>
           {available.map(row=><option key={row.version} value={row.version}>
-            {row.version}{installed && engine.installed_version===row.version ? " (installed)" : row.local ? " (available locally)" : ""}
+            {row.version}{installed && activeVersion===row.version ? " (installed)" : row.local ? " (available locally)" : ""}
           </option>)}
         </select>
       </label>
@@ -131,15 +132,15 @@ export default function SlicerEngineManager({engines = [], onChanged}) {
     <div className="slicerEngineManagerList">
       {engines.map(engine=>{
         const approved=releases.filter(row=>row.engine===engine.key);
-        const installed=engine.available===true || engine.status==="validated";
         const versions=state?.installed_versions?.[engine.key]||[];
+        const installed=engine.available===true || engine.status==="validated" || versions.some(row=>row.active);
         const matching=(state?.operations||[]).find(item=>item.engine===engine.key && !TERMINAL.has(item.status));
         return <article key={engine.key} className="slicerEngineManagerCard">
           <div className="slicerEngineManagerIdentity">
             <SlicerEngineLogo engine={engine.key} label={engine.label} size="small"/>
             <div><strong>{engine.label}</strong>
               <small>{installed
-                ? "Installed · "+(engine.installed_version||"Current")+
+                ? "Installed · "+(engine.installed_version||versions.find(row=>row.active)?.version||"Current")+
                   (engine.key==="crealityprint"?" · CLI integration in testing":"")
                 : "Not installed"}</small>
             </div>
