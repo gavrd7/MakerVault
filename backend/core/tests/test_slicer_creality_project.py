@@ -20,6 +20,100 @@ class CrealityPositionedPlateTests(SimpleTestCase):
               "scale_percent": 100}, fixture_stl()),
         ]
 
+    def test_native_machine_multicolor_requires_explicit_capability_and_script(self):
+        from core.slicer_creality_project import (
+            _preserve_creality_machine_multicolor_capability)
+        base = {
+            "filament_settings_id": ["A", "B", "A", "B"],
+            "different_settings_to_system": [
+                "enable_support", "", "", "", "", "purge_in_prime_tower"],
+            "change_filament_gcode": "unchanged manufacturer's script",
+        }
+        script = "{if multicolor_method}\nM8200 P S1\nG1 E{flush_length_1}\n{endif}"
+        missing = json.loads(json.dumps(base))
+        self.assertFalse(_preserve_creality_machine_multicolor_capability(
+            missing, {}))
+        self.assertEqual(missing, base)
+        with self.assertRaisesRegex(SlicerProfileError, "explicitly enabled"):
+            _preserve_creality_machine_multicolor_capability(
+                json.loads(json.dumps(base)), {}, require_verified=True)
+        for invalid in ("true", "auto", [], 2):
+            with self.subTest(invalid=invalid), self.assertRaises(SlicerProfileError):
+                _preserve_creality_machine_multicolor_capability(
+                    json.loads(json.dumps(base)),
+                    {"multicolor_method": invalid})
+        with self.assertRaisesRegex(SlicerProfileError, "disables"):
+            _preserve_creality_machine_multicolor_capability(
+                json.loads(json.dumps(base)),
+                {"multicolor_method": "0"}, require_verified=True)
+        with self.assertRaisesRegex(SlicerProfileError, "no verified native"):
+            _preserve_creality_machine_multicolor_capability(
+                json.loads(json.dumps(base)),
+                {"multicolor_method": "1", "change_filament_gcode": "T[next_extruder]"},
+                require_verified=True)
+        enabled = json.loads(json.dumps(base))
+        selected = {"multicolor_method": "1", "change_filament_gcode": script}
+        self.assertTrue(_preserve_creality_machine_multicolor_capability(
+            enabled, selected, require_verified=True))
+        self.assertEqual(enabled["multicolor_method"], "1")
+        self.assertEqual(enabled["different_settings_to_system"][0:5],
+                         base["different_settings_to_system"][0:5])
+        self.assertEqual(enabled["different_settings_to_system"][-1],
+                         "purge_in_prime_tower;multicolor_method")
+        self.assertEqual(enabled["change_filament_gcode"],
+                         base["change_filament_gcode"])
+        self.assertTrue(_preserve_creality_machine_multicolor_capability(
+            enabled, selected, require_verified=True))
+        self.assertEqual(enabled["different_settings_to_system"][-1].count(
+            "multicolor_method"), 1)
+
+    def test_real_project_preserves_selected_multicolor_machine_capability(self):
+        from core.slicer_creality_project import build_creality_project_candidate
+        plate = build_creality_positioned_plate(
+            self._objects(), bed_width=260, bed_depth=260, tool_ids=[0, 1])
+        machine = {
+            "type": "machine", "name": "Approved native machine",
+            "printable_height": "260",
+            "printable_area": ["0x0", "260x0", "260x260", "0x260"],
+            "single_extruder_multi_material": "1",
+            "purge_in_prime_tower": "0",
+            "multicolor_method": "1",
+            "change_filament_gcode": (
+                "{if multicolor_method}\nM8200 P S1\n"
+                "G1 E{flush_length_1}\n{endif}"),
+        }
+        process = {"type": "process", "name": "Native process",
+                   "enable_prime_tower": "1", "prime_tower_width": "40"}
+        filaments = [
+            json.dumps({"type": "filament", "name": name,
+                        "filament_type": "PLA",
+                        "nozzle_temperature": temp}).encode()
+            for name, temp in (("A", "210"), ("B", "220"))
+        ]
+        def build(selected):
+            return build_creality_project_candidate(
+                plate, printer=json.dumps(selected).encode(),
+                process=json.dumps(process).encode(), filaments=filaments,
+                require_verified_multicolor_purge=True,
+                bed_width=260, bed_depth=260)
+        with zipfile.ZipFile(io.BytesIO(build(machine))) as archive:
+            project = json.loads(archive.read(
+                "Metadata/project_settings.config"))
+        self.assertEqual(project["multicolor_method"], "1")
+        self.assertIn("multicolor_method",
+                      project["different_settings_to_system"][-1].split(";"))
+        self.assertEqual(project["purge_in_prime_tower"], "0")
+        self.assertEqual(project["change_filament_gcode"],
+                         machine["change_filament_gcode"])
+        for value in (None, "0"):
+            altered = dict(machine)
+            if value is None:
+                altered.pop("multicolor_method")
+            else:
+                altered["multicolor_method"] = value
+            with self.subTest(value=value), self.assertRaises(SlicerProfileError):
+                build(altered)
+
     def test_flush_preset_markers_preserve_only_explicit_settings_and_printer_choice(self):
         from core.slicer_creality_project import _mark_creality_flush_preset_overrides
         settings = {
