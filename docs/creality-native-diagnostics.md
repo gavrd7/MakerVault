@@ -1850,3 +1850,57 @@ sudo docker exec makervault python3 /app/backend/manage.py \
   --filament-profile-id eb8473e9-f993-4c6e-8cc4-fb357e3ae782 \
   --native --test-flush
 ```
+
+
+## Confirmed multiplier/directional native sensitivity and bounded project-builder fix (21 Nov 2026)
+
+User's `Pasted text(20261121-002608).txt` is a **tail-only**
+diagnostic response; it includes the full
+`creality_tower_flush_sensitivity` object but does not show the Django
+test-run header. It confirms:
+
+| Native comparison | T0→T1 fixture | Multiplier | Tagged tower positive-E | Tower XY |
+| --- | --- | --- | --- | --- |
+| `tower_flush_multiplier_1_0` | 140 mm³ | 1.0 | 3109.561 mm | 35.398 × 34.398 mm |
+| `tower_flush_multiplier_2_0` | 140 mm³ | 2.0 | 6011.448 mm | 47.398 × 45.398 mm |
+| `tower_flush_forward_2_0` | 165 mm³ | 2.0 | 6663.034 mm | 50.398 × 48.898 mm |
+
+Both A/B comparisons changed G0/G1 and M-command SHA, tower
+footprint and tower tagged E, with `purge_in_prime_tower=enabled`
+in the emitted G-code. Therefore Creality's native slicing does respond
+to both the multiplier and directional matrix when the process
+override list and printer purge override are correctly preserved.
+
+**These figures are lengths of filament extruded into *tagged tower
+moves*, NOT independently measured mm³ of purged material.** Source
+matrix 140 mm³ is a diagnostic fallback, not a Creality K2 preset
+default. The generated G-code still does not validate physical
+purging at printer-side tool changes.
+
+The production project builder formerly marked only support process
+options in `different_settings_to_system[0]`. A bounded fix now
+writes native process override markers for **explicitly requested**
+`flush_multiplier`, `flush_volumes_matrix`,
+`flush_volumes_changed`, `enable_prime_tower` and for the
+selected process profile's explicit `prime_volume`, when applicable.
+Machine `purge_in_prime_tower` is marked in the last/printer
+override slot **only when provided by the selected machine profile**;
+its value is deliberately not changed. The fix does not force tower
+purging, invent flush-volume defaults, rewrite manufacturer scripts
+or change the isolated native worker. It does not promise the CFS
+firmware will purge at the specified physical location.
+
+Regression coverage tests the bounded allowlist, stable process/
+printer/filament slots, repeat safety, no invented fields, and actual
+generated Creality 3MF output. **These production-path edits are
+committed on a draft PR branch, not yet run on Debian.**
+
+Next: app-only staging rebuild and the four focused test suites
+(previously 64; now **66** tests expected with two added methods;
+existing project test also has stronger assertions). Run a normal
+non-printing native staging slice with explicit flush requests and
+compare hashes/settings; do not dispatch to the K2. The existing
+diagnostic uses its own disposable marker controls and therefore
+does NOT by itself validate the new production 3MF marker path.
+Keep PR in draft until end-to-end production 3MF slicing evidence and
+physical CFS verification are collected.
