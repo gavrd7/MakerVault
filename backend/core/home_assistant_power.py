@@ -192,7 +192,6 @@ def printer_is_busy(printer):
     """
     history_active = printer.print_jobs.filter(status="printing").exists()
     now = timezone.now()
-    verified_idle = False
     has_connection = False
     for connection in printer.live_connections.filter(enabled=True):
         has_connection = True
@@ -211,16 +210,16 @@ def printer_is_busy(printer):
         checked = getattr(connection, "last_checked_at", None)
         interval = getattr(connection, "poll_interval_seconds", 30) or 30
         max_age = timedelta(seconds=max(120, 2 * interval))
-        if (checked and now - checked <= max_age
+        if not (checked and now - checked <= max_age
                 and getattr(connection, "status", None) == "connected"
                 and str(snapshot.get("state") or "").strip().casefold()
                 in {"idle", "ready", "standby", "complete", "completed"}):
-            verified_idle = True
-    # Unknown/stale telemetry is not evidence that the printer is safe to
-    # power down. Require a fresh idle snapshot for connected printers; for
-    # deliberately offline/unmonitored printers only explicit UI confirmation
-    # remains available, and a recorded active job still blocks shutdown.
-    return (not verified_idle if has_connection else history_active)
+            # One missing or conflicting connection cannot be overridden by
+            # another reporting idle; require every enabled connection to be safe.
+            return True
+    # No enabled live connections: retain manual-off confirmation, while
+    # refusing a shutdown with an active print history record.
+    return history_active if not has_connection else False
 
 def set_switch(setting, entity, desired):
     if desired not in {"on", "off"} or not valid_entity(entity):
