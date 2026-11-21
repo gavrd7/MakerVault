@@ -403,6 +403,45 @@ class PrinterCompatibilityFixtureTests(SimpleTestCase):
         with self.assertRaises(ValueError):
             _creality_marked_result_comparison(controls, "unknown", "multiplier_1_0")
 
+    def test_disposable_tower_flush_preserves_both_preset_override_slots(self):
+        settings = {
+            "filament_settings_id": ["A", "B", "A", "B"],
+            "different_settings_to_system": [
+                "prime_volume", "", "", "", "", "nozzle_diameter"],
+            "purge_in_prime_tower": "1",
+            "flush_multiplier": "2.0",
+            "flush_volumes_matrix": ["0", "140", "140", "0"] * 4,
+            "change_filament_gcode": "protected vendor macro",
+        }
+        archive = io.BytesIO()
+        with zipfile.ZipFile(archive, "w") as z:
+            z.writestr("Metadata/project_settings.config", json.dumps(settings))
+            for name in ("3D/3dmodel.model", "Metadata/model_settings.config",
+                         "Metadata/creality.config", "[Content_Types].xml", "_rels/.rels"):
+                z.writestr(name, b"unchanged fixture")
+        baseline = archive.getvalue()
+        after_process = _creality_flush_override_control(baseline)
+        after_printer = _creality_mark_native_printer_purge(after_process)
+        before, final, changed = _creality_control_project_with_extra(
+            baseline, after_printer, {"different_settings_to_system"})
+        self.assertEqual(changed, {"different_settings_to_system"})
+        self.assertEqual(final["flush_volumes_matrix"], settings["flush_volumes_matrix"])
+        self.assertEqual(final["flush_multiplier"], "2.0")
+        self.assertEqual(final["purge_in_prime_tower"], "1")
+        self.assertIn("flush_volumes_matrix",
+                      final["different_settings_to_system"][0].split(";"))
+        self.assertIn("flush_multiplier",
+                      final["different_settings_to_system"][0].split(";"))
+        self.assertIn("purge_in_prime_tower",
+                      final["different_settings_to_system"][-1].split(";"))
+        self.assertEqual(final["different_settings_to_system"][1:-1],
+                         settings["different_settings_to_system"][1:-1])
+        self.assertEqual(final["change_filament_gcode"], "protected vendor macro")
+        with zipfile.ZipFile(io.BytesIO(baseline)) as a, zipfile.ZipFile(io.BytesIO(after_printer)) as b:
+            for name in a.namelist():
+                if name != "Metadata/project_settings.config":
+                    self.assertEqual(a.read(name), b.read(name))
+
     def test_creality_printer_purge_override_uses_last_vector_slot_only(self):
         project = {
             "filament_settings_id": ["A", "B", "A", "B"],
