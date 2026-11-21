@@ -519,12 +519,15 @@ def build_creality_project_candidate(plate, *, printer, process, filaments,
                                     version="7.3.1", prime_tower=None,
                                     tool_colours=None, flush_settings=None,
                                     tool_bindings=None, layer_ranges=None,
-                                    bed_width=260, bed_depth=260):
+                                    bed_width=260, bed_depth=260,
+                                    preserve_native_flush_overrides=True):
     """Create a self-contained *candidate* Creality project 3MF.
 
     Deliberately not a verified CLI route. Project settings must first pass
     Creality's real loader/print result fixture before execution is enabled.
     """
+    if type(preserve_native_flush_overrides) is not bool:
+        raise SlicerProfileError("Invalid native Creality flush override preservation mode.")
     if not isinstance(plate, bytes) or len(plate) > _MAX_PROJECT:
         raise SlicerProfileError("Invalid Creality plate archive.")
     if not isinstance(filaments, (list, tuple)) or len(filaments) != 2:
@@ -605,8 +608,12 @@ def build_creality_project_candidate(plate, *, printer, process, filaments,
         project, ("enable_support", "support_type"))
     if flush_settings is not None:
         _apply_creality_flush_settings(project, flush_settings, tool_bindings)
-        _mark_creality_flush_preset_overrides(
-            project, flush_settings, machine=machine, process=print_settings)
+        # The ordinary builder retains native values through the CLI preset
+        # merger. Only the explicit historical negative-control diagnostics
+        # may opt out, so they still test unmarked project behaviour.
+        if preserve_native_flush_overrides:
+            _mark_creality_flush_preset_overrides(
+                project, flush_settings, machine=machine, process=print_settings)
     # Creality 7.3.1 uses one-based physical nozzle routing. A K2/CFS
     # changes filament through a single physical nozzle; it does not have
     # two physical nozzle_diameter entries. Native upstream tests explicitly
