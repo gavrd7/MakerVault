@@ -21,6 +21,29 @@ from core.slicer_plate_3mf import build_plate_3mf, NS
 
 
 class PrinterCompatibilityFixtureTests(SimpleTestCase):
+    def test_creality_toolchange_macro_audit_counts_only_known_markers(self):
+        from core.management.commands.diagnose_slicer_printer_profiles import (
+            _creality_toolchange_macro_audit, _creality_emitted_setting_audit)
+        gcode = (
+            b"; multicolor_method = 0\n"
+            b"; FLUSH_START\nM8200 P S1\n"
+            b"SET_VELOCITY_LIMIT ACCEL=5000\n"
+            b"T0\nT1 ; select\n"
+            b"; M8200 P S999\n"
+            b"; FLUSH_END\n"
+            b"M82001 S1\n"
+        )
+        audit = _creality_toolchange_macro_audit(gcode)
+        self.assertEqual(audit["flush_start_comment_count"], 1)
+        self.assertEqual(audit["flush_end_comment_count"], 1)
+        self.assertEqual(audit["m8200_command_count"], 1)
+        self.assertEqual(audit["set_velocity_limit_command_count"], 1)
+        self.assertEqual(audit["tool_select_command_count"], 2)
+        setting = _creality_emitted_setting_audit(gcode)
+        self.assertEqual(setting["settings"]["multicolor_method"], "disabled")
+        with self.assertRaises(ValueError):
+            _creality_toolchange_macro_audit(b"")
+
     def test_production_flush_diagnostic_flag_is_explicit_opt_in(self):
         from django.core.management import CommandError
         from core.management.commands.diagnose_slicer_printer_profiles import Command
