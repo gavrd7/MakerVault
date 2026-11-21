@@ -205,6 +205,42 @@ class OfficialProfileApiTests(TestCase):
         chain.assert_not_called()
         self.assertIn("7.3.1", str(response.content))
 
+    def test_all_catalogues_require_exact_selected_engine_release(self):
+        self.client.force_login(self.user)
+        supported = {
+            "orcaslicer": ("2.4.2", "v2.4.2"),
+            "crealityprint": ("7.3.1", "v7.3.1"),
+            "bambustudio": ("02.09.01.70", "v02.09.01.70"),
+            "prusaslicer": ("2.9.6", "version_2.9.6"),
+            "snapmakerorca": ("2.4.1", "v2.4.1"),
+        }
+        for engine, (version, ref) in supported.items():
+            with self.subTest(engine=engine):
+                response = self.client.get(self.url, {
+                    "engine": engine, "version": version, "catalogues": "1"})
+                self.assertEqual(response.status_code, 200, response.content)
+                self.assertEqual(response.json()["selected_version"], version)
+                self.assertEqual(response.json()["ref"], ref)
+                self.assertIn(version, response.json()["versions"])
+        for engine, bad in (
+                ("orcaslicer", "7.3.1"), ("crealityprint", "7.3.0"),
+                ("bambustudio", "2.9.6"), ("prusaslicer", "2.4.2"),
+                ("snapmakerorca", "2.5.0"), ("crealityprint", "")):
+            with self.subTest(engine=engine, bad=bad):
+                # Fail before catalogue/network lookup and before DB writes.
+                response = self.client.get(self.url, {
+                    "engine": engine, "version": bad, "catalogues": "1"})
+                self.assertEqual(response.status_code, 400, response.content)
+                self.assertIn("No approved official", str(response.content))
+                with patch("core.slicer_api.official_profile_chain") as chain:
+                    response = self.post({
+                        "engine": engine, "engine_version": bad,
+                        "kind": "printer", "vendor": "Creality",
+                        "name": "Model", "sub_path": "machine/Model.json",
+                    })
+                self.assertEqual(response.status_code, 400, response.content)
+                chain.assert_not_called()
+
     def test_orca_25_catalogue_search_and_manufacturer_brand_filter(self):
         self.client.force_login(self.user)
         result = self.client.get(self.url, {
