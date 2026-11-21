@@ -74,3 +74,20 @@ class CrealitySyntheticPaintFixtureTests(SimpleTestCase):
         self.assertIsNotNone(orca_layer_config_ranges([(obj, self.raw)]))
         self.assertNotIn("asset_id", obj)
         self.assertNotIn("printer_id", obj)
+
+    def test_creality_role_audit_recognises_fractional_native_e_moves(self):
+        from core.management.commands.diagnose_creality_paint_features import (
+            _feature_role_audit)
+        gcode = (
+            b"; FEATURE: Support\n"
+            b"G1 X1 Y2 E.25\nG1 X.5 Y-.7 E-.25\n"
+            b"; FEATURE: Outer wall\n"
+            b"G1 X2.5 Y3 E0.125\n"
+            b"; FEATURE: Prime tower\nG1 X1 E1\n"
+        )
+        metrics = _feature_role_audit(gcode)
+        self.assertEqual(metrics["extrusion_xy_moves_by_role"], {
+            "support": 2, "outer_wall": 1, "other": 1,
+        })
+        self.assertEqual(metrics["recognized_role_tag_counts"]["support"], 1)
+
