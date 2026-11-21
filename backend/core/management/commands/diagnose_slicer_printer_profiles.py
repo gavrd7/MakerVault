@@ -27,7 +27,9 @@ from core.slicer_flush_adapters import (
 )
 from core.slicer_native_compatibility import check_native_compatibility
 from core.slicer_native_material_palette import _single_positive_diameter
-from core.slicer_native_resolution import resolved_native_profile
+from core.slicer_native_resolution import (
+    resolved_native_profile, audit_creality_profile_origins,
+)
 from core.slicer_plate_3mf import build_plate_3mf
 from core.slicer_worker_client import run_remote_job
 from core.slicer_tower_diagnostics import tower_deposition_metrics
@@ -717,6 +719,8 @@ class Command(BaseCommand):
                             help="Offline A/B test the ordinary marked Creality 3MF builder; no printer communication")
         parser.add_argument("--probe-multicolor-gate", action="store_true",
                             help="With --test-production-flush only, add one disposable offline K2 machine capability positive control")
+        parser.add_argument("--audit-machine-capability", action="store_true",
+                            help="Read-only selected Creality printer capability provenance; no worker or printer")
 
     def handle(self, *args, **opts):
         engine = opts["engine"]
@@ -737,6 +741,13 @@ class Command(BaseCommand):
                               "status": row["status"]} for row in rows],
                 "truncated_at": 100, "note": "Listing only, not native validation."}, indent=2))
             return
+        if opts["audit_machine_capability"]:
+            if (engine != "crealityprint" or opts["native"]
+                    or opts["test_flush"] or opts["test_production_flush"]
+                    or opts["probe_multicolor_gate"]):
+                raise CommandError(
+                    "--audit-machine-capability requires --engine crealityprint "
+                    "without native slicing flags.")
         if opts["test_flush"] and not opts["native"]:
             raise CommandError("--test-flush requires --native.")
         if opts["probe_multicolor_gate"] and not opts["test_production_flush"]:
@@ -814,6 +825,40 @@ class Command(BaseCommand):
             "physical_purge": "unverified",
             "offline_only": True, "native_run": "not_requested",
         }
+        if opts["audit_machine_capability"]:
+            selected_machine = json.loads(native["printer"])
+            selected_method = selected_machine.get("multicolor_method")
+            provenance = audit_creality_profile_origins(printer)
+            script = selected_machine.get("change_filament_gcode")
+            is_native_macro = (
+                isinstance(script, str)
+                and script.lstrip().startswith("{if multicolor_method}")
+                and "flush_length_1" in script
+                and "M8200" in script)
+            self.stdout.write(json.dumps({
+                **summary,
+                "profile_id": str(printer.pk),
+                "native_run": "not_requested",
+                "source_multicolor_method": (
+                    "not_explicit" if selected_method is None
+                    else str(selected_method)),
+                "source_purge_in_prime_tower": str(
+                    selected_machine.get("purge_in_prime_tower",
+                                         "not_explicit")),
+                "native_machine_purge_macro_shape": (
+                    "expected_gated_k2_structure" if is_native_macro
+                    else "not_recognised"),
+                "provenance": provenance,
+                "printer_ready_candidate": (
+                    selected_method in ("1", 1, True) and is_native_macro),
+                "printer_ready": False,
+                "note": (
+                    "Read-only preset provenance and structure, NOT validated "
+                    "printer capability or permission to print. A separate "
+                    "offline native slice and physical safety validation "
+                    "remain necessary. No printer or worker called."),
+            }, indent=2))
+            return
         if not opts["native"]:
             self.stdout.write(json.dumps(summary, indent=2))
             return
