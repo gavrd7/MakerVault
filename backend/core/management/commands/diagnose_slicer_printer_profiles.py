@@ -1129,6 +1129,14 @@ class Command(BaseCommand):
                             != enabled["toolchange_macro_audit"]["m8200_command_count"]),
                         "g1_extrusion_move_count_changed": (
                             output["g1_with_extrusion"] != enabled["g1_with_extrusion"]),
+                        "explicit_flush_e_length_changed": (
+                            output["toolchange_macro_audit"][
+                                "positive_extrusion_only_flush_length_mm"] !=
+                            enabled["toolchange_macro_audit"][
+                                "positive_extrusion_only_flush_length_mm"]),
+                        "flush_markers_balanced_both": (
+                            output["toolchange_macro_audit"]["flush_markers_balanced"]
+                            and enabled["toolchange_macro_audit"]["flush_markers_balanced"]),
                     }
                     cases[label] = output
             for label in ("normal_multiplier_1_0", "normal_forward_2_0"):
