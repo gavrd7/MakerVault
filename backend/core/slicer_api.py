@@ -1375,14 +1375,16 @@ def official_profiles(request):
                 raise ValueError("Unsupported OrcaSlicer official profile release.")
             ref = "v" + version
         elif engine == "crealityprint":
-            # The verified upstream catalogue is pinned to v7.3.0. Allow its
-            # candidates to be associated with an installed 7.3.1 runtime
-            # without misrepresenting their origin or claiming compatibility.
-            # Execution still validates the native preset against the runtime.
+            # An imported machine must originate from the exact matching
+            # Creality Print release. v7.3.0's K2 toolchange macro is only
+            # 212 chars; v7.3.1's official macro is 7183 chars and handles
+            # external flushing. Do not mislabel old source as v7.3.1.
             target_version = selection.get("engine_version", version)
-            if target_version not in {OFFICIAL_CRE_VERSION, "7.3.1"}:
-                raise ValueError("This Creality profile source cannot be used with the selected engine version.")
-            version = target_version
+            if target_version != OFFICIAL_CRE_VERSION:
+                raise ValueError(
+                    "Select the matching pinned Creality Print "
+                    + OFFICIAL_CRE_VERSION + " official profile release.")
+            version = OFFICIAL_CRE_VERSION
         elif selection.get("engine_version", version) != version:
             raise ValueError("This source does not provide the requested engine version.")
         kind = selection.get("kind")
