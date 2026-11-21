@@ -68,3 +68,13 @@ test("engine cards use a compact two-row version and action layout",()=>{
   assert.doesNotMatch(manager,/slicerEngineManagerRemove/);
   assert.doesNotMatch(manager,/CLI integration in testing/);
 });
+
+
+test("completed private slices can print without first joining G-code library",()=>{
+  assert.match(workbench,/job\.settings\?\.workflow !== "quick" && job\.status === "completed" && job\.output_asset\?\.id && canPrint && <button/);
+  assert.doesNotMatch(workbench,/job\.output_asset\?\.id && job\.gcode_in_library && canPrint/);
+  assert.match(workbench,/if \(job\.status !== "completed" \|\| !job\.output_asset\?\.id\) return;/);
+  assert.match(workbench,/availableSlicerPrintConnections\(printer\)/);
+  assert.match(workbench,/initialAsset=\{printSelection\.job\.output_asset\}/);
+  assert.match(workbench,/onClick=\{\(\) => requestPrint\(job\)\}>Print from slicer/);
+});
