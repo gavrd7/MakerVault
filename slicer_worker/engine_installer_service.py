@@ -31,6 +31,7 @@ from .engine_store_admin import (
     EXPECTED_ORCA_SHA, APPROVAL_VERSION, rollback as rollback_store,
 )
 from .engine_store_lifecycle import installed_versions, activate_installed, uninstall_engine, IDENTITY
+from .engine_registry import SUPPORTED as INSTALLED_ENGINE_TYPES
 
 STORE = Path(os.environ.get("SLICER_ENGINE_STORE", "/opt/engine-store"))
 TOKEN = os.environ.get("SLICER_INSTALLER_TOKEN", "")
@@ -409,8 +410,7 @@ def _lifecycle_operation(op_id, engine, version, action):
 
 
 def start_lifecycle(engine, version, action):
-    if action not in {"activate", "uninstall"} or engine not in {
-            "orcaslicer", "crealityprint"}:
+    if action not in {"activate", "uninstall"} or engine not in INSTALLED_ENGINE_TYPES:
         raise ValueError("Unsupported engine operation.")
     if not isinstance(version, str) or (action == "activate" and not VERSION.fullmatch(version)):
         raise ValueError("Invalid installed engine version.")
