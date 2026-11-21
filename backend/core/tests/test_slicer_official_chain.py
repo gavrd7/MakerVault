@@ -26,6 +26,16 @@ class OfficialNativeProfileChainTests(SimpleTestCase):
     def fetch(self, kind, name, subpath, vendor):
         return json.dumps(self.files[name]).encode("utf-8")
 
+    @patch("core.slicer_official_chain.fetch_creality_profile")
+    @patch("core.slicer_official_chain.creality_entries")
+    def test_cross_release_dependency_chain_fails_before_network(self, index, fetch):
+        with self.assertRaisesRegex(OfficialProfileError, "approved official"):
+            official_profile_chain(
+                "crealityprint", "printer", "K1 0.4 nozzle",
+                "machine/k1.json", version="7.3.0")
+        fetch.assert_not_called()
+        index.assert_not_called()
+
     @patch("core.slicer_official_chain.fetch_official_profile")
     @patch("core.slicer_official_chain.orca_entries")
     def test_imports_entire_native_chain_parent_first(self, index, fetch):
