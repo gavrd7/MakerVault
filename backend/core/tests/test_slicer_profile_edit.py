@@ -102,6 +102,7 @@ class NativeSlicerProfileEditorTests(SimpleTestCase):
                 engine_version="2.4.2", kind="printer", source_scope="",
                 file_asset=SimpleNamespace(file=file, owner_id=7),
                 content_sha256=hashlib.sha256(raw).hexdigest(),
+                source_scope="", file_asset_id="test-"+str(pk),
             )
 
         parent = record("parent", "fdm_creality_common", {
