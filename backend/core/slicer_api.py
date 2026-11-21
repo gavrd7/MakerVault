@@ -1843,13 +1843,19 @@ def delete_profile(request, profile_id):
             Q(printer_profile_id=profile.pk) |
             Q(filament_profile_id=profile.pk) |
             Q(process_profile_id=profile.pk))
-        if linked.exclude(status="completed").exists():
+        # Private G-code cleanup turns an already completed result into
+        # stale history with this exact message. It is no longer retryable:
+        # no native preset needs to remain registered merely for that record.
+        archived_slice = (Q(status="completed") |
+                          Q(status="stale", message="Private unsaved G-code removed; slice history retained."))
+        if linked.exclude(archived_slice).exists():
             return _error(
                 "This profile is still required by an unsliced, active or retryable "
                 "slicing job. Delete or reassign those entries first.", 409)
-        linked.filter(status="completed", printer_profile_id=profile.pk).update(printer_profile=None)
-        linked.filter(status="completed", filament_profile_id=profile.pk).update(filament_profile=None)
-        linked.filter(status="completed", process_profile_id=profile.pk).update(process_profile=None)
+        archived = linked.filter(archived_slice)
+        archived.filter(printer_profile_id=profile.pk).update(printer_profile=None)
+        archived.filter(filament_profile_id=profile.pk).update(filament_profile=None)
+        archived.filter(process_profile_id=profile.pk).update(process_profile=None)
         try:
             profile.delete()
         except ProtectedError:
