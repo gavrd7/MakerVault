@@ -20,6 +20,23 @@ import { profilesForEngineVersion, isInternalNativeProfile, readableNativeProfil
 
 function SlicerJobThumbnail({ job }) {
   const [unavailable, setUnavailable] = useState(false);
+  const objects = job.settings?.plate_objects;
+  const singleModel = Array.isArray(objects) && objects.length === 1;
+  const painted = singleModel && (
+    (objects[0]?.colour_paint?.regions?.length || 0) > 0 ||
+    (objects[0]?.support_paint?.regions?.length || 0) > 0 ||
+    job.settings?.multi_material_test === true
+  );
+  // The source STL renderer creates a shaded 3D preview, unlike the printer's
+  // simplified extrusion-path fallback. Do not use one source STL as a
+  // misleading preview for painted or multi-object finished plates.
+  const model = job.input_asset;
+  const showModel = singleModel && !painted && Boolean(model?.url) &&
+    /\.stl(?:$|\?)/i.test(String(model?.filename || model?.name || ""));
+  if (showModel) return <div className="slicerSavedJobModelPreview"
+    aria-label={"3D source model preview for " + (model?.name || "saved slice")}>
+    <ModelThumbnail file={model} className="slicerSavedJobModelThumb"/>
+  </div>;
   const hasOutput = job.status === "completed" && Boolean(job.output_asset_id);
   const style = {
     width: 96, height: 96, minWidth: 96, borderRadius: 10,
