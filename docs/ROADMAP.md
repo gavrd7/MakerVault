@@ -109,7 +109,34 @@ These are not delivered capabilities or mandatory additions to the v1.0 scope:
 
 Printer maintenance logs, schedules and reminders were removed from the planned milestone at the owner's request. Camera development replaced that scope; maintenance is not silently reintroduced here.
 
-## Future FDM workflow — G-code and local slicing (unscheduled)
+## v1.7.0 — MakerVault Slicer Beta (planned)
+
+The owner-approved release order is to finish the existing **OrcaSlicer +
+Creality Print** integration, then introduce a **working Bambu Studio**
+engine in **v1.7.0**. The slicer UI and all unverified native capabilities
+must be clearly marked **Beta**, with explicit per-engine and per-feature
+limitations. Existing printer/G-code workflows must remain operable without
+the optional slicer worker. Bambu Studio's current catalogue-only support
+does **not** meet the working-engine acceptance condition: a pinned,
+isolated native runner, verified full profiles and real G-code output
+are still required.
+
+**Follow-on plan:** release the next reviewed engine in **v1.7.1**,
+then subsequent engines incrementally in **v1.7.2, ...**, rather than
+blocking v1.7.0 for every upstream slicer. The current PrusaSlicer
+worker prototype is a sensible first follow-on candidate but requires
+its own exact-binary acceptance before the engine is advertised.
+Printer communication remains a separate adapter from offline slicing.
+
+PR #171 is a long-lived draft foundation branch including unrelated
+non-slicer changes. Reconcile its main-branch divergence and isolate
+release scope before merging. Preserve working multi-colour printing
+and manufacturer scripts; retire obsolete diagnostic restrictions only
+when their corresponding production path is confirmed. Release guidance
+and acceptance criteria: [v1.7.0 Slicer Beta release plan](development/slicer-v1.7-beta-release-plan.md).
+
+## Future FDM workflow — G-code and local slicing (background)
+
 
 The v1.6.0 G-code milestone is delivered. **Current next priority: #156, the self-hosted multi-engine MakerVault Slicer**, followed by the connected **MakerVault Weigh Station**. Other planned QoL enhancements rank lower unless reliability/security requires them. The slicer is a separate major milestone and remains incomplete until an end-to-end isolated worker is validated:
 
