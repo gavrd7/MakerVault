@@ -2708,3 +2708,35 @@ unchanged.
 Focused tests: `core.tests.test_slicer_creality_paint_fixture`. This
 new code is committed on draft PR #171 but was **not yet run on Debian**
 as of the initial implementation.
+
+## Synthetic painting native output: first Debian matrix and audit correction
+
+On 21 Nov 2026, using the official K2 7.3.1 two-filament profile
+chain, `diagnose_creality_paint_fixture --deep` successfully sliced all
+six scenarios; targeted unit tests passed 57/57. Evidence:
+
+- Baseline: 47 total T0/T1 selections (24/23), 9439 G1 E moves
+- Support: 11331 G1 E moves (+1890 versus identical-geometry unpainted
+  support control), with 96 support, 2 support-interface and 1
+  support-transition role tags
+- Seam: +55 extrusion moves relative to identical-geometry control
+- Fuzzy: +890 extrusion moves relative to identical-geometry control
+- Variable layer: observed 0.12 mm and 0.20 mm steps
+- Flushing: no motion change and zero explicit native flush markers,
+  because the unmodified official machine profile does not explicitly
+  activate multicolor_method; this is a **negative control**, not evidence
+  of successful native purge
+
+The earlier role audit showed zero role-attributed support XY extrusion
+despite support tags and new extrusion moves. Its numeric matcher only
+accepted E followed by a digit, while Creality may emit E.25/E-.25,
+X.5/Y-.7. The matcher was corrected with regression tests, without
+changing the slicer engine or source G-code. Re-run the synthetic
+`--deep` matrix after staging update to check actual role-specific
+extrusion counts. A reported section count of zero must never be
+misinterpreted as a safe CFS changeover. The native gate positive control
+is separate and still strictly disposable.
+
+Latest fix commits include e2d9a2c6 (native role-decimal recognition),
+1509d9da (regression test), and 9686293f (explicit inactive flushing
+interpretation). These commits still require Debian tests.
