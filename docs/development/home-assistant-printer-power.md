@@ -30,8 +30,8 @@ automatic shutdown, G-code edits, Home Assistant add-ons, or extra containers.
   a re-read after every request. The state is **not** changed optimistically.
 - Off requires confirmation; MakerVault blocks off while it detects an
   active/paused/heating/cooling job in the known printer state. When a
-  printer has an enabled live connection but its telemetry is stale or
-  unverified, MakerVault blocks power-off instead of assuming it is idle.
+  printer has enabled live connections, **all** must have fresh verified idle
+  telemetry; any stale, conflicting or unverified connection blocks power-off.
   Printers deliberately configured without live connections still require
   explicit confirmation; operators must verify they are cooled and inactive.
   Never use the plug as a regular means of stopping a live print.
@@ -63,6 +63,8 @@ automatic shutdown, G-code edits, Home Assistant add-ons, or extra containers.
 - [ ] Printing or cooling: power-off request refused.
 - [ ] Stale, missing or disconnected live printer telemetry: power-off refused.
 - [ ] API or plug unreachable: error is shown; UI does not claim success.
+- [ ] Unknown Home Assistant switch state: no power command can be issued from inferred printer connectivity.
+- [ ] Multiple live connections: any stale/non-idle connection blocks shutdown.
 - [ ] Viewer without change permission sees no action.
 - [ ] Restart MakerVault: token, enabled state and printer assignment persist.
 - [ ] Other users' printers and switches cannot be controlled.
