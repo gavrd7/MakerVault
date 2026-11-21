@@ -86,3 +86,12 @@ test("saved slices reuse owner-private generated G-code thumbnails", () => {
   assert.match(setup, /printing\/slicer\/jobs\/.*thumbnail\//);
   assert.match(setup, /onError=\{\(\) => setUnavailable\(true\)\}/);
 });
+
+test("saved slicer entries keep thumbnails and buttons aligned, with shaded 3D model previews", () => {
+  assert.match(setup, /cameraSourceRow slicerSavedJobRow/);
+  assert.match(setup, /SlicerJobThumbnail key=\{job\.id/);
+  assert.match(setup, /ModelThumbnail file=\{model\}/);
+  assert.match(setup, /singleModel && !painted/);
+  assert.match(setup, /slicerSavedJobModelPreview/);
+  assert.match(setup, /printing\/slicer\/jobs\/.*thumbnail\//);
+});
