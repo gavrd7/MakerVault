@@ -170,6 +170,6 @@ test("device monitor stays over the slicer without navigating away or unmounting
   assert.match(workspace, /setLivePrinter\(printer\)/);
   assert.match(workspace, /livePrinter && <PrinterConnectionsModal/);
   assert.match(workspace, /onClose=\{\(\) => setLivePrinter\(null\)\}/);
-  assert.doesNotMatch(workspace, /setWorkspaceView\("overview"\)/);
+  assert.doesNotMatch(workspace.slice(workspace.indexOf("onOpenDevice="), workspace.indexOf("onOpenGcode=")), /setWorkspaceView|setSection/);
   assert.doesNotMatch(app, /onOpenSlicerDevice=/);
 });
