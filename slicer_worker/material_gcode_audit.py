@@ -204,8 +204,8 @@ def verify_painted_cube_tool_regions(raw_gcode):
                 reset = E_AXIS.search(code[3:])
                 if reset:
                     prior_e[active] = float(reset.group(1))
-            reset_x = re.search(r"(?:^|\\s)X([-+]?(?:\\d+(?:\\.\\d*)?|\\.\\d+))(?=\\s|$)", code)
-            reset_y = re.search(r"(?:^|\\s)Y([-+]?(?:\\d+(?:\\.\\d*)?|\\.\\d+))(?=\\s|$)", code)
+            reset_x = re.search(r"(?:^|\s)X([-+]?(?:\d+(?:\.\d*)?|\.\d+))(?=\s|$)", code)
+            reset_y = re.search(r"(?:^|\s)Y([-+]?(?:\d+(?:\.\d*)?|\.\d+))(?=\s|$)", code)
             if reset_x:
                 x = float(reset_x.group(1))
             if reset_y:
