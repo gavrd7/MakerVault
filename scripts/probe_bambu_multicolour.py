@@ -240,7 +240,7 @@ def run_fixture(binary, profiles, *, painted=False, timeout=180):
                         lines = native_gcode.decode("utf-8", "replace").splitlines()
                         exact_tools = {}
                         for code in lines:
-                            match = re.fullmatch(r"T([0-9]{1,2})\\s*", code.split(";", 1)[0].strip(), re.I)
+                            match = re.fullmatch(r"T([0-9]{1,2})\s*", code.split(";", 1)[0].strip(), re.I)
                             if match:
                                 exact_tools[match.group(1)] = exact_tools.get(match.group(1), 0) + 1
                         print("CI Bambu variant exact T commands:", label, exact_tools)
