@@ -53,7 +53,7 @@ def _entries(kind, vendor="BBL"):
 
 def search_bambu_native_profiles(query, kind, vendor="BBL", printer_model=None):
     if not isinstance(query, str) or len(query.strip()) > 80:
-        raise OfficialProfileError("Search for at least two characters.")
+        raise OfficialProfileError("Search terms must be 80 characters or fewer.")
     entries = _entries(kind, vendor)
     needle = query.strip().casefold()
     matches = [(name, path) for name, path in entries.items()
