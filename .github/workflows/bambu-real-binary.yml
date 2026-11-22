@@ -199,6 +199,15 @@ jobs:
           # Debug only the public, fixed two-cube fixture and verified vendor
           # profiles; no MakerVault user content, secrets or printer links.
           sudo apt-get install -y --no-install-recommends gdb
+          echo "CI-only public AppRun launcher (first 90 lines):"
+          sed -n '1,90p' /tmp/bambu-appimage-acceptance/squashfs-root/AppRun | cut -c 1-180
+          echo "CI-only native executable file type:"
+          file /tmp/bambu-appimage-acceptance/squashfs-root/bin/bambu-studio
+          set +e
+          timeout 15s env -u DISPLAY -u WAYLAND_DISPLAY             HOME=/tmp/bambu-cli-home QT_QPA_PLATFORM=offscreen             SSL_CERT_FILE=/etc/ssl/certs/ca-certificates.crt             bash -x /tmp/bambu-appimage-acceptance/squashfs-root/AppRun --help             >/tmp/bambu-apprun-shelltrace.txt 2>&1
+          set -e
+          grep -E -m 25 '(exec |APPDIR=|LD_LIBRARY_PATH=|bambu-studio)'             /tmp/bambu-apprun-shelltrace.txt | cut -c 1-180 || true
+
           python3 - <<'PY'
           from pathlib import Path
           import tempfile
