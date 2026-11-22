@@ -96,6 +96,18 @@ jobs:
               value = json.loads(path.read_text())
               assert 'inherits' not in value and 'include' not in value
               assert value['type'] == ('machine' if kind == 'printer' else kind)
+          for key in ('filament_flow_ratio', 'nozzle_temperature',
+                      'nozzle_temperature_initial_layer',
+                      'filament_max_volumetric_speed',
+                      'filament_retraction_length',
+                      'filament_is_support', 'filament_start_gcode',
+                      'filament_end_gcode'):
+              f = json.loads(Path('/tmp/bambu-verified-profiles/filament.json').read_text())
+              v = f.get(key)
+              print('Official BBL resolved option', key,
+                    'count', len(v) if isinstance(v, list) else 'not-vector',
+                    'sample', [str(x)[:40] for x in v[:2]]
+                    if isinstance(v, list) else '')
           for key in ('filament_id', 'filament_settings_id',
                       'filament_self_index', 'filament_extruder_variant'):
               f = json.loads(Path('/tmp/bambu-verified-profiles/filament.json').read_text())
@@ -162,6 +174,20 @@ jobs:
                             'list', len(v) if isinstance(v, list) else
                             'scalar' if isinstance(v, (str, int, float)) else
                             'absent')
+                  for key in ('filament_flow_ratio', 'nozzle_temperature',
+                              'nozzle_temperature_initial_layer',
+                              'filament_max_volumetric_speed',
+                              'filament_retraction_length',
+                              'filament_is_support', 'filament_start_gcode',
+                              'filament_end_gcode', 'filament_colour',
+                              'filament_diameter'):
+                      value = cfg.get(key)
+                      if isinstance(value, list):
+                          print('Official Bambu vendor option', key,
+                                'count', len(value),
+                                'samples', [str(x)[:40] for x in value[:3]])
+                      else:
+                          print('Official Bambu vendor option', key, 'not-vector')
                   for key in ('filament_ids', 'filament_self_index',
                               'filament_extruder_variant', 'printable_height'):
                       value = cfg.get(key)
