@@ -199,19 +199,26 @@ def verify_painted_cube_tool_regions(raw_gcode):
             absolute_e = True
         elif command == "M83":
             absolute_e = False
-        elif command == "G92" and active is not None:
-            reset = E_AXIS.search(code[3:])
-            if reset:
-                prior_e[active] = float(reset.group(1))
+        elif command == "G92":
+            if active is not None:
+                reset = E_AXIS.search(code[3:])
+                if reset:
+                    prior_e[active] = float(reset.group(1))
+            reset_x = re.search(r"(?:^|\\s)X([-+]?(?:\\d+(?:\\.\\d*)?|\\.\\d+))(?=\\s|$)", code)
+            reset_y = re.search(r"(?:^|\\s)Y([-+]?(?:\\d+(?:\\.\\d*)?|\\.\\d+))(?=\\s|$)", code)
+            if reset_x:
+                x = float(reset_x.group(1))
+            if reset_y:
+                y = float(reset_y.group(1))
         elif MOVE.match(code):
             mx = re.search(r"(?:^|\s)X([-+]?(?:\d+(?:\.\d*)?|\.\d+))(?=\s|$)", code)
             my = re.search(r"(?:^|\s)Y([-+]?(?:\d+(?:\.\d*)?|\.\d+))(?=\s|$)", code)
-            if (mx or my) and not absolute_xyz:
-                raise WorkerError("Relative XY cannot verify painted cube deposition.")
             if mx:
-                x = float(mx.group(1))
+                amount = float(mx.group(1))
+                x = amount if absolute_xyz else x + amount
             if my:
-                y = float(my.group(1))
+                amount = float(my.group(1))
+                y = amount if absolute_xyz else y + amount
             e = E_AXIS.search(code)
             if e and active is not None:
                 value = float(e.group(1))
