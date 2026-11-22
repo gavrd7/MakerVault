@@ -30,6 +30,23 @@ sudo python3 scripts/install_slicer_staging.py consolidate-slicer
 sudo python3 scripts/install_slicer_staging.py update
 ```
 
+**Existing engine volume permissions:** Older `versions/orcaslicer/2.5.0`
+and `versions/crealityprint/7.3.1` directories may be private to the
+former worker UID. The one-time migration helper uses `CHOWN`, `FOWNER`
+and `DAC_READ_SEARCH` strictly for traversal and ownership migration.
+It always reprocesses the full tree on retry (rather than skipping when only
+the volume root was previously changed). It does **not** grant these caps
+to the persistent worker. A locked-directory fixture is exercised by the
+combined-container smoke test.
+
+If the previous migration failed at `slicer-engine-store-init`, preserve
+the stopped legacy installer and the engine volume. Check
+`sudo docker logs makervault-slicer-engine-store-init-1`, pull this
+corrected PR branch, verify an engine-volume backup (an interrupted tar is
+not a valid backup), then explicitly rerun `consolidate-slicer`. Do
+not remove orphan containers or pass `--remove-orphans` until both native
+engines have passed real on-host slicing tests.
+
 The migration checks the full Compose configuration, stops the **old**
 standalone engine installer, stops the previous worker, adjusts permissions
 on the existing versioned volume **without deleting it**, then builds and
