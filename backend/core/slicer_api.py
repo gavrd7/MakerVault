@@ -614,19 +614,19 @@ def _draft(user, data):
         native_labels[f"{kind}_preset"] = label
 
     plate_type = _preset(data, "plate", 80) if "plate" in data else "default"
-    if engine.key in ("orcaslicer", "crealityprint"):
+    if engine.key in ("orcaslicer", "crealityprint", "bambustudio"):
         if plate_type not in ORCA_PLATES:
             raise ValueError("Choose a supported native build plate type.")
-        if engine.key == "crealityprint" and plate_type != "default":
+        if engine.key in ("crealityprint", "bambustudio") and plate_type != "default":
             printer_profile = native_profiles.get("printer_profile")
             if not printer_profile:
-                raise ValueError("Select a native Creality printer profile before choosing a plate.")
+                raise ValueError("Select a native printer profile before choosing a plate.")
             try:
                 supported = inspect_engine_plates(printer_profile)["supported"]
             except (SlicerProfileError, ValueError, TypeError, OSError) as exc:
-                raise ValueError("Creality build plate capabilities could not be verified.") from exc
+                raise ValueError("Native build plate capabilities could not be verified.") from exc
             if plate_type not in supported:
-                raise ValueError("Build plate is not supported by the Creality printer profile.")
+                raise ValueError("Build plate is not supported by the selected printer profile.")
     elif plate_type != "default":
         raise ValueError("Build plate overrides are not supported by this slicer engine.")
     return SliceJob.objects.create(
@@ -1956,7 +1956,7 @@ def profile_plate(request, profile_id):
     ).select_related("file_asset").first()
     if not profile:
         return _error("Owned Orca or Creality machine profile not found.", 404)
-    if profile.engine in ("orcaslicer", "crealityprint"):
+    if profile.engine in ("orcaslicer", "crealityprint", "bambustudio"):
         try:
             geometry = (inspect_creality_plate(profile) if profile.engine == "crealityprint"
                         else inspect_orca_plate(profile))
