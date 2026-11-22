@@ -117,6 +117,7 @@ def run_fixture(binary, profiles, *, painted=False, timeout=180):
                 import subprocess
                 from slicer_worker.bambu_runner import bambu_command
                 from slicer_worker.headless_env import slicing_environment
+                (workdir / "bambu-sliced.3mf").unlink(missing_ok=True)
                 args = bambu_command(Path(binary), workdir)
                 attempt = subprocess.run(args, cwd=workdir,
                     env={**slicing_environment(workdir),
