@@ -388,6 +388,15 @@ def run_fixture(binary, profiles, *, painted=False, timeout=180,
         print("CI Bambu native flush evidence:",
               json.dumps(flush_evidence, sort_keys=True))
         if variable_layers:
+            code_lines = gcode.decode("utf-8", "replace").splitlines()
+            print("CI Bambu layer-related native comments:",
+                  [line[:150] for line in code_lines
+                   if line.lstrip().startswith(";") and
+                   ("layer" in line.lower() or "z:" in line.lower())][:30])
+            print("CI Bambu early Z-motion samples:",
+                  [line[:140] for line in code_lines
+                   if line.startswith(("G0 ", "G1 ", "G00 ", "G01 "))
+                   and " Z" in line.upper()][:30])
             layer_marks = []
             for line in gcode.decode("utf-8", "replace").splitlines():
                 if line.startswith(";Z:") and len(line) < 40:
