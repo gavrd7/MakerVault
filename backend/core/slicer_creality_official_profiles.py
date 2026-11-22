@@ -69,10 +69,10 @@ def official_catalogue_models(vendor="Creality"):
 
 
 def search_creality_profiles(query, kind, vendor="Creality", printer_model=None):
-    if vendor not in VENDORS or not isinstance(query, str) or not 2 <= len(query.strip()) <= 80:
+    if vendor not in VENDORS or not isinstance(query, str) or len(query.strip()) > 80:
         raise OfficialProfileError("Choose an upstream manufacturer catalogue and search at least two characters.")
     term = query.strip().casefold()
-    matches = [(name, path) for name, path in _entries(kind, vendor) if fuzzy_name_match(name, term)]
+    matches = [(name, path) for name, path in _entries(kind, vendor) if not term or fuzzy_name_match(name, term)]
     if printer_model:
         matches = narrow_catalogue(matches, kind, printer_model)
     return {
