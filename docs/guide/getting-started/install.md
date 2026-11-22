@@ -140,9 +140,23 @@ This builds the checked-out source using the repository Dockerfile and tags the 
 
 The source-build route changes only how the MakerVault application image is obtained. It uses the **same** PostgreSQL database, Redis data, media, encryption keys, backups, ports and `.env` settings as the GHCR route.
 
-### Optional MakerVault Slicer
+### MakerVault Slicer — combined four-container deployment
 
-The slicing service is **not required** for installation, printer monitoring or G-code management. To understand the planned single-container installation, independent engine selection and update/rollback policy, see the [MakerVault Slicer installation and engine guide](../3d-printing/slicer.md). The multi-engine installer is still in development and is not part of the supported base installation.
+The base Compose stack starts **three** long-running containers (application, PostgreSQL and Redis), which remain usable for printer monitoring and G-code management without a slicer. The verified slicer deployment adds exactly **one** long-running combined worker/installer container, named `makervault-slicer`. Its one-off engine-store permissions helper exits after setup. See the [slicer installation and engine guide](../3d-printing/slicer.md) for approved engine sources, installation, native profile import and verification.
+
+**Important release distinction:** the supplied `compose.slicer.yaml` defines the release-oriented combined-container architecture, but starting it requires a reviewed, reachable combined worker image and genuine engine identity/checksum values. Those assets and values must be published/approved for the actual v1.7.0 release before these instructions can be called a tested turnkey installation. Do not substitute staging environment files or invented hashes.
+
+Once the required combined image and engine approvals are available, retain your normal `.env` and supply the separately documented slicer credentials and identity values (see [Environment](environment.md)). Inspect the rendered configuration *before* starting:
+
+```bash
+sudo docker compose -f compose.yaml -f compose.slicer.yaml config --quiet
+sudo docker compose -f compose.yaml -f compose.slicer.yaml --profile slicer up -d
+sudo docker compose -f compose.yaml -f compose.slicer.yaml ps
+```
+
+The overlay's `slicer-engine-store-init` task is not a fifth persistent service. Install each native engine explicitly through MakerVault only after its version, source and binary checksum are verified. Do not execute an unverified slicer or assume that a successful slice authorises printing to a physical printer.
+
+For local testing against checked-out application source, retain `-f compose.build.yaml` *before* `-f compose.slicer.yaml`. The separate `compose.slicer.staging.yaml` and `.slicer-staging.env` are development-only; do not combine the staging and release overlays.
 
 ## 5. Set up the first administrator
 
