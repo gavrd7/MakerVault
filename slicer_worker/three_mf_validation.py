@@ -94,7 +94,7 @@ def validate_worker_3mf(data, *, native_tool_count=None, allow_creality_combined
                 raise WorkerError("Invalid Bambu project filament colour.")
             if (not isinstance(settings.get("nozzle_diameter"), list)
                     or not 1 <= len(settings["nozzle_diameter"]) <= 16
-                    or any(not isinstance(v, str) or not re.fullmatch(r"(?:0\\.[1-9][0-9]?|[12](?:\\.[0-9]{1,2})?)", v)
+                    or any(not isinstance(v, str) or not re.fullmatch(r"(?:0\.[1-9][0-9]?|[12](?:\.[0-9]{1,2})?)", v)
                            for v in settings["nozzle_diameter"])):
                 raise WorkerError("Invalid Bambu project nozzle diameter.")
         root = ET.fromstring(raw)
