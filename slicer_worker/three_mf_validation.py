@@ -44,7 +44,7 @@ BAMBU_VARIANT_OPTIONS = {
 
 def validate_worker_3mf(data, *, native_tool_count=None, allow_creality_combined_paint=False,
                         allow_creality_layer_ranges=False, allow_bambu_project=False,
-                        allow_bambu_combined_paint=False):
+                        allow_bambu_combined_paint=False, allow_bambu_layer_ranges=False):
     if native_tool_count is not None and (isinstance(native_tool_count, bool) or
             not isinstance(native_tool_count, int) or not 2 <= native_tool_count <= 16):
         raise WorkerError("Invalid native filament tool count.")
@@ -54,6 +54,10 @@ def validate_worker_3mf(data, *, native_tool_count=None, allow_creality_combined
         raise WorkerError("Creality painting extensions need exactly two native tools.")
     if allow_bambu_combined_paint and (not allow_bambu_project or native_tool_count is None):
         raise WorkerError("Bambu combined painting needs an exact native project palette.")
+    if allow_bambu_layer_ranges and not (
+            allow_bambu_project and allow_bambu_combined_paint
+            and native_tool_count is not None):
+        raise WorkerError("Bambu variable layers require an exact native palette.")
     if not isinstance(data, bytes) or not data or len(data) > 32 * 1024 * 1024:
         raise WorkerError("3MF input exceeds worker limits.")
     try:
@@ -177,7 +181,8 @@ def validate_worker_3mf(data, *, native_tool_count=None, allow_creality_combined
         raise WorkerError("3MF build references unknown objects.")
     # Accept only simple, bounded per-object layer heights, never script keys.
     if layer_ranges is not None:
-        if len(objects) != 1 or (native_tool_count is not None and not allow_creality_layer_ranges):
+        if len(objects) != 1 or (native_tool_count is not None and not (
+                allow_creality_layer_ranges or allow_bambu_layer_ranges)):
             raise WorkerError("Native variable layer test requires an approved single object.")
         try:
             layer_root = ET.fromstring(layer_ranges)
