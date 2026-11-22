@@ -166,6 +166,23 @@ jobs:
                               'filament_extruder_variant', 'printable_height'):
                       value = cfg.get(key)
                       print('Official public fixture', key, repr(value)[:600])
+              from xml.etree import ElementTree as ET
+              root = ET.fromstring(archive.read('3D/3dmodel.model'))
+              metadata = [(node.get('name'), (node.text or '')[:90])
+                          for node in root if node.tag.endswith('}metadata')]
+              print('Official Bambu root metadata:', metadata[:18])
+              build = next((node for node in root if node.tag.endswith('}build')), None)
+              resources = next((node for node in root if node.tag.endswith('}resources')), None)
+              print('Official Bambu root object/build counts:',
+                    len(resources) if resources is not None else -1,
+                    len(build) if build is not None else -1)
+              if build is not None:
+                  print('Official Bambu first two build items:',
+                        [dict(x.attrib) for x in list(build)[:2]])
+              if resources is not None:
+                  print('Official Bambu first two object shapes:',
+                        [(dict(x.attrib), [y.tag.rsplit('}',1)[-1] for y in x][:5])
+                         for x in list(resources)[:2]])
               if 'Metadata/model_settings.config' in names:
                   from xml.etree import ElementTree as ET
                   manifest = ET.fromstring(archive.read('Metadata/model_settings.config'))
