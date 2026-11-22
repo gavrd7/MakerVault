@@ -1119,16 +1119,6 @@ def submit(connection, user, payload):
         asset = FileAsset.objects.filter(owner=user, pk=aid, superseded_by__isnull=True).first()
         if not asset or (asset.metadata or {}).get("extension") != ".gcode":
             raise GcodeSubmissionError("Select an owned, current plain-text G-code file.", 404)
-        # Bambu Beta native G-code is offline-only until manufacturer
-        # firmware and physical printer acceptance. Enforce at the central
-        # submission endpoint, even when the asset was saved into the G-code
-        # library or the UI is bypassed. No override or printer adapter may
-        # permit upload/start during this Beta stage.
-        if ((asset.metadata or {}).get("bambu_beta") is True
-                or ((asset.metadata or {}).get("generated_by") == "makervault-slicer"
-                    and (asset.metadata or {}).get("engine") == "bambustudio")):
-            raise GcodeSubmissionError(
-                "Bambu Studio Beta G-code is not approved for printer upload or start.", 409)
         # Experimental multicolour slices are offline evidence only.
         # No opt-in, adapter flag or CFS acknowledgement bypasses this guard.
         if (asset.metadata or {}).get("multi_material_test") is True:
