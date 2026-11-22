@@ -372,6 +372,7 @@ class Handler(BaseHTTPRequestHandler):
                 "Invalid Bambu native filament IDs.": "invalid-native-project-settings",
                 "Bambu filament support vector does not match the palette.": "invalid-native-project-settings",
                 "Bambu native material vector does not match variants.": "invalid-native-project-settings",
+                "Bambu variable layers require an exact native palette.": "invalid-native-layer-settings",
                 "Unsafe Bambu native material vector.": "invalid-native-project-settings",
                 "Bambu native project does not match the selected filament profiles.": "native-filament-palette-mismatch",
                 "Invalid Bambu filament extruder variants.": "invalid-native-project-settings",
