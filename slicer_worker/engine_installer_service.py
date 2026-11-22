@@ -363,6 +363,11 @@ def _install(op_id, release):
             "binary": str(target / "squashfs-root" / "AppRun"),
             "binary_sha256": binary_hash,
         }, separators=(",", ":")), encoding="utf-8")
+        # mkdtemp creates a 0700 staging root. The installer (UID 10002)
+        # can inspect it, but the worker (UID 10001) cannot traverse a
+        # published version directory unless the root is made searchable.
+        # Only expose traversal/read; retain installer-only write access.
+        stage.chmod(0o755)
         os.rename(stage, target)
         stage = None
         _write_operation(op_id, status="activating", progress=94,
