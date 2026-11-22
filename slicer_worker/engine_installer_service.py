@@ -381,11 +381,13 @@ def _install(op_id, release):
             probe = subprocess.run(probe_args, cwd=stage,
                 env={"HOME": str(stage), "TMPDIR": str(stage),
                      "PATH": "/usr/bin:/bin", "LANG": "C.UTF-8",
-                     "DISPLAY": "", "QT_QPA_PLATFORM": "offscreen"},
+                     "DISPLAY": "", "QT_QPA_PLATFORM": "offscreen",
+                     "SSL_CERT_FILE": "/etc/ssl/certs/ca-certificates.crt"},
                 stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
-                stderr=subprocess.PIPE, timeout=18, check=False)
+                stderr=subprocess.PIPE,
+                timeout=45 if engine == "bambustudio" else 18, check=False)
         except subprocess.TimeoutExpired as exc:
-            raise ValueError("Engine CLI headless check timed out (18 seconds).") from exc
+            raise ValueError("Engine CLI headless check timed out.") from exc
         except OSError as exc:
             raise ValueError(
                 f"Engine CLI could not start ({type(exc).__name__}, errno {exc.errno})."
