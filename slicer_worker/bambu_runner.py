@@ -95,8 +95,12 @@ def extract_single_bambu_gcode(sliced_project: Path, workdir: Path) -> Path:
                 if name in seen_names:
                     raise WorkerError("Bambu native 3MF contains duplicate entries.")
                 seen_names.add(name)
-                if (name.startswith("Metadata/plate_") and
-                        re.fullmatch(r"Metadata/plate_[1-9][0-9]*\.gcode", name)):
+                # Reject unrecognized G-code members as well as multiple
+                # recognised plates; never silently omit an unexpected toolpath.
+                if name.lower().endswith(".gcode") and not re.fullmatch(
+                        r"Metadata/plate_[1-9][0-9]*\\.gcode", name):
+                    raise WorkerError("Bambu native output includes an unexpected G-code plate.")
+                if re.fullmatch(r"Metadata/plate_[1-9][0-9]*\\.gcode", name):
                     if info.file_size <= 0 or info.file_size > MAX_GCODE_BYTES:
                         raise WorkerError("Bambu G-code exceeds size limits.")
                     if stat.S_IFMT(info.external_attr >> 16) == stat.S_IFLNK:
