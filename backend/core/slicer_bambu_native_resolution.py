@@ -89,7 +89,7 @@ def resolved_bambu_profile(profile):
     if (profile.engine != "bambustudio"
             or profile.kind not in KIND_TYPES
             or profile.engine_version != "02.09.01.70"
-            or not profile.source_scope.startswith("bambulab/BambuStudio@v02.09.01.70/BBL")):
+            or profile.source_scope != "bambulab/BambuStudio@v02.09.01.70/BBL"):
         raise SlicerProfileError("Unapproved Bambu native profile source or version.")
     def fetch(current):
         if current == profile.name:
