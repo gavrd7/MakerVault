@@ -14,6 +14,9 @@ MAX_PARENT_DEPTH = 12
 
 
 def resolved_native_profile(profile, *, depth=0, seen=None):
+    if profile.engine == "bambustudio":
+        from .slicer_bambu_native_resolution import resolved_bambu_profile
+        return resolved_bambu_profile(profile)
     if profile.engine not in {"orcaslicer", "crealityprint"}:
         raise SlicerProfileError("Profile resolution currently supports Orca and Creality JSON.")
     seen = set() if seen is None else seen
