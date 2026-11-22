@@ -3,6 +3,26 @@ from core.slicer_preview import generated_preview
 
 
 class SlicerPreviewTests(SimpleTestCase):
+
+    def test_bambu_total_filament_headers_report_length_and_mass_not_mislabeled_volume(self):
+        raw = """; HEADER_BLOCK_START
+; BambuStudio 02.09.01.70
+; estimated printing time (normal mode) = 42m 34s
+; total filament length [mm] : 3877.84
+; total filament volume [cm^3] : 9327.30
+; total filament weight [g] : 11.57
+; filament_diameter: 1.75
+; HEADER_BLOCK_END
+G90
+M83
+G1 X0 Y0 Z0.2
+G1 X5 Y0 E1
+"""
+        result = generated_preview(raw)
+        self.assertEqual(result["filament_mm"], 3877.84)
+        self.assertEqual(result["filament_g"], 11.57)
+        self.assertIsNone(result["filament_cm3"])
+        self.assertEqual(result["estimated_time_seconds"], 2554)
     def test_extracts_native_duration_filament_and_extrusion_features(self):
         raw = """; estimated printing time (normal mode) = 1h 20m 30s
 ; filament used [mm] = 1520.0
