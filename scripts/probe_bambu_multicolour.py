@@ -17,6 +17,7 @@ from slicer_worker.bambu_runner import run_bambu
 from slicer_worker.material_gcode_audit import (
     expected_native_tools, verify_multi_material_output,
     verify_two_object_tool_regions, verify_painted_cube_tool_regions,
+    summarize_k2_fixture_changeovers,
 )
 from slicer_worker.runner import WorkerError
 from slicer_worker.three_mf_validation import CORE_NS, validate_worker_3mf
@@ -307,6 +308,15 @@ def run_fixture(binary, profiles, *, painted=False, timeout=180):
         verify_multi_material_output(gcode, {0, 1})
         coverage = (verify_painted_cube_tool_regions(gcode) if painted
                     else verify_two_object_tool_regions(gcode))
+        # Evidence only: this fixed-geometry parser is shared with the K2
+        # acceptance but makes no assertion about Bambu purge semantics.
+        # The actual topology and tool-commands remain engine-specific.
+        try:
+            switch_evidence = summarize_k2_fixture_changeovers(gcode)
+        except WorkerError as exc:
+            switch_evidence = {"diagnostic": str(exc)[:160]}
+        print("CI Bambu fixed model changeover/purge evidence:",
+              json.dumps(switch_evidence, sort_keys=True))
         return {
             "status": "passed", "engine": "bambustudio",
             "fixture": "painted-facets" if painted else "two-objects",
