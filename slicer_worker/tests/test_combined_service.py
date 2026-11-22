@@ -49,6 +49,7 @@ class CombinedSlicerTests(unittest.TestCase):
     def test_compose_has_only_one_slicer_runtime_service(self):
         compose = (ROOT / "compose.slicer.staging.yaml").read_text()
         self.assertIn("  slicer-worker:", compose)
+        self.assertIn("    container_name: makervault-slicer", compose)
         self.assertNotIn("\n  slicer-engine-installer:", compose)
         self.assertIn("http://slicer-worker:8091", compose)
         self.assertIn("slicer_worker.combined_service", compose)
