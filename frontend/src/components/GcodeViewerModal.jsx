@@ -128,7 +128,7 @@ export default function GcodeViewerModal({ file, canEdit = false, onClose, onSav
         <span>Bed {headerTemperature("bed_c")}</span>
         <span>Chamber {headerTemperature("chamber_c")}</span>
         {filamentSummary && <span>Filament {filamentSummary}</span>}
-      </div>
+      </div>}
       <div className={"formActions" + (compact ? " slicerGcodeDesktopActions" : "")} style={{ justifyContent: "flex-start" }}>
         <button type="button" className={mode === "visual" ? "primary" : ""} onClick={() => setMode("visual")}>Visual toolpath</button>
         <button type="button" className={mode === "code" ? "primary" : ""} onClick={() => setMode("code")}>G-code text</button>
