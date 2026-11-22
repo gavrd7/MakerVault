@@ -23,8 +23,10 @@ from slicer_worker.runner import WorkerError
 from slicer_worker.three_mf_validation import CORE_NS, validate_worker_3mf
 
 
-def make_bambu_material_fixture(*, painted=False, native_app=True):
+def make_bambu_material_fixture(*, painted=False, native_app=True, variable_layers=False):
     """Build 1 painted cube or 2 separately assigned cubes on a 256mm plate."""
+    if variable_layers and not painted:
+        raise WorkerError("Bambu variable-layer fixture requires one painted object.")
     ns = "{" + CORE_NS + "}"
     ET.register_namespace("", CORE_NS)
     model = ET.Element(ns + "model", {"unit": "millimeter"})
@@ -91,6 +93,20 @@ def make_bambu_material_fixture(*, painted=False, native_app=True):
             package.writestr("3D/3dmodel.model", ET.tostring(model, encoding="utf-8"))
             package.writestr("Metadata/model_settings.config",
                              ET.tostring(manifest, encoding="utf-8"))
+            if variable_layers:
+                # BambuStudio 2.9.1 native bbs_3mf.cpp imports the same
+                # Metadata/layer_config_ranges.xml structure as Orca.
+                ranges = ET.Element("objects")
+                target = ET.SubElement(ranges, "object", {"id": "1"})
+                for start, stop, height in (
+                        ("0.0", "9.0", "0.10"),
+                        ("9.0", "20.0", "0.30")):
+                    band = ET.SubElement(target, "range",
+                                         {"min_z": start, "max_z": stop})
+                    ET.SubElement(band, "option",
+                                  {"opt_key": "layer_height"}).text = height
+                package.writestr("Metadata/layer_config_ranges.xml",
+                                 ET.tostring(ranges, encoding="utf-8"))
             # Bambu CLI 02.09.01.70 reads these project vectors during
             # --export-3mf; absent filament IDs can abort inside upstream
             # get_at(). A generic core 3MF is sufficient only for one tool.
@@ -119,17 +135,21 @@ def make_bambu_material_fixture(*, painted=False, native_app=True):
             package.writestr("[Content_Types].xml", content_types)
             package.writestr("_rels/.rels", rels)
         raw = data.getvalue()
-    validate_worker_3mf(raw, native_tool_count=2, allow_bambu_project=True)
+    validate_worker_3mf(raw, native_tool_count=2, allow_bambu_project=True,
+                        allow_bambu_combined_paint=painted,
+                        allow_bambu_layer_ranges=variable_layers)
     if expected_native_tools(raw) != {0, 1}:
         raise WorkerError("Two-material fixture did not select both logical tools.")
     return raw
 
 
-def run_fixture(binary, profiles, *, painted=False, timeout=180, flush_multiplier=None, tower_xy=None):
+def run_fixture(binary, profiles, *, painted=False, timeout=180,
+                flush_multiplier=None, tower_xy=None, variable_layers=False):
     source = Path(profiles)
     with tempfile.TemporaryDirectory(prefix="makervault-bambu-two-tool-") as tmp:
         workdir = Path(tmp)
-        project = make_bambu_material_fixture(painted=painted)
+        project = make_bambu_material_fixture(painted=painted,
+                                              variable_layers=variable_layers)
         (workdir / "input.3mf").write_bytes(project)
         for kind in ("printer", "process", "filament"):
             raw = (source / (kind + ".json")).read_bytes()
@@ -351,6 +371,32 @@ def run_fixture(binary, profiles, *, painted=False, timeout=180, flush_multiplie
         flush_evidence["native_header"] = native_header
         print("CI Bambu native flush evidence:",
               json.dumps(flush_evidence, sort_keys=True))
+        if variable_layers:
+            layer_marks = []
+            for line in gcode.decode("utf-8", "replace").splitlines():
+                if line.startswith(";Z:") and len(line) < 40:
+                    try:
+                        layer_marks.append(float(line[3:].strip()))
+                    except ValueError:
+                        pass
+            increments = [(z1, round(z1-z0, 3))
+                          for z0, z1 in zip(layer_marks, layer_marks[1:])
+                          if z1 > z0]
+            bands = {
+                "lower_0_10": [delta for z, delta in increments
+                               if 2 <= z <= 8],
+                "upper_0_30": [delta for z, delta in increments
+                               if 12 <= z <= 18],
+            }
+            print("CI Bambu native variable-layer Z evidence:",
+                  json.dumps({"marker_count": len(layer_marks),
+                              "samples": layer_marks[:6],
+                              "bands": {k: v[:12] for k, v in bands.items()},
+                              "modal_counts": {
+                                  k: {str(inc): vals.count(inc)
+                                      for inc in sorted(set(vals))}
+                                  for k, vals in bands.items()}}, sort_keys=True))
+
 
         return {
             "status": "passed", "engine": "bambustudio",
@@ -361,6 +407,7 @@ def run_fixture(binary, profiles, *, painted=False, timeout=180, flush_multiplie
             "flush_multiplier": flush_multiplier,
             "tower_xy": tower_xy,
             "flush_evidence": flush_evidence,
+            "variable_layers_requested": variable_layers,
             **coverage,
         }
 
@@ -370,6 +417,7 @@ def main():
     parser.add_argument("--binary", required=True)
     parser.add_argument("--profiles", required=True)
     parser.add_argument("--painted", action="store_true")
+    parser.add_argument("--variable-layers", action="store_true")
     parser.add_argument("--flush-multiplier", type=float, choices=(1.0, 2.0))
     parser.add_argument("--tower-x", type=float)
     parser.add_argument("--tower-y", type=float)
@@ -379,6 +427,7 @@ def main():
         print(json.dumps(run_fixture(
             args.binary, args.profiles, painted=args.painted, timeout=args.timeout,
             flush_multiplier=args.flush_multiplier,
+            variable_layers=args.variable_layers,
             tower_xy=((args.tower_x, args.tower_y)
                       if args.tower_x is not None and args.tower_y is not None
                       else None)),
