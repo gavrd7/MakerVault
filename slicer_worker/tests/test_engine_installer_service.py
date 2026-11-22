@@ -135,6 +135,13 @@ class InstallerTests(unittest.TestCase):
         self.assertIn('shutil.copyfile(REVIEWED_ORCA_SOURCE, image)', source)
         self.assertIn('if bundled_orca:', source)
 
+    def test_published_version_directory_is_worker_traversable(self):
+        # mkdtemp starts at 0700; worker UID 10001 must be able to
+        # traverse a version published by installer UID 10002.
+        from inspect import getsource
+        source = getsource(installer._install)
+        self.assertIn("stage.chmod(0o755)\n        os.rename(stage, target)", source)
+
     def test_creality_cli_probe_uses_explicit_cli_switch(self):
         # Upstream requires --cli to avoid launching the wxWidgets GUI.
         from inspect import getsource
