@@ -69,6 +69,31 @@ class BambuNativeProfileImportTests(SimpleTestCase):
         return doc, raw
 
     @patch("core.slicer_bambu_native_profiles._get_json")
+    def test_p1s_profiles_are_visible_without_an_owned_printer_filter(self, fetch):
+        index = self._index()
+        index["machine_list"].extend([
+            {"name": "Bambu Lab P1S 0.4 nozzle",
+             "sub_path": "machine/Bambu Lab P1S 0.4 nozzle.json"},
+            {"name": "Bambu Lab P1S 0.6 nozzle",
+             "sub_path": "machine/Bambu Lab P1S 0.6 nozzle.json"},
+        ])
+        fetch.side_effect = lambda url, limit: (index, json.dumps(index).encode())
+        found = search_bambu_native_profiles("P1S", "printer", vendor="BBL")
+        self.assertEqual(found["total_matches"], 2)
+        self.assertEqual(len(found["profiles"]), 2)
+
+    @patch("core.slicer_bambu_native_profiles._get_json")
+    def test_creality_catalogue_is_not_blocked_by_bambu_engine(self, fetch):
+        index = {"machine_list": [
+            {"name": "Creality K1 0.4 nozzle",
+             "sub_path": "machine/Creality K1 0.4 nozzle.json"},
+        ], "filament_list": [], "process_list": []}
+        fetch.side_effect = lambda url, limit: (index, json.dumps(index).encode())
+        found = search_bambu_native_profiles("", "printer", vendor="Creality")
+        self.assertEqual(found["profiles"][0]["name"], "Creality K1 0.4 nozzle")
+        self.assertEqual(found["vendor"], "Creality")
+
+    @patch("core.slicer_bambu_native_profiles._get_json")
     def test_searches_real_native_machine_process_filament_not_model_artwork(self, fetch):
         fetch.side_effect = self._mock_get
         printer = search_bambu_native_profiles("X1 Carbon", "printer")
