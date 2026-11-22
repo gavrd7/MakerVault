@@ -265,6 +265,8 @@ def summarize_bambu_flush_signal(raw_gcode):
     positive_moves = {0: 0, 1: 0}
     stationary = {0: 0.0, 1: 0.0}
     tower = {0: 0.0, 1: 0.0}
+    support = {0: 0.0, 1: 0.0}
+    support_feature_moves = 0
     tower_feature_moves = 0
     toolchanges = 0
     feature = ""
@@ -327,6 +329,9 @@ def summarize_bambu_flush_signal(raw_gcode):
             positive_moves[active] += 1
             if not XY.search(line):
                 stationary[active] += inc
+            if "support" in feature:
+                support[active] += inc
+                support_feature_moves += 1
             if "tower" in feature or "wipe" in feature:
                 tower[active] += inc
                 tower_feature_moves += 1
@@ -341,6 +346,9 @@ def summarize_bambu_flush_signal(raw_gcode):
         "positive_e_moves": {str(k): v for k, v in positive_moves.items()},
         "stationary_positive_e_mm": {str(k): round(v, 3) for k, v in stationary.items()},
         "tower_feature_positive_e_mm": {str(k): round(v, 3) for k, v in tower.items()},
+        "support_feature_positive_e_mm": {
+            str(k): round(v, 3) for k, v in support.items()},
+        "support_feature_moves": support_feature_moves,
         "tower_feature_moves": tower_feature_moves,
         "tower_position_moves": tower_position_moves,
         "tower_deposition_bbox_mm": (
