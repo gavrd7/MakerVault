@@ -4,6 +4,7 @@ on:
   pull_request:
     paths:
       - 'scripts/prepare_bambu_staging.py'
+      - 'scripts/prepare_bambu_native_fixtures.py'
       - 'slicer_worker/bambu_runner.py'
       - 'slicer_worker/stage_engines.py'
       - 'slicer_worker/probe.py'
@@ -69,3 +70,35 @@ jobs:
             }
           grep -Eiq -- '--(slice|load-settings|load-filaments|export-3mf)' /tmp/bambu-help.log
           echo 'Pinned Bambu Studio headless command-line startup verified.'
+
+      - name: Resolve exact-version official X1C native profiles from extracted bundle
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 scripts/prepare_bambu_native_fixtures.py \
+            --appdir /tmp/bambu-appimage-acceptance/squashfs-root \
+            --output /tmp/bambu-verified-profiles
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          for kind in ('printer', 'process', 'filament'):
+              path = Path('/tmp/bambu-verified-profiles') / (kind + '.json')
+              value = json.loads(path.read_text())
+              assert 'inherits' not in value and 'include' not in value
+              assert value['type'] == ('machine' if kind == 'printer' else kind)
+          print('Official native profile ancestry fully resolved.')
+          PY
+      - name: Attempt genuine pinned Bambu CLI single-material STL slice
+        shell: bash
+        run: |
+          set -euo pipefail
+          # CI runner is ephemeral and has no printer credentials or MakerVault
+          # server connection. This is still only a preliminary native CLI
+          # proof; isolated staging acceptance remains a separate gate.
+          timeout 240s python3 -m slicer_worker.probe \
+            --engine bambustudio --version 02.09.01.70 \
+            --binary /tmp/bambu-appimage-acceptance/squashfs-root/AppRun \
+            --printer /tmp/bambu-verified-profiles/printer.json \
+            --process /tmp/bambu-verified-profiles/process.json \
+            --filament /tmp/bambu-verified-profiles/filament.json \
+            --timeout 180
