@@ -269,12 +269,6 @@ def _validate_plate_execution(job):
         settings=expand_painted_settings(getattr(job, "owner", None), job.settings or {})
     except (ValueError, OSError) as exc:
         raise SlicerExecutionError("A referenced private painting asset is missing or invalid.") from exc
-    if job.engine == "bambustudio" and settings.get("multi_material_test") is True:
-        # The existing native Bambu runner has not yet implemented multiple
-        # --load-filaments entries. Fail before routing to Orca-specific
-        # colour-planning code, which otherwise reports a misleading error.
-        raise SlicerExecutionError(
-            "Multiple Bambu filaments require a native multi-filament runner.")
     # Do not silently discard native flush / prime-tower preferences when
     # admitting an otherwise single-filament job. They require the future
     # exact-printer, multi-tool worker route and verified CFS bindings.
@@ -320,11 +314,12 @@ def _validate_plate_execution(job):
         # Native geometry splitting and paint_supports attributes are
         # experimental until compared with real Orca-generated toolpaths.
         if not ((job.engine == "orcaslicer" and job.engine_version == "2.5.0") or
+                (job.engine == "bambustudio" and job.engine_version == "02.09.01.70") or
                 (job.engine == "crealityprint" and job.engine_version.startswith("7.3.") and
                  settings.get("multi_material_test") is True)):
             raise SlicerExecutionError(
                 "Native support painting test requires OrcaSlicer 2.5.0 or Creality Print 7.3.x CFS test mode.")
-        if len(objects) != 1 or (settings.get("multi_material_test") and job.engine != "crealityprint"):
+        if len(objects) != 1 or (settings.get("multi_material_test") and job.engine not in {"crealityprint", "bambustudio"}):
             raise SlicerExecutionError(
                 "Support painting test requires one upright model (Creality: one two-colour CFS model).")
         item = objects[0]
@@ -344,10 +339,11 @@ def _validate_plate_execution(job):
     if any(isinstance(item, dict) and isinstance(item.get("seam_paint"), dict)
            and item["seam_paint"].get("regions") for item in objects):
         if not ((job.engine == "orcaslicer" and job.engine_version == "2.5.0") or
+                (job.engine == "bambustudio" and job.engine_version == "02.09.01.70") or
                 (job.engine == "crealityprint" and job.engine_version.startswith("7.3.") and
                  settings.get("multi_material_test") is True)):
             raise SlicerExecutionError("Native seam painting test requires OrcaSlicer 2.5.0 or Creality Print 7.3.x CFS test mode.")
-        if len(objects) != 1 or (settings.get("multi_material_test") and job.engine != "crealityprint"):
+        if len(objects) != 1 or (settings.get("multi_material_test") and job.engine not in {"crealityprint", "bambustudio"}):
             raise SlicerExecutionError("Seam painting test requires one model (Creality: one two-colour CFS model).")
         item = objects[0]
         if item.get("process_overrides"):
@@ -366,11 +362,12 @@ def _validate_plate_execution(job):
         # fuzzy_skin=none ("Painted only") to activate them. The distinct
         # disabled_fuzzy value turns the effect off entirely.
         if not ((job.engine == "orcaslicer" and job.engine_version == "2.5.0") or
+                (job.engine == "bambustudio" and job.engine_version == "02.09.01.70") or
                 (job.engine == "crealityprint" and job.engine_version.startswith("7.3.") and
                  settings.get("multi_material_test") is True)):
             raise SlicerExecutionError(
                 "Native fuzzy skin painting test requires OrcaSlicer 2.5.0 or Creality Print 7.3.x CFS test mode.")
-        if len(objects) != 1 or (settings.get("multi_material_test") and job.engine != "crealityprint"):
+        if len(objects) != 1 or (settings.get("multi_material_test") and job.engine not in {"crealityprint", "bambustudio"}):
             raise SlicerExecutionError(
                 "Selective fuzzy skin test requires one model (Creality: one two-colour CFS model).")
         item = objects[0]
@@ -393,11 +390,12 @@ def _validate_plate_execution(job):
         # explicitly offline, single upright model experiment only. Real
         # G-code and firmware checks are still needed for print approval.
         if not ((job.engine == "orcaslicer" and job.engine_version == "2.5.0") or
+                (job.engine == "bambustudio" and job.engine_version == "02.09.01.70") or
                 (job.engine == "crealityprint" and job.engine_version.startswith("7.3.") and
                  settings.get("multi_material_test") is True)):
             raise SlicerExecutionError(
                 "Variable layer slicing requires OrcaSlicer 2.5.0 or Creality Print 7.3.x CFS test mode.")
-        if len(objects) != 1 or (settings.get("multi_material_test") and job.engine != "crealityprint"):
+        if len(objects) != 1 or (settings.get("multi_material_test") and job.engine not in {"crealityprint", "bambustudio"}):
             raise SlicerExecutionError(
                 "Variable layer test slicing requires one model (Creality: one two-colour CFS model).")
         item = objects[0]
@@ -467,23 +465,9 @@ def _validate_plate_execution(job):
         raise SlicerExecutionError(str(exc)) from exc
     if job.engine not in {"orcaslicer", "crealityprint", "bambustudio"}:
         raise SlicerExecutionError("This engine does not yet support native build-plate slicing.")
-    if job.engine == "bambustudio":
-        # The native Bambu CLI accepts STL and 3MF build plates. Retain
-        # common placement/overlap validation rather than a one-STL Beta gate.
-        # Reject only paths whose material or paint parameters cannot yet be
-        # represented by the native Bambu runner, so user selections are never
-        # silently omitted from the generated G-code.
-        if any(isinstance(item, dict) and (
-                item.get("process_overrides")
-                or (item.get("colour_paint") or {}).get("regions")
-                or (item.get("colour_paint") or {}).get("faces")
-                or (item.get("support_paint") or {}).get("regions")
-                or (item.get("seam_paint") or {}).get("regions")
-                or (item.get("fuzzy_skin_paint") or {}).get("regions")
-                or (item.get("variable_layer_profile") or {}).get("bands")
-                ) for item in objects):
-            raise SlicerExecutionError(
-                "Selected Bambu object-specific features are not represented in its native 3MF export.")
+    # Bambu and Orca both import 3MF per-object extruder settings and native
+    # paint_color facets. Other object-specific channels follow the same
+    # feature-specific validation below, never an entire-engine ban.
     if job.engine == "crealityprint":
         # Creality receives the same validated STL/3MF geometry route, but
         # Orca-only per-object modifiers must not be silently discarded.
