@@ -94,6 +94,7 @@ def make_bambu_material_fixture(*, painted=False):
                 "filament_type": ["PLA", "PLA"],
                 "filament_diameter": ["1.75", "1.75"],
                 "nozzle_diameter": ["0.4"],
+                "printable_height": "256",
             }, separators=(",", ":")))
             package.writestr("[Content_Types].xml", content_types)
             package.writestr("_rels/.rels", rels)
