@@ -5,6 +5,7 @@ on:
     paths:
       - 'scripts/prepare_bambu_staging.py'
       - 'scripts/prepare_bambu_native_fixtures.py'
+      - 'scripts/probe_bambu_multicolour.py'
       - 'slicer_worker/bambu_runner.py'
       - 'slicer_worker/stage_engines.py'
       - 'slicer_worker/probe.py'
@@ -123,6 +124,18 @@ jobs:
             --process /tmp/bambu-verified-profiles/process.json \
             --filament /tmp/bambu-verified-profiles/filament.json \
             --bambu-core-3mf --timeout 180
+
+      - name: Validate real native two-material and facet-painted Bambu 3MF
+        shell: bash
+        run: |
+          set -euo pipefail
+          for paint in models painted; do
+            extra=()
+            if [ "$paint" = painted ]; then extra+=(--painted); fi
+            timeout 240s python3 -m scripts.probe_bambu_multicolour \
+              --binary /tmp/bambu-appimage-acceptance/squashfs-root/AppRun \
+              --profiles /tmp/bambu-verified-profiles --timeout 180 "${extra[@]}"
+          done
 
       - name: Build disposable pinned Bambu candidate image
         run: |
