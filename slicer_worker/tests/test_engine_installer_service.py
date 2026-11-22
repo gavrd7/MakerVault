@@ -57,7 +57,8 @@ class InstallerTests(unittest.TestCase):
              patch.object(installer, "_request",
                           return_value=io.BytesIO(json.dumps(release()).encode())) as request:
             self.assertEqual(installer.release_catalogue(), installer.release_catalogue())
-            self.assertEqual(request.call_count, 2)
+            # Orca, Creality and Bambu now participate in normal catalogue refresh.
+            self.assertEqual(request.call_count, 3)
 
     def test_only_sha_verified_bundled_orca_250_is_offered_for_k2(self):
         from io import BytesIO
