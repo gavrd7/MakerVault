@@ -5,6 +5,9 @@ identical native 3MF output, profile/resource resolution or firmware mapping.
 The approved isolated worker must provide a reviewed Bambu executable.
 """
 import os
+import io
+import json
+from xml.etree import ElementTree as ET
 import re
 import signal
 import stat
@@ -17,7 +20,63 @@ from .runner import WorkerError, _regular_file, _output_path
 from .orca_runner import _native_json
 from .headless_env import slicing_environment
 from .stl_validation import StlValidationError, validate_stl
-from .three_mf_validation import validate_worker_3mf
+from .three_mf_validation import validate_worker_3mf, BAMBU_VARIANT_OPTIONS, CORE_NS
+
+
+def _native_project_matches_palette(model: bytes, palette: list[Path]):
+    """Cross-check every embedded native Bambu material vector against the
+    exact resolved owner-scoped preset staged for this job. No CLI override of
+    second+ slots: pinned Bambu Studio 2.9.1 double-frees on that path.
+    """
+    try:
+        with zipfile.ZipFile(io.BytesIO(model)) as archive:
+            settings = json.loads(archive.read("Metadata/project_settings.config"))
+            root = ET.fromstring(archive.read("3D/3dmodel.model"))
+        markers = [(n.get("name"), n.text) for n in root
+                   if n.tag == "{" + CORE_NS + "}metadata"
+                   and n.get("name") in ("Application", "BambuStudio:3mfVersion")]
+        if markers != [("Application", "BambuStudio-02.09.01.70"),
+                       ("BambuStudio:3mfVersion", "1")]:
+            raise ValueError("missing Bambu-native identity")
+        documents = [json.loads(path.read_bytes()) for path in palette]
+        names = []
+        types = []
+        diameters = []
+        ids = []
+        support = []
+        indices = []
+        variants = []
+        material_values = {key: [] for key in BAMBU_VARIANT_OPTIONS}
+        for index, doc in enumerate(documents, 1):
+            scalar = lambda key: (doc[key][0] if isinstance(doc.get(key), list)
+                                 and len(doc[key]) == 1 else doc[key])
+            names.append(scalar("name"))
+            types.append(scalar("filament_type"))
+            diameters.append(scalar("filament_diameter"))
+            ids.append(scalar("filament_id"))
+            support.append(scalar("filament_is_support")
+                           if "filament_is_support" in doc else "0")
+            native_variants = doc["filament_extruder_variant"]
+            if not isinstance(native_variants, list) or not native_variants:
+                raise ValueError("missing native filament variant")
+            variants.extend(native_variants)
+            indices.extend([str(index)] * len(native_variants))
+            for key in material_values:
+                material_values[key].extend(doc[key])
+        expected = {
+            "filament_settings_id": names, "filament_type": types,
+            "filament_diameter": diameters, "filament_ids": ids,
+            "filament_is_support": support,
+            "filament_self_index": indices,
+            "filament_extruder_variant": variants,
+            **material_values,
+        }
+        if any(settings.get(key) != value for key, value in expected.items()):
+            raise ValueError("native material vectors differ")
+    except (OSError, ValueError, KeyError, TypeError, ET.ParseError,
+            zipfile.BadZipFile, IndexError) as exc:
+        raise WorkerError(
+            "Bambu native project does not match the selected filament profiles.") from None
 
 
 def bambu_command(binary: Path, workdir: Path) -> list[str]:
@@ -87,6 +146,8 @@ def bambu_command(binary: Path, workdir: Path) -> list[str]:
             native_tool_count=len(palette) if palette else None,
             allow_bambu_project=True,
             allow_bambu_combined_paint=bool(palette))
+        if palette:
+            _native_project_matches_palette(model.read_bytes(), palette)
     _output_path(workdir)
     output = workdir / "bambu-sliced.3mf"
     if output.exists() or output.is_symlink():
@@ -95,11 +156,13 @@ def bambu_command(binary: Path, workdir: Path) -> list[str]:
     if is_stl:
         # The upstream documented STL flow needs a placement arrangement.
         args += ["--arrange", "1"]
-    args += [
-        "--load-settings", str(printer) + ";" + str(process),
-        "--load-filaments", ";".join(str(p) for p in palette) if palette else str(filament),
-        "--slice", "0", "--export-3mf", str(output), str(model),
-    ]
+    args += ["--load-settings", str(printer) + ";" + str(process)]
+    if not palette:
+        args += ["--load-filaments", str(filament)]
+    # For native multi-material 3MF, exact per-variant filament settings are
+    # embedded and cross-checked above. Loading CLI filament 2+ corrupts
+    # memory in the official pinned 02.09.01.70 executable.
+    args += ["--slice", "0", "--export-3mf", str(output), str(model)]
     return args
 
 
