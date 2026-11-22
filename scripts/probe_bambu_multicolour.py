@@ -339,6 +339,16 @@ def run_fixture(binary, profiles, *, painted=False, timeout=180, flush_multiplie
                    or "wipe tower" in line.lower())][:12])
         from slicer_worker.material_gcode_audit import summarize_bambu_flush_signal
         flush_evidence = summarize_bambu_flush_signal(gcode)
+        # Read generated G-code header, NOT the input process JSON. These
+        # native values prove the slicer resolved directional purge volumes.
+        native_header = {}
+        for line in gcode.decode("utf-8", "replace").splitlines()[:2500]:
+            for key in ("flush_volumes_matrix", "flush_multiplier",
+                        "wipe_tower_x", "wipe_tower_y"):
+                prefix = "; " + key + " = "
+                if line.startswith(prefix):
+                    native_header[key] = line[len(prefix):][:256].strip()
+        flush_evidence["native_header"] = native_header
         print("CI Bambu native flush evidence:",
               json.dumps(flush_evidence, sort_keys=True))
 
