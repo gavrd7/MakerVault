@@ -79,7 +79,7 @@ class InstallerTests(unittest.TestCase):
                 }
                 return BytesIO(json.dumps(payload).encode())
             return BytesIO(json.dumps(release()).encode())
-        with patch.object(installer.platform, "machine", return_value="x86_64"), \\
+        with patch.object(installer.platform, "machine", return_value="x86_64"), \
              patch.object(installer, "_request", side_effect=github):
             rows = installer.release_catalogue()
         bambu = [row for row in rows if row["engine"] == "bambustudio"]
@@ -97,7 +97,7 @@ class InstallerTests(unittest.TestCase):
             payload = json.loads(response.read())
             payload["assets"][0]["digest"] = "sha256:" + "0" * 64
             return BytesIO(json.dumps(payload).encode())
-        with patch.object(installer.platform, "machine", return_value="x86_64"), \\
+        with patch.object(installer.platform, "machine", return_value="x86_64"), \
              patch.object(installer, "_request", side_effect=altered):
             rows = installer.release_catalogue()
         self.assertNotIn("bambustudio", {row["engine"] for row in rows})
