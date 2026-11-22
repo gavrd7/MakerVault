@@ -67,6 +67,18 @@ jobs:
           chmod 600 .slicer-staging.env
           docker compose --env-file .env --env-file .slicer-staging.env \
             -f compose.yaml -f compose.build.yaml -f compose.slicer.staging.yaml config --quiet
+          # Validate effective Compose semantics (not source comments/grep).
+          docker compose --env-file .env --env-file .slicer-staging.env \
+            -f compose.yaml -f compose.build.yaml -f compose.slicer.staging.yaml \
+            config --format json | python3 -c '
+          import json,sys
+          services=json.load(sys.stdin)["services"]
+          helper=set(services["slicer-engine-store-init"]["cap_add"])
+          slicer=set(services["slicer-worker"]["cap_add"])
+          assert helper == {"CHOWN","FOWNER","DAC_READ_SEARCH"}, helper
+          assert slicer == {"SETUID","SETGID","KILL"}, slicer
+          assert "slicer-engine-installer" not in services
+          '
       - name: Validate opt-in worker Compose overlay without starting containers
         env:
           POSTGRES_PASSWORD: ci-only-placeholder
