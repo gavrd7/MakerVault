@@ -17,7 +17,7 @@ REF = "v02.09.01.70"
 BASE = f"https://raw.githubusercontent.com/{SOURCE}/{REF}/resources/profiles"
 # Exact native manufacturer indexes published at the pinned official Bambu tag.
 # Exclude blacklist.json: it is not a profile catalogue.
-VENDORS = ("Anker", "Anycubic", "BBL", "Creality", "Elegoo", "Geeetech",
+VENDORS = ("BBL", "Anker", "Anycubic", "Creality", "Elegoo", "Geeetech",
            "Prusa", "Qidi", "Tronxy", "Vivedino", "Voron", "Voxelab")
 MAX_INDEX = 512 * 1024
 MAX_MODEL = 256 * 1024
