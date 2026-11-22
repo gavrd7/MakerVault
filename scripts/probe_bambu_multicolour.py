@@ -157,23 +157,111 @@ def make_bambu_material_fixture(*, painted=False, native_app=True,
     return raw
 
 
+def make_bambu_support_overhang_fixture(*, enforcer):
+    """Fixed watertight 3MF T-shaped overhang with independently painted cap.
+
+    Base: 10mm post up to Z12; 30mm-wide cap from Z12 to Z16. The
+    cap underside is genuine unsupported horizontal geometry and carries
+    paint_supports=4 only for the enforcer case. Both models still use the
+    same native verified two-filament palette and legal material paint.
+    """
+    raw = make_bambu_material_fixture(painted=True)
+    with zipfile.ZipFile(io.BytesIO(raw)) as package:
+        members = {name: package.read(name) for name in package.namelist()}
+    ns = "{" + CORE_NS + "}"
+    root = ET.fromstring(members["3D/3dmodel.model"])
+    obj = root.find("./" + ns + "resources/" + ns + "object")
+    if obj is None:
+        raise WorkerError("Missing synthetic Bambu overhang object.")
+    old = obj.find(ns + "mesh")
+    if old is None:
+        raise WorkerError("Missing synthetic Bambu overhang mesh.")
+    obj.remove(old)
+    mesh = ET.SubElement(obj, ns + "mesh")
+    verts = ET.SubElement(mesh, ns + "vertices")
+    triangles = ET.SubElement(mesh, ns + "triangles")
+    indices = {}
+    def vertex(point):
+        coord = (75.0 + point[0], 110.0 + point[1], float(point[2]))
+        if coord not in indices:
+            indices[coord] = len(indices)
+            ET.SubElement(verts, ns + "vertex",
+                          {axis: str(value) for axis, value
+                           in zip(("x", "y", "z"), coord)})
+        return indices[coord]
+    def quad(points, outward, *, cap=False, underside=False):
+        p0, p1, p2, p3 = points
+        u = tuple(p1[k]-p0[k] for k in range(3))
+        v = tuple(p2[k]-p0[k] for k in range(3))
+        cross = (u[1]*v[2]-u[2]*v[1],
+                 u[2]*v[0]-u[0]*v[2],
+                 u[0]*v[1]-u[1]*v[0])
+        if sum(cross[k]*outward[k] for k in range(3)) < 0:
+            points = (p0, p3, p2, p1)
+        ids = [vertex(point) for point in points]
+        for face in ((0, 1, 2), (0, 2, 3)):
+            attrs = {name: str(ids[index]) for name, index in
+                     zip(("v1", "v2", "v3"), face)}
+            if cap:
+                attrs["paint_color"] = "8"
+            if underside and enforcer:
+                attrs["paint_supports"] = "4"
+            ET.SubElement(triangles, ns + "triangle", attrs)
+    base = [(-5, -5), (5, -5), (5, 5), (-5, 5)]
+    roof = [(-15, -15), (15, -15), (15, 15), (-15, 15)]
+    quad([(x, y, 0) for x, y in base], (0, 0, -1))
+    quad([(x, y, 16) for x, y in roof], (0, 0, 1), cap=True)
+    for ring, low, high, painted in (
+            (base, 0, 12, False), (roof, 12, 16, True)):
+        for i in range(4):
+            a, b = ring[i], ring[(i+1) % 4]
+            quad([(a[0], a[1], low), (b[0], b[1], low),
+                  (b[0], b[1], high), (a[0], a[1], high)],
+                 (b[1]-a[1], a[0]-b[0], 0), cap=painted)
+    # Four non-overlapping horizontal strips tile the cap underside
+    # without covering the central post's contact area.
+    for x0, x1, y0, y1 in (
+            (-15, -5, -15, 15), (5, 15, -15, 15),
+            (-5, 5, -15, -5), (-5, 5, 5, 15)):
+        quad([(x0, y0, 12), (x0, y1, 12),
+              (x1, y1, 12), (x1, y0, 12)],
+             (0, 0, -1), cap=True, underside=True)
+    members["3D/3dmodel.model"] = ET.tostring(root, encoding="utf-8")
+    with io.BytesIO() as output:
+        with zipfile.ZipFile(output, "w", zipfile.ZIP_DEFLATED) as target:
+            for name, value in members.items():
+                target.writestr(name, value)
+        raw = output.getvalue()
+    validate_worker_3mf(raw, native_tool_count=2, allow_bambu_project=True,
+                        allow_bambu_combined_paint=True)
+    if expected_native_tools(raw) != {0, 1}:
+        raise WorkerError("Bambu overhang fixture did not select both tools.")
+    return raw
+
+
 def run_fixture(binary, profiles, *, painted=False, timeout=180,
                 flush_multiplier=None, tower_xy=None, variable_layers=False,
-                detail_paint=None):
+                detail_paint=None, support_overhang=False):
     source = Path(profiles)
     with tempfile.TemporaryDirectory(prefix="makervault-bambu-two-tool-") as tmp:
         workdir = Path(tmp)
-        project = make_bambu_material_fixture(painted=painted,
-                                              variable_layers=variable_layers,
-                                              detail_paint=detail_paint)
+        project = (make_bambu_support_overhang_fixture(enforcer=(detail_paint == "support"))
+                   if support_overhang else make_bambu_material_fixture(
+                       painted=painted, variable_layers=variable_layers,
+                       detail_paint=detail_paint))
         (workdir / "input.3mf").write_bytes(project)
         for kind in ("printer", "process", "filament"):
             raw = (source / (kind + ".json")).read_bytes()
             (workdir / (kind + ".json")).write_bytes(raw)
-        if flush_multiplier is not None or tower_xy is not None:
+        if flush_multiplier is not None or tower_xy is not None or support_overhang:
             # CI-only exact native process settings: production uses
             # apply_orca_flush_settings/apply_bambu_prime_tower_position.
             process_doc = json.loads((workdir / "process.json").read_bytes())
+            if support_overhang:
+                # Manual mode only creates supports on explicitly painted
+                # enforcers; the baseline has identical geometry/settings.
+                process_doc["enable_support"] = "1"
+                process_doc["support_type"] = "normal(manual)"
             if flush_multiplier is not None:
                 if flush_multiplier not in (1.0, 2.0):
                     raise WorkerError("Unsupported Bambu flush evidence multiplier.")
@@ -437,6 +525,7 @@ def run_fixture(binary, profiles, *, painted=False, timeout=180,
             "flush_evidence": flush_evidence,
             "variable_layers_requested": variable_layers,
             "detail_paint": detail_paint,
+            "support_overhang": support_overhang,
             **coverage,
         }
 
@@ -448,6 +537,7 @@ def main():
     parser.add_argument("--painted", action="store_true")
     parser.add_argument("--variable-layers", action="store_true")
     parser.add_argument("--detail-paint", choices=("support", "seam", "fuzzy", "combined"))
+    parser.add_argument("--support-overhang", action="store_true")
     parser.add_argument("--flush-multiplier", type=float, choices=(1.0, 2.0))
     parser.add_argument("--tower-x", type=float)
     parser.add_argument("--tower-y", type=float)
@@ -459,6 +549,7 @@ def main():
             flush_multiplier=args.flush_multiplier,
             variable_layers=args.variable_layers,
             detail_paint=args.detail_paint,
+            support_overhang=args.support_overhang,
             tower_xy=((args.tower_x, args.tower_y)
                       if args.tower_x is not None and args.tower_y is not None
                       else None)),
