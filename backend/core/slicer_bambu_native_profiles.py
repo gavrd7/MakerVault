@@ -83,7 +83,7 @@ def fetch_bambu_native_chain(kind, name, subpath, vendor="BBL", *, version=ENGIN
     requested_name = name
     result = []
     visiting = set()
-    complete = set()
+    complete = {}
     used = 0
     type_expected = KINDS[kind][0]
 
@@ -94,6 +94,8 @@ def fetch_bambu_native_chain(kind, name, subpath, vendor="BBL", *, version=ENGIN
         if current in visiting:
             raise OfficialProfileError("Bambu native profile inheritance is circular.")
         if current in complete:
+            if not included and complete[current].get("type") != type_expected:
+                raise OfficialProfileError("Typeless Bambu included template cannot become a preset parent.")
             return
         path = index.get(current)
         if not path:
@@ -123,7 +125,7 @@ def fetch_bambu_native_chain(kind, name, subpath, vendor="BBL", *, version=ENGIN
                 raise OfficialProfileError("Bambu native included templates are invalid.")
             for ref_name in included_names:
                 walk(ref_name, depth + 1, included=True)
-            complete.add(current)
+            complete[current] = document
             result.append((current, path, raw))
         finally:
             visiting.discard(current)
