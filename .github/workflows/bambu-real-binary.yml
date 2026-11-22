@@ -309,18 +309,46 @@ jobs:
 
           PY
 
-      - name: Probe joint Bambu native colour/support/seam/fuzzy facets (diagnostic)
+      - name: Verify native seam fuzzy and combined facet painting changes real model toolpaths
         shell: bash
-        continue-on-error: true
         run: |
           set -euo pipefail
-          for mode in support seam fuzzy combined; do
-            echo "CI-only Bambu semantic paint mode: $mode"
+          for mode in baseline support seam fuzzy combined; do
+            flags=()
+            if [ "$mode" != baseline ]; then flags+=(--detail-paint "$mode"); fi
             timeout 240s python3 -m scripts.probe_bambu_multicolour \
               --binary /tmp/bambu-appimage-acceptance/squashfs-root/AppRun \
               --profiles /tmp/bambu-verified-profiles \
-              --painted --detail-paint "$mode" --timeout 180
+              --painted "${flags[@]}" --timeout 180 \
+              >"/tmp/bambu-semantic-facet-${mode}.log"
           done
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          files = {}
+          for label in ("baseline", "support", "seam", "fuzzy", "combined"):
+              files[label] = json.loads(
+                  Path(f"/tmp/bambu-semantic-facet-{label}.log").read_text().splitlines()[-1])
+              if files[label]["status"] != "passed" or not files[label]["both_tools_extrude"]:
+                  raise SystemExit(f"Bambu semantic paint {label} did not deposit both tools")
+          base = files["baseline"]
+          # There is no overhang on this cube: support enforcer should not
+          # arbitrarily invent support. The separate T-overhang gate proves
+          # real positive-E support deposition.
+          if files["support"]["gcode_sha256"] != base["gcode_sha256"]:
+              raise SystemExit("Bambu cube-only support paint changed geometry unexpectedly")
+          for label in ("seam", "fuzzy", "combined"):
+              if files[label]["gcode_sha256"] == base["gcode_sha256"]:
+                  raise SystemExit(f"Bambu {label} facet painting did not change native G-code")
+          if files["fuzzy"]["painted_tool_model_deposits"] < (
+                  base["painted_tool_model_deposits"] * 1.3):
+              raise SystemExit("Bambu fuzzy facet painting did not modify actual model deposition")
+          if files["combined"]["painted_tool_model_deposits"] < (
+                  base["painted_tool_model_deposits"] * 1.3):
+              raise SystemExit("Bambu combined facet painting lost fuzzy surface changes")
+          print("CI Bambu colour+seam+fuzzy+support native facet G-code: VERIFIED",
+                {key: files[key]["painted_tool_model_deposits"] for key in files})
+          PY
 
       - name: Verify real Bambu 0.10mm and 0.15mm variable painted layers
         shell: bash
