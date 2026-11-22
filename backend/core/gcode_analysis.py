@@ -65,6 +65,48 @@ def _requested_start_temperatures(text):
             "chamber_c": found.get("chamber"),
             "source": "requested_start_gcode" if found else None}
 
+def _slicer_profile_temperatures(text):
+    """Advisory slicer settings, NOT proof of executed heating commands."""
+    found = {}
+    keys = {
+        "nozzle_temperature_initial_layer": ("nozzle_c", 500),
+        "nozzle_temperature": ("nozzle_c", 500),
+        "hot_plate_temp_initial_layer": ("bed_c", 200),
+        "hot_plate_temp": ("bed_c", 200),
+        "cool_plate_temp_initial_layer": ("bed_c", 200),
+        "cool_plate_temp": ("bed_c", 200),
+        "chamber_temperatures": ("chamber_c", 120),
+    }
+    candidates = {}
+    for raw in text.splitlines()[:1500]:
+        if len(raw) > MAX_LINE or not raw.lstrip().startswith(";"):
+            continue
+        match = re.match(r"^;\s*([a-z_]+)\s*=\s*(.+?)\s*$", raw.strip(), re.I)
+        if not match:
+            continue
+        key = match.group(1).lower()
+        if key not in keys:
+            continue
+        values = [part.strip() for part in re.split(r"[,;]", match.group(2))]
+        if not values or len(values) > 16 or any(not NUMBER.fullmatch(v) for v in values):
+            continue
+        value = float(values[0])
+        label, ceiling = keys[key]
+        if math.isfinite(value) and 0 < value <= ceiling:
+            candidates[key] = value
+    for label, names in {
+        "nozzle_c": ("nozzle_temperature_initial_layer", "nozzle_temperature"),
+        "bed_c": ("hot_plate_temp_initial_layer", "hot_plate_temp",
+                  "cool_plate_temp_initial_layer", "cool_plate_temp"),
+        "chamber_c": ("chamber_temperatures",),
+    }.items():
+        for name in names:
+            if name in candidates:
+                found[label] = candidates[name]
+                break
+    return found
+
+
 def _print_setup(text):
     """Extract only explicit slicer-declared nozzle and build-plate metadata."""
     nozzle = []
@@ -100,7 +142,8 @@ def _print_setup(text):
             bed_type = value
             sources["bed_type"] = key
     return {"nozzle_diameters_mm": nozzle, "bed_type": bed_type, "sources": sources,
-            "temperatures_c": _requested_start_temperatures(text)}
+            "temperatures_c": _requested_start_temperatures(text),
+            "profile_temperatures_c": _slicer_profile_temperatures(text)}
 
 
 HEX_COLOUR = re.compile(r"^#[0-9A-Fa-f]{6}$")
