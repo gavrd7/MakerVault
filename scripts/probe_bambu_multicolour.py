@@ -236,6 +236,19 @@ def run_fixture(binary, profiles, *, painted=False, timeout=180):
                             and len(emitted) == 1 and
                             0 < emitted[0].stat().st_size <= 16 * 1024 * 1024):
                         native_gcode = emitted[0].read_bytes()
+                        import re
+                        lines = native_gcode.decode("utf-8", "replace").splitlines()
+                        exact_tools = {}
+                        for code in lines:
+                            match = re.fullmatch(r"T([0-9]{1,2})\\s*", code.split(";", 1)[0].strip(), re.I)
+                            if match:
+                                exact_tools[match.group(1)] = exact_tools.get(match.group(1), 0) + 1
+                        print("CI Bambu variant exact T commands:", label, exact_tools)
+                        print("CI Bambu variant material mentions:", label,
+                              sum("CHANGE_FILAMENT" in line.upper() for line in lines),
+                              sum("FILAMENT_CHANGE" in line.upper() for line in lines))
+                        print("CI Bambu variant gcode sample:", label,
+                              [line[:140] for line in lines if line.lstrip().startswith("T")][:8])
                         try:
                             verify_multi_material_output(native_gcode, {0, 1})
                             if not painted:
