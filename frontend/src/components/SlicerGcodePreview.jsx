@@ -271,9 +271,9 @@ export default function SlicerGcodePreview({ fileId = null, preview, bedSize = n
       <div><small>Filament weight</small><strong>{metric(preview?.filament_g, "g")}</strong></div>
       <div><small>Filament volume</small><strong>{metric(preview?.filament_cm3, "cm³")}</strong></div>
       <div><small>Extrusion layers</small><strong>{preview?.layer_count ?? "Partial"}</strong></div>
-      <div><small>Requested nozzle · G-code</small><strong>{temperatureInfo("nozzle_c")}</strong></div>
-      <div><small>Requested bed · G-code</small><strong>{temperatureInfo("bed_c")}</strong></div>
-      <div><small>Requested chamber · G-code</small><strong>{temperatureInfo("chamber_c")}</strong></div>
+      <div><small>Nozzle temperature · G-code/profile</small><strong>{temperatureInfo("nozzle_c")}</strong></div>
+      <div><small>Bed temperature · G-code/profile</small><strong>{temperatureInfo("bed_c")}</strong></div>
+      <div><small>Chamber temperature · G-code/profile</small><strong>{temperatureInfo("chamber_c")}</strong></div>
     </div>
     {layers.length > 0 ? <>
 
