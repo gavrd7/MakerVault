@@ -308,6 +308,15 @@ jobs:
               --painted --detail-paint "$mode" --timeout 180
           done
 
+      - name: Verify real Bambu 0.10mm and 0.15mm variable painted layers
+        shell: bash
+        run: |
+          set -euo pipefail
+          timeout 240s python3 -m scripts.probe_bambu_multicolour \
+            --binary /tmp/bambu-appimage-acceptance/squashfs-root/AppRun \
+            --profiles /tmp/bambu-verified-profiles \
+            --painted --variable-layers --upper-layer-height 0.15 --timeout 180
+
       - name: Probe Bambu variable layer height with native painted 3MF (diagnostic)
         shell: bash
         continue-on-error: true
