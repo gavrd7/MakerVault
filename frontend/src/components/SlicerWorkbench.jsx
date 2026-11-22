@@ -499,7 +499,7 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
 
 
   useEffect(() => {
-    if (!materialHint || !["orcaslicer", "crealityprint"].includes(form.engine)) {
+    if (!materialHint || !["orcaslicer", "crealityprint", "bambustudio"].includes(form.engine)) {
       setMaterialProfileMatches(null);
       return undefined;
     }
@@ -559,7 +559,7 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
     setForm(current => ({...current, plate: "default"}));
   }, [form.engine, form.printer_profile_id, bedTypes, form.plate]);
   useEffect(() => {
-    if(!["orcaslicer", "crealityprint"].includes(form.engine) || !bedTypes?.default ||
+    if(!["orcaslicer", "crealityprint", "bambustudio"].includes(form.engine) || !bedTypes?.default ||
         userChosePlateRef.current) return;
     setForm(current => current.plate==="default" ?
       {...current,plate:bedTypes.default} : current);
@@ -1238,7 +1238,7 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
   }
 
   async function saveInteractiveProcessProfile(name) {
-    if (!canPrepare || busy || loading || !["orcaslicer", "crealityprint"].includes(form.engine) ||
+    if (!canPrepare || busy || loading || !["orcaslicer", "crealityprint", "bambustudio"].includes(form.engine) ||
         !form.process_profile_id || !Object.keys(processOverrides).length) {
       throw new Error("Choose an installed engine process profile and change a supported setting first.");
     }
@@ -1702,14 +1702,14 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
           <SlicerBedTypePicker value={form.plate} onChange={choosePlate}
             disabled={!canPrepare||busy} options={availablePlateOptions} compact/>
           {bedTypes?.default && <small>Printer's native default: {ORCA_PLATE_TYPES.find(([key])=>key===bedTypes.default)?.[1]||bedTypes.default}.</small>}
-          {["orcaslicer", "crealityprint"].includes(form.engine) && bedTypes && !bedTypes.default && <small>
+          {["orcaslicer", "crealityprint", "bambustudio"].includes(form.engine) && bedTypes && !bedTypes.default && <small>
             This printer profile does not declare a reliable default plate.
             Choose the actual fitted surface manually. These generic illustrations
             do not confirm physical compatibility; the selected filament must
             declare temperatures for that surface.
           </small>}
         </div>
-      {["orcaslicer", "crealityprint"].includes(form.engine) && nativePlate?.id === form.printer_profile_id &&
+      {["orcaslicer", "crealityprint", "bambustudio"].includes(form.engine) && nativePlate?.id === form.printer_profile_id &&
         <div className="slicerNativeVolume" aria-label="Native slicer build volume">
           <strong>Build volume</strong>
           <span>{nativePlate.loading ? "Loading…" :
