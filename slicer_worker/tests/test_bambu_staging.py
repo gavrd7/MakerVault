@@ -48,7 +48,11 @@ class BambuStagingTests(TestCase):
         self.assertTrue((self.root / "stage" / "bambustudio.AppImage").exists())
         self.assertEqual(
             json.loads((self.root / "stage" / "manifest.json").read_text())["fixture_approved"], False)
-        self.assertNotIn("bambustudio", SUPPORTED)
+        self.assertIn("bambustudio", SUPPORTED)
+        # Recognised beta code is not permission to activate the unreviewed staged fixture.
+        from slicer_worker.engine_registry import configured_engines
+        with patch.dict("os.environ", {"SLICER_WORKER_ENABLED": "0"}, clear=True):
+            self.assertNotIn("bambustudio", configured_engines())
 
     def test_staging_existing_engine_assets_is_refused(self):
         target = self.root / "slicer-engine-assets"
