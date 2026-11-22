@@ -21,12 +21,12 @@ services:
 
   slicer-engine-store-init:
     image: busybox:1.37.0
-    command: ["sh", "-ec", "chown -R 10002:10002 /engine-store; find /engine-store -type d -exec chmod 0755 {} +; find /engine-store -type f -exec chmod go-w,a+r {} +"]
+    command: ["sh", "-ec", "chown -R 10002:10002 /engine-store; find /engine-store -type d -exec chmod 0755 {} +; find /engine-store -type f -exec chmod go-w,a+rX {} +"]
     user: "0:0"
     restart: "no"
     cap_drop: [ALL]
     # Existing per-engine directories can be 0700 owned by UID 10001.
-    # DAC_READ_SEARCH permits traversal without broad DAC_OVERRIDE/write.
+    # Preserve existing executable bits on extracted native runtimes, while\n    # granting worker UID 10001 read/execute (never write) access.\n    # DAC_READ_SEARCH permits traversal without broad DAC_OVERRIDE/write.
     cap_add: [CHOWN, FOWNER, DAC_READ_SEARCH]
     security_opt: ["no-new-privileges:true"]
     network_mode: "none"
