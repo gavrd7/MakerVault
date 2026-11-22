@@ -110,3 +110,15 @@ jobs:
             --process /tmp/bambu-verified-profiles/process.json \
             --filament /tmp/bambu-verified-profiles/filament.json \
             --timeout 180
+
+      - name: Verify real Bambu slicing of fixed MakerVault core 3MF
+        shell: bash
+        run: |
+          set -euo pipefail
+          timeout 240s python3 -m slicer_worker.probe \
+            --engine bambustudio --version 02.09.01.70 \
+            --binary /tmp/bambu-appimage-acceptance/squashfs-root/AppRun \
+            --printer /tmp/bambu-verified-profiles/printer.json \
+            --process /tmp/bambu-verified-profiles/process.json \
+            --filament /tmp/bambu-verified-profiles/filament.json \
+            --bambu-core-3mf --timeout 180
