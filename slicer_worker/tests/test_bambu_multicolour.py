@@ -41,6 +41,16 @@ class BambuNativeMulticolourTests(TestCase):
         self.assertGreaterEqual(counts["base_tool_model_deposits"], 10)
         self.assertGreaterEqual(counts["painted_tool_model_deposits"], 10)
 
+    def test_painted_cube_deposition_audit_tracks_relative_xy_without_false_purge(self):
+        lines = ["G90", "M83", "T0"]
+        lines.extend(["G1 X75 Y110 E0.2"] * 20)
+        lines.extend(["T1", "G91"])
+        lines.extend(["G1 X1 Y0 E0.2", "G1 X-1 Y0 E0.2"] * 10)
+        raw = ("\n".join(lines) + "\n").encode("utf-8")
+        counts = verify_painted_cube_tool_regions(raw)
+        self.assertGreaterEqual(counts["base_tool_model_deposits"], 10)
+        self.assertGreaterEqual(counts["painted_tool_model_deposits"], 10)
+
     def test_two_object_tool_assignments_are_preserved(self):
         project = make_bambu_material_fixture()
         self.assertTrue(validate_worker_3mf(project, native_tool_count=2, allow_bambu_project=True))
