@@ -57,7 +57,90 @@ class InstallerTests(unittest.TestCase):
              patch.object(installer, "_request",
                           return_value=io.BytesIO(json.dumps(release()).encode())) as request:
             self.assertEqual(installer.release_catalogue(), installer.release_catalogue())
-            self.assertEqual(request.call_count, 1)
+            self.assertEqual(request.call_count, 2)
+
+    def test_only_sha_verified_bundled_orca_250_is_offered_for_k2(self):
+        from io import BytesIO
+        from unittest.mock import patch as mock_patch
+
+        def upstream(url, **kwargs):
+            if url.endswith("/releases/tags/v2.4.2"):
+                asset = "OrcaSlicer_Linux_AppImage_Ubuntu2404_V2.4.2.AppImage"
+                return BytesIO(json.dumps({
+                    "tag_name": "v2.4.2", "draft": False, "prerelease": False,
+                    "assets": [{
+                        "name": asset,
+                        "digest": "sha256:" + installer.APPROVED_ORCA["2.4.2"],
+                        "size": 180000000,
+                        "browser_download_url":
+                            "https://github.com/OrcaSlicer/OrcaSlicer/releases/download/v2.4.2/" + asset,
+                    }],
+                }).encode())
+            return BytesIO(json.dumps(release()).encode())
+
+        with TemporaryDirectory() as tmp:
+            image = Path(tmp) / "orcaslicer.AppImage"
+            image.write_bytes(b"reviewed fixture")
+            appdir = Path(tmp) / "squashfs-root"
+            appdir.mkdir()
+            (appdir / "AppRun").write_text("verified fixture runtime")
+            with mock_patch.object(installer, "REVIEWED_ORCA_SOURCE", image), \
+                 mock_patch.object(installer, "REVIEWED_ORCA_APPDIR", appdir), \
+                 mock_patch.object(installer, "_sha256", return_value=installer.REVIEWED_ORCA_SHA256), \
+                 mock_patch.object(installer.platform, "machine", return_value="x86_64"), \
+                 mock_patch.object(installer, "_request", side_effect=upstream):
+                releases = installer.release_catalogue()
+            orca = {row["version"]: row for row in releases if row["engine"] == "orcaslicer"}
+            self.assertEqual(set(orca), {"2.4.2", "2.5.0"})
+            self.assertEqual(orca["2.5.0"]["bundle_sha256"], installer.EXPECTED_ORCA_SHA)
+            self.assertEqual(orca["2.5.0"]["source"], "bundled-reviewed-image")
+            self.assertIsNone(orca["2.5.0"]["bundle_url"])
+            self.assertNotEqual(orca["2.5.0"]["bundle_sha256"],
+                                "d13eb0a9cd618ed080ab6b82c64c0a60c4501aac91e88d5ac2c3b526fb141a7c")
+
+    def test_missing_or_tampered_bundled_orca_never_falls_back_to_upstream(self):
+        from io import BytesIO
+        with TemporaryDirectory() as tmp:
+            image = Path(tmp) / "orcaslicer.AppImage"
+            image.write_bytes(b"invalid")
+            appdir = Path(tmp) / "squashfs-root"
+            appdir.mkdir()
+            (appdir / "AppRun").write_text("fixture")
+            for variant in ("bad-hash", "missing-appimage", "symlink"):
+                with self.subTest(variant=variant):
+                    installer.RELEASE_CACHE["items"] = []
+                    image.unlink(missing_ok=True)
+                    if variant == "bad-hash":
+                        image.write_bytes(b"stock upstream")
+                    elif variant == "symlink":
+                        image.symlink_to(appdir / "AppRun")
+                    def upstream(url, **kwargs):
+                        if "/releases/tags/v2.4.2" in url:
+                            return BytesIO(json.dumps({"assets": []}).encode())
+                        return BytesIO(json.dumps(release()).encode())
+                    with patch.object(installer, "REVIEWED_ORCA_SOURCE", image), \
+                         patch.object(installer, "REVIEWED_ORCA_APPDIR", appdir), \
+                         patch.object(installer.platform, "machine", return_value="x86_64"), \
+                         patch.object(installer, "_request", side_effect=upstream):
+                        choices = installer.release_catalogue()
+                    self.assertFalse(any(row["engine"] == "orcaslicer"
+                                         and row["version"] == "2.5.0" for row in choices))
+
+    def test_bundled_orca_cannot_download_stock_250(self):
+        from inspect import getsource
+        source = getsource(installer._install)
+        self.assertIn('release.get("bundle_sha256") != REVIEWED_ORCA_SHA256', source)
+        self.assertIn('_sha256(REVIEWED_ORCA_SOURCE) != REVIEWED_ORCA_SHA256', source)
+        self.assertIn('_sha256(image) != REVIEWED_ORCA_SHA256', source)
+        self.assertIn('shutil.copyfile(REVIEWED_ORCA_SOURCE, image)', source)
+        self.assertIn('if bundled_orca:', source)
+
+    def test_published_version_directory_is_worker_traversable(self):
+        # mkdtemp starts at 0700; worker UID 10001 must be able to
+        # traverse a version published by installer UID 10002.
+        from inspect import getsource
+        source = getsource(installer._install)
+        self.assertIn("stage.chmod(0o755)\n        os.rename(stage, target)", source)
 
     def test_creality_cli_probe_uses_explicit_cli_switch(self):
         # Upstream requires --cli to avoid launching the wxWidgets GUI.
