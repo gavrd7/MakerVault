@@ -32,6 +32,8 @@ def make_bambu_material_fixture(*, painted=False, native_app=True):
         # the source declares a BambuStudio-compatible application marker.
         ET.SubElement(model, ns + "metadata",
                       {"name": "Application"}).text = "BambuStudio-02.09.01.70"
+        ET.SubElement(model, ns + "metadata",
+                      {"name": "BambuStudio:3mfVersion"}).text = "1"
     resources = ET.SubElement(model, ns + "resources")
     build = ET.SubElement(model, ns + "build")
     # X positions deliberately match the existing material/deposition audit.
