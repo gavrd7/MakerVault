@@ -6,6 +6,34 @@ from core.gcode_analysis import analyse_text, compare_printer_metadata
 
 
 class GcodeAnalysisTests(SimpleTestCase):
+
+    def test_bambu_profile_temperature_comments_are_not_executable_targets(self):
+        from core.gcode_analysis import _print_setup
+        raw = """; HEADER_BLOCK_START
+; BambuStudio 02.09.01.70
+; HEADER_BLOCK_END
+; CONFIG_BLOCK_START
+; nozzle_diameter = 0.4
+; nozzle_temperature = 220
+; nozzle_temperature_initial_layer = 220
+; cool_plate_temp = 60
+; cool_plate_temp_initial_layer = 60
+; chamber_temperatures = 0
+; curr_bed_type = Cool Plate
+; filament_type = PLA
+; CONFIG_BLOCK_END
+M140 S0
+M104 S0
+M140 S60
+START_PRINT
+"""
+        result = _print_setup(raw)
+        self.assertEqual(result["nozzle_diameters_mm"], [0.4])
+        self.assertEqual(result["bed_type"], "Cool Plate")
+        self.assertEqual(result["profile_temperatures_c"]["nozzle_c"], 220)
+        self.assertEqual(result["profile_temperatures_c"]["bed_c"], 60)
+        self.assertIsNone(result["temperatures_c"]["nozzle_c"])
+        self.assertEqual(result["temperatures_c"]["bed_c"], 60)
     def test_nozzle_and_plate_comments_are_advisory(self):
         report = analyse_text(
             "; nozzle_diameter = 0.4, 0.6\n"
