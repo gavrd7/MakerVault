@@ -33,10 +33,12 @@ class FlushCapability:
 
 _ENGINE_FLUSH_FORMATS = {
     "orcaslicer": ("per_nozzle_vector", 20000),
+    "bambustudio": ("per_nozzle_vector", 20000),
     "crealityprint": ("scalar", 1200),
 }
 _ENGINE_ALIASES = {
     "orca": "orcaslicer", "orcaslicer": "orcaslicer",
+    "bambu": "bambustudio", "bambustudio": "bambustudio",
     "creality": "crealityprint", "crealityprint": "crealityprint",
 }
 _TOPOLOGIES = frozenset({
@@ -260,6 +262,17 @@ def apply_orca_native_flush(process_bytes, settings, *, routes, tool_count, topo
     if len(output) > 1024 * 1024:
         raise MaterialRoutingError("Native flushing settings exceed the profile size limit.")
     return output
+
+
+def apply_bambu_native_flush(process_bytes, settings, *, routes, tool_count, topology):
+    """Reuse verified native vector encoding with Bambu's independent
+    capability check. This does not certify a physical AMS/CFS purge.
+    """
+    require_flush_capability(
+        "bambustudio", topology, nozzle_count=1, material_count=tool_count)
+    return apply_orca_native_flush(
+        process_bytes, settings, routes=routes,
+        tool_count=tool_count, topology=topology)
 
 
 def apply_creality_native_flush(project, settings, bindings):
