@@ -1580,10 +1580,10 @@ def profiles(request):
 def customise_profile(request, profile_id):
     """Clone a native JSON preset, applying only bounded GUI-supported changes."""
     profile = SlicerProfile.objects.filter(
-        pk=profile_id, owner=request.user, engine__in=["orcaslicer", "crealityprint"]
+        pk=profile_id, owner=request.user, engine__in=["orcaslicer", "crealityprint", "bambustudio"]
     ).select_related("file_asset").first()
     if not profile:
-        return _error("An owned Orca or Creality native profile is required.", 404)
+        return _error("An owned native slicing profile is required.", 404)
     if profile.kind not in EDITABLE_PROFILE_SETTINGS:
         return _error("Unsupported native profile type.")
     if request.method == "GET":
@@ -1686,10 +1686,10 @@ def save_process_profile(request, profile_id):
     if not request.user.has_perm("core.add_fileasset"):
         return _error("You do not have permission to save custom profiles.", 403)
     profile = SlicerProfile.objects.filter(
-        pk=profile_id, owner=request.user, engine__in=["orcaslicer", "crealityprint"], kind="process"
+        pk=profile_id, owner=request.user, engine__in=["orcaslicer", "crealityprint", "bambustudio"], kind="process"
     ).select_related("file_asset").first()
     if not profile:
-        return _error("An owned OrcaSlicer or Creality Print process profile is required.", 404)
+        return _error("An owned native slicing process profile is required.", 404)
     if len(request.body) > 4096:
         return _error("Custom process profile request is too large.", 413)
     try:
@@ -1883,10 +1883,10 @@ def delete_profile(request, profile_id):
 def profile_process_settings(request, profile_id):
     """Read editable native process settings from the user's resolved preset."""
     profile = SlicerProfile.objects.filter(
-        pk=profile_id, owner=request.user, engine__in=["orcaslicer", "crealityprint"], kind="process"
+        pk=profile_id, owner=request.user, engine__in=["orcaslicer", "crealityprint", "bambustudio"], kind="process"
     ).select_related("file_asset").first()
     if not profile:
-        return _error("Owned Orca or Creality process profile not found.", 404)
+        return _error("Owned native slicing process profile not found.", 404)
     try:
         resolved = resolved_native_profile(profile)
         fields = process_schema(resolved)
@@ -1908,7 +1908,7 @@ def profile_flush_defaults(request, profile_id):
     """
     profile = SlicerProfile.objects.filter(
         pk=profile_id, owner=request.user,
-        engine__in=["orcaslicer", "crealityprint"], kind="process"
+        engine__in=["orcaslicer", "crealityprint", "bambustudio"], kind="process"
     ).select_related("file_asset").first()
     if not profile:
         return _error("Owned slicer process profile not found.", 404)
