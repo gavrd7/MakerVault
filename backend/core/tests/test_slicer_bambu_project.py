@@ -15,6 +15,7 @@ from core.slicer_bambu_project import (
     apply_bambu_prime_tower_position,
 )
 from core.slicer_profiles import SlicerProfileError
+from core.slicer_variable_layers import audit_bambu_variable_layers
 
 
 class BambuNativeProjectVectorTests(TestCase):
@@ -93,6 +94,24 @@ class BambuNativeProjectVectorTests(TestCase):
             apply_bambu_prime_tower_position(
                 self.process, {"x": True, "y": 50},
                 bed_width=256, bed_depth=256)
+
+    def test_native_z_height_audit_rejects_silent_bambu_layer_clamping(self):
+        bands = [
+            {"from_mm": 0, "to_mm": 9, "layer_mm": 0.10},
+            {"from_mm": 9, "to_mm": 20, "layer_mm": 0.30},
+        ]
+        def generate(second_height):
+            heights = [0.2]
+            for inc in [0.1] * 88 + [second_height] * 65:
+                heights.append(round(heights[-1] + inc, 4))
+            return "\n".join(
+                ";LAYER_CHANGE\n; Z_HEIGHT: %.4f" % z for z in heights)
+        good = audit_bambu_variable_layers(generate(.30), bands)
+        self.assertEqual(len(good["verified_bands"]), 2)
+        with self.assertRaisesRegex(ValueError, "did not match"):
+            audit_bambu_variable_layers(generate(.15), bands)
+        with self.assertRaisesRegex(ValueError, "lacks verifiable"):
+            audit_bambu_variable_layers("G1 Z2; motion without layer marker", bands)
 
     def test_selected_colour_tools_use_explicit_material_slot_not_bay_index(self):
         models = [
