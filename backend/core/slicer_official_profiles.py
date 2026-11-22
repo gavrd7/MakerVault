@@ -130,7 +130,7 @@ def search_official_profiles(query, kind, vendor="Creality", printer_model=None,
                              version=ENGINE_VERSION, brand="", slot_discovery=False,
                              material="", manufacturer=""):
     if not isinstance(query, str) or len(query.strip()) > 80:
-        raise OfficialProfileError("Search using at least two characters.")
+        raise OfficialProfileError("Search must be 80 characters or fewer.")
     if not isinstance(vendor, str) or vendor not in VENDORS:
         raise OfficialProfileError("Choose an available official profile vendor.")
     _ref(version)
