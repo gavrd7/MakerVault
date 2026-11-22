@@ -233,6 +233,40 @@ jobs:
               --profiles /tmp/bambu-verified-profiles --timeout 180 "${extra[@]}"
           done
 
+      - name: Probe support enforcer overhang model with real native toolpaths (diagnostic)
+        shell: bash
+        continue-on-error: true
+        run: |
+          set -euo pipefail
+          for mode in baseline enforcer; do
+            flags=()
+            if [ "$mode" = enforcer ]; then flags+=(--detail-paint support); fi
+            timeout 240s python3 -m scripts.probe_bambu_multicolour \
+              --binary /tmp/bambu-appimage-acceptance/squashfs-root/AppRun \
+              --profiles /tmp/bambu-verified-profiles \
+              --painted --support-overhang --timeout 180 "${flags[@]}" \
+              | tee "/tmp/bambu-support-overhang-${mode}.log"
+          done
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          results = {}
+          for label in ("baseline", "enforcer"):
+              last = Path(f"/tmp/bambu-support-overhang-{label}.log").read_text().splitlines()[-1]
+              item = json.loads(last)
+              results[label] = item
+              print("CI native Bambu support overhang evidence:", label,
+                    json.dumps({
+                        "gcode_sha256": item["gcode_sha256"],
+                        "support_feature_moves": item["flush_evidence"]["support_feature_moves"],
+                        "support_feature_positive_e_mm": item["flush_evidence"]["support_feature_positive_e_mm"],
+                        "base_model_deposits": item["base_tool_model_deposits"],
+                        "painted_model_deposits": item["painted_tool_model_deposits"],
+                    }, sort_keys=True))
+          print("CI native Bambu support enforcer changes actual G-code:",
+                results["baseline"]["gcode_sha256"] != results["enforcer"]["gcode_sha256"])
+          PY
+
       - name: Probe joint Bambu native colour/support/seam/fuzzy facets (diagnostic)
         shell: bash
         continue-on-error: true
