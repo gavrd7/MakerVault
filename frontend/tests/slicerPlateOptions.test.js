@@ -32,3 +32,11 @@ test("Creality Print native profile offers bed surfaces from resolved capabiliti
   assert.deepEqual(plateOptions("crealityprint",null).map(([key])=>key),["default"]);
   assert.deepEqual(plateOptions("crealityprint",{supported:[]}).map(([key])=>key),["default"]);
 });
+
+test("Bambu Studio uses the same profile-scoped bed selector as Orca and Creality",()=>{
+  const plates=plateOptions("bambustudio",{
+    default:null, supported:["cool","high_temp","textured_pei"],
+  });
+  assert.deepEqual(plates.map(([key])=>key),["cool","high_temp","textured_pei"]);
+  assert.deepEqual(plateOptions("bambustudio",null).map(([key])=>key),["default"]);
+});
