@@ -94,6 +94,11 @@ export default function GcodeViewerModal({ file, canEdit = false, onClose, onSav
   const startTemps=analysis.print_setup?.temperatures_c || {};
   const profileTemps=analysis.print_setup?.profile_temperatures_c || {};
   const requestedTemperature=key=>startTemps[key]!=null?startTemps[key]+" °C":"Not declared";
+  const filamentSummary=(analysis.filaments?.requirements||[])
+    .filter(row=>row.material || row.preset)
+    .slice(0,4)
+    .map(row=>[row.material,row.preset].filter(Boolean).join(" · "))
+    .join("; ");
   const headerTemperature=key=>startTemps[key]!=null
     ? startTemps[key]+" °C"
     : profileTemps[key]!=null ? profileTemps[key]+" °C (profile only)" : "—";
@@ -122,7 +127,8 @@ export default function GcodeViewerModal({ file, canEdit = false, onClose, onSav
         <span>Nozzle {headerTemperature("nozzle_c")}</span>
         <span>Bed {headerTemperature("bed_c")}</span>
         <span>Chamber {headerTemperature("chamber_c")}</span>
-      </div>}
+        {filamentSummary && <span>Filament {filamentSummary}</span>}
+      </div>
       <div className={"formActions" + (compact ? " slicerGcodeDesktopActions" : "")} style={{ justifyContent: "flex-start" }}>
         <button type="button" className={mode === "visual" ? "primary" : ""} onClick={() => setMode("visual")}>Visual toolpath</button>
         <button type="button" className={mode === "code" ? "primary" : ""} onClick={() => setMode("code")}>G-code text</button>
