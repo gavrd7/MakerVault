@@ -35,7 +35,8 @@ MAX_OBJECT_SETTINGS = 16
 
 
 def validate_worker_3mf(data, *, native_tool_count=None, allow_creality_combined_paint=False,
-                        allow_creality_layer_ranges=False, allow_bambu_project=False):
+                        allow_creality_layer_ranges=False, allow_bambu_project=False,
+                        allow_bambu_combined_paint=False):
     if native_tool_count is not None and (isinstance(native_tool_count, bool) or
             not isinstance(native_tool_count, int) or not 2 <= native_tool_count <= 16):
         raise WorkerError("Invalid native filament tool count.")
@@ -43,6 +44,8 @@ def validate_worker_3mf(data, *, native_tool_count=None, allow_creality_combined
     # project. The ordinary Orca validator remains fail-closed.
     if (allow_creality_combined_paint or allow_creality_layer_ranges) and native_tool_count != 2:
         raise WorkerError("Creality painting extensions need exactly two native tools.")
+    if allow_bambu_combined_paint and (not allow_bambu_project or native_tool_count is None):
+        raise WorkerError("Bambu combined painting needs an exact native project palette.")
     if not isinstance(data, bytes) or not data or len(data) > 32 * 1024 * 1024:
         raise WorkerError("3MF input exceeds worker limits.")
     try:
@@ -68,6 +71,8 @@ def validate_worker_3mf(data, *, native_tool_count=None, allow_creality_combined
             manifest = package.read(PLATE_MANIFEST) if PLATE_MANIFEST in names else None
             layer_ranges = package.read(LAYER_RANGES) if LAYER_RANGES in names else None
             bambu_settings = package.read(BAMBU_SETTINGS) if BAMBU_SETTINGS in names else None
+            if allow_bambu_project and native_tool_count is not None and bambu_settings is None:
+                raise WorkerError("Bambu multi-material 3MF requires native project settings.")
         if bambu_settings is not None:
             if len(bambu_settings) > 16384 or native_tool_count is None:
                 raise WorkerError("Bambu project settings require a bounded native palette.")
@@ -168,7 +173,7 @@ def validate_worker_3mf(data, *, native_tool_count=None, allow_creality_combined
             if paint_attrs:
                 # Semantic paint remains independently constrained to a
                 # single filament until joint material/tool verification.
-                if len(objects) != 1 or (native_tool_count is not None and not allow_creality_combined_paint):
+                if len(objects) != 1 or (native_tool_count is not None and not (allow_creality_combined_paint or allow_bambu_combined_paint)):
                     raise WorkerError("Unsupported native painted facet annotation.")
                 for channel in paint_attrs:
                     used_native_paint_channels.add(channel)
@@ -179,7 +184,7 @@ def validate_worker_3mf(data, *, native_tool_count=None, allow_creality_combined
                 # One unsplit TriangleSelector leaf per generated triangle.
                 # No arbitrary nibble streams or unverified colour→tool
                 # remapping are permitted. The server clips exact polygons.
-                if native_tool_count is None or (paint_attrs and not allow_creality_combined_paint):
+                if native_tool_count is None or (paint_attrs and not (allow_creality_combined_paint or allow_bambu_combined_paint)):
                     raise WorkerError("Colour painting requires verified native multi-tool slicing.")
                 native_states = ("4", "8") + tuple(
                     format(tool - 2, "X") + "C" for tool in range(2, native_tool_count))
