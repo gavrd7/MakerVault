@@ -122,3 +122,33 @@ jobs:
             --process /tmp/bambu-verified-profiles/process.json \
             --filament /tmp/bambu-verified-profiles/filament.json \
             --bambu-core-3mf --timeout 180
+
+      - name: Build disposable pinned Bambu candidate image
+        run: |
+          docker build --file slicer_worker/Dockerfile.bundle \
+            --tag makervault-bambu-offline:ci .
+
+      - name: Prove native STL and 3MF slicing inside networkless rootless container
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Only immutable official native profiles are exposed read-only.
+          chmod 755 /tmp/bambu-verified-profiles
+          chmod 644 /tmp/bambu-verified-profiles/*.json
+          for input in stl core-3mf; do
+            extra=()
+            if [ "$input" = core-3mf ]; then extra+=(--bambu-core-3mf); fi
+            docker run --rm --network none --read-only \
+              --cap-drop ALL --pids-limit 128 --cpus 2 --memory 3g \
+              --security-opt no-new-privileges:true \
+              --tmpfs /tmp:rw,nosuid,size=1g,mode=1777 \
+              --mount type=bind,src=/tmp/bambu-verified-profiles,dst=/fixtures,readonly \
+              --entrypoint python3 makervault-bambu-offline:ci \
+              -m slicer_worker.probe \
+              --engine bambustudio --version 02.09.01.70 \
+              --binary /opt/engines/bambu-root/squashfs-root/AppRun \
+              --printer /fixtures/printer.json \
+              --process /fixtures/process.json \
+              --filament /fixtures/filament.json \
+              --timeout 180 "${extra[@]}"
+          done
