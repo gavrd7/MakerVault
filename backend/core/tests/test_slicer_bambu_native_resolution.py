@@ -58,6 +58,17 @@ class BambuNativeResolutionTests(SimpleTestCase):
         self.assertEqual(process["layer_height"], "0.2")
         self.assertEqual(filament["filament_type"], ["PLA"])
 
+    def test_manually_imported_complete_native_preset_does_not_require_vendor_instantiation_flag(self):
+        profile_name = "Custom Bambu PLA"
+        self.docs[profile_name] = {
+            "type": "filament", "name": profile_name,
+            "filament_type": ["PLA"],
+            "nozzle_temperature": ["220"],
+        }
+        data = json.loads(flatten_bambu_preset(profile_name, "filament", self.fetch))
+        self.assertEqual(data["name"], profile_name)
+        self.assertEqual(data["filament_type"], ["PLA"])
+
     def test_missing_and_cyclic_dependency_fail_closed(self):
         def absent(name):
             if name == "fdm_bbl_common":
