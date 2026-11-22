@@ -47,7 +47,8 @@ services:
     init: true
     read_only: true
     cap_drop: [ALL]
-    cap_add: [SETUID, SETGID]
+    # PID 1 must signal child processes under separate UIDs on shutdown.
+    cap_add: [SETUID, SETGID, KILL]
     security_opt:
       - no-new-privileges:true
     pids_limit: 144
