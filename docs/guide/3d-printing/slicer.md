@@ -1,5 +1,10 @@
 # MakerVault Slicer: installation and engine management
 
+> **v1.7.0 deployment note:** The merged Bambu Studio work extends the existing OrcaSlicer and Creality Print integrations. The intended release deployment has **four long-running containers**, with one combined `makervault-slicer` worker/installer and a **one-off** engine-store-init helper. Use the [Linux installation guide](../getting-started/install.md#makervault-slicer--combined-four-container-deployment), [environment settings](../getting-started/environment.md#optional-slicer-environment-settings-v17) and [upgrade guide](../administration/updates.md#updating-with-the-combined-slicer-service-v17). Native engines require individually verified sources, checksums, profiles and explicit installation; do not assume a listed engine or a passing CI slice is safe to print on every physical machine. The release overlay must have a published and reviewed combined worker image before its setup procedure is considered end-to-end validated.
+>
+> The historical development and planned-feature details further down this chapter are retained for traceability; do not use their old version numbers or staging branch references as release installation instructions.
+
+
 > **Development status — PR #171:** The optional slicer is not yet released. The final multi-engine installer and approved container image do not exist yet. This guide describes the intended installation and the current limitations. Do not install an unverified engine merely to remove the “No slicer installed” warning.
 
 [MakerVault installation](../getting-started/install.md) · [Technical verification and developer setup](https://github.com/gavrd7/MakerVault/blob/feature/self-hosted-slicer-foundation/docs/development/self-hosted-slicer.md) · [Slicer roadmap](https://github.com/gavrd7/MakerVault/issues/156)
