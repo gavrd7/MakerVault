@@ -173,6 +173,8 @@ def _decode_payload(payload):
                    if "filament_profiles" in files else None}
         if payload["engine"] == "bambustudio":
             options["allow_bambu_project"] = True
+            if "filament_profiles" in files:
+                options["allow_bambu_combined_paint"] = True
         validate_worker_3mf(files["model"], **options)
     return files
 
