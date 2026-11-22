@@ -89,6 +89,31 @@ class BambuNativeMulticolourTests(TestCase):
         with self.assertRaisesRegex(WorkerError, "requires native project settings"):
             _decode_payload(self.payload(missing))
 
+    def test_bambu_project_rejects_missing_or_invalid_printable_height(self):
+        import io
+        import zipfile
+        project = make_bambu_material_fixture()
+        with zipfile.ZipFile(io.BytesIO(project)) as original:
+            members = {name: original.read(name) for name in original.namelist()}
+        for value in (None, "", "-1", "0", "NaN", "Infinity", "2001",
+                      "../../etc/passwd", ["256"]):
+            project_settings = json.loads(members["Metadata/project_settings.config"])
+            if value is None:
+                del project_settings["printable_height"]
+            else:
+                project_settings["printable_height"] = value
+            with io.BytesIO() as output:
+                with zipfile.ZipFile(output, "w", zipfile.ZIP_DEFLATED) as target:
+                    for name, data in members.items():
+                        if name == "Metadata/project_settings.config":
+                            data = json.dumps(project_settings).encode()
+                        target.writestr(name, data)
+                invalid = output.getvalue()
+            with self.subTest(value=value):
+                with self.assertRaisesRegex(WorkerError, "printable height"):
+                    validate_worker_3mf(
+                        invalid, native_tool_count=2, allow_bambu_project=True)
+
     def test_worker_rejects_wrong_filament_order_and_non_3mf_input(self):
         project = make_bambu_material_fixture()
         request = self.payload(project)
