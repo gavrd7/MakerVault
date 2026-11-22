@@ -19,6 +19,14 @@
   <img src="docs/guide/assets/makervault-cover.png" alt="MakerVault cover" width="100%">
 </p>
 
+## v1.7.0 installation preparation
+
+The [Linux installation guide](docs/guide/getting-started/install.md) now documents the optional **combined MakerVault Slicer** deployment with **four long-running containers**: application, `makervault-slicer` (worker + engine installer), PostgreSQL and Redis. The standalone permissions-init helper exits after initialising the engine store. The base stack remains available for installations that do not enable slicing.
+
+The reviewed production overlay is [`compose.slicer.yaml`](compose.slicer.yaml), alongside [`compose.yaml`](compose.yaml) and the [`.env.example`](.env.example) reference. A verified, immutable combined worker image and exact native engine checksums are required before starting the overlay with slicing enabled; the staging-only overlay is **not** a substitute for release artifacts. No native engine is automatically installed or approved.
+
+See [environment settings](docs/guide/getting-started/environment.md), [slicer setup](docs/guide/3d-printing/slicer.md) and [upgrades](docs/guide/administration/updates.md). Preserve your existing `.env`, named volumes and engine store when upgrading.
+
 ## Why MakerVault?
 
 Maker projects rarely live in one place. Components end up in boxes and spreadsheets, model revisions in folders, filament in a separate tracker and build notes scattered across apps. **MakerVault connects your physical workshop with its digital records** so you can find what you own, see what a project needs, and keep track of what you made.
