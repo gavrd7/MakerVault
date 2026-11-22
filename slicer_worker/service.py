@@ -171,7 +171,8 @@ def _decode_payload(payload):
     elif model_format == "3mf":
         validate_worker_3mf(files["model"],
             native_tool_count=len(files["filament_profiles"])
-                if "filament_profiles" in files else None)
+                if "filament_profiles" in files else None,
+            allow_bambu_project=payload["engine"] == "bambustudio")
     return files
 
 
