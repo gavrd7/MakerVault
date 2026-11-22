@@ -50,16 +50,22 @@ jobs:
           test -d squashfs-root/usr
           echo 'Official pinned Bambu Studio AppImage verified and extracted; no engine was enabled or print started.'
 
-      - name: Install Bambu native GStreamer runtime prerequisite
+      - name: Install Bambu native desktop runtime prerequisites
         run: |
           sudo apt-get update -qq
-          sudo apt-get install -y --no-install-recommends libgstreamer-plugins-base1.0-0
+          sudo apt-get install -y --no-install-recommends \
+            libgstreamer-plugins-base1.0-0 libwebkit2gtk-4.1-0
       - name: Launch actual pinned Bambu CLI in headless offline mode
         shell: bash
         run: |
           set -euo pipefail
           cd /tmp/bambu-appimage-acceptance
           mkdir -p /tmp/bambu-cli-home
+          echo 'Checking native Bambu shared-library closure...'
+          ldd ./squashfs-root/bin/bambu-studio | grep 'not found' && {
+            echo 'Pinned Bambu binary still requires missing native libraries.'
+            exit 1
+          } || true
           # Prove the extracted entrypoint starts as a CLI, not merely that
           # the AppImage unpacks. No profile, model or printer is supplied.
           # Keep this offline and bounded, even if upstream regresses into GUI startup.
