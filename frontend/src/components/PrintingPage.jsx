@@ -205,7 +205,7 @@ function newestGeometryAnalysis(model) {
   return null;
 }
 
-export default function PrintingPage({ config, projects, searchTarget = null, onOpenConsumed, onOpenMakerTags = () => {}, onModelLibraryBack = null, initialWorkspaceView = "overview", onOpenSlicer = null, onOpenSlicerDevice = null, slicerStatus = { state: "checking" } }) {
+export default function PrintingPage({ config, projects, searchTarget = null, onOpenConsumed, onOpenMakerTags = () => {}, onModelLibraryBack = null, initialWorkspaceView = "overview", onOpenSlicer = null, slicerStatus = { state: "checking" } }) {
   const [data, setData] = useState(null);
   const [filamentsLoaded, setFilamentsLoaded] = useState(false);
   const [filesLoaded, setFilesLoaded] = useState(false);
