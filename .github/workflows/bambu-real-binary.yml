@@ -48,3 +48,24 @@ jobs:
           test -x squashfs-root/AppRun
           test -d squashfs-root/usr
           echo 'Official pinned Bambu Studio AppImage verified and extracted; no engine was enabled or print started.'
+
+      - name: Launch actual pinned Bambu CLI in headless offline mode
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd /tmp/bambu-appimage-acceptance
+          mkdir -p /tmp/bambu-cli-home
+          # Prove the extracted entrypoint starts as a CLI, not merely that
+          # the AppImage unpacks. No profile, model or printer is supplied.
+          # Keep this offline and bounded, even if upstream regresses into GUI startup.
+          timeout 45s env -u DISPLAY -u WAYLAND_DISPLAY \
+            HOME=/tmp/bambu-cli-home QT_QPA_PLATFORM=offscreen \
+            SSL_CERT_FILE=/etc/ssl/certs/ca-certificates.crt \
+            ./squashfs-root/AppRun --help > /tmp/bambu-help.log 2>&1 || {
+              status=$?
+              echo "Pinned Bambu Studio CLI startup failed (exit ${status})."
+              tail -60 /tmp/bambu-help.log
+              exit "$status"
+            }
+          grep -Eiq -- '--(slice|load-settings|load-filaments|export-3mf)' /tmp/bambu-help.log
+          echo 'Pinned Bambu Studio headless command-line startup verified.'
