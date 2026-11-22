@@ -96,6 +96,10 @@ jobs:
               value = json.loads(path.read_text())
               assert 'inherits' not in value and 'include' not in value
               assert value['type'] == ('machine' if kind == 'printer' else kind)
+          for key in ('filament_id', 'filament_settings_id',
+                      'filament_self_index', 'filament_extruder_variant'):
+              f = json.loads(Path('/tmp/bambu-verified-profiles/filament.json').read_text())
+              print('Official public BBL filament', key, repr(f.get(key))[:300])
           print('Official native profile ancestry fully resolved.')
           PY
       - name: Attempt genuine pinned Bambu CLI single-material STL slice
@@ -158,6 +162,10 @@ jobs:
                             'list', len(v) if isinstance(v, list) else
                             'scalar' if isinstance(v, (str, int, float)) else
                             'absent')
+                  for key in ('filament_ids', 'filament_self_index',
+                              'filament_extruder_variant', 'printable_height'):
+                      value = cfg.get(key)
+                      print('Official public fixture', key, repr(value)[:600])
               if 'Metadata/model_settings.config' in names:
                   from xml.etree import ElementTree as ET
                   manifest = ET.fromstring(archive.read('Metadata/model_settings.config'))
@@ -181,6 +189,41 @@ jobs:
               --binary /tmp/bambu-appimage-acceptance/squashfs-root/AppRun \
               --profiles /tmp/bambu-verified-profiles --timeout 180 "${extra[@]}"
           done
+
+      - name: Diagnose native Bambu two-material abort in disposable CI (informational)
+        if: failure()
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Debug only the public, fixed two-cube fixture and verified vendor
+          # profiles; no MakerVault user content, secrets or printer links.
+          sudo apt-get install -y --no-install-recommends gdb
+          python3 - <<'PY'
+          from pathlib import Path
+          import tempfile
+          from scripts.probe_bambu_multicolour import make_bambu_material_fixture
+          import json
+          p=Path('/tmp/bambu-native-debug')
+          p.mkdir(exist_ok=True)
+          (p/'input.3mf').write_bytes(make_bambu_material_fixture())
+          src=Path('/tmp/bambu-verified-profiles')
+          for kind in ('printer', 'process', 'filament'):
+              (p/(kind+'.json')).write_bytes((src/(kind+'.json')).read_bytes())
+          f=json.loads((p/'filament.json').read_bytes())
+          for i in range(2):
+              item=dict(f)
+              item['name']=f'MakerVault PLA Tool {i+1}'
+              item['filament_settings_id']=[item['name']]
+              (p/f'filament-{i}.json').write_text(json.dumps(item))
+          (p/'filament.json').write_bytes((p/'filament-0.json').read_bytes())
+          PY
+          set +e
+          timeout 60s env -u DISPLAY -u WAYLAND_DISPLAY             HOME=/tmp/bambu-cli-home QT_QPA_PLATFORM=offscreen             SSL_CERT_FILE=/etc/ssl/certs/ca-certificates.crt             gdb -q -batch -ex 'set pagination off' -ex 'run'             -ex 'thread apply all bt 8' --args             /tmp/bambu-appimage-acceptance/squashfs-root/AppRun             --load-settings '/tmp/bambu-native-debug/printer.json;/tmp/bambu-native-debug/process.json'             --load-filaments '/tmp/bambu-native-debug/filament-0.json;/tmp/bambu-native-debug/filament-1.json'             --slice 0 --export-3mf /tmp/bambu-native-debug/out.3mf             /tmp/bambu-native-debug/input.3mf > /tmp/bambu-native-debug/backtrace.txt 2>&1
+          code=$?
+          set -e
+          echo "CI-only native debugger exit: $code"
+          grep -E -m 60 'Program received|SIGABRT|SIGSEGV|terminate called|what\(\)|#0 |#1 |#2 |#3 |#4 |#5 |BambuStudio|libslic3r|__assert_fail|std::' /tmp/bambu-native-debug/backtrace.txt | cut -c 1-240 || true
 
       - name: Build disposable pinned Bambu candidate image
         run: |
