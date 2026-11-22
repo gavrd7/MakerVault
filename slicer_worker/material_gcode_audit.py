@@ -351,6 +351,49 @@ def summarize_bambu_flush_signal(raw_gcode):
     }
 
 
+def verify_bambu_fixture_variable_layers(raw_gcode):
+    """Prove the pinned Bambu native 3MF fixed painted cube used the requested
+    0.10mm (0-9mm) and 0.30mm (9-20mm) layer-height bands in actual G-code.
+
+    BambuStudio 2.9.1 emits '; Z_HEIGHT: <physical Z>', not Orca's ';Z:'.
+    Only strictly increasing native layer markers are accepted; travel Z,
+    Z-hops and untrusted header settings cannot pass the audit.
+    """
+    if (not isinstance(raw_gcode, bytes) or not raw_gcode
+            or len(raw_gcode) > 64 * 1024 * 1024):
+        raise WorkerError("Invalid Bambu native layer audit G-code.")
+    try:
+        lines = raw_gcode.decode("utf-8").splitlines()
+    except UnicodeDecodeError:
+        raise WorkerError("Bambu native layer audit requires UTF-8.") from None
+    if len(lines) > 1_500_000:
+        raise WorkerError("Bambu native layer audit exceeds line limit.")
+    layer = re.compile(r"^;\\s*Z_HEIGHT:\\s*([0-9]+(?:\\.[0-9]+)?)\\s*$", re.I)
+    positions = []
+    for raw in lines:
+        match = layer.fullmatch(raw.strip())
+        if match:
+            z = float(match.group(1))
+            if math.isfinite(z) and 0 < z <= 1000 and (
+                    not positions or z > positions[-1] + 1e-5):
+                positions.append(z)
+    if len(positions) < 10:
+        raise WorkerError("Bambu G-code lacks native layer-height markers.")
+    checks = []
+    for label, start, stop, wanted in (
+            ("lower", 0.0, 9.0, 0.10),
+            ("upper", 9.0, 20.0, 0.30)):
+        values = [round(z1 - z0, 4)
+                  for z0, z1 in zip(positions, positions[1:])
+                  if z0 >= start + wanted and z1 <= stop - wanted]
+        matched = [v for v in values if abs(v - wanted) <= max(0.018, wanted * .12)]
+        if len(values) < 5 or len(matched) < max(3, math.ceil(.6 * len(values))):
+            raise WorkerError("Bambu native variable layer height did not match the requested bands.")
+        checks.append({"band": label, "target_height_mm": wanted,
+                       "matched_layers": len(matched), "checked_layers": len(values)})
+    return {"native_z_markers": len(positions), "verified_layer_bands": checks}
+
+
 def summarize_k2_fixture_changeovers(raw_gcode):
     """Offline evidence for fixed two-cube test, NOT a physical K2 approval.
 
