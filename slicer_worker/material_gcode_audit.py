@@ -161,6 +161,74 @@ def verify_two_object_tool_regions(raw_gcode, *, left_tool=0, right_tool=1):
     return {"left_tool_deposits": hits[0], "right_tool_deposits": hits[1]}
 
 
+
+def verify_painted_cube_tool_regions(raw_gcode):
+    """Offline acceptance for the fixed 20mm facet-painted cube at (75,110).
+
+    Unlike global T0/T1 checks, this requires actual positive-E XY toolpaths
+    *inside the printed cube* from both tools. Prime-tower/wipe-only tool
+    changes cannot pass. This fixed-fixture check makes no claims about
+    colour-boundary fidelity or physical print quality.
+    """
+    if (not isinstance(raw_gcode, bytes) or not raw_gcode
+            or len(raw_gcode) > 64 * 1024 * 1024):
+        raise WorkerError("Invalid native painted cube G-code.")
+    try:
+        lines = raw_gcode.decode("utf-8").splitlines()
+    except UnicodeDecodeError:
+        raise WorkerError("Painted cube G-code must be UTF-8.") from None
+
+    active = None
+    absolute_e = True
+    absolute_xyz = True
+    x = y = 0.0
+    prior_e = {}
+    hits = {0: 0, 1: 0}
+    for raw in lines:
+        code = raw.split(";", 1)[0].strip().upper()
+        tool = TOOL.fullmatch(code)
+        if tool:
+            active = int(tool.group(1))
+            continue
+        command = code.split(None, 1)[0] if code else ""
+        if command == "G90":
+            absolute_xyz = True
+        elif command == "G91":
+            absolute_xyz = False
+        elif command == "M82":
+            absolute_e = True
+        elif command == "M83":
+            absolute_e = False
+        elif command == "G92" and active is not None:
+            reset = E_AXIS.search(code[3:])
+            if reset:
+                prior_e[active] = float(reset.group(1))
+        elif MOVE.match(code):
+            mx = re.search(r"(?:^|\\s)X([-+]?(?:\\d+(?:\\.\\d*)?|\\.\\d+))(?=\\s|$)", code)
+            my = re.search(r"(?:^|\\s)Y([-+]?(?:\\d+(?:\\.\\d*)?|\\.\\d+))(?=\\s|$)", code)
+            if (mx or my) and not absolute_xyz:
+                raise WorkerError("Relative XY cannot verify painted cube deposition.")
+            if mx:
+                x = float(mx.group(1))
+            if my:
+                y = float(my.group(1))
+            e = E_AXIS.search(code)
+            if e and active is not None:
+                value = float(e.group(1))
+                old = prior_e.get(active, 0.0)
+                if absolute_e:
+                    prior_e[active] = value
+                if ((value > old + 1e-6 if absolute_e else value > 1e-6)
+                        and (mx or my) and 64 <= x <= 86 and 99 <= y <= 121
+                        and active in hits):
+                    hits[active] += 1
+    if min(hits.values()) < 10:
+        raise WorkerError(
+            "Painted Bambu G-code lacks actual dual-tool deposition inside the model.")
+    return {"base_tool_model_deposits": hits[0],
+            "painted_tool_model_deposits": hits[1]}
+
+
 def summarize_k2_fixture_changeovers(raw_gcode):
     """Offline evidence for fixed two-cube test, NOT a physical K2 approval.
 
