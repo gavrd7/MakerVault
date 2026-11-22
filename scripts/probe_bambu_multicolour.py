@@ -22,7 +22,7 @@ from slicer_worker.runner import WorkerError
 from slicer_worker.three_mf_validation import CORE_NS, validate_worker_3mf
 
 
-def make_bambu_material_fixture(*, painted=False, native_app=False):
+def make_bambu_material_fixture(*, painted=False, native_app=True):
     """Build 1 painted cube or 2 separately assigned cubes on a 256mm plate."""
     ns = "{" + CORE_NS + "}"
     ET.register_namespace("", CORE_NS)
@@ -100,6 +100,11 @@ def make_bambu_material_fixture(*, painted=False, native_app=False):
                 "filament_diameter": ["1.75", "1.75"],
                 "filament_ids": ["GFA00", "GFA00"],
                 "filament_is_support": ["0", "0"],
+                "filament_flow_ratio": ["0.98"] * 4,
+                "nozzle_temperature": ["220"] * 4,
+                "nozzle_temperature_initial_layer": ["220"] * 4,
+                "filament_max_volumetric_speed": ["21", "29", "21", "29"],
+                "filament_retraction_length": ["nil", "0.4", "nil", "0.4"],
                 "filament_self_index": ["1", "1", "2", "2"],
                 "filament_extruder_variant": [
                     "Direct Drive Standard", "Direct Drive High Flow",
