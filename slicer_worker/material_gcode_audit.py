@@ -204,8 +204,8 @@ def verify_painted_cube_tool_regions(raw_gcode):
             if reset:
                 prior_e[active] = float(reset.group(1))
         elif MOVE.match(code):
-            mx = re.search(r"(?:^|\\s)X([-+]?(?:\\d+(?:\\.\\d*)?|\\.\\d+))(?=\\s|$)", code)
-            my = re.search(r"(?:^|\\s)Y([-+]?(?:\\d+(?:\\.\\d*)?|\\.\\d+))(?=\\s|$)", code)
+            mx = re.search(r"(?:^|\s)X([-+]?(?:\d+(?:\.\d*)?|\.\d+))(?=\s|$)", code)
+            my = re.search(r"(?:^|\s)Y([-+]?(?:\d+(?:\.\d*)?|\.\d+))(?=\s|$)", code)
             if (mx or my) and not absolute_xyz:
                 raise WorkerError("Relative XY cannot verify painted cube deposition.")
             if mx:
