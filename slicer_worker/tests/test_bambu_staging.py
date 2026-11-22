@@ -74,7 +74,27 @@ class BambuStagingTests(TestCase):
                       filament="/nonexistent", process="/nonexistent")
         with self.assertRaisesRegex(WorkerError, "pinned"):
             run_probe(**{**common, "version": "02.08.01.55"})
-        with self.assertRaisesRegex(WorkerError, "single STL"):
+        with self.assertRaisesRegex(WorkerError, "single STL or fixed 3MF"):
             run_probe(**{**common, "second_filament": "/nonexistent"})
         with self.assertRaisesRegex(WorkerError, "single STL"):
             run_probe(**{**common, "model": "/nonexistent.3mf"})
+
+    def test_fixed_core_3mf_is_one_object_and_not_an_arbitrary_vendor_project(self):
+        import io
+        import zipfile
+        from slicer_worker.probe import fixture_bambu_core_3mf, run_probe
+        from slicer_worker.three_mf_validation import validate_worker_3mf
+        from slicer_worker.runner import WorkerError
+        package = fixture_bambu_core_3mf()
+        self.assertTrue(validate_worker_3mf(package))
+        with zipfile.ZipFile(io.BytesIO(package)) as archive:
+            self.assertEqual(set(archive.namelist()),
+                             {"3D/3dmodel.model", "_rels/.rels", "[Content_Types].xml"})
+            self.assertIn(b'<item objectid="1"', archive.read("3D/3dmodel.model"))
+        common = dict(engine="bambustudio", version=staging.VERSION,
+                      binary="/nonexistent", printer="/nonexistent",
+                      filament="/nonexistent", process="/nonexistent")
+        with self.assertRaisesRegex(WorkerError, "no external model"):
+            run_probe(**common, model="untrusted.3mf", bambu_core_3mf=True)
+        with self.assertRaisesRegex(WorkerError, "only for Bambu"):
+            run_probe(**{**common, "engine": "orcaslicer"}, bambu_core_3mf=True)
