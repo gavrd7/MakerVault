@@ -335,8 +335,15 @@ jobs:
           # There is no overhang on this cube: support enforcer should not
           # arbitrarily invent support. The separate T-overhang gate proves
           # real positive-E support deposition.
-          if files["support"]["gcode_sha256"] != base["gcode_sha256"]:
-              raise SystemExit("Bambu cube-only support paint changed geometry unexpectedly")
+          # Full-file hashes include slicer metadata and non-depositing
+          # operations. Verify the intended invariant directly: the support
+          # brush must not create unsupported support extrusion on a plain cube.
+          for label in ("baseline", "support"):
+              signal = files[label]["flush_evidence"]
+              if (signal["support_feature_moves"] != 0 or
+                      sum(signal["support_feature_positive_e_mm"].values()) != 0):
+                  raise SystemExit(
+                      f"Bambu cube-only {label} generated unexpected support extrusion")
           for label in ("seam", "fuzzy", "combined"):
               if files[label]["gcode_sha256"] == base["gcode_sha256"]:
                   raise SystemExit(f"Bambu {label} facet painting did not change native G-code")
