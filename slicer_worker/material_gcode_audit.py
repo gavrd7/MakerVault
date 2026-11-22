@@ -4,6 +4,7 @@ Only a bounded acceptance check, never proof of printer firmware compatibility.
 A profile's toolchange macro is not interpreted or executed by this module.
 """
 import io
+import math
 import re
 import zipfile
 from xml.etree import ElementTree as ET
