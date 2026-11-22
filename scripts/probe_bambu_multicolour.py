@@ -203,6 +203,17 @@ def run_fixture(binary, profiles, *, painted=False, timeout=180):
                         str(workdir / "filament-1.json"),
                         "--slice", "0", "--outputdir",
                         str(workdir / "tagged-filaments-only"), str(tagged_model)]),
+                    ("tagged_machine_process_export", [
+                        "--load-settings", str(workdir / "printer.json") + ";" +
+                        str(workdir / "process.json"),
+                        "--slice", "0", "--export-3mf",
+                        str(workdir / "tagged-sliced.3mf"), str(tagged_model)]),
+                    ("tagged_machine_process_one_filament", [
+                        "--load-settings", str(workdir / "printer.json") + ";" +
+                        str(workdir / "process.json"),
+                        "--load-filaments", str(workdir / "filament-0.json"),
+                        "--slice", "0", "--outputdir",
+                        str(workdir / "tagged-machine-process-one-filament"), str(tagged_model)]),
                 ]
                 for label, tail in variants:
                     try:
@@ -210,7 +221,9 @@ def run_fixture(binary, profiles, *, painted=False, timeout=180):
                             "no_overrides", "machine_process_only", "filaments_only",
                             "filament0_one_only", "filament0_blank_second",
                             "blank_first_filament1", "tagged_no_overrides",
-                            "tagged_machine_process_only", "tagged_filaments_only")
+                            "tagged_machine_process_only", "tagged_filaments_only",
+                            "tagged_machine_process_export",
+                            "tagged_machine_process_one_filament")
                             else prefix)
                         attempt = subprocess.run(selected_prefix + tail, cwd=workdir,
                             env={**slicing_environment(workdir),
@@ -224,6 +237,19 @@ def run_fixture(binary, profiles, *, painted=False, timeout=180):
                           "output_bytes", len(attempt.stdout),
                           "error_bytes", len(attempt.stderr))
                     print("CI Bambu stderr bounded:", repr(attempt.stderr[:200]))
+                    if label == "tagged_machine_process_export" and attempt.returncode == 0:
+                        import zipfile as _zipfile
+                        archive_path = workdir / "tagged-sliced.3mf"
+                        with _zipfile.ZipFile(archive_path) as archive:
+                            gcode_members = [n for n in archive.namelist()
+                                             if n.lower().endswith(".gcode")]
+                            print("CI Bambu tagged export native G-code members:",
+                                  gcode_members[:5])
+                            if len(gcode_members) == 1:
+                                exported = archive.read(gcode_members[0])
+                                verify_multi_material_output(exported, {0, 1})
+                                print("CI Bambu tagged export model regions:",
+                                      verify_two_object_tool_regions(exported))
                     print("CI Bambu stdout bounded:", repr(attempt.stdout[:400]))
                     directory = workdir / label.replace("_", "-")
                     emitted = ([f for f in directory.rglob("*.gcode") if f.is_file()]
@@ -234,7 +260,8 @@ def run_fixture(binary, profiles, *, painted=False, timeout=180):
                     if (label in ("no_overrides", "machine_process_only",
                                  "filament0_one_only", "filament0_blank_second",
                                  "tagged_no_overrides", "tagged_machine_process_only",
-                                 "tagged_filaments_only")
+                                 "tagged_filaments_only",
+                                 "tagged_machine_process_one_filament")
                             and len(emitted) == 1 and
                             0 < emitted[0].stat().st_size <= 16 * 1024 * 1024):
                         native_gcode = emitted[0].read_bytes()
