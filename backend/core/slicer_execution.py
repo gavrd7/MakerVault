@@ -470,9 +470,6 @@ def _validate_plate_execution(job):
         if settings.get("multi_material_test") is True:
             raise SlicerExecutionError(
                 "Multiple Bambu filaments require a native multi-filament runner.")
-        if settings.get("process_overrides"):
-            raise SlicerExecutionError(
-                "Per-job Bambu process overrides require native profile mapping.")
         if any(isinstance(item, dict) and (
                 item.get("process_overrides")
                 or (item.get("colour_paint") or {}).get("regions")
@@ -824,6 +821,16 @@ def process_queued_job(job_id):
                 palette = list(material_result["filament_profiles"])
                 palette[0] = profiles[1]
                 material_result["filament_profiles"] = tuple(palette)
+        if job.engine == "bambustudio":
+            # Bambu native process keys share the validated slicer process
+            # schema. Apply user-selected values to an in-memory copy only,
+            # exactly like the existing Orca global process controls.
+            try:
+                profiles[2] = apply_process_overrides(
+                    profiles[2], (job.settings or {}).get("process_overrides") or {})
+            except (ValueError, TypeError, UnicodeDecodeError) as exc:
+                raise SlicerExecutionError(
+                    "Bambu native process settings could not be applied.") from exc
         if job.engine == "bambustudio":
             stage = "validating native Bambu build plate and filament temperatures"
             try:
