@@ -5,7 +5,7 @@ import uuid
 from unittest import TestCase
 
 from scripts.probe_bambu_multicolour import make_bambu_material_fixture
-from slicer_worker.material_gcode_audit import expected_native_tools, verify_painted_cube_tool_regions, summarize_bambu_flush_signal
+from slicer_worker.material_gcode_audit import expected_native_tools, verify_painted_cube_tool_regions, summarize_bambu_flush_signal, verify_bambu_fixture_variable_layers
 from slicer_worker.service import _decode_payload
 from slicer_worker.runner import WorkerError
 from slicer_worker.three_mf_validation import validate_worker_3mf
@@ -121,6 +121,21 @@ class BambuNativeMulticolourTests(TestCase):
                 with self.assertRaisesRegex(WorkerError, "painted facet"):
                     validate_worker_3mf(project, native_tool_count=2,
                                         allow_bambu_project=True)
+
+    def test_bambu_layer_height_audit_requires_both_actual_native_z_bands(self):
+        lower = [round(0.10 * index, 3) for index in range(1, 90)]
+        upper = [round(9.0 + 0.30 * index, 3) for index in range(1, 36)]
+        def gcode(values):
+            return ("\n".join("; Z_HEIGHT: " + str(z) for z in values)
+                    + "\n").encode("utf-8")
+        proof = verify_bambu_fixture_variable_layers(gcode(lower + upper))
+        self.assertEqual(len(proof["verified_layer_bands"]), 2)
+        self.assertGreater(proof["native_z_markers"], 100)
+        with self.assertRaisesRegex(WorkerError, "did not match"):
+            verify_bambu_fixture_variable_layers(gcode(
+                [round(0.20*index, 3) for index in range(1, 101)]))
+        with self.assertRaisesRegex(WorkerError, "lacks native"):
+            verify_bambu_fixture_variable_layers(b"; just a layer height setting\nG1 Z3")
 
     def test_native_bambu_variable_layers_require_exact_palette_and_single_object(self):
         project = make_bambu_material_fixture(painted=True, variable_layers=True)
