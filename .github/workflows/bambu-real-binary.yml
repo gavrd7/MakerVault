@@ -233,6 +233,16 @@ jobs:
               --profiles /tmp/bambu-verified-profiles --timeout 180 "${extra[@]}"
           done
 
+      - name: Probe Bambu variable layer height with native painted 3MF (diagnostic)
+        shell: bash
+        continue-on-error: true
+        run: |
+          set -euo pipefail
+          timeout 240s python3 -m scripts.probe_bambu_multicolour \
+            --binary /tmp/bambu-appimage-acceptance/squashfs-root/AppRun \
+            --profiles /tmp/bambu-verified-profiles \
+            --painted --variable-layers --timeout 180
+
       - name: Compare real Bambu native flush and prime-tower output (diagnostic)
         shell: bash
         run: |
