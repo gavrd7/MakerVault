@@ -147,6 +147,8 @@ def store_generated_gcode(job_id, raw: bytes):
                     "embedded_thumbnail_sizes": [
                         f"{size}x{size}" for size in thumbnail_sizes
                     ],
+                    **({"bambu_beta": True, "printer_submission_verified": False}
+                       if job.engine == "bambustudio" else {}),
                     **({"multi_material_test": True, "printer_submission_verified": False}
                        if (job.settings or {}).get("multi_material_test") is True else {}),
                     **({"variable_layer_test": True, "printer_submission_verified": False}
@@ -166,6 +168,9 @@ def store_generated_gcode(job_id, raw: bytes):
             job.status = "completed"
             job.progress = 100
             job.message = (
+                "Bambu Studio Beta G-code generated. Inspect the toolpath; "
+                "printer upload and start remain disabled until hardware validation."
+                if job.engine == "bambustudio" else
                 "Creality colour-painted G-code generated; verify that both tools "
                 "extrude inside the model before any supervised printer test."
                 if (job.engine == "crealityprint"
