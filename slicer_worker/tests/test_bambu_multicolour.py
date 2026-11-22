@@ -5,7 +5,7 @@ import uuid
 from unittest import TestCase
 
 from scripts.probe_bambu_multicolour import make_bambu_material_fixture
-from slicer_worker.material_gcode_audit import expected_native_tools, verify_painted_cube_tool_regions
+from slicer_worker.material_gcode_audit import expected_native_tools, verify_painted_cube_tool_regions, summarize_bambu_flush_signal
 from slicer_worker.service import _decode_payload
 from slicer_worker.runner import WorkerError
 from slicer_worker.three_mf_validation import validate_worker_3mf
@@ -50,6 +50,21 @@ class BambuNativeMulticolourTests(TestCase):
         counts = verify_painted_cube_tool_regions(raw)
         self.assertGreaterEqual(counts["base_tool_model_deposits"], 10)
         self.assertGreaterEqual(counts["painted_tool_model_deposits"], 10)
+
+    def test_bambu_flush_signal_counts_actual_positive_extrusion_not_comments(self):
+        lines = ["G90", "M83", "T0", "; FEATURE: Prime tower",
+                 "G1 X30 Y30 E1.2", "G1 E0.5", "G1 E-0.2",
+                 "; FEATURE: Outer wall", "T1", "G1 X75 Y110 E1.4",
+                 "M82", "G92 E0", "G1 X80 Y110 E0.3",
+                 "G1 X80 Y110 E0.1"]
+        data = ("\n".join(lines) + "\n").encode("utf-8")
+        report = summarize_bambu_flush_signal(data)
+        self.assertEqual(report["positive_e_mm"]["0"], 1.7)
+        self.assertEqual(report["positive_e_mm"]["1"], 1.7)
+        self.assertEqual(report["stationary_positive_e_mm"]["0"], 0.5)
+        self.assertEqual(report["tower_feature_positive_e_mm"]["0"], 1.7)
+        self.assertEqual(report["tower_feature_moves"], 2)
+        self.assertEqual(report["toolchanges"], 1)
 
     def test_two_object_tool_assignments_are_preserved(self):
         project = make_bambu_material_fixture()
