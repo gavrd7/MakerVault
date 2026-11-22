@@ -48,6 +48,26 @@ G1 X10 Y20 E2.0
         self.assertEqual(result["segment_count"], 3)
         self.assertEqual(result["feature_counts"]["Outer wall"], 2)
 
+    def test_existing_orca_and_creality_filament_headers_remain_unchanged(self):
+        cases = [
+            ("Orca", """; estimated printing time (normal mode) = 1h 20m 30s
+; filament used [mm] = 1520.0
+; filament used [g] = 4.8
+; filament used [cm3] = 3.9
+"""),
+            ("Creality", """; filament used [mm] = 1520.0
+; filament used [g] = 4.8
+; filament used [cm3] = 3.9
+"""),
+        ]
+        for engine, raw in cases:
+            with self.subTest(engine=engine):
+                result = generated_preview(raw)
+                self.assertEqual(result["filament_mm"], 1520.0)
+                self.assertEqual(result["filament_g"], 4.8)
+                self.assertEqual(result["filament_cm3"], 3.9)
+        self.assertEqual(generated_preview(cases[0][1])["estimated_time_seconds"], 4830)
+
     def test_native_line_width_is_preserved_for_3d_filament_geometry(self):
         result = generated_preview(
             "G90\nM83\nG1 Z0.2 X10 Y10\n"
