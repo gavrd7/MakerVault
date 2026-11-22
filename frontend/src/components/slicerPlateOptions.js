@@ -11,7 +11,7 @@ export const ORCA_PLATE_TYPES = [
 
 /** Never advertise unknown plate types as supported by a selected printer. */
 export function plateOptions(engine, bedTypes) {
-  if (!["orcaslicer", "crealityprint"].includes(engine)) return ORCA_PLATE_TYPES.slice(0, 1);
+  if (!["orcaslicer", "crealityprint", "bambustudio"].includes(engine)) return ORCA_PLATE_TYPES.slice(0, 1);
   const supported = Array.isArray(bedTypes?.supported) ? bedTypes.supported : null;
   if (supported?.length)
     return ORCA_PLATE_TYPES.filter(([key]) => supported.includes(key));
