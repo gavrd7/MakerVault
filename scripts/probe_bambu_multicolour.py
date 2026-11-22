@@ -22,11 +22,16 @@ from slicer_worker.runner import WorkerError
 from slicer_worker.three_mf_validation import CORE_NS, validate_worker_3mf
 
 
-def make_bambu_material_fixture(*, painted=False):
+def make_bambu_material_fixture(*, painted=False, native_app=False):
     """Build 1 painted cube or 2 separately assigned cubes on a 256mm plate."""
     ns = "{" + CORE_NS + "}"
     ET.register_namespace("", CORE_NS)
     model = ET.Element(ns + "model", {"unit": "millimeter"})
+    if native_app:
+        # CI-only hypothesis: upstream only loads vendor object metadata if
+        # the source declares a BambuStudio-compatible application marker.
+        ET.SubElement(model, ns + "metadata",
+                      {"name": "Application"}).text = "BambuStudio-02.09.01.70"
     resources = ET.SubElement(model, ns + "resources")
     build = ET.SubElement(model, ns + "build")
     # X positions deliberately match the existing material/deposition audit.
@@ -149,6 +154,11 @@ def run_fixture(binary, profiles, *, painted=False, timeout=180):
                 # Compare the real Bambu CLI's plate numbering and export
                 # path. Every test has a separate scratch output; no printer
                 # API/credentials and no production data are involved.
+                tagged_model = workdir / "tagged.3mf"
+                tagged_model.write_bytes(make_bambu_material_fixture(
+                    painted=painted, native_app=True))
+                validate_worker_3mf(tagged_model.read_bytes(),
+                    native_tool_count=2, allow_bambu_project=True)
                 variants = [
                     ("slice0_export", ["--slice", "0", "--export-3mf",
                                       str(workdir / "bambu-debug-0.3mf"), model]),
@@ -179,13 +189,27 @@ def run_fixture(binary, profiles, *, painted=False, timeout=180):
                         "--load-filaments", ";" + str(workdir / "filament-1.json"),
                         "--slice", "0", "--outputdir",
                         str(workdir / "blank-first-filament1"), model]),
+                    ("tagged_no_overrides", [
+                        "--slice", "0", "--outputdir",
+                        str(workdir / "tagged-no-overrides"), str(tagged_model)]),
+                    ("tagged_machine_process_only", [
+                        "--load-settings", str(workdir / "printer.json") + ";" +
+                        str(workdir / "process.json"),
+                        "--slice", "0", "--outputdir",
+                        str(workdir / "tagged-machine-process-only"), str(tagged_model)]),
+                    ("tagged_filaments_only", [
+                        "--load-filaments", str(workdir / "filament-0.json") + ";" +
+                        str(workdir / "filament-1.json"),
+                        "--slice", "0", "--outputdir",
+                        str(workdir / "tagged-filaments-only"), str(tagged_model)]),
                 ]
                 for label, tail in variants:
                     try:
                         selected_prefix = ([str(binary)] if label in (
                             "no_overrides", "machine_process_only", "filaments_only",
                             "filament0_one_only", "filament0_blank_second",
-                            "blank_first_filament1")
+                            "blank_first_filament1", "tagged_no_overrides",
+                            "tagged_machine_process_only", "tagged_filaments_only")
                             else prefix)
                         attempt = subprocess.run(selected_prefix + tail, cwd=workdir,
                             env={**slicing_environment(workdir),
@@ -206,7 +230,9 @@ def run_fixture(binary, profiles, *, painted=False, timeout=180):
                           len(emitted), "bytes",
                           sum(f.stat().st_size for f in emitted[:4]))
                     if (label in ("no_overrides", "machine_process_only",
-                                 "filament0_one_only", "filament0_blank_second")
+                                 "filament0_one_only", "filament0_blank_second",
+                                 "tagged_no_overrides", "tagged_machine_process_only",
+                                 "tagged_filaments_only")
                             and len(emitted) == 1 and
                             0 < emitted[0].stat().st_size <= 16 * 1024 * 1024):
                         native_gcode = emitted[0].read_bytes()
