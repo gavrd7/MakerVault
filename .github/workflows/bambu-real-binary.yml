@@ -233,6 +233,19 @@ jobs:
               --profiles /tmp/bambu-verified-profiles --timeout 180 "${extra[@]}"
           done
 
+      - name: Probe joint Bambu native colour/support/seam/fuzzy facets (diagnostic)
+        shell: bash
+        continue-on-error: true
+        run: |
+          set -euo pipefail
+          for mode in support seam fuzzy combined; do
+            echo "CI-only Bambu semantic paint mode: $mode"
+            timeout 240s python3 -m scripts.probe_bambu_multicolour \
+              --binary /tmp/bambu-appimage-acceptance/squashfs-root/AppRun \
+              --profiles /tmp/bambu-verified-profiles \
+              --painted --detail-paint "$mode" --timeout 180
+          done
+
       - name: Probe Bambu variable layer height with native painted 3MF (diagnostic)
         shell: bash
         continue-on-error: true
