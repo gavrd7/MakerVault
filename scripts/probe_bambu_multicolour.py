@@ -170,7 +170,10 @@ def run_fixture(binary, profiles, *, painted=False, timeout=180):
                 ]
                 for label, tail in variants:
                     try:
-                        attempt = subprocess.run(prefix + tail, cwd=workdir,
+                        selected_prefix = ([str(binary)] if label in (
+                            "no_overrides", "machine_process_only", "filaments_only")
+                            else prefix)
+                        attempt = subprocess.run(selected_prefix + tail, cwd=workdir,
                             env={**slicing_environment(workdir),
                                  "SSL_CERT_FILE": "/etc/ssl/certs/ca-certificates.crt"},
                             stdin=subprocess.DEVNULL, stdout=subprocess.PIPE,
