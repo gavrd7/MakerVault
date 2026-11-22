@@ -4,7 +4,7 @@ import json
 import uuid
 from unittest import TestCase
 
-from scripts.probe_bambu_multicolour import make_bambu_material_fixture
+from scripts.probe_bambu_multicolour import make_bambu_material_fixture, make_bambu_support_overhang_fixture
 from slicer_worker.material_gcode_audit import expected_native_tools, verify_painted_cube_tool_regions, summarize_bambu_flush_signal, verify_bambu_fixture_variable_layers
 from slicer_worker.service import _decode_payload
 from slicer_worker.runner import WorkerError
@@ -94,6 +94,26 @@ class BambuNativeMulticolourTests(TestCase):
         self.assertTrue(validate_worker_3mf(project, native_tool_count=2, allow_bambu_project=True))
         self.assertEqual(expected_native_tools(project), {0, 1})
         self.assertEqual(len(_decode_payload(self.payload(project))["filament_profiles"]), 2)
+
+    def test_bambu_true_overhang_has_exact_support_paint_and_two_filament_tools(self):
+        import io
+        import zipfile
+        from xml.etree import ElementTree as ET
+        for marked in (False, True):
+            with self.subTest(enforcer=marked):
+                data = make_bambu_support_overhang_fixture(enforcer=marked)
+                self.assertTrue(validate_worker_3mf(
+                    data, native_tool_count=2, allow_bambu_project=True,
+                    allow_bambu_combined_paint=True))
+                self.assertEqual(expected_native_tools(data), {0, 1})
+                with zipfile.ZipFile(io.BytesIO(data)) as archive:
+                    root = ET.fromstring(archive.read("3D/3dmodel.model"))
+                facets = [t for t in root.iter() if t.tag.endswith("}triangle")]
+                self.assertEqual(len(facets), 28)
+                support = [t for t in facets if t.get("paint_supports") == "4"]
+                self.assertEqual(len(support), 8 if marked else 0)
+                self.assertGreaterEqual(
+                    sum(t.get("paint_color") == "8" for t in facets), 10)
 
     def test_bambu_semantic_paint_3mf_keeps_exact_palette_and_native_attributes(self):
         import io
