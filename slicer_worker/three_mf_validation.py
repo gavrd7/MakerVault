@@ -32,6 +32,14 @@ OBJECT_SETTINGS = {
     "enable_support": (0, 1, False),
 }
 MAX_OBJECT_SETTINGS = 16
+BAMBU_VARIANT_OPTIONS = {
+    "filament_flow_ratio": (0.5, 1.5),
+    "nozzle_temperature": (100, 400),
+    "nozzle_temperature_initial_layer": (100, 400),
+    "filament_max_volumetric_speed": (0.1, 100),
+    "filament_retraction_length": (0, 30),
+}
+
 
 
 def validate_worker_3mf(data, *, native_tool_count=None, allow_creality_combined_paint=False,
@@ -82,7 +90,7 @@ def validate_worker_3mf(data, *, native_tool_count=None, allow_creality_combined
                          "filament_type", "filament_diameter", "nozzle_diameter",
                          "printable_height", "filament_ids",
                          "filament_self_index", "filament_extruder_variant",
-                         "filament_is_support"}
+                         "filament_is_support"} | set(BAMBU_VARIANT_OPTIONS)
             if not isinstance(settings, dict) or not settings or set(settings) - permitted:
                 raise WorkerError("Unsafe Bambu project setting keys.")
             for label in ("printer_settings_id", "print_settings_id"):
@@ -134,6 +142,17 @@ def validate_worker_3mf(data, *, native_tool_count=None, allow_creality_combined
                                     if tool == index)) != observed.count(index)
                            for index in range(1, native_tool_count + 1))):
                 raise WorkerError("Bambu filament variant mapping is inconsistent.")
+            for key, (lower, upper) in BAMBU_VARIANT_OPTIONS.items():
+                values = settings.get(key)
+                if not isinstance(values, list) or len(values) != len(variant_vector):
+                    raise WorkerError("Bambu native material vector does not match variants.")
+                for value in values:
+                    if key == "filament_retraction_length" and value == "nil":
+                        continue
+                    if (not isinstance(value, str) or
+                            not re.fullmatch(r"[0-9]{1,3}(?:\\.[0-9]{1,4})?", value)
+                            or not lower <= float(value) <= upper):
+                        raise WorkerError("Unsafe Bambu native material vector.")
             if any(not re.fullmatch(r"#[0-9A-Fa-f]{6}", v)
                    for v in settings["filament_colour"]):
                 raise WorkerError("Invalid Bambu project filament colour.")
