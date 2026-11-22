@@ -1,6 +1,6 @@
 # Bambu Studio 02.09.01.70 — isolated candidate acceptance
 
-**Status: development candidate only.** The OrcaSlicer/Creality Print foundation in PR #171 is merged. This follow-on Bambu work belongs to draft PR #191; neither the main application nor the normal worker is allowed to use Bambu for jobs until the pinned real-binary and native-profile acceptance pass.
+**Status: development candidate only.** The OrcaSlicer/Creality Print foundation PR #171 and four-container engine-management PR #192 are merged. This follow-on Bambu work belongs to draft PR #191; Bambu is not yet in the main application's approved engine registry, the combined installer catalogue or normal worker request routing. Do not deploy the optional candidate image over the running `makervault-slicer` service.
 
 ## Official Linux executable
 
@@ -52,6 +52,16 @@ docker run --rm --network none --read-only --pids-limit 128 \
 The probe generates a small tetrahedron STL, exercises the actual Bambu CLI using scratch-only profiles, extracts exactly one `Metadata/plate_N.gcode` from the native sliced 3MF, and checks for real extrusion G-code. It reports bounded SHA-256/size/profile receipts without exposing G-code, output paths, keys or arbitrary CLI logs. Adjust container limits to support the real AppImage if necessary; never remove network isolation or pass live printer credentials.
 
 A **successful fixture** is evidence for this binary and one specific set of profiles only; it is not approval for other profiles, multicolour/toolheads, CFS/AMS mapping, printer dispatch or use with unrelated printers. If the CLI fails, first confirm Bambu-specific runtime resources and native-profile lineage rather than disabling MakerVault's safety validation.
+
+## Verified native-profile smoke test in CI
+
+The dedicated Bambu Actions workflow now runs candidate unit tests, verifies the official SHA-256 and extracts the real AppImage before attempting a headless CLI startup. It then resolves an **X1 Carbon 0.4 mm / 0.20 mm Standard / Bambu PLA Basic** fixture from **that same pinned executable's embedded BBL profiles** using `scripts/prepare_bambu_native_fixtures.py`. The resolver follows only local native `inherits` and `include` references; it rejects missing, ambiguous, cyclic or oversized inheritance rather than fabricating configuration. It writes flattened JSON solely into an empty temporary fixture directory.
+
+The test then attempts an actual pinned-Bambu STL slice, extracts the native 3MF single-plate G-code and proves extrusion. **These new runtime and slicing steps must pass before treating Bambu as working.** A CI failure is diagnostic evidence, not permission to activate an untested engine.
+
+Initial real-AppRun invocation on the Ubuntu runner exposed a missing native library, `libgstvideo-1.0.so.0`. The test runner now installs the Ubuntu `libgstreamer-plugins-base1.0-0` package to supply it; further dependency or native-profile corrections may be required. Package installation is for the disposable CI environment, not an instruction to change the live staging server or the existing combined Orca/Creality image.
+
+The candidate `Dockerfile.bundle` is a **disposable offline integration image**, not the production four-container `Dockerfile.generic` runtime. After real slicing proof, Bambu installation and runtime resource handling must be integrated into the existing authenticated, UID-separated installer/worker system without adding a fifth long-running container.
 
 ## Still required for v1.7.0 Beta
 
