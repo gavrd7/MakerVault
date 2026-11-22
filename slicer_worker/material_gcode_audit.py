@@ -254,6 +254,11 @@ def summarize_bambu_flush_signal(raw_gcode):
         raise WorkerError("Bambu flush evidence exceeds line limit.")
     active = None
     absolute_e = True
+    absolute_xyz = True
+    x = y = 0.0
+    tower_min_x = tower_min_y = float("inf")
+    tower_max_x = tower_max_y = float("-inf")
+    tower_position_moves = 0
     e_last = {}
     totals = {0: 0.0, 1: 0.0}
     positive_moves = {0: 0, 1: 0}
@@ -281,11 +286,32 @@ def summarize_bambu_flush_signal(raw_gcode):
             absolute_e = True
         elif command == "M83":
             absolute_e = False
-        elif command == "G92" and active in totals:
-            e = E_AXIS.search(line[3:])
-            if e:
-                e_last[active] = float(e.group(1))
-        elif active in totals and MOVE.match(line):
+        elif command == "G90":
+            absolute_xyz = True
+        elif command == "G91":
+            absolute_xyz = False
+        elif command == "G92":
+            if active in totals:
+                e = E_AXIS.search(line[3:])
+                if e:
+                    e_last[active] = float(e.group(1))
+            for axis, value in re.findall(
+                    r"(?:^|\s)([XY])([-+]?(?:\d+(?:\.\d*)?|\.\d+))(?=\s|$)", line):
+                if axis == "X":
+                    x = float(value)
+                else:
+                    y = float(value)
+        elif MOVE.match(line):
+            mx = re.search(r"(?:^|\s)X([-+]?(?:\d+(?:\.\d*)?|\.\d+))(?=\s|$)", line)
+            my = re.search(r"(?:^|\s)Y([-+]?(?:\d+(?:\.\d*)?|\.\d+))(?=\s|$)", line)
+            if mx:
+                amount = float(mx.group(1))
+                x = amount if absolute_xyz else x + amount
+            if my:
+                amount = float(my.group(1))
+                y = amount if absolute_xyz else y + amount
+            if active not in totals:
+                continue
             e = E_AXIS.search(line)
             if not e:
                 continue
@@ -303,12 +329,23 @@ def summarize_bambu_flush_signal(raw_gcode):
             if "tower" in feature or "wipe" in feature:
                 tower[active] += inc
                 tower_feature_moves += 1
+                if (mx or my) and all(math.isfinite(v) for v in (x, y)):
+                    tower_min_x = min(tower_min_x, x)
+                    tower_max_x = max(tower_max_x, x)
+                    tower_min_y = min(tower_min_y, y)
+                    tower_max_y = max(tower_max_y, y)
+                    tower_position_moves += 1
     return {
         "positive_e_mm": {str(k): round(v, 3) for k, v in totals.items()},
         "positive_e_moves": {str(k): v for k, v in positive_moves.items()},
         "stationary_positive_e_mm": {str(k): round(v, 3) for k, v in stationary.items()},
         "tower_feature_positive_e_mm": {str(k): round(v, 3) for k, v in tower.items()},
         "tower_feature_moves": tower_feature_moves,
+        "tower_position_moves": tower_position_moves,
+        "tower_deposition_bbox_mm": (
+            {"min_x": round(tower_min_x, 3), "max_x": round(tower_max_x, 3),
+             "min_y": round(tower_min_y, 3), "max_y": round(tower_max_y, 3)}
+            if tower_position_moves else None),
         "toolchanges": toolchanges,
     }
 
