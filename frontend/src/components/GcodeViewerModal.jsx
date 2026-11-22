@@ -92,7 +92,11 @@ export default function GcodeViewerModal({ file, canEdit = false, onClose, onSav
   const analysis = report?.analysis || {};
   const bounds = analysis.bounds_mm || {};
   const startTemps=analysis.print_setup?.temperatures_c || {};
+  const profileTemps=analysis.print_setup?.profile_temperatures_c || {};
   const requestedTemperature=key=>startTemps[key]!=null?startTemps[key]+" °C":"Not declared";
+  const headerTemperature=key=>startTemps[key]!=null
+    ? startTemps[key]+" °C"
+    : profileTemps[key]!=null ? profileTemps[key]+" °C (profile only)" : "—";
   // A Creality compatibility/header marker may coexist with the Orca
   // generator header. Display the primary generator, not both as engines.
   const slicerGenerator=(analysis.slicer_hints||[]).find(label=>/OrcaSlicer/i.test(label))
@@ -115,9 +119,9 @@ export default function GcodeViewerModal({ file, canEdit = false, onClose, onSav
       </div>}
       {compact && <div className="slicerGcodeQuickSummary" role="status">
         <span>{analysis.printer_hints?.join(", ") || "Printer unknown"}</span>
-        <span>Nozzle {analysis.print_setup?.temperatures_c?.nozzle_c != null ? analysis.print_setup.temperatures_c.nozzle_c + " °C" : "—"}</span>
-        <span>Bed {startTemps.bed_c!=null?startTemps.bed_c+" °C":"—"}</span>
-        <span>Chamber {startTemps.chamber_c!=null?startTemps.chamber_c+" °C":"—"}</span>
+        <span>Nozzle {headerTemperature("nozzle_c")}</span>
+        <span>Bed {headerTemperature("bed_c")}</span>
+        <span>Chamber {headerTemperature("chamber_c")}</span>
       </div>}
       <div className={"formActions" + (compact ? " slicerGcodeDesktopActions" : "")} style={{ justifyContent: "flex-start" }}>
         <button type="button" className={mode === "visual" ? "primary" : ""} onClick={() => setMode("visual")}>Visual toolpath</button>
@@ -148,6 +152,9 @@ export default function GcodeViewerModal({ file, canEdit = false, onClose, onSav
       <p className="slicerGcodeDetailRow"><strong>Requested start temperatures</strong>
         <span>Nozzle {requestedTemperature("nozzle_c")} · Bed {requestedTemperature("bed_c")} · Chamber {requestedTemperature("chamber_c")} <small>(G-code targets)</small></span>
       </p>
+      {Object.keys(profileTemps).length > 0 && <p className="slicerGcodeDetailRow"><strong>Slicer profile temperatures</strong>
+        <span>Nozzle {profileTemps.nozzle_c != null ? profileTemps.nozzle_c + " °C" : "—"} · Bed {profileTemps.bed_c != null ? profileTemps.bed_c + " °C" : "—"} · Chamber {profileTemps.chamber_c != null ? profileTemps.chamber_c + " °C" : "—"} <small>(profile comments only; not verified G-code heating commands)</small></span>
+      </p>}
       <p className="slicerGcodeDetailRow"><strong>Sliced nozzle</strong>
         <span>{analysis.print_setup?.nozzle_diameters_mm?.length
           ? analysis.print_setup.nozzle_diameters_mm.map(size=>size+" mm").join(", ")
