@@ -149,3 +149,12 @@ test("official profile import cards stack on mobile and feedback spans full widt
   assert.match(styles, /@media\(max-width:800px\)\{[\s\S]*?\.cameraSourceRow\.slicerOfficialProfileRow\{/);
   assert.match(styles, /\.slicerOfficialProfileRow>\.cameraSourceActions button\{[\s\S]*?flex:1 1 160px/);
 });
+
+test("official profile browsing is not silently narrowed to the selected printer", () => {
+  const start = setup.indexOf('  // Catalogue models come from the pinned upstream index');
+  const end = setup.indexOf('  async function searchOfficialProfiles(', start);
+  const browse = setup.slice(start, end);
+  assert.match(browse, /setOfficialModels\(models\);/);
+  assert.doesNotMatch(browse, /models\.find\(item =>/);
+  assert.ok(setup.includes('setOfficialQuery("");'));
+});
