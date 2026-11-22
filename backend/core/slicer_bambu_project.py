@@ -58,6 +58,13 @@ def add_bambu_project_settings(project, *, printer, process, filaments,
     diameter = _field(machine, "nozzle_diameter", label="machine")
     if not re.fullmatch(r"(?:0\.[1-9][0-9]?|[12](?:\.[0-9]{1,2})?)", diameter):
         raise SlicerProfileError("Invalid Bambu machine nozzle diameter.")
+    height = _field(machine, "printable_height", label="machine")
+    try:
+        height_mm = float(height)
+    except ValueError:
+        raise SlicerProfileError("Invalid Bambu machine printable height.") from None
+    if not 1 <= height_mm <= 2000 or not re.fullmatch(r"[0-9]+(?:\.[0-9]{1,3})?", height):
+        raise SlicerProfileError("Invalid Bambu machine printable height.")
     material_ids = [_field(item, "name", label="filament") for item in sources]
     types = [_field(item, "filament_type", label="filament") for item in sources]
     diameters = [_field(item, "filament_diameter", label="filament") for item in sources]
@@ -69,6 +76,7 @@ def add_bambu_project_settings(project, *, printer, process, filaments,
         "filament_type": types,
         "filament_diameter": diameters,
         "nozzle_diameter": [diameter],
+        "printable_height": height,
     }
     try:
         with zipfile.ZipFile(io.BytesIO(project)) as original:
