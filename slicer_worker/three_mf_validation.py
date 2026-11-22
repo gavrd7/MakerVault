@@ -81,7 +81,8 @@ def validate_worker_3mf(data, *, native_tool_count=None, allow_creality_combined
                          "filament_settings_id", "filament_colour",
                          "filament_type", "filament_diameter", "nozzle_diameter",
                          "printable_height", "filament_ids",
-                         "filament_self_index", "filament_extruder_variant"}
+                         "filament_self_index", "filament_extruder_variant",
+                         "filament_is_support"}
             if not isinstance(settings, dict) or not settings or set(settings) - permitted:
                 raise WorkerError("Unsafe Bambu project setting keys.")
             for label in ("printer_settings_id", "print_settings_id"):
@@ -101,6 +102,12 @@ def validate_worker_3mf(data, *, native_tool_count=None, allow_creality_combined
                         or any(not isinstance(v, str) or not 1 <= len(v) <= 200
                                for v in values)):
                     raise WorkerError("Bambu project palette does not match the native tool count.")
+            support_flags = settings.get("filament_is_support")
+            if (not isinstance(support_flags, list)
+                    or len(support_flags) != native_tool_count
+                    or any(type(v) is not str or v not in ("0", "1")
+                           for v in support_flags)):
+                raise WorkerError("Bambu filament support vector does not match the palette.")
             ids_vector = settings.get("filament_ids")
             self_vector = settings.get("filament_self_index")
             variant_vector = settings.get("filament_extruder_variant")
