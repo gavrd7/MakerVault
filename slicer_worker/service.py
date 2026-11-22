@@ -85,8 +85,6 @@ def _decode_payload(payload):
         raise WorkerError("Invalid job identifier.") from None
     if payload["engine"] not in {"orcaslicer", "crealityprint", "prusaslicer", "bambustudio"}:
         raise WorkerError("Unsupported isolated worker engine.")
-    if payload["engine"] == "bambustudio" and os.environ.get("SLICER_BAMBU_BETA_ENABLED") != "1":
-        raise WorkerError("Unsupported isolated worker engine.")
     model_format = payload.get("model_format", "stl")
     if model_format not in {"stl", "3mf"}:
         raise WorkerError("Unsupported model input format.")
