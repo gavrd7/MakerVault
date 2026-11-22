@@ -169,10 +169,11 @@ def _decode_payload(payload):
         validate_creality_project(files["model"], native_tool_count=2)
         files["creality_native_project"] = True
     elif model_format == "3mf":
-        validate_worker_3mf(files["model"],
-            native_tool_count=len(files["filament_profiles"])
-                if "filament_profiles" in files else None,
-            allow_bambu_project=payload["engine"] == "bambustudio")
+        options = {"native_tool_count": len(files["filament_profiles"])
+                   if "filament_profiles" in files else None}
+        if payload["engine"] == "bambustudio":
+            options["allow_bambu_project"] = True
+        validate_worker_3mf(files["model"], **options)
     return files
 
 
