@@ -167,11 +167,25 @@ def run_fixture(binary, profiles, *, painted=False, timeout=180):
                         "--load-filaments", str(workdir / "filament-0.json") + ";" +
                         str(workdir / "filament-1.json"), "--slice", "0",
                         "--outputdir", str(workdir / "filaments-only"), model]),
+                    ("filament0_one_only", [
+                        "--load-filaments", str(workdir / "filament-0.json"),
+                        "--slice", "0", "--outputdir",
+                        str(workdir / "filament0-one-only"), model]),
+                    ("filament0_blank_second", [
+                        "--load-filaments", str(workdir / "filament-0.json") + ";",
+                        "--slice", "0", "--outputdir",
+                        str(workdir / "filament0-blank-second"), model]),
+                    ("blank_first_filament1", [
+                        "--load-filaments", ";" + str(workdir / "filament-1.json"),
+                        "--slice", "0", "--outputdir",
+                        str(workdir / "blank-first-filament1"), model]),
                 ]
                 for label, tail in variants:
                     try:
                         selected_prefix = ([str(binary)] if label in (
-                            "no_overrides", "machine_process_only", "filaments_only")
+                            "no_overrides", "machine_process_only", "filaments_only",
+                            "filament0_one_only", "filament0_blank_second",
+                            "blank_first_filament1")
                             else prefix)
                         attempt = subprocess.run(selected_prefix + tail, cwd=workdir,
                             env={**slicing_environment(workdir),
@@ -185,6 +199,12 @@ def run_fixture(binary, profiles, *, painted=False, timeout=180):
                           "output_bytes", len(attempt.stdout),
                           "error_bytes", len(attempt.stderr))
                     print("CI Bambu stderr bounded:", repr(attempt.stderr[:200]))
+                    directory = workdir / label.replace("_", "-")
+                    emitted = ([f for f in directory.rglob("*.gcode") if f.is_file()]
+                               if directory.is_dir() else [])
+                    print("CI Bambu variant G-code files:",
+                          len(emitted), "bytes",
+                          sum(f.stat().st_size for f in emitted[:4]))
                     for channel in (attempt.stdout, attempt.stderr):
                         for line in channel.decode("utf-8", "replace").splitlines()[-12:]:
                             if any(token in line.lower() for token in (
