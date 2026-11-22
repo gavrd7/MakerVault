@@ -55,6 +55,12 @@ def _mark_bambu_native_model(raw):
         raise SlicerProfileError("Malformed native Bambu model XML.") from exc
     if root.tag != "{" + _CORE + "}model":
         raise SlicerProfileError("Invalid Bambu model namespace.")
+    existing = [(node.get("name"), node.text)
+                for node in root if node.tag == "{" + _CORE + "}metadata"
+                and node.get("name") in ("Application", "BambuStudio:3mfVersion")]
+    if existing == [("Application", "BambuStudio-02.09.01.70"),
+                    ("BambuStudio:3mfVersion", "1")]:
+        return raw
     for node in list(root):
         if node.tag == "{" + _CORE + "}metadata" and node.get("name") in (
                 "Application", "BambuStudio:3mfVersion"):
