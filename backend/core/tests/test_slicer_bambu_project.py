@@ -52,6 +52,7 @@ class BambuNativeProjectVectorTests(TestCase):
         self.assertEqual(ids["nozzle_diameter"], ["0.4"])
         self.assertEqual(ids["printable_height"], "256")
         self.assertEqual(ids["filament_ids"], ["GFA00", "GFA00"])
+        self.assertEqual(ids["filament_is_support"], ["0", "0"])
         self.assertEqual(ids["filament_self_index"], ["1", "1", "2", "2"])
         self.assertEqual(ids["filament_extruder_variant"],
                          ["Direct Drive Standard", "Direct Drive High Flow"] * 2)
