@@ -42,9 +42,9 @@ class BambuRunnerContractTests(TestCase):
         self.assertTrue(argv[-1].endswith("input.stl"))
 
     def test_native_multifilament_3mf_uses_ordered_cli_palette(self):
-        from slicer_worker.probe import fixture_bambu_core_3mf
+        from scripts.probe_bambu_multicolour import make_bambu_material_fixture
         (self.root / "input.stl").unlink()
-        (self.root / "input.3mf").write_bytes(fixture_bambu_core_3mf())
+        (self.root / "input.3mf").write_bytes(make_bambu_material_fixture())
         for index in range(2):
             source = self.root / ("filament-" + str(index) + ".json")
             source.write_text(json.dumps({
@@ -61,9 +61,9 @@ class BambuRunnerContractTests(TestCase):
         self.assertTrue(argv[-1].endswith("input.3mf"))
 
     def test_multifilament_refuses_missing_palette_member_and_mismatched_tool_zero(self):
-        from slicer_worker.probe import fixture_bambu_core_3mf
+        from scripts.probe_bambu_multicolour import make_bambu_material_fixture
         (self.root / "input.stl").unlink()
-        (self.root / "input.3mf").write_bytes(fixture_bambu_core_3mf())
+        (self.root / "input.3mf").write_bytes(make_bambu_material_fixture())
         (self.root / "filament-0.json").write_bytes(
             (self.root / "filament.json").read_bytes())
         (self.root / "filament-2.json").write_bytes(
