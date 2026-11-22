@@ -1,7 +1,8 @@
 # In-browser slicer engine installation — four-container staging
 
 MakerVault runs **four long-running containers**: application, PostgreSQL,
-Redis and **one combined slicer runtime** (`slicer-worker`). The runtime
+Redis and **one combined slicer runtime** (Compose service `slicer-worker`,
+Docker container **`makervault-slicer`**). The runtime
 supervises two unprivileged subprocesses on separate UIDs: the slicer HTTP
 worker (10001, port 8088) and the authenticated engine installer (10002,
 port 8091). The shared versioned engine store is owned by installer UID
@@ -62,7 +63,15 @@ sudo docker rm makervault-slicer-engine-installer-1
 ```
 
 Never use `docker compose down -v` or `docker system prune` for this
-migration. On subsequent UI-only changes, `update` rebuilds the main app;
+migration. For an existing healthy combined runtime still named
+`makervault-slicer-worker-1`, updating this Compose overlay and running
+`sudo python3 scripts/install_slicer_staging.py refresh-worker` recreates
+only the slicer service under its stable name `makervault-slicer`.
+Do this only when no slicing or installation jobs are running. The existing
+engine volume and internal service DNS (`slicer-worker`) are preserved;
+the container name is purely cosmetic and does not change the application URLs.
+
+On subsequent UI-only changes, `update` rebuilds the main app;
 slicer code changes use `refresh-worker` to rebuild the combined image.
 Existing staging users should **not** run the old five-container installer
 build command again.
