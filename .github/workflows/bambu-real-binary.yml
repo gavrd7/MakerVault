@@ -159,6 +159,7 @@ jobs:
         run: |
           set -euo pipefail
           docker build --file slicer_worker/Dockerfile.bambu-combined-candidate \
+            --build-context bambu-verified-assets=./slicer-engine-assets \
             --tag makervault-bambu-combined-candidate:ci .
 
       - name: Verify candidate works as unprivileged worker on merged combined image base
