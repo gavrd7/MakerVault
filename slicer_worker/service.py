@@ -107,12 +107,12 @@ def _decode_payload(payload):
         files[key] = raw
     if "filament_profiles" in payload:
         palette = payload["filament_profiles"]
-        if (not ((payload["engine"] == "orcaslicer" and model_format == "3mf") or
+        if (not ((payload["engine"] in {"orcaslicer", "bambustudio"} and model_format == "3mf") or
                  (payload["engine"] == "crealityprint" and (
                     (model_format == "stl" and "creality_model_stls" in payload) or
                     (model_format == "3mf" and payload.get("creality_native_project") is True))))
                 or not isinstance(palette, list) or not 2 <= len(palette) <= 16):
-            raise WorkerError("Multi-filament requests require Orca 3MF and two to sixteen presets.")
+            raise WorkerError("Multi-filament requests require native 3MF and two to sixteen presets.")
         decoded = []
         for entry in palette:
             if not isinstance(entry, str) or len(entry) > ((MAX_PROFILE_BYTES + 2)//3)*4 + 8:
@@ -237,7 +237,7 @@ class Handler(BaseHTTPRequestHandler):
             files = _decode_payload(request)
             with tempfile.TemporaryDirectory(prefix="makervault-slice-") as tmp:
                 workdir = Path(tmp)
-                extension = ".json" if current["engine"] in {"orcaslicer", "crealityprint"} else ".ini"
+                extension = ".json" if current["engine"] in {"orcaslicer", "crealityprint", "bambustudio"} else ".ini"
                 for field, name in (
                     ("model", "input." + files["model_format"]), ("printer_profile", "printer" + extension),
                     ("filament_profile", "filament" + extension),
