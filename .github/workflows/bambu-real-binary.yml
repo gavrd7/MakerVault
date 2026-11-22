@@ -10,6 +10,7 @@ on:
       - 'slicer_worker/probe.py'
       - 'slicer_worker/tests/test_bambu*.py'
       - 'slicer_worker/Dockerfile.bundle'
+      - 'slicer_worker/Dockerfile.bambu-combined-candidate'
       - '.github/workflows/bambu-real-binary.yml'
   workflow_dispatch:
 
@@ -147,6 +148,35 @@ jobs:
               -m slicer_worker.probe \
               --engine bambustudio --version 02.09.01.70 \
               --binary /opt/engines/bambu-root/squashfs-root/AppRun \
+              --printer /fixtures/printer.json \
+              --process /fixtures/process.json \
+              --filament /fixtures/filament.json \
+              --timeout 180 "${extra[@]}"
+          done
+
+      - name: Build disposable Bambu candidate on current combined Orca base
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker build --file slicer_worker/Dockerfile.bambu-combined-candidate \
+            --tag makervault-bambu-combined-candidate:ci .
+
+      - name: Verify candidate works as unprivileged worker on merged combined image base
+        shell: bash
+        run: |
+          set -euo pipefail
+          for input in stl core-3mf; do
+            extra=()
+            if [ "$input" = core-3mf ]; then extra+=(--bambu-core-3mf); fi
+            docker run --rm --network none --read-only \
+              --cap-drop ALL --pids-limit 128 --cpus 2 --memory 3g \
+              --security-opt no-new-privileges:true \
+              --tmpfs /tmp:rw,nosuid,size=1g,mode=1777 \
+              --mount type=bind,src=/tmp/bambu-verified-profiles,dst=/fixtures,readonly \
+              --entrypoint python3 makervault-bambu-combined-candidate:ci \
+              -m slicer_worker.probe \
+              --engine bambustudio --version 02.09.01.70 \
+              --binary /opt/bambu-candidate/squashfs-root/AppRun \
               --printer /fixtures/printer.json \
               --process /fixtures/process.json \
               --filament /fixtures/filament.json \
