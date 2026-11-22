@@ -30,10 +30,59 @@ from .engine_store_admin import (
     _manifest, _write, _sha256, seed_bundled_orca, activate,
     EXPECTED_ORCA_SHA, APPROVAL_VERSION, rollback as rollback_store,
 )
+from .engine_store_lifecycle import installed_versions, activate_installed, uninstall_engine, preserve_active_identities, IDENTITY
+from .engine_registry import SUPPORTED as INSTALLED_ENGINE_TYPES, BAMBU_BETA_VERSION, BAMBU_BETA_RUNTIME_SHA256
 
 STORE = Path(os.environ.get("SLICER_ENGINE_STORE", "/opt/engine-store"))
 TOKEN = os.environ.get("SLICER_INSTALLER_TOKEN", "")
-SUPPORTED = {"crealityprint": "CrealityOfficial/CrealityPrint"}
+SUPPORTED = {"crealityprint": "CrealityOfficial/CrealityPrint",
+             "orcaslicer": "OrcaSlicer/OrcaSlicer"}
+# Explicit opt-in: Bambu remains absent from the normal engine catalogue
+# until the full worker/backend beta gate is enabled on the same deployment.
+if os.environ.get("SLICER_BAMBU_BETA_ENABLED") == "1":
+    SUPPORTED["bambustudio"] = "bambulab/BambuStudio"
+BAMBU_APPIMAGE_SHA256 = "668dabb1be53c758189ed6bc89935285dea5e0af46216546b1bafd6882e9aff0"
+BAMBU_ASSET = "BambuStudio_ubu24-v02.09.01.70-20261103183404.AppImage"
+
+# Orca 2.5.0 is NOT compatible with the native Creality K2 profile as
+# published upstream: the profile asks for 30 mm cut retraction while the
+# official executable caps it at 18 mm. Never substitute the stock AppImage
+# for the independently reviewed, source-patched MakerVault build.
+# 2.4.2 is an upstream-only version, with NO K2 compatibility approval.
+APPROVED_ORCA = {
+    "2.4.2": "d12fb8c8eac1aecd2dfb6377acd48f994f8fa439ed5292fa532dd82880f029fd",
+}
+REVIEWED_ORCA_VERSION = "2.5.0"
+REVIEWED_ORCA_SHA256 = EXPECTED_ORCA_SHA
+# Dockerfile.generic is based on the exact approved, immutable reviewed
+# Orca bootstrap image. The installer runs from that image too: reinstallation
+# copies its own bundled AppImage after checking the audited checksum.
+# Do not depend on expiring Actions artifacts or an unneeded Github release.
+REVIEWED_ORCA_SOURCE = Path("/opt/engines/orcaslicer.AppImage")
+REVIEWED_ORCA_APPDIR = Path("/opt/engines/squashfs-root")
+
+
+def _reviewed_orca_release():
+    """Offer reviewed 2.5.0 only when the embedded source passes SHA-256."""
+    if (REVIEWED_ORCA_SOURCE.is_symlink() or not REVIEWED_ORCA_SOURCE.is_file()
+            or REVIEWED_ORCA_APPDIR.is_symlink()
+            or not (REVIEWED_ORCA_APPDIR / "AppRun").is_file()):
+        return None
+    try:
+        if _sha256(REVIEWED_ORCA_SOURCE) != REVIEWED_ORCA_SHA256:
+            return None
+    except OSError:
+        return None
+    return {
+        "engine": "orcaslicer", "version": REVIEWED_ORCA_VERSION,
+        "bundle_sha256": REVIEWED_ORCA_SHA256,
+        "bundle_url": None, "binary_sha256": REVIEWED_ORCA_SHA256,
+        "architecture": "linux/amd64",
+        "notes": "MakerVault-reviewed OrcaSlicer 2.5.0 (K2 30 mm compatible)",
+        "asset_size": REVIEWED_ORCA_SOURCE.stat().st_size,
+        "source": "bundled-reviewed-image",
+    }
+
 MAX_BYTES = 650 * 1024 * 1024
 VERSION = re.compile(r"^v?(\d+\.\d+\.\d+)$")
 HEX = re.compile(r"^[a-f0-9]{64}$")
@@ -107,6 +156,74 @@ def release_catalogue():
             return list(RELEASE_CACHE["items"])
     releases = []
     for engine, repo in SUPPORTED.items():
+        if engine == "bambustudio":
+            tag = "v" + BAMBU_BETA_VERSION
+            url = f"https://api.github.com/repos/{repo}/releases/tags/{tag}"
+            try:
+                with _request(url) as response:
+                    raw = response.read(2 * 1024 * 1024 + 1)
+                if len(raw) > 2 * 1024 * 1024:
+                    continue
+                release = json.loads(raw)
+            except (OSError, ValueError, urllib.error.URLError):
+                continue
+            if not isinstance(release, dict) or release.get("draft") or release.get("prerelease"):
+                continue
+            expected_url = (
+                f"https://github.com/{repo}/releases/download/{tag}/{BAMBU_ASSET}")
+            matches = [item for item in release.get("assets", [])
+                       if isinstance(item, dict) and item.get("name") == BAMBU_ASSET]
+            if len(matches) != 1:
+                continue
+            item = matches[0]
+            if (item.get("digest") != "sha256:" + BAMBU_APPIMAGE_SHA256
+                    or item.get("browser_download_url") != expected_url
+                    or type(item.get("size")) is not int
+                    or not 10_000_000 <= item["size"] <= MAX_BYTES):
+                continue
+            releases.append({
+                "engine": engine, "version": BAMBU_BETA_VERSION,
+                "bundle_sha256": BAMBU_APPIMAGE_SHA256,
+                "bundle_url": expected_url,
+                "binary_sha256": BAMBU_BETA_RUNTIME_SHA256,
+                "architecture": "linux/amd64",
+                "notes": "Bambu Studio 2.9.1 (single-material Beta)",
+                "asset_size": item["size"],
+            })
+            continue
+        if engine == "orcaslicer":
+            reviewed = _reviewed_orca_release()
+            if reviewed is not None:
+                releases.append(reviewed)
+            for version, approved_digest in APPROVED_ORCA.items():
+                tag = "v" + version
+                asset_name = f"OrcaSlicer_Linux_AppImage_Ubuntu2404_V{version}.AppImage"
+                url = f"https://api.github.com/repos/{repo}/releases/tags/{tag}"
+                try:
+                    with _request(url) as response:
+                        release = json.load(response)
+                except (OSError, ValueError, urllib.error.URLError):
+                    continue
+                if not isinstance(release, dict) or release.get("draft") or release.get("prerelease"):
+                    continue
+                expected_url = f"https://github.com/{repo}/releases/download/{tag}/{asset_name}"
+                matches = [item for item in release.get("assets", []) if isinstance(item, dict)
+                           and item.get("name") == asset_name]
+                if len(matches) != 1:
+                    continue
+                item = matches[0]
+                if (item.get("digest") != "sha256:" + approved_digest
+                        or item.get("browser_download_url") != expected_url
+                        or type(item.get("size")) is not int
+                        or not 10_000_000 <= item["size"] <= MAX_BYTES):
+                    continue
+                releases.append({
+                    "engine": engine, "version": version,
+                    "bundle_sha256": approved_digest, "bundle_url": expected_url,
+                    "binary_sha256": approved_digest, "architecture": "linux/amd64",
+                    "notes": "OrcaSlicer " + version, "asset_size": item["size"],
+                })
+            continue
         url = "https://api.github.com/repos/" + repo + "/releases?per_page=10"
         with _request(url) as response:
             data = json.load(response)
@@ -189,7 +306,10 @@ def _install(op_id, release):
     target = base / version
     stage = None
     try:
-        _write_operation(op_id, status="downloading", progress=2, message="Downloading official release")
+        bundled_orca = (engine == "orcaslicer" and version == REVIEWED_ORCA_VERSION)
+        _write_operation(op_id, status="verifying" if bundled_orca else "downloading",
+                         progress=2, message=("Checking bundled MakerVault-reviewed Orca"
+                                              if bundled_orca else "Downloading official release"))
         base.mkdir(parents=True, exist_ok=True)
         if STORE.is_symlink() or base.is_symlink() or target.is_symlink():
             raise ValueError("Unsafe engine store path.")
@@ -197,7 +317,21 @@ def _install(op_id, release):
             raise ValueError("This engine version is already installed.")
         stage = Path(tempfile.mkdtemp(prefix=".stage-", dir=base))
         image = stage / (engine + ".AppImage")
-        _download(release, image, lambda n: _write_operation(op_id, progress=n))
+        if bundled_orca:
+            # Source is inside the immutable GHCR bootstrap image (not a user
+            # path or an upstream official AppImage). Check the actual bytes
+            # before copying, then verify the copy again before extraction.
+            if (release.get("source") != "bundled-reviewed-image"
+                    or release.get("bundle_sha256") != REVIEWED_ORCA_SHA256
+                    or release.get("bundle_url") is not None
+                    or REVIEWED_ORCA_SOURCE.is_symlink()
+                    or _sha256(REVIEWED_ORCA_SOURCE) != REVIEWED_ORCA_SHA256):
+                raise ValueError("MakerVault-reviewed Orca 2.5.0 source is unavailable or modified.")
+            shutil.copyfile(REVIEWED_ORCA_SOURCE, image)
+            if _sha256(image) != REVIEWED_ORCA_SHA256:
+                raise ValueError("Copied Orca 2.5.0 does not match the reviewed build.")
+        else:
+            _download(release, image, lambda n: _write_operation(op_id, progress=n))
         _write_operation(op_id, status="verifying", progress=70,
                          message="Checking downloaded binary")
         with image.open("rb") as source:
@@ -208,11 +342,20 @@ def _install(op_id, release):
         # The AppImage runtime extracts its payload without requiring FUSE.
         # This is restricted to the installer sandbox and a bounded scratch.
         try:
-            extracted = subprocess.run([str(image), "--appimage-extract"],
-                cwd=stage, env={"HOME": str(stage), "TMPDIR": str(stage),
-                                "PATH": "/usr/bin:/bin", "LANG": "C.UTF-8"},
-                stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
-                stderr=subprocess.PIPE, timeout=180, check=False)
+            if bundled_orca:
+                # The same immutable image already contains the extracted
+                # approved runtime. Copy it, avoiding a second extraction
+                # and refusing symlinks escaping the source bundle.
+                if REVIEWED_ORCA_APPDIR.is_symlink() or not REVIEWED_ORCA_APPDIR.is_dir():
+                    raise ValueError("Bundled reviewed Orca runtime is unavailable.")
+                shutil.copytree(REVIEWED_ORCA_APPDIR, stage / "squashfs-root", symlinks=True)
+                extracted = subprocess.CompletedProcess([], 0)
+            else:
+                extracted = subprocess.run([str(image), "--appimage-extract"],
+                    cwd=stage, env={"HOME": str(stage), "TMPDIR": str(stage),
+                                    "PATH": "/usr/bin:/bin", "LANG": "C.UTF-8"},
+                    stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
+                    stderr=subprocess.PIPE, timeout=180, check=False)
         except subprocess.TimeoutExpired as exc:
             raise ValueError("AppImage extraction timed out after 180 seconds.") from exc
         except OSError as exc:
@@ -236,25 +379,39 @@ def _install(op_id, release):
         # Never mark a release available solely because it downloaded.
         # Known Creality builds can hang by opening the GUI instead of slicing.
         try:
-            probe = subprocess.run([str(app_run), "--cli", "--help"], cwd=stage,
+            probe_args = ([str(app_run), "--cli", "--help"] if engine == "crealityprint"
+                          else [str(app_run), "--help"])
+            probe = subprocess.run(probe_args, cwd=stage,
                 env={"HOME": str(stage), "TMPDIR": str(stage),
                      "PATH": "/usr/bin:/bin", "LANG": "C.UTF-8",
                      "DISPLAY": "", "QT_QPA_PLATFORM": "offscreen"},
                 stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
                 stderr=subprocess.PIPE, timeout=18, check=False)
         except subprocess.TimeoutExpired as exc:
-            raise ValueError("Creality Print CLI headless check timed out (18 seconds).") from exc
+            raise ValueError("Engine CLI headless check timed out (18 seconds).") from exc
         except OSError as exc:
             raise ValueError(
-                f"Creality Print CLI could not start ({type(exc).__name__}, errno {exc.errno})."
+                f"Engine CLI could not start ({type(exc).__name__}, errno {exc.errno})."
             ) from exc
         if probe.returncode != 0:
-            raise ValueError(f"Creality Print CLI check exited with status {probe.returncode}.")
+            raise ValueError(f"Engine CLI check exited with status {probe.returncode}.")
         # Stage a complete version before publishing it; preserve all older
         # engines and use a single atomic manifest rename for activation.
         binary_hash = _sha256(runtime)
+        if engine == "bambustudio" and binary_hash != BAMBU_BETA_RUNTIME_SHA256:
+            raise ValueError("Bambu native runtime differs from the reviewed exact release.")
         if not HEX.fullmatch(binary_hash):
             raise ValueError("Engine runtime digest unavailable.")
+        (stage / IDENTITY).write_text(json.dumps({
+            "engine": engine, "version": version,
+            "binary": str(target / "squashfs-root" / "AppRun"),
+            "binary_sha256": binary_hash,
+        }, separators=(",", ":")), encoding="utf-8")
+        # mkdtemp creates a 0700 staging root. The installer (UID 10002)
+        # can inspect it, but the worker (UID 10001) cannot traverse a
+        # published version directory unless the root is made searchable.
+        # Only expose traversal/read; retain installer-only write access.
+        stage.chmod(0o755)
         os.rename(stage, target)
         stage = None
         _write_operation(op_id, status="activating", progress=94,
@@ -269,6 +426,7 @@ def _install(op_id, release):
         new_manifest = {"schema_version": 1,
                         "engines": {**existing, engine: new_record}}
         if existing:
+            preserve_active_identities(STORE)
             _write(STORE, current)  # Ensure manifest formatting is consistent.
             previous = STORE / "previous.json"
             previous.write_text(json.dumps(current, separators=(",", ":")), encoding="utf-8")
@@ -289,7 +447,9 @@ def _install(op_id, release):
 
 
 def start_install(engine, version, digest):
-    if engine not in SUPPORTED or not VERSION.fullmatch(version) or not HEX.fullmatch(digest):
+    version_ok = (version == BAMBU_BETA_VERSION if engine == "bambustudio"
+                  else isinstance(version, str) and bool(VERSION.fullmatch(version)))
+    if engine not in SUPPORTED or not version_ok or not isinstance(digest, str) or not HEX.fullmatch(digest):
         raise ValueError("Unknown engine release.")
     with LOCK:
         if any(op["status"] not in {"completed", "failed"} for op in OPERATIONS.values()):
@@ -298,7 +458,7 @@ def start_install(engine, version, digest):
     release = next((row for row in releases if row["engine"] == engine and
                     row["version"] == version and row["bundle_sha256"] == digest), None)
     if not release:
-        raise ValueError("This version is not in the official release catalogue.")
+        raise ValueError("This engine version is not in the approved release catalogue.")
     op_id = str(uuid.uuid4())
     with LOCK:
         OPERATIONS[op_id] = {"id": op_id, "engine": engine, "version": version,
@@ -344,6 +504,52 @@ def start_rollback():
     return dict(OPERATIONS[op_id])
 
 
+
+def _lifecycle_operation(op_id, engine, version, action):
+    try:
+        _write_operation(op_id, status="verifying", progress=30,
+                         message="Checking installed engine versions")
+        if action == "activate":
+            activate_installed(STORE, engine, version)
+            message = "Installed version activated"
+        elif action == "uninstall":
+            uninstall_engine(STORE, engine)
+            message = "Engine uninstalled; other engines preserved"
+        else:
+            raise ValueError("Unsupported engine operation.")
+        _write_operation(op_id, status="completed", progress=100, message=message)
+    except Exception as exc:
+        LOGGER.warning("Engine %s %s failed: %s", action, engine, type(exc).__name__)
+        _write_operation(op_id, status="failed", progress=0,
+                         message="Engine operation refused; check the installed version and active jobs.")
+
+
+def start_lifecycle(engine, version, action):
+    if action not in {"activate", "uninstall"} or engine not in INSTALLED_ENGINE_TYPES:
+        raise ValueError("Unsupported engine operation.")
+    if not isinstance(version, str) or (action == "activate" and not VERSION.fullmatch(version)):
+        raise ValueError("Invalid installed engine version.")
+    if action == "uninstall" and version != "all":
+        raise ValueError("Uninstall requires an explicit all-versions selection.")
+    choices = installed_versions(STORE).get(engine, [])
+    if not choices or (action == "activate" and version not in {
+            entry["version"] for entry in choices if not entry["active"]}):
+        raise ValueError("Installed version is unavailable.")
+    with LOCK:
+        if any(op["status"] not in {"completed", "failed"} for op in OPERATIONS.values()):
+            raise ValueError("Another engine change is running.")
+        op_id = str(uuid.uuid4())
+        OPERATIONS[op_id] = {
+            "id": op_id, "engine": engine, "version": version,
+            "action": action, "status": "queued", "progress": 0,
+            "message": "Waiting for engine change",
+        }
+        _persist_operations()
+    Thread(target=_lifecycle_operation,
+           args=(op_id, engine, version, action), daemon=True).start()
+    return dict(OPERATIONS[op_id])
+
+
 class Handler(BaseHTTPRequestHandler):
     server_version = "MakerVaultEngineInstaller/1"
     def log_message(self, *args):
@@ -370,10 +576,11 @@ class Handler(BaseHTTPRequestHandler):
         if self.path == "/status":
             with LOCK:
                 return self.respond(200, {"operations": list(OPERATIONS.values())[-30:],
+                                          "installed_versions": installed_versions(STORE),
                                           "rollback_available": (STORE / "previous.json").is_file()})
         return self.respond(404, {"error": "Not found"})
     def do_POST(self):
-        if self.path not in {"/install", "/rollback"} or not self.authenticated():
+        if self.path not in {"/install", "/rollback", "/activate", "/uninstall"} or not self.authenticated():
             return self.respond(403, {"error": "Unauthorized"})
         if self.path == "/rollback":
             try:
@@ -385,9 +592,17 @@ class Handler(BaseHTTPRequestHandler):
             if not 0 < length <= 2048:
                 return self.respond(413, {"error": "Invalid request size"})
             data = json.loads(self.rfile.read(length))
-            if not isinstance(data, dict) or set(data) != {"engine", "version", "bundle_sha256"}:
-                raise ValueError("Invalid release selection.")
-            result = start_install(data["engine"], data["version"], data["bundle_sha256"])
+            if not isinstance(data, dict):
+                raise ValueError("Invalid engine selection.")
+            if self.path == "/install":
+                if set(data) != {"engine", "version", "bundle_sha256"}:
+                    raise ValueError("Invalid release selection.")
+                result = start_install(data["engine"], data["version"], data["bundle_sha256"])
+            else:
+                if set(data) != {"engine", "version"}:
+                    raise ValueError("Invalid installed engine selection.")
+                result = start_lifecycle(data["engine"], data["version"],
+                                         self.path.removeprefix("/"))
         except (ValueError, KeyError, TypeError):
             return self.respond(400, {"error": "Requested version is not available or another update is running."})
         except Exception:
