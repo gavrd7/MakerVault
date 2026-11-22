@@ -2180,7 +2180,7 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
             </div>
             {managingSavedProfiles && <div className="cameraSourceActions">
               {profile.engine === "orcaslicer" && <button type="button" disabled={profileLineages[profile.id]?.checking} onClick={() => inspectProfile(profile)}>Check parent presets</button>}
-              {!isInternalNativeProfile(profile) && ["orcaslicer", "crealityprint"].includes(profile.engine) && <button type="button" disabled={busy} onClick={() => openProfileEditor(profile)}>Edit as custom</button>}
+              {!isInternalNativeProfile(profile) && ["orcaslicer", "crealityprint", "bambustudio"].includes(profile.engine) && <button type="button" disabled={busy} onClick={() => openProfileEditor(profile)}>Edit as custom</button>}
               {!isInternalNativeProfile(profile) && <button type="button" disabled={busy} onClick={() => toggleProfileDefault(profile)}>
                 {profile.is_default ? "Clear default" : "Set as default"}
               </button>}
