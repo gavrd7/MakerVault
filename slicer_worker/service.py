@@ -175,6 +175,7 @@ def _decode_payload(payload):
             options["allow_bambu_project"] = True
             if "filament_profiles" in files:
                 options["allow_bambu_combined_paint"] = True
+                options["allow_bambu_layer_ranges"] = True
         validate_worker_3mf(files["model"], **options)
     return files
 
