@@ -172,4 +172,4 @@ class BambuRunnerContractTests(TestCase):
             "process_profile": base64.b64encode(b"{}").decode(),
         }
         decoded = _decode_payload(payload)
-        self.assertEqual(decoded["engine"], "bambustudio")
+        self.assertEqual(decoded["model_format"], "stl")
