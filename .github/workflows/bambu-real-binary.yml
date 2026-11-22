@@ -219,10 +219,12 @@ jobs:
           (p/'filament.json').write_bytes((p/'filament-0.json').read_bytes())
           PY
           set +e
-          timeout 60s env -u DISPLAY -u WAYLAND_DISPLAY             HOME=/tmp/bambu-cli-home QT_QPA_PLATFORM=offscreen             SSL_CERT_FILE=/etc/ssl/certs/ca-certificates.crt             gdb -q -batch -ex 'set pagination off' -ex 'run'             -ex 'thread apply all bt 8' --args             /tmp/bambu-appimage-acceptance/squashfs-root/AppRun             --load-settings '/tmp/bambu-native-debug/printer.json;/tmp/bambu-native-debug/process.json'             --load-filaments '/tmp/bambu-native-debug/filament-0.json;/tmp/bambu-native-debug/filament-1.json'             --slice 0 --export-3mf /tmp/bambu-native-debug/out.3mf             /tmp/bambu-native-debug/input.3mf > /tmp/bambu-native-debug/backtrace.txt 2>&1
+          timeout 60s env -u DISPLAY -u WAYLAND_DISPLAY             HOME=/tmp/bambu-cli-home QT_QPA_PLATFORM=offscreen             SSL_CERT_FILE=/etc/ssl/certs/ca-certificates.crt             gdb -q -batch -ex 'set pagination off' -ex 'set follow-fork-mode child' -ex 'set detach-on-fork off' -ex 'set follow-exec-mode new' -ex 'run'             -ex 'thread apply all bt 8' --args             /tmp/bambu-appimage-acceptance/squashfs-root/AppRun             --load-settings '/tmp/bambu-native-debug/printer.json;/tmp/bambu-native-debug/process.json'             --load-filaments '/tmp/bambu-native-debug/filament-0.json;/tmp/bambu-native-debug/filament-1.json'             --slice 0 --export-3mf /tmp/bambu-native-debug/out.3mf             /tmp/bambu-native-debug/input.3mf > /tmp/bambu-native-debug/backtrace.txt 2>&1
           code=$?
           set -e
           echo "CI-only native debugger exit: $code"
+          echo 'CI-only debugger first 45 lines:'
+          sed -n '1,45p' /tmp/bambu-native-debug/backtrace.txt | cut -c 1-200
           grep -E -m 60 'Program received|SIGABRT|SIGSEGV|terminate called|what\(\)|#0 |#1 |#2 |#3 |#4 |#5 |BambuStudio|libslic3r|__assert_fail|std::' /tmp/bambu-native-debug/backtrace.txt | cut -c 1-240 || true
 
       - name: Build disposable pinned Bambu candidate image
