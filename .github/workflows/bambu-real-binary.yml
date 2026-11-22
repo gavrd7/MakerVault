@@ -174,7 +174,7 @@ jobs:
               --tmpfs /tmp:rw,nosuid,size=1g,mode=1777 \
               --mount type=bind,src=/tmp/bambu-verified-profiles,dst=/fixtures,readonly \
               --entrypoint python3 makervault-bambu-combined-candidate:ci \
-              -m slicer_worker.probe \
+              -c 'from slicer_worker.combined_service import block_worker_outbound_connections; from slicer_worker.probe import main; block_worker_outbound_connections(); raise SystemExit(main())' \
               --engine bambustudio --version 02.09.01.70 \
               --binary /opt/bambu-candidate/squashfs-root/AppRun \
               --printer /fixtures/printer.json \
