@@ -163,7 +163,7 @@ def audit_orca_variable_layers(gcode, bands):
                        "target_layer_mm": wanted, "observed_layer_mm": matched[0]})
     return {"verified_bands": checks, "layer_markers": len(positions)}
 
-_BAMBU_LAYER_Z = re.compile(r"^;\\s*Z_HEIGHT:\\s*([0-9]+(?:\\.[0-9]+)?)\\s*$", re.I)
+_BAMBU_LAYER_Z = re.compile(r"^;\s*Z_HEIGHT:\s*([0-9]+(?:\.[0-9]+)?)\s*$", re.I)
 
 
 def audit_bambu_variable_layers(gcode, bands):
