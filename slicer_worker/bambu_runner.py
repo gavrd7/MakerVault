@@ -145,7 +145,8 @@ def bambu_command(binary: Path, workdir: Path) -> list[str]:
         validate_worker_3mf(model.read_bytes(),
             native_tool_count=len(palette) if palette else None,
             allow_bambu_project=True,
-            allow_bambu_combined_paint=bool(palette))
+            allow_bambu_combined_paint=bool(palette),
+            allow_bambu_layer_ranges=bool(palette))
         if palette:
             _native_project_matches_palette(model.read_bytes(), palette)
     _output_path(workdir)
