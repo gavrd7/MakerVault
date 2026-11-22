@@ -1135,7 +1135,7 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
       if (!form.engine_version || officialProfileVersion !== form.engine_version)
         throw new Error("Selected slicer engine release changed; reopen official search to load its matching catalogue.");
       const q = [officialManualModel.trim(), officialQuery.trim()].filter(Boolean).join(" ").trim();
-      if (q.length < 2 || q.length > 80) throw new Error("Enter 2–80 characters across the manual model and preset searches.");
+      if (q.length > 80) throw new Error("Search terms must not exceed 80 characters.");
       const params = new URLSearchParams({q, kind:importKind,vendor:officialVendor,
         engine:form.engine,version:officialProfileVersion});
       if(officialBrand && importKind==="filament" && officialVendor==="OrcaFilamentLibrary")
@@ -2017,7 +2017,7 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
             <input value={officialQuery} maxLength="80" onChange={e => setOfficialQuery(e.target.value)} placeholder="e.g. PLA or 0.20mm Standard" />
           </label>
           <div className="full settingsActions">
-            <button type="submit" disabled={officialBusy || !officialVendor || !officialVendors.length || [officialManualModel.trim(), officialQuery.trim()].filter(Boolean).join(" ").length < 2}>
+            <button type="submit" disabled={officialBusy || !officialVendor || !officialVendors.length}>
               {officialBusy ? "Searching…" : "Search official profiles"}
             </button>
           </div>
@@ -2030,7 +2030,7 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
             from the selected OrcaSlicer release. Preset dependencies are checked automatically.</p>}
         {officialResults && <div className="printingStack" role="region" aria-label="Official profile search results">
           <p>{officialResults.total_matches} matching official presets in {officialResults.vendor} · showing up to {officialResults.profiles.length} · original upstream release {officialResults.ref}{officialResults.printer_model_filter ? " · filtered for " + officialResults.printer_model_filter + " (name-based, not verified compatibility)" : ""}</p>
-          {officialResults.profiles.map(candidate => <div className="cameraSourceRow" key={candidate.sub_path}>
+          {officialResults.profiles.map(candidate => <div className="cameraSourceRow slicerOfficialProfileRow" key={candidate.sub_path}>
             <div className="cameraSourceIdentity">
               <strong>{candidate.name}</strong>
               <small>{candidate.sub_path}</small>
