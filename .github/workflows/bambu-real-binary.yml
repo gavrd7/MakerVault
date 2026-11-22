@@ -338,3 +338,15 @@ jobs:
               --filament /fixtures/filament.json \
               --timeout 180 "${extra[@]}"
           done
+
+      - name: Prove genuine Bambu two-tool and facet painting in isolated combined worker
+        shell: bash
+        run: |
+          set -euo pipefail
+          chmod 755 /tmp/bambu-verified-profiles
+          chmod 644 /tmp/bambu-verified-profiles/*.json
+          for paint in models facets; do
+            extra=()
+            if [ "$paint" = facets ]; then extra+=(--painted); fi
+            docker run --rm --network none --read-only               --cap-drop ALL --pids-limit 128 --cpus 2 --memory 3g               --security-opt no-new-privileges:true               --tmpfs /tmp:rw,nosuid,size=1g,mode=1777               --mount type=bind,src=/tmp/bambu-verified-profiles,dst=/fixtures,readonly               --mount type=bind,src="$GITHUB_WORKSPACE/scripts",dst=/opt/makervault-slicer/scripts,readonly               --entrypoint python3 makervault-bambu-combined-candidate:ci               -c 'from slicer_worker.combined_service import block_worker_outbound_connections; from scripts.probe_bambu_multicolour import main; block_worker_outbound_connections(); raise SystemExit(main())'               --binary /opt/bambu-candidate/squashfs-root/AppRun               --profiles /fixtures --timeout 180 "${extra[@]}"
+          done
