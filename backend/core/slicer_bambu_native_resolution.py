@@ -52,8 +52,8 @@ def flatten_bambu_preset(name, kind, fetch):
             observed_type = data.get("type")
             if observed_type != native_type and not (included and observed_type is None):
                 raise SlicerProfileError("Bambu native dependency type does not match profile family.")
-            if current == name and data.get("instantiation") != "true":
-                raise SlicerProfileError("Bambu selected profile must be an instantiable preset.")
+            if current == name and data.get("instantiation") == "false":
+                raise SlicerProfileError("Bambu selected profile is a non-instantiable template.")
             parent = data.get("inherits", "")
             if parent and (not isinstance(parent, str) or not 1 <= len(parent) <= 200):
                 raise SlicerProfileError("Bambu native parent identity is invalid.")
@@ -86,11 +86,13 @@ def flatten_bambu_preset(name, kind, fetch):
 
 def resolved_bambu_profile(profile):
     """Resolve one owned, exact-release imported Bambu profile."""
-    if (profile.engine != "bambustudio"
-            or profile.kind not in KIND_TYPES
-            or profile.engine_version != "02.09.01.70"
-            or profile.source_scope != "bambulab/BambuStudio@v02.09.01.70/BBL"):
-        raise SlicerProfileError("Unapproved Bambu native profile source or version.")
+    if (profile.engine != "bambustudio" or profile.kind not in KIND_TYPES
+            or not isinstance(profile.engine_version, str)
+            or not 1 <= len(profile.engine_version) <= 80):
+        raise SlicerProfileError("Invalid Bambu native profile identity.")
+    # Same-owner, same-version and same-source checks below also support
+    # user-imported complete native Bambu JSON, exactly as Orca/Creality do.
+    # The installed engine itself remains version/checksum approved.
     def fetch(current):
         if current == profile.name:
             item = profile
