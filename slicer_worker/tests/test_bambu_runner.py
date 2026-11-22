@@ -90,6 +90,22 @@ class BambuRunnerContractTests(TestCase):
                     extract_single_bambu_gcode(
                         self.root / "bambu-sliced.3mf", self.root)
 
+    def test_rejects_unexpected_secondary_gcode_member(self):
+        # A future upstream layout must be re-reviewed rather than allowing
+        # a valid plate to mask a second unsupported toolpath.
+        for extra in ("Metadata/plate_0.gcode",
+                      "Metadata/plate_2.GCODE",
+                      "Metadata/subfolder/plate_2.gcode"):
+            with self.subTest(extra=extra):
+                self._archive([
+                    ("Metadata/plate_1.gcode", b"G1 X2 E0.2\\n"),
+                    (extra, b"G1 X3 E0.4\\n"),
+                ])
+                with self.assertRaisesRegex(WorkerError, "unexpected G-code"):
+                    extract_single_bambu_gcode(
+                        self.root / "bambu-sliced.3mf", self.root)
+                self.assertFalse((self.root / "output.gcode").exists())
+
     def test_rejects_zip_member_exceeding_gcode_limit(self):
         from slicer_worker.runner import MAX_GCODE_BYTES
         self._archive([("Metadata/plate_1.gcode", b"G1 E1\n")])
