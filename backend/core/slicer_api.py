@@ -67,6 +67,9 @@ from .slicer_bambu_official_profiles import (
     ENGINE_VERSION as OFFICIAL_BAMBU_VERSION, SOURCE as OFFICIAL_BAMBU_SOURCE,
     REF as OFFICIAL_BAMBU_REF,
 )
+from .slicer_bambu_native_profiles import (
+    search_bambu_native_profiles, fetch_bambu_native_chain,
+)
 from .slicer_official_profiles import (
     OfficialProfileError, search_official_profiles, fetch_official_profile, available_official_vendors,
     official_filament_brands, APPROVED_VERSIONS as ORCA_APPROVED_PROFILE_VERSIONS,
@@ -1304,7 +1307,7 @@ def official_profiles(request):
         searcher = {
             "orcaslicer": search_official_profiles,
             "crealityprint": search_creality_profiles,
-            "bambustudio": search_bambu_profiles,
+            "bambustudio": search_bambu_native_profiles,
             "prusaslicer": search_prusa_profiles,
             "snapmakerorca": search_snapmaker_profiles,
         }.get(selected)
@@ -1401,7 +1404,7 @@ def official_profiles(request):
         # Existing records are never overwritten or implicitly modified.
         # Fetch and validate the complete bounded parent chain *before*
         # mutating the database. Never install a partial official preset.
-        chain = ([(name, subpath, fetch_bambu_model(kind, name, subpath, vendor))]
+        chain = (fetch_bambu_native_chain(kind, name, subpath, vendor, version=version)
                  if engine == "bambustudio" else
                  [(name, subpath, fetch_prusa_model(kind, name, subpath, vendor))]
                  if engine == "prusaslicer" else
