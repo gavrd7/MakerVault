@@ -4,6 +4,8 @@ No arbitrary vendor projects, scripts, remote relationships or extra archive
 members are permitted through this execution path.
 """
 import io
+import json
+import re
 import math
 import zipfile
 from xml.etree import ElementTree as ET
@@ -13,6 +15,7 @@ from .runner import WorkerError
 CORE_NS = "http://schemas.microsoft.com/3dmanufacturing/core/2015/02"
 ALLOWED = {"3D/3dmodel.model", "_rels/.rels", "[Content_Types].xml"}
 PLATE_MANIFEST = "Metadata/model_settings.config"
+BAMBU_SETTINGS = "Metadata/project_settings.config"
 LAYER_RANGES = "Metadata/layer_config_ranges.xml"
 # Keep the worker aligned with the validated STL and server-side 3MF builder.
 # Expanded XML, compressed archive and model upload bounds remain separate.
@@ -32,7 +35,7 @@ MAX_OBJECT_SETTINGS = 16
 
 
 def validate_worker_3mf(data, *, native_tool_count=None, allow_creality_combined_paint=False,
-                        allow_creality_layer_ranges=False):
+                        allow_creality_layer_ranges=False, allow_bambu_project=False):
     if native_tool_count is not None and (isinstance(native_tool_count, bool) or
             not isinstance(native_tool_count, int) or not 2 <= native_tool_count <= 16):
         raise WorkerError("Invalid native filament tool count.")
@@ -48,7 +51,9 @@ def validate_worker_3mf(data, *, native_tool_count=None, allow_creality_combined
             names = {part.filename for part in info}
             approved = (ALLOWED, ALLOWED | {PLATE_MANIFEST},
                         ALLOWED | {PLATE_MANIFEST, LAYER_RANGES})
-            if len(info) not in (3, 4, 5) or names not in approved:
+            if allow_bambu_project:
+                approved += tuple(items | {BAMBU_SETTINGS} for items in approved)
+            if len(info) not in (3, 4, 5, 6) or names not in approved:
                 raise WorkerError("Unsupported 3MF package members.")
             if LAYER_RANGES in names and package.getinfo(LAYER_RANGES).file_size > 32768:
                 raise WorkerError("Native layer range metadata is oversized.")
@@ -62,6 +67,36 @@ def validate_worker_3mf(data, *, native_tool_count=None, allow_creality_combined
             raw = package.read("3D/3dmodel.model")
             manifest = package.read(PLATE_MANIFEST) if PLATE_MANIFEST in names else None
             layer_ranges = package.read(LAYER_RANGES) if LAYER_RANGES in names else None
+            bambu_settings = package.read(BAMBU_SETTINGS) if BAMBU_SETTINGS in names else None
+        if bambu_settings is not None:
+            if len(bambu_settings) > 16384 or native_tool_count is None:
+                raise WorkerError("Bambu project settings require a bounded native palette.")
+            settings = json.loads(bambu_settings)
+            permitted = {"printer_settings_id", "print_settings_id",
+                         "filament_settings_id", "filament_colour",
+                         "filament_type", "filament_diameter", "nozzle_diameter"}
+            if not isinstance(settings, dict) or not settings or set(settings) - permitted:
+                raise WorkerError("Unsafe Bambu project setting keys.")
+            for label in ("printer_settings_id", "print_settings_id"):
+                value = settings.get(label)
+                if not isinstance(value, str) or not 1 <= len(value) <= 200:
+                    raise WorkerError("Missing Bambu native preset identity.")
+            for key in ("filament_settings_id", "filament_colour",
+                        "filament_type", "filament_diameter"):
+                values = settings.get(key)
+                if (not isinstance(values, list)
+                        or len(values) != native_tool_count
+                        or any(not isinstance(v, str) or not 1 <= len(v) <= 200
+                               for v in values)):
+                    raise WorkerError("Bambu project palette does not match the native tool count.")
+            if any(not re.fullmatch(r"#[0-9A-Fa-f]{6}", v)
+                   for v in settings["filament_colour"]):
+                raise WorkerError("Invalid Bambu project filament colour.")
+            if (not isinstance(settings.get("nozzle_diameter"), list)
+                    or not 1 <= len(settings["nozzle_diameter"]) <= 16
+                    or any(not isinstance(v, str) or not re.fullmatch(r"(?:0\\.[1-9][0-9]?|[12](?:\\.[0-9]{1,2})?)", v)
+                           for v in settings["nozzle_diameter"])):
+                raise WorkerError("Invalid Bambu project nozzle diameter.")
         root = ET.fromstring(raw)
     except WorkerError:
         raise
