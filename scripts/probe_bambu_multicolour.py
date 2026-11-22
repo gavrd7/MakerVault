@@ -83,10 +83,22 @@ def make_bambu_material_fixture(*, painted=False):
             package.writestr("3D/3dmodel.model", ET.tostring(model, encoding="utf-8"))
             package.writestr("Metadata/model_settings.config",
                              ET.tostring(manifest, encoding="utf-8"))
+            # Bambu CLI 02.09.01.70 reads these project vectors during
+            # --export-3mf; absent filament IDs can abort inside upstream
+            # get_at(). A generic core 3MF is sufficient only for one tool.
+            package.writestr("Metadata/project_settings.config", json.dumps({
+                "printer_settings_id": "Bambu Lab X1 Carbon 0.4 nozzle",
+                "print_settings_id": "0.20mm Standard @BBL X1C",
+                "filament_settings_id": ["Bambu PLA Basic @BBL X1C"] * 2,
+                "filament_colour": ["#FFFF00", "#0000FF"],
+                "filament_type": ["PLA", "PLA"],
+                "filament_diameter": ["1.75", "1.75"],
+                "nozzle_diameter": ["0.4"],
+            }, separators=(",", ":")))
             package.writestr("[Content_Types].xml", content_types)
             package.writestr("_rels/.rels", rels)
         raw = data.getvalue()
-    validate_worker_3mf(raw, native_tool_count=2)
+    validate_worker_3mf(raw, native_tool_count=2, allow_bambu_project=True)
     if expected_native_tools(raw) != {0, 1}:
         raise WorkerError("Two-material fixture did not select both logical tools.")
     return raw
