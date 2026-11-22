@@ -269,6 +269,12 @@ def _validate_plate_execution(job):
         settings=expand_painted_settings(getattr(job, "owner", None), job.settings or {})
     except (ValueError, OSError) as exc:
         raise SlicerExecutionError("A referenced private painting asset is missing or invalid.") from exc
+    if job.engine == "bambustudio" and settings.get("multi_material_test") is True:
+        # The existing native Bambu runner has not yet implemented multiple
+        # --load-filaments entries. Fail before routing to Orca-specific
+        # colour-planning code, which otherwise reports a misleading error.
+        raise SlicerExecutionError(
+            "Multiple Bambu filaments require a native multi-filament runner.")
     # Do not silently discard native flush / prime-tower preferences when
     # admitting an otherwise single-filament job. They require the future
     # exact-printer, multi-tool worker route and verified CFS bindings.
@@ -460,16 +466,13 @@ def _validate_plate_execution(job):
     except MaterialRoutingError as exc:
         raise SlicerExecutionError(str(exc)) from exc
     if job.engine not in {"orcaslicer", "crealityprint", "bambustudio"}:
-        raise SlicerExecutionError("This engine does not support native build-plate slicing.")
+        raise SlicerExecutionError("This engine does not yet support native build-plate slicing.")
     if job.engine == "bambustudio":
         # The native Bambu CLI accepts STL and 3MF build plates. Retain
         # common placement/overlap validation rather than a one-STL Beta gate.
         # Reject only paths whose material or paint parameters cannot yet be
         # represented by the native Bambu runner, so user selections are never
         # silently omitted from the generated G-code.
-        if settings.get("multi_material_test") is True:
-            raise SlicerExecutionError(
-                "Multiple Bambu filaments require a native multi-filament runner.")
         if any(isinstance(item, dict) and (
                 item.get("process_overrides")
                 or (item.get("colour_paint") or {}).get("regions")
