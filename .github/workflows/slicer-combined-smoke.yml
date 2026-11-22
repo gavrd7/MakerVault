@@ -23,25 +23,28 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          docker volume create mv-ci-engine-store
+          docker volume create mv-ci-migration-volume
           docker run --rm --network none \
-            -v mv-ci-engine-store:/engine-store busybox:1.37.0 sh -ec \
+            -v mv-ci-migration-volume:/engine-store busybox:1.37.0 sh -ec \
             'mkdir -p /engine-store/versions/orcaslicer/2.5.0 /engine-store/versions/crealityprint/7.3.1; echo original > /engine-store/versions/orcaslicer/2.5.0/identity; echo original > /engine-store/versions/crealityprint/7.3.1/identity; chown -R 10001:10001 /engine-store; chmod 0700 /engine-store/versions/orcaslicer/2.5.0 /engine-store/versions/crealityprint/7.3.1'
           docker run --rm --network none --cap-drop ALL \
             --cap-add CHOWN --cap-add FOWNER --cap-add DAC_READ_SEARCH \
             --security-opt no-new-privileges:true \
-            -v mv-ci-engine-store:/engine-store busybox:1.37.0 sh -ec \
+            -v mv-ci-migration-volume:/engine-store busybox:1.37.0 sh -ec \
             'chown -R 10002:10002 /engine-store; find /engine-store -type d -exec chmod 0755 {} +; find /engine-store -type f -exec chmod go-w,a+r {} +'
           docker run --rm --network none \
-            -v mv-ci-engine-store:/engine-store:ro busybox:1.37.0 sh -ec \
+            -v mv-ci-migration-volume:/engine-store:ro busybox:1.37.0 sh -ec \
             'test "$(stat -c %u /engine-store/versions/orcaslicer/2.5.0)" = 10002; test "$(stat -c %u /engine-store/versions/crealityprint/7.3.1)" = 10002; grep -qx original /engine-store/versions/orcaslicer/2.5.0/identity; grep -qx original /engine-store/versions/crealityprint/7.3.1/identity'
       - name: Start both isolated child services in one container
         shell: bash
         run: |
           set -euo pipefail
+          docker volume create mv-ci-engine-store
+          docker run --rm --network none -v mv-ci-engine-store:/engine-store busybox:1.37.0 sh -ec \
+            'chown -R 10002:10002 /engine-store; chmod 0755 /engine-store'
           docker run -d --name mv-ci-combined --network none \
             --read-only --init --cap-drop ALL \
-            --cap-add SETUID --cap-add SETGID \
+            --cap-add SETUID --cap-add SETGID --cap-add KILL \
             --security-opt no-new-privileges:true \
             --pids-limit 144 --memory 4g \
             --tmpfs /tmp:rw,nosuid,size=1g,mode=1777 \
@@ -76,3 +79,4 @@ jobs:
           docker logs mv-ci-combined 2>/dev/null | tail -60 || true
           docker rm -f mv-ci-combined 2>/dev/null || true
           docker volume rm mv-ci-engine-store 2>/dev/null || true
+          docker volume rm mv-ci-migration-volume 2>/dev/null || true
