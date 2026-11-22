@@ -61,11 +61,9 @@ jobs:
           set -euo pipefail
           cd /tmp/bambu-appimage-acceptance
           mkdir -p /tmp/bambu-cli-home
-          echo 'Checking native Bambu shared-library closure...'
-          ldd ./squashfs-root/bin/bambu-studio | grep 'not found' && {
-            echo 'Pinned Bambu binary still requires missing native libraries.'
-            exit 1
-          } || true
+          # Direct ldd on bin/bambu-studio does not reflect AppRun's bundled
+          # library search paths, so collect it as diagnostic only.
+          ldd ./squashfs-root/bin/bambu-studio | grep 'not found' || true
           # Prove the extracted entrypoint starts as a CLI, not merely that
           # the AppImage unpacks. No profile, model or printer is supplied.
           # Keep this offline and bounded, even if upstream regresses into GUI startup.
