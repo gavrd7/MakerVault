@@ -106,7 +106,31 @@ def run_fixture(binary, profiles, *, painted=False, timeout=180):
         # Same verified PLA preset in two logical slots. Material assignment
         # must still be evident in the *native G-code*, not inferred from colour.
         (workdir / "filament-1.json").write_bytes(filament)
-        receipt = run_bambu(Path(binary), workdir, timeout_seconds=timeout)
+        try:
+            receipt = run_bambu(Path(binary), workdir, timeout_seconds=timeout)
+        except WorkerError:
+            # Diagnostic only: this invocation is an ephemeral CI fixture
+            # using public, pinned BBL profiles and a synthetic 3MF. Never
+            # expose native stderr from production worker requests.
+            import os
+            if os.environ.get("MAKERVAULT_BAMBU_FIXTURE_DIAGNOSTICS") == "1":
+                import subprocess
+                from slicer_worker.bambu_runner import bambu_command
+                from slicer_worker.headless_env import slicing_environment
+                args = bambu_command(Path(binary), workdir)
+                attempt = subprocess.run(args, cwd=workdir,
+                    env={**slicing_environment(workdir),
+                         "SSL_CERT_FILE": "/etc/ssl/certs/ca-certificates.crt"},
+                    stdin=subprocess.DEVNULL, stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE, timeout=timeout, check=False)
+                for channel in (attempt.stdout, attempt.stderr):
+                    for line in channel.decode("utf-8", "replace").splitlines()[-25:]:
+                        if any(token in line.lower() for token in (
+                            "error", "failed", "invalid", "warn", "filament",
+                            "3mf", "plate", "slice", "unsupported")):
+                            print("CI native diagnosis:", line[:320])
+                print("CI native exit code:", attempt.returncode)
+            raise
         gcode = (workdir / "output.gcode").read_bytes()
         verify_multi_material_output(gcode, {0, 1})
         coverage = ({} if painted else verify_two_object_tool_regions(gcode))
