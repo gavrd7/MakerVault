@@ -13,8 +13,8 @@ from functools import lru_cache
 SUPPORTED = frozenset({"orcaslicer", "crealityprint", "prusaslicer", "bambustudio"})
 # Reviewed, exact native AppRun hash of the pinned official 02.09.01.70 build.
 # This is distinct from the upstream AppImage SHA-256.
-BAMBU_BETA_VERSION = "02.09.01.70"
-BAMBU_BETA_RUNTIME_SHA256 = "eaf5a1c6ff4f0d49d6e0c0bacf106309daa2c822ca1ebe8739067699e6cdaef4"
+BAMBU_VERSION = "02.09.01.70"
+BAMBU_RUNTIME_SHA256 = "eaf5a1c6ff4f0d49d6e0c0bacf106309daa2c822ca1ebe8739067699e6cdaef4"
 
 # The host-side installer owns this read-only, volume-backed registry. The
 # worker never writes to it or downloads/installs executables.
@@ -110,9 +110,6 @@ def configured_engines():
         }
     result = {}
     for key, entry in entries.items():
-        if key == "bambustudio" and os.environ.get("SLICER_BAMBU_BETA_ENABLED") != "1":
-            # An inactive beta must not make Orca/Creality unavailable.
-            continue
         if key not in SUPPORTED or not isinstance(entry, dict) or set(entry) != {
             "binary", "version", "binary_sha256"
         }:
@@ -122,8 +119,8 @@ def configured_engines():
             continue
         if not isinstance(digest, str) or len(digest) != 64 or any(c not in "0123456789abcdef" for c in digest):
             continue
-        if key == "bambustudio" and (version != BAMBU_BETA_VERSION
-                or digest != BAMBU_BETA_RUNTIME_SHA256):
+        if key == "bambustudio" and (version != BAMBU_VERSION
+                or digest != BAMBU_RUNTIME_SHA256):
             continue
         path = Path(binary)
         if (not path.is_absolute() or not path.is_file()
