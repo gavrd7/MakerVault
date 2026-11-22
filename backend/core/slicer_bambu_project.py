@@ -11,6 +11,8 @@ import math
 import re
 import zipfile
 from xml.etree import ElementTree as ET
+from defusedxml.ElementTree import fromstring as safe_xml_fromstring
+from defusedxml.common import DefusedXmlException
 
 from .slicer_profiles import SlicerProfileError
 
@@ -51,8 +53,8 @@ def _variant_values(document, count, key, low, high):
 
 def _mark_bambu_native_model(raw):
     try:
-        root = ET.fromstring(raw)
-    except ET.ParseError as exc:
+        root = safe_xml_fromstring(raw)
+    except (ET.ParseError, DefusedXmlException) as exc:
         raise SlicerProfileError("Malformed native Bambu model XML.") from exc
     if root.tag != "{" + _CORE + "}model":
         raise SlicerProfileError("Invalid Bambu model namespace.")
