@@ -120,7 +120,7 @@ def run_remote_job(job_id, engine, version, model, printer_profile, filament_pro
     if model_format == "3mf":
         payload["model_format"] = "3mf"
     if filament_profiles is not None:
-        if (not ((engine == "orcaslicer" and model_format == "3mf") or
+        if (not ((engine in {"orcaslicer", "bambustudio"} and model_format == "3mf") or
                  (engine == "crealityprint" and
                   ((model_format == "stl" and creality_model_stls is not None) or
                    (model_format == "3mf" and creality_native_project is True))))
