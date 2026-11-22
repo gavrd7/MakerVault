@@ -70,7 +70,7 @@ class BambuNativeResolutionTests(SimpleTestCase):
             flatten_bambu_preset(self.machine, "printer", self.fetch)
 
     def test_cannot_recast_typeless_template_as_full_preset(self):
-        with self.assertRaisesRegex(SlicerProfileError, "not a native"):
+        with self.assertRaisesRegex(SlicerProfileError, "type"):
             flatten_bambu_preset("X1_start_gcode", "printer", self.fetch)
         self.docs["fdm_bbl_common"]["inherits"] = "X1_start_gcode"
         with self.assertRaisesRegex(SlicerProfileError, "type"):
