@@ -5,7 +5,7 @@ from types import SimpleNamespace
 from django.test import SimpleTestCase
 
 from core.slicer_flush_adapters import (
-    apply_creality_native_flush, apply_orca_native_flush,
+    apply_creality_native_flush, apply_orca_native_flush, apply_bambu_native_flush,
     audit_native_flush_profile,
     map_verified_flush_transitions, require_flush_capability,
     resolve_flush_capability,
@@ -17,6 +17,7 @@ from core.slicer_profiles import SlicerProfileError
 class FlushAdapterCapabilityTests(SimpleTestCase):
     def test_same_slicer_supports_verified_single_nozzle_changers_independent_of_brand(self):
         for engine, multiplier in (("orca", "per_nozzle_vector"),
+                                   ("bambustudio", "per_nozzle_vector"),
                                    ("crealityprint", "scalar")):
             for model in ("generic-mmu-1", "unknown-brand-cfs-2"):
                 with self.subTest(engine=engine, model=model):
@@ -39,7 +40,7 @@ class FlushAdapterCapabilityTests(SimpleTestCase):
             ("unknown", 1, 2),
             ("single_nozzle_changer", 2, 2),
         ):
-            for engine in ("orcaslicer", "crealityprint"):
+            for engine in ("orcaslicer", "bambustudio", "crealityprint"):
                 with self.subTest(engine=engine, topology=topology):
                     cap = resolve_flush_capability(
                         engine, topology, nozzle_count=nozzles,
@@ -51,7 +52,7 @@ class FlushAdapterCapabilityTests(SimpleTestCase):
                             material_count=materials)
 
     def test_capability_is_only_encoding_not_firmware_or_physical_purge(self):
-        for engine in ("orcaslicer", "crealityprint"):
+        for engine in ("orcaslicer", "bambustudio", "crealityprint"):
             supported = resolve_flush_capability(
                 engine, "single_nozzle_changer",
                 nozzle_count=1, material_count=2)
@@ -75,6 +76,41 @@ class FlushAdapterCapabilityTests(SimpleTestCase):
                     self.assertFalse(unsupported.supported)
                     self.assertTrue(unsupported.reason)
                     self.assertEqual(unsupported.purge_validation, "native_unverified")
+
+    def test_bambu_verified_native_flush_uses_existing_directional_ui_contract(self):
+        routes = [SimpleNamespace(slot_id="spool-a", tool_index=1),
+                  SimpleNamespace(slot_id="spool-b", tool_index=0)]
+        profile = json.dumps({
+            "flush_volumes_matrix": ["0", "373", "760", "0"],
+            "flush_multiplier": ["1"],
+            "enable_prime_tower": "1",
+            "change_filament_gcode": "PINNED_VENDOR_NATIVE_MACRO_UNCHANGED",
+        }).encode()
+        settings = {
+            "multiplier": 2, "prime_tower": "enabled",
+            "transitions": [{
+                "from_slot_id": "spool-a", "to_slot_id": "spool-b",
+                "volume_mm3": 450,
+            }],
+        }
+        result = json.loads(apply_bambu_native_flush(
+            profile, settings, routes=routes, tool_count=2,
+            topology="single_nozzle_changer"))
+        self.assertEqual(result["flush_volumes_matrix"], ["0", "373", "450", "0"])
+        self.assertEqual(result["flush_multiplier"], ["2.0"])
+        self.assertEqual(result["enable_prime_tower"], "1")
+        self.assertEqual(result["change_filament_gcode"],
+                         "PINNED_VENDOR_NATIVE_MACRO_UNCHANGED")
+        capability = resolve_flush_capability(
+            "bambustudio", "single_nozzle_changer",
+            nozzle_count=1, material_count=2)
+        self.assertTrue(capability.supported)
+        self.assertEqual(capability.multiplier_encoding, "per_nozzle_vector")
+        self.assertEqual(capability.purge_validation, "native_unverified")
+        with self.assertRaises(MaterialRoutingError):
+            apply_bambu_native_flush(
+                profile, settings, routes=routes, tool_count=2,
+                topology="independent_toolheads")
 
     def test_orca_variable_material_palettes_preserve_direction_and_defaults(self):
         for tool_count in (2, 3, 4, 8, 16):
