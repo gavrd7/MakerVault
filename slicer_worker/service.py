@@ -20,6 +20,7 @@ import uuid
 from .runner import MAX_GCODE_BYTES, MAX_MODEL_BYTES, MAX_PROFILE_BYTES, WorkerError, run_prusa
 from .orca_runner import run_orca
 from .creality_runner import run_creality
+from .bambu_runner import run_bambu
 from .engine_registry import configured_engines
 from .three_mf_validation import validate_worker_3mf
 from .material_gcode_audit import expected_native_tools, verify_multi_material_output
@@ -82,7 +83,9 @@ def _decode_payload(payload):
         uuid.UUID(str(payload["job_id"]))
     except (TypeError, ValueError):
         raise WorkerError("Invalid job identifier.") from None
-    if payload["engine"] not in {"orcaslicer", "crealityprint", "prusaslicer"}:
+    if payload["engine"] not in {"orcaslicer", "crealityprint", "prusaslicer", "bambustudio"}:
+        raise WorkerError("Unsupported isolated worker engine.")
+    if payload["engine"] == "bambustudio" and os.environ.get("SLICER_BAMBU_BETA_ENABLED") != "1":
         raise WorkerError("Unsupported isolated worker engine.")
     model_format = payload.get("model_format", "stl")
     if model_format not in {"stl", "3mf"}:
@@ -258,7 +261,8 @@ class Handler(BaseHTTPRequestHandler):
                 stage = "running slicer engine"
                 runner = {"orcaslicer": run_orca,
                           "crealityprint": run_creality,
-                          "prusaslicer": run_prusa}[current["engine"]]
+                          "prusaslicer": run_prusa,
+                          "bambustudio": run_bambu}[current["engine"]]
                 receipt = runner(current["binary"], workdir)
                 stage = "validating generated G-code"
                 data = (workdir / "output.gcode").read_bytes()
@@ -306,6 +310,12 @@ class Handler(BaseHTTPRequestHandler):
                 "Creality Print produced unsupported binary G-code.": "invalid-gcode",
                 "Creality Print worker could not launch the approved binary.": "creality-launch-failed",
                 "OrcaSlicer failed. Check the engine-native profiles.": "engine-exited",
+                "Reviewed Bambu Studio executable is unavailable.": "engine-unavailable",
+                "Bambu Studio CLI rejected the native profiles or model.": "engine-exited",
+                "Bambu generated unsupported binary or empty G-code.": "invalid-gcode",
+                "Bambu native output must contain exactly one G-code plate.": "unexpected-output-layout",
+                "Bambu native output includes an unexpected G-code plate.": "unexpected-output-layout",
+                "Isolated worker could not execute Bambu Studio.": "engine-launch-failed",
                 "Orca profile requires an unbundled parent preset; use a verified complete native profile bundle.": "unresolved-profile-parent",
                 "OrcaSlicer produced no safe output directory.": "no-output-directory",
                 "OrcaSlicer must produce exactly one G-code plate and only expected metadata.": "unexpected-output-layout",
