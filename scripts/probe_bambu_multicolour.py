@@ -23,8 +23,13 @@ from slicer_worker.runner import WorkerError
 from slicer_worker.three_mf_validation import CORE_NS, validate_worker_3mf
 
 
-def make_bambu_material_fixture(*, painted=False, native_app=True, variable_layers=False):
+def make_bambu_material_fixture(*, painted=False, native_app=True,
+                                variable_layers=False, detail_paint=None):
     """Build 1 painted cube or 2 separately assigned cubes on a 256mm plate."""
+    if detail_paint not in (None, "support", "seam", "fuzzy", "combined"):
+        raise WorkerError("Unsupported native Bambu semantic paint fixture.")
+    if detail_paint is not None and not painted:
+        raise WorkerError("Bambu semantic paint fixture requires a painted model.")
     if variable_layers and not painted:
         raise WorkerError("Bambu variable-layer fixture requires one painted object.")
     ns = "{" + CORE_NS + "}"
@@ -64,6 +69,15 @@ def make_bambu_material_fixture(*, painted=False, native_app=True, variable_laye
             if painted and face_index in (2, 3, 6, 7):
                 # Native 3MF TriangleSelector state: paint_color=8 => tool 1.
                 attrs["paint_color"] = "8"
+            if painted and detail_paint is not None and face_index in (2, 3, 6, 7):
+                # Additional native TriangleSelector states on those same
+                # tessellated model regions. No geometry modification.
+                for mode, native_attribute in (
+                        ("support", "paint_supports"),
+                        ("seam", "paint_seam"),
+                        ("fuzzy", "paint_fuzzy_skin")):
+                    if detail_paint in (mode, "combined"):
+                        attrs[native_attribute] = "4"
             ET.SubElement(triangles, ns + "triangle", attrs)
         ET.SubElement(build, ns + "item", {
             "objectid": str(index),
@@ -144,12 +158,14 @@ def make_bambu_material_fixture(*, painted=False, native_app=True, variable_laye
 
 
 def run_fixture(binary, profiles, *, painted=False, timeout=180,
-                flush_multiplier=None, tower_xy=None, variable_layers=False):
+                flush_multiplier=None, tower_xy=None, variable_layers=False,
+                detail_paint=None):
     source = Path(profiles)
     with tempfile.TemporaryDirectory(prefix="makervault-bambu-two-tool-") as tmp:
         workdir = Path(tmp)
         project = make_bambu_material_fixture(painted=painted,
-                                              variable_layers=variable_layers)
+                                              variable_layers=variable_layers,
+                                              detail_paint=detail_paint)
         (workdir / "input.3mf").write_bytes(project)
         for kind in ("printer", "process", "filament"):
             raw = (source / (kind + ".json")).read_bytes()
@@ -408,6 +424,7 @@ def run_fixture(binary, profiles, *, painted=False, timeout=180,
             "tower_xy": tower_xy,
             "flush_evidence": flush_evidence,
             "variable_layers_requested": variable_layers,
+            "detail_paint": detail_paint,
             **coverage,
         }
 
@@ -418,6 +435,7 @@ def main():
     parser.add_argument("--profiles", required=True)
     parser.add_argument("--painted", action="store_true")
     parser.add_argument("--variable-layers", action="store_true")
+    parser.add_argument("--detail-paint", choices=("support", "seam", "fuzzy", "combined"))
     parser.add_argument("--flush-multiplier", type=float, choices=(1.0, 2.0))
     parser.add_argument("--tower-x", type=float)
     parser.add_argument("--tower-y", type=float)
@@ -428,6 +446,7 @@ def main():
             args.binary, args.profiles, painted=args.painted, timeout=args.timeout,
             flush_multiplier=args.flush_multiplier,
             variable_layers=args.variable_layers,
+            detail_paint=args.detail_paint,
             tower_xy=((args.tower_x, args.tower_y)
                       if args.tower_x is not None and args.tower_y is not None
                       else None)),
