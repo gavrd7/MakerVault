@@ -54,6 +54,16 @@ def validate_flush_settings(value):
             "transitions": result, "prime_tower": mode}
 
 
+def apply_bambu_flush_settings(process_bytes, settings, *, routes, tool_count, topology):
+    """Bambu uses the same native directional matrix/one-nozzle vector
+    shape as Orca. Keep its capability independently observable.
+    """
+    from .slicer_flush_adapters import apply_bambu_native_flush
+    return apply_bambu_native_flush(
+        process_bytes, settings, routes=routes,
+        tool_count=tool_count, topology=topology)
+
+
 def apply_orca_flush_settings(process_bytes, settings, *, routes, tool_count, topology):
     """Compatibility entrypoint: delegate native serialization to Orca adapter.
 
