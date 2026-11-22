@@ -28,7 +28,7 @@ class BambuNativeMulticolourTests(TestCase):
 
     def test_two_object_tool_assignments_are_preserved(self):
         project = make_bambu_material_fixture()
-        self.assertTrue(validate_worker_3mf(project, native_tool_count=2))
+        self.assertTrue(validate_worker_3mf(project, native_tool_count=2, allow_bambu_project=True))
         self.assertEqual(expected_native_tools(project), {0, 1})
         decoded = _decode_payload(self.payload(project))
         self.assertEqual(decoded["model_format"], "3mf")
@@ -36,9 +36,18 @@ class BambuNativeMulticolourTests(TestCase):
 
     def test_single_model_native_paint_color_selects_second_tool(self):
         project = make_bambu_material_fixture(painted=True)
-        self.assertTrue(validate_worker_3mf(project, native_tool_count=2))
+        self.assertTrue(validate_worker_3mf(project, native_tool_count=2, allow_bambu_project=True))
         self.assertEqual(expected_native_tools(project), {0, 1})
         self.assertEqual(len(_decode_payload(self.payload(project))["filament_profiles"]), 2)
+
+    def test_native_project_settings_are_never_accepted_by_orca_contract(self):
+        project = make_bambu_material_fixture()
+        with self.assertRaisesRegex(WorkerError, "Unsupported 3MF package members"):
+            validate_worker_3mf(project, native_tool_count=2)
+        request = self.payload(project)
+        request["engine"] = "orcaslicer"
+        with self.assertRaisesRegex(WorkerError, "Unsupported 3MF package members"):
+            _decode_payload(request)
 
     def test_worker_rejects_wrong_filament_order_and_non_3mf_input(self):
         project = make_bambu_material_fixture()
