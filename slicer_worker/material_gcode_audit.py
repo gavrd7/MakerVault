@@ -236,6 +236,83 @@ def verify_painted_cube_tool_regions(raw_gcode):
             "painted_tool_model_deposits": hits[1]}
 
 
+def summarize_bambu_flush_signal(raw_gcode):
+    """Bounded offline evidence of actual native Bambu positive-E toolpaths.
+
+    Per-tool totals exclude retractions and never read printer firmware.
+    No G-code is rewritten. This is exploratory output evidence, not proof
+    that purge exits at the right physical location or correct colour.
+    """
+    if (not isinstance(raw_gcode, bytes) or not raw_gcode
+            or len(raw_gcode) > 64 * 1024 * 1024):
+        raise WorkerError("Invalid native Bambu flush evidence.")
+    try:
+        lines = raw_gcode.decode("utf-8").splitlines()
+    except UnicodeDecodeError:
+        raise WorkerError("Bambu flush evidence requires UTF-8 G-code.") from None
+    if len(lines) > 1_500_000:
+        raise WorkerError("Bambu flush evidence exceeds line limit.")
+    active = None
+    absolute_e = True
+    e_last = {}
+    totals = {0: 0.0, 1: 0.0}
+    positive_moves = {0: 0, 1: 0}
+    stationary = {0: 0.0, 1: 0.0}
+    tower = {0: 0.0, 1: 0.0}
+    tower_feature_moves = 0
+    toolchanges = 0
+    feature = ""
+    for raw in lines:
+        if raw.lstrip().startswith(";"):
+            comment = raw.strip()[1:].strip()
+            if comment.upper().startswith(("FEATURE:", "TYPE:")):
+                feature = comment.split(":", 1)[-1].strip().lower()[:80]
+            continue
+        line = raw.split(";", 1)[0].strip().upper()
+        chosen = TOOL.fullmatch(line)
+        if chosen:
+            nxt = int(chosen.group(1))
+            if active in totals and nxt in totals and active != nxt:
+                toolchanges += 1
+            active = nxt
+            continue
+        command = line.split(None, 1)[0] if line else ""
+        if command == "M82":
+            absolute_e = True
+        elif command == "M83":
+            absolute_e = False
+        elif command == "G92" and active in totals:
+            e = E_AXIS.search(line[3:])
+            if e:
+                e_last[active] = float(e.group(1))
+        elif active in totals and MOVE.match(line):
+            e = E_AXIS.search(line)
+            if not e:
+                continue
+            val = float(e.group(1))
+            prev = e_last.get(active, 0.0)
+            if absolute_e:
+                e_last[active] = val
+            inc = (val - prev) if absolute_e else val
+            if not 0 < inc < 10000:
+                continue
+            totals[active] += inc
+            positive_moves[active] += 1
+            if not XY.search(line):
+                stationary[active] += inc
+            if "tower" in feature or "wipe" in feature:
+                tower[active] += inc
+                tower_feature_moves += 1
+    return {
+        "positive_e_mm": {str(k): round(v, 3) for k, v in totals.items()},
+        "positive_e_moves": {str(k): v for k, v in positive_moves.items()},
+        "stationary_positive_e_mm": {str(k): round(v, 3) for k, v in stationary.items()},
+        "tower_feature_positive_e_mm": {str(k): round(v, 3) for k, v in tower.items()},
+        "tower_feature_moves": tower_feature_moves,
+        "toolchanges": toolchanges,
+    }
+
+
 def summarize_k2_fixture_changeovers(raw_gcode):
     """Offline evidence for fixed two-cube test, NOT a physical K2 approval.
 
