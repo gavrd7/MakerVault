@@ -24,15 +24,14 @@ class GcodeAnalysisTests(SimpleTestCase):
 ; CONFIG_BLOCK_END
 M140 S0
 M104 S0
-M140 S60
-START_PRINT
+START_PRINT EXTRUDER_TEMP=220 BED_TEMP=60
 """
         result = _print_setup(raw)
         self.assertEqual(result["nozzle_diameters_mm"], [0.4])
         self.assertEqual(result["bed_type"], "Cool Plate")
         self.assertEqual(result["profile_temperatures_c"]["nozzle_c"], 220)
         self.assertEqual(result["profile_temperatures_c"]["bed_c"], 60)
-        self.assertIsNone(result["temperatures_c"]["nozzle_c"])
+        self.assertEqual(result["temperatures_c"]["nozzle_c"], 220)
         self.assertEqual(result["temperatures_c"]["bed_c"], 60)
     def test_nozzle_and_plate_comments_are_advisory(self):
         report = analyse_text(
