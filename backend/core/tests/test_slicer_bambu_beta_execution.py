@@ -15,7 +15,7 @@ class BambuEngineExecutionTests(SimpleTestCase):
             engine="bambustudio", engine_version=version,
             plate=plate, settings={} if settings is None else settings,
             owner=None, filament_profile_id=uuid.uuid4(),
-            printer_profile=SimpleNamespace(),
+            printer_profile=SimpleNamespace(), printer_profile_id=uuid.uuid4(),
         )
 
     @patch("core.slicer_execution.expand_painted_settings",
