@@ -24,12 +24,15 @@ from slicer_worker.three_mf_validation import CORE_NS, validate_worker_3mf
 
 
 def make_bambu_material_fixture(*, painted=False, native_app=True,
-                                variable_layers=False, detail_paint=None):
+                                variable_layers=False, detail_paint=None,
+                                upper_layer_height=0.30):
     """Build 1 painted cube or 2 separately assigned cubes on a 256mm plate."""
     if detail_paint not in (None, "support", "seam", "fuzzy", "combined"):
         raise WorkerError("Unsupported native Bambu semantic paint fixture.")
     if detail_paint is not None and not painted:
         raise WorkerError("Bambu semantic paint fixture requires a painted model.")
+    if upper_layer_height not in (0.15, 0.30):
+        raise WorkerError("Invalid Bambu native layer range fixture.")
     if variable_layers and not painted:
         raise WorkerError("Bambu variable-layer fixture requires one painted object.")
     ns = "{" + CORE_NS + "}"
@@ -114,7 +117,7 @@ def make_bambu_material_fixture(*, painted=False, native_app=True,
                 target = ET.SubElement(ranges, "object", {"id": "1"})
                 for start, stop, height in (
                         ("0.0", "9.0", "0.10"),
-                        ("9.0", "20.0", "0.30")):
+                        ("9.0", "20.0", format(upper_layer_height, ".2f"))):
                     band = ET.SubElement(target, "range",
                                          {"min_z": start, "max_z": stop})
                     ET.SubElement(band, "option",
@@ -241,14 +244,16 @@ def make_bambu_support_overhang_fixture(*, enforcer):
 
 def run_fixture(binary, profiles, *, painted=False, timeout=180,
                 flush_multiplier=None, tower_xy=None, variable_layers=False,
-                detail_paint=None, support_overhang=False):
+                detail_paint=None, support_overhang=False,
+                upper_layer_height=0.30):
     source = Path(profiles)
     with tempfile.TemporaryDirectory(prefix="makervault-bambu-two-tool-") as tmp:
         workdir = Path(tmp)
         project = (make_bambu_support_overhang_fixture(enforcer=(detail_paint == "support"))
                    if support_overhang else make_bambu_material_fixture(
                        painted=painted, variable_layers=variable_layers,
-                       detail_paint=detail_paint))
+                       detail_paint=detail_paint,
+                       upper_layer_height=upper_layer_height))
         (workdir / "input.3mf").write_bytes(project)
         for kind in ("printer", "process", "filament"):
             raw = (source / (kind + ".json")).read_bytes()
@@ -523,7 +528,8 @@ def run_fixture(binary, profiles, *, painted=False, timeout=180,
             print("CI Bambu first 20 native Z_HEIGHT markers:",
                   layer_marks[:20])
             from slicer_worker.material_gcode_audit import verify_bambu_fixture_variable_layers
-            proof = verify_bambu_fixture_variable_layers(gcode)
+            proof = verify_bambu_fixture_variable_layers(
+                gcode, upper_height=upper_layer_height)
             print("CI Bambu verified true layer increments:", json.dumps(proof, sort_keys=True))
 
 
@@ -537,6 +543,7 @@ def run_fixture(binary, profiles, *, painted=False, timeout=180,
             "tower_xy": tower_xy,
             "flush_evidence": flush_evidence,
             "variable_layers_requested": variable_layers,
+            "upper_layer_height": upper_layer_height if variable_layers else None,
             "detail_paint": detail_paint,
             "support_overhang": support_overhang,
             **coverage,
@@ -549,6 +556,7 @@ def main():
     parser.add_argument("--profiles", required=True)
     parser.add_argument("--painted", action="store_true")
     parser.add_argument("--variable-layers", action="store_true")
+    parser.add_argument("--upper-layer-height", type=float, choices=(0.15, 0.30), default=0.30)
     parser.add_argument("--detail-paint", choices=("support", "seam", "fuzzy", "combined"))
     parser.add_argument("--support-overhang", action="store_true")
     parser.add_argument("--flush-multiplier", type=float, choices=(1.0, 2.0))
@@ -561,6 +569,7 @@ def main():
             args.binary, args.profiles, painted=args.painted, timeout=args.timeout,
             flush_multiplier=args.flush_multiplier,
             variable_layers=args.variable_layers,
+            upper_layer_height=args.upper_layer_height,
             detail_paint=args.detail_paint,
             support_overhang=args.support_overhang,
             tower_xy=((args.tower_x, args.tower_y)
