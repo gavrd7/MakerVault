@@ -60,14 +60,22 @@ def resolve(bundle: Path, kind: str, name: str) -> dict:
         raise ValueError("Unapproved native Bambu profile category.")
     cache = {}
 
-    def visit(current: str, stack: tuple[str, ...]) -> dict:
+    def visit(current: str, stack: tuple[str, ...], *, included=False) -> dict:
         if current in stack or len(stack) >= MAX_DEPTH:
             raise ValueError("Native Bambu profile inheritance cycle or excess depth.")
-        if current in cache:
-            return dict(cache[current])
+        # Bambu's explicitly included G-code fragments are intentionally
+        # type-less template JSON. Actual presets and inherited parents are
+        # required to carry the exact native machine/process/filament type.
+        key = (current, included)
+        if key in cache:
+            return dict(cache[key])
         doc = _document(_profile_path(bundle, kind, current))
-        if doc.get("type") != kind or doc.get("name") != current:
-            raise ValueError("Native Bambu profile identity mismatch at " + kind + "/" + current + " (type_ok=" + str(doc.get("type") == kind) + ", name_ok=" + str(doc.get("name") == current) + ").")
+        observed_type = doc.get("type")
+        if (doc.get("name") != current or
+                (observed_type != kind and not (included and observed_type is None))):
+            raise ValueError("Native Bambu profile identity mismatch at " + kind + "/" + current
+                             + " (type_ok=" + str(observed_type == kind or (included and observed_type is None))
+                             + ", name_ok=" + str(doc.get("name") == current) + ").")
         parent = doc.get("inherits", "")
         if not isinstance(parent, str):
             raise ValueError("Invalid Bambu inheritance reference.")
@@ -75,11 +83,11 @@ def resolve(bundle: Path, kind: str, name: str) -> dict:
         if not isinstance(includes, list) or any(not isinstance(x, str) for x in includes):
             raise ValueError("Invalid Bambu include references.")
         merged = visit(parent, stack + (current,)) if parent else {}
-        for included in includes:
-            merged.update(visit(included, stack + (current,)))
-        merged.update({key: value for key, value in doc.items()
-                       if key not in {"inherits", "include"}})
-        cache[current] = dict(merged)
+        for name_included in includes:
+            merged.update(visit(name_included, stack + (current,), included=True))
+        merged.update({field: value for field, value in doc.items()
+                       if field not in {"inherits", "include"}})
+        cache[key] = dict(merged)
         return merged
 
     result = visit(name, ())
