@@ -89,7 +89,7 @@ def make_bambu_material_fixture(*, painted=False):
             package.writestr("Metadata/project_settings.config", json.dumps({
                 "printer_settings_id": "Bambu Lab X1 Carbon 0.4 nozzle",
                 "print_settings_id": "0.20mm Standard @BBL X1C",
-                "filament_settings_id": ["Bambu PLA Basic @BBL X1C"] * 2,
+                "filament_settings_id": ["MakerVault PLA Tool 1", "MakerVault PLA Tool 2"],
                 "filament_colour": ["#FFFF00", "#0000FF"],
                 "filament_type": ["PLA", "PLA"],
                 "filament_diameter": ["1.75", "1.75"],
@@ -113,11 +113,18 @@ def run_fixture(binary, profiles, *, painted=False, timeout=180):
         for kind in ("printer", "process", "filament"):
             raw = (source / (kind + ".json")).read_bytes()
             (workdir / (kind + ".json")).write_bytes(raw)
-        filament = (workdir / "filament.json").read_bytes()
-        (workdir / "filament-0.json").write_bytes(filament)
-        # Same verified PLA preset in two logical slots. Material assignment
-        # must still be evident in the *native G-code*, not inferred from colour.
-        (workdir / "filament-1.json").write_bytes(filament)
+        filament = json.loads((workdir / "filament.json").read_bytes())
+        # Both slots use authentic, fully resolved BBL PLA parameters, but
+        # distinct job-local names prevent Bambu 2.9.1's duplicate-preset
+        # special mapping from conflating logical tool 0 with tool 1.
+        for index in range(2):
+            entry = dict(filament)
+            entry["name"] = "MakerVault PLA Tool " + str(index + 1)
+            entry["filament_settings_id"] = [entry["name"]]
+            (workdir / ("filament-" + str(index) + ".json")).write_text(
+                json.dumps(entry, ensure_ascii=False, separators=(",", ":")))
+        (workdir / "filament.json").write_bytes(
+            (workdir / "filament-0.json").read_bytes())
         try:
             receipt = run_bambu(Path(binary), workdir, timeout_seconds=timeout)
         except WorkerError:
