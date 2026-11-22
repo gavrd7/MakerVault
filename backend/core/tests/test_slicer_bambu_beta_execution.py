@@ -37,11 +37,14 @@ class BambuEngineExecutionTests(SimpleTestCase):
             self.job({"plate_objects": [transformed]})))
         self.assertTrue(_validate_plate_execution(
             self.job({"plate_objects": [base, transformed]})))
-        with self.assertRaisesRegex(SlicerExecutionError, "native multi-filament"):
-            _validate_plate_execution(self.job({
+        # Shared multi-material admission now reaches the native tool planner,
+        # rather than an artificial Bambu-only engine prohibition.
+        with patch("core.slicer_execution.plan_native_multimaterial") as plan:
+            self.assertTrue(_validate_plate_execution(self.job({
                 "multi_material_test": True,
                 "plate_objects": [base, transformed],
-            }))
+            })))
+            plan.assert_called_once()
         painted = {**base, "colour_paint": {"regions": [{"kind": "test"}]}}
         with self.assertRaisesRegex(SlicerExecutionError, "colour painting|object-specific"):
             _validate_plate_execution(self.job({"plate_objects": [painted]}))
