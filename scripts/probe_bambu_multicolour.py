@@ -156,6 +156,17 @@ def run_fixture(binary, profiles, *, painted=False, timeout=180):
                                       str(workdir / "bambu-debug-1.3mf"), model]),
                     ("slice1_output", ["--slice", "1", "--outputdir",
                                       str(workdir / "bambu-debug-out"), model]),
+
+                    ("no_overrides", ["--slice", "0", "--outputdir",
+                                      str(workdir / "no-overrides"), model]),
+                    ("machine_process_only", [
+                        "--load-settings", str(workdir / "printer.json") + ";" +
+                        str(workdir / "process.json"), "--slice", "0",
+                        "--outputdir", str(workdir / "machine-process-only"), model]),
+                    ("filaments_only", [
+                        "--load-filaments", str(workdir / "filament-0.json") + ";" +
+                        str(workdir / "filament-1.json"), "--slice", "0",
+                        "--outputdir", str(workdir / "filaments-only"), model]),
                 ]
                 for label, tail in variants:
                     try:
