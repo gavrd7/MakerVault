@@ -49,6 +49,46 @@ class BambuNativeMulticolourTests(TestCase):
         with self.assertRaisesRegex(WorkerError, "Unsupported 3MF package members"):
             _decode_payload(request)
 
+    def test_bambu_combined_colour_and_support_paint_requires_native_palette(self):
+        import io
+        import zipfile
+        from xml.etree import ElementTree as ET
+        project = make_bambu_material_fixture(painted=True)
+        with zipfile.ZipFile(io.BytesIO(project)) as source:
+            members = {name: source.read(name) for name in source.namelist()}
+        root = ET.fromstring(members["3D/3dmodel.model"])
+        painted = next(node for node in root.iter()
+                       if node.tag.endswith("}triangle") and node.get("paint_color") == "8")
+        painted.set("paint_supports", "4")
+        members["3D/3dmodel.model"] = ET.tostring(root, encoding="utf-8")
+        with io.BytesIO() as output:
+            with zipfile.ZipFile(output, "w", zipfile.ZIP_DEFLATED) as dest:
+                for name, data in members.items():
+                    dest.writestr(name, data)
+            combined = output.getvalue()
+        with self.assertRaisesRegex(WorkerError, "painted facet"):
+            validate_worker_3mf(combined, native_tool_count=2,
+                                allow_bambu_project=True)
+        self.assertTrue(validate_worker_3mf(
+            combined, native_tool_count=2, allow_bambu_project=True,
+            allow_bambu_combined_paint=True))
+        self.assertEqual(len(_decode_payload(self.payload(combined))["filament_profiles"]), 2)
+
+    def test_bambu_multifilament_refuses_project_without_vendor_filament_vectors(self):
+        import io
+        import zipfile
+        project = make_bambu_material_fixture()
+        with zipfile.ZipFile(io.BytesIO(project)) as original:
+            members = {name: original.read(name) for name in original.namelist()
+                       if name != "Metadata/project_settings.config"}
+        with io.BytesIO() as output:
+            with zipfile.ZipFile(output, "w", zipfile.ZIP_DEFLATED) as target:
+                for name, data in members.items():
+                    target.writestr(name, data)
+            missing = output.getvalue()
+        with self.assertRaisesRegex(WorkerError, "requires native project settings"):
+            _decode_payload(self.payload(missing))
+
     def test_worker_rejects_wrong_filament_order_and_non_3mf_input(self):
         project = make_bambu_material_fixture()
         request = self.payload(project)
