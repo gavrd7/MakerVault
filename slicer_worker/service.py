@@ -367,6 +367,7 @@ class Handler(BaseHTTPRequestHandler):
                 "3MF triangle count exceeds worker limit.": "invalid-3mf",
                 "3MF vertex count exceeds worker limit.": "invalid-3mf",
                 "3MF package contents are not bounded.": "invalid-3mf",
+                "Bambu project is missing a valid printable height.": "invalid-native-project-settings",
                 "3MF archive expansion exceeds the limit.": "invalid-3mf",
                 "Unsupported 3MF package members.": "invalid-3mf",
                 "Unsupported native 3MF triangle attributes.": "unsupported-native-facet-attributes",
