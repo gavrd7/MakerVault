@@ -57,10 +57,10 @@ def official_catalogue_models(vendor="Snapmaker"):
 
 
 def search_snapmaker_profiles(query, kind, vendor="Snapmaker", printer_model=None):
-    if not isinstance(query, str) or not 2 <= len(query.strip()) <= 80:
+    if not isinstance(query, str) or len(query.strip()) > 80:
         raise OfficialProfileError("Enter two or more search characters.")
     candidates = [(name, path) for name, path in _entries(kind, vendor)
-                  if fuzzy_name_match(name, query.strip().casefold())]
+                  if not query.strip() or fuzzy_name_match(name, query.strip().casefold())]
     if printer_model:
         candidates = narrow_catalogue(candidates, kind, printer_model)
     return {
