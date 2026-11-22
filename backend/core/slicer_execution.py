@@ -298,15 +298,22 @@ def _validate_plate_execution(job):
         if objects and not _single_unmodified_stl(objects):
             raise SlicerExecutionError(
                 "Bambu Beta currently supports one unmodified STL model only.")
-        if any(isinstance(item, dict) and any(
-                item.get(field) for field in (
-                    "colour_paint", "support_paint", "seam_paint",
-                    "fuzzy_skin_paint", "variable_layer_profile",
-                    "process_overrides", "filament_profile_id", "tool_id",
-                    "modifier_meshes"
-                )) for item in objects):
-            raise SlicerExecutionError(
-                "Bambu Beta does not yet support painting, modifiers or per-object material routing.")
+        for item in objects:
+            if (not isinstance(item, dict) or
+                    any((item.get(field) or {}).get("regions") or
+                        (item.get(field) or {}).get("faces")
+                        for field in ("colour_paint", "support_paint", "seam_paint",
+                                      "fuzzy_skin_paint")) or
+                    (item.get("variable_layer_profile") or {}).get("bands") or
+                    item.get("process_overrides") or item.get("modifier_meshes")):
+                raise SlicerExecutionError(
+                    "Bambu Beta does not yet support painting or per-object modifiers.")
+            if item.get("tool_id") not in (None, 0, 1):
+                raise SlicerExecutionError("Bambu Beta cannot assign additional native material tools.")
+            assigned = item.get("filament_profile_id")
+            if assigned and str(assigned) != str(job.filament_profile_id):
+                raise SlicerExecutionError(
+                    "Bambu Beta object material must match the selected single filament.")
         return True
     # Do not silently discard native flush / prime-tower preferences when
     # admitting an otherwise single-filament job. They require the future
