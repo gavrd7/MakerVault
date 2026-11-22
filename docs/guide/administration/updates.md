@@ -71,6 +71,25 @@ sudo docker compose -f compose.yaml -f compose.build.yaml up -d --build makervau
 
 A database migration is not guaranteed to be reversible simply by switching to an older application image. Back up before changing versions.
 
+## Updating with the combined slicer service (v1.7)
+
+If you enabled the verified slicer release overlay, use **the same Compose files for every update**. The following commands keep the engine-store volume, profiles, media, database, encryption keys and backups in place:
+
+```bash
+git status --short
+git fetch --prune origin
+git switch main
+git pull --ff-only origin main
+sudo docker compose -f compose.yaml -f compose.slicer.yaml config --quiet
+sudo docker compose -f compose.yaml -f compose.slicer.yaml pull
+sudo docker compose -f compose.yaml -f compose.slicer.yaml up -d
+sudo docker compose -f compose.yaml -f compose.slicer.yaml ps
+```
+
+For a self-built application, insert `-f compose.build.yaml` **between** the base file and the slicer overlay, then use `up -d --build` for the application build. Pin and verify the combined worker image before changing its digest; do not silently update native slicers or their approved hashes as part of an application upgrade. The engine installer is the only writer of installed engines, and individual engine updates must be administrator-initiated.
+
+Existing `.slicer-staging.env` and `compose.slicer.staging.yaml` are development-only. Do not replace a working staging installation with the release overlay until you have the published combined image, reviewed engine registry and migration checks. Never run `docker compose down -v` to upgrade or troubleshoot: it can erase persistent engine binaries and application data.
+
 ## Check the result
 
 The `v1_release_preflight` command performs a read-only deployment check for the database, migrations, Redis, encryption key, media/backup storage and production configuration.
