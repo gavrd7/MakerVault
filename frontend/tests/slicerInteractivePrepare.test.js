@@ -432,7 +432,7 @@ test("confirmed completed slice actions return to slicer without hiding uncertai
 });
 
 
-test("slicer Device action opens selected physical printer live monitoring", () => {
+test("slicer Device action opens selected printer live monitoring without navigation", () => {
   const app = fs.readFileSync(path.resolve(root, "../App.jsx"), "utf8");
   const printing = read("PrintingPage.jsx");
   const workbench = read("SlicerWorkbench.jsx");
@@ -441,9 +441,17 @@ test("slicer Device action opens selected physical printer live monitoring", () 
   assert.match(prepare, /disabled=\{!printerId \|\| !onOpenDevice\}/);
   assert.match(prepare, />\s*Device\s*<\/button>/);
   assert.match(workbench, /onOpenDevice=\{onOpenDevice\}/);
-  assert.match(printing, /onOpenDevice=\{onOpenSlicerDevice\}/);
-  assert.match(app, /onOpenSlicerDevice=\{printerId =>/);
-  assert.match(app, /type: "printers", id: String\(printerId\), openLive: true/);
+  const slicerStart = printing.indexOf('if (workspaceView === "slicer") {');
+  const slicerEnd = printing.indexOf('if (workspaceView === "models") {', slicerStart);
+  assert.ok(slicerStart >= 0 && slicerEnd > slicerStart);
+  const slicer = printing.slice(slicerStart, slicerEnd);
+  assert.match(slicer, /onOpenDevice=\{printerId => \{/);
+  assert.match(slicer, /setLivePrinter\(printer\)/);
+  assert.match(slicer, /livePrinter && <PrinterConnectionsModal/);
+  assert.match(slicer, /onClose=\{\(\) => setLivePrinter\(null\)\}/);
+  assert.doesNotMatch(slicer.slice(slicer.indexOf("onOpenDevice="), slicer.indexOf("onOpenGcode=")), /setWorkspaceView|setSection/);
+  assert.doesNotMatch(app, /onOpenSlicerDevice=/);
+  // Other 3D Printing entry points still open the established live monitor.
   assert.match(printing, /printerIntent\(searchTarget, data\?\.printers, openedLiveTarget\)/);
 });
 
