@@ -16,7 +16,7 @@ from xml.etree import ElementTree as ET
 from slicer_worker.bambu_runner import run_bambu
 from slicer_worker.material_gcode_audit import (
     expected_native_tools, verify_multi_material_output,
-    verify_two_object_tool_regions,
+    verify_two_object_tool_regions, verify_painted_cube_tool_regions,
 )
 from slicer_worker.runner import WorkerError
 from slicer_worker.three_mf_validation import CORE_NS, validate_worker_3mf
@@ -305,7 +305,8 @@ def run_fixture(binary, profiles, *, painted=False, timeout=180):
             raise
         gcode = (workdir / "output.gcode").read_bytes()
         verify_multi_material_output(gcode, {0, 1})
-        coverage = ({} if painted else verify_two_object_tool_regions(gcode))
+        coverage = (verify_painted_cube_tool_regions(gcode) if painted
+                    else verify_two_object_tool_regions(gcode))
         return {
             "status": "passed", "engine": "bambustudio",
             "fixture": "painted-facets" if painted else "two-objects",
