@@ -77,9 +77,9 @@ def add_bambu_project_settings(project, *, printer, process, filaments,
             raise SlicerProfileError("Unsafe Bambu native filament ID.")
         variants = item.get("filament_extruder_variant")
         if (not isinstance(variants, list) or not 1 <= len(variants) <= 4
-                or len(set(variants)) != len(variants)
                 or any(not isinstance(v, str) or not re.fullmatch(
-                    r"[A-Za-z0-9 -]{1,64}", v) for v in variants)):
+                    r"[A-Za-z0-9 -]{1,64}", v) for v in variants)
+                or len(set(variants)) != len(variants)):
             raise SlicerProfileError("Bambu native filament variants are incomplete.")
         filament_ids.append(native_id)
         self_indices.extend([str(index)] * len(variants))
