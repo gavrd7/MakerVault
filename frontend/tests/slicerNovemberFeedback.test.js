@@ -136,3 +136,16 @@ test("official source and matching release controls use equal height without cap
   assert.ok(source >= 0 && version > source && following > version);
   assert.doesNotMatch(setup.slice(version, following), /<small>/);
 });
+
+test("official catalogue filters are truly optional across engines", () => {
+  assert.match(setup, /if \(q\.length > 80\) throw new Error/);
+  assert.match(setup, /disabled=\{officialBusy \|\| !officialVendor \|\| !officialVendors\.length\}/);
+  assert.doesNotMatch(setup, /join\(" "\)\.length < 2/);
+});
+
+test("official profile import cards stack on mobile and feedback spans full width", () => {
+  assert.match(setup, /cameraSourceRow slicerOfficialProfileRow/);
+  assert.match(styles, /\.slicerOfficialProfileRow>\.slicerProfileImportNotice,[\s\S]*?grid-column:1\/-1/);
+  assert.match(styles, /@media\(max-width:800px\)\{[\s\S]*?\.cameraSourceRow\.slicerOfficialProfileRow\{/);
+  assert.match(styles, /\.slicerOfficialProfileRow>\.cameraSourceActions button\{[\s\S]*?flex:1 1 160px/);
+});
