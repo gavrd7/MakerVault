@@ -68,6 +68,22 @@ def add_bambu_project_settings(project, *, printer, process, filaments,
     material_ids = [_field(item, "name", label="filament") for item in sources]
     types = [_field(item, "filament_type", label="filament") for item in sources]
     diameters = [_field(item, "filament_diameter", label="filament") for item in sources]
+    filament_ids = []
+    self_indices = []
+    extruder_variants = []
+    for index, item in enumerate(sources, 1):
+        native_id = _field(item, "filament_id", label="filament")
+        if not re.fullmatch(r"[A-Za-z0-9_-]{1,32}", native_id):
+            raise SlicerProfileError("Unsafe Bambu native filament ID.")
+        variants = item.get("filament_extruder_variant")
+        if (not isinstance(variants, list) or not 1 <= len(variants) <= 4
+                or len(set(variants)) != len(variants)
+                or any(not isinstance(v, str) or not re.fullmatch(
+                    r"[A-Za-z0-9 -]{1,64}", v) for v in variants)):
+            raise SlicerProfileError("Bambu native filament variants are incomplete.")
+        filament_ids.append(native_id)
+        self_indices.extend([str(index)] * len(variants))
+        extruder_variants.extend(variants)
     vectors = {
         "printer_settings_id": _field(machine, "name", label="printer"),
         "print_settings_id": _field(print_preset, "name", label="process"),
@@ -75,6 +91,9 @@ def add_bambu_project_settings(project, *, printer, process, filaments,
         "filament_colour": [value.upper() for value in tool_colours],
         "filament_type": types,
         "filament_diameter": diameters,
+        "filament_ids": filament_ids,
+        "filament_self_index": self_indices,
+        "filament_extruder_variant": extruder_variants,
         "nozzle_diameter": [diameter],
         "printable_height": height,
     }
