@@ -269,6 +269,45 @@ def _validate_plate_execution(job):
         settings=expand_painted_settings(getattr(job, "owner", None), job.settings or {})
     except (ValueError, OSError) as exc:
         raise SlicerExecutionError("A referenced private painting asset is missing or invalid.") from exc
+    if job.engine == "bambustudio":
+        # Verified Bambu Beta only covers a *single unchanged STL* and one
+        # fully resolved BBL machine/process/filament preset. Real 3MF has
+        # passed offline, but complex MakerVault project/palette generation,
+        # painting, bed overrides and actual printer dispatch have not.
+        if (os.environ.get("MAKERVAULT_SLICER_BAMBU_BETA_ENABLED") != "1"
+                or job.engine_version != "02.09.01.70"):
+            raise SlicerExecutionError("Bambu Studio Beta is not enabled for this reviewed version.")
+        if getattr(job, "plate", "default") not in ("default", "", None):
+            raise SlicerExecutionError("Bambu Beta requires the selected native preset default build plate.")
+        if (settings.get("multi_material_test") is True
+                or settings.get("flush_settings") is not None
+                or settings.get("prime_tower") is not None
+                or settings.get("slot_filament_profiles")
+                or settings.get("material_tool_bindings")
+                or settings.get("process_overrides")):
+            raise SlicerExecutionError(
+                "Bambu Beta supports single-material defaults only; remove multi-tool and process overrides.")
+        objects = settings.get("plate_objects") or []
+        plates = settings.get("plates")
+        if plates is not None:
+            active = next((plate for plate in plates
+                           if isinstance(plate, dict)
+                           and plate.get("id") == settings.get("active_plate_id")), None)
+            if not active or active.get("objects") != objects:
+                raise SlicerExecutionError("Bambu Beta plate selection differs from saved model list.")
+        if objects and not _single_unmodified_stl(objects):
+            raise SlicerExecutionError(
+                "Bambu Beta currently supports one unmodified STL model only.")
+        if any(isinstance(item, dict) and any(
+                item.get(field) for field in (
+                    "colour_paint", "support_paint", "seam_paint",
+                    "fuzzy_skin_paint", "variable_layer_profile",
+                    "process_overrides", "filament_profile_id", "tool_id",
+                    "modifier_meshes"
+                )) for item in objects):
+            raise SlicerExecutionError(
+                "Bambu Beta does not yet support painting, modifiers or per-object material routing.")
+        return True
     # Do not silently discard native flush / prime-tower preferences when
     # admitting an otherwise single-filament job. They require the future
     # exact-printer, multi-tool worker route and verified CFS bindings.
