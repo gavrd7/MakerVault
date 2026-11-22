@@ -487,9 +487,9 @@ def run_fixture(binary, profiles, *, painted=False, timeout=180,
                    and " Z" in line.upper()][:30])
             layer_marks = []
             for line in gcode.decode("utf-8", "replace").splitlines():
-                if line.startswith(";Z:") and len(line) < 40:
+                if line.lstrip().upper().startswith("; Z_HEIGHT:") and len(line) < 50:
                     try:
-                        layer_marks.append(float(line[3:].strip()))
+                        layer_marks.append(float(line.split(":", 1)[1].strip()))
                     except ValueError:
                         pass
             increments = [(z1, round(z1-z0, 3))
@@ -509,6 +509,8 @@ def run_fixture(binary, profiles, *, painted=False, timeout=180,
                                   k: {str(inc): vals.count(inc)
                                       for inc in sorted(set(vals))}
                                   for k, vals in bands.items()}}, sort_keys=True))
+            print("CI Bambu first 20 native Z_HEIGHT markers:",
+                  layer_marks[:20])
             from slicer_worker.material_gcode_audit import verify_bambu_fixture_variable_layers
             proof = verify_bambu_fixture_variable_layers(gcode)
             print("CI Bambu verified true layer increments:", json.dumps(proof, sort_keys=True))
