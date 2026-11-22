@@ -15,7 +15,10 @@ ENGINE_VERSION = "02.09.01.70"
 SOURCE = "bambulab/BambuStudio"
 REF = "v02.09.01.70"
 BASE = f"https://raw.githubusercontent.com/{SOURCE}/{REF}/resources/profiles"
-VENDORS = ("BBL",)
+# Exact native manufacturer indexes published at the pinned official Bambu tag.
+# Exclude blacklist.json: it is not a profile catalogue.
+VENDORS = ("BBL", "Anker", "Anycubic", "Creality", "Elegoo", "Geeetech",
+           "Prusa", "Qidi", "Tronxy", "Vivedino", "Voron", "Voxelab")
 MAX_INDEX = 512 * 1024
 MAX_MODEL = 256 * 1024
 
@@ -48,7 +51,8 @@ def _entries(vendor="BBL"):
 
 
 def available_bambu_vendors():
-    return [{"id": "BBL", "label": "Bambu Lab"}]
+    return [{"id": vendor, "label": "Bambu Lab" if vendor == "BBL" else vendor}
+            for vendor in VENDORS]
 
 
 def official_catalogue_models(vendor="BBL"):
@@ -58,11 +62,11 @@ def official_catalogue_models(vendor="BBL"):
 def search_bambu_profiles(query, kind, vendor="BBL", printer_model=None):
     if kind != "printer":
         raise OfficialProfileError("Bambu model-artwork discovery currently supports printer models only.")
-    if not isinstance(query, str) or not 2 <= len(query.strip()) <= 80:
-        raise OfficialProfileError("Search for at least two characters.")
+    if not isinstance(query, str) or len(query.strip()) > 80:
+        raise OfficialProfileError("Search terms must be 80 characters or fewer.")
     entries = _entries(vendor)
     candidates = [(name, path) for name, path in entries.items()
-                  if fuzzy_name_match(name, query.strip().casefold())]
+                  if not query.strip() or fuzzy_name_match(name, query.strip().casefold())]
     if printer_model:
         candidates = [(name, path) for name, path in candidates if name == printer_model]
     return {

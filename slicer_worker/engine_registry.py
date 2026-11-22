@@ -10,7 +10,12 @@ import re
 from pathlib import Path
 from functools import lru_cache
 
-SUPPORTED = frozenset({"orcaslicer", "crealityprint", "prusaslicer"})
+SUPPORTED = frozenset({"orcaslicer", "crealityprint", "prusaslicer", "bambustudio"})
+# Reviewed, exact native AppRun hash of the pinned official 02.09.01.70 build.
+# This is distinct from the upstream AppImage SHA-256.
+BAMBU_VERSION = "02.09.01.70"
+BAMBU_RUNTIME_SHA256 = "eaf5a1c6ff4f0d49d6e0c0bacf106309daa2c822ca1ebe8739067699e6cdaef4"
+
 # The host-side installer owns this read-only, volume-backed registry. The
 # worker never writes to it or downloads/installs executables.
 ENGINE_STORE = Path("/opt/engine-store")
@@ -113,6 +118,9 @@ def configured_engines():
         if not isinstance(binary, str) or not isinstance(version, str) or not 1 <= len(version) <= 80:
             continue
         if not isinstance(digest, str) or len(digest) != 64 or any(c not in "0123456789abcdef" for c in digest):
+            continue
+        if key == "bambustudio" and (version != BAMBU_VERSION
+                or digest != BAMBU_RUNTIME_SHA256):
             continue
         path = Path(binary)
         if (not path.is_absolute() or not path.is_file()

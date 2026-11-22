@@ -3,6 +3,26 @@ from core.slicer_preview import generated_preview
 
 
 class SlicerPreviewTests(SimpleTestCase):
+
+    def test_bambu_total_filament_headers_report_length_and_mass_not_mislabeled_volume(self):
+        raw = """; HEADER_BLOCK_START
+; BambuStudio 02.09.01.70
+; estimated printing time (normal mode) = 42m 34s
+; total filament length [mm] : 3877.84
+; total filament volume [cm^3] : 9327.30
+; total filament weight [g] : 11.57
+; filament_diameter: 1.75
+; HEADER_BLOCK_END
+G90
+M83
+G1 X0 Y0 Z0.2
+G1 X5 Y0 E1
+"""
+        result = generated_preview(raw)
+        self.assertEqual(result["filament_mm"], 3877.84)
+        self.assertEqual(result["filament_g"], 11.57)
+        self.assertIsNone(result["filament_cm3"])
+        self.assertEqual(result["estimated_time_seconds"], 2554)
     def test_extracts_native_duration_filament_and_extrusion_features(self):
         raw = """; estimated printing time (normal mode) = 1h 20m 30s
 ; filament used [mm] = 1520.0
@@ -27,6 +47,26 @@ G1 X10 Y20 E2.0
         self.assertEqual(result["layer_count"], 2)
         self.assertEqual(result["segment_count"], 3)
         self.assertEqual(result["feature_counts"]["Outer wall"], 2)
+
+    def test_existing_orca_and_creality_filament_headers_remain_unchanged(self):
+        cases = [
+            ("Orca", """; estimated printing time (normal mode) = 1h 20m 30s
+; filament used [mm] = 1520.0
+; filament used [g] = 4.8
+; filament used [cm3] = 3.9
+"""),
+            ("Creality", """; filament used [mm] = 1520.0
+; filament used [g] = 4.8
+; filament used [cm3] = 3.9
+"""),
+        ]
+        for engine, raw in cases:
+            with self.subTest(engine=engine):
+                result = generated_preview(raw)
+                self.assertEqual(result["filament_mm"], 1520.0)
+                self.assertEqual(result["filament_g"], 4.8)
+                self.assertEqual(result["filament_cm3"], 3.9)
+        self.assertEqual(generated_preview(cases[0][1])["estimated_time_seconds"], 4830)
 
     def test_native_line_width_is_preserved_for_3d_filament_geometry(self):
         result = generated_preview(

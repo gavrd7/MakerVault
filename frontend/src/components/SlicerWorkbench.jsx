@@ -499,7 +499,7 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
 
 
   useEffect(() => {
-    if (!materialHint || !["orcaslicer", "crealityprint"].includes(form.engine)) {
+    if (!materialHint || !["orcaslicer", "crealityprint", "bambustudio"].includes(form.engine)) {
       setMaterialProfileMatches(null);
       return undefined;
     }
@@ -507,7 +507,7 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
     setMaterialProfileMatches({ material: materialHint, loading: true });
     const params = new URLSearchParams({
       engine: form.engine, kind: "filament",
-      vendor: form.engine === "orcaslicer" ? "OrcaFilamentLibrary" : "Creality",
+      vendor: form.engine === "orcaslicer" ? "OrcaFilamentLibrary" : form.engine === "bambustudio" ? "BBL" : "Creality",
       version: form.engine_version, q: materialHint,
     });
     apiFetch("/api/printing/slicer/official-profiles/?" + params)
@@ -559,7 +559,7 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
     setForm(current => ({...current, plate: "default"}));
   }, [form.engine, form.printer_profile_id, bedTypes, form.plate]);
   useEffect(() => {
-    if(!["orcaslicer", "crealityprint"].includes(form.engine) || !bedTypes?.default ||
+    if(!["orcaslicer", "crealityprint", "bambustudio"].includes(form.engine) || !bedTypes?.default ||
         userChosePlateRef.current) return;
     setForm(current => current.plate==="default" ?
       {...current,plate:bedTypes.default} : current);
@@ -1098,12 +1098,9 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
       if (!active) return;
       const models = result.models || [];
       setOfficialModels(models);
-      const model = String(selectedPrinter?.model || selectedPrinter?.name || "").trim().toLowerCase();
-      const match = models.find(item => {
-        const candidate = item.toLowerCase();
-        return candidate === model || (model && candidate.endsWith(" " + model));
-      });
-      setOfficialModel(match || "");
+      // Browsing is independent of the printer selected for slicing.
+      // Model filtering is applied only when the operator explicitly chooses one.
+      setOfficialModel("");
     }).catch(err => {
       if (active) {
         setOfficialModels([]);
@@ -1135,7 +1132,7 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
       if (!form.engine_version || officialProfileVersion !== form.engine_version)
         throw new Error("Selected slicer engine release changed; reopen official search to load its matching catalogue.");
       const q = [officialManualModel.trim(), officialQuery.trim()].filter(Boolean).join(" ").trim();
-      if (q.length < 2 || q.length > 80) throw new Error("Enter 2–80 characters across the manual model and preset searches.");
+      if (q.length > 80) throw new Error("Search terms must not exceed 80 characters.");
       const params = new URLSearchParams({q, kind:importKind,vendor:officialVendor,
         engine:form.engine,version:officialProfileVersion});
       if(officialBrand && importKind==="filament" && officialVendor==="OrcaFilamentLibrary")
@@ -1238,7 +1235,7 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
   }
 
   async function saveInteractiveProcessProfile(name) {
-    if (!canPrepare || busy || loading || !["orcaslicer", "crealityprint"].includes(form.engine) ||
+    if (!canPrepare || busy || loading || !["orcaslicer", "crealityprint", "bambustudio"].includes(form.engine) ||
         !form.process_profile_id || !Object.keys(processOverrides).length) {
       throw new Error("Choose an installed engine process profile and change a supported setting first.");
     }
@@ -1375,7 +1372,7 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
   }
 
   function openOfficialSearch(kind = materialHint ? "filament" : form.printer_id ? "printer" : "process") {
-    setImportKind(["bambustudio", "prusaslicer"].includes(form.engine) ? "printer" : kind);
+    setImportKind(form.engine === "prusaslicer" ? "printer" : kind);
     setOfficialVendor("");
     // The catalogue must always follow the exact selected slicer release.
     // Never replace an unsupported installed version with a nearby preset.
@@ -1389,7 +1386,7 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
     setOfficialSourceInfo(null);
     setOfficialError("");
     loadOfficialVendors(targetVersion, kind);
-    setOfficialQuery(defaultOfficialSearch(kind, { printer: selectedPrinter, spool: selectedSpool, nozzle: form.nozzle_mm }));
+    setOfficialQuery("");
     setOfficialResults(null); // Never carry results into another engine/vendor catalogue.
     setOfficialImportNotice("");
     setOfficialImportTarget("");
@@ -1702,14 +1699,14 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
           <SlicerBedTypePicker value={form.plate} onChange={choosePlate}
             disabled={!canPrepare||busy} options={availablePlateOptions} compact/>
           {bedTypes?.default && <small>Printer's native default: {ORCA_PLATE_TYPES.find(([key])=>key===bedTypes.default)?.[1]||bedTypes.default}.</small>}
-          {["orcaslicer", "crealityprint"].includes(form.engine) && bedTypes && !bedTypes.default && <small>
+          {["orcaslicer", "crealityprint", "bambustudio"].includes(form.engine) && bedTypes && !bedTypes.default && <small>
             This printer profile does not declare a reliable default plate.
             Choose the actual fitted surface manually. These generic illustrations
             do not confirm physical compatibility; the selected filament must
             declare temperatures for that surface.
           </small>}
         </div>
-      {["orcaslicer", "crealityprint"].includes(form.engine) && nativePlate?.id === form.printer_profile_id &&
+      {["orcaslicer", "crealityprint", "bambustudio"].includes(form.engine) && nativePlate?.id === form.printer_profile_id &&
         <div className="slicerNativeVolume" aria-label="Native slicer build volume">
           <strong>Build volume</strong>
           <span>{nativePlate.loading ? "Loading…" :
@@ -1955,7 +1952,7 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
       </div>
       <div className="printingActionGroup" aria-labelledby="slicer-official-profiles-heading">
         <h4 id="slicer-official-profiles-heading">Search official slicer profiles</h4>
-        <p>Search available pinned official manufacturer catalogues. Bambu Studio and PrusaSlicer currently offer printer-model artwork records only; other engines may offer printer, filament and process presets. An engine may not provide a profile for every printer. Profiles are imported for your selected engine; profiles cannot be shared between engines.</p>
+        <p>Browse all profiles in the selected engine's pinned official manufacturer catalogues, or optionally filter by manufacturer, printer model and search terms. Results are not restricted to your currently selected printer. Imported profiles remain engine-native and must be reviewed for printer compatibility before slicing.</p>
         {officialSourceInfo?.source_engine_version &&
           officialSourceInfo.source_engine_version !== form.engine_version &&
           <p role="alert">Official profile release {officialSourceInfo.source_engine_version} does not match selected engine {form.engine_version}. Matching native release is required before importing; choose the supported engine version.</p>}
@@ -1997,7 +1994,7 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
             <select value={importKind} disabled={officialBusy} onChange={e => {
                 const kind=e.target.value;
                 setImportKind(kind);setOfficialResults(null);setOfficialImportNotice("");setOfficialBrand("");
-                setOfficialQuery(defaultOfficialSearch(kind,{printer:selectedPrinter,spool:selectedSpool,nozzle:form.nozzle_mm}));
+                setOfficialQuery("");
                 if(form.engine==="orcaslicer" && kind==="filament" &&
                     officialVendors.some(v=>v.id==="OrcaFilamentLibrary"))
                   setOfficialVendor("OrcaFilamentLibrary");
@@ -2017,7 +2014,7 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
             <input value={officialQuery} maxLength="80" onChange={e => setOfficialQuery(e.target.value)} placeholder="e.g. PLA or 0.20mm Standard" />
           </label>
           <div className="full settingsActions">
-            <button type="submit" disabled={officialBusy || !officialVendor || !officialVendors.length || [officialManualModel.trim(), officialQuery.trim()].filter(Boolean).join(" ").length < 2}>
+            <button type="submit" disabled={officialBusy || !officialVendor || !officialVendors.length}>
               {officialBusy ? "Searching…" : "Search official profiles"}
             </button>
           </div>
@@ -2030,7 +2027,7 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
             from the selected OrcaSlicer release. Preset dependencies are checked automatically.</p>}
         {officialResults && <div className="printingStack" role="region" aria-label="Official profile search results">
           <p>{officialResults.total_matches} matching official presets in {officialResults.vendor} · showing up to {officialResults.profiles.length} · original upstream release {officialResults.ref}{officialResults.printer_model_filter ? " · filtered for " + officialResults.printer_model_filter + " (name-based, not verified compatibility)" : ""}</p>
-          {officialResults.profiles.map(candidate => <div className="cameraSourceRow" key={candidate.sub_path}>
+          {officialResults.profiles.map(candidate => <div className="cameraSourceRow slicerOfficialProfileRow" key={candidate.sub_path}>
             <div className="cameraSourceIdentity">
               <strong>{candidate.name}</strong>
               <small>{candidate.sub_path}</small>
@@ -2180,7 +2177,7 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
             </div>
             {managingSavedProfiles && <div className="cameraSourceActions">
               {profile.engine === "orcaslicer" && <button type="button" disabled={profileLineages[profile.id]?.checking} onClick={() => inspectProfile(profile)}>Check parent presets</button>}
-              {!isInternalNativeProfile(profile) && ["orcaslicer", "crealityprint"].includes(profile.engine) && <button type="button" disabled={busy} onClick={() => openProfileEditor(profile)}>Edit as custom</button>}
+              {!isInternalNativeProfile(profile) && ["orcaslicer", "crealityprint", "bambustudio"].includes(profile.engine) && <button type="button" disabled={busy} onClick={() => openProfileEditor(profile)}>Edit as custom</button>}
               {!isInternalNativeProfile(profile) && <button type="button" disabled={busy} onClick={() => toggleProfileDefault(profile)}>
                 {profile.is_default ? "Clear default" : "Set as default"}
               </button>}

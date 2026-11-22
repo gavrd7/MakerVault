@@ -59,8 +59,9 @@ def health():
         if not isinstance(payload, dict):
             raise SlicerWorkerError("Worker returned invalid health information.")
         supported = {"orcaslicer", "crealityprint", "prusaslicer"}
+        supported.add("bambustudio")
         engines = {}
-        if isinstance(payload.get("engines"), dict) and len(payload["engines"]) <= 3:
+        if isinstance(payload.get("engines"), dict) and len(payload["engines"]) <= len(supported):
             for key, entry in payload["engines"].items():
                 if key not in supported or not isinstance(entry, dict):
                     continue
@@ -98,7 +99,11 @@ def run_remote_job(job_id, engine, version, model, printer_profile, filament_pro
         raise SlicerWorkerError("Unsupported slicer input format.")
     if not isinstance(timeout_seconds, int) or not 1 <= timeout_seconds <= 900:
         raise SlicerWorkerError("Invalid slicing timeout.")
-    if engine not in {"orcaslicer", "crealityprint", "prusaslicer"} or not isinstance(version, str) or not version or len(version) > 80:
+    supported = {"orcaslicer", "crealityprint", "prusaslicer"}
+    supported.add("bambustudio")
+    if (engine not in supported or not isinstance(version, str)
+            or not version or len(version) > 80
+            or (engine == "bambustudio" and version != "02.09.01.70")):
         raise SlicerWorkerError("Unsupported slicing worker engine/version.")
     try:
         canonical_id = str(uuid.UUID(str(job_id)))
@@ -115,7 +120,7 @@ def run_remote_job(job_id, engine, version, model, printer_profile, filament_pro
     if model_format == "3mf":
         payload["model_format"] = "3mf"
     if filament_profiles is not None:
-        if (not ((engine == "orcaslicer" and model_format == "3mf") or
+        if (not ((engine in {"orcaslicer", "bambustudio"} and model_format == "3mf") or
                  (engine == "crealityprint" and
                   ((model_format == "stl" and creality_model_stls is not None) or
                    (model_format == "3mf" and creality_native_project is True))))

@@ -14,7 +14,7 @@ ARC_PARAM = re.compile(r"([IJR])\s*([-+]?(?:\d+(?:\.\d*)?|\.\d+))", re.I)
 MOVE = re.compile(r"([XYZEF])\s*([-+]?(?:\d+(?:\.\d*)?|\.\d+))", re.I)
 DURATION = re.compile(r"^;\s*(?:estimated printing time(?: \(normal mode\))?|"
                       r"total estimated time|print time|printing time)\s*[:=]\s*(.+)$", re.I)
-FILAMENT = re.compile(r"^;\s*filament used \[(mm|g|cm3)\]\s*[:=]\s*(.+)$", re.I)
+FILAMENT = re.compile(r"^;\s*(?:filament used|total filament (?:length|weight|volume))\s*\[(mm|g|cm3|cm\^3)\]\s*[:=]\s*(.+)$", re.I)
 TYPE = re.compile(r"^;\s*(?:TYPE|FEATURE)\s*:\s*([^;]+)", re.I)
 WIDTH = re.compile(r"^;\s*(?:WIDTH|LINE_WIDTH)\s*:\s*([0-9]+(?:\.[0-9]+)?)\s*$", re.I)
 MAX_SEGMENTS = 80000
@@ -82,9 +82,18 @@ def generated_preview(text, *, truncated=False):
             found = FILAMENT.match(line)
             if found:
                 key = {"mm": "filament_mm", "g": "filament_g",
-                       "cm3": "filament_cm3"}[found.group(1).lower()]
+                       "cm3": "filament_cm3", "cm^3": "filament_cm3"}[found.group(1).lower()]
                 if stats[key] is None:
-                    stats[key] = _filament_values(found.group(2))
+                    value = _filament_values(found.group(2))
+                    # Some Bambu releases label a mm³ total as cm³.
+                    # Do not show a volume conflicting with actual length.
+                    if key == "filament_cm3" and "total filament volume" in line.lower():
+                        length = stats["filament_mm"]
+                        if value is not None and length is not None:
+                            expected = length * math.pi * (1.75 / 2) ** 2 / 1000
+                            if expected > 0 and value > expected * 10:
+                                value = None
+                    stats[key] = value
             found = TYPE.match(line)
             if found:
                 feature = found.group(1).strip()[:48] or "Other"

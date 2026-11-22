@@ -4,6 +4,8 @@ No arbitrary vendor projects, scripts, remote relationships or extra archive
 members are permitted through this execution path.
 """
 import io
+import json
+import re
 import math
 import zipfile
 from xml.etree import ElementTree as ET
@@ -13,6 +15,7 @@ from .runner import WorkerError
 CORE_NS = "http://schemas.microsoft.com/3dmanufacturing/core/2015/02"
 ALLOWED = {"3D/3dmodel.model", "_rels/.rels", "[Content_Types].xml"}
 PLATE_MANIFEST = "Metadata/model_settings.config"
+BAMBU_SETTINGS = "Metadata/project_settings.config"
 LAYER_RANGES = "Metadata/layer_config_ranges.xml"
 # Keep the worker aligned with the validated STL and server-side 3MF builder.
 # Expanded XML, compressed archive and model upload bounds remain separate.
@@ -29,10 +32,19 @@ OBJECT_SETTINGS = {
     "enable_support": (0, 1, False),
 }
 MAX_OBJECT_SETTINGS = 16
+BAMBU_VARIANT_OPTIONS = {
+    "filament_flow_ratio": (0.5, 1.5),
+    "nozzle_temperature": (100, 400),
+    "nozzle_temperature_initial_layer": (100, 400),
+    "filament_max_volumetric_speed": (0.1, 100),
+    "filament_retraction_length": (0, 30),
+}
+
 
 
 def validate_worker_3mf(data, *, native_tool_count=None, allow_creality_combined_paint=False,
-                        allow_creality_layer_ranges=False):
+                        allow_creality_layer_ranges=False, allow_bambu_project=False,
+                        allow_bambu_combined_paint=False, allow_bambu_layer_ranges=False):
     if native_tool_count is not None and (isinstance(native_tool_count, bool) or
             not isinstance(native_tool_count, int) or not 2 <= native_tool_count <= 16):
         raise WorkerError("Invalid native filament tool count.")
@@ -40,6 +52,12 @@ def validate_worker_3mf(data, *, native_tool_count=None, allow_creality_combined
     # project. The ordinary Orca validator remains fail-closed.
     if (allow_creality_combined_paint or allow_creality_layer_ranges) and native_tool_count != 2:
         raise WorkerError("Creality painting extensions need exactly two native tools.")
+    if allow_bambu_combined_paint and (not allow_bambu_project or native_tool_count is None):
+        raise WorkerError("Bambu combined painting needs an exact native project palette.")
+    if allow_bambu_layer_ranges and not (
+            allow_bambu_project and allow_bambu_combined_paint
+            and native_tool_count is not None):
+        raise WorkerError("Bambu variable layers require an exact native palette.")
     if not isinstance(data, bytes) or not data or len(data) > 32 * 1024 * 1024:
         raise WorkerError("3MF input exceeds worker limits.")
     try:
@@ -48,7 +66,9 @@ def validate_worker_3mf(data, *, native_tool_count=None, allow_creality_combined
             names = {part.filename for part in info}
             approved = (ALLOWED, ALLOWED | {PLATE_MANIFEST},
                         ALLOWED | {PLATE_MANIFEST, LAYER_RANGES})
-            if len(info) not in (3, 4, 5) or names not in approved:
+            if allow_bambu_project:
+                approved += tuple(items | {BAMBU_SETTINGS} for items in approved)
+            if len(info) not in (3, 4, 5, 6) or names not in approved:
                 raise WorkerError("Unsupported 3MF package members.")
             if LAYER_RANGES in names and package.getinfo(LAYER_RANGES).file_size > 32768:
                 raise WorkerError("Native layer range metadata is oversized.")
@@ -62,6 +82,89 @@ def validate_worker_3mf(data, *, native_tool_count=None, allow_creality_combined
             raw = package.read("3D/3dmodel.model")
             manifest = package.read(PLATE_MANIFEST) if PLATE_MANIFEST in names else None
             layer_ranges = package.read(LAYER_RANGES) if LAYER_RANGES in names else None
+            bambu_settings = package.read(BAMBU_SETTINGS) if BAMBU_SETTINGS in names else None
+            if allow_bambu_project and native_tool_count is not None and bambu_settings is None:
+                raise WorkerError("Bambu multi-material 3MF requires native project settings.")
+        if bambu_settings is not None:
+            if len(bambu_settings) > 16384 or native_tool_count is None:
+                raise WorkerError("Bambu project settings require a bounded native palette.")
+            settings = json.loads(bambu_settings)
+            permitted = {"printer_settings_id", "print_settings_id",
+                         "filament_settings_id", "filament_colour",
+                         "filament_type", "filament_diameter", "nozzle_diameter",
+                         "printable_height", "filament_ids",
+                         "filament_self_index", "filament_extruder_variant",
+                         "filament_is_support"} | set(BAMBU_VARIANT_OPTIONS)
+            if not isinstance(settings, dict) or not settings or set(settings) - permitted:
+                raise WorkerError("Unsafe Bambu project setting keys.")
+            for label in ("printer_settings_id", "print_settings_id"):
+                value = settings.get(label)
+                if not isinstance(value, str) or not 1 <= len(value) <= 200:
+                    raise WorkerError("Missing Bambu native preset identity.")
+            height = settings.get("printable_height")
+            if (not isinstance(height, str) or
+                    not re.fullmatch(r"[0-9]+(?:\.[0-9]{1,3})?", height) or
+                    not 1 <= float(height) <= 2000):
+                raise WorkerError("Bambu project is missing a valid printable height.")
+            for key in ("filament_settings_id", "filament_colour",
+                        "filament_type", "filament_diameter"):
+                values = settings.get(key)
+                if (not isinstance(values, list)
+                        or len(values) != native_tool_count
+                        or any(not isinstance(v, str) or not 1 <= len(v) <= 200
+                               for v in values)):
+                    raise WorkerError("Bambu project palette does not match the native tool count.")
+            support_flags = settings.get("filament_is_support")
+            if (not isinstance(support_flags, list)
+                    or len(support_flags) != native_tool_count
+                    or any(type(v) is not str or v not in ("0", "1")
+                           for v in support_flags)):
+                raise WorkerError("Bambu filament support vector does not match the palette.")
+            ids_vector = settings.get("filament_ids")
+            self_vector = settings.get("filament_self_index")
+            variant_vector = settings.get("filament_extruder_variant")
+            if (not isinstance(ids_vector, list)
+                    or len(ids_vector) != native_tool_count
+                    or any(not isinstance(value, str) or not re.fullmatch(
+                        r"[A-Za-z0-9_-]{1,32}", value) for value in ids_vector)):
+                raise WorkerError("Invalid Bambu native filament IDs.")
+            if (not isinstance(self_vector, list)
+                    or not isinstance(variant_vector, list)
+                    or not native_tool_count <= len(self_vector) <= native_tool_count * 4
+                    or len(self_vector) != len(variant_vector)
+                    or any(not isinstance(value, str) or not re.fullmatch(
+                        r"[A-Za-z0-9 -]{1,64}", value) for value in variant_vector)):
+                raise WorkerError("Invalid Bambu filament extruder variants.")
+            observed = []
+            for self_index in self_vector:
+                if not isinstance(self_index, str) or not self_index.isdecimal():
+                    raise WorkerError("Invalid Bambu filament self-index.")
+                observed.append(int(self_index))
+            if (observed != sorted(observed)
+                    or set(observed) != set(range(1, native_tool_count + 1))
+                    or any(len(set(variant_vector[pos] for pos, tool in enumerate(observed)
+                                    if tool == index)) != observed.count(index)
+                           for index in range(1, native_tool_count + 1))):
+                raise WorkerError("Bambu filament variant mapping is inconsistent.")
+            for key, (lower, upper) in BAMBU_VARIANT_OPTIONS.items():
+                values = settings.get(key)
+                if not isinstance(values, list) or len(values) != len(variant_vector):
+                    raise WorkerError("Bambu native material vector does not match variants.")
+                for value in values:
+                    if key == "filament_retraction_length" and value == "nil":
+                        continue
+                    if (not isinstance(value, str) or
+                            not re.fullmatch(r"[0-9]{1,3}(?:\.[0-9]{1,4})?", value)
+                            or not lower <= float(value) <= upper):
+                        raise WorkerError("Unsafe Bambu native material vector.")
+            if any(not re.fullmatch(r"#[0-9A-Fa-f]{6}", v)
+                   for v in settings["filament_colour"]):
+                raise WorkerError("Invalid Bambu project filament colour.")
+            if (not isinstance(settings.get("nozzle_diameter"), list)
+                    or not 1 <= len(settings["nozzle_diameter"]) <= 16
+                    or any(not isinstance(v, str) or not re.fullmatch(r"(?:0\.[1-9][0-9]?|[12](?:\.[0-9]{1,2})?)", v)
+                           for v in settings["nozzle_diameter"])):
+                raise WorkerError("Invalid Bambu project nozzle diameter.")
         root = ET.fromstring(raw)
     except WorkerError:
         raise
@@ -78,7 +181,8 @@ def validate_worker_3mf(data, *, native_tool_count=None, allow_creality_combined
         raise WorkerError("3MF build references unknown objects.")
     # Accept only simple, bounded per-object layer heights, never script keys.
     if layer_ranges is not None:
-        if len(objects) != 1 or (native_tool_count is not None and not allow_creality_layer_ranges):
+        if len(objects) != 1 or (native_tool_count is not None and not (
+                allow_creality_layer_ranges or allow_bambu_layer_ranges)):
             raise WorkerError("Native variable layer test requires an approved single object.")
         try:
             layer_root = ET.fromstring(layer_ranges)
@@ -133,7 +237,7 @@ def validate_worker_3mf(data, *, native_tool_count=None, allow_creality_combined
             if paint_attrs:
                 # Semantic paint remains independently constrained to a
                 # single filament until joint material/tool verification.
-                if len(objects) != 1 or (native_tool_count is not None and not allow_creality_combined_paint):
+                if len(objects) != 1 or (native_tool_count is not None and not (allow_creality_combined_paint or allow_bambu_combined_paint)):
                     raise WorkerError("Unsupported native painted facet annotation.")
                 for channel in paint_attrs:
                     used_native_paint_channels.add(channel)
@@ -144,7 +248,7 @@ def validate_worker_3mf(data, *, native_tool_count=None, allow_creality_combined
                 # One unsplit TriangleSelector leaf per generated triangle.
                 # No arbitrary nibble streams or unverified colour→tool
                 # remapping are permitted. The server clips exact polygons.
-                if native_tool_count is None or (paint_attrs and not allow_creality_combined_paint):
+                if native_tool_count is None or (paint_attrs and not (allow_creality_combined_paint or allow_bambu_combined_paint)):
                     raise WorkerError("Colour painting requires verified native multi-tool slicing.")
                 native_states = ("4", "8") + tuple(
                     format(tool - 2, "X") + "C" for tool in range(2, native_tool_count))

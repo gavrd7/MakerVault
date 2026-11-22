@@ -136,3 +136,40 @@ test("official source and matching release controls use equal height without cap
   assert.ok(source >= 0 && version > source && following > version);
   assert.doesNotMatch(setup.slice(version, following), /<small>/);
 });
+
+test("official catalogue filters are truly optional across engines", () => {
+  assert.match(setup, /if \(q\.length > 80\) throw new Error/);
+  assert.match(setup, /disabled=\{officialBusy \|\| !officialVendor \|\| !officialVendors\.length\}/);
+  assert.doesNotMatch(setup, /join\(" "\)\.length < 2/);
+});
+
+test("official profile import cards stack on mobile and feedback spans full width", () => {
+  assert.match(setup, /cameraSourceRow slicerOfficialProfileRow/);
+  assert.match(styles, /\.slicerOfficialProfileRow>\.slicerProfileImportNotice,[\s\S]*?grid-column:1\/-1/);
+  assert.match(styles, /@media\(max-width:800px\)\{[\s\S]*?\.cameraSourceRow\.slicerOfficialProfileRow\{/);
+  assert.match(styles, /\.slicerOfficialProfileRow>\.cameraSourceActions button\{[\s\S]*?flex:1 1 160px/);
+});
+
+test("official profile browsing is not silently narrowed to the selected printer", () => {
+  const start = setup.indexOf('  // Catalogue models come from the pinned upstream index');
+  const end = setup.indexOf('  async function searchOfficialProfiles(', start);
+  const browse = setup.slice(start, end);
+  assert.match(browse, /setOfficialModels\(models\);/);
+  assert.doesNotMatch(browse, /models\.find\(item =>/);
+  assert.ok(setup.includes('setOfficialQuery("");'));
+});
+
+test("device monitor stays over the slicer without navigating away or unmounting its draft", () => {
+  const printing = fs.readFileSync(path.resolve(base, "PrintingPage.jsx"), "utf8");
+  const app = fs.readFileSync(path.resolve(base, "../App.jsx"), "utf8");
+  const start = printing.indexOf('  if (workspaceView === "slicer") {');
+  const end = printing.indexOf('  if (workspaceView === "models") {', start);
+  assert.ok(start >= 0 && end > start);
+  const workspace = printing.slice(start, end);
+  assert.match(workspace, /onOpenDevice=\{printerId => \{/);
+  assert.match(workspace, /setLivePrinter\(printer\)/);
+  assert.match(workspace, /livePrinter && <PrinterConnectionsModal/);
+  assert.match(workspace, /onClose=\{\(\) => setLivePrinter\(null\)\}/);
+  assert.doesNotMatch(workspace.slice(workspace.indexOf("onOpenDevice="), workspace.indexOf("onOpenGcode=")), /setWorkspaceView|setSection/);
+  assert.doesNotMatch(app, /onOpenSlicerDevice=/);
+});

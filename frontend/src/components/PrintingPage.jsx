@@ -205,7 +205,7 @@ function newestGeometryAnalysis(model) {
   return null;
 }
 
-export default function PrintingPage({ config, projects, searchTarget = null, onOpenConsumed, onOpenMakerTags = () => {}, onModelLibraryBack = null, initialWorkspaceView = "overview", onOpenSlicer = null, onOpenSlicerDevice = null, slicerStatus = { state: "checking" } }) {
+export default function PrintingPage({ config, projects, searchTarget = null, onOpenConsumed, onOpenMakerTags = () => {}, onModelLibraryBack = null, initialWorkspaceView = "overview", onOpenSlicer = null, slicerStatus = { state: "checking" } }) {
   const [data, setData] = useState(null);
   const [filamentsLoaded, setFilamentsLoaded] = useState(false);
   const [filesLoaded, setFilesLoaded] = useState(false);
@@ -470,7 +470,10 @@ export default function PrintingPage({ config, projects, searchTarget = null, on
       canPrint={Boolean(config?.permissions?.change_printer)}
       onBack={() => initialWorkspaceView === "slicer" && onModelLibraryBack ? onModelLibraryBack() : setWorkspaceView("overview")}
       onFilesUploaded={load}
-      onOpenDevice={onOpenSlicerDevice}
+      onOpenDevice={printerId => {
+        const printer = (data?.printers || []).find(row => String(row.id) === String(printerId));
+        if (printer) setLivePrinter(printer);
+      }}
       onOpenGcode={async () => {
         await load({ includeFilaments: false });
         setWorkspaceView("overview");
@@ -479,6 +482,20 @@ export default function PrintingPage({ config, projects, searchTarget = null, on
     />
       </Suspense>
       </SlicerErrorBoundary>
+      {livePrinter && <PrinterConnectionsModal
+        printer={livePrinter}
+        onClose={() => setLivePrinter(null)}
+        onChanged={async () => {
+          const fresh = await load();
+          const updated = fresh?.printers?.find(row => row.id === livePrinter.id);
+          if (updated) setLivePrinter(updated);
+          return fresh;
+        }}
+        onAdded={async () => {
+          setLivePrinter(null);
+          await load();
+        }}
+      />}
     </>;
   }
 

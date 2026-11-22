@@ -36,7 +36,7 @@ from .slicer_semantic_painting import validate_semantic_paint
 from .slicer_variable_layers import validate_variable_layer_profile
 from .slicer_paint_assets import store_paint, load_paint, expand_painted_item, expand_painted_settings, PAINT_FIELDS
 from .slicer_mesh import inspect_stl, MeshInspectionError, MAX_INSPECTION_BYTES
-from .slicer_bed import inspect_orca_plate, inspect_creality_plate
+from .slicer_bed import inspect_orca_plate, inspect_creality_plate, inspect_bambu_plate
 from .slicer_bed_artwork import (official_artwork_source, cached_official_artwork,
     official_bed_model_source, cached_official_bed_model)
 from .slicer_official_chain import official_profile_chain
@@ -66,6 +66,9 @@ from .slicer_bambu_official_profiles import (
     official_catalogue_models as bambu_catalogue_models,
     ENGINE_VERSION as OFFICIAL_BAMBU_VERSION, SOURCE as OFFICIAL_BAMBU_SOURCE,
     REF as OFFICIAL_BAMBU_REF,
+)
+from .slicer_bambu_native_profiles import (
+    search_bambu_native_profiles, fetch_bambu_native_chain,
 )
 from .slicer_official_profiles import (
     OfficialProfileError, search_official_profiles, fetch_official_profile, available_official_vendors,
@@ -611,19 +614,19 @@ def _draft(user, data):
         native_labels[f"{kind}_preset"] = label
 
     plate_type = _preset(data, "plate", 80) if "plate" in data else "default"
-    if engine.key in ("orcaslicer", "crealityprint"):
+    if engine.key in ("orcaslicer", "crealityprint", "bambustudio"):
         if plate_type not in ORCA_PLATES:
             raise ValueError("Choose a supported native build plate type.")
-        if engine.key == "crealityprint" and plate_type != "default":
+        if engine.key in ("crealityprint", "bambustudio") and plate_type != "default":
             printer_profile = native_profiles.get("printer_profile")
             if not printer_profile:
-                raise ValueError("Select a native Creality printer profile before choosing a plate.")
+                raise ValueError("Select a native printer profile before choosing a plate.")
             try:
                 supported = inspect_engine_plates(printer_profile)["supported"]
             except (SlicerProfileError, ValueError, TypeError, OSError) as exc:
-                raise ValueError("Creality build plate capabilities could not be verified.") from exc
+                raise ValueError("Native build plate capabilities could not be verified.") from exc
             if plate_type not in supported:
-                raise ValueError("Build plate is not supported by the Creality printer profile.")
+                raise ValueError("Build plate is not supported by the selected printer profile.")
     elif plate_type != "default":
         raise ValueError("Build plate overrides are not supported by this slicer engine.")
     return SliceJob.objects.create(
@@ -1304,7 +1307,7 @@ def official_profiles(request):
         searcher = {
             "orcaslicer": search_official_profiles,
             "crealityprint": search_creality_profiles,
-            "bambustudio": search_bambu_profiles,
+            "bambustudio": search_bambu_native_profiles,
             "prusaslicer": search_prusa_profiles,
             "snapmakerorca": search_snapmaker_profiles,
         }.get(selected)
@@ -1401,7 +1404,7 @@ def official_profiles(request):
         # Existing records are never overwritten or implicitly modified.
         # Fetch and validate the complete bounded parent chain *before*
         # mutating the database. Never install a partial official preset.
-        chain = ([(name, subpath, fetch_bambu_model(kind, name, subpath, vendor))]
+        chain = (fetch_bambu_native_chain(kind, name, subpath, vendor, version=version)
                  if engine == "bambustudio" else
                  [(name, subpath, fetch_prusa_model(kind, name, subpath, vendor))]
                  if engine == "prusaslicer" else
@@ -1577,10 +1580,10 @@ def profiles(request):
 def customise_profile(request, profile_id):
     """Clone a native JSON preset, applying only bounded GUI-supported changes."""
     profile = SlicerProfile.objects.filter(
-        pk=profile_id, owner=request.user, engine__in=["orcaslicer", "crealityprint"]
+        pk=profile_id, owner=request.user, engine__in=["orcaslicer", "crealityprint", "bambustudio"]
     ).select_related("file_asset").first()
     if not profile:
-        return _error("An owned Orca or Creality native profile is required.", 404)
+        return _error("An owned native slicing profile is required.", 404)
     if profile.kind not in EDITABLE_PROFILE_SETTINGS:
         return _error("Unsupported native profile type.")
     if request.method == "GET":
@@ -1683,10 +1686,10 @@ def save_process_profile(request, profile_id):
     if not request.user.has_perm("core.add_fileasset"):
         return _error("You do not have permission to save custom profiles.", 403)
     profile = SlicerProfile.objects.filter(
-        pk=profile_id, owner=request.user, engine__in=["orcaslicer", "crealityprint"], kind="process"
+        pk=profile_id, owner=request.user, engine__in=["orcaslicer", "crealityprint", "bambustudio"], kind="process"
     ).select_related("file_asset").first()
     if not profile:
-        return _error("An owned OrcaSlicer or Creality Print process profile is required.", 404)
+        return _error("An owned native slicing process profile is required.", 404)
     if len(request.body) > 4096:
         return _error("Custom process profile request is too large.", 413)
     try:
@@ -1880,10 +1883,10 @@ def delete_profile(request, profile_id):
 def profile_process_settings(request, profile_id):
     """Read editable native process settings from the user's resolved preset."""
     profile = SlicerProfile.objects.filter(
-        pk=profile_id, owner=request.user, engine__in=["orcaslicer", "crealityprint"], kind="process"
+        pk=profile_id, owner=request.user, engine__in=["orcaslicer", "crealityprint", "bambustudio"], kind="process"
     ).select_related("file_asset").first()
     if not profile:
-        return _error("Owned Orca or Creality process profile not found.", 404)
+        return _error("Owned native slicing process profile not found.", 404)
     try:
         resolved = resolved_native_profile(profile)
         fields = process_schema(resolved)
@@ -1905,7 +1908,7 @@ def profile_flush_defaults(request, profile_id):
     """
     profile = SlicerProfile.objects.filter(
         pk=profile_id, owner=request.user,
-        engine__in=["orcaslicer", "crealityprint"], kind="process"
+        engine__in=["orcaslicer", "crealityprint", "bambustudio"], kind="process"
     ).select_related("file_asset").first()
     if not profile:
         return _error("Owned slicer process profile not found.", 404)
@@ -1953,9 +1956,10 @@ def profile_plate(request, profile_id):
     ).select_related("file_asset").first()
     if not profile:
         return _error("Owned Orca or Creality machine profile not found.", 404)
-    if profile.engine in ("orcaslicer", "crealityprint"):
+    if profile.engine in ("orcaslicer", "crealityprint", "bambustudio"):
         try:
             geometry = (inspect_creality_plate(profile) if profile.engine == "crealityprint"
+                        else inspect_bambu_plate(profile) if profile.engine == "bambustudio"
                         else inspect_orca_plate(profile))
         except SlicerProfileError:
             return _error("Native printer geometry could not be safely inspected.", 422)

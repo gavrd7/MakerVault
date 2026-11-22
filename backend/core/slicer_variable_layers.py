@@ -162,3 +162,54 @@ def audit_orca_variable_layers(gcode, bands):
         checks.append({"from_mm": begin, "to_mm": end,
                        "target_layer_mm": wanted, "observed_layer_mm": matched[0]})
     return {"verified_bands": checks, "layer_markers": len(positions)}
+
+_BAMBU_LAYER_Z = re.compile(r"^;\s*Z_HEIGHT:\s*([0-9]+(?:\.[0-9]+)?)\s*$", re.I)
+
+
+def audit_bambu_variable_layers(gcode, bands):
+    """Verify *actual* BambuStudio 2.9.1 sliced native Z_HEIGHT intervals.
+
+    A validated 3MF layer_config_ranges.xml alone is not proof: Bambu may
+    clamp requested 0.30mm to 0.15mm without an error. Reject such output
+    before it is persisted, without changing either user's profile or model.
+    """
+    if not isinstance(gcode, str) or len(gcode) > 90 * 1024 * 1024:
+        raise ValueError("Invalid native Bambu layer audit G-code.")
+    validated = validate_variable_layer_profile({"version": 1, "bands": bands})
+    positions = []
+    following = 0
+    for index, raw in enumerate(gcode.splitlines()):
+        if index >= 2_000_000:
+            raise ValueError("Native Bambu layer audit exceeds line limit.")
+        line = raw.strip()
+        if line.upper() == ";LAYER_CHANGE":
+            following = 8
+            continue
+        if following <= 0:
+            continue
+        following -= 1
+        match = _BAMBU_LAYER_Z.fullmatch(line)
+        if match:
+            z = float(match.group(1))
+            if math.isfinite(z) and 0 < z <= 1000 and (
+                    not positions or z > positions[-1] + 1e-5):
+                positions.append(z)
+            following = 0
+    if len(positions) < 3:
+        raise ValueError("Bambu G-code lacks verifiable native Z_HEIGHT layer markers.")
+    results = []
+    for band in validated["bands"]:
+        lower, upper, wanted = band["from_mm"], band["to_mm"], band["layer_mm"]
+        samples = [(z0, z1) for z0, z1 in zip(positions, positions[1:])
+                   if z0 >= lower + wanted and z1 <= upper - wanted]
+        if not samples:
+            samples = [(z0, z1) for z0, z1 in zip(positions, positions[1:])
+                       if z0 >= lower - 1e-4 and z1 <= upper + 1e-4]
+        delta = [round(z1-z0, 4) for z0, z1 in samples]
+        matched = [v for v in delta if abs(v-wanted) <= max(.018, wanted*.12)]
+        if len(matched) < 2 or len(matched) < math.ceil(.6*len(delta)):
+            raise ValueError("Native Bambu G-code did not match the requested variable layer height.")
+        results.append({"from_mm": lower, "to_mm": upper,
+                        "target_layer_mm": wanted, "verified_layers": len(matched)})
+    return {"verified_bands": results, "layer_markers": len(positions)}
+

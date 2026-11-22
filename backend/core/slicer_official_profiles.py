@@ -129,8 +129,8 @@ def official_filament_brands(version=ENGINE_VERSION):
 def search_official_profiles(query, kind, vendor="Creality", printer_model=None,
                              version=ENGINE_VERSION, brand="", slot_discovery=False,
                              material="", manufacturer=""):
-    if not isinstance(query, str) or not 2 <= len(query.strip()) <= 80:
-        raise OfficialProfileError("Search using at least two characters.")
+    if not isinstance(query, str) or len(query.strip()) > 80:
+        raise OfficialProfileError("Search must be 80 characters or fewer.")
     if not isinstance(vendor, str) or vendor not in VENDORS:
         raise OfficialProfileError("Choose an available official profile vendor.")
     _ref(version)
@@ -139,7 +139,7 @@ def search_official_profiles(query, kind, vendor="Creality", printer_model=None,
         raise OfficialProfileError("Select a listed filament manufacturer.")
     term = query.strip().casefold()
     matches = [(name, subpath) for name, subpath in _entries(vendor, kind, version)
-               if fuzzy_name_match(name, term) and
+               if (not term or fuzzy_name_match(name, term)) and
                (not brand or subpath.startswith("filament/" + brand + "/"))]
     if slot_discovery:
         if kind != "filament" or not printer_model:

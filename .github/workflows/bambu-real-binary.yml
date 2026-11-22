@@ -1,0 +1,567 @@
+name: Bambu Studio pinned Linux AppImage candidate
+
+on:
+  pull_request:
+    paths:
+      - 'scripts/prepare_bambu_staging.py'
+      - 'scripts/prepare_bambu_native_fixtures.py'
+      - 'scripts/probe_bambu_multicolour.py'
+      - 'slicer_worker/bambu_runner.py'
+      - 'slicer_worker/stage_engines.py'
+      - 'slicer_worker/probe.py'
+      - 'slicer_worker/tests/test_bambu*.py'
+      - 'slicer_worker/Dockerfile.bundle'
+      - 'slicer_worker/Dockerfile.bambu-combined-candidate'
+      - '.github/workflows/bambu-real-binary.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify-pinned-bambu-asset:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check Bambu candidate unit tests
+        run: python3 -m unittest discover -s slicer_worker/tests -p 'test_bambu*.py' -v
+      - name: Download and verify official Bambu Studio AppImage
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 scripts/prepare_bambu_staging.py
+      - name: Verify the exact pinned executable
+        run: |
+          echo '668dabb1be53c758189ed6bc89935285dea5e0af46216546b1bafd6882e9aff0  slicer-engine-assets/bambustudio.AppImage' | sha256sum --check --status
+          test -f slicer-engine-assets/manifest.json
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          doc = json.loads(Path('slicer-engine-assets/manifest.json').read_text())
+          assert doc.get('fixture_approved') is False
+          entry = doc['engines']['bambustudio']
+          assert entry['version'] == '02.09.01.70'
+          assert entry['binary_sha256'] == '668dabb1be53c758189ed6bc89935285dea5e0af46216546b1bafd6882e9aff0'
+          PY
+      - name: Extract native AppRun and resources without enabling worker
+        run: |
+          mkdir -p /tmp/bambu-appimage-acceptance
+          cd /tmp/bambu-appimage-acceptance
+          "$GITHUB_WORKSPACE/slicer-engine-assets/bambustudio.AppImage" --appimage-extract >/dev/null
+          test -x squashfs-root/AppRun
+          test -d squashfs-root/usr
+          echo 'Official pinned Bambu Studio AppImage verified and extracted; no engine was enabled or print started.'
+
+      - name: Install Bambu native desktop runtime prerequisites
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get -o Acquire::Retries=3 update -qq
+          # Hosted runner images can transiently lose apt source indexes.
+          # Restore only official, archive-signed Ubuntu 24.04 sources
+          # in this disposable CI runner if the expected package vanishes.
+          if ! apt-cache show libwebkit2gtk-4.1-0 >/dev/null 2>&1; then
+            . /etc/os-release
+            if [ "$ID" != ubuntu ] || [ "$VERSION_CODENAME" != noble ] ||
+               [ ! -f /usr/share/keyrings/ubuntu-archive-keyring.gpg ]; then
+              echo "Unsupported CI runner package source configuration" >&2
+              exit 1
+            fi
+            echo "CI runner package index missing; restoring official signed Ubuntu noble sources"
+            sudo tee /etc/apt/sources.list.d/makervault-ci-ubuntu.sources >/dev/null <<'SOURCES'
+          Types: deb
+          URIs: https://archive.ubuntu.com/ubuntu/
+          Suites: noble noble-updates
+          Components: main restricted universe multiverse
+          Signed-By: /usr/share/keyrings/ubuntu-archive-keyring.gpg
+
+          Types: deb
+          URIs: https://security.ubuntu.com/ubuntu/
+          Suites: noble-security
+          Components: main restricted universe multiverse
+          Signed-By: /usr/share/keyrings/ubuntu-archive-keyring.gpg
+          SOURCES
+            sudo apt-get -o Acquire::Retries=3 update
+          fi
+          sudo apt-get -o Acquire::Retries=3 install -y --no-install-recommends \
+            libgstreamer-plugins-base1.0-0 libwebkit2gtk-4.1-0
+      - name: Launch actual pinned Bambu CLI in headless offline mode
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd /tmp/bambu-appimage-acceptance
+          mkdir -p /tmp/bambu-cli-home
+          # Direct ldd on bin/bambu-studio does not reflect AppRun's bundled
+          # library search paths, so collect it as diagnostic only.
+          ldd ./squashfs-root/bin/bambu-studio | grep 'not found' || true
+          # Prove the extracted entrypoint starts as a CLI, not merely that
+          # the AppImage unpacks. No profile, model or printer is supplied.
+          # Keep this offline and bounded, even if upstream regresses into GUI startup.
+          timeout 45s env -u DISPLAY -u WAYLAND_DISPLAY \
+            HOME=/tmp/bambu-cli-home QT_QPA_PLATFORM=offscreen \
+            SSL_CERT_FILE=/etc/ssl/certs/ca-certificates.crt \
+            ./squashfs-root/AppRun --help > /tmp/bambu-help.log 2>&1 || {
+              status=$?
+              echo "Pinned Bambu Studio CLI startup failed (exit ${status})."
+              tail -60 /tmp/bambu-help.log
+              exit "$status"
+            }
+          grep -Eiq -- '--(slice|load-settings|load-filaments|export-3mf)' /tmp/bambu-help.log
+          echo 'Pinned Bambu Studio headless command-line startup verified.'
+
+      - name: Resolve exact-version official X1C native profiles from extracted bundle
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 scripts/prepare_bambu_native_fixtures.py \
+            --appdir /tmp/bambu-appimage-acceptance/squashfs-root \
+            --output /tmp/bambu-verified-profiles
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          for kind in ('printer', 'process', 'filament'):
+              path = Path('/tmp/bambu-verified-profiles') / (kind + '.json')
+              value = json.loads(path.read_text())
+              assert 'inherits' not in value and 'include' not in value
+              assert value['type'] == ('machine' if kind == 'printer' else kind)
+          for key in ('filament_flow_ratio', 'nozzle_temperature',
+                      'nozzle_temperature_initial_layer',
+                      'filament_max_volumetric_speed',
+                      'filament_retraction_length',
+                      'filament_is_support', 'filament_start_gcode',
+                      'filament_end_gcode'):
+              f = json.loads(Path('/tmp/bambu-verified-profiles/filament.json').read_text())
+              v = f.get(key)
+              print('Official BBL resolved option', key,
+                    'count', len(v) if isinstance(v, list) else 'not-vector',
+                    'sample', [str(x)[:40] for x in v[:2]]
+                    if isinstance(v, list) else '')
+          for key in ('filament_id', 'filament_settings_id',
+                      'filament_self_index', 'filament_extruder_variant'):
+              f = json.loads(Path('/tmp/bambu-verified-profiles/filament.json').read_text())
+              print('Official public BBL filament', key, repr(f.get(key))[:300])
+          print('Official native profile ancestry fully resolved.')
+          PY
+      - name: Attempt genuine pinned Bambu CLI single-material STL slice
+        shell: bash
+        run: |
+          set -euo pipefail
+          # CI runner is ephemeral and has no printer credentials or MakerVault
+          # server connection. This is still only a preliminary native CLI
+          # proof; isolated staging acceptance remains a separate gate.
+          timeout 240s python3 -m slicer_worker.probe \
+            --engine bambustudio --version 02.09.01.70 \
+            --binary /tmp/bambu-appimage-acceptance/squashfs-root/AppRun \
+            --printer /tmp/bambu-verified-profiles/printer.json \
+            --process /tmp/bambu-verified-profiles/process.json \
+            --filament /tmp/bambu-verified-profiles/filament.json \
+            --timeout 180
+
+      - name: Verify real Bambu slicing of fixed MakerVault core 3MF
+        shell: bash
+        run: |
+          set -euo pipefail
+          timeout 240s python3 -m slicer_worker.probe \
+            --engine bambustudio --version 02.09.01.70 \
+            --binary /tmp/bambu-appimage-acceptance/squashfs-root/AppRun \
+            --printer /tmp/bambu-verified-profiles/printer.json \
+            --process /tmp/bambu-verified-profiles/process.json \
+            --filament /tmp/bambu-verified-profiles/filament.json \
+            --bambu-core-3mf --timeout 180
+
+      - name: Compare genuine pinned Bambu Studio 3MF metadata (diagnostic)
+        shell: bash
+        continue-on-error: true
+        run: |
+          set -euo pipefail
+          curl --fail --location --silent --show-error --max-time 30 \
+            'https://raw.githubusercontent.com/bambulab/BambuStudio/v02.09.01.70/resources/calib/pressure_advance/auto_pa_line_dual.3mf' \
+            -o /tmp/bambu-vendor-reference.3mf
+          python3 - <<'PY'
+          import json
+          import zipfile
+          from pathlib import Path
+          p = Path('/tmp/bambu-vendor-reference.3mf')
+          assert 0 < p.stat().st_size <= 16*1024*1024
+          with zipfile.ZipFile(p) as archive:
+              names = sorted(archive.namelist())
+              assert len(names) <= 100
+              print('Official Bambu reference 3MF member names:', names)
+              if 'Metadata/project_settings.config' in names:
+                  raw = archive.read('Metadata/project_settings.config')
+                  assert len(raw) <= 1024*1024
+                  cfg = json.loads(raw)
+                  print('Official project key count:', len(cfg))
+                  for key in ('filament_settings_id', 'filament_colour',
+                              'filament_type', 'filament_diameter',
+                              'filament_self_index', 'filament_extruder_variant',
+                              'filament_ids', 'printer_settings_id',
+                              'print_settings_id', 'nozzle_diameter'):
+                      v = cfg.get(key)
+                      print('Official project field:', key,
+                            'list', len(v) if isinstance(v, list) else
+                            'scalar' if isinstance(v, (str, int, float)) else
+                            'absent')
+                  for key in ('filament_flow_ratio', 'nozzle_temperature',
+                              'nozzle_temperature_initial_layer',
+                              'filament_max_volumetric_speed',
+                              'filament_retraction_length',
+                              'filament_is_support', 'filament_start_gcode',
+                              'filament_end_gcode', 'filament_colour',
+                              'filament_diameter'):
+                      value = cfg.get(key)
+                      if isinstance(value, list):
+                          print('Official Bambu vendor option', key,
+                                'count', len(value),
+                                'samples', [str(x)[:40] for x in value[:3]])
+                      else:
+                          print('Official Bambu vendor option', key, 'not-vector')
+                  for key in ('filament_ids', 'filament_self_index',
+                              'filament_extruder_variant', 'printable_height'):
+                      value = cfg.get(key)
+                      print('Official public fixture', key, repr(value)[:600])
+              from xml.etree import ElementTree as ET
+              root = ET.fromstring(archive.read('3D/3dmodel.model'))
+              metadata = [(node.get('name'), (node.text or '')[:90])
+                          for node in root if node.tag.endswith('}metadata')]
+              print('Official Bambu root metadata:', metadata[:18])
+              build = next((node for node in root if node.tag.endswith('}build')), None)
+              resources = next((node for node in root if node.tag.endswith('}resources')), None)
+              print('Official Bambu root object/build counts:',
+                    len(resources) if resources is not None else -1,
+                    len(build) if build is not None else -1)
+              if build is not None:
+                  print('Official Bambu first two build items:',
+                        [dict(x.attrib) for x in list(build)[:2]])
+              if resources is not None:
+                  print('Official Bambu first two object shapes:',
+                        [(dict(x.attrib), [y.tag.rsplit('}',1)[-1] for y in x][:5])
+                         for x in list(resources)[:2]])
+              if 'Metadata/model_settings.config' in names:
+                  from xml.etree import ElementTree as ET
+                  manifest = ET.fromstring(archive.read('Metadata/model_settings.config'))
+                  objs = manifest.findall('object')
+                  print('Official model-settings object count:', len(objs))
+                  print('Official model-setting names:',
+                        sorted({x.get('key') for obj in objs
+                                for x in obj.findall('metadata') if x.get('key')}))
+          PY
+
+      - name: Validate real native two-material and facet-painted Bambu 3MF
+        shell: bash
+        env:
+          MAKERVAULT_BAMBU_FIXTURE_DIAGNOSTICS: '1'
+        run: |
+          set -euo pipefail
+          for paint in models painted; do
+            extra=()
+            if [ "$paint" = painted ]; then extra+=(--painted); fi
+            timeout 240s python3 -m scripts.probe_bambu_multicolour \
+              --binary /tmp/bambu-appimage-acceptance/squashfs-root/AppRun \
+              --profiles /tmp/bambu-verified-profiles --timeout 180 "${extra[@]}"
+          done
+
+      - name: Verify native painted support enforcer generates real overhang support G-code
+        shell: bash
+        run: |
+          set -euo pipefail
+          for mode in baseline enforcer; do
+            flags=()
+            if [ "$mode" = enforcer ]; then flags+=(--detail-paint support); fi
+            timeout 240s python3 -m scripts.probe_bambu_multicolour \
+              --binary /tmp/bambu-appimage-acceptance/squashfs-root/AppRun \
+              --profiles /tmp/bambu-verified-profiles \
+              --painted --support-overhang --timeout 180 "${flags[@]}" \
+              | tee "/tmp/bambu-support-overhang-${mode}.log"
+          done
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          results = {}
+          for label in ("baseline", "enforcer"):
+              last = Path(f"/tmp/bambu-support-overhang-{label}.log").read_text().splitlines()[-1]
+              item = json.loads(last)
+              results[label] = item
+              print("CI native Bambu support overhang evidence:", label,
+                    json.dumps({
+                        "gcode_sha256": item["gcode_sha256"],
+                        "support_feature_moves": item["flush_evidence"]["support_feature_moves"],
+                        "support_feature_positive_e_mm": item["flush_evidence"]["support_feature_positive_e_mm"],
+                        "model_region_audit": item.get("overhang_model_region_audit", "passed"),
+                        "global_two_tool_deposition": item["both_tools_extrude"],
+                    }, sort_keys=True))
+          print("CI native Bambu support enforcer changes actual G-code:",
+                results["baseline"]["gcode_sha256"] != results["enforcer"]["gcode_sha256"])
+          baseline, enforcer = results["baseline"], results["enforcer"]
+          empty = baseline["flush_evidence"]
+          marked = enforcer["flush_evidence"]
+          if not (baseline["both_tools_extrude"] and enforcer["both_tools_extrude"]):
+              raise SystemExit("Bambu overhang lost native multi-material extrusion")
+          if (empty["support_feature_moves"] != 0 or
+                  sum(empty["support_feature_positive_e_mm"].values()) != 0):
+              raise SystemExit("Bambu unsupported baseline unexpectedly generated support")
+          if (marked["support_feature_moves"] < 100 or
+                  sum(marked["support_feature_positive_e_mm"].values()) < 10):
+              raise SystemExit("Bambu painted support enforcer did not generate real support extrusion")
+          if baseline["gcode_sha256"] == enforcer["gcode_sha256"]:
+              raise SystemExit("Bambu painted support enforcer did not modify native G-code")
+          print("CI native Bambu support enforcer: VERIFIED support deposition contrast")
+
+          PY
+
+      - name: Verify native seam fuzzy and combined facet painting changes real model toolpaths
+        shell: bash
+        run: |
+          set -euo pipefail
+          for mode in baseline support seam fuzzy combined; do
+            flags=()
+            if [ "$mode" != baseline ]; then flags+=(--detail-paint "$mode"); fi
+            timeout 240s python3 -m scripts.probe_bambu_multicolour \
+              --binary /tmp/bambu-appimage-acceptance/squashfs-root/AppRun \
+              --profiles /tmp/bambu-verified-profiles \
+              --painted "${flags[@]}" --timeout 180 \
+              >"/tmp/bambu-semantic-facet-${mode}.log"
+          done
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          files = {}
+          for label in ("baseline", "support", "seam", "fuzzy", "combined"):
+              files[label] = json.loads(
+                  Path(f"/tmp/bambu-semantic-facet-{label}.log").read_text().splitlines()[-1])
+              if files[label]["status"] != "passed" or not files[label]["both_tools_extrude"]:
+                  raise SystemExit(f"Bambu semantic paint {label} did not deposit both tools")
+          base = files["baseline"]
+          # There is no overhang on this cube: support enforcer should not
+          # arbitrarily invent support. The separate T-overhang gate proves
+          # real positive-E support deposition.
+          # Full-file hashes include slicer metadata and non-depositing
+          # operations. Verify the intended invariant directly: the support
+          # brush must not create unsupported support extrusion on a plain cube.
+          for label in ("baseline", "support"):
+              signal = files[label]["flush_evidence"]
+              if (signal["support_feature_moves"] != 0 or
+                      sum(signal["support_feature_positive_e_mm"].values()) != 0):
+                  raise SystemExit(
+                      f"Bambu cube-only {label} generated unexpected support extrusion")
+          for label in ("seam", "fuzzy", "combined"):
+              if files[label]["gcode_sha256"] == base["gcode_sha256"]:
+                  raise SystemExit(f"Bambu {label} facet painting did not change native G-code")
+          if files["fuzzy"]["painted_tool_model_deposits"] < (
+                  base["painted_tool_model_deposits"] * 1.3):
+              raise SystemExit("Bambu fuzzy facet painting did not modify actual model deposition")
+          if files["combined"]["painted_tool_model_deposits"] < (
+                  base["painted_tool_model_deposits"] * 1.3):
+              raise SystemExit("Bambu combined facet painting lost fuzzy surface changes")
+          print("CI Bambu colour+seam+fuzzy+support native facet G-code: VERIFIED",
+                {key: files[key]["painted_tool_model_deposits"] for key in files})
+          PY
+
+      - name: Verify real Bambu 0.10mm and 0.15mm variable painted layers
+        shell: bash
+        run: |
+          set -euo pipefail
+          timeout 240s python3 -m scripts.probe_bambu_multicolour \
+            --binary /tmp/bambu-appimage-acceptance/squashfs-root/AppRun \
+            --profiles /tmp/bambu-verified-profiles \
+            --painted --variable-layers --upper-layer-height 0.15 --timeout 180
+
+      - name: Probe Bambu variable layer height with native painted 3MF (diagnostic)
+        shell: bash
+        continue-on-error: true
+        run: |
+          set -euo pipefail
+          timeout 240s python3 -m scripts.probe_bambu_multicolour \
+            --binary /tmp/bambu-appimage-acceptance/squashfs-root/AppRun \
+            --profiles /tmp/bambu-verified-profiles \
+            --painted --variable-layers --timeout 180
+
+      - name: Verify real Bambu native flush multiplier and prime tower location
+        shell: bash
+        run: |
+          set -euo pipefail
+          for case in "1.0 45 40" "2.0 45 40" "1.0 90 40"; do
+            read -r mult x y <<< "$case"
+            tag="${mult//./_}_${x}_${y}"
+            timeout 240s python3 -m scripts.probe_bambu_multicolour \
+              --binary /tmp/bambu-appimage-acceptance/squashfs-root/AppRun \
+              --profiles /tmp/bambu-verified-profiles --timeout 180 \
+              --flush-multiplier "$mult" --tower-x "$x" --tower-y "$y" \
+              | tee "/tmp/bambu-flush-evidence-${tag}.log"
+          done
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          results = []
+          for key in ("1_0_45_40", "2_0_45_40", "1_0_90_40"):
+              entries = Path(f"/tmp/bambu-flush-evidence-{key}.log").read_text().splitlines()
+              result = json.loads(entries[-1])
+              if result["status"] != "passed":
+                  raise SystemExit("Bambu flush variant did not slice correctly")
+              results.append(result)
+          for result in results:
+              print("CI native flush/tower signal:",
+                    json.dumps({
+                        "flush_multiplier": result["flush_multiplier"],
+                        "tower_xy": result["tower_xy"],
+                        "gcode_sha256": result["gcode_sha256"],
+                        "gcode_bytes": result["gcode_bytes"],
+                        **result["flush_evidence"],
+                    }, sort_keys=True))
+          print("CI native multiplier changes G-code:",
+                results[0]["gcode_sha256"] != results[1]["gcode_sha256"])
+          print("CI native tower positioning changes G-code:",
+                results[0]["gcode_sha256"] != results[2]["gcode_sha256"])
+          base, double, relocated = results
+          def native_matrix(case):
+              value = case["flush_evidence"]["native_header"]["flush_volumes_matrix"]
+              return [float(x) for x in value.split(",")]
+          m1, m2 = native_matrix(base), native_matrix(double)
+          if len(m1) != 4 or len(m2) != 4:
+              raise SystemExit("Native Bambu directional flushing matrix is not 2-tool")
+          if not all(abs(m2[index] - 2*m1[index]) < 0.01
+                     and m1[index] > 10 for index in (1, 2)):
+              raise SystemExit("Bambu 2x multiplier did not double native flush volumes")
+          for tool in ("0", "1"):
+              prior = base["flush_evidence"]["positive_e_mm"][tool]
+              raised = double["flush_evidence"]["positive_e_mm"][tool]
+              if not raised > prior * 1.2:
+                  raise SystemExit("Bambu 2x flush did not increase actual extrusion")
+          def tower_bbox(case):
+              return case["flush_evidence"]["tower_deposition_bbox_mm"]
+          before, after = tower_bbox(base), tower_bbox(relocated)
+          if not before or not after:
+              raise SystemExit("Bambu emitted no measurable prime tower deposition")
+          if base["flush_evidence"]["tower_position_moves"] < 20:
+              raise SystemExit("Bambu tower has insufficient actual extrusion moves")
+          if not all(abs(after[key] - before[key] - 45) < 0.1
+                     for key in ("min_x", "max_x")):
+              raise SystemExit("Bambu tower X movement does not match requested 45mm")
+          if not all(abs(after[key] - before[key]) < 0.1
+                     for key in ("min_y", "max_y")):
+              raise SystemExit("Bambu tower moved unexpectedly on Y")
+          if (base["flush_evidence"]["toolchanges"]
+                  != relocated["flush_evidence"]["toolchanges"]
+                  or base["flush_evidence"]["tower_position_moves"]
+                  != relocated["flush_evidence"]["tower_position_moves"]):
+              raise SystemExit("Relocating Bambu tower changed model/tool semantics")
+          print("CI Bambu 2x flush and +45mm tower position: VERIFIED native G-code")
+          PY
+
+      - name: Diagnose native Bambu two-material abort in disposable CI (informational)
+        if: failure()
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Debug only the public, fixed two-cube fixture and verified vendor
+          # profiles; no MakerVault user content, secrets or printer links.
+          sudo apt-get install -y --no-install-recommends gdb
+          echo "CI-only public AppRun launcher (first 90 lines):"
+          sed -n '1,90p' /tmp/bambu-appimage-acceptance/squashfs-root/AppRun | cut -c 1-180
+          echo "CI-only native executable file type:"
+          file /tmp/bambu-appimage-acceptance/squashfs-root/bin/bambu-studio
+          set +e
+          timeout 15s env -u DISPLAY -u WAYLAND_DISPLAY             HOME=/tmp/bambu-cli-home QT_QPA_PLATFORM=offscreen             SSL_CERT_FILE=/etc/ssl/certs/ca-certificates.crt             bash -x /tmp/bambu-appimage-acceptance/squashfs-root/AppRun --help             >/tmp/bambu-apprun-shelltrace.txt 2>&1
+          set -e
+          grep -E -m 25 '(exec |APPDIR=|LD_LIBRARY_PATH=|bambu-studio)'             /tmp/bambu-apprun-shelltrace.txt | cut -c 1-180 || true
+
+          python3 - <<'PY'
+          from pathlib import Path
+          import tempfile
+          from scripts.probe_bambu_multicolour import make_bambu_material_fixture
+          import json
+          p=Path('/tmp/bambu-native-debug')
+          p.mkdir(exist_ok=True)
+          (p/'input.3mf').write_bytes(make_bambu_material_fixture())
+          src=Path('/tmp/bambu-verified-profiles')
+          for kind in ('printer', 'process', 'filament'):
+              (p/(kind+'.json')).write_bytes((src/(kind+'.json')).read_bytes())
+          f=json.loads((p/'filament.json').read_bytes())
+          for i in range(2):
+              item=dict(f)
+              item['name']=f'MakerVault PLA Tool {i+1}'
+              item['filament_settings_id']=[item['name']]
+              (p/f'filament-{i}.json').write_text(json.dumps(item))
+          (p/'filament.json').write_bytes((p/'filament-0.json').read_bytes())
+          PY
+          set +e
+          timeout 60s env -u DISPLAY -u WAYLAND_DISPLAY             HOME=/tmp/bambu-cli-home QT_QPA_PLATFORM=offscreen             SSL_CERT_FILE=/etc/ssl/certs/ca-certificates.crt             LD_LIBRARY_PATH=/tmp/bambu-appimage-acceptance/squashfs-root/bin LC_ALL=C             gdb -q -batch -ex 'set pagination off' -ex 'set follow-fork-mode child' -ex 'set detach-on-fork off' -ex 'set follow-exec-mode new' -ex 'run'             -ex 'bt 32' --args             /tmp/bambu-appimage-acceptance/squashfs-root/bin/bambu-studio             --load-settings '/tmp/bambu-native-debug/printer.json;/tmp/bambu-native-debug/process.json'             --load-filaments '/tmp/bambu-native-debug/filament-0.json;/tmp/bambu-native-debug/filament-1.json'             --slice 0 --export-3mf /tmp/bambu-native-debug/out.3mf             /tmp/bambu-native-debug/input.3mf > /tmp/bambu-native-debug/backtrace.txt 2>&1
+          code=$?
+          set -e
+          echo "CI-only native debugger exit: $code"
+          echo 'CI-only debugger first 45 lines:'
+          sed -n '1,45p' /tmp/bambu-native-debug/backtrace.txt | cut -c 1-200
+          grep -E -m 100 'Program received|SIGABRT|SIGSEGV|terminate called|what\(\)|#0 |#1 |#2 |#3 |#4 |#5 |BambuStudio|libslic3r|__assert_fail|std::' /tmp/bambu-native-debug/backtrace.txt | cut -c 1-240 || true
+
+      - name: Build disposable pinned Bambu candidate image
+        run: |
+          docker build --file slicer_worker/Dockerfile.bundle \
+            --tag makervault-bambu-offline:ci .
+
+      - name: Prove native STL and 3MF slicing inside networkless rootless container
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Only immutable official native profiles are exposed read-only.
+          chmod 755 /tmp/bambu-verified-profiles
+          chmod 644 /tmp/bambu-verified-profiles/*.json
+          for input in stl core-3mf; do
+            extra=()
+            if [ "$input" = core-3mf ]; then extra+=(--bambu-core-3mf); fi
+            docker run --rm --network none --read-only \
+              --cap-drop ALL --pids-limit 128 --cpus 2 --memory 3g \
+              --security-opt no-new-privileges:true \
+              --tmpfs /tmp:rw,nosuid,size=1g,mode=1777 \
+              --mount type=bind,src=/tmp/bambu-verified-profiles,dst=/fixtures,readonly \
+              --entrypoint python3 makervault-bambu-offline:ci \
+              -m slicer_worker.probe \
+              --engine bambustudio --version 02.09.01.70 \
+              --binary /opt/engines/bambu-root/squashfs-root/AppRun \
+              --printer /fixtures/printer.json \
+              --process /fixtures/process.json \
+              --filament /fixtures/filament.json \
+              --timeout 180 "${extra[@]}"
+          done
+
+      - name: Build disposable Bambu candidate on current combined Orca base
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker build --file slicer_worker/Dockerfile.bambu-combined-candidate \
+            --build-context bambu-verified-assets=./slicer-engine-assets \
+            --tag makervault-bambu-combined-candidate:ci .
+
+      - name: Verify candidate works as unprivileged worker on merged combined image base
+        shell: bash
+        run: |
+          set -euo pipefail
+          for input in stl core-3mf; do
+            extra=()
+            if [ "$input" = core-3mf ]; then extra+=(--bambu-core-3mf); fi
+            docker run --rm --network none --read-only \
+              --cap-drop ALL --pids-limit 128 --cpus 2 --memory 3g \
+              --security-opt no-new-privileges:true \
+              --tmpfs /tmp:rw,nosuid,size=1g,mode=1777 \
+              --mount type=bind,src=/tmp/bambu-verified-profiles,dst=/fixtures,readonly \
+              --entrypoint python3 makervault-bambu-combined-candidate:ci \
+              -c 'from slicer_worker.combined_service import block_worker_outbound_connections; from slicer_worker.probe import main; block_worker_outbound_connections(); raise SystemExit(main())' \
+              --engine bambustudio --version 02.09.01.70 \
+              --binary /opt/bambu-candidate/squashfs-root/AppRun \
+              --printer /fixtures/printer.json \
+              --process /fixtures/process.json \
+              --filament /fixtures/filament.json \
+              --timeout 180 "${extra[@]}"
+          done
+
+      - name: Prove genuine Bambu two-tool and facet painting in isolated combined worker
+        shell: bash
+        run: |
+          set -euo pipefail
+          chmod 755 /tmp/bambu-verified-profiles
+          chmod 644 /tmp/bambu-verified-profiles/*.json
+          for paint in models facets; do
+            extra=()
+            if [ "$paint" = facets ]; then extra+=(--painted); fi
+            docker run --rm --network none --read-only               --cap-drop ALL --pids-limit 128 --cpus 2 --memory 3g               --security-opt no-new-privileges:true               --tmpfs /tmp:rw,nosuid,size=1g,mode=1777               --mount type=bind,src=/tmp/bambu-verified-profiles,dst=/fixtures,readonly               --mount type=bind,src="$GITHUB_WORKSPACE/scripts",dst=/opt/makervault-slicer/scripts,readonly               --entrypoint python3 makervault-bambu-combined-candidate:ci               -c 'from slicer_worker.combined_service import block_worker_outbound_connections; from scripts.probe_bambu_multicolour import main; block_worker_outbound_connections(); raise SystemExit(main())'               --binary /opt/bambu-candidate/squashfs-root/AppRun               --profiles /fixtures --timeout 180 "${extra[@]}"
+          done

@@ -20,6 +20,7 @@ import uuid
 from .runner import MAX_GCODE_BYTES, MAX_MODEL_BYTES, MAX_PROFILE_BYTES, WorkerError, run_prusa
 from .orca_runner import run_orca
 from .creality_runner import run_creality
+from .bambu_runner import run_bambu
 from .engine_registry import configured_engines
 from .three_mf_validation import validate_worker_3mf
 from .material_gcode_audit import expected_native_tools, verify_multi_material_output
@@ -82,7 +83,7 @@ def _decode_payload(payload):
         uuid.UUID(str(payload["job_id"]))
     except (TypeError, ValueError):
         raise WorkerError("Invalid job identifier.") from None
-    if payload["engine"] not in {"orcaslicer", "crealityprint", "prusaslicer"}:
+    if payload["engine"] not in {"orcaslicer", "crealityprint", "prusaslicer", "bambustudio"}:
         raise WorkerError("Unsupported isolated worker engine.")
     model_format = payload.get("model_format", "stl")
     if model_format not in {"stl", "3mf"}:
@@ -106,12 +107,12 @@ def _decode_payload(payload):
         files[key] = raw
     if "filament_profiles" in payload:
         palette = payload["filament_profiles"]
-        if (not ((payload["engine"] == "orcaslicer" and model_format == "3mf") or
+        if (not ((payload["engine"] in {"orcaslicer", "bambustudio"} and model_format == "3mf") or
                  (payload["engine"] == "crealityprint" and (
                     (model_format == "stl" and "creality_model_stls" in payload) or
                     (model_format == "3mf" and payload.get("creality_native_project") is True))))
                 or not isinstance(palette, list) or not 2 <= len(palette) <= 16):
-            raise WorkerError("Multi-filament requests require Orca 3MF and two to sixteen presets.")
+            raise WorkerError("Multi-filament requests require native 3MF and two to sixteen presets.")
         decoded = []
         for entry in palette:
             if not isinstance(entry, str) or len(entry) > ((MAX_PROFILE_BYTES + 2)//3)*4 + 8:
@@ -168,9 +169,14 @@ def _decode_payload(payload):
         validate_creality_project(files["model"], native_tool_count=2)
         files["creality_native_project"] = True
     elif model_format == "3mf":
-        validate_worker_3mf(files["model"],
-            native_tool_count=len(files["filament_profiles"])
-                if "filament_profiles" in files else None)
+        options = {"native_tool_count": len(files["filament_profiles"])
+                   if "filament_profiles" in files else None}
+        if payload["engine"] == "bambustudio":
+            options["allow_bambu_project"] = True
+            if "filament_profiles" in files:
+                options["allow_bambu_combined_paint"] = True
+                options["allow_bambu_layer_ranges"] = True
+        validate_worker_3mf(files["model"], **options)
     return files
 
 
@@ -236,7 +242,7 @@ class Handler(BaseHTTPRequestHandler):
             files = _decode_payload(request)
             with tempfile.TemporaryDirectory(prefix="makervault-slice-") as tmp:
                 workdir = Path(tmp)
-                extension = ".json" if current["engine"] in {"orcaslicer", "crealityprint"} else ".ini"
+                extension = ".json" if current["engine"] in {"orcaslicer", "crealityprint", "bambustudio"} else ".ini"
                 for field, name in (
                     ("model", "input." + files["model_format"]), ("printer_profile", "printer" + extension),
                     ("filament_profile", "filament" + extension),
@@ -258,7 +264,8 @@ class Handler(BaseHTTPRequestHandler):
                 stage = "running slicer engine"
                 runner = {"orcaslicer": run_orca,
                           "crealityprint": run_creality,
-                          "prusaslicer": run_prusa}[current["engine"]]
+                          "prusaslicer": run_prusa,
+                          "bambustudio": run_bambu}[current["engine"]]
                 receipt = runner(current["binary"], workdir)
                 stage = "validating generated G-code"
                 data = (workdir / "output.gcode").read_bytes()
@@ -306,6 +313,20 @@ class Handler(BaseHTTPRequestHandler):
                 "Creality Print produced unsupported binary G-code.": "invalid-gcode",
                 "Creality Print worker could not launch the approved binary.": "creality-launch-failed",
                 "OrcaSlicer failed. Check the engine-native profiles.": "engine-exited",
+                "Reviewed Bambu Studio executable is unavailable.": "engine-unavailable",
+                "Bambu Studio CLI rejected the native profiles or model.": "engine-exited",
+                "Bambu generated unsupported binary or empty G-code.": "invalid-gcode",
+                "Bambu native output must contain exactly one G-code plate.": "unexpected-output-layout",
+                "Bambu native output includes an unexpected G-code plate.": "unexpected-output-layout",
+                "Bambu combined painting needs an exact native project palette.": "validation-error",
+                "Bambu multi-material 3MF requires native project settings.": "validation-error",
+                "Bambu project settings require a bounded native palette.": "validation-error",
+                "Unsafe Bambu project setting keys.": "validation-error",
+                "Missing Bambu native preset identity.": "validation-error",
+                "Bambu project palette does not match the native tool count.": "validation-error",
+                "Invalid Bambu project filament colour.": "validation-error",
+                "Invalid Bambu project nozzle diameter.": "validation-error",
+                "Isolated worker could not execute Bambu Studio.": "engine-launch-failed",
                 "Orca profile requires an unbundled parent preset; use a verified complete native profile bundle.": "unresolved-profile-parent",
                 "OrcaSlicer produced no safe output directory.": "no-output-directory",
                 "OrcaSlicer must produce exactly one G-code plate and only expected metadata.": "unexpected-output-layout",
@@ -347,6 +368,16 @@ class Handler(BaseHTTPRequestHandler):
                 "3MF triangle count exceeds worker limit.": "invalid-3mf",
                 "3MF vertex count exceeds worker limit.": "invalid-3mf",
                 "3MF package contents are not bounded.": "invalid-3mf",
+                "Bambu project is missing a valid printable height.": "invalid-native-project-settings",
+                "Invalid Bambu native filament IDs.": "invalid-native-project-settings",
+                "Bambu filament support vector does not match the palette.": "invalid-native-project-settings",
+                "Bambu native material vector does not match variants.": "invalid-native-project-settings",
+                "Bambu variable layers require an exact native palette.": "invalid-native-layer-settings",
+                "Unsafe Bambu native material vector.": "invalid-native-project-settings",
+                "Bambu native project does not match the selected filament profiles.": "native-filament-palette-mismatch",
+                "Invalid Bambu filament extruder variants.": "invalid-native-project-settings",
+                "Invalid Bambu filament self-index.": "invalid-native-project-settings",
+                "Bambu filament variant mapping is inconsistent.": "invalid-native-project-settings",
                 "3MF archive expansion exceeds the limit.": "invalid-3mf",
                 "Unsupported 3MF package members.": "invalid-3mf",
                 "Unsupported native 3MF triangle attributes.": "unsupported-native-facet-attributes",

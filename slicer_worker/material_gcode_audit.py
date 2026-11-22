@@ -4,6 +4,7 @@ Only a bounded acceptance check, never proof of printer firmware compatibility.
 A profile's toolchange macro is not interpreted or executed by this module.
 """
 import io
+import math
 import re
 import zipfile
 from xml.etree import ElementTree as ET
@@ -159,6 +160,248 @@ def verify_two_object_tool_regions(raw_gcode, *, left_tool=0, right_tool=1):
     if min(hits) < 20 or any(mismatches):
         raise WorkerError("Native multi-tool G-code does not match the expected model/tool regions.")
     return {"left_tool_deposits": hits[0], "right_tool_deposits": hits[1]}
+
+
+
+def verify_painted_cube_tool_regions(raw_gcode):
+    """Offline acceptance for the fixed 20mm facet-painted cube at (75,110).
+
+    Unlike global T0/T1 checks, this requires actual positive-E XY toolpaths
+    *inside the printed cube* from both tools. Prime-tower/wipe-only tool
+    changes cannot pass. This fixed-fixture check makes no claims about
+    colour-boundary fidelity or physical print quality.
+    """
+    if (not isinstance(raw_gcode, bytes) or not raw_gcode
+            or len(raw_gcode) > 64 * 1024 * 1024):
+        raise WorkerError("Invalid native painted cube G-code.")
+    try:
+        lines = raw_gcode.decode("utf-8").splitlines()
+    except UnicodeDecodeError:
+        raise WorkerError("Painted cube G-code must be UTF-8.") from None
+
+    active = None
+    absolute_e = True
+    absolute_xyz = True
+    x = y = 0.0
+    prior_e = {}
+    hits = {0: 0, 1: 0}
+    for raw in lines:
+        code = raw.split(";", 1)[0].strip().upper()
+        tool = TOOL.fullmatch(code)
+        if tool:
+            active = int(tool.group(1))
+            continue
+        command = code.split(None, 1)[0] if code else ""
+        if command == "G90":
+            absolute_xyz = True
+        elif command == "G91":
+            absolute_xyz = False
+        elif command == "M82":
+            absolute_e = True
+        elif command == "M83":
+            absolute_e = False
+        elif command == "G92":
+            if active is not None:
+                reset = E_AXIS.search(code[3:])
+                if reset:
+                    prior_e[active] = float(reset.group(1))
+            reset_x = re.search(r"(?:^|\s)X([-+]?(?:\d+(?:\.\d*)?|\.\d+))(?=\s|$)", code)
+            reset_y = re.search(r"(?:^|\s)Y([-+]?(?:\d+(?:\.\d*)?|\.\d+))(?=\s|$)", code)
+            if reset_x:
+                x = float(reset_x.group(1))
+            if reset_y:
+                y = float(reset_y.group(1))
+        elif MOVE.match(code):
+            mx = re.search(r"(?:^|\s)X([-+]?(?:\d+(?:\.\d*)?|\.\d+))(?=\s|$)", code)
+            my = re.search(r"(?:^|\s)Y([-+]?(?:\d+(?:\.\d*)?|\.\d+))(?=\s|$)", code)
+            if mx:
+                amount = float(mx.group(1))
+                x = amount if absolute_xyz else x + amount
+            if my:
+                amount = float(my.group(1))
+                y = amount if absolute_xyz else y + amount
+            e = E_AXIS.search(code)
+            if e and active is not None:
+                value = float(e.group(1))
+                old = prior_e.get(active, 0.0)
+                if absolute_e:
+                    prior_e[active] = value
+                if ((value > old + 1e-6 if absolute_e else value > 1e-6)
+                        and (mx or my) and 64 <= x <= 86 and 99 <= y <= 121
+                        and active in hits):
+                    hits[active] += 1
+    if min(hits.values()) < 10:
+        raise WorkerError(
+            "Painted Bambu G-code lacks actual dual-tool deposition inside the model.")
+    return {"base_tool_model_deposits": hits[0],
+            "painted_tool_model_deposits": hits[1]}
+
+
+def summarize_bambu_flush_signal(raw_gcode):
+    """Bounded offline evidence of actual native Bambu positive-E toolpaths.
+
+    Per-tool totals exclude retractions and never read printer firmware.
+    No G-code is rewritten. This is exploratory output evidence, not proof
+    that purge exits at the right physical location or correct colour.
+    """
+    if (not isinstance(raw_gcode, bytes) or not raw_gcode
+            or len(raw_gcode) > 64 * 1024 * 1024):
+        raise WorkerError("Invalid native Bambu flush evidence.")
+    try:
+        lines = raw_gcode.decode("utf-8").splitlines()
+    except UnicodeDecodeError:
+        raise WorkerError("Bambu flush evidence requires UTF-8 G-code.") from None
+    if len(lines) > 1_500_000:
+        raise WorkerError("Bambu flush evidence exceeds line limit.")
+    active = None
+    absolute_e = True
+    absolute_xyz = True
+    x = y = 0.0
+    tower_min_x = tower_min_y = float("inf")
+    tower_max_x = tower_max_y = float("-inf")
+    tower_position_moves = 0
+    e_last = {}
+    totals = {0: 0.0, 1: 0.0}
+    positive_moves = {0: 0, 1: 0}
+    stationary = {0: 0.0, 1: 0.0}
+    tower = {0: 0.0, 1: 0.0}
+    support = {0: 0.0, 1: 0.0}
+    support_feature_moves = 0
+    tower_feature_moves = 0
+    toolchanges = 0
+    feature = ""
+    for raw in lines:
+        if raw.lstrip().startswith(";"):
+            comment = raw.strip()[1:].strip()
+            if comment.upper().startswith(("FEATURE:", "TYPE:")):
+                feature = comment.split(":", 1)[-1].strip().lower()[:80]
+            continue
+        line = raw.split(";", 1)[0].strip().upper()
+        chosen = TOOL.fullmatch(line)
+        if chosen:
+            nxt = int(chosen.group(1))
+            if active in totals and nxt in totals and active != nxt:
+                toolchanges += 1
+            active = nxt
+            continue
+        command = line.split(None, 1)[0] if line else ""
+        if command == "M82":
+            absolute_e = True
+        elif command == "M83":
+            absolute_e = False
+        elif command == "G90":
+            absolute_xyz = True
+        elif command == "G91":
+            absolute_xyz = False
+        elif command == "G92":
+            if active in totals:
+                e = E_AXIS.search(line[3:])
+                if e:
+                    e_last[active] = float(e.group(1))
+            for axis, value in re.findall(
+                    r"(?:^|\s)([XY])([-+]?(?:\d+(?:\.\d*)?|\.\d+))(?=\s|$)", line):
+                if axis == "X":
+                    x = float(value)
+                else:
+                    y = float(value)
+        elif MOVE.match(line):
+            mx = re.search(r"(?:^|\s)X([-+]?(?:\d+(?:\.\d*)?|\.\d+))(?=\s|$)", line)
+            my = re.search(r"(?:^|\s)Y([-+]?(?:\d+(?:\.\d*)?|\.\d+))(?=\s|$)", line)
+            if mx:
+                amount = float(mx.group(1))
+                x = amount if absolute_xyz else x + amount
+            if my:
+                amount = float(my.group(1))
+                y = amount if absolute_xyz else y + amount
+            if active not in totals:
+                continue
+            e = E_AXIS.search(line)
+            if not e:
+                continue
+            val = float(e.group(1))
+            prev = e_last.get(active, 0.0)
+            if absolute_e:
+                e_last[active] = val
+            inc = (val - prev) if absolute_e else val
+            if not 0 < inc < 10000:
+                continue
+            totals[active] += inc
+            positive_moves[active] += 1
+            if not XY.search(line):
+                stationary[active] += inc
+            if "support" in feature:
+                support[active] += inc
+                support_feature_moves += 1
+            if "tower" in feature or "wipe" in feature:
+                tower[active] += inc
+                tower_feature_moves += 1
+                if (mx or my) and all(math.isfinite(v) for v in (x, y)):
+                    tower_min_x = min(tower_min_x, x)
+                    tower_max_x = max(tower_max_x, x)
+                    tower_min_y = min(tower_min_y, y)
+                    tower_max_y = max(tower_max_y, y)
+                    tower_position_moves += 1
+    return {
+        "positive_e_mm": {str(k): round(v, 3) for k, v in totals.items()},
+        "positive_e_moves": {str(k): v for k, v in positive_moves.items()},
+        "stationary_positive_e_mm": {str(k): round(v, 3) for k, v in stationary.items()},
+        "tower_feature_positive_e_mm": {str(k): round(v, 3) for k, v in tower.items()},
+        "support_feature_positive_e_mm": {
+            str(k): round(v, 3) for k, v in support.items()},
+        "support_feature_moves": support_feature_moves,
+        "tower_feature_moves": tower_feature_moves,
+        "tower_position_moves": tower_position_moves,
+        "tower_deposition_bbox_mm": (
+            {"min_x": round(tower_min_x, 3), "max_x": round(tower_max_x, 3),
+             "min_y": round(tower_min_y, 3), "max_y": round(tower_max_y, 3)}
+            if tower_position_moves else None),
+        "toolchanges": toolchanges,
+    }
+
+
+def verify_bambu_fixture_variable_layers(raw_gcode, *, upper_height=0.30):
+    """Prove the pinned Bambu native 3MF fixed painted cube used the requested
+    0.10mm (0-9mm) and 0.30mm (9-20mm) layer-height bands in actual G-code.
+
+    BambuStudio 2.9.1 emits '; Z_HEIGHT: <physical Z>', not Orca's ';Z:'.
+    Only strictly increasing native layer markers are accepted; travel Z,
+    Z-hops and untrusted header settings cannot pass the audit.
+    """
+    if type(upper_height) not in (int, float) or upper_height not in (0.15, 0.30):
+        raise WorkerError("Invalid Bambu fixture upper layer height.")
+    if (not isinstance(raw_gcode, bytes) or not raw_gcode
+            or len(raw_gcode) > 64 * 1024 * 1024):
+        raise WorkerError("Invalid Bambu native layer audit G-code.")
+    try:
+        lines = raw_gcode.decode("utf-8").splitlines()
+    except UnicodeDecodeError:
+        raise WorkerError("Bambu native layer audit requires UTF-8.") from None
+    if len(lines) > 1_500_000:
+        raise WorkerError("Bambu native layer audit exceeds line limit.")
+    layer = re.compile(r"^;\s*Z_HEIGHT:\s*([0-9]+(?:\.[0-9]+)?)\s*$", re.I)
+    positions = []
+    for raw in lines:
+        match = layer.fullmatch(raw.strip())
+        if match:
+            z = float(match.group(1))
+            if math.isfinite(z) and 0 < z <= 1000 and (
+                    not positions or z > positions[-1] + 1e-5):
+                positions.append(z)
+    if len(positions) < 10:
+        raise WorkerError("Bambu G-code lacks native layer-height markers.")
+    checks = []
+    for label, start, stop, wanted in (
+            ("lower", 0.0, 9.0, 0.10),
+            ("upper", 9.0, 20.0, upper_height)):
+        values = [round(z1 - z0, 4)
+                  for z0, z1 in zip(positions, positions[1:])
+                  if z0 >= start + wanted and z1 <= stop - wanted]
+        matched = [v for v in values if abs(v - wanted) <= max(0.018, wanted * .12)]
+        if len(values) < 5 or len(matched) < max(3, math.ceil(.6 * len(values))):
+            raise WorkerError("Bambu native variable layer height did not match the requested bands.")
+        checks.append({"band": label, "target_height_mm": wanted,
+                       "matched_layers": len(matched), "checked_layers": len(values)})
+    return {"native_z_markers": len(positions), "verified_layer_bands": checks}
 
 
 def summarize_k2_fixture_changeovers(raw_gcode):

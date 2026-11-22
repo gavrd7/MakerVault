@@ -31,12 +31,16 @@ from .engine_store_admin import (
     EXPECTED_ORCA_SHA, APPROVAL_VERSION, rollback as rollback_store,
 )
 from .engine_store_lifecycle import installed_versions, activate_installed, uninstall_engine, preserve_active_identities, IDENTITY
-from .engine_registry import SUPPORTED as INSTALLED_ENGINE_TYPES
+from .engine_registry import SUPPORTED as INSTALLED_ENGINE_TYPES, BAMBU_VERSION, BAMBU_RUNTIME_SHA256
 
 STORE = Path(os.environ.get("SLICER_ENGINE_STORE", "/opt/engine-store"))
 TOKEN = os.environ.get("SLICER_INSTALLER_TOKEN", "")
 SUPPORTED = {"crealityprint": "CrealityOfficial/CrealityPrint",
              "orcaslicer": "OrcaSlicer/OrcaSlicer"}
+SUPPORTED["bambustudio"] = "bambulab/BambuStudio"
+BAMBU_APPIMAGE_SHA256 = "668dabb1be53c758189ed6bc89935285dea5e0af46216546b1bafd6882e9aff0"
+BAMBU_ASSET = "BambuStudio_ubu24-v02.09.01.70-20261103183404.AppImage"
+
 # Orca 2.5.0 is NOT compatible with the native Creality K2 profile as
 # published upstream: the profile asks for 30 mm cut retraction while the
 # official executable caps it at 18 mm. Never substitute the stock AppImage
@@ -149,6 +153,41 @@ def release_catalogue():
             return list(RELEASE_CACHE["items"])
     releases = []
     for engine, repo in SUPPORTED.items():
+        if engine == "bambustudio":
+            tag = "v" + BAMBU_VERSION
+            url = f"https://api.github.com/repos/{repo}/releases/tags/{tag}"
+            try:
+                with _request(url) as response:
+                    raw = response.read(2 * 1024 * 1024 + 1)
+                if len(raw) > 2 * 1024 * 1024:
+                    continue
+                release = json.loads(raw)
+            except (OSError, ValueError, urllib.error.URLError):
+                continue
+            if not isinstance(release, dict) or release.get("draft") or release.get("prerelease"):
+                continue
+            expected_url = (
+                f"https://github.com/{repo}/releases/download/{tag}/{BAMBU_ASSET}")
+            matches = [item for item in release.get("assets", [])
+                       if isinstance(item, dict) and item.get("name") == BAMBU_ASSET]
+            if len(matches) != 1:
+                continue
+            item = matches[0]
+            if (item.get("digest") != "sha256:" + BAMBU_APPIMAGE_SHA256
+                    or item.get("browser_download_url") != expected_url
+                    or type(item.get("size")) is not int
+                    or not 10_000_000 <= item["size"] <= MAX_BYTES):
+                continue
+            releases.append({
+                "engine": engine, "version": BAMBU_VERSION,
+                "bundle_sha256": BAMBU_APPIMAGE_SHA256,
+                "bundle_url": expected_url,
+                "binary_sha256": BAMBU_RUNTIME_SHA256,
+                "architecture": "linux/amd64",
+                "notes": "Bambu Studio 2.9.1",
+                "asset_size": item["size"],
+            })
+            continue
         if engine == "orcaslicer":
             reviewed = _reviewed_orca_release()
             if reviewed is not None:
@@ -342,11 +381,13 @@ def _install(op_id, release):
             probe = subprocess.run(probe_args, cwd=stage,
                 env={"HOME": str(stage), "TMPDIR": str(stage),
                      "PATH": "/usr/bin:/bin", "LANG": "C.UTF-8",
-                     "DISPLAY": "", "QT_QPA_PLATFORM": "offscreen"},
+                     "DISPLAY": "", "QT_QPA_PLATFORM": "offscreen",
+                     "SSL_CERT_FILE": "/etc/ssl/certs/ca-certificates.crt"},
                 stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
-                stderr=subprocess.PIPE, timeout=18, check=False)
+                stderr=subprocess.PIPE,
+                timeout=45 if engine == "bambustudio" else 18, check=False)
         except subprocess.TimeoutExpired as exc:
-            raise ValueError("Engine CLI headless check timed out (18 seconds).") from exc
+            raise ValueError("Engine CLI headless check timed out.") from exc
         except OSError as exc:
             raise ValueError(
                 f"Engine CLI could not start ({type(exc).__name__}, errno {exc.errno})."
@@ -356,6 +397,8 @@ def _install(op_id, release):
         # Stage a complete version before publishing it; preserve all older
         # engines and use a single atomic manifest rename for activation.
         binary_hash = _sha256(runtime)
+        if engine == "bambustudio" and binary_hash != BAMBU_RUNTIME_SHA256:
+            raise ValueError("Bambu native runtime differs from the reviewed exact release.")
         if not HEX.fullmatch(binary_hash):
             raise ValueError("Engine runtime digest unavailable.")
         (stage / IDENTITY).write_text(json.dumps({
@@ -403,7 +446,9 @@ def _install(op_id, release):
 
 
 def start_install(engine, version, digest):
-    if engine not in SUPPORTED or not VERSION.fullmatch(version) or not HEX.fullmatch(digest):
+    version_ok = (version == BAMBU_VERSION if engine == "bambustudio"
+                  else isinstance(version, str) and bool(VERSION.fullmatch(version)))
+    if engine not in SUPPORTED or not version_ok or not isinstance(digest, str) or not HEX.fullmatch(digest):
         raise ValueError("Unknown engine release.")
     with LOCK:
         if any(op["status"] not in {"completed", "failed"} for op in OPERATIONS.values()):

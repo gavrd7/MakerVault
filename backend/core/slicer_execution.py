@@ -24,10 +24,10 @@ from .slicer_multimaterial_execution import (plan_native_multimaterial, prepare_
                                              prepare_creality_multistl, prepare_creality_positioned_project)
 from .slicer_material_gcode_audit import audit_native_tool_usage, MaterialGcodeAuditError
 from .slicer_gcode_bounds import audit_extrusion_xy_bounds, GcodeExtrusionBoundsError
-from .slicer_flush_settings import apply_orca_flush_settings
+from .slicer_flush_settings import apply_orca_flush_settings, apply_bambu_flush_settings
 from .slicer_native_overrides import apply_orca_job_overrides
 from .slicer_plate_types import apply_creality_plate, effective_creality_plate, validate_plate_temperature
-from .slicer_variable_layers import audit_orca_variable_layers, validate_orca_variable_support_compatibility
+from .slicer_variable_layers import audit_orca_variable_layers, audit_bambu_variable_layers, validate_orca_variable_support_compatibility
 from .slicer_paint_assets import expand_painted_settings
 from .slicer_process_settings import apply_process_overrides
 from .slicer_profiles import SlicerProfileError
@@ -230,7 +230,7 @@ def _check_profile_integrity(profile, job, kind):
         inspection = inspect_native_profile(profile.file_asset, profile.engine)
         if inspection["sha256"] != profile.content_sha256:
             raise SlicerExecutionError("Native profile contents changed after import.")
-        if profile.engine in {"orcaslicer", "crealityprint"}:
+        if profile.engine in {"orcaslicer", "crealityprint", "bambustudio"}:
             resolved_native_profile(profile)
     except (SlicerProfileError, ValueError, OSError) as exc:
         raise SlicerExecutionError("Native profile is invalid or its parent presets are incomplete: " +
@@ -314,11 +314,12 @@ def _validate_plate_execution(job):
         # Native geometry splitting and paint_supports attributes are
         # experimental until compared with real Orca-generated toolpaths.
         if not ((job.engine == "orcaslicer" and job.engine_version == "2.5.0") or
+                (job.engine == "bambustudio" and job.engine_version == "02.09.01.70") or
                 (job.engine == "crealityprint" and job.engine_version.startswith("7.3.") and
                  settings.get("multi_material_test") is True)):
             raise SlicerExecutionError(
                 "Native support painting test requires OrcaSlicer 2.5.0 or Creality Print 7.3.x CFS test mode.")
-        if len(objects) != 1 or (settings.get("multi_material_test") and job.engine != "crealityprint"):
+        if len(objects) != 1 or (settings.get("multi_material_test") and job.engine not in {"crealityprint", "bambustudio"}):
             raise SlicerExecutionError(
                 "Support painting test requires one upright model (Creality: one two-colour CFS model).")
         item = objects[0]
@@ -338,10 +339,11 @@ def _validate_plate_execution(job):
     if any(isinstance(item, dict) and isinstance(item.get("seam_paint"), dict)
            and item["seam_paint"].get("regions") for item in objects):
         if not ((job.engine == "orcaslicer" and job.engine_version == "2.5.0") or
+                (job.engine == "bambustudio" and job.engine_version == "02.09.01.70") or
                 (job.engine == "crealityprint" and job.engine_version.startswith("7.3.") and
                  settings.get("multi_material_test") is True)):
             raise SlicerExecutionError("Native seam painting test requires OrcaSlicer 2.5.0 or Creality Print 7.3.x CFS test mode.")
-        if len(objects) != 1 or (settings.get("multi_material_test") and job.engine != "crealityprint"):
+        if len(objects) != 1 or (settings.get("multi_material_test") and job.engine not in {"crealityprint", "bambustudio"}):
             raise SlicerExecutionError("Seam painting test requires one model (Creality: one two-colour CFS model).")
         item = objects[0]
         if item.get("process_overrides"):
@@ -360,11 +362,12 @@ def _validate_plate_execution(job):
         # fuzzy_skin=none ("Painted only") to activate them. The distinct
         # disabled_fuzzy value turns the effect off entirely.
         if not ((job.engine == "orcaslicer" and job.engine_version == "2.5.0") or
+                (job.engine == "bambustudio" and job.engine_version == "02.09.01.70") or
                 (job.engine == "crealityprint" and job.engine_version.startswith("7.3.") and
                  settings.get("multi_material_test") is True)):
             raise SlicerExecutionError(
                 "Native fuzzy skin painting test requires OrcaSlicer 2.5.0 or Creality Print 7.3.x CFS test mode.")
-        if len(objects) != 1 or (settings.get("multi_material_test") and job.engine != "crealityprint"):
+        if len(objects) != 1 or (settings.get("multi_material_test") and job.engine not in {"crealityprint", "bambustudio"}):
             raise SlicerExecutionError(
                 "Selective fuzzy skin test requires one model (Creality: one two-colour CFS model).")
         item = objects[0]
@@ -387,11 +390,12 @@ def _validate_plate_execution(job):
         # explicitly offline, single upright model experiment only. Real
         # G-code and firmware checks are still needed for print approval.
         if not ((job.engine == "orcaslicer" and job.engine_version == "2.5.0") or
+                (job.engine == "bambustudio" and job.engine_version == "02.09.01.70") or
                 (job.engine == "crealityprint" and job.engine_version.startswith("7.3.") and
                  settings.get("multi_material_test") is True)):
             raise SlicerExecutionError(
                 "Variable layer slicing requires OrcaSlicer 2.5.0 or Creality Print 7.3.x CFS test mode.")
-        if len(objects) != 1 or (settings.get("multi_material_test") and job.engine != "crealityprint"):
+        if len(objects) != 1 or (settings.get("multi_material_test") and job.engine not in {"crealityprint", "bambustudio"}):
             raise SlicerExecutionError(
                 "Variable layer test slicing requires one model (Creality: one two-colour CFS model).")
         item = objects[0]
@@ -459,8 +463,11 @@ def _validate_plate_execution(job):
         )
     except MaterialRoutingError as exc:
         raise SlicerExecutionError(str(exc)) from exc
-    if job.engine not in {"orcaslicer", "crealityprint"}:
+    if job.engine not in {"orcaslicer", "crealityprint", "bambustudio"}:
         raise SlicerExecutionError("This engine does not yet support native build-plate slicing.")
+    # Bambu and Orca both import 3MF per-object extruder settings and native
+    # paint_color facets. Other object-specific channels follow the same
+    # feature-specific validation below, never an entire-engine ban.
     if job.engine == "crealityprint":
         # Creality receives the same validated STL/3MF geometry route, but
         # Orca-only per-object modifiers must not be silently discarded.
@@ -717,7 +724,7 @@ def process_queued_job(job_id):
             if hashlib.sha256(data).hexdigest() != profile.content_sha256:
                 raise SlicerExecutionError("Native profile contents changed since verification.")
             profiles.append(resolved_native_profile(profile)
-                            if job.engine in {"orcaslicer", "crealityprint"} else data)
+                            if job.engine in {"orcaslicer", "crealityprint", "bambustudio"} else data)
         if job.engine == "orcaslicer":
             stage = "checking native printer/process compatibility"
             profiles[0] = _execution_printer_profile(
@@ -801,6 +808,38 @@ def process_queued_job(job_id):
                 palette = list(material_result["filament_profiles"])
                 palette[0] = profiles[1]
                 material_result["filament_profiles"] = tuple(palette)
+        if job.engine == "bambustudio":
+            # Bambu native process keys share the validated slicer process
+            # schema. Apply user-selected values to an in-memory copy only,
+            # exactly like the existing Orca global process controls.
+            try:
+                profiles[2] = apply_process_overrides(
+                    profiles[2], (job.settings or {}).get("process_overrides") or {})
+            except (ValueError, TypeError, UnicodeDecodeError) as exc:
+                raise SlicerExecutionError(
+                    "Bambu native process settings could not be applied.") from exc
+        if job.engine == "bambustudio":
+            stage = "validating native Bambu build plate and filament temperatures"
+            try:
+                # Bambu Studio's native settings share the same named bed
+                # temperature vectors and curr_bed_type field. Apply only to
+                # worker-bound copies, retaining the original stored presets.
+                selected = (material_result["filament_profiles"][0]
+                            if material_result is not None else profiles[1])
+                profiles[2], profiles[1] = apply_creality_plate(
+                    profiles[2], selected, job.plate,
+                    printer_profile=job.printer_profile)
+                if material_result is not None:
+                    resolved = [apply_creality_plate(
+                        profiles[2], native, job.plate,
+                        printer_profile=job.printer_profile)[1]
+                        for native in material_result["filament_profiles"]]
+                    material_result["filament_profiles"] = tuple(resolved)
+                    # The legacy first-profile field and the first entry
+                    # of the ordered palette must match byte-for-byte.
+                    profiles[1] = resolved[0]
+            except (ValueError, TypeError, UnicodeDecodeError, SlicerProfileError) as exc:
+                raise SlicerExecutionError(str(exc)) from exc
         if job.engine == "crealityprint":
             stage = "validating native Creality build plate and filament temperatures"
             try:
@@ -833,6 +872,33 @@ def process_queued_job(job_id):
                 raise SlicerExecutionError(
                     "Creality process changes are not supported by this native profile."
                 ) from exc
+        if material_result is not None and job.engine == "bambustudio":
+            # Bambu processes the 3MF per-object extruder or painted-facet
+            # tool number against the same zero-based ordered filament palette.
+            # Settings are job-local; never infer a tool from AMS bay position.
+            if (job.settings or {}).get("flush_settings") is not None:
+                from types import SimpleNamespace
+                routes = [SimpleNamespace(slot_id=slot, tool_index=index)
+                          for slot, index in material_result["tool_bindings"].items()]
+                try:
+                    profiles[2] = apply_bambu_flush_settings(
+                        profiles[2], job.settings["flush_settings"],
+                        routes=routes,
+                        tool_count=len(material_result["filament_profiles"]),
+                        topology=material_result["topology"])
+                except (MaterialRoutingError, ValueError) as exc:
+                    raise SlicerExecutionError(
+                        "Invalid native Bambu multi-filament flushing settings.") from exc
+            if (job.settings or {}).get("prime_tower") is not None:
+                from .slicer_bambu_project import apply_bambu_prime_tower_position
+                try:
+                    bed_width, bed_depth = trusted_plate_dimensions(job.printer_profile)
+                    profiles[2] = apply_bambu_prime_tower_position(
+                        profiles[2], job.settings["prime_tower"],
+                        bed_width=bed_width, bed_depth=bed_depth)
+                except (SlicerProfileError, ValueError, TypeError) as exc:
+                    raise SlicerExecutionError(
+                        "Invalid native Bambu prime tower position.") from exc
         if material_result is not None and job.engine == "crealityprint":
             # Each filament in the palette is resolved from the authenticated
             # model-assigned slot. The legacy single-profile field must match
@@ -863,6 +929,28 @@ def process_queued_job(job_id):
                 bed_width=width, bed_depth=depth,
                 require_verified_multicolor_purge=selected_creality_multicolor)
             model_format = "3mf"
+        if material_result is not None and job.engine == "bambustudio":
+            # Bambu's native 02.09.01.70 CLI requires the 3MF project's
+            # filament ID/colour vectors when loading more than one filament.
+            # Build these from exact owner-scoped native presets and the
+            # already-validated logical tool bindings; never infer them from
+            # the numeric CFS/AMS bay index.
+            from .slicer_bambu_project import (
+                add_bambu_project_settings, selected_bambu_tool_colours,
+            )
+            try:
+                colours = selected_bambu_tool_colours(
+                    (job.settings or {}).get("plate_objects") or [],
+                    material_result["tool_bindings"],
+                    len(material_result["filament_profiles"]))
+                model = add_bambu_project_settings(
+                    model, printer=profiles[0], process=profiles[2],
+                    filaments=material_result["filament_profiles"],
+                    tool_colours=colours)
+            except (SlicerProfileError, ValueError, TypeError) as exc:
+                raise SlicerExecutionError(
+                    "Bambu multi-material project settings could not be validated: "
+                    + str(exc)) from exc
         if model_format == "stl" and job.input_asset.sha256 and hashlib.sha256(model).hexdigest() != job.input_asset.sha256:
             raise SlicerExecutionError("Model contents changed since the job was prepared.")
         stage = "executing the isolated slicer worker"
@@ -939,11 +1027,16 @@ def process_queued_job(job_id):
         if variable_test:
             stage = "auditing native variable layer height"
             try:
-                audit_orca_variable_layers(output.decode("utf-8"), variable_test)
+                if job.engine == "bambustudio":
+                    audit_bambu_variable_layers(output.decode("utf-8"), variable_test)
+                else:
+                    audit_orca_variable_layers(output.decode("utf-8"), variable_test)
             except (UnicodeDecodeError, ValueError) as exc:
+                engine_name = ("Bambu Studio" if job.engine == "bambustudio"
+                               else "Orca")
                 raise SlicerExecutionError(
-                    "Orca did not produce verifiable native variable layer heights. "
-                    "The generated G-code has not been approved or stored."
+                    engine_name + " did not produce the requested variable layer "
+                    "heights. The generated G-code has not been approved or stored."
                 ) from exc
         stage = "validating and storing generated G-code"
         asset = store_generated_gcode(job.pk, output)

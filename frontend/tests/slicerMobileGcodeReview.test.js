@@ -39,8 +39,10 @@ test("G-code toolpath uses right-handed printer coordinates, not a reflected axi
 test("mobile preview retains the toolpath, temperatures and primary figures", () => {
   assert.match(preview, /<SlicerToolpath3D segments=/);
   assert.match(preview, /Estimated print time/);
-  assert.match(preview, /Requested nozzle/);
-  assert.match(preview, /Requested bed/);
+  assert.match(preview, /temperatureInfo/);
+  assert.match(viewer, /profileTemperatures=\{analysis\.print_setup\?\.profile_temperatures_c\}/);
+  assert.match(preview, /Nozzle temperature · G-code\/profile/);
+  assert.match(preview, /Bed temperature · G-code\/profile/);
   assert.match(viewer, /slicerGcodeQuickSummary/);
   assert.match(mobileCss, /\.slicerGcodeQuickSummary/);
   assert.match(mobileCss, /\.slicerResultLayerLayout/);
@@ -48,7 +50,7 @@ test("mobile preview retains the toolpath, temperatures and primary figures", ()
 
 test("review layout keeps temperatures, detail table and source reader responsive", () => {
   const source = read("../src/components/GcodeFullSource.jsx");
-  assert.match(preview, /Requested chamber/);
+  assert.match(preview, /Chamber temperature · G-code\/profile/);
   assert.match(viewer, /Chamber /);
   assert.ok(viewer.includes("<strong>Build plate</strong>"));
   assert.match(viewer, /slicerGenerator/);

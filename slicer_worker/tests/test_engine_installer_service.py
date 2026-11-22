@@ -57,7 +57,51 @@ class InstallerTests(unittest.TestCase):
              patch.object(installer, "_request",
                           return_value=io.BytesIO(json.dumps(release()).encode())) as request:
             self.assertEqual(installer.release_catalogue(), installer.release_catalogue())
-            self.assertEqual(request.call_count, 2)
+            # Orca, Creality and Bambu now participate in normal catalogue refresh.
+            self.assertEqual(request.call_count, 3)
+
+    def test_bambu_is_listed_normally_with_verified_upstream_digest(self):
+        from io import BytesIO
+
+        def github(url, **kwargs):
+            if "bambulab/BambuStudio" in url:
+                payload = {
+                    "tag_name": "v" + installer.BAMBU_VERSION,
+                    "draft": False, "prerelease": False,
+                    "assets": [{
+                        "name": installer.BAMBU_ASSET,
+                        "size": 270000000,
+                        "digest": "sha256:" + installer.BAMBU_APPIMAGE_SHA256,
+                        "browser_download_url":
+                            "https://github.com/bambulab/BambuStudio/releases/download/v"
+                            + installer.BAMBU_VERSION + "/" + installer.BAMBU_ASSET,
+                    }],
+                }
+                return BytesIO(json.dumps(payload).encode())
+            return BytesIO(json.dumps(release()).encode())
+        with patch.object(installer.platform, "machine", return_value="x86_64"), \
+             patch.object(installer, "_request", side_effect=github):
+            rows = installer.release_catalogue()
+        bambu = [row for row in rows if row["engine"] == "bambustudio"]
+        self.assertEqual(len(bambu), 1)
+        self.assertEqual(bambu[0]["version"], installer.BAMBU_VERSION)
+        self.assertEqual(bambu[0]["bundle_sha256"], installer.BAMBU_APPIMAGE_SHA256)
+        self.assertEqual(bambu[0]["binary_sha256"], installer.BAMBU_RUNTIME_SHA256)
+        self.assertIn("crealityprint", {row["engine"] for row in rows})
+        installer.RELEASE_CACHE["items"] = []
+        installer.RELEASE_CACHE["time"] = 0
+        def altered(url, **kwargs):
+            response = github(url, **kwargs)
+            if "bambulab/BambuStudio" not in url:
+                return response
+            payload = json.loads(response.read())
+            payload["assets"][0]["digest"] = "sha256:" + "0" * 64
+            return BytesIO(json.dumps(payload).encode())
+        with patch.object(installer.platform, "machine", return_value="x86_64"), \
+             patch.object(installer, "_request", side_effect=altered):
+            rows = installer.release_catalogue()
+        self.assertNotIn("bambustudio", {row["engine"] for row in rows})
+        self.assertIn("crealityprint", {row["engine"] for row in rows})
 
     def test_only_sha_verified_bundled_orca_250_is_offered_for_k2(self):
         from io import BytesIO

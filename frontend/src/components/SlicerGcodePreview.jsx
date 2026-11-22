@@ -27,7 +27,7 @@ const COLOUR_MODES = [
   { value: "acceleration", label: "Acceleration", supported: false },
 ];
 
-export default function SlicerGcodePreview({ fileId = null, preview, bedSize = null, file = null, canEdit = false, onSaved = null, startTemperatures = null, filamentColours = {} }) {
+export default function SlicerGcodePreview({ fileId = null, preview, bedSize = null, file = null, canEdit = false, onSaved = null, startTemperatures = null, profileTemperatures = null, filamentColours = {} }) {
   const [mobilePanel, setMobilePanel] = useState(null);
   const [layer, setLayer] = useState(null);
   const [step, setStep] = useState(null);
@@ -258,6 +258,11 @@ export default function SlicerGcodePreview({ fileId = null, preview, bedSize = n
     return hours ? `${hours}h ${mins}m` : `${mins}m`;
   };
   const metric = (value, unit) => value == null ? "Not declared" : `${value.toLocaleString()} ${unit}`;
+  const temperatureInfo = key => {
+    if (startTemperatures?.[key] != null) return startTemperatures[key] + " °C";
+    if (profileTemperatures?.[key] != null) return profileTemperatures[key] + " °C (profile only)";
+    return "Not declared";
+  };
 
   return <div className="slicerResultPreview">
     <div className="slicerResultStats">
@@ -266,9 +271,9 @@ export default function SlicerGcodePreview({ fileId = null, preview, bedSize = n
       <div><small>Filament weight</small><strong>{metric(preview?.filament_g, "g")}</strong></div>
       <div><small>Filament volume</small><strong>{metric(preview?.filament_cm3, "cm³")}</strong></div>
       <div><small>Extrusion layers</small><strong>{preview?.layer_count ?? "Partial"}</strong></div>
-      <div><small>Requested nozzle · G-code</small><strong>{startTemperatures?.nozzle_c != null ? startTemperatures.nozzle_c + " °C" : "Not declared"}</strong></div>
-      <div><small>Requested bed · G-code</small><strong>{startTemperatures?.bed_c != null ? startTemperatures.bed_c + " °C" : "Not declared"}</strong></div>
-      <div><small>Requested chamber · G-code</small><strong>{startTemperatures?.chamber_c != null ? startTemperatures.chamber_c + " °C" : "Not declared"}</strong></div>
+      <div><small>Nozzle temperature · G-code/profile</small><strong>{temperatureInfo("nozzle_c")}</strong></div>
+      <div><small>Bed temperature · G-code/profile</small><strong>{temperatureInfo("bed_c")}</strong></div>
+      <div><small>Chamber temperature · G-code/profile</small><strong>{temperatureInfo("chamber_c")}</strong></div>
     </div>
     {layers.length > 0 ? <>
 

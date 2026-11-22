@@ -26,11 +26,13 @@ from xml.etree import ElementTree as ET
 from .runner import MAX_PROFILE_BYTES, MAX_GCODE_BYTES, WorkerError
 from .orca_runner import run_orca
 from .creality_runner import run_creality
+from .bambu_runner import run_bambu
 from .three_mf_validation import validate_worker_3mf
 from .material_gcode_audit import verify_multi_material_output, expected_native_tools, verify_two_object_tool_regions, verify_k2_fixture_purge_tower_evidence
 from .k2_cfs_acceptance import k2_offline_profile_evidence
 
-ENGINES = {"orcaslicer": run_orca, "crealityprint": run_creality}
+ENGINES = {"orcaslicer": run_orca, "crealityprint": run_creality,
+           "bambustudio": run_bambu}
 GCODE_EXTRUSION = re.compile(
     rb"(?m)^\s*G0?1\s+[^\r\n]*\bE[-+]?(?:\d+(?:\.\d*)?|\.\d+)(?:\s|$)", re.I
 )
@@ -52,6 +54,50 @@ def fixture_stl():
     return header + struct.pack("<I", len(points)) + triangles
 
 
+def fixture_bambu_core_3mf():
+    """Fixed single-object core 3MF tetrahedron; no scripts or vendor settings."""
+    namespace = "http://schemas.microsoft.com/3dmanufacturing/core/2015/02"
+    vertices = ((0, 0, 0), (10, 0, 0), (0, 10, 0), (0, 0, 10))
+    facets = ((0, 1, 2), (0, 3, 1), (0, 2, 3), (1, 3, 2))
+    positions = "".join(
+        '<vertex x="%s" y="%s" z="%s"/>' % vertex for vertex in vertices
+    )
+    triangles = "".join(
+        '<triangle v1="%s" v2="%s" v3="%s"/>' % face for face in facets
+    )
+    model = (
+        '<model xmlns="' + namespace + '" unit="millimeter">'
+        '<resources><object id="1" type="model"><mesh><vertices>'
+        + positions + '</vertices><triangles>' + triangles +
+        '</triangles></mesh></object></resources>'
+        '<build><item objectid="1" transform="1 0 0 0 1 0 0 0 1 0 0 0"/></build>'
+        '</model>'
+    )
+    content_types = (
+        '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">'
+        '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>'
+        '<Default Extension="model" ContentType="application/vnd.ms-package.3dmanufacturing-3dmodel+xml"/>'
+        '</Types>'
+    )
+    relationships = (
+        '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
+        '<Relationship Id="rel0" Target="/3D/3dmodel.model" '
+        'Type="http://schemas.microsoft.com/3dmanufacturing/2013/01/3dmodel"/>'
+        '</Relationships>'
+    )
+    with io.BytesIO() as output:
+        with zipfile.ZipFile(output, "w", compression=zipfile.ZIP_DEFLATED) as package:
+            for name, content in (
+                ("[Content_Types].xml", content_types),
+                ("_rels/.rels", relationships),
+                ("3D/3dmodel.model", model),
+            ):
+                package.writestr(name, content.encode("utf-8"))
+        data = output.getvalue()
+    validate_worker_3mf(data)
+    return data
+
+
 def _read_source(path, limit):
     source = Path(path)
     if source.is_symlink() or not source.is_file():
@@ -65,8 +111,16 @@ def _read_source(path, limit):
 
 def _fingerprint(path):
     file = Path(path)
-    if not file.is_absolute() or file.is_symlink() or not file.is_file() or not os.access(file, os.X_OK):
-        raise WorkerError("Select an executable, absolute, non-symlinked binary path.")
+    if not file.is_absolute() or not file.is_file() or not os.access(file, os.X_OK):
+        raise WorkerError("Select an executable, absolute binary path.")
+    if file.is_symlink():
+        # Only AppRun may link to its own extracted AppImage contents.
+        try:
+            if (file.name != "AppRun" or not file.resolve(strict=True).is_relative_to(
+                    file.parent.resolve(strict=True))):
+                raise WorkerError("Fixture executable is symlinked outside its extracted AppImage.")
+        except (OSError, RuntimeError, ValueError) as exc:
+            raise WorkerError("Fixture executable is symlinked or invalid.") from exc
     digest = hashlib.sha256()
     with file.open("rb") as stream:
         while chunk := stream.read(1024 * 1024):
@@ -174,13 +228,19 @@ def _verify_two_native_object_effects(path, *, reverse=False):
             "left_moves": moves[0], "right_moves": moves[1]}
 
 
-def run_probe(*, engine, version, binary, printer, filament, process, timeout=120, model=None, expected_objects=1, expected_islands=1, experimental_all_plates=False, experimental_no_arrange=False, verify_object_effects=False, reverse_object_effects=False, second_filament=None, audit_changeovers=False):
+def run_probe(*, engine, version, binary, printer, filament, process, timeout=120, model=None, expected_objects=1, expected_islands=1, experimental_all_plates=False, experimental_no_arrange=False, verify_object_effects=False, reverse_object_effects=False, second_filament=None, audit_changeovers=False, bambu_core_3mf=False):
     """Run the *real* worker adapter with the *real* binary and report evidence.
 
     No mock success, no automatic deployment and no stored G-code artifact.
     """
     if engine not in ENGINES:
-        raise WorkerError("Only OrcaSlicer and Creality Print are supported by this probe.")
+        raise WorkerError("Only approved candidate engine identifiers are supported by this probe.")
+    if bambu_core_3mf and (engine != "bambustudio" or model is not None):
+        raise WorkerError("Fixed Bambu 3MF fixture is only for Bambu with no external model.")
+    if engine == "bambustudio" and (version != "02.09.01.70" or expected_objects != 1
+            or expected_islands != 1 or model is not None or second_filament is not None
+            or audit_changeovers or verify_object_effects):
+        raise WorkerError("Bambu probe requires pinned v02.09.01.70, a single STL or fixed 3MF and one filament.")
     if not isinstance(version, str) or not 1 <= len(version) <= 80:
         raise WorkerError("A pinned engine version is required.")
     if not isinstance(timeout, int) or not 1 <= timeout <= 900:
@@ -208,6 +268,8 @@ def run_probe(*, engine, version, binary, printer, filament, process, timeout=12
         count = len(xml.findall("./" + namespace + "build/" + namespace + "item"))
         if count != expected_objects:
             raise WorkerError("The reference 3MF does not contain the expected build instance count.")
+    if bambu_core_3mf:
+        model_bytes = fixture_bambu_core_3mf()
     binary_sha256 = _fingerprint(binary)
     inputs = {
         "printer.json": _read_source(printer, MAX_PROFILE_BYTES),
@@ -251,15 +313,16 @@ def run_probe(*, engine, version, binary, printer, filament, process, timeout=12
         "status": "passed",
         "engine": engine, "engine_version": version,
         "binary_sha256": binary_sha256,
-        "fixture": "makervault-two-object-3mf-v1" if model_bytes is not None
-                   else "makervault-tetrahedron-binary-v1",
+        "fixture": ("makervault-bambu-core-3mf-v1" if bambu_core_3mf
+                    else "makervault-two-object-3mf-v1" if model_bytes is not None
+                    else "makervault-tetrahedron-binary-v1"),
         "object_count": expected_objects,
         "expected_geometry_islands": expected_islands,
         "profile_sha256": {key.removesuffix(".json"): hashlib.sha256(data).hexdigest()
                            for key, data in inputs.items()},
         **output,
         **({"k2_profile_evidence": k2_profile} if k2_profile is not None else {}),
-        "note": "Evidence only; no engine was installed, approved or enabled in MakerVault.",
+        "note": "Offline candidate acceptance evidence only; no engine was approved, worker-enabled or printer-dispatched.",
     }
 
 
@@ -273,6 +336,8 @@ def main(argv=None):
     parser.add_argument("--process", required=True)
     parser.add_argument("--timeout", type=int, default=120)
     parser.add_argument("--model", help="Optional real two-model MakerVault core 3MF fixture")
+    parser.add_argument("--bambu-core-3mf", action="store_true",
+                        help="Generate fixed one-object Bambu 3MF offline fixture")
     parser.add_argument("--second-filament", help="Second ordered native filament preset (offline only)")
     parser.add_argument("--audit-changeovers", action="store_true",
                         help="Report bounded K2 two-cube toolchange/purge-region evidence")

@@ -25,7 +25,7 @@ def trusted_plate_dimensions(profile):
             if not match:
                 raise SlicerProfileError("Creality printable polygon is invalid.")
             points.append([float(match.group(1)), float(match.group(2))])
-    elif profile.engine == "orcaslicer" and isinstance(values, list):
+    elif profile.engine in {"orcaslicer", "bambustudio"} and isinstance(values, list):
         points = []
         for raw_point in values:
             if not isinstance(raw_point, str):
@@ -57,7 +57,11 @@ def trusted_plate_dimensions(profile):
         exclusion == "0x0" or exclusion == [] or exclusion == ["0x0"] or
         exclusion == ["0"] or exclusion == ["0", "0"] or exclusion == "0x0,0x0"
     )
-    if not empty_exclusion:
+    # Bambu's native 3MF CLI retains its printer-specific excluded regions;
+    # use a rectangular outer bound for plate placement, without stripping
+    # bed_exclude_area from the native printer preset passed to the engine.
+    # All final model/bed validation remains the native slicer's responsibility.
+    if not empty_exclusion and profile.engine != "bambustudio":
         raise SlicerProfileError(
             "Native printable-area exclusion is non-empty; mapped exclusion zones "
             "are not yet supported for multi-object slicing."
