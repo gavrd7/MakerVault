@@ -79,13 +79,19 @@ def validate_worker_3mf(data, *, native_tool_count=None, allow_creality_combined
             settings = json.loads(bambu_settings)
             permitted = {"printer_settings_id", "print_settings_id",
                          "filament_settings_id", "filament_colour",
-                         "filament_type", "filament_diameter", "nozzle_diameter"}
+                         "filament_type", "filament_diameter", "nozzle_diameter",
+                         "printable_height"}
             if not isinstance(settings, dict) or not settings or set(settings) - permitted:
                 raise WorkerError("Unsafe Bambu project setting keys.")
             for label in ("printer_settings_id", "print_settings_id"):
                 value = settings.get(label)
                 if not isinstance(value, str) or not 1 <= len(value) <= 200:
                     raise WorkerError("Missing Bambu native preset identity.")
+            height = settings.get("printable_height")
+            if (not isinstance(height, str) or
+                    not re.fullmatch(r"[0-9]+(?:\.[0-9]{1,3})?", height) or
+                    not 1 <= float(height) <= 2000):
+                raise WorkerError("Bambu project is missing a valid printable height.")
             for key in ("filament_settings_id", "filament_colour",
                         "filament_type", "filament_diameter"):
                 values = settings.get(key)
