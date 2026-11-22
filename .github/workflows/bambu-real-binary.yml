@@ -125,6 +125,49 @@ jobs:
             --filament /tmp/bambu-verified-profiles/filament.json \
             --bambu-core-3mf --timeout 180
 
+      - name: Compare genuine pinned Bambu Studio 3MF metadata (diagnostic)
+        shell: bash
+        continue-on-error: true
+        run: |
+          set -euo pipefail
+          curl --fail --location --silent --show-error --max-time 30 \
+            'https://raw.githubusercontent.com/bambulab/BambuStudio/v02.09.01.70/resources/calib/pressure_advance/auto_pa_line_dual.3mf' \
+            -o /tmp/bambu-vendor-reference.3mf
+          python3 - <<'PY'
+          import json
+          import zipfile
+          from pathlib import Path
+          p = Path('/tmp/bambu-vendor-reference.3mf')
+          assert 0 < p.stat().st_size <= 16*1024*1024
+          with zipfile.ZipFile(p) as archive:
+              names = sorted(archive.namelist())
+              assert len(names) <= 100
+              print('Official Bambu reference 3MF member names:', names)
+              if 'Metadata/project_settings.config' in names:
+                  raw = archive.read('Metadata/project_settings.config')
+                  assert len(raw) <= 1024*1024
+                  cfg = json.loads(raw)
+                  print('Official project key count:', len(cfg))
+                  for key in ('filament_settings_id', 'filament_colour',
+                              'filament_type', 'filament_diameter',
+                              'filament_self_index', 'filament_extruder_variant',
+                              'filament_ids', 'printer_settings_id',
+                              'print_settings_id', 'nozzle_diameter'):
+                      v = cfg.get(key)
+                      print('Official project field:', key,
+                            'list', len(v) if isinstance(v, list) else
+                            'scalar' if isinstance(v, (str, int, float)) else
+                            'absent')
+              if 'Metadata/model_settings.config' in names:
+                  from xml.etree import ElementTree as ET
+                  manifest = ET.fromstring(archive.read('Metadata/model_settings.config'))
+                  objs = manifest.findall('object')
+                  print('Official model-settings object count:', len(objs))
+                  print('Official model-setting names:',
+                        sorted({x.get('key') for obj in objs
+                                for x in obj.findall('metadata') if x.get('key')}))
+          PY
+
       - name: Validate real native two-material and facet-painted Bambu 3MF
         shell: bash
         env:
