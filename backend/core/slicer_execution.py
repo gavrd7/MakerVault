@@ -269,52 +269,6 @@ def _validate_plate_execution(job):
         settings=expand_painted_settings(getattr(job, "owner", None), job.settings or {})
     except (ValueError, OSError) as exc:
         raise SlicerExecutionError("A referenced private painting asset is missing or invalid.") from exc
-    if job.engine == "bambustudio":
-        # Verified Bambu Beta only covers a *single unchanged STL* and one
-        # fully resolved BBL machine/process/filament preset. Real 3MF has
-        # passed offline, but complex MakerVault project/palette generation,
-        # painting, bed overrides and actual printer dispatch have not.
-        if (os.environ.get("MAKERVAULT_SLICER_BAMBU_BETA_ENABLED") != "1"
-                or job.engine_version != "02.09.01.70"):
-            raise SlicerExecutionError("Bambu Studio Beta is not enabled for this reviewed version.")
-        if getattr(job, "plate", "default") not in ("default", "", None):
-            raise SlicerExecutionError("Bambu Beta requires the selected native preset default build plate.")
-        if (settings.get("multi_material_test") is True
-                or settings.get("flush_settings") is not None
-                or settings.get("prime_tower") is not None
-                or settings.get("slot_filament_profiles")
-                or settings.get("material_tool_bindings")
-                or settings.get("process_overrides")):
-            raise SlicerExecutionError(
-                "Bambu Beta supports single-material defaults only; remove multi-tool and process overrides.")
-        objects = settings.get("plate_objects") or []
-        plates = settings.get("plates")
-        if plates is not None:
-            active = next((plate for plate in plates
-                           if isinstance(plate, dict)
-                           and plate.get("id") == settings.get("active_plate_id")), None)
-            if not active or active.get("objects") != objects:
-                raise SlicerExecutionError("Bambu Beta plate selection differs from saved model list.")
-        if objects and not _single_unmodified_stl(objects):
-            raise SlicerExecutionError(
-                "Bambu Beta currently supports one unmodified STL model only.")
-        for item in objects:
-            if (not isinstance(item, dict) or
-                    any((item.get(field) or {}).get("regions") or
-                        (item.get(field) or {}).get("faces")
-                        for field in ("colour_paint", "support_paint", "seam_paint",
-                                      "fuzzy_skin_paint")) or
-                    (item.get("variable_layer_profile") or {}).get("bands") or
-                    item.get("process_overrides") or item.get("modifier_meshes")):
-                raise SlicerExecutionError(
-                    "Bambu Beta does not yet support painting or per-object modifiers.")
-            if item.get("tool_id") not in (None, 0, 1):
-                raise SlicerExecutionError("Bambu Beta cannot assign additional native material tools.")
-            assigned = item.get("filament_profile_id")
-            if assigned and str(assigned) != str(job.filament_profile_id):
-                raise SlicerExecutionError(
-                    "Bambu Beta object material must match the selected single filament.")
-        return True
     # Do not silently discard native flush / prime-tower preferences when
     # admitting an otherwise single-filament job. They require the future
     # exact-printer, multi-tool worker route and verified CFS bindings.
@@ -505,8 +459,31 @@ def _validate_plate_execution(job):
         )
     except MaterialRoutingError as exc:
         raise SlicerExecutionError(str(exc)) from exc
-    if job.engine not in {"orcaslicer", "crealityprint"}:
-        raise SlicerExecutionError("This engine does not yet support native build-plate slicing.")
+    if job.engine not in {"orcaslicer", "crealityprint", "bambustudio"}:
+        raise SlicerExecutionError("This engine does not support native build-plate slicing.")
+    if job.engine == "bambustudio":
+        # The native Bambu CLI accepts STL and 3MF build plates. Retain
+        # common placement/overlap validation rather than a one-STL Beta gate.
+        # Reject only paths whose material or paint parameters cannot yet be
+        # represented by the native Bambu runner, so user selections are never
+        # silently omitted from the generated G-code.
+        if settings.get("multi_material_test") is True:
+            raise SlicerExecutionError(
+                "Multiple Bambu filaments require a native multi-filament runner.")
+        if settings.get("process_overrides"):
+            raise SlicerExecutionError(
+                "Per-job Bambu process overrides require native profile mapping.")
+        if any(isinstance(item, dict) and (
+                item.get("process_overrides")
+                or (item.get("colour_paint") or {}).get("regions")
+                or (item.get("colour_paint") or {}).get("faces")
+                or (item.get("support_paint") or {}).get("regions")
+                or (item.get("seam_paint") or {}).get("regions")
+                or (item.get("fuzzy_skin_paint") or {}).get("regions")
+                or (item.get("variable_layer_profile") or {}).get("bands")
+                ) for item in objects):
+            raise SlicerExecutionError(
+                "Selected Bambu object-specific features are not represented in its native 3MF export.")
     if job.engine == "crealityprint":
         # Creality receives the same validated STL/3MF geometry route, but
         # Orca-only per-object modifiers must not be silently discarded.
