@@ -24,7 +24,7 @@ from .slicer_multimaterial_execution import (plan_native_multimaterial, prepare_
                                              prepare_creality_multistl, prepare_creality_positioned_project)
 from .slicer_material_gcode_audit import audit_native_tool_usage, MaterialGcodeAuditError
 from .slicer_gcode_bounds import audit_extrusion_xy_bounds, GcodeExtrusionBoundsError
-from .slicer_flush_settings import apply_orca_flush_settings
+from .slicer_flush_settings import apply_orca_flush_settings, apply_bambu_flush_settings
 from .slicer_native_overrides import apply_orca_job_overrides
 from .slicer_plate_types import apply_creality_plate, effective_creality_plate, validate_plate_temperature
 from .slicer_variable_layers import audit_orca_variable_layers, validate_orca_variable_support_compatibility
@@ -881,7 +881,7 @@ def process_queued_job(job_id):
                 routes = [SimpleNamespace(slot_id=slot, tool_index=index)
                           for slot, index in material_result["tool_bindings"].items()]
                 try:
-                    profiles[2] = apply_orca_flush_settings(
+                    profiles[2] = apply_bambu_flush_settings(
                         profiles[2], job.settings["flush_settings"],
                         routes=routes,
                         tool_count=len(material_result["filament_profiles"]),
