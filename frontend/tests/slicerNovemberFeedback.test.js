@@ -158,3 +158,18 @@ test("official profile browsing is not silently narrowed to the selected printer
   assert.doesNotMatch(browse, /models\.find\(item =>/);
   assert.ok(setup.includes('setOfficialQuery("");'));
 });
+
+test("device monitor stays over the slicer without navigating away or unmounting its draft", () => {
+  const printing = fs.readFileSync(path.resolve(base, "PrintingPage.jsx"), "utf8");
+  const app = fs.readFileSync(path.resolve(base, "../App.jsx"), "utf8");
+  const start = printing.indexOf('  if (workspaceView === "slicer") {');
+  const end = printing.indexOf('  if (workspaceView === "models") {', start);
+  assert.ok(start >= 0 && end > start);
+  const workspace = printing.slice(start, end);
+  assert.match(workspace, /onOpenDevice=\{printerId => \{/);
+  assert.match(workspace, /setLivePrinter\(printer\)/);
+  assert.match(workspace, /livePrinter && <PrinterConnectionsModal/);
+  assert.match(workspace, /onClose=\{\(\) => setLivePrinter\(null\)\}/);
+  assert.doesNotMatch(workspace, /setWorkspaceView\("overview"\)/);
+  assert.doesNotMatch(app, /onOpenSlicerDevice=/);
+});
