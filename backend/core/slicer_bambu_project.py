@@ -56,7 +56,7 @@ def add_bambu_project_settings(project, *, printer, process, filaments,
     print_preset = _native(process, "process")
     sources = [_native(item, "filament") for item in filaments]
     diameter = _field(machine, "nozzle_diameter", label="machine")
-    if not re.fullmatch(r"(?:0\\.[1-9][0-9]?|[12](?:\\.[0-9]{1,2})?)", diameter):
+    if not re.fullmatch(r"(?:0\.[1-9][0-9]?|[12](?:\.[0-9]{1,2})?)", diameter):
         raise SlicerProfileError("Invalid Bambu machine nozzle diameter.")
     material_ids = [_field(item, "name", label="filament") for item in sources]
     types = [_field(item, "filament_type", label="filament") for item in sources]
