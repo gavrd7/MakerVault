@@ -150,7 +150,7 @@ def validate_worker_3mf(data, *, native_tool_count=None, allow_creality_combined
                     if key == "filament_retraction_length" and value == "nil":
                         continue
                     if (not isinstance(value, str) or
-                            not re.fullmatch(r"[0-9]{1,3}(?:\\.[0-9]{1,4})?", value)
+                            not re.fullmatch(r"[0-9]{1,3}(?:\.[0-9]{1,4})?", value)
                             or not lower <= float(value) <= upper):
                         raise WorkerError("Unsafe Bambu native material vector.")
             if any(not re.fullmatch(r"#[0-9A-Fa-f]{6}", v)
