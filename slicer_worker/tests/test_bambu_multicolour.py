@@ -34,7 +34,7 @@ class BambuNativeMulticolourTests(TestCase):
                 lines += ["G1 X80 Y110 E0.2"] * 20
             else:
                 lines += ["G1 X30 Y30 E0.2"] * 20
-            return ("\\n".join(lines) + "\\n").encode("utf-8")
+            return ("\n".join(lines) + "\n").encode("utf-8")
         with self.assertRaisesRegex(WorkerError, "inside the model"):
             verify_painted_cube_tool_regions(toolpaths(False))
         counts = verify_painted_cube_tool_regions(toolpaths(True))
