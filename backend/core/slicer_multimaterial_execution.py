@@ -19,8 +19,8 @@ from .slicer_native_material_palette import (
 def plan_native_multimaterial(job, *, settings=None):
     settings = (job.settings or {}) if settings is None else settings
     objects = settings.get("plate_objects") or []
-    if job.engine not in {"orcaslicer", "crealityprint"} or not 1 <= len(objects) <= 12:
-        raise MaterialRoutingError("Multi-colour test slicing requires an Orca model.")
+    if job.engine not in {"orcaslicer", "crealityprint", "bambustudio"} or not 1 <= len(objects) <= 12:
+        raise MaterialRoutingError("Multi-colour slicing requires a compatible native 3MF engine.")
     if any(not isinstance(item, dict) for item in objects):
         raise MaterialRoutingError("Multi-colour models are invalid.")
     # Colour painting is now converted to Orca's native per-triangle
@@ -129,8 +129,8 @@ def plan_native_multimaterial(job, *, settings=None):
 
 
 def prepare_job_multimaterial(job, source_models, *, bed_width, bed_depth):
-    if job.engine != "orcaslicer":
-        raise MaterialRoutingError("Orca native 3MF preparation cannot be used for Creality Print.")
+    if job.engine not in {"orcaslicer", "bambustudio"}:
+        raise MaterialRoutingError("Native 3MF palette preparation requires Orca or Bambu Studio.")
     topology, bindings, profiles = plan_native_multimaterial(job)
     result = prepare_multimaterial_plate(
         source_models, bed_width=bed_width, bed_depth=bed_depth,
