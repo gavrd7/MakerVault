@@ -369,6 +369,7 @@ class Handler(BaseHTTPRequestHandler):
                 "3MF package contents are not bounded.": "invalid-3mf",
                 "Bambu project is missing a valid printable height.": "invalid-native-project-settings",
                 "Invalid Bambu native filament IDs.": "invalid-native-project-settings",
+                "Bambu filament support vector does not match the palette.": "invalid-native-project-settings",
                 "Invalid Bambu filament extruder variants.": "invalid-native-project-settings",
                 "Invalid Bambu filament self-index.": "invalid-native-project-settings",
                 "Bambu filament variant mapping is inconsistent.": "invalid-native-project-settings",
