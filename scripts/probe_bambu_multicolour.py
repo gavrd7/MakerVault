@@ -205,6 +205,22 @@ def run_fixture(binary, profiles, *, painted=False, timeout=180):
                     print("CI Bambu variant G-code files:",
                           len(emitted), "bytes",
                           sum(f.stat().st_size for f in emitted[:4]))
+                    if (label in ("no_overrides", "machine_process_only",
+                                 "filament0_one_only", "filament0_blank_second")
+                            and len(emitted) == 1 and
+                            0 < emitted[0].stat().st_size <= 16 * 1024 * 1024):
+                        native_gcode = emitted[0].read_bytes()
+                        try:
+                            verify_multi_material_output(native_gcode, {0, 1})
+                            if not painted:
+                                coverage = verify_two_object_tool_regions(native_gcode)
+                                print("CI Bambu variant two-cube deposition:",
+                                      label, coverage)
+                            else:
+                                print("CI Bambu variant painted tools:", label, "passed")
+                        except WorkerError as audit_error:
+                            print("CI Bambu variant deposition audit:", label,
+                                  "failed", str(audit_error)[:160])
                     for channel in (attempt.stdout, attempt.stderr):
                         for line in channel.decode("utf-8", "replace").splitlines()[-12:]:
                             if any(token in line.lower() for token in (
