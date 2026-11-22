@@ -5,7 +5,7 @@ import uuid
 from unittest import TestCase
 
 from scripts.probe_bambu_multicolour import make_bambu_material_fixture
-from slicer_worker.material_gcode_audit import expected_native_tools
+from slicer_worker.material_gcode_audit import expected_native_tools, verify_painted_cube_tool_regions
 from slicer_worker.service import _decode_payload
 from slicer_worker.runner import WorkerError
 from slicer_worker.three_mf_validation import validate_worker_3mf
@@ -25,6 +25,21 @@ class BambuNativeMulticolourTests(TestCase):
             "filament_profile": encoded(filament0),
             "filament_profiles": [encoded(filament0), encoded(filament1)],
         }
+
+    def test_painted_cube_deposition_audit_rejects_purge_only(self):
+        def toolpaths(painted_inside):
+            lines = ["G90", "M83", "T0", "G1 X75 Y110 E0.2"] * 20
+            lines += ["T1"]
+            if painted_inside:
+                lines += ["G1 X80 Y110 E0.2"] * 20
+            else:
+                lines += ["G1 X30 Y30 E0.2"] * 20
+            return ("\\n".join(lines) + "\\n").encode("utf-8")
+        with self.assertRaisesRegex(WorkerError, "inside the model"):
+            verify_painted_cube_tool_regions(toolpaths(False))
+        counts = verify_painted_cube_tool_regions(toolpaths(True))
+        self.assertGreaterEqual(counts["base_tool_model_deposits"], 10)
+        self.assertGreaterEqual(counts["painted_tool_model_deposits"], 10)
 
     def test_two_object_tool_assignments_are_preserved(self):
         project = make_bambu_material_fixture()
