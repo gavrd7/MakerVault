@@ -25,7 +25,9 @@ services:
     user: "0:0"
     restart: "no"
     cap_drop: [ALL]
-    # Existing per-engine directories can be 0700 owned by UID 10001.\n    # DAC_READ_SEARCH permits traversal without broad DAC_OVERRIDE/write.\n    cap_add: [CHOWN, FOWNER, DAC_READ_SEARCH]
+    # Existing per-engine directories can be 0700 owned by UID 10001.
+    # DAC_READ_SEARCH permits traversal without broad DAC_OVERRIDE/write.
+    cap_add: [CHOWN, FOWNER, DAC_READ_SEARCH]
     security_opt: ["no-new-privileges:true"]
     network_mode: "none"
     volumes:
