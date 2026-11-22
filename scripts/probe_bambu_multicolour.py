@@ -136,20 +136,39 @@ def run_fixture(binary, profiles, *, painted=False, timeout=180):
                 import subprocess
                 from slicer_worker.bambu_runner import bambu_command
                 from slicer_worker.headless_env import slicing_environment
-                (workdir / "bambu-sliced.3mf").unlink(missing_ok=True)
                 args = bambu_command(Path(binary), workdir)
-                attempt = subprocess.run(args, cwd=workdir,
-                    env={**slicing_environment(workdir),
-                         "SSL_CERT_FILE": "/etc/ssl/certs/ca-certificates.crt"},
-                    stdin=subprocess.DEVNULL, stdout=subprocess.PIPE,
-                    stderr=subprocess.PIPE, timeout=timeout, check=False)
-                for channel in (attempt.stdout, attempt.stderr):
-                    for line in channel.decode("utf-8", "replace").splitlines()[-25:]:
-                        if any(token in line.lower() for token in (
-                            "error", "failed", "invalid", "warn", "filament",
-                            "3mf", "plate", "slice", "unsupported")):
-                            print("CI native diagnosis:", line[:320])
-                print("CI native exit code:", attempt.returncode)
+                prefix = args[:args.index("--slice")]
+                model = str(workdir / "input.3mf")
+                # Compare the real Bambu CLI's plate numbering and export
+                # path. Every test has a separate scratch output; no printer
+                # API/credentials and no production data are involved.
+                variants = [
+                    ("slice0_export", ["--slice", "0", "--export-3mf",
+                                      str(workdir / "bambu-debug-0.3mf"), model]),
+                    ("slice1_export", ["--slice", "1", "--export-3mf",
+                                      str(workdir / "bambu-debug-1.3mf"), model]),
+                    ("slice1_output", ["--slice", "1", "--outputdir",
+                                      str(workdir / "bambu-debug-out"), model]),
+                ]
+                for label, tail in variants:
+                    try:
+                        attempt = subprocess.run(prefix + tail, cwd=workdir,
+                            env={**slicing_environment(workdir),
+                                 "SSL_CERT_FILE": "/etc/ssl/certs/ca-certificates.crt"},
+                            stdin=subprocess.DEVNULL, stdout=subprocess.PIPE,
+                            stderr=subprocess.PIPE, timeout=min(timeout, 60), check=False)
+                    except subprocess.TimeoutExpired:
+                        print("CI Bambu variant:", label, "timeout")
+                        continue
+                    print("CI Bambu variant:", label, "exit", attempt.returncode,
+                          "output_bytes", len(attempt.stdout),
+                          "error_bytes", len(attempt.stderr))
+                    for channel in (attempt.stdout, attempt.stderr):
+                        for line in channel.decode("utf-8", "replace").splitlines()[-12:]:
+                            if any(token in line.lower() for token in (
+                                "error", "failed", "invalid", "warn", "filament",
+                                "3mf", "plate", "slice", "unsupported")):
+                                print("CI native diagnosis:", line[:240])
             raise
         gcode = (workdir / "output.gcode").read_bytes()
         verify_multi_material_output(gcode, {0, 1})
