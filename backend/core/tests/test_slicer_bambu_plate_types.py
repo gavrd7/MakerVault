@@ -36,3 +36,17 @@ class BambuNativePlateTests(SimpleTestCase):
             process, filament, "default", self.profile())
         self.assertEqual(json.loads(unchanged_process)["name"], "0.20mm Standard")
         self.assertEqual(unchanged_filament, filament)
+
+    @patch("core.slicer_native_resolution.resolved_native_profile")
+    def test_resolved_bambu_bed_dimensions_preserve_exclusion_warning(self, resolve):
+        from core.slicer_bed import inspect_bambu_plate
+        resolve.return_value = json.dumps({
+            "type": "machine", "name": "Bambu Lab X1 Carbon 0.4 nozzle",
+            "printable_area": ["0x0", "256x0", "256x256", "0x256"],
+            "printable_height": "256",
+            "bed_exclude_area": ["0x0", "18x0", "18x28", "0x28"],
+        }).encode()
+        row = inspect_bambu_plate(self.profile())
+        self.assertEqual(row["status"], "available")
+        self.assertEqual(row["size_mm"], [256.0, 256.0, 256.0])
+        self.assertTrue(row["has_exclusion_zone"])
