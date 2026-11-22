@@ -824,6 +824,17 @@ def process_queued_job(job_id):
                 palette = list(material_result["filament_profiles"])
                 palette[0] = profiles[1]
                 material_result["filament_profiles"] = tuple(palette)
+        if job.engine == "bambustudio":
+            stage = "validating native Bambu build plate and filament temperatures"
+            try:
+                # Bambu Studio's native settings share the same named bed
+                # temperature vectors and curr_bed_type field. Apply only to
+                # worker-bound copies, retaining the original stored presets.
+                profiles[2], profiles[1] = apply_creality_plate(
+                    profiles[2], profiles[1], job.plate,
+                    printer_profile=job.printer_profile)
+            except (ValueError, TypeError, UnicodeDecodeError, SlicerProfileError) as exc:
+                raise SlicerExecutionError(str(exc)) from exc
         if job.engine == "crealityprint":
             stage = "validating native Creality build plate and filament temperatures"
             try:
