@@ -4,12 +4,21 @@
 # Future engines live in a persistent, host-managed read-only-to-worker volume.
 FROM ghcr.io/gavrd7/makervault-slicer-orca@sha256:7f12df990d059d6a5e889c3cff6ebacd3a7c627fee28ff75e8696bee9c3423f4
 USER root
+# Bambu Studio's reviewed native AppRun requires these Ubuntu libraries.
+# No Bambu asset is downloaded or worker-admitted by this image build.
+RUN apt-get update && apt-get install -y --no-install-recommends \
+      libgstreamer-plugins-base1.0-0 libwebkit2gtk-4.1-0 \
+      libjavascriptcoregtk-4.1-0 ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
 COPY --chown=10001:10001 slicer_worker/ /opt/makervault-slicer/slicer_worker/
 RUN python3 -m compileall -q /opt/makervault-slicer/slicer_worker && \
     test -f /opt/engines/manifest.json && \
-    test -x /opt/engines/squashfs-root/AppRun
+    test -x /opt/engines/squashfs-root/AppRun && \
+    echo 'b30b0ae933e653692cf85a493287a949215ae4c14d547a00203d16dfcadb8054  /opt/engines/orcaslicer.AppImage' | sha256sum --check --status
 LABEL org.opencontainers.image.title="MakerVault Slicer" \
       org.opencontainers.image.description="One worker runtime with independent verified engine installations" \
       org.opencontainers.image.version="0.1.0"
-USER 10001:10001
-CMD ["python3", "-m", "slicer_worker.service"]
+# Only PID 1 runs with limited SETUID/SETGID capabilities; child processes
+# run as separate unprivileged users (10001 slicer / 10002 installer).
+USER 0:0
+CMD ["python3", "-m", "slicer_worker.combined_service"]
