@@ -19,7 +19,7 @@ from core.slicer_profiles import SlicerProfileError
 class BambuNativeProjectVectorTests(TestCase):
     printer = b'{"type":"machine","name":"Bambu Lab X1 Carbon 0.4 nozzle","nozzle_diameter":["0.4"],"printable_height":["256"]}'
     process = b'{"type":"process","name":"0.20mm Standard @BBL X1C"}'
-    filament = b'{"type":"filament","name":"Bambu PLA Basic @BBL X1C","filament_diameter":["1.75"],"filament_type":["PLA"]}'
+    filament = b'{"type":"filament","name":"Bambu PLA Basic @BBL X1C","filament_diameter":["1.75"],"filament_type":["PLA"],"filament_id":"GFA00","filament_extruder_variant":["Direct Drive Standard","Direct Drive High Flow"]}'
 
     def _base_project(self):
         original = make_bambu_material_fixture()
@@ -51,6 +51,10 @@ class BambuNativeProjectVectorTests(TestCase):
         self.assertEqual(ids["filament_colour"], ["#FF0000", "#0000FF"])
         self.assertEqual(ids["nozzle_diameter"], ["0.4"])
         self.assertEqual(ids["printable_height"], "256")
+        self.assertEqual(ids["filament_ids"], ["GFA00", "GFA00"])
+        self.assertEqual(ids["filament_self_index"], ["1", "1", "2", "2"])
+        self.assertEqual(ids["filament_extruder_variant"],
+                         ["Direct Drive Standard", "Direct Drive High Flow"] * 2)
 
     def test_rejects_incomplete_profiles_and_colour_conflicts(self):
         project = self._base_project()
