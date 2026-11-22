@@ -47,7 +47,6 @@ def bambu_command(binary: Path, workdir: Path) -> list[str]:
         is_stl = True
     elif three_mf.is_file() and not three_mf.is_symlink() and not stl.exists():
         model = _regular_file(workdir, "input.3mf", MAX_MODEL_BYTES)
-        validate_worker_3mf(model.read_bytes())
         is_stl = False
     else:
         raise WorkerError("Choose exactly one supported STL or 3MF input.")
@@ -80,6 +79,12 @@ def bambu_command(binary: Path, workdir: Path) -> list[str]:
             raise WorkerError("Bambu first native palette preset must match the selected filament.")
         for candidate in palette:
             _native_json(candidate)
+    if not is_stl:
+        # Validate extruder metadata against the *same* ordered native
+        # palette used for the Bambu CLI. Validating without the palette
+        # would accidentally reject legitimate per-object extruder keys.
+        validate_worker_3mf(model.read_bytes(),
+            native_tool_count=len(palette) if palette else None)
     _output_path(workdir)
     output = workdir / "bambu-sliced.3mf"
     if output.exists() or output.is_symlink():
