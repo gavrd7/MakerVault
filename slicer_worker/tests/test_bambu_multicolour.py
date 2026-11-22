@@ -64,7 +64,22 @@ class BambuNativeMulticolourTests(TestCase):
         self.assertEqual(report["stationary_positive_e_mm"]["0"], 0.5)
         self.assertEqual(report["tower_feature_positive_e_mm"]["0"], 1.7)
         self.assertEqual(report["tower_feature_moves"], 2)
+        self.assertEqual(report["tower_position_moves"], 1)
+        self.assertEqual(report["tower_deposition_bbox_mm"],
+                         {"min_x": 30.0, "max_x": 30.0,
+                          "min_y": 30.0, "max_y": 30.0})
         self.assertEqual(report["toolchanges"], 1)
+
+    def test_bambu_tower_signal_resolves_relative_xy_positions(self):
+        lines = ["G90", "M83", "T0", "; FEATURE: Prime tower",
+                 "G1 X45 Y40 E0.3", "G91", "G1 X3 Y4 E0.2",
+                 "G90", "G92 X100 Y100", "G1 X101 Y102 E0.4"]
+        report = summarize_bambu_flush_signal(
+            ("\n".join(lines) + "\n").encode("utf-8"))
+        self.assertEqual(report["tower_deposition_bbox_mm"],
+                         {"min_x": 45.0, "max_x": 101.0,
+                          "min_y": 40.0, "max_y": 102.0})
+        self.assertEqual(report["tower_position_moves"], 3)
 
     def test_two_object_tool_assignments_are_preserved(self):
         project = make_bambu_material_fixture()
