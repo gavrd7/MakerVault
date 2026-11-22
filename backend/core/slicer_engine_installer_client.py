@@ -17,7 +17,7 @@ def _connection():
     token = os.environ.get("MAKERVAULT_SLICER_INSTALLER_TOKEN", "")
     parsed = urlsplit(url)
     if (len(token) < 32 or parsed.scheme != "http" or
-            parsed.hostname != "slicer-engine-installer" or parsed.port != 8091 or
+            parsed.hostname not in {"slicer-worker", "slicer-engine-installer"} or parsed.port != 8091 or
             parsed.path or parsed.query or parsed.fragment):
         raise EngineInstallerUnavailable("Engine installer is not configured.")
     return url, token
