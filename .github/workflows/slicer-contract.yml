@@ -67,6 +67,18 @@ jobs:
           chmod 600 .slicer-staging.env
           docker compose --env-file .env --env-file .slicer-staging.env \
             -f compose.yaml -f compose.build.yaml -f compose.slicer.staging.yaml config --quiet
+          # Validate effective Compose semantics (not source comments/grep).
+          docker compose --env-file .env --env-file .slicer-staging.env \
+            -f compose.yaml -f compose.build.yaml -f compose.slicer.staging.yaml \
+            config --format json | python3 -c '
+          import json,sys
+          services=json.load(sys.stdin)["services"]
+          helper=set(services["slicer-engine-store-init"]["cap_add"])
+          slicer=set(services["slicer-worker"]["cap_add"])
+          assert helper == {"CHOWN","FOWNER","DAC_READ_SEARCH"}, helper
+          assert slicer == {"SETUID","SETGID","KILL"}, slicer
+          assert "slicer-engine-installer" not in services
+          '
       - name: Validate opt-in worker Compose overlay without starting containers
         env:
           POSTGRES_PASSWORD: ci-only-placeholder
@@ -83,54 +95,63 @@ jobs:
 
 
   candidate-image-build:
-    runs-on: ubuntu-latest
-    timeout-minutes: 20
+    # Legacy worker-only smoke has been replaced: the deployed staging image
+    # now runs the worker and installer as separate UIDs in ONE container.
+    # Keep verifying the fixture-only stage contract, but never treat that
+    # intentionally non-executable asset as an installed slicing engine.
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
     steps:
       - uses: actions/checkout@v4
       - name: Stage a clearly non-executable CI fixture (never a real engine)
         run: |
-          printf 'CI fixture only, not a slicing engine\\n' > /tmp/creality-fixture.AppImage
+          printf 'CI fixture only, not a slicing engine\n' > /tmp/creality-fixture.AppImage
           SHA=$(sha256sum /tmp/creality-fixture.AppImage | cut -d' ' -f1)
           python3 -m slicer_worker.stage_engines \
             --engine crealityprint 7.3.0 /tmp/creality-fixture.AppImage "$SHA"
-      - name: Build optional isolated worker candidate image
-        run: docker build -f slicer_worker/Dockerfile.bundle -t makervault-slicer-ci:candidate .
-      - name: Confirm image contains worker code and only the selected engine asset
+      - name: Build combined slicer runtime with approved bundled Orca
+        run: docker build -f slicer_worker/Dockerfile.generic -t makervault-slicer-ci:combined .
+      - name: Confirm compiled worker/installer modules and reviewed Orca identity
         run: |
-          docker run --rm --network none --read-only --tmpfs /tmp:rw,nosuid,size=128m \
-            --entrypoint python3 makervault-slicer-ci:candidate \
-            -c 'from pathlib import Path; import slicer_worker.probe, slicer_worker.service; assert Path("/opt/engines/crealityprint.AppImage").is_file(); assert not Path("/opt/engines/orcaslicer.AppImage").exists()'
-      - name: Boot isolated staging worker from immutable local image ID
-        env:
-          POSTGRES_PASSWORD: ci-only-placeholder
+          docker run --rm --network none --entrypoint python3 makervault-slicer-ci:combined \
+            -c 'from pathlib import Path; import slicer_worker.service,slicer_worker.engine_installer_service,slicer_worker.combined_service; assert Path("/opt/engines/orcaslicer.AppImage").is_file()'
+      - name: Boot combined staging runtime with installer credentials and engine-store permissions
         run: |
-          IMAGE=$(docker image inspect --format '{{.Id}}' makervault-slicer-ci:candidate)
-          ENGINE_SHA=$(sha256sum slicer-engine-assets/crealityprint.AppImage | cut -d' ' -f1)
-          printf 'POSTGRES_PASSWORD=ci-only-placeholder\n' > .env
-          cat > .slicer-staging.env <<EOF
-          MAKERVAULT_SLICER_EXECUTION_ENABLED=1
-          MAKERVAULT_SLICER_WORKER_IMAGE=${IMAGE}
-          MAKERVAULT_SLICER_ENGINE_IMAGE_DIGEST=${IMAGE}
-          MAKERVAULT_SLICER_WORKER_TOKEN=0123456789012345678901234567890123456789
-          MAKERVAULT_SLICER_ENGINES_JSON='{"crealityprint":{"version":"7.3.0","binary_sha256":"${ENGINE_SHA}"}}'
-          SLICER_ENGINES_JSON='{"crealityprint":{"binary":"/opt/engines/crealityprint.AppImage","version":"7.3.0","binary_sha256":"${ENGINE_SHA}"}}'
-          EOF
-          chmod 600 .slicer-staging.env
-          docker compose --env-file .env --env-file .slicer-staging.env \
-            -f compose.yaml -f compose.slicer.staging.yaml \
-            up -d --no-deps slicer-worker
-          sleep 4
-          docker compose --env-file .env --env-file .slicer-staging.env \
-            -f compose.yaml -f compose.slicer.staging.yaml \
-            ps slicer-worker
-          docker compose --env-file .env --env-file .slicer-staging.env \
-            -f compose.yaml -f compose.slicer.staging.yaml \
-            exec -T slicer-worker python3 -c 'import json,urllib.request; r=json.load(urllib.request.urlopen("http://127.0.0.1:8088/health")); assert r["ready"] and "crealityprint" in r["engines"]'
-      - name: Remove staging worker used by candidate-image CI
+          set -euo pipefail
+          docker volume create mv-contract-engine-store
+          docker run --rm --network none \
+            -v mv-contract-engine-store:/engine-store busybox:1.37.0 \
+            sh -ec 'chown -R 10002:10002 /engine-store; chmod 0755 /engine-store'
+          docker run -d --name mv-contract-combined --network none \
+            --read-only --init --cap-drop ALL --cap-add SETUID --cap-add SETGID --cap-add KILL \
+            --security-opt no-new-privileges:true \
+            --pids-limit 144 --memory 4g \
+            --tmpfs /tmp:rw,nosuid,size=1g,mode=1777 \
+            -v mv-contract-engine-store:/opt/engine-store:rw \
+            -e SLICER_WORKER_ENABLED=1 \
+            -e SLICER_WORKER_TOKEN=0123456789012345678901234567890123456789 \
+            -e SLICER_INSTALLER_TOKEN=9876543210987654321098765432109876543210 \
+            -e 'SLICER_ENGINES_JSON={}' \
+            makervault-slicer-ci:combined
+          healthy=0
+          for n in {1..60}; do
+            if docker exec mv-contract-combined python3 -c \
+              'import json,socket,urllib.request; j=json.load(urllib.request.urlopen("http://127.0.0.1:8088/health",timeout=2)); assert j["ready"]; s=socket.create_connection(("127.0.0.1",8091),2); s.close()' \
+              >/dev/null 2>&1; then healthy=1; break; fi
+            if [ "$(docker inspect --format '{{.State.Running}}' mv-contract-combined)" != true ]; then
+              docker logs mv-contract-combined || true
+              exit 1
+            fi
+            sleep 2
+          done
+          test "$healthy" -eq 1
+          docker exec -u 10001 mv-contract-combined python3 -c \
+            'import os; assert not os.access("/opt/engine-store",os.W_OK)'
+          docker exec -u 10002 mv-contract-combined python3 -c \
+            'from pathlib import Path; f=Path("/opt/engine-store/.contract-write"); f.write_text("ok"); f.unlink()'
+      - name: Remove contract smoke container and volume
         if: always()
         run: |
-          if test -f .slicer-staging.env; then
-            docker compose --env-file .env --env-file .slicer-staging.env \
-              -f compose.yaml -f compose.slicer.staging.yaml down --remove-orphans || true
-          fi
-
+          docker logs mv-contract-combined 2>/dev/null | tail -60 || true
+          docker rm -f mv-contract-combined 2>/dev/null || true
+          docker volume rm mv-contract-engine-store 2>/dev/null || true

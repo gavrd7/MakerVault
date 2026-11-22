@@ -131,6 +131,79 @@ class EngineManagementAPITests(TestCase):
         self.assertEqual(record.progress, 100)
         self.assertIsNotNone(record.completed_at)
 
+    @patch.dict(os.environ, {"MAKERVAULT_SLICER_HOST_UPDATER_ENABLED": "1"})
+    def test_installed_versions_are_visible_without_new_release_catalogue(self):
+        self.client.force_login(self.user)
+        def installer(method, path, payload=None):
+            if path == "/status":
+                return {"operations": [], "installed_versions": {
+                    "orcaslicer": [
+                        {"version": "2.5.0", "active": True},
+                        {"version": "2.4.2", "active": False},
+                    ]}}
+            if path == "/catalog":
+                return {"releases": []}
+            raise AssertionError(path)
+        with patch("core.slicer_engine_management_api.installer_request", side_effect=installer):
+            result = self.client.get(self.endpoint).json()
+        self.assertEqual(len(result["installed_versions"]["orcaslicer"]), 2)
+        self.assertTrue(result["host_updater_connected"])
+        self.assertFalse(result["installation_available"])
+
+    @patch.dict(os.environ, {"MAKERVAULT_SLICER_HOST_UPDATER_ENABLED": "1"})
+    def test_any_signed_in_user_can_switch_and_uninstall_unless_restricted(self):
+        import uuid
+        from core.models import SlicerEngineAccessSettings
+        self.client.force_login(self.user)
+        calls = []
+        def installer(method, path, payload=None):
+            calls.append((method, path, payload))
+            if path == "/status":
+                return {"operations": []}
+            if path == "/catalog":
+                return {"releases": []}
+            if path in {"/activate", "/uninstall"}:
+                return {"operation": {"id": str(uuid.uuid4()),
+                        "engine": payload["engine"], "version": payload["version"],
+                        "status": "queued"}}
+            raise AssertionError(path)
+        switch = {"engine": "orcaslicer", "version": "2.4.2",
+                  "action": "activate", "release_sha256": "0" * 64}
+        remove = {"engine": "orcaslicer", "version": "all",
+                  "action": "uninstall", "release_sha256": "0" * 64}
+        with patch("core.slicer_engine_management_api.installer_request", side_effect=installer):
+            response = self.client.post(self.endpoint, data=switch, content_type="application/json")
+            self.assertEqual(response.status_code, 202, response.content)
+            self.assertIn(("POST", "/activate",
+                           {"engine": "orcaslicer", "version": "2.4.2"}), calls)
+            self.assertEqual(self.client.post(self.endpoint, data=remove,
+                             content_type="application/json").status_code, 409)
+            # A completed operation no longer blocks subsequent user changes.
+            SlicerEngineOperation.objects.update(status="completed")
+            response = self.client.post(self.endpoint, data=remove, content_type="application/json")
+            self.assertEqual(response.status_code, 202, response.content)
+            self.assertIn(("POST", "/uninstall", {"engine": "orcaslicer", "version": "all"}), calls)
+            SlicerEngineAccessSettings.objects.create(
+                restrict_engine_management_to_admins=True)
+            self.assertEqual(self.client.post(self.endpoint, data=remove,
+                             content_type="application/json").status_code, 403)
+
+    @patch.dict(os.environ, {"MAKERVAULT_SLICER_HOST_UPDATER_ENABLED": "1"})
+    def test_engine_lifecycle_rejects_untrusted_request_forms(self):
+        self.client.force_login(self.user)
+        for mutation in (
+            {"engine": "orcaslicer", "version": "all",
+             "action": "activate", "release_sha256": "1" * 64},
+            {"engine": "../orcaslicer", "version": "all",
+             "action": "uninstall", "release_sha256": "0" * 64},
+            {"engine": "orcaslicer", "version": "2.5.0",
+             "action": "uninstall", "release_sha256": "0" * 64},
+        ):
+            with self.subTest(mutation=mutation):
+                self.assertEqual(self.client.post(
+                    self.endpoint, data=mutation,
+                    content_type="application/json").status_code, 400)
+
     def test_release_validation_fails_closed(self):
         from core.slicer_engine_releases import validated_releases
         with patch("core.slicer_engine_releases.APPROVED_RELEASES", ({
