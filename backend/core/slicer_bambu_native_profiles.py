@@ -52,12 +52,12 @@ def _entries(kind, vendor="BBL"):
 
 
 def search_bambu_native_profiles(query, kind, vendor="BBL", printer_model=None):
-    if not isinstance(query, str) or not 2 <= len(query.strip()) <= 80:
+    if not isinstance(query, str) or len(query.strip()) > 80:
         raise OfficialProfileError("Search for at least two characters.")
     entries = _entries(kind, vendor)
     needle = query.strip().casefold()
     matches = [(name, path) for name, path in entries.items()
-               if fuzzy_name_match(name, needle)
+               if (not needle or fuzzy_name_match(name, needle))
                and not name.startswith("fdm_")
                and " template " not in name]
     if printer_model and kind == "printer":
