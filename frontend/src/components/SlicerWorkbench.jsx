@@ -507,7 +507,7 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
     setMaterialProfileMatches({ material: materialHint, loading: true });
     const params = new URLSearchParams({
       engine: form.engine, kind: "filament",
-      vendor: form.engine === "orcaslicer" ? "OrcaFilamentLibrary" : "Creality",
+      vendor: form.engine === "orcaslicer" ? "OrcaFilamentLibrary" : form.engine === "bambustudio" ? "BBL" : "Creality",
       version: form.engine_version, q: materialHint,
     });
     apiFetch("/api/printing/slicer/official-profiles/?" + params)
@@ -1955,7 +1955,7 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
       </div>
       <div className="printingActionGroup" aria-labelledby="slicer-official-profiles-heading">
         <h4 id="slicer-official-profiles-heading">Search official slicer profiles</h4>
-        <p>Search available pinned official manufacturer catalogues. Bambu Studio now offers pinned native machine, filament and process presets for candidate import, while PrusaSlicer currently offers printer-model records only. Other engines may not provide a profile for every printer. An engine may not provide a profile for every printer. Profiles are imported for your selected engine; profiles cannot be shared between engines.</p>
+        <p>Search available pinned official manufacturer catalogues. Bambu Studio provides official machine, filament and process presets; PrusaSlicer currently provides printer-model records. Availability depends on the selected printer and engine. Profiles are imported for your selected engine; profiles cannot be shared between engines.</p>
         {officialSourceInfo?.source_engine_version &&
           officialSourceInfo.source_engine_version !== form.engine_version &&
           <p role="alert">Official profile release {officialSourceInfo.source_engine_version} does not match selected engine {form.engine_version}. Matching native release is required before importing; choose the supported engine version.</p>}
