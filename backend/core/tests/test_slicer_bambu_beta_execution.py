@@ -43,7 +43,7 @@ class BambuEngineExecutionTests(SimpleTestCase):
                 "plate_objects": [base, transformed],
             }))
         painted = {**base, "colour_paint": {"regions": [{"kind": "test"}]}}
-        with self.assertRaisesRegex(SlicerExecutionError, "object-specific"):
+        with self.assertRaisesRegex(SlicerExecutionError, "colour painting|object-specific"):
             _validate_plate_execution(self.job({"plate_objects": [painted]}))
 
     def test_bambu_installed_health_visible_without_beta_setting(self):
