@@ -9,6 +9,7 @@ import io
 import json
 import re
 import zipfile
+from xml.etree import ElementTree as ET
 
 from .slicer_profiles import SlicerProfileError
 
@@ -19,6 +20,54 @@ _MEMBERS = frozenset({
     "Metadata/layer_config_ranges.xml", "[Content_Types].xml", "_rels/.rels",
 })
 _BAMBU = "Metadata/project_settings.config"
+_CORE = "http://schemas.microsoft.com/3dmanufacturing/core/2015/02"
+_VARIANT_FLOATS = {
+    "filament_flow_ratio": (0.5, 1.5),
+    "nozzle_temperature": (100, 400),
+    "nozzle_temperature_initial_layer": (100, 400),
+    "filament_max_volumetric_speed": (0.1, 100),
+    "filament_retraction_length": (0, 30),
+}
+
+
+def _variant_values(document, count, key, low, high):
+    values = document.get(key)
+    if not isinstance(values, list) or len(values) != count:
+        raise SlicerProfileError("Bambu native material option " + key + " is incomplete.")
+    result = []
+    for value in values:
+        if key == "filament_retraction_length" and value == "nil":
+            result.append(value)
+            continue
+        if (not isinstance(value, str) or
+                not re.fullmatch(r"(?:[0-9]{1,3})(?:\\.[0-9]{1,4})?", value)):
+            raise SlicerProfileError("Invalid Bambu native material option " + key + ".")
+        if not low <= float(value) <= high:
+            raise SlicerProfileError("Unsafe Bambu native material option " + key + ".")
+        result.append(value)
+    return result
+
+
+def _mark_bambu_native_model(raw):
+    try:
+        root = ET.fromstring(raw)
+    except ET.ParseError as exc:
+        raise SlicerProfileError("Malformed native Bambu model XML.") from exc
+    if root.tag != "{" + _CORE + "}model":
+        raise SlicerProfileError("Invalid Bambu model namespace.")
+    for node in list(root):
+        if node.tag == "{" + _CORE + "}metadata" and node.get("name") in (
+                "Application", "BambuStudio:3mfVersion"):
+            root.remove(node)
+    for index, (name, value) in enumerate((
+            ("Application", "BambuStudio-02.09.01.70"),
+            ("BambuStudio:3mfVersion", "1"))):
+        node = ET.Element("{" + _CORE + "}metadata", {"name": name})
+        node.text = value
+        root.insert(index, node)
+    ET.register_namespace("", _CORE)
+    return ET.tostring(root, encoding="utf-8")
+
 
 
 def _native(raw, label):
@@ -72,6 +121,7 @@ def add_bambu_project_settings(project, *, printer, process, filaments,
     support_flags = []
     self_indices = []
     extruder_variants = []
+    material_variant_values = {key: [] for key in _VARIANT_FLOATS}
     for index, item in enumerate(sources, 1):
         native_id = _field(item, "filament_id", label="filament")
         if not re.fullmatch(r"[A-Za-z0-9_-]{1,32}", native_id):
@@ -93,6 +143,9 @@ def add_bambu_project_settings(project, *, printer, process, filaments,
         filament_ids.append(native_id)
         self_indices.extend([str(index)] * len(variants))
         extruder_variants.extend(variants)
+        for key, (lower, upper) in _VARIANT_FLOATS.items():
+            material_variant_values[key].extend(
+                _variant_values(item, len(variants), key, lower, upper))
     vectors = {
         "printer_settings_id": _field(machine, "name", label="printer"),
         "print_settings_id": _field(print_preset, "name", label="process"),
@@ -106,6 +159,7 @@ def add_bambu_project_settings(project, *, printer, process, filaments,
         "filament_extruder_variant": extruder_variants,
         "nozzle_diameter": [diameter],
         "printable_height": height,
+        **material_variant_values,
     }
     try:
         with zipfile.ZipFile(io.BytesIO(project)) as original:
@@ -122,7 +176,10 @@ def add_bambu_project_settings(project, *, printer, process, filaments,
                     for item in info:
                         if item.file_size > MAX_SIZE:
                             raise SlicerProfileError("Unsafe source native 3MF member.")
-                        target.writestr(item.filename, original.read(item.filename))
+                        value = original.read(item.filename)
+                        if item.filename == "3D/3dmodel.model":
+                            value = _mark_bambu_native_model(value)
+                        target.writestr(item.filename, value)
                     target.writestr(_BAMBU, json.dumps(
                         vectors, ensure_ascii=False, separators=(",", ":")))
                 result = output.getvalue()
