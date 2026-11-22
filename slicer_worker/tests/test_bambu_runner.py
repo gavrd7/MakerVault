@@ -41,6 +41,46 @@ class BambuRunnerContractTests(TestCase):
         self.assertEqual(argv[argv.index("--slice") + 1], "0")
         self.assertTrue(argv[-1].endswith("input.stl"))
 
+    def test_native_multifilament_3mf_uses_ordered_cli_palette(self):
+        from slicer_worker.probe import fixture_bambu_core_3mf
+        (self.root / "input.stl").unlink()
+        (self.root / "input.3mf").write_bytes(fixture_bambu_core_3mf())
+        for index in range(2):
+            source = self.root / ("filament-" + str(index) + ".json")
+            source.write_text(json.dumps({
+                "type": "filament", "name": "Fixture PLA " + str(index),
+                "filament_type": ["PLA"], "filament_diameter": ["1.75"],
+            }))
+        (self.root / "filament.json").write_bytes(
+            (self.root / "filament-0.json").read_bytes())
+        argv = bambu_command(self.binary, self.root)
+        self.assertNotIn("--arrange", argv)
+        self.assertEqual(argv[argv.index("--load-filaments") + 1],
+                         str(self.root / "filament-0.json") + ";" +
+                         str(self.root / "filament-1.json"))
+        self.assertTrue(argv[-1].endswith("input.3mf"))
+
+    def test_multifilament_refuses_missing_palette_member_and_mismatched_tool_zero(self):
+        from slicer_worker.probe import fixture_bambu_core_3mf
+        (self.root / "input.stl").unlink()
+        (self.root / "input.3mf").write_bytes(fixture_bambu_core_3mf())
+        (self.root / "filament-0.json").write_bytes(
+            (self.root / "filament.json").read_bytes())
+        (self.root / "filament-2.json").write_bytes(
+            (self.root / "filament.json").read_bytes())
+        with self.assertRaisesRegex(WorkerError, "contiguous"):
+            bambu_command(self.binary, self.root)
+        (self.root / "filament-2.json").rename(self.root / "filament-1.json")
+        (self.root / "filament-0.json").write_text('{"type":"filament","name":"other"}')
+        with self.assertRaisesRegex(WorkerError, "first native palette"):
+            bambu_command(self.binary, self.root)
+        (self.root / "filament-0.json").write_bytes(
+            (self.root / "filament.json").read_bytes())
+        (self.root / "filament-1.json").write_text(
+            '{"type":"filament","name":"other","post_processing_scripts":"curl"}')
+        with self.assertRaises(WorkerError):
+            bambu_command(self.binary, self.root)
+
     def test_staged_native_profile_must_not_inherit_or_postprocess(self):
         profile = self.root / "printer.json"
         profile.write_text(json.dumps({"inherits": "unknown"}))
