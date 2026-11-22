@@ -240,7 +240,7 @@ def run_probe(*, engine, version, binary, printer, filament, process, timeout=12
     if engine == "bambustudio" and (version != "02.09.01.70" or expected_objects != 1
             or expected_islands != 1 or model is not None or second_filament is not None
             or audit_changeovers or verify_object_effects):
-        raise WorkerError("Bambu probe requires pinned v02.09.01.70, a single STL and single filament.")
+        raise WorkerError("Bambu probe requires pinned v02.09.01.70, a single STL or fixed 3MF and one filament.")
     if not isinstance(version, str) or not 1 <= len(version) <= 80:
         raise WorkerError("A pinned engine version is required.")
     if not isinstance(timeout, int) or not 1 <= timeout <= 900:
@@ -313,8 +313,9 @@ def run_probe(*, engine, version, binary, printer, filament, process, timeout=12
         "status": "passed",
         "engine": engine, "engine_version": version,
         "binary_sha256": binary_sha256,
-        "fixture": "makervault-two-object-3mf-v1" if model_bytes is not None
-                   else "makervault-tetrahedron-binary-v1",
+        "fixture": ("makervault-bambu-core-3mf-v1" if bambu_core_3mf
+                    else "makervault-two-object-3mf-v1" if model_bytes is not None
+                    else "makervault-tetrahedron-binary-v1"),
         "object_count": expected_objects,
         "expected_geometry_islands": expected_islands,
         "profile_sha256": {key.removesuffix(".json"): hashlib.sha256(data).hexdigest()
