@@ -58,11 +58,11 @@ def official_catalogue_models(vendor="BBL"):
 def search_bambu_profiles(query, kind, vendor="BBL", printer_model=None):
     if kind != "printer":
         raise OfficialProfileError("Bambu model-artwork discovery currently supports printer models only.")
-    if not isinstance(query, str) or not 2 <= len(query.strip()) <= 80:
+    if not isinstance(query, str) or len(query.strip()) > 80:
         raise OfficialProfileError("Search for at least two characters.")
     entries = _entries(vendor)
     candidates = [(name, path) for name, path in entries.items()
-                  if fuzzy_name_match(name, query.strip().casefold())]
+                  if not query.strip() or fuzzy_name_match(name, query.strip().casefold())]
     if printer_model:
         candidates = [(name, path) for name, path in candidates if name == printer_model]
     return {
