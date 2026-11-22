@@ -95,6 +95,33 @@ class BambuNativeMulticolourTests(TestCase):
         self.assertEqual(expected_native_tools(project), {0, 1})
         self.assertEqual(len(_decode_payload(self.payload(project))["filament_profiles"]), 2)
 
+    def test_bambu_semantic_paint_3mf_keeps_exact_palette_and_native_attributes(self):
+        import io
+        import zipfile
+        from xml.etree import ElementTree as ET
+        for mode, attributes in (
+                ("support", {"paint_supports"}),
+                ("seam", {"paint_seam"}),
+                ("fuzzy", {"paint_fuzzy_skin"}),
+                ("combined", {"paint_supports", "paint_seam", "paint_fuzzy_skin"})):
+            with self.subTest(mode=mode):
+                project = make_bambu_material_fixture(
+                    painted=True, detail_paint=mode)
+                self.assertTrue(validate_worker_3mf(
+                    project, native_tool_count=2, allow_bambu_project=True,
+                    allow_bambu_combined_paint=True))
+                with zipfile.ZipFile(io.BytesIO(project)) as archive:
+                    model = ET.fromstring(archive.read("3D/3dmodel.model"))
+                matches = [tri for tri in model.iter()
+                           if tri.tag.endswith("}triangle")
+                           and attributes <= set(tri.attrib)
+                           and tri.get("paint_color") == "8"]
+                self.assertGreaterEqual(len(matches), 1)
+                self.assertEqual(expected_native_tools(project), {0, 1})
+                with self.assertRaisesRegex(WorkerError, "painted facet"):
+                    validate_worker_3mf(project, native_tool_count=2,
+                                        allow_bambu_project=True)
+
     def test_native_bambu_variable_layers_require_exact_palette_and_single_object(self):
         project = make_bambu_material_fixture(painted=True, variable_layers=True)
         with self.assertRaisesRegex(WorkerError, "approved single object"):
