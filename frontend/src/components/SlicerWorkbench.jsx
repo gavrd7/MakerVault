@@ -849,10 +849,6 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
 
 
   function requestPrint(job, action = "print") {
-    if (job.engine === "bambustudio") {
-      setError("Bambu Studio Beta is offline-only; printer upload and start remain disabled.");
-      return;
-    }
     if (job.status !== "completed" || !job.output_asset?.id) return;
     const printer = printers.find(item => String(item.id) === String(job.printer?.id));
     if (!printer) {
@@ -2214,7 +2210,7 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
           {previewJob.settings?.workflow !== "quick" && !previewJob.gcode_in_library && <button type="button" disabled={busy}
             onClick={() => saveOutputToLibrary(previewJob)}>Add G-code to library</button>}
           {previewJob.settings?.workflow !== "quick" && previewJob.gcode_in_library && <button type="button" onClick={onOpenGcode}>Open G-code library</button>}
-          {canPrint && previewJob.engine !== "bambustudio" && previewJob.settings?.workflow !== "quick" && <>
+          {canPrint && previewJob.settings?.workflow !== "quick" && <>
             <button type="button"
               onClick={() => requestPrint(previewJob, "upload")}>Upload to printer</button>
             <button type="button" className="primary"
@@ -2357,7 +2353,7 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
             {mayCancel && (job.status === "draft" || job.status === "queued") && <button type="button" disabled={busy} onClick={() => cancelPending(job)}>Cancel {job.status === "queued" ? "queued slice" : "draft"}</button>}
             {job.status === "completed" && job.output_asset?.id &&
               <button type="button" onClick={() => setPreviewJobId(job.id)}>Preview G-code</button>}
-            {job.settings?.workflow !== "quick" && job.status === "completed" && job.output_asset?.id && canPrint && job.engine !== "bambustudio" && <button type="button" className="primary" disabled={busy} onClick={() => requestPrint(job)}>Print from slicer</button>}
+            {job.settings?.workflow !== "quick" && job.status === "completed" && job.output_asset?.id && canPrint && <button type="button" className="primary" disabled={busy} onClick={() => requestPrint(job)}>Print from slicer</button>}
             {job.settings?.workflow !== "quick" && job.status === "completed" && job.output_asset_id && !job.gcode_in_library &&
               <button type="button" disabled={busy} onClick={() => saveOutputToLibrary(job)}>Add G-code to library</button>}
             {job.settings?.workflow !== "quick" && job.status === "completed" && job.output_asset_id && job.gcode_in_library &&
