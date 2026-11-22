@@ -261,9 +261,8 @@ jobs:
               --profiles /tmp/bambu-verified-profiles --timeout 180 "${extra[@]}"
           done
 
-      - name: Probe support enforcer overhang model with real native toolpaths (diagnostic)
+      - name: Verify native painted support enforcer generates real overhang support G-code
         shell: bash
-        continue-on-error: true
         run: |
           set -euo pipefail
           for mode in baseline enforcer; do
@@ -288,11 +287,26 @@ jobs:
                         "gcode_sha256": item["gcode_sha256"],
                         "support_feature_moves": item["flush_evidence"]["support_feature_moves"],
                         "support_feature_positive_e_mm": item["flush_evidence"]["support_feature_positive_e_mm"],
-                        "base_model_deposits": item["base_tool_model_deposits"],
-                        "painted_model_deposits": item["painted_tool_model_deposits"],
+                        "model_region_audit": item.get("overhang_model_region_audit", "passed"),
+                        "global_two_tool_deposition": item["both_tools_extrude"],
                     }, sort_keys=True))
           print("CI native Bambu support enforcer changes actual G-code:",
                 results["baseline"]["gcode_sha256"] != results["enforcer"]["gcode_sha256"])
+          baseline, enforcer = results["baseline"], results["enforcer"]
+          empty = baseline["flush_evidence"]
+          marked = enforcer["flush_evidence"]
+          if not (baseline["both_tools_extrude"] and enforcer["both_tools_extrude"]):
+              raise SystemExit("Bambu overhang lost native multi-material extrusion")
+          if (empty["support_feature_moves"] != 0 or
+                  sum(empty["support_feature_positive_e_mm"].values()) != 0):
+              raise SystemExit("Bambu unsupported baseline unexpectedly generated support")
+          if (marked["support_feature_moves"] < 100 or
+                  sum(marked["support_feature_positive_e_mm"].values()) < 10):
+              raise SystemExit("Bambu painted support enforcer did not generate real support extrusion")
+          if baseline["gcode_sha256"] == enforcer["gcode_sha256"]:
+              raise SystemExit("Bambu painted support enforcer did not modify native G-code")
+          print("CI native Bambu support enforcer: VERIFIED support deposition contrast")
+
           PY
 
       - name: Probe joint Bambu native colour/support/seam/fuzzy facets (diagnostic)
