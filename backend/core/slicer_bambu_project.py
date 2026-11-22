@@ -40,7 +40,7 @@ def _variant_values(document, count, key, low, high):
             result.append(value)
             continue
         if (not isinstance(value, str) or
-                not re.fullmatch(r"(?:[0-9]{1,3})(?:\\.[0-9]{1,4})?", value)):
+                not re.fullmatch(r"(?:[0-9]{1,3})(?:\.[0-9]{1,4})?", value)):
             raise SlicerProfileError("Invalid Bambu native material option " + key + ".")
         if not low <= float(value) <= high:
             raise SlicerProfileError("Unsafe Bambu native material option " + key + ".")
