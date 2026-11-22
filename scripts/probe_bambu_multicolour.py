@@ -223,6 +223,7 @@ def run_fixture(binary, profiles, *, painted=False, timeout=180):
                           "output_bytes", len(attempt.stdout),
                           "error_bytes", len(attempt.stderr))
                     print("CI Bambu stderr bounded:", repr(attempt.stderr[:200]))
+                    print("CI Bambu stdout bounded:", repr(attempt.stdout[:400]))
                     directory = workdir / label.replace("_", "-")
                     emitted = ([f for f in directory.rglob("*.gcode") if f.is_file()]
                                if directory.is_dir() else [])
