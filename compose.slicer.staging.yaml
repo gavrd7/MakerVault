@@ -34,6 +34,8 @@ services:
       - makervault_slicer_engines:/engine-store:rw
 
   slicer-worker:
+    # Stable Docker container name; retain service DNS name slicer-worker.
+    container_name: makervault-slicer
     # The single slicer container runs one non-writable, egress-blocked
     # worker UID 10001 and one installer UID 10002 as distinct processes.
     image: makervault-slicer-combined:staging
