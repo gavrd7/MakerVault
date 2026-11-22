@@ -85,7 +85,8 @@ def bambu_command(binary: Path, workdir: Path) -> list[str]:
         # would accidentally reject legitimate per-object extruder keys.
         validate_worker_3mf(model.read_bytes(),
             native_tool_count=len(palette) if palette else None,
-            allow_bambu_project=True)
+            allow_bambu_project=True,
+            allow_bambu_combined_paint=bool(palette))
     _output_path(workdir)
     output = workdir / "bambu-sliced.3mf"
     if output.exists() or output.is_symlink():
