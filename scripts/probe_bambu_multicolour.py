@@ -421,6 +421,9 @@ def run_fixture(binary, profiles, *, painted=False, timeout=180,
                                   k: {str(inc): vals.count(inc)
                                       for inc in sorted(set(vals))}
                                   for k, vals in bands.items()}}, sort_keys=True))
+            from slicer_worker.material_gcode_audit import verify_bambu_fixture_variable_layers
+            proof = verify_bambu_fixture_variable_layers(gcode)
+            print("CI Bambu verified true layer increments:", json.dumps(proof, sort_keys=True))
 
 
         return {
