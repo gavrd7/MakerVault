@@ -44,8 +44,8 @@ def resolve_native_material_palette(
     and structurally valid. Manual approval is not required. The resolved byte blobs are never persisted here.
     No assumption is made that the worker accepts more than one filament.
     """
-    if engine != "orcaslicer":
-        raise MaterialRoutingError("Native multi-filament palette is not verified for this engine.")
+    if engine not in {"orcaslicer", "bambustudio"}:
+        raise MaterialRoutingError("Native multi-filament palette is unavailable for this engine.")
     if (not isinstance(native_filament_profiles, (list, tuple))
             or not 2 <= len(native_filament_profiles) <= MAX_NATIVE_TOOLS):
         raise MaterialRoutingError("Select two to sixteen ordered native filament presets.")
