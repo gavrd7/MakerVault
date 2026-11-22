@@ -18,7 +18,7 @@ def _connection():
     parsed = urlsplit(url)
     if (len(token) < 32 or parsed.scheme != "http" or
             parsed.hostname not in {"slicer-worker", "slicer-engine-installer"} or parsed.port != 8091 or
-            parsed.path or parsed.query or parsed.fragment):
+            parsed.username or parsed.password or parsed.path or parsed.query or parsed.fragment):
         raise EngineInstallerUnavailable("Engine installer is not configured.")
     return url, token
 
