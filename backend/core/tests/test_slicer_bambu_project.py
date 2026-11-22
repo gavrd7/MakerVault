@@ -12,6 +12,7 @@ from slicer_worker.runner import WorkerError
 # Backend has Django dependencies; these tests run inside the backend suite.
 from core.slicer_bambu_project import (
     add_bambu_project_settings, selected_bambu_tool_colours,
+    apply_bambu_prime_tower_position,
 )
 from core.slicer_profiles import SlicerProfileError
 
@@ -77,6 +78,21 @@ class BambuNativeProjectVectorTests(TestCase):
             add_bambu_project_settings(project, printer=b'{"name":"invalid"}',
                                        process=self.process, filaments=[self.filament]*2,
                                        tool_colours=["#FF0000","#0000FF"])
+
+    def test_prime_tower_position_uses_same_bounded_native_process_keys(self):
+        result = json.loads(apply_bambu_prime_tower_position(
+            self.process, {"x": 43, "y": 51.5},
+            bed_width=256, bed_depth=256))
+        self.assertEqual(result["wipe_tower_x"], ["43"])
+        self.assertEqual(result["wipe_tower_y"], ["51.5"])
+        with self.assertRaises(SlicerProfileError):
+            apply_bambu_prime_tower_position(
+                self.process, {"x": 250, "y": 50},
+                bed_width=256, bed_depth=256)
+        with self.assertRaises(SlicerProfileError):
+            apply_bambu_prime_tower_position(
+                self.process, {"x": True, "y": 50},
+                bed_width=256, bed_depth=256)
 
     def test_selected_colour_tools_use_explicit_material_slot_not_bay_index(self):
         models = [
