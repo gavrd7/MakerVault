@@ -919,6 +919,28 @@ def process_queued_job(job_id):
                 bed_width=width, bed_depth=depth,
                 require_verified_multicolor_purge=selected_creality_multicolor)
             model_format = "3mf"
+        if material_result is not None and job.engine == "bambustudio":
+            # Bambu's native 02.09.01.70 CLI requires the 3MF project's
+            # filament ID/colour vectors when loading more than one filament.
+            # Build these from exact owner-scoped native presets and the
+            # already-validated logical tool bindings; never infer them from
+            # the numeric CFS/AMS bay index.
+            from .slicer_bambu_project import (
+                add_bambu_project_settings, selected_bambu_tool_colours,
+            )
+            try:
+                colours = selected_bambu_tool_colours(
+                    (job.settings or {}).get("plate_objects") or [],
+                    material_result["tool_bindings"],
+                    len(material_result["filament_profiles"]))
+                model = add_bambu_project_settings(
+                    model, printer=profiles[0], process=profiles[2],
+                    filaments=material_result["filament_profiles"],
+                    tool_colours=colours)
+            except (SlicerProfileError, ValueError, TypeError) as exc:
+                raise SlicerExecutionError(
+                    "Bambu multi-material project settings could not be validated: "
+                    + str(exc)) from exc
         if model_format == "stl" and job.input_asset.sha256 and hashlib.sha256(model).hexdigest() != job.input_asset.sha256:
             raise SlicerExecutionError("Model contents changed since the job was prepared.")
         stage = "executing the isolated slicer worker"
