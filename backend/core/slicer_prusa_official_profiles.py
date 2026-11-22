@@ -82,7 +82,7 @@ def search_prusa_profiles(query, kind, vendor="PrusaResearch", printer_model=Non
     if kind != "printer":
         raise OfficialProfileError("Prusa artwork discovery currently supports printer-model metadata only.")
     if not isinstance(query, str) or len(query.strip()) > 80:
-        raise OfficialProfileError("Enter at least two search characters.")
+        raise OfficialProfileError("Search terms must be 80 characters or fewer.")
     needle = query.strip().casefold()
     models = _sections(vendor)
     matches = [name for name in models if needle in name.casefold()]
