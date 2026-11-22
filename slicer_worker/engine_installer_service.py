@@ -31,16 +31,13 @@ from .engine_store_admin import (
     EXPECTED_ORCA_SHA, APPROVAL_VERSION, rollback as rollback_store,
 )
 from .engine_store_lifecycle import installed_versions, activate_installed, uninstall_engine, preserve_active_identities, IDENTITY
-from .engine_registry import SUPPORTED as INSTALLED_ENGINE_TYPES, BAMBU_BETA_VERSION, BAMBU_BETA_RUNTIME_SHA256
+from .engine_registry import SUPPORTED as INSTALLED_ENGINE_TYPES, BAMBU_VERSION, BAMBU_RUNTIME_SHA256
 
 STORE = Path(os.environ.get("SLICER_ENGINE_STORE", "/opt/engine-store"))
 TOKEN = os.environ.get("SLICER_INSTALLER_TOKEN", "")
 SUPPORTED = {"crealityprint": "CrealityOfficial/CrealityPrint",
              "orcaslicer": "OrcaSlicer/OrcaSlicer"}
-# Explicit opt-in: Bambu remains absent from the normal engine catalogue
-# until the full worker/backend beta gate is enabled on the same deployment.
-if os.environ.get("SLICER_BAMBU_BETA_ENABLED") == "1":
-    SUPPORTED["bambustudio"] = "bambulab/BambuStudio"
+SUPPORTED["bambustudio"] = "bambulab/BambuStudio"
 BAMBU_APPIMAGE_SHA256 = "668dabb1be53c758189ed6bc89935285dea5e0af46216546b1bafd6882e9aff0"
 BAMBU_ASSET = "BambuStudio_ubu24-v02.09.01.70-20261103183404.AppImage"
 
@@ -157,7 +154,7 @@ def release_catalogue():
     releases = []
     for engine, repo in SUPPORTED.items():
         if engine == "bambustudio":
-            tag = "v" + BAMBU_BETA_VERSION
+            tag = "v" + BAMBU_VERSION
             url = f"https://api.github.com/repos/{repo}/releases/tags/{tag}"
             try:
                 with _request(url) as response:
@@ -182,12 +179,12 @@ def release_catalogue():
                     or not 10_000_000 <= item["size"] <= MAX_BYTES):
                 continue
             releases.append({
-                "engine": engine, "version": BAMBU_BETA_VERSION,
+                "engine": engine, "version": BAMBU_VERSION,
                 "bundle_sha256": BAMBU_APPIMAGE_SHA256,
                 "bundle_url": expected_url,
-                "binary_sha256": BAMBU_BETA_RUNTIME_SHA256,
+                "binary_sha256": BAMBU_RUNTIME_SHA256,
                 "architecture": "linux/amd64",
-                "notes": "Bambu Studio 2.9.1 (single-material Beta)",
+                "notes": "Bambu Studio 2.9.1",
                 "asset_size": item["size"],
             })
             continue
@@ -398,7 +395,7 @@ def _install(op_id, release):
         # Stage a complete version before publishing it; preserve all older
         # engines and use a single atomic manifest rename for activation.
         binary_hash = _sha256(runtime)
-        if engine == "bambustudio" and binary_hash != BAMBU_BETA_RUNTIME_SHA256:
+        if engine == "bambustudio" and binary_hash != BAMBU_RUNTIME_SHA256:
             raise ValueError("Bambu native runtime differs from the reviewed exact release.")
         if not HEX.fullmatch(binary_hash):
             raise ValueError("Engine runtime digest unavailable.")
@@ -447,7 +444,7 @@ def _install(op_id, release):
 
 
 def start_install(engine, version, digest):
-    version_ok = (version == BAMBU_BETA_VERSION if engine == "bambustudio"
+    version_ok = (version == BAMBU_VERSION if engine == "bambustudio"
                   else isinstance(version, str) and bool(VERSION.fullmatch(version)))
     if engine not in SUPPORTED or not version_ok or not isinstance(digest, str) or not HEX.fullmatch(digest):
         raise ValueError("Unknown engine release.")
