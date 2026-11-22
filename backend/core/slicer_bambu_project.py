@@ -7,6 +7,7 @@ these vectors. No scripts, printer credentials or external file references.
 """
 import io
 import json
+import math
 import re
 import zipfile
 from xml.etree import ElementTree as ET
@@ -194,6 +195,36 @@ def add_bambu_project_settings(project, *, printer, process, filaments,
     if len(result) > MAX_SIZE:
         raise SlicerProfileError("Bambu native project exceeds its size limit.")
     return result
+
+
+def apply_bambu_prime_tower_position(process_bytes, tower, *, bed_width, bed_depth):
+    """Apply the normal MakerVault tower X/Y control to a native Bambu process.
+
+    Bambu Studio 2.9.1 uses the same wipe_tower_x/y project settings as Orca.
+    This is a worker-bound profile copy, never a stored native preset.
+    """
+    if (not isinstance(tower, dict) or set(tower) != {"x", "y"}
+            or any(type(tower[k]) not in (float, int) or
+                   not math.isfinite(tower[k]) for k in ("x", "y"))
+            or any(type(value) not in (float, int) or
+                   not math.isfinite(value) or value <= 0
+                   for value in (bed_width, bed_depth))):
+        raise SlicerProfileError("Invalid Bambu prime tower position.")
+    doc = _native(process_bytes, "process")
+    raw_width = doc.get("prime_tower_width", "35")
+    if isinstance(raw_width, list):
+        raw_width = raw_width[0] if len(raw_width) == 1 else None
+    try:
+        width = float(raw_width)
+    except (TypeError, ValueError, OverflowError):
+        raise SlicerProfileError("Invalid Bambu prime tower width.") from None
+    x, y = tower["x"], tower["y"]
+    if (not math.isfinite(width) or not 2 <= width <= 200
+            or not (0 <= x <= bed_width - width and 0 <= y < bed_depth)):
+        raise SlicerProfileError("Bambu prime tower exceeds the selected plate.")
+    doc["wipe_tower_x"] = [str(round(x, 3))]
+    doc["wipe_tower_y"] = [str(round(y, 3))]
+    return json.dumps(doc, separators=(",", ":"), ensure_ascii=False).encode("utf-8")
 
 
 def selected_bambu_tool_colours(objects, bindings, count):
