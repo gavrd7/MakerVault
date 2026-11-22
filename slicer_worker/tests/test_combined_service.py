@@ -52,7 +52,7 @@ class CombinedSlicerTests(unittest.TestCase):
         self.assertNotIn("\n  slicer-engine-installer:", compose)
         self.assertIn("http://slicer-worker:8091", compose)
         self.assertIn("slicer_worker.combined_service", compose)
-        self.assertIn("cap_add: [SETUID, SETGID]", compose)
+        self.assertIn("cap_add: [SETUID, SETGID, KILL]", compose)
         self.assertIn("10002:10002", compose)
         self.assertIn("makervault_slicer_engines:/opt/engine-store:rw", compose)
 
