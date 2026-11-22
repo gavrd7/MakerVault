@@ -359,7 +359,7 @@ def summarize_bambu_flush_signal(raw_gcode):
     }
 
 
-def verify_bambu_fixture_variable_layers(raw_gcode):
+def verify_bambu_fixture_variable_layers(raw_gcode, *, upper_height=0.30):
     """Prove the pinned Bambu native 3MF fixed painted cube used the requested
     0.10mm (0-9mm) and 0.30mm (9-20mm) layer-height bands in actual G-code.
 
@@ -367,6 +367,8 @@ def verify_bambu_fixture_variable_layers(raw_gcode):
     Only strictly increasing native layer markers are accepted; travel Z,
     Z-hops and untrusted header settings cannot pass the audit.
     """
+    if type(upper_height) not in (int, float) or upper_height not in (0.15, 0.30):
+        raise WorkerError("Invalid Bambu fixture upper layer height.")
     if (not isinstance(raw_gcode, bytes) or not raw_gcode
             or len(raw_gcode) > 64 * 1024 * 1024):
         raise WorkerError("Invalid Bambu native layer audit G-code.")
@@ -390,7 +392,7 @@ def verify_bambu_fixture_variable_layers(raw_gcode):
     checks = []
     for label, start, stop, wanted in (
             ("lower", 0.0, 9.0, 0.10),
-            ("upper", 9.0, 20.0, 0.30)):
+            ("upper", 9.0, 20.0, upper_height)):
         values = [round(z1 - z0, 4)
                   for z0, z1 in zip(positions, positions[1:])
                   if z0 >= start + wanted and z1 <= stop - wanted]
