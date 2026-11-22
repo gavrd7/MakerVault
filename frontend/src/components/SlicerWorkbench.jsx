@@ -1098,12 +1098,9 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
       if (!active) return;
       const models = result.models || [];
       setOfficialModels(models);
-      const model = String(selectedPrinter?.model || selectedPrinter?.name || "").trim().toLowerCase();
-      const match = models.find(item => {
-        const candidate = item.toLowerCase();
-        return candidate === model || (model && candidate.endsWith(" " + model));
-      });
-      setOfficialModel(match || "");
+      // Browsing is independent of the printer selected for slicing.
+      // Model filtering is applied only when the operator explicitly chooses one.
+      setOfficialModel("");
     }).catch(err => {
       if (active) {
         setOfficialModels([]);
@@ -1389,7 +1386,7 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
     setOfficialSourceInfo(null);
     setOfficialError("");
     loadOfficialVendors(targetVersion, kind);
-    setOfficialQuery(defaultOfficialSearch(kind, { printer: selectedPrinter, spool: selectedSpool, nozzle: form.nozzle_mm }));
+    setOfficialQuery("");
     setOfficialResults(null); // Never carry results into another engine/vendor catalogue.
     setOfficialImportNotice("");
     setOfficialImportTarget("");
@@ -1955,7 +1952,7 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
       </div>
       <div className="printingActionGroup" aria-labelledby="slicer-official-profiles-heading">
         <h4 id="slicer-official-profiles-heading">Search official slicer profiles</h4>
-        <p>Search available pinned official manufacturer catalogues. Bambu Studio provides official machine, filament and process presets; PrusaSlicer currently provides printer-model records. Availability depends on the selected printer and engine. Profiles are imported for your selected engine; profiles cannot be shared between engines.</p>
+        <p>Browse all profiles in the selected engine's pinned official manufacturer catalogues, or optionally filter by manufacturer, printer model and search terms. Results are not restricted to your currently selected printer. Imported profiles remain engine-native and must be reviewed for printer compatibility before slicing.</p>
         {officialSourceInfo?.source_engine_version &&
           officialSourceInfo.source_engine_version !== form.engine_version &&
           <p role="alert">Official profile release {officialSourceInfo.source_engine_version} does not match selected engine {form.engine_version}. Matching native release is required before importing; choose the supported engine version.</p>}
@@ -1997,7 +1994,7 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
             <select value={importKind} disabled={officialBusy} onChange={e => {
                 const kind=e.target.value;
                 setImportKind(kind);setOfficialResults(null);setOfficialImportNotice("");setOfficialBrand("");
-                setOfficialQuery(defaultOfficialSearch(kind,{printer:selectedPrinter,spool:selectedSpool,nozzle:form.nozzle_mm}));
+                setOfficialQuery("");
                 if(form.engine==="orcaslicer" && kind==="filament" &&
                     officialVendors.some(v=>v.id==="OrcaFilamentLibrary"))
                   setOfficialVendor("OrcaFilamentLibrary");
