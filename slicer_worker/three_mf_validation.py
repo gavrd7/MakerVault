@@ -80,7 +80,8 @@ def validate_worker_3mf(data, *, native_tool_count=None, allow_creality_combined
             permitted = {"printer_settings_id", "print_settings_id",
                          "filament_settings_id", "filament_colour",
                          "filament_type", "filament_diameter", "nozzle_diameter",
-                         "printable_height"}
+                         "printable_height", "filament_ids",
+                         "filament_self_index", "filament_extruder_variant"}
             if not isinstance(settings, dict) or not settings or set(settings) - permitted:
                 raise WorkerError("Unsafe Bambu project setting keys.")
             for label in ("printer_settings_id", "print_settings_id"):
@@ -100,6 +101,32 @@ def validate_worker_3mf(data, *, native_tool_count=None, allow_creality_combined
                         or any(not isinstance(v, str) or not 1 <= len(v) <= 200
                                for v in values)):
                     raise WorkerError("Bambu project palette does not match the native tool count.")
+            ids_vector = settings.get("filament_ids")
+            self_vector = settings.get("filament_self_index")
+            variant_vector = settings.get("filament_extruder_variant")
+            if (not isinstance(ids_vector, list)
+                    or len(ids_vector) != native_tool_count
+                    or any(not isinstance(value, str) or not re.fullmatch(
+                        r"[A-Za-z0-9_-]{1,32}", value) for value in ids_vector)):
+                raise WorkerError("Invalid Bambu native filament IDs.")
+            if (not isinstance(self_vector, list)
+                    or not isinstance(variant_vector, list)
+                    or not native_tool_count <= len(self_vector) <= native_tool_count * 4
+                    or len(self_vector) != len(variant_vector)
+                    or any(not isinstance(value, str) or not re.fullmatch(
+                        r"[A-Za-z0-9 -]{1,64}", value) for value in variant_vector)):
+                raise WorkerError("Invalid Bambu filament extruder variants.")
+            observed = []
+            for self_index in self_vector:
+                if not isinstance(self_index, str) or not self_index.isdecimal():
+                    raise WorkerError("Invalid Bambu filament self-index.")
+                observed.append(int(self_index))
+            if (observed != sorted(observed)
+                    or set(observed) != set(range(1, native_tool_count + 1))
+                    or any(len(set(variant_vector[pos] for pos, tool in enumerate(observed)
+                                    if tool == index)) != observed.count(index)
+                           for index in range(1, native_tool_count + 1))):
+                raise WorkerError("Bambu filament variant mapping is inconsistent.")
             if any(not re.fullmatch(r"#[0-9A-Fa-f]{6}", v)
                    for v in settings["filament_colour"]):
                 raise WorkerError("Invalid Bambu project filament colour.")
