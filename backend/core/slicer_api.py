@@ -36,7 +36,7 @@ from .slicer_semantic_painting import validate_semantic_paint
 from .slicer_variable_layers import validate_variable_layer_profile
 from .slicer_paint_assets import store_paint, load_paint, expand_painted_item, expand_painted_settings, PAINT_FIELDS
 from .slicer_mesh import inspect_stl, MeshInspectionError, MAX_INSPECTION_BYTES
-from .slicer_bed import inspect_orca_plate, inspect_creality_plate
+from .slicer_bed import inspect_orca_plate, inspect_creality_plate, inspect_bambu_plate
 from .slicer_bed_artwork import (official_artwork_source, cached_official_artwork,
     official_bed_model_source, cached_official_bed_model)
 from .slicer_official_chain import official_profile_chain
@@ -1959,6 +1959,7 @@ def profile_plate(request, profile_id):
     if profile.engine in ("orcaslicer", "crealityprint", "bambustudio"):
         try:
             geometry = (inspect_creality_plate(profile) if profile.engine == "crealityprint"
+                        else inspect_bambu_plate(profile) if profile.engine == "bambustudio"
                         else inspect_orca_plate(profile))
         except SlicerProfileError:
             return _error("Native printer geometry could not be safely inspected.", 422)
