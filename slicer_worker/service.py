@@ -317,6 +317,8 @@ class Handler(BaseHTTPRequestHandler):
                 "Bambu generated unsupported binary or empty G-code.": "invalid-gcode",
                 "Bambu native output must contain exactly one G-code plate.": "unexpected-output-layout",
                 "Bambu native output includes an unexpected G-code plate.": "unexpected-output-layout",
+                "Bambu combined painting needs an exact native project palette.": "validation-error",
+                "Bambu multi-material 3MF requires native project settings.": "validation-error",
                 "Bambu project settings require a bounded native palette.": "validation-error",
                 "Unsafe Bambu project setting keys.": "validation-error",
                 "Missing Bambu native preset identity.": "validation-error",
