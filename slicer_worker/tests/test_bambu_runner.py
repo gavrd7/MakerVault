@@ -48,17 +48,50 @@ class BambuRunnerContractTests(TestCase):
         for index in range(2):
             source = self.root / ("filament-" + str(index) + ".json")
             source.write_text(json.dumps({
-                "type": "filament", "name": "Fixture PLA " + str(index),
+                "type": "filament", "name": "MakerVault PLA Tool " + str(index + 1),
                 "filament_type": ["PLA"], "filament_diameter": ["1.75"],
+                "filament_id": "GFA00", "filament_is_support": ["0"],
+                "filament_extruder_variant": [
+                    "Direct Drive Standard", "Direct Drive High Flow"],
+                "filament_flow_ratio": ["0.98", "0.98"],
+                "nozzle_temperature": ["220", "220"],
+                "nozzle_temperature_initial_layer": ["220", "220"],
+                "filament_max_volumetric_speed": ["21", "29"],
+                "filament_retraction_length": ["nil", "0.4"],
             }))
         (self.root / "filament.json").write_bytes(
             (self.root / "filament-0.json").read_bytes())
         argv = bambu_command(self.binary, self.root)
         self.assertNotIn("--arrange", argv)
-        self.assertEqual(argv[argv.index("--load-filaments") + 1],
-                         str(self.root / "filament-0.json") + ";" +
-                         str(self.root / "filament-1.json"))
+        self.assertNotIn("--load-filaments", argv)
+        self.assertIn("--load-settings", argv)
         self.assertTrue(argv[-1].endswith("input.3mf"))
+
+    def test_native_project_rejects_a_tampered_selected_material(self):
+        from scripts.probe_bambu_multicolour import make_bambu_material_fixture
+        (self.root / "input.stl").unlink()
+        (self.root / "input.3mf").write_bytes(make_bambu_material_fixture())
+        for index in range(2):
+            (self.root / ("filament-" + str(index) + ".json")).write_text(json.dumps({
+                "type": "filament", "name": "MakerVault PLA Tool " + str(index + 1),
+                "filament_type": ["PLA"], "filament_diameter": ["1.75"],
+                "filament_id": "GFA00", "filament_is_support": ["0"],
+                "filament_extruder_variant": [
+                    "Direct Drive Standard", "Direct Drive High Flow"],
+                "filament_flow_ratio": ["0.98", "0.98"],
+                "nozzle_temperature": ["220", "220"],
+                "nozzle_temperature_initial_layer": ["220", "220"],
+                "filament_max_volumetric_speed": ["21", "29"],
+                "filament_retraction_length": ["nil", "0.4"],
+            }))
+        (self.root / "filament.json").write_bytes(
+            (self.root / "filament-0.json").read_bytes())
+        bambu_command(self.binary, self.root)
+        altered = json.loads((self.root / "filament-1.json").read_text())
+        altered["nozzle_temperature"] = ["250", "250"]
+        (self.root / "filament-1.json").write_text(json.dumps(altered))
+        with self.assertRaisesRegex(WorkerError, "does not match"):
+            bambu_command(self.binary, self.root)
 
     def test_multifilament_refuses_missing_palette_member_and_mismatched_tool_zero(self):
         from scripts.probe_bambu_multicolour import make_bambu_material_fixture
