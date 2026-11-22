@@ -110,3 +110,46 @@ def inspect_creality_plate(profile):
         "size_mm": [round(xmax - xmin, 3), round(ymax - ymin, 3), round(z, 3)],
         "fit_check": "not_performed",
     }
+
+
+def inspect_bambu_plate(profile):
+    """UI-only geometry from a complete, owned, resolved native Bambu machine.
+
+    This is not a slicer fit approval; the native machine may contain nonempty
+    excluded regions that must be honored by the actual Bambu CLI.
+    """
+    import json
+    from .slicer_native_resolution import resolved_native_profile
+    if profile.engine != "bambustudio" or profile.kind != "printer":
+        raise SlicerProfileError("A native Bambu machine profile is required.")
+    data = json.loads(resolved_native_profile(profile))
+    area, height = data.get("printable_area"), data.get("printable_height")
+    if not isinstance(area, list) or not 3 <= len(area) <= 24:
+        return {"status": "unavailable", "reason": "No resolved native printable-area polygon."}
+    try:
+        z = float(height[0] if isinstance(height, list) else height)
+        points = []
+        for vertex in area:
+            match = POINT.fullmatch(vertex) if isinstance(vertex, str) else None
+            if match is None:
+                raise ValueError("Invalid native Bambu bed point")
+            x, y = map(float, match.groups())
+            if not all(math.isfinite(v) and 0 <= v <= 10000 for v in (x, y)):
+                raise ValueError("Invalid native Bambu bed coordinate")
+            points.append([x, y])
+        if not math.isfinite(z) or not 0 < z <= 10000:
+            raise ValueError("Invalid native Bambu build height")
+        xmin, xmax = min(x for x, _ in points), max(x for x, _ in points)
+        ymin, ymax = min(y for _, y in points), max(y for _, y in points)
+        if xmax <= xmin or ymax <= ymin or abs(xmin) > .01 or abs(ymin) > .01:
+            raise ValueError("Invalid native Bambu bed extents")
+    except (ValueError, TypeError, OverflowError):
+        return {"status": "invalid", "reason": "Native Bambu printable geometry is malformed."}
+    return {
+        "status": "available", "polygon_mm": points,
+        "bounds_mm": {"min": [xmin, ymin, 0], "max": [xmax, ymax, z]},
+        "size_mm": [round(xmax - xmin, 3), round(ymax - ymin, 3), round(z, 3)],
+        "fit_check": "not_performed",
+        "has_exclusion_zone": bool(data.get("bed_exclude_area")
+                                   and data["bed_exclude_area"] not in (["0x0"], [])),
+    }
