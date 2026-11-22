@@ -368,7 +368,7 @@ def verify_bambu_fixture_variable_layers(raw_gcode):
         raise WorkerError("Bambu native layer audit requires UTF-8.") from None
     if len(lines) > 1_500_000:
         raise WorkerError("Bambu native layer audit exceeds line limit.")
-    layer = re.compile(r"^;\\s*Z_HEIGHT:\\s*([0-9]+(?:\\.[0-9]+)?)\\s*$", re.I)
+    layer = re.compile(r"^;\s*Z_HEIGHT:\s*([0-9]+(?:\.[0-9]+)?)\s*$", re.I)
     positions = []
     for raw in lines:
         match = layer.fullmatch(raw.strip())
