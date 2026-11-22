@@ -111,7 +111,7 @@ jobs:
             -v mv-contract-engine-store:/engine-store busybox:1.37.0 \
             sh -ec 'chown -R 10002:10002 /engine-store; chmod 0755 /engine-store'
           docker run -d --name mv-contract-combined --network none \
-            --read-only --init --cap-drop ALL --cap-add SETUID --cap-add SETGID \
+            --read-only --init --cap-drop ALL --cap-add SETUID --cap-add SETGID --cap-add KILL \
             --security-opt no-new-privileges:true \
             --pids-limit 144 --memory 4g \
             --tmpfs /tmp:rw,nosuid,size=1g,mode=1777 \
