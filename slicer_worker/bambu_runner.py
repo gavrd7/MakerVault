@@ -1,4 +1,4 @@
-"""Bambu Studio CLI contract candidate; NOT worker-enabled until binary acceptance.
+"""Bambu Studio CLI contract in the isolated MakerVault worker.
 
 Kept separate from Orca's executable runner: shared ancestry does not prove
 identical native 3MF output, profile/resource resolution or firmware mapping.
@@ -59,6 +59,27 @@ def bambu_command(binary: Path, workdir: Path) -> list[str]:
     # rejection; never resolve unknown inheritance to arbitrary host files.
     for profile in (printer, process, filament):
         _native_json(profile)
+    # Use the exact worker-validated 0-based native filament palette.
+    # Bambu CLI accepts a semicolon-separated list of complete native JSON
+    # presets; never infer it from a physical AMS/CFS slot index.
+    palette = []
+    for index in range(16):
+        candidate = workdir / ("filament-" + str(index) + ".json")
+        if candidate.is_symlink():
+            raise WorkerError("Bambu native palette cannot contain links.")
+        if not candidate.exists():
+            if any((workdir / ("filament-" + str(other) + ".json")).exists()
+                   for other in range(index + 1, 16)):
+                raise WorkerError("Bambu native palette must be contiguous.")
+            break
+        palette.append(_regular_file(workdir, candidate.name, MAX_PROFILE_BYTES))
+    if palette:
+        if is_stl or len(palette) < 2:
+            raise WorkerError("Bambu multi-filament slicing requires 3MF and two or more native presets.")
+        if palette[0].read_bytes() != filament.read_bytes():
+            raise WorkerError("Bambu first native palette preset must match the selected filament.")
+        for candidate in palette:
+            _native_json(candidate)
     _output_path(workdir)
     output = workdir / "bambu-sliced.3mf"
     if output.exists() or output.is_symlink():
@@ -69,7 +90,7 @@ def bambu_command(binary: Path, workdir: Path) -> list[str]:
         args += ["--arrange", "1"]
     args += [
         "--load-settings", str(printer) + ";" + str(process),
-        "--load-filaments", str(filament),
+        "--load-filaments", ";".join(str(p) for p in palette) if palette else str(filament),
         "--slice", "0", "--export-3mf", str(output), str(model),
     ]
     return args
@@ -136,7 +157,7 @@ def extract_single_bambu_gcode(sliced_project: Path, workdir: Path) -> Path:
 
 
 def run_bambu(binary: Path, workdir: Path, *, timeout_seconds: int = DEFAULT_TIMEOUT_SECONDS) -> dict:
-    """Candidate isolated executor; not registered for production admission.
+    """Execute exact approved Bambu Studio in the isolated worker.
 
     The worker container, not this helper, is responsible for filesystem,
     network, identity and resource isolation. Real Bambu CLI acceptance is
