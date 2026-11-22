@@ -125,7 +125,7 @@ def make_bambu_material_fixture(*, painted=False, native_app=True):
     return raw
 
 
-def run_fixture(binary, profiles, *, painted=False, timeout=180):
+def run_fixture(binary, profiles, *, painted=False, timeout=180, flush_multiplier=None, tower_xy=None):
     source = Path(profiles)
     with tempfile.TemporaryDirectory(prefix="makervault-bambu-two-tool-") as tmp:
         workdir = Path(tmp)
@@ -134,6 +134,22 @@ def run_fixture(binary, profiles, *, painted=False, timeout=180):
         for kind in ("printer", "process", "filament"):
             raw = (source / (kind + ".json")).read_bytes()
             (workdir / (kind + ".json")).write_bytes(raw)
+        if flush_multiplier is not None or tower_xy is not None:
+            # CI-only exact native process settings: production uses
+            # apply_orca_flush_settings/apply_bambu_prime_tower_position.
+            process_doc = json.loads((workdir / "process.json").read_bytes())
+            if flush_multiplier is not None:
+                if flush_multiplier not in (1.0, 2.0):
+                    raise WorkerError("Unsupported Bambu flush evidence multiplier.")
+                process_doc["flush_multiplier"] = [str(flush_multiplier)]
+            if tower_xy is not None:
+                x, y = tower_xy
+                if not (5 <= x <= 220 and 5 <= y <= 220):
+                    raise WorkerError("Invalid Bambu fixture tower XY.")
+                process_doc["wipe_tower_x"] = [str(x)]
+                process_doc["wipe_tower_y"] = [str(y)]
+            (workdir / "process.json").write_text(
+                json.dumps(process_doc, ensure_ascii=False, separators=(",", ":")))
         filament = json.loads((workdir / "filament.json").read_bytes())
         # Both slots use authentic, fully resolved BBL PLA parameters, but
         # distinct job-local names prevent Bambu 2.9.1's duplicate-preset
@@ -317,12 +333,25 @@ def run_fixture(binary, profiles, *, painted=False, timeout=180):
             switch_evidence = {"diagnostic": str(exc)[:160]}
         print("CI Bambu fixed model changeover/purge evidence:",
               json.dumps(switch_evidence, sort_keys=True))
+        print("CI Bambu pinned G-code purge/tower markers:",
+              [line[:100] for line in gcode.decode("utf-8", "replace").splitlines()
+               if ("flush" in line.lower() or "prime tower" in line.lower()
+                   or "wipe tower" in line.lower())][:12])
+        from slicer_worker.material_gcode_audit import summarize_bambu_flush_signal
+        flush_evidence = summarize_bambu_flush_signal(gcode)
+        print("CI Bambu native flush evidence:",
+              json.dumps(flush_evidence, sort_keys=True))
+
         return {
             "status": "passed", "engine": "bambustudio",
             "fixture": "painted-facets" if painted else "two-objects",
             "gcode_bytes": receipt["bytes"],
             "gcode_sha256": hashlib.sha256(gcode).hexdigest(),
-            "both_tools_extrude": True, **coverage,
+            "both_tools_extrude": True,
+            "flush_multiplier": flush_multiplier,
+            "tower_xy": tower_xy,
+            "flush_evidence": flush_evidence,
+            **coverage,
         }
 
 
@@ -331,11 +360,18 @@ def main():
     parser.add_argument("--binary", required=True)
     parser.add_argument("--profiles", required=True)
     parser.add_argument("--painted", action="store_true")
+    parser.add_argument("--flush-multiplier", type=float, choices=(1.0, 2.0))
+    parser.add_argument("--tower-x", type=float)
+    parser.add_argument("--tower-y", type=float)
     parser.add_argument("--timeout", type=int, default=180)
     args = parser.parse_args()
     try:
         print(json.dumps(run_fixture(
-            args.binary, args.profiles, painted=args.painted, timeout=args.timeout),
+            args.binary, args.profiles, painted=args.painted, timeout=args.timeout,
+            flush_multiplier=args.flush_multiplier,
+            tower_xy=((args.tower_x, args.tower_y)
+                      if args.tower_x is not None and args.tower_y is not None
+                      else None)),
             sort_keys=True))
     except (WorkerError, OSError, ValueError, KeyError, zipfile.BadZipFile) as exc:
         print(json.dumps({"status": "failed", "reason": str(exc)}))
