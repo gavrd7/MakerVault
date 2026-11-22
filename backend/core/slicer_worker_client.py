@@ -59,8 +59,7 @@ def health():
         if not isinstance(payload, dict):
             raise SlicerWorkerError("Worker returned invalid health information.")
         supported = {"orcaslicer", "crealityprint", "prusaslicer"}
-        if os.environ.get("MAKERVAULT_SLICER_BAMBU_BETA_ENABLED") == "1":
-            supported.add("bambustudio")
+        supported.add("bambustudio")
         engines = {}
         if isinstance(payload.get("engines"), dict) and len(payload["engines"]) <= len(supported):
             for key, entry in payload["engines"].items():
@@ -101,8 +100,7 @@ def run_remote_job(job_id, engine, version, model, printer_profile, filament_pro
     if not isinstance(timeout_seconds, int) or not 1 <= timeout_seconds <= 900:
         raise SlicerWorkerError("Invalid slicing timeout.")
     supported = {"orcaslicer", "crealityprint", "prusaslicer"}
-    if os.environ.get("MAKERVAULT_SLICER_BAMBU_BETA_ENABLED") == "1":
-        supported.add("bambustudio")
+    supported.add("bambustudio")
     if (engine not in supported or not isinstance(version, str)
             or not version or len(version) > 80
             or (engine == "bambustudio" and version != "02.09.01.70")):
