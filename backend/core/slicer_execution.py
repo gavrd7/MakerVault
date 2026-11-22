@@ -27,7 +27,7 @@ from .slicer_gcode_bounds import audit_extrusion_xy_bounds, GcodeExtrusionBounds
 from .slicer_flush_settings import apply_orca_flush_settings, apply_bambu_flush_settings
 from .slicer_native_overrides import apply_orca_job_overrides
 from .slicer_plate_types import apply_creality_plate, effective_creality_plate, validate_plate_temperature
-from .slicer_variable_layers import audit_orca_variable_layers, validate_orca_variable_support_compatibility
+from .slicer_variable_layers import audit_orca_variable_layers, audit_bambu_variable_layers, validate_orca_variable_support_compatibility
 from .slicer_paint_assets import expand_painted_settings
 from .slicer_process_settings import apply_process_overrides
 from .slicer_profiles import SlicerProfileError
@@ -1027,11 +1027,16 @@ def process_queued_job(job_id):
         if variable_test:
             stage = "auditing native variable layer height"
             try:
-                audit_orca_variable_layers(output.decode("utf-8"), variable_test)
+                if job.engine == "bambustudio":
+                    audit_bambu_variable_layers(output.decode("utf-8"), variable_test)
+                else:
+                    audit_orca_variable_layers(output.decode("utf-8"), variable_test)
             except (UnicodeDecodeError, ValueError) as exc:
+                engine_name = ("Bambu Studio" if job.engine == "bambustudio"
+                               else "Orca")
                 raise SlicerExecutionError(
-                    "Orca did not produce verifiable native variable layer heights. "
-                    "The generated G-code has not been approved or stored."
+                    engine_name + " did not produce the requested variable layer "
+                    "heights. The generated G-code has not been approved or stored."
                 ) from exc
         stage = "validating and storing generated G-code"
         asset = store_generated_gcode(job.pk, output)
