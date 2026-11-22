@@ -95,6 +95,20 @@ class BambuNativeMulticolourTests(TestCase):
         self.assertEqual(expected_native_tools(project), {0, 1})
         self.assertEqual(len(_decode_payload(self.payload(project))["filament_profiles"]), 2)
 
+    def test_native_bambu_variable_layers_require_exact_palette_and_single_object(self):
+        project = make_bambu_material_fixture(painted=True, variable_layers=True)
+        with self.assertRaisesRegex(WorkerError, "approved single object"):
+            validate_worker_3mf(project, native_tool_count=2,
+                                allow_bambu_project=True,
+                                allow_bambu_combined_paint=True)
+        self.assertTrue(validate_worker_3mf(
+            project, native_tool_count=2, allow_bambu_project=True,
+            allow_bambu_combined_paint=True, allow_bambu_layer_ranges=True))
+        self.assertEqual(_decode_payload(self.payload(project))["model_format"], "3mf")
+        with self.assertRaisesRegex(WorkerError, "exact native palette"):
+            validate_worker_3mf(project, native_tool_count=2,
+                                allow_bambu_layer_ranges=True)
+
     def test_native_project_settings_are_never_accepted_by_orca_contract(self):
         project = make_bambu_material_fixture()
         with self.assertRaisesRegex(WorkerError, "Unsupported 3MF package members"):
