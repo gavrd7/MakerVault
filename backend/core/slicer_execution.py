@@ -824,9 +824,20 @@ def process_queued_job(job_id):
                 # Bambu Studio's native settings share the same named bed
                 # temperature vectors and curr_bed_type field. Apply only to
                 # worker-bound copies, retaining the original stored presets.
+                selected = (material_result["filament_profiles"][0]
+                            if material_result is not None else profiles[1])
                 profiles[2], profiles[1] = apply_creality_plate(
-                    profiles[2], profiles[1], job.plate,
+                    profiles[2], selected, job.plate,
                     printer_profile=job.printer_profile)
+                if material_result is not None:
+                    resolved = [apply_creality_plate(
+                        profiles[2], native, job.plate,
+                        printer_profile=job.printer_profile)[1]
+                        for native in material_result["filament_profiles"]]
+                    material_result["filament_profiles"] = tuple(resolved)
+                    # The legacy first-profile field and the first entry
+                    # of the ordered palette must match byte-for-byte.
+                    profiles[1] = resolved[0]
             except (ValueError, TypeError, UnicodeDecodeError, SlicerProfileError) as exc:
                 raise SlicerExecutionError(str(exc)) from exc
         if job.engine == "crealityprint":
@@ -861,6 +872,23 @@ def process_queued_job(job_id):
                 raise SlicerExecutionError(
                     "Creality process changes are not supported by this native profile."
                 ) from exc
+        if material_result is not None and job.engine == "bambustudio":
+            # Bambu processes the 3MF per-object extruder or painted-facet
+            # tool number against the same zero-based ordered filament palette.
+            # Settings are job-local; never infer a tool from AMS bay position.
+            if (job.settings or {}).get("flush_settings") is not None:
+                from types import SimpleNamespace
+                routes = [SimpleNamespace(slot_id=slot, tool_index=index)
+                          for slot, index in material_result["tool_bindings"].items()]
+                try:
+                    profiles[2] = apply_orca_flush_settings(
+                        profiles[2], job.settings["flush_settings"],
+                        routes=routes,
+                        tool_count=len(material_result["filament_profiles"]),
+                        topology=material_result["topology"])
+                except (MaterialRoutingError, ValueError) as exc:
+                    raise SlicerExecutionError(
+                        "Invalid native Bambu multi-filament flushing settings.") from exc
         if material_result is not None and job.engine == "crealityprint":
             # Each filament in the palette is resolved from the authenticated
             # model-assigned slot. The legacy single-profile field must match
