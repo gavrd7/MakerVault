@@ -93,38 +93,38 @@ jobs:
       - uses: actions/checkout@v4
       - name: Stage a clearly non-executable CI fixture (never a real engine)
         run: |
-          printf 'CI fixture only, not a slicing engine\\n' > /tmp/creality-fixture.AppImage
+          printf 'CI fixture only, not a slicing engine\n' > /tmp/creality-fixture.AppImage
           SHA=$(sha256sum /tmp/creality-fixture.AppImage | cut -d' ' -f1)
-          python3 -m slicer_worker.stage_engines \\
+          python3 -m slicer_worker.stage_engines \
             --engine crealityprint 7.3.0 /tmp/creality-fixture.AppImage "$SHA"
       - name: Build combined slicer runtime with approved bundled Orca
         run: docker build -f slicer_worker/Dockerfile.generic -t makervault-slicer-ci:combined .
       - name: Confirm compiled worker/installer modules and reviewed Orca identity
         run: |
-          docker run --rm --network none --entrypoint python3 makervault-slicer-ci:combined \\
+          docker run --rm --network none --entrypoint python3 makervault-slicer-ci:combined \
             -c 'from pathlib import Path; import slicer_worker.service,slicer_worker.engine_installer_service,slicer_worker.combined_service; assert Path("/opt/engines/orcaslicer.AppImage").is_file()'
       - name: Boot combined staging runtime with installer credentials and engine-store permissions
         run: |
           set -euo pipefail
           docker volume create mv-contract-engine-store
-          docker run --rm --network none \\
-            -v mv-contract-engine-store:/engine-store busybox:1.37.0 \\
+          docker run --rm --network none \
+            -v mv-contract-engine-store:/engine-store busybox:1.37.0 \
             sh -ec 'chown -R 10002:10002 /engine-store; chmod 0755 /engine-store'
-          docker run -d --name mv-contract-combined --network none \\
-            --read-only --init --cap-drop ALL --cap-add SETUID --cap-add SETGID \\
-            --security-opt no-new-privileges:true \\
-            --pids-limit 144 --memory 4g \\
-            --tmpfs /tmp:rw,nosuid,size=1g,mode=1777 \\
-            -v mv-contract-engine-store:/opt/engine-store:rw \\
-            -e SLICER_WORKER_ENABLED=1 \\
-            -e SLICER_WORKER_TOKEN=0123456789012345678901234567890123456789 \\
-            -e SLICER_INSTALLER_TOKEN=9876543210987654321098765432109876543210 \\
-            -e 'SLICER_ENGINES_JSON={}' \\
+          docker run -d --name mv-contract-combined --network none \
+            --read-only --init --cap-drop ALL --cap-add SETUID --cap-add SETGID \
+            --security-opt no-new-privileges:true \
+            --pids-limit 144 --memory 4g \
+            --tmpfs /tmp:rw,nosuid,size=1g,mode=1777 \
+            -v mv-contract-engine-store:/opt/engine-store:rw \
+            -e SLICER_WORKER_ENABLED=1 \
+            -e SLICER_WORKER_TOKEN=0123456789012345678901234567890123456789 \
+            -e SLICER_INSTALLER_TOKEN=9876543210987654321098765432109876543210 \
+            -e 'SLICER_ENGINES_JSON={}' \
             makervault-slicer-ci:combined
           healthy=0
           for n in {1..60}; do
-            if docker exec mv-contract-combined python3 -c \\
-              'import json,socket,urllib.request; j=json.load(urllib.request.urlopen("http://127.0.0.1:8088/health",timeout=2)); assert j["ready"]; s=socket.create_connection(("127.0.0.1",8091),2); s.close()' \\
+            if docker exec mv-contract-combined python3 -c \
+              'import json,socket,urllib.request; j=json.load(urllib.request.urlopen("http://127.0.0.1:8088/health",timeout=2)); assert j["ready"]; s=socket.create_connection(("127.0.0.1",8091),2); s.close()' \
               >/dev/null 2>&1; then healthy=1; break; fi
             if [ "$(docker inspect --format '{{.State.Running}}' mv-contract-combined)" != true ]; then
               docker logs mv-contract-combined || true
@@ -133,9 +133,9 @@ jobs:
             sleep 2
           done
           test "$healthy" -eq 1
-          docker exec -u 10001 mv-contract-combined python3 -c \\
+          docker exec -u 10001 mv-contract-combined python3 -c \
             'import os; assert not os.access("/opt/engine-store",os.W_OK)'
-          docker exec -u 10002 mv-contract-combined python3 -c \\
+          docker exec -u 10002 mv-contract-combined python3 -c \
             'from pathlib import Path; f=Path("/opt/engine-store/.contract-write"); f.write_text("ok"); f.unlink()'
       - name: Remove contract smoke container and volume
         if: always()
