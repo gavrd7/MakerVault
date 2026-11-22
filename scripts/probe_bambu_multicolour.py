@@ -170,6 +170,7 @@ def run_fixture(binary, profiles, *, painted=False, timeout=180):
                     print("CI Bambu variant:", label, "exit", attempt.returncode,
                           "output_bytes", len(attempt.stdout),
                           "error_bytes", len(attempt.stderr))
+                    print("CI Bambu stderr bounded:", repr(attempt.stderr[:200]))
                     for channel in (attempt.stdout, attempt.stderr):
                         for line in channel.decode("utf-8", "replace").splitlines()[-12:]:
                             if any(token in line.lower() for token in (
