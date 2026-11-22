@@ -233,6 +233,44 @@ jobs:
               --profiles /tmp/bambu-verified-profiles --timeout 180 "${extra[@]}"
           done
 
+      - name: Compare real Bambu native flush and prime-tower output (diagnostic)
+        shell: bash
+        run: |
+          set -euo pipefail
+          for case in "1.0 45 40" "2.0 45 40" "1.0 90 40"; do
+            read -r mult x y <<< "$case"
+            tag="${mult//./_}_${x}_${y}"
+            timeout 240s python3 -m scripts.probe_bambu_multicolour \
+              --binary /tmp/bambu-appimage-acceptance/squashfs-root/AppRun \
+              --profiles /tmp/bambu-verified-profiles --timeout 180 \
+              --flush-multiplier "$mult" --tower-x "$x" --tower-y "$y" \
+              | tee "/tmp/bambu-flush-evidence-${tag}.log"
+          done
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          results = []
+          for key in ("1_0_45_40", "2_0_45_40", "1_0_90_40"):
+              entries = Path(f"/tmp/bambu-flush-evidence-{key}.log").read_text().splitlines()
+              result = json.loads(entries[-1])
+              if result["status"] != "passed":
+                  raise SystemExit("Bambu flush variant did not slice correctly")
+              results.append(result)
+          for result in results:
+              print("CI native flush/tower signal:",
+                    json.dumps({
+                        "flush_multiplier": result["flush_multiplier"],
+                        "tower_xy": result["tower_xy"],
+                        "gcode_sha256": result["gcode_sha256"],
+                        "gcode_bytes": result["gcode_bytes"],
+                        **result["flush_evidence"],
+                    }, sort_keys=True))
+          print("CI native multiplier changes G-code:",
+                results[0]["gcode_sha256"] != results[1]["gcode_sha256"])
+          print("CI native tower positioning changes G-code:",
+                results[0]["gcode_sha256"] != results[2]["gcode_sha256"])
+          PY
+
       - name: Diagnose native Bambu two-material abort in disposable CI (informational)
         if: failure()
         continue-on-error: true
