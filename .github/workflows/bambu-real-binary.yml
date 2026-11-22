@@ -243,7 +243,7 @@ jobs:
             --profiles /tmp/bambu-verified-profiles \
             --painted --variable-layers --timeout 180
 
-      - name: Compare real Bambu native flush and prime-tower output (diagnostic)
+      - name: Verify real Bambu native flush multiplier and prime tower location
         shell: bash
         run: |
           set -euo pipefail
@@ -279,6 +279,40 @@ jobs:
                 results[0]["gcode_sha256"] != results[1]["gcode_sha256"])
           print("CI native tower positioning changes G-code:",
                 results[0]["gcode_sha256"] != results[2]["gcode_sha256"])
+          base, double, relocated = results
+          def native_matrix(case):
+              value = case["flush_evidence"]["native_header"]["flush_volumes_matrix"]
+              return [float(x) for x in value.split(",")]
+          m1, m2 = native_matrix(base), native_matrix(double)
+          if len(m1) != 4 or len(m2) != 4:
+              raise SystemExit("Native Bambu directional flushing matrix is not 2-tool")
+          if not all(abs(m2[index] - 2*m1[index]) < 0.01
+                     and m1[index] > 10 for index in (1, 2)):
+              raise SystemExit("Bambu 2x multiplier did not double native flush volumes")
+          for tool in ("0", "1"):
+              prior = base["flush_evidence"]["positive_e_mm"][tool]
+              raised = double["flush_evidence"]["positive_e_mm"][tool]
+              if not raised > prior * 1.2:
+                  raise SystemExit("Bambu 2x flush did not increase actual extrusion")
+          def tower_bbox(case):
+              return case["flush_evidence"]["tower_deposition_bbox_mm"]
+          before, after = tower_bbox(base), tower_bbox(relocated)
+          if not before or not after:
+              raise SystemExit("Bambu emitted no measurable prime tower deposition")
+          if base["flush_evidence"]["tower_position_moves"] < 20:
+              raise SystemExit("Bambu tower has insufficient actual extrusion moves")
+          if not all(abs(after[key] - before[key] - 45) < 0.1
+                     for key in ("min_x", "max_x")):
+              raise SystemExit("Bambu tower X movement does not match requested 45mm")
+          if not all(abs(after[key] - before[key]) < 0.1
+                     for key in ("min_y", "max_y")):
+              raise SystemExit("Bambu tower moved unexpectedly on Y")
+          if (base["flush_evidence"]["toolchanges"]
+                  != relocated["flush_evidence"]["toolchanges"]
+                  or base["flush_evidence"]["tower_position_moves"]
+                  != relocated["flush_evidence"]["tower_position_moves"]):
+              raise SystemExit("Relocating Bambu tower changed model/tool semantics")
+          print("CI Bambu 2x flush and +45mm tower position: VERIFIED native G-code")
           PY
 
       - name: Diagnose native Bambu two-material abort in disposable CI (informational)
