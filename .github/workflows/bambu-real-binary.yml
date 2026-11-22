@@ -50,6 +50,10 @@ jobs:
           test -d squashfs-root/usr
           echo 'Official pinned Bambu Studio AppImage verified and extracted; no engine was enabled or print started.'
 
+      - name: Install Bambu native GStreamer runtime prerequisite
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends libgstreamer-plugins-base1.0-0
       - name: Launch actual pinned Bambu CLI in headless offline mode
         shell: bash
         run: |
