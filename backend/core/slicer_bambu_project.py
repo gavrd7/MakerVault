@@ -69,6 +69,7 @@ def add_bambu_project_settings(project, *, printer, process, filaments,
     types = [_field(item, "filament_type", label="filament") for item in sources]
     diameters = [_field(item, "filament_diameter", label="filament") for item in sources]
     filament_ids = []
+    support_flags = []
     self_indices = []
     extruder_variants = []
     for index, item in enumerate(sources, 1):
@@ -81,6 +82,14 @@ def add_bambu_project_settings(project, *, printer, process, filaments,
                     r"[A-Za-z0-9 -]{1,64}", v) for v in variants)
                 or len(set(variants)) != len(variants)):
             raise SlicerProfileError("Bambu native filament variants are incomplete.")
+        support = item.get("filament_is_support", ["0"])
+        if isinstance(support, str):
+            support = [support]
+        if (not isinstance(support, list) or not 1 <= len(support) <= 4
+                or any(value not in ("0", "1") for value in support)
+                or len(set(support)) != 1):
+            raise SlicerProfileError("Unsafe Bambu filament support classification.")
+        support_flags.append(support[0])
         filament_ids.append(native_id)
         self_indices.extend([str(index)] * len(variants))
         extruder_variants.extend(variants)
@@ -92,6 +101,7 @@ def add_bambu_project_settings(project, *, printer, process, filaments,
         "filament_type": types,
         "filament_diameter": diameters,
         "filament_ids": filament_ids,
+        "filament_is_support": support_flags,
         "filament_self_index": self_indices,
         "filament_extruder_variant": extruder_variants,
         "nozzle_diameter": [diameter],
