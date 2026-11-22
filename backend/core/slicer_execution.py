@@ -889,6 +889,16 @@ def process_queued_job(job_id):
                 except (MaterialRoutingError, ValueError) as exc:
                     raise SlicerExecutionError(
                         "Invalid native Bambu multi-filament flushing settings.") from exc
+            if (job.settings or {}).get("prime_tower") is not None:
+                from .slicer_bambu_project import apply_bambu_prime_tower_position
+                try:
+                    bed_width, bed_depth = trusted_plate_dimensions(job.printer_profile)
+                    profiles[2] = apply_bambu_prime_tower_position(
+                        profiles[2], job.settings["prime_tower"],
+                        bed_width=bed_width, bed_depth=bed_depth)
+                except (SlicerProfileError, ValueError, TypeError) as exc:
+                    raise SlicerExecutionError(
+                        "Invalid native Bambu prime tower position.") from exc
         if material_result is not None and job.engine == "crealityprint":
             # Each filament in the palette is resolved from the authenticated
             # model-assigned slot. The legacy single-profile field must match
