@@ -162,7 +162,7 @@ def inspect_engine_plates(profile):
     engine = getattr(profile, "engine", None)
     if engine == "orcaslicer":
         return inspect_native_plates(profile)
-    if engine != "crealityprint":
+    if engine not in ("crealityprint", "bambustudio"):
         return {"default": None, "supported": [], "default_source": "not declared"}
     native = json.loads(resolved_native_profile(profile))
     if not isinstance(native, dict):
@@ -183,9 +183,9 @@ def inspect_engine_plates(profile):
                   for value in excluded}
         supported = [key for key in supported if key not in denied]
     if default and default not in supported:
-        raise SlicerProfileError("Creality default plate conflicts with its supported bed types.")
+        raise SlicerProfileError("Native default plate conflicts with its supported bed types.")
     return {"default": default, "supported": supported,
-            "default_source": "native Creality printer" if default else "not declared"}
+            "default_source": "native printer preset" if default else "not declared"}
 
 
 def effective_creality_plate(plate_type, process, printer_profile=None):
@@ -195,7 +195,7 @@ def effective_creality_plate(plate_type, process, printer_profile=None):
     if printer_profile is not None:
         allowed = inspect_engine_plates(printer_profile)
         if plate_type != "default" and plate_type not in allowed["supported"]:
-            raise ValueError("Selected build plate is excluded by the Creality printer profile.")
+            raise ValueError("Selected build plate is excluded by the native printer profile.")
         if plate_type == "default" and allowed["default"]:
             return allowed["default"]
     if plate_type != "default":
