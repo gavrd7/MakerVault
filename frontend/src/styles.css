@@ -8676,3 +8676,23 @@ a:focus-visible,
  .slicerEngineManagerCard {padding:11px}
  .slicerEngineManagerRelease {align-items:flex-start;flex-wrap:wrap}
 }
+
+/* Official slicer profile browser: do not inherit camera controls' rigid
+   action column on narrow modals. Import feedback must occupy a full row. */
+.slicerOfficialProfileRow{min-width:0}
+.slicerOfficialProfileRow>.cameraSourceIdentity{min-width:0;overflow-wrap:anywhere}
+.slicerOfficialProfileRow>.cameraSourceActions{min-width:0}
+.slicerOfficialProfileRow>.cameraSourceActions button{white-space:normal}
+.slicerOfficialProfileRow>.slicerProfileImportNotice,
+.slicerOfficialProfileRow>.integrationError{grid-column:1/-1;min-width:0;max-width:100%;overflow-wrap:anywhere}
+@media(max-width:800px){
+  .cameraSourceRow.slicerOfficialProfileRow{
+    display:grid;grid-template-columns:minmax(0,1fr);align-items:stretch;gap:12px
+  }
+  .slicerOfficialProfileRow>.cameraSourceIdentity,
+  .slicerOfficialProfileRow>.cameraSourceActions{grid-column:1;min-width:0}
+  .slicerOfficialProfileRow>.cameraSourceActions{justify-content:stretch}
+  .slicerOfficialProfileRow>.cameraSourceActions button{
+    flex:1 1 160px;min-width:0;width:auto;overflow-wrap:anywhere
+  }
+}
