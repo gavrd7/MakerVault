@@ -67,7 +67,7 @@ def resolve(bundle: Path, kind: str, name: str) -> dict:
             return dict(cache[current])
         doc = _document(_profile_path(bundle, kind, current))
         if doc.get("type") != kind or doc.get("name") != current:
-            raise ValueError("Native Bambu profile identity mismatch.")
+            raise ValueError("Native Bambu profile identity mismatch at " + kind + "/" + current + " (type_ok=" + str(doc.get("type") == kind) + ", name_ok=" + str(doc.get("name") == current) + ").")
         parent = doc.get("inherits", "")
         if not isinstance(parent, str):
             raise ValueError("Invalid Bambu inheritance reference.")
