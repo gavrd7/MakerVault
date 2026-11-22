@@ -157,12 +157,12 @@ class BambuRunnerContractTests(TestCase):
                 with self.assertRaisesRegex(WorkerError, "timeout"):
                     run_bambu(self.binary, self.root, timeout_seconds=timeout)
 
-    def test_candidate_runner_stays_disconnected_from_worker_admission(self):
+    def test_bambu_runner_uses_standard_worker_admission(self):
         from slicer_worker.engine_registry import SUPPORTED
         from slicer_worker.service import _decode_payload
         import base64
         import uuid
-        self.assertNotIn("bambustudio", SUPPORTED)
+        self.assertIn("bambustudio", SUPPORTED)
         payload = {
             "job_id": str(uuid.uuid4()), "engine": "bambustudio",
             "engine_version": "02.09.01.70",
@@ -171,5 +171,5 @@ class BambuRunnerContractTests(TestCase):
             "filament_profile": base64.b64encode(b"{}").decode(),
             "process_profile": base64.b64encode(b"{}").decode(),
         }
-        with self.assertRaises(WorkerError):
-            _decode_payload(payload)
+        decoded = _decode_payload(payload)
+        self.assertEqual(decoded["engine"], "bambustudio")
