@@ -99,6 +99,7 @@ def make_bambu_material_fixture(*, painted=False, native_app=False):
                 "filament_type": ["PLA", "PLA"],
                 "filament_diameter": ["1.75", "1.75"],
                 "filament_ids": ["GFA00", "GFA00"],
+                "filament_is_support": ["0", "0"],
                 "filament_self_index": ["1", "1", "2", "2"],
                 "filament_extruder_variant": [
                     "Direct Drive Standard", "Direct Drive High Flow",
