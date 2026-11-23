@@ -91,7 +91,7 @@ jobs:
       - name: Verify combined slicer worker and installer contracts
         if: ${{ steps.version.outputs.is_dev != 'true' }}
         run: |
-          python3 -m unittest slicer_worker.tests.test_combined_service slicer_worker.tests.test_engine_installer_service -v
+          python3 -m unittest slicer_worker.tests.test_combined_service slicer_worker.tests.test_engine_installer_service slicer_worker.tests.test_engine_store slicer_worker.tests.test_engine_store_permissions -v
           python3 -m compileall -q slicer_worker
 
       - name: Build and validate combined slicer release candidate
@@ -110,7 +110,9 @@ jobs:
           file: slicer_worker/Dockerfile.generic
           platforms: linux/amd64
           push: true
-          tags: ghcr.io/gavrd7/makervault-slicer:${{ steps.version.outputs.version }}
+          tags: |
+            ghcr.io/gavrd7/makervault-slicer:${{ steps.version.outputs.version }}
+            ${{ !contains(steps.version.outputs.version, '-') && 'ghcr.io/gavrd7/makervault-slicer:latest' || '' }}
           provenance: true
           sbom: true
           cache-from: type=gha,scope=combined-slicer

@@ -121,12 +121,12 @@ def configured_engines():
                 or digest != BAMBU_RUNTIME_SHA256):
             continue
         path = Path(binary)
-        if (not path.is_absolute() or not path.is_file()
-                or (path.is_symlink() and stored is None)
-                or not os.access(path, os.X_OK)
-                or (stored is not None and not _valid_store_path(path, key, version))):
-            continue
         try:
+            if (not path.is_absolute() or not path.is_file()
+                    or (path.is_symlink() and stored is None)
+                    or not os.access(path, os.X_OK)
+                    or (stored is not None and not _valid_store_path(path, key, version))):
+                continue
             stat = path.stat()
             if not 0 < stat.st_size <= 1024 * 1024 * 1024:
                 continue

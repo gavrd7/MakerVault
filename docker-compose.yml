@@ -74,8 +74,10 @@ services:
       retries: 10
 
   slicer-worker:
+    # Release workflow publishes both application and slicer :latest tags as
+    # an integrity-matched pair. Override both image refs for version pinning.
     container_name: makervault-slicer
-    image: ${MAKERVAULT_SLICER_WORKER_IMAGE:-ghcr.io/gavrd7/makervault-slicer:1.7.0}
+    image: ${MAKERVAULT_SLICER_WORKER_IMAGE:-ghcr.io/gavrd7/makervault-slicer:latest}
     command: ["python3", "-m", "slicer_worker.combined_service"]
     restart: unless-stopped
     user: "0:0"

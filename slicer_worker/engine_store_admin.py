@@ -19,6 +19,7 @@ import sys
 import tempfile
 
 from .engine_registry import ENGINE_STORE, SUPPORTED
+from .engine_store_permissions import make_runtime_worker_readable
 
 SOURCE = Path("/opt/engines")
 EXPECTED_ORCA_SHA = "b30b0ae933e653692cf85a493287a949215ae4c14d547a00203d16dfcadb8054"
@@ -87,6 +88,7 @@ def seed_bundled_orca(store=ENGINE_STORE, source=SOURCE):
         if not (stage / "squashfs-root" / "AppRun").is_file():
             raise ValueError("Copied Orca runtime is incomplete.")
         os.chmod(stage / src.name, 0o555)
+        make_runtime_worker_readable(stage / "squashfs-root")
         os.chmod(stage, 0o755)
         os.rename(stage, target)
     finally:
