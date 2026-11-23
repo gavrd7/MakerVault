@@ -2,7 +2,7 @@
 
 **Goal:** move to the current deployable release while keeping a recoverable copy of your data.
 
-MakerVault can be updated either by pulling the published GHCR image or by rebuilding from source. Use the same route you chose for installation unless you deliberately want to switch.
+MakerVault updates use published GHCR images and the single repository `compose.yaml`.
 
 1. Read the release notes/CHANGELOG for changes since your installed version.
 2. If upgrading from before v0.7, read [the migration chapter](../advanced/legacy-upgrade.md) first.
@@ -34,32 +34,22 @@ If you pin `MAKERVAULT_IMAGE` in `.env`, change that value to the release you in
 MAKERVAULT_IMAGE=ghcr.io/gavrd7/makervault:1.7.0
 ```
 
-## Update using one Compose file
+## Updating the four-container stack
 
-The checkout always uses **`compose.yaml`**. Keep your existing private `.env` and storage. For ordinary published-image upgrades, the commands above are sufficient.
-
-For an intentional **source build**, retain `MAKERVAULT_IMAGE=makervault-local:dev` in your environment, update the checkout as above and rebuild only the app:
-
-```bash
-sudo docker compose build makervault
-sudo docker compose up -d
-sudo docker compose ps
-```
-
-For an installation that already uses the verified combined slicer, include the same **`slicer` profile** at each update. Keep the immutable slicer-worker image, native engine store and imported profiles unchanged unless you explicitly choose an approved version update:
+The published images are downloaded from GHCR using **one `compose.yaml`**. MakerVault, its slicer, PostgreSQL and Redis are managed together; there are no profiles, extra Compose files or locally built production images.
 
 ```bash
 sudo docker compose config --quiet
-sudo docker compose pull makervault postgres redis
+sudo docker compose pull
 sudo docker compose up -d
 sudo docker compose ps
 ```
 
-If running a local source build with the slicer container, run `sudo docker compose build makervault` before `sudo docker compose up -d`. Rebuild the slicer worker separately and deliberately only when needed. The combined container runs the worker and installer on separate UIDs, and the one-shot permission helper is not a fifth running daemon.
+Installed native slicer engines and their registry live in a separate persistent Docker volume. Updating the MakerVault and combined slicer images does not by itself authorise changing the versions of those native engines; use the application engine manager for explicit changes.
 
-**Migration from previous overlays:** the old `compose.build.yaml`, `compose.slicer.yaml` and `compose.slicer.staging.yaml` files have been retired. Before using the single Compose stack on an existing development/staging host, inspect the current engine image ID, private `.slicer-staging.env`, `.env`, named volumes and any local custom Compose file. Preserve the full environment and volume data, then map relevant settings into the private `.env` and validate `docker compose config --quiet`. Do not blindly run old multi-file commands after updating source. No automatic migration or database reset is required, and do not delete the legacy container, its image or any volume before verification.
+**Upgrading an older multi-file staging deployment:** first back up the complete installation, inspect existing custom files and private `.slicer-staging.env`, and preserve existing image identities and the named engine volume. Map relevant settings into the private `.env` before using the one-file configuration. Do **not** delete legacy containers or volumes until the new deployment has been checked and engine installations have been verified. Consult the dedicated [slicer guide](../3d-printing/slicer.md).
 
-**Never run `docker compose down -v`** as an upgrade step: it may delete the database, private media encryption keys, backups and installed slicer engines. Backup and independently verify recovery first.
+Never use `docker compose down -v` for upgrades; it can delete persistent database, media, keys and native engine storage.
 
 ## Check the result
 
