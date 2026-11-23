@@ -1,6 +1,6 @@
 # Models and the 3D viewer
 
-**Goal:** keep the history of a design and inspect printable geometry before opening your slicer.
+**Goal:** keep the history of a design, inspect printable geometry and open the model in MakerVault Slicer when a verified engine is installed.
 
 ## Add a model
 
@@ -31,10 +31,16 @@ The Model Intelligence panel can show dimensions, triangle/vertex counts, surfac
 - Orientation guidance compares six axis-aligned candidates and estimates support risk, contact area and height. It does not test every possible rotation.
 - Fitting inside a build volume does not prove the sliced job clears clips, exclusion zones, supports or a brim.
 
-MakerVault analyses geometry locally and does not slice or repair the model. Confirm scale, orientation, support and machine settings in your slicer.
+MakerVault analyses model geometry locally; **MakerVault Slicer** can separately create G-code through an installed, verified native engine. The viewer itself does not slice, repair meshes or prove printability. Confirm scale, orientation, supports and printer/firmware settings in the [slicing workspace](../3d-printing/slicer.md).
 
 ## Saved 3MF settings
 
 Compatible 3MF packages may contain printer/process/filament profiles, layer height, nozzle, infill, wall counts, supports and brim settings. MakerVault reads available saved metadata; it does not calculate missing settings or ensure they match your printer now. Not every 3MF contains the same fields.
 
 Re-analyse existing files when new analysis fields become available, using the analysis action where offered. A saved file remains useful even when analysis has limited information.
+
+## Send a model to MakerVault Slicer
+
+Open **MakerVault Slicer** from the navigation and use its model/file selection to add your stored STL or 3MF to a build plate. Choose an installed engine, compatible printer and native process/filament profiles, then position and slice the model. Model revisions and their source assets remain in the Model Library; slicing produces a separate reviewed G-code output and never automatically starts a printer.
+
+See the dedicated [MakerVault Slicer guide](../3d-printing/slicer.md) for engine installation, painting, multicolour, saved jobs and print review.
