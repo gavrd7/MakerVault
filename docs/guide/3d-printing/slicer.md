@@ -6,6 +6,14 @@ The slicer is **optional to deploy**, but it is part of MakerVault's v1.7.0 feat
 
 For the basic host installation see [Install MakerVault](../getting-started/install.md). This chapter covers slicer setup and everyday use. [Printers and filament](../using/printing.md) and [Models](../using/models.md) cover the related libraries.
 
+## Platform compatibility (v1.7.0)
+
+**The published MakerVault Slicer container supports Linux AMD64 (x86-64) only in v1.7.0.** This refers to the Linux container architecture, not necessarily the host operating system. It can run on x86-64 Linux and on x86-64 Windows or Intel macOS hosts using Docker Desktop with Linux containers (subject to host validation). Native Windows/macOS slicer container images are not provided.
+
+**ARM64 is not a supported native slicer architecture for v1.7.0**, including ARM64 Linux servers, Raspberry Pi and Apple Silicon. Docker emulation is not a tested or supported workaround. The **main MakerVault application image** is published for both AMD64 and ARM64, but an ARM64 host cannot run the complete default four-container stack natively while the slicer remains AMD64-only. For ARM64 deployments, the slicer must be excluded or run on a separate compatible AMD64 machine; this release does not provide a tested, supported ARM64-only Compose procedure. Other MakerVault features do not depend on successful slicer startup.
+
+Native ARM64 slicer support may be added in a later release only after verified engine binaries and integration tests are available.
+
 ## 1. Enable the slicer service
 
 The single `docker-compose.yml` starts MakerVault, PostgreSQL, Redis and the separate combined slicer container named `makervault-slicer` (Compose service `slicer-worker`) for **four long-running containers**.
