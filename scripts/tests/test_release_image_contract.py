@@ -14,6 +14,8 @@ class ReleaseImageContractTests(unittest.TestCase):
         self.assertIn('tags:\n      - "v*"', workflow)
         self.assertIn("slicer_worker/Dockerfile.generic", workflow)
         self.assertIn("ghcr.io/gavrd7/makervault-slicer:", workflow)
+        self.assertIn("ghcr.io/gavrd7/makervault-slicer:latest", workflow)
+        self.assertIn("!contains(steps.version.outputs.version, '-')", workflow)
         self.assertIn("id: slicer", workflow)
         self.assertLess(
             workflow.index("name: Publish version-matched combined slicer image"),
@@ -31,7 +33,8 @@ class ReleaseImageContractTests(unittest.TestCase):
         self.assertIn("ARG MAKERVAULT_SLICER_WORKER_IMAGE", dockerfile)
         self.assertIn("ENV MAKERVAULT_SLICER_WORKER_IMAGE=", dockerfile)
         self.assertIn("MAKERVAULT_SLICER_ENGINE_IMAGE_DIGEST=", dockerfile)
-        self.assertIn("ghcr.io/gavrd7/makervault-slicer:1.7.0", compose)
+        self.assertIn("ghcr.io/gavrd7/makervault-slicer:latest", compose)
+        self.assertNotIn("ghcr.io/gavrd7/makervault-slicer:1.7.0", compose)
         self.assertNotIn("      MAKERVAULT_SLICER_ENGINE_IMAGE_DIGEST:", compose)
         self.assertNotIn("      MAKERVAULT_SLICER_WORKER_IMAGE:", compose)
         self.assertIn("slicer_worker.combined_service", compose)
