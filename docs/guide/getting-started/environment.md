@@ -71,14 +71,14 @@ ghcr.io/gavrd7/makervault:latest
 You normally do not need to add anything to `.env`. If you want to stay on a specific release until you deliberately upgrade, set:
 
 ```dotenv
-MAKERVAULT_IMAGE=ghcr.io/gavrd7/makervault:1.1.0
+MAKERVAULT_IMAGE=ghcr.io/gavrd7/makervault:1.7.0
 ```
 
-This setting controls only the MakerVault application image. It does not change your database or storage. Users following the build-it-yourself route use `compose.build.yaml`, which replaces the published image with a locally built one.
+This setting controls only the MakerVault application image. It does not change your database or storage. For a source build, set `MAKERVAULT_IMAGE=makervault-local:dev` and run `sudo docker compose build makervault`; the same Compose file is used for both routes.
 
 ## Optional slicer environment settings (v1.7)
 
-If enabling the **combined** slicer overlay, keep your existing base `.env` and add the required slicer settings there only after you have a verified worker image and engine registry. The default base Compose stack requires none of these settings.
+If enabling the **combined** slicer profile, keep your existing base `.env` and add the required slicer settings there only after you have a verified worker image and engine registry. The default base Compose stack requires none of these settings.
 
 | Setting | Purpose |
 | --- | --- |
@@ -92,13 +92,13 @@ If enabling the **combined** slicer overlay, keep your existing base `.env` and 
 
 Use the same secret-generation method described below, generating two **different** tokens. Do not commit real values, copied staging environment files, printer credentials, or an unreviewed worker image reference to the repository. Configure only the published/supported combinations; a missing release artifact is a blocker to the complete slicer install, not a reason to fabricate a digest.
 
-For a new deployment, Compose overlays are loaded together:
+For a new deployment, The single Compose file is validated with the slicer profile:
 
 ```bash
-sudo docker compose -f compose.yaml -f compose.slicer.yaml config --quiet
+sudo docker compose --profile slicer config --quiet
 ```
 
-The combined worker and installer are isolated processes within one `makervault-slicer` container. Its one-shot volume-permissions service exits after configuration. The full installation therefore has **four long-running containers**, not separate always-on installer and worker services. See [installation](install.md#makervault-slicer-combined-four-container-deployment) and [slicer setup](../3d-printing/slicer.md).
+The combined worker and installer are isolated processes within one `makervault-slicer` container defined by `compose.yaml`. Its one-shot volume-permissions service exits after configuration. The full installation therefore has **four long-running containers**, not separate always-on installer and worker services. See [installation](install.md#makervault-slicer-combined-four-container-deployment) and [slicer setup](../3d-printing/slicer.md).
 
 ## Generate the secrets
 
