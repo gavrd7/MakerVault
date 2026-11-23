@@ -69,11 +69,11 @@ def regional_extrusion(gcode):
 def probe(fixtures, binary):
     fixtures = Path(fixtures)
     result = {}
-    with tempfile.TemporaryDirectory(prefix="modifier-real-orca-") as tmp:
-        root = Path(tmp)
-        for name in ("printer.json", "filament.json", "process.json"):
-            shutil.copyfile(fixtures / name, root / name)
-        for label in ("baseline", "modified"):
+    for label in ("baseline", "modified"):
+        with tempfile.TemporaryDirectory(prefix="modifier-real-orca-") as tmp:
+            root = Path(tmp)
+            for name in ("printer.json", "filament.json", "process.json"):
+                shutil.copyfile(fixtures / name, root / name)
             source = fixtures / (label + ".3mf")
             if source.is_symlink() or not source.is_file():
                 raise WorkerError("Native modifier test fixture missing.")
@@ -83,10 +83,7 @@ def probe(fixtures, binary):
                 receipt = run_orca(Path(binary), root, timeout_seconds=180)
             if receipt.get("status") != "completed":
                 raise WorkerError("Actual Orca CLI did not complete " + label + " fixture.")
-            gcode = root.joinpath("output.gcode").read_bytes()
-            result[label] = regional_extrusion(gcode)
-            root.joinpath("input.3mf").unlink()
-            root.joinpath("output.gcode").unlink()
+            result[label] = regional_extrusion(root.joinpath("output.gcode").read_bytes())
     baseline = result["baseline"]
     modified = result["modified"]
     for label in ("control", "changed"):
