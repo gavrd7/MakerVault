@@ -58,6 +58,12 @@ class NativeModifierProjectTests(SimpleTestCase):
             export_modifier_3mf_fixture(
                 [(item(x=500), fixture_stl())], bed_width=220, bed_depth=220)
 
+    def test_unverified_modifier_is_never_silently_dropped_by_standard_export(self):
+        from core.slicer_plate_3mf import build_plate_3mf
+        with self.assertRaisesRegex(SlicerProfileError, "cannot discard"):
+            build_plate_3mf(
+                [(item(), fixture_stl())], bed_width=220, bed_depth=220)
+
     def test_normal_plate_without_modifiers_keeps_existing_path(self):
         from core.slicer_plate_3mf import build_plate_3mf
         plain = item()
