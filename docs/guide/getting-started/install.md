@@ -125,7 +125,7 @@ Press **Ctrl+C** to stop following logs; this does not stop MakerVault.
 
 The standard `docker compose up -d` starts four long-running containers: MakerVault, **`makervault-slicer`**, PostgreSQL and Redis. There are **no profiles, extra Compose files or local builds**. The application and slicer are downloaded from GHCR. Only MakerVault's web/camera ports are published; the slicer, database and Redis are accessible only on the Docker network.
 
-Your private `.env` contains different, automatically generated worker and installer tokens. The slicer uses a verified GHCR image; individual OrcaSlicer, Creality Print and Bambu Studio engines are managed separately in MakerVault. The one-off engine-store permission setup task exits when complete.
+Your private `.env` contains different, automatically generated worker and installer tokens. The slicer uses a verified GHCR image; individual OrcaSlicer, Creality Print and Bambu Studio engines are managed separately in MakerVault. The engine-store volume is initialised from the published image on first deployment.
 
 The **v1.7.0 combined slicer GHCR image must be published and validated before release**; the older `makervault-slicer:0.1.0` image does not contain the combined worker/installer. See [MakerVault Slicer](../3d-printing/slicer.md) for engine setup and compatibility checks.
 
