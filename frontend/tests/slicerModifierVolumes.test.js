@@ -22,3 +22,13 @@ test("all six primitive modifier shapes have edit and preview paths", () => {
   assert.match(editor, /parent\.add\(ghost\)/);
   assert.match(editor, /syncModifierOverlays\(mesh, item, state\.sectionPlane\)/);
 });
+
+test("duplicate keeps modifier children independent from the original parent", () => {
+  assert.match(editor, /copy\.modifier_volumes = chosen\.modifier_volumes\.map\(modifier =>/);
+  assert.match(editor, /id: plateUuid\(\), settings: \{\.\.\.modifier\.settings\}/);
+});
+
+test("torus preview uses the exact backend major and minor radii", () => {
+  assert.match(editor, /TorusGeometry\(\.30, \.20, 16, 32\)/);
+  assert.match(editor, /geometry\.scale\(w, d, h \/ \.4\)/);
+});
