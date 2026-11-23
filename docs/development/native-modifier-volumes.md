@@ -104,7 +104,7 @@ The Creality native project-loader and additional five shapes are now **required
 
 ## 23 November — required real-binary gates extended
 
-Orca 2.5.0, Bambu 02.09.01.70 and Creality 7.3.1 now run **required** real CLI G-code acceptance jobs for (a) the box modifier's baseline/upper/lower/paired regions, (b) the five other primitive shapes, and (c) a world-coordinate modifier with independent 12° X tilt, −8° Y tilt, 35° Z rotation and 110/90/105% nonuniform scale. The modifier has its own geometry and transform; it is not moved as part of the target model.
+Orca 2.5.0, Bambu 02.09.01.70 and Creality 7.3.1 now run **required** real CLI G-code acceptance jobs for (a) the box modifier's baseline/upper/lower/paired regions, (b) the five other primitive shapes, and (c) a world-coordinate modifier with independent 6° X tilt, −5° Y tilt, 35° Z rotation and 110/90/105% nonuniform scale. The modifier has its own geometry and transform; it is not moved as part of the target model.
 
 These are acceptance checks for **isolated native fixtures only**. Required workflows are not a substitute for the still-missing production backend exporter, strict worker admission, owner-scoped source validation, native format controls, output audit, or end-to-end UI smoke. Keep modifier-bearing jobs **rejected** until those are tested in a single production path. No misleading "merge-ready" or release labels should be applied on the strength of fixture checks alone.
 
