@@ -10,6 +10,14 @@
 | Filament spool | Filament stock, with its own weight, price and identity |\n| Reusable spool design | Empty reel hardware specification or printable design, separate from filament |\n| Physical reusable spool | An actual refillable reel with measured tare, condition and optional assigned filament |
 | Slot | A position in a printer's multi-material system |
 
+## Slice models and review G-code
+
+The **MakerVault Slicer** workspace is available alongside 3D Printing when the verified combined slicer service and an approved native engine are installed. Choose **OrcaSlicer, Creality Print or Bambu Studio** and import matching native printer, process and filament profiles. The slicer provides a visual build plate, model placement and supported per-object, painting, multicolour and variable-layer controls. It generates private G-code for review; it does not automatically submit a job or consume spool stock.
+
+To check the printer without leaving your work, choose **Device** in MakerVault Slicer. Its live-monitor modal opens over the slicer and closing it returns to your current preparation state.
+
+Installation, engine lifecycle, paint and material limitations, G-code inspection and printing safety are explained in the dedicated [MakerVault Slicer guide](../3d-printing/slicer.md). A live printer connection is optional for slicing and is required only for the separately confirmed network print workflow.
+
 ## Add your printer
 
 1. Open **3D Printing** and choose the add-printer action.
@@ -93,6 +101,6 @@ In the manufacturer catalogue choose **Suggest New Model**. Supply manufacturer,
 Administrator submissions are accepted directly into the shared catalogue. Other users' suggestions remain pending until a catalogue administrator acts. Accepted user-provided specs retain provenance but are not automatically manufacturer-verified. [Catalogue review →](../administration/catalogue-updates.md)
 
 
-### Maker Tag label preview (in development)
+### MakerTag label preview
 
-Under **Maker Tags**, open an existing QR tag and select a label format. The preview provides a visual check of the QR and label text before printing. Three label dimensions are available for initial testing: compact 50 × 30 mm, standard 70 × 50 mm and large 100 × 70 mm. The print window uses millimetre dimensions; printer scaling and margins may affect the finished size. Print a single test on ordinary paper and scan it before using adhesive stock. Multi-label sheets and batch printing are planned separately.
+Under **Maker Tags**, open an existing QR tag and select a label format. The preview provides a visual check of the QR and label text before printing. Three label dimensions are available: compact 50 × 30 mm, standard 70 × 50 mm and large 100 × 70 mm. The print window uses millimetre dimensions; printer scaling and margins may affect the finished size. Print a single test on ordinary paper and scan it before using adhesive stock. Batch printing is also available where supported; verify printed scale and scan a physical test before committing label stock.
