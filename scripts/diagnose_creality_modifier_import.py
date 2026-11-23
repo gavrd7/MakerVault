@@ -26,13 +26,17 @@ def inspect_archive(path):
         if not required.issubset(names):
             raise ValueError("Missing native 3MF model metadata.")
         from xml.etree import ElementTree as ET
-        if project.getinfo("3D/3dmodel.model").file_size > 4 * 1024 * 1024:\n            raise ValueError("Oversized candidate model XML.")\n        model = ET.fromstring(project.read("3D/3dmodel.model"))
+        if project.getinfo("3D/3dmodel.model").file_size > 4 * 1024 * 1024:
+            raise ValueError("Oversized candidate model XML.")
+        model = ET.fromstring(project.read("3D/3dmodel.model"))
         ns = "{http://schemas.microsoft.com/3dmanufacturing/core/2015/02}"
         build = model.find(ns + "build")
         objects = model.find(ns + "resources")
         if build is None or objects is None or len(build) != 1:
             raise ValueError("Not a one-build-item test project.")
-        if project.getinfo("Metadata/model_settings.config").file_size > 4 * 1024 * 1024:\n            raise ValueError("Oversized candidate settings XML.")\n        settings = ET.fromstring(project.read("Metadata/model_settings.config"))
+        if project.getinfo("Metadata/model_settings.config").file_size > 4 * 1024 * 1024:
+            raise ValueError("Oversized candidate settings XML.")
+        settings = ET.fromstring(project.read("Metadata/model_settings.config"))
         return {
             "members": len(names),
             "objects": len(objects),
@@ -50,13 +54,15 @@ def reference_structure(path):
     blob = path.read_bytes()
     if len(blob) > 32 * 1024 * 1024 or not zipfile.is_zipfile(io.BytesIO(blob)):
         raise ValueError("Expected actual upstream 3MF, not an LFS pointer.")
-    from defusedxml import ElementTree as ET
+    from xml.etree import ElementTree as ET
     ns = "{http://schemas.microsoft.com/3dmanufacturing/core/2015/02}"
     with zipfile.ZipFile(io.BytesIO(blob)) as z:
         names = z.namelist()
         if len(names) > 150 or len(set(names)) != len(names):
             raise ValueError("Unsafe upstream reference archive.")
-        if z.getinfo("3D/3dmodel.model").file_size > 4 * 1024 * 1024:\n            raise ValueError("Oversized reference model XML.")\n        model = ET.fromstring(z.read("3D/3dmodel.model"))
+        if z.getinfo("3D/3dmodel.model").file_size > 4 * 1024 * 1024:
+            raise ValueError("Oversized reference model XML.")
+        model = ET.fromstring(z.read("3D/3dmodel.model"))
         metadata = {
             tag.attrib.get("name"): tag.text
             for tag in model.findall(ns + "metadata")
@@ -69,7 +75,9 @@ def reference_structure(path):
             "creality_sidecar": "Metadata/creality.config" in names,
         }
         if "Metadata/model_settings.config" in names:
-            if z.getinfo("Metadata/model_settings.config").file_size > 4 * 1024 * 1024:\n                raise ValueError("Oversized reference settings XML.")\n            settings = ET.fromstring(z.read("Metadata/model_settings.config"))
+            if z.getinfo("Metadata/model_settings.config").file_size > 4 * 1024 * 1024:
+                raise ValueError("Oversized reference settings XML.")
+            settings = ET.fromstring(z.read("Metadata/model_settings.config"))
             info.update({
                 "object_metadata_count": len(settings.findall("object")),
                 "part_subtypes": sorted(part.attrib.get("subtype", "")
