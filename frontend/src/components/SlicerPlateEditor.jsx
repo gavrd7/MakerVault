@@ -2284,6 +2284,17 @@ export default function SlicerPlateEditor({
         }
       }
       const hits = raycaster.intersectObjects([...meshes.values()], false);
+      if (["select","move","rotate","scale"].includes(latestToolModeRef.current)) {
+        const modifierGhosts = [...meshes.values()].flatMap(mesh =>
+          (mesh.userData.modifierGhosts || []).filter(ghost => ghost.userData.isWorldModifier));
+        const candidate = raycaster.intersectObjects(modifierGhosts, false)[0];
+        if (candidate && (!hits[0] || candidate.distance <= hits[0].distance + 0.01)) {
+          setSelected(candidate.object.userData.modifierParentId);
+          modifierSelectionRef.current.onChange?.(candidate.object.userData.modifierId);
+          event.preventDefault();
+          return;
+        }
+      }
       if(latestToolModeRef.current==="variable_layers"){
         const hit=hits.find(row=>row.object.userData.instanceId===selectionRef.current[0]);
         if(hit){
@@ -2964,9 +2975,11 @@ export default function SlicerPlateEditor({
       ghost.userData.isModifierVolume = true;
       ghost.userData.modifierId = modifier.id;
       ghost.userData.modifierParentId = item.instance_id;
-      // Modifiers are editable independently but must not be hit by the
-      // standard printable model raycast or mesh collision calculations.
-      ghost.raycast = () => {};
+      ghost.userData.isWorldModifier = modifier.coordinate_space === "world";
+      // The ordinary model raycast only tests printable meshes; free
+      // modifiers have a separate explicit hit test for selecting their
+      // own controls. Legacy parent-local overlays remain decorative.
+      if (!ghost.userData.isWorldModifier) ghost.raycast = () => {};
       ghosts.push(ghost);
     }
     parent.userData.modifierGhosts = ghosts;
