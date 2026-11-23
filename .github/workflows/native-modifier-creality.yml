@@ -59,7 +59,10 @@ jobs:
           echo "Missing system runtime libraries (diagnostic):"
           ldd "$(cat /tmp/creality-modifier-binary)" 2>/dev/null | grep 'not found' || true
           echo "Official extracted bundled library paths:"
-          find squashfs-root -maxdepth 3 -type d \\( -name lib -o -name lib64 \\) -print | head -20
+          find squashfs-root -maxdepth 3 -type d -name lib -print | head -20
+          find squashfs-root -maxdepth 3 -type d -name lib64 -print | head -20
+          echo "Official public launcher initialization (first 60 lines):"
+          sed -n '1,60p' squashfs-root/AppRun | cut -c 1-180
       - name: Run exact Creality CLI regional-effect and project-loader probe
         id: native_modifier
         continue-on-error: true
