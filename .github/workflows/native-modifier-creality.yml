@@ -139,6 +139,23 @@ jobs:
               --fixtures "$target" \
               --binary "$(cat /tmp/creality-modifier-binary)"
           done
+      - name: Require native Creality independent XYZ modifier transformation
+        shell: bash
+        env:
+          QT_QPA_PLATFORM: offscreen
+          LIBGL_ALWAYS_SOFTWARE: "1"
+          HOME: /tmp
+        run: |
+          set -euo pipefail
+          root=/tmp/creality-modifier-world-pose
+          python3 scripts/build_native_modifier_fixture.py --output-dir "$root" --world-pose
+          for kind in printer process filament; do
+            cp "/tmp/creality-pinned-profiles/$kind.json" "$root/$kind.json"
+          done
+          python3 scripts/build_creality_modifier_projects.py --fixtures "$root"
+          timeout 240s python3 -m slicer_worker.modifier_acceptance_probe \
+            --engine crealityprint --creality-native-project \
+            --fixtures "$root" --binary "$(cat /tmp/creality-modifier-binary)"
       - name: Compare genuine CLI import of baseline and modifier 3MF variants
         id: import_matrix
         if: steps.native_packaging.outcome == 'success'
