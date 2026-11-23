@@ -11,6 +11,7 @@ on:
       - "slicer_worker/modifier_3mf_validation.py"
       - "backend/core/slicer_modifier_3mf.py"
       - "backend/core/slicer_creality_modifier_project.py"
+      - "slicer_worker/creality_modifier_validation.py"
       - ".github/workflows/native-modifier-creality.yml"
   workflow_dispatch:
 
@@ -26,7 +27,7 @@ jobs:
       - name: Resolve exact-version Creality native profiles and bounded modifier projects
         run: |
           set -euo pipefail
-          python3 -m py_compile scripts/diagnose_creality_modifier_import.py scripts/build_creality_modifier_projects.py backend/core/slicer_creality_modifier_project.py
+          python3 -m py_compile scripts/diagnose_creality_modifier_import.py scripts/build_creality_modifier_projects.py backend/core/slicer_creality_modifier_project.py slicer_worker/creality_modifier_validation.py
           python3 -m pip install --disable-pip-version-check --no-input --target /tmp/creality-modifier-pydeps "defusedxml>=0.7.1,<0.8"
           # Later isolated CLI steps intentionally set HOME=/tmp. A fixed
           # non-user dependency directory keeps Python fixture imports stable.
