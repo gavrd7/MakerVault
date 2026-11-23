@@ -4,7 +4,7 @@ on:
   pull_request:
     paths:
       - "slicer_worker/**"
-      - "compose.slicer.staging.yaml"
+      - "compose.yaml"
       - ".github/workflows/slicer-combined-smoke.yml"
   workflow_dispatch:
 
