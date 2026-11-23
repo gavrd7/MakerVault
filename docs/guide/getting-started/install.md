@@ -139,7 +139,7 @@ sudo -E docker compose ps
 
 Alternatively set `MAKERVAULT_IMAGE=makervault-local:dev` in your private `.env` for ongoing local source builds, and run `sudo docker compose build makervault` before updating. Never tag a local build as the published GHCR release image by accident.
 
-### MakerVault Slicer — four-container deployment
+### MakerVault Slicer combined four-container deployment
 
 The main MakerVault app, PostgreSQL and Redis run with `docker compose up -d`. The optional `slicer` profile adds **one** long-running combined worker/installer container, named `makervault-slicer`, with separate worker and installer processes and credentials. The engine-store permissions initializer runs once and exits.
 
