@@ -32,6 +32,7 @@ from .engine_store_admin import (
 )
 from .engine_store_lifecycle import installed_versions, activate_installed, uninstall_engine, preserve_active_identities, IDENTITY
 from .engine_registry import SUPPORTED as INSTALLED_ENGINE_TYPES, BAMBU_VERSION, BAMBU_RUNTIME_SHA256
+from .engine_store_permissions import make_runtime_worker_readable
 
 STORE = Path(os.environ.get("SLICER_ENGINE_STORE", "/opt/engine-store"))
 TOKEN = os.environ.get("SLICER_INSTALLER_TOKEN", "")
@@ -410,6 +411,7 @@ def _install(op_id, release):
         # can inspect it, but the worker (UID 10001) cannot traverse a
         # published version directory unless the root is made searchable.
         # Only expose traversal/read; retain installer-only write access.
+        make_runtime_worker_readable(stage / "squashfs-root")
         stage.chmod(0o755)
         os.rename(stage, target)
         stage = None
