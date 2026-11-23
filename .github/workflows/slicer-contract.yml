@@ -4,8 +4,7 @@ on:
   pull_request:
     paths:
       - "slicer_worker/**"
-      - "compose.slicer.yaml"
-      - "compose.slicer.staging.yaml"
+      - "compose.yaml"
       - "scripts/install_slicer_staging.py"
       - "scripts/orca_compatibility_patch.py"
       - "scripts/tests/test_install_slicer_staging.py"
@@ -20,8 +19,7 @@ on:
     branches: [main]
     paths:
       - "slicer_worker/**"
-      - "compose.slicer.yaml"
-      - "compose.slicer.staging.yaml"
+      - "compose.yaml"
       - "scripts/install_slicer_staging.py"
       - "scripts/orca_compatibility_patch.py"
       - "scripts/tests/test_install_slicer_staging.py"
@@ -51,48 +49,35 @@ jobs:
         run: python3 -m unittest scripts.tests.test_orca_compatibility_patch -v
       - name: Verify real-engine acceptance probe isolation and fail-closed contracts offline
         run: python3 -m unittest discover -s scripts/tests -p "test_probe_slicer_staging.py" -v
-      - name: Validate explicit staging engine overlay without connecting to printers
-        env:
-          POSTGRES_PASSWORD: ci-only-placeholder
-          MAKERVAULT_SLICER_WORKER_TOKEN: "0123456789012345678901234567890123456789"
-        run: |
-          printf 'POSTGRES_PASSWORD=ci-only-placeholder\n' > .env
-          cat > .slicer-staging.env <<'ENV'
-          MAKERVAULT_SLICER_EXECUTION_ENABLED=1
-          MAKERVAULT_SLICER_WORKER_IMAGE=sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
-          MAKERVAULT_SLICER_ENGINE_IMAGE_DIGEST=sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
-          MAKERVAULT_SLICER_ENGINES_JSON='{"orcaslicer":{"version":"2.4.2","binary_sha256":"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"}}'
-          SLICER_ENGINES_JSON='{"orcaslicer":{"binary":"/opt/engines/orcaslicer.AppImage","version":"2.4.2","binary_sha256":"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"}}'
-          ENV
-          chmod 600 .slicer-staging.env
-          docker compose --env-file .env --env-file .slicer-staging.env \
-            -f compose.yaml -f compose.build.yaml -f compose.slicer.staging.yaml config --quiet
-          # Validate effective Compose semantics (not source comments/grep).
-          docker compose --env-file .env --env-file .slicer-staging.env \
-            -f compose.yaml -f compose.build.yaml -f compose.slicer.staging.yaml \
-            config --format json | python3 -c '
-          import json,sys
-          services=json.load(sys.stdin)["services"]
-          helper=set(services["slicer-engine-store-init"]["cap_add"])
-          slicer=set(services["slicer-worker"]["cap_add"])
-          assert helper == {"CHOWN","FOWNER","DAC_READ_SEARCH"}, helper
-          assert slicer == {"SETUID","SETGID","KILL"}, slicer
-          assert "slicer-engine-installer" not in services
-          '
-      - name: Validate opt-in worker Compose overlay without starting containers
+      - name: Validate one canonical Compose stack and slicer profile
         env:
           POSTGRES_PASSWORD: ci-only-placeholder
           MAKERVAULT_SLICER_WORKER_TOKEN: "0123456789012345678901234567890123456789"
           MAKERVAULT_SLICER_INSTALLER_TOKEN: "9876543210987654321098765432109876543210"
           MAKERVAULT_SLICER_WORKER_IMAGE: "ghcr.io/example/slicer@sha256:0000000000000000000000000000000000000000000000000000000000000000"
           MAKERVAULT_SLICER_ENGINE_IMAGE_DIGEST: "sha256:0000000000000000000000000000000000000000000000000000000000000000"
-          MAKERVAULT_SLICER_ENGINE_BINARY_SHA256: "0000000000000000000000000000000000000000000000000000000000000000"
-          MAKERVAULT_SLICER_ENGINE_VERSION: "ci-only-placeholder"
-          MAKERVAULT_SLICER_ENGINES_JSON: '{"orcaslicer":{"version":"2.4.2","binary_sha256":"0000000000000000000000000000000000000000000000000000000000000000"}}'
-          SLICER_ENGINES_JSON: '{"orcaslicer":{"binary":"/opt/engines/orcaslicer.AppImage","version":"2.4.2","binary_sha256":"0000000000000000000000000000000000000000000000000000000000000000"}}'
+          MAKERVAULT_SLICER_ENGINES_JSON: '{"orcaslicer":{"version":"2.5.0","binary_sha256":"0000000000000000000000000000000000000000000000000000000000000000"}}'
+          SLICER_ENGINES_JSON: '{"orcaslicer":{"binary":"/opt/engines/orcaslicer.AppImage","version":"2.5.0","binary_sha256":"0000000000000000000000000000000000000000000000000000000000000000"}}'
         run: |
           printf 'POSTGRES_PASSWORD=ci-only-placeholder\n' > .env
-          docker compose -f compose.yaml -f compose.slicer.yaml --profile slicer config --quiet
+          docker compose config --quiet
+          docker compose --profile slicer config --quiet
+          docker compose config --format json | python3 -c '
+          import json,sys
+          services=json.load(sys.stdin)["services"]
+          assert "makervault" in services and "postgres" in services and "redis" in services
+          assert "slicer-worker" not in services
+          '
+          docker compose --profile slicer config --format json | python3 -c '
+          import json,sys
+          services=json.load(sys.stdin)["services"]
+          assert {"makervault","postgres","redis","slicer-worker","slicer-engine-store-init"} <= set(services)
+          assert set(services["slicer-engine-store-init"]["cap_add"]) == {"CHOWN","FOWNER","DAC_READ_SEARCH"}
+          assert set(services["slicer-worker"]["cap_add"]) == {"SETUID","SETGID","KILL"}
+          assert services["slicer-worker"]["container_name"] == "makervault-slicer"
+          assert "slicer-engine-installer" not in services
+          assert services["slicer-worker"]["environment"]["SLICER_INSTALLER_TOKEN"] != services["slicer-worker"]["environment"]["SLICER_WORKER_TOKEN"]
+          '
 
 
   candidate-image-build:
