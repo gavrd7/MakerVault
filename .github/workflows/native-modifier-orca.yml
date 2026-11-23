@@ -98,6 +98,25 @@ jobs:
               --entrypoint python3 "$IMAGE" -m slicer_worker.modifier_acceptance_probe \
               --fixtures /fixtures --binary /opt/engines/orcaslicer.AppImage
           done
+      - name: Require real Orca independent modifier XYZ pose and regional extrusion
+        shell: bash
+        run: |
+          set -euo pipefail
+          output=/tmp/native-modifier-world-pose
+          python3 scripts/build_native_modifier_fixture.py --output-dir "$output" --world-pose
+          for kind in printer process filament; do
+            cp "/tmp/native-modifier-fixtures/$kind.json" "$output/$kind.json"
+          done
+          IMAGE=$(sed -n 's/^MAKERVAULT_SLICER_WORKER_IMAGE=//p' .slicer-staging.env)
+          [[ "$IMAGE" =~ ^sha256:[0-9a-f]{64}$ ]]
+          timeout 240s docker run --rm --network none --read-only \
+            --user 10001:10001 --cap-drop ALL \
+            --security-opt no-new-privileges:true --pids-limit 96 \
+            --memory 3g --cpus 2 \
+            --tmpfs /tmp:rw,exec,nosuid,nodev,size=1g,mode=1777 \
+            --mount "type=bind,src=$output,dst=/fixtures,readonly" \
+            --entrypoint python3 "$IMAGE" -m slicer_worker.modifier_acceptance_probe \
+            --fixtures /fixtures --binary /opt/engines/orcaslicer.AppImage
       - name: Record evidence without enabling unsafe production slicing
         if: always()
         run: |
