@@ -59,7 +59,7 @@ def run(binary, fixtures):
             with tempfile.TemporaryDirectory(prefix="creality-native-import-") as temp:
                 output = Path(temp) / "output"
                 command = [str(binary), "--cli", "--slice", "0",
-                           "--outputdir", str(output), str(source)]
+                           "--outputdir", str(output), "--need-gcode-file", str(source)]
                 try:
                     result = subprocess.run(command, cwd=temp, env=env,
                                             capture_output=True, text=True,
