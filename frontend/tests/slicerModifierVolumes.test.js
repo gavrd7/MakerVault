@@ -39,3 +39,13 @@ test("object settings exposes regional walls and enforces total plate modifier c
   assert.match(prepare, /totalModifierCount>=48/);
   assert.match(prepare, /if\(raw===""\) delete settings\.wall_loops/);
 });
+
+test("Add model menu offers six parameter modifier shapes with non-printing child ownership", () => {
+  assert.match(prepare, /Add parameter modifier/);
+  assert.match(prepare, /Choose parameter modifier primitive/);
+  assert.match(prepare, /modifierShapeMenuOpen/);
+  assert.match(prepare, /addModifier\(shape\)/);
+  assert.match(prepare, /onClick=\{\(\)=>addModifier\(\)\}/);
+  assert.match(prepare, /totalModifierCount>=48/);
+  assert.match(prepare, /modifier_volumes: \[\.\.\.\(item\.modifier_volumes \|\| \[\]\), fresh\]/);
+});
