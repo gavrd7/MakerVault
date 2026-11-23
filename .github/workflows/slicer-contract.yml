@@ -49,34 +49,33 @@ jobs:
         run: python3 -m unittest scripts.tests.test_orca_compatibility_patch -v
       - name: Verify real-engine acceptance probe isolation and fail-closed contracts offline
         run: python3 -m unittest discover -s scripts/tests -p "test_probe_slicer_staging.py" -v
-      - name: Validate one canonical Compose stack and slicer profile
+      - name: Validate four running services and one private Compose network
         env:
           POSTGRES_PASSWORD: ci-only-placeholder
           MAKERVAULT_SLICER_WORKER_TOKEN: "0123456789012345678901234567890123456789"
           MAKERVAULT_SLICER_INSTALLER_TOKEN: "9876543210987654321098765432109876543210"
-          MAKERVAULT_SLICER_WORKER_IMAGE: "ghcr.io/example/slicer@sha256:0000000000000000000000000000000000000000000000000000000000000000"
-          MAKERVAULT_SLICER_ENGINE_IMAGE_DIGEST: "sha256:0000000000000000000000000000000000000000000000000000000000000000"
-          MAKERVAULT_SLICER_ENGINES_JSON: '{"orcaslicer":{"version":"2.5.0","binary_sha256":"0000000000000000000000000000000000000000000000000000000000000000"}}'
-          SLICER_ENGINES_JSON: '{"orcaslicer":{"binary":"/opt/engines/orcaslicer.AppImage","version":"2.5.0","binary_sha256":"0000000000000000000000000000000000000000000000000000000000000000"}}'
+          MAKERVAULT_SLICER_WORKER_IMAGE: "ghcr.io/gavrd7/makervault-slicer:0.1.0"
         run: |
           printf 'POSTGRES_PASSWORD=ci-only-placeholder\n' > .env
           docker compose config --quiet
-          docker compose --profile slicer config --quiet
           docker compose config --format json | python3 -c '
           import json,sys
-          services=json.load(sys.stdin)["services"]
-          assert "makervault" in services and "postgres" in services and "redis" in services
-          assert "slicer-worker" not in services
-          '
-          docker compose --profile slicer config --format json | python3 -c '
-          import json,sys
-          services=json.load(sys.stdin)["services"]
-          assert {"makervault","postgres","redis","slicer-worker","slicer-engine-store-init"} <= set(services)
+          stack=json.load(sys.stdin)
+          services=stack["services"]
+          assert set(services) == {"makervault","postgres","redis","slicer-worker","slicer-engine-store-init"}, services.keys()
+          assert set(stack["networks"]) == {"makervault"}, stack["networks"]
+          for name in ("makervault","postgres","redis","slicer-worker"):
+              assert len(services[name]["networks"]) == 1
+          for name in ("postgres","redis","slicer-worker"):
+              assert not services[name].get("ports"), name
+          for name in ("makervault","slicer-worker"):
+              assert "build" not in services[name]
+          assert not any("profiles" in value for value in services.values())
           assert set(services["slicer-engine-store-init"]["cap_add"]) == {"CHOWN","FOWNER","DAC_READ_SEARCH"}
           assert set(services["slicer-worker"]["cap_add"]) == {"SETUID","SETGID","KILL"}
           assert services["slicer-worker"]["container_name"] == "makervault-slicer"
-          assert "slicer-engine-installer" not in services
           assert services["slicer-worker"]["environment"]["SLICER_INSTALLER_TOKEN"] != services["slicer-worker"]["environment"]["SLICER_WORKER_TOKEN"]
+          assert not any(k in services["slicer-worker"] for k in ("cpus","mem_limit"))
           '
 
 
