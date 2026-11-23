@@ -6,7 +6,10 @@ modifier object so real native parser/effectiveness can be examined.
 A pass is diagnostic evidence, NOT approval to enable modifier execution.
 """
 import argparse
+from contextlib import ExitStack
+import io
 import json
+import zipfile
 from pathlib import Path
 import re
 import shutil
@@ -69,9 +72,11 @@ def regional_extrusion(gcode):
     return {"totals": totals, "moves": moves}
 
 
-def probe(fixtures, binary, *, engine="orcaslicer"):
+def probe(fixtures, binary, *, engine="orcaslicer", creality_native_project=False):
     if engine not in {"orcaslicer", "bambustudio", "crealityprint"}:
         raise WorkerError("Unsupported modifier acceptance engine.")
+    if creality_native_project and engine != "crealityprint":
+        raise WorkerError("Creality-native fixture mode requires its exact CLI.")
     fixtures = Path(fixtures)
     result = {}
     for label in ("baseline", "modified", "lower", "both"):
@@ -82,7 +87,32 @@ def probe(fixtures, binary, *, engine="orcaslicer"):
             source = fixtures / (label + ".3mf")
             if source.is_symlink() or not source.is_file():
                 raise WorkerError("Native modifier test fixture missing.")
-            shutil.copyfile(source, root / "input.3mf")
+            source_data = source.read_bytes()
+            # Even when Creality's actual self-contained project format
+            # requires extra vendor sidecars, independently validate the
+            # generated nested model's original safe four-member package.
+            if label == "baseline":
+                strict_worker_3mf(source_data)
+            else:
+                strict_worker_3mf(source_data, allow_native_modifier_fixture=True)
+            if creality_native_project:
+                candidate = fixtures / ("native-" + label + ".3mf")
+                if candidate.is_symlink() or not candidate.is_file():
+                    raise WorkerError("Missing native Creality self-contained project.")
+                data = candidate.read_bytes()
+                if not 0 < len(data) <= 32 * 1024 * 1024:
+                    raise WorkerError("Oversized Creality native fixture.")
+                with zipfile.ZipFile(io.BytesIO(data)) as archive:
+                    expected = {"3D/3dmodel.model", "Metadata/model_settings.config",
+                                "_rels/.rels", "[Content_Types].xml",
+                                "Metadata/project_settings.config",
+                                "Metadata/creality.config"}
+                    if len(archive.infolist()) != 6 or set(archive.namelist()) != expected:
+                        raise WorkerError("Unexpected Creality native fixture members.")
+                (root / "creality-native-project.marker").write_text("fixture-only")
+                (root / "input.3mf").write_bytes(data)
+            else:
+                (root / "input.3mf").write_bytes(source_data)
             # Test-only alternate admission: the default worker validator
             # still rejects nested modifier parts for production requests.
             # Never bypass the new explicit nested 3MF structural allowlist.
@@ -110,7 +140,16 @@ def probe(fixtures, binary, *, engine="orcaslicer"):
                 "orcaslicer": run_orca, "bambustudio": run_bambu,
                 "crealityprint": run_creality,
             }[engine]
-            with patch(module, side_effect=validate_fixture):
+            with ExitStack() as checks:
+                if creality_native_project:
+                    # The true Creality loader and G-code auditor run; only
+                    # the production two-tool self-contained project validator
+                    # is bypassed on this immutable test-only fixture.
+                    checks.enter_context(patch(
+                        "slicer_worker.creality_runner.validate_creality_project",
+                        return_value=True))
+                else:
+                    checks.enter_context(patch(module, side_effect=validate_fixture))
                 receipt = runner(Path(binary), root, timeout_seconds=180)
             if receipt.get("status") != "completed":
                 raise WorkerError("Actual " + engine + " CLI did not complete " + label + " fixture.")
@@ -159,10 +198,13 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--fixtures", type=Path, required=True)
     parser.add_argument("--engine", choices=("orcaslicer", "bambustudio", "crealityprint"), default="orcaslicer")
+    parser.add_argument("--creality-native-project", action="store_true",
+                        help="Test-only exact Creality native project loader path")
     parser.add_argument("--binary", type=Path, required=True)
     args = parser.parse_args()
     try:
-        print(json.dumps(probe(args.fixtures, args.binary, engine=args.engine), indent=2))
+        print(json.dumps(probe(args.fixtures, args.binary, engine=args.engine,
+                              creality_native_project=args.creality_native_project), indent=2))
     except (WorkerError, OSError, ValueError) as exc:
         parser.exit(1, "Native modifier real Orca diagnostic failed: " + str(exc) + "\n")
 
