@@ -230,7 +230,11 @@ export default function SlicerPrepareWorkspace({
             return (ch === "x" ? n : (n & 3) | 8).toString(16);
           })), shape,
       width_mm: 20, depth_mm: 20, height_mm: 20,
-      x_mm: 0, y_mm: 0, z_mm: 10,
+      // Plate-centred independent pose; selecting a model sets the regional
+      // slicing association, not a welded or inherited geometry transform.
+      x_mm: Number(parent.x_mm || 0), y_mm: Number(parent.y_mm || 0),
+      z_mm: 10, coordinate_space: "world",
+      rotation_xyz_deg: [0, 0, 0], scale_xyz_percent: [100, 100, 100],
       settings: {sparse_infill_density: 50},
     };
     updatePlate(latest.current.map(item => item.instance_id !== parent.instance_id ? item : {
@@ -1173,6 +1177,39 @@ export default function SlicerPrepareWorkspace({
                   onChange={e=>{const value=Number(e.target.value);if(Number.isFinite(value)&&value>=min&&value<=max)
                     changeModifier(modifier.id,{[key]:value});}} />
               </label>)}
+              {modifier.coordinate_space === "world" && <>
+                <div style={{fontWeight:600}}>Independent modifier transform</div>
+                <small>Plate-space placement: moving, rotating or scaling the model
+                  will not move this modifier. Assemble is a separate model operation.</small>
+                <div style={{display:"grid",gridTemplateColumns:"repeat(3,minmax(0,1fr))",gap:6}}>
+                  {["X","Y","Z"].map((axis,index)=><label key={"rot"+axis}>
+                    Rotate {axis} (°)
+                    <input type="number" min="-360" max="360" step="5"
+                      disabled={!canEdit||busy}
+                      value={modifier.rotation_xyz_deg?.[index] ?? 0}
+                      onChange={e=>{
+                        const v=Number(e.target.value);
+                        if (!Number.isFinite(v)||v < -360||v > 360) return;
+                        const next=[...(modifier.rotation_xyz_deg || [0,0,0])];
+                        next[index]=v;
+                        changeModifier(modifier.id,{rotation_xyz_deg:next});
+                      }}/>
+                  </label>)}
+                  {["X","Y","Z"].map((axis,index)=><label key={"scale"+axis}>
+                    Scale {axis} (%)
+                    <input type="number" min="5" max="400" step="5"
+                      disabled={!canEdit||busy}
+                      value={modifier.scale_xyz_percent?.[index] ?? 100}
+                      onChange={e=>{
+                        const v=Number(e.target.value);
+                        if (!Number.isFinite(v)||v < 5||v > 400) return;
+                        const next=[...(modifier.scale_xyz_percent || [100,100,100])];
+                        next[index]=v;
+                        changeModifier(modifier.id,{scale_xyz_percent:next});
+                      }}/>
+                  </label>)}
+                </div>
+              </>}
               <label>Regional infill (%)
                 <input type="number" min="0" max="100" step="1" disabled={!canEdit||busy}
                   value={modifier.settings?.sparse_infill_density ?? 50}
