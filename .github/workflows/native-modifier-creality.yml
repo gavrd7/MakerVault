@@ -111,6 +111,25 @@ jobs:
             --engine crealityprint --creality-native-project \
             --fixtures /tmp/creality-native-modifiers \
             --binary "$(cat /tmp/creality-modifier-binary)"
+      - name: Diagnose native Creality 3MF rejection without retaining profiles
+        if: steps.native_packaging.outcome == 'success' && steps.native_project.outcome == 'failure'
+        shell: bash
+        continue-on-error: true
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/creality-native-diagnostic-output
+          set +e
+          timeout 90s "$(cat /tmp/creality-modifier-binary)" \
+            --cli --slice 0 --outputdir /tmp/creality-native-diagnostic-output \
+            --need-gcode-file /tmp/creality-native-modifiers/native-modified.3mf \
+            >/tmp/creality-native-diagnostic.log 2>&1
+          code=$?
+          set -e
+          echo "Exact pinned Creality native-project CLI exit: $code"
+          # Only static public fixture errors, never upload any private
+          # project or user data. Capped diagnostic keywords and width.
+          grep -Ei 'load|error|invalid|fail|missing|config|project|model|plate|part|version|setting' \
+            /tmp/creality-native-diagnostic.log | tail -50 | cut -c 1-180 || true
       - name: Record Creality parser and regional effects result
         if: always()
         run: |
