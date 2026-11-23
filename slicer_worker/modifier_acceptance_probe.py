@@ -72,7 +72,8 @@ def regional_extrusion(gcode):
     return {"totals": totals, "moves": moves}
 
 
-def probe(fixtures, binary, *, engine="orcaslicer", creality_native_project=False):
+def probe(fixtures, binary, *, engine="orcaslicer", creality_native_project=False,
+          production_validator=False):
     if engine not in {"orcaslicer", "bambustudio", "crealityprint"}:
         raise WorkerError("Unsupported modifier acceptance engine.")
     if creality_native_project and engine != "crealityprint":
@@ -159,10 +160,15 @@ def probe(fixtures, binary, *, engine="orcaslicer", creality_native_project=Fals
                 "crealityprint": run_creality,
             }[engine]
             with ExitStack() as checks:
-                if creality_native_project:
-                    # The true Creality loader and G-code auditor run; only
-                    # the production two-tool self-contained project validator
-                    # is bypassed on this immutable test-only fixture.
+                if production_validator and label != "baseline":
+                    # Exercise exactly the same strict runner validator and
+                    # explicit marker used by the actual worker request path.
+                    # The plain unmodified control intentionally has no such
+                    # marker and uses the existing baseline test adapter.
+                    (root / "native-modifier-project.marker").write_text("v1")
+                elif creality_native_project:
+                    # A plain native Creality control is not a modifier job.
+                    # Keep its fixture-only baseline adapter separate.
                     checks.enter_context(patch(
                         "slicer_worker.creality_runner.validate_creality_project",
                         return_value=True))
@@ -219,10 +225,13 @@ def main():
     parser.add_argument("--creality-native-project", action="store_true",
                         help="Test-only exact Creality native project loader path")
     parser.add_argument("--binary", type=Path, required=True)
+    parser.add_argument("--production-validator", action="store_true",
+                        help="Exercise actual runner modifier admission, without patching it")
     args = parser.parse_args()
     try:
         print(json.dumps(probe(args.fixtures, args.binary, engine=args.engine,
-                              creality_native_project=args.creality_native_project), indent=2))
+                              creality_native_project=args.creality_native_project,
+                              production_validator=args.production_validator), indent=2))
     except (WorkerError, OSError, ValueError) as exc:
         parser.exit(1, "Native modifier real Orca diagnostic failed: " + str(exc) + "\n")
 
