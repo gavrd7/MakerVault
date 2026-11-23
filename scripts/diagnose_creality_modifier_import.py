@@ -44,6 +44,41 @@ def inspect_archive(path):
         }
 
 
+def reference_structure(path):
+    """Summarize official upstream 3MF metadata without executing its data."""
+    path = Path(path)
+    blob = path.read_bytes()
+    if len(blob) > 32 * 1024 * 1024 or not zipfile.is_zipfile(io.BytesIO(blob)):
+        raise ValueError("Expected actual upstream 3MF, not an LFS pointer.")
+    from defusedxml import ElementTree as ET
+    ns = "{http://schemas.microsoft.com/3dmanufacturing/core/2015/02}"
+    with zipfile.ZipFile(io.BytesIO(blob)) as z:
+        names = z.namelist()
+        if len(names) > 150 or len(set(names)) != len(names):
+            raise ValueError("Unsafe upstream reference archive.")
+        model = ET.fromstring(z.read("3D/3dmodel.model"))
+        metadata = {
+            tag.attrib.get("name"): tag.text
+            for tag in model.findall(ns + "metadata")
+        }
+        info = {
+            "member_names": sorted(names),
+            "app": metadata.get("Application"),
+            "model_objects": len(model.findall(f"./{ns}resources/{ns}object")),
+            "build_items": len(model.findall(f"./{ns}build/{ns}item")),
+            "creality_sidecar": "Metadata/creality.config" in names,
+        }
+        if "Metadata/model_settings.config" in names:
+            settings = ET.fromstring(z.read("Metadata/model_settings.config"))
+            info.update({
+                "object_metadata_count": len(settings.findall("object")),
+                "part_subtypes": sorted(part.attrib.get("subtype", "")
+                                        for part in settings.findall("./object/part")),
+                "assemble_count": len(settings.findall("./assemble/assemble_item")),
+            })
+        return info
+
+
 def run(binary, fixtures):
     root = Path(fixtures)
     results = []
@@ -86,7 +121,12 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--fixtures", required=True, type=Path)
     parser.add_argument("--binary", required=True, type=Path)
+    parser.add_argument("--reference", type=Path,
+                        help="Read-only genuine upstream Creality 3MF structure")
     args = parser.parse_args()
+    if args.reference:
+        print("Official upstream reference 3MF structure:",
+              reference_structure(args.reference), flush=True)
     rows = run(args.binary, args.fixtures)
     generic = next(code for label, mode, code, _ in rows if label == "baseline" and mode == "generic")
     native = next(code for label, mode, code, _ in rows if label == "baseline" and mode == "native")
