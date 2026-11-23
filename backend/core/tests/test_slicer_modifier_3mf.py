@@ -79,6 +79,40 @@ class NativeModifierProjectTests(SimpleTestCase):
         for actual, expected in zip(centroid, (116, 101, 5)):
             self.assertAlmostEqual(actual, expected, places=4)
 
+
+    def test_world_modifier_ignores_parent_translation_rotation_and_scale(self):
+        parent = item(x=0, y=0, z=5)
+        modifier = parent["modifier_volumes"][0]
+        modifier.update({
+            "coordinate_space": "world",
+            "rotation_xyz_deg": [0, 0, 90],
+            "scale_xyz_percent": [200, 100, 50],
+        })
+
+        def child_vertices(item_value):
+            output = export_modifier_3mf_fixture(
+                [(item_value, fixture_stl())], bed_width=220, bed_depth=220)
+            with zipfile.ZipFile(io.BytesIO(output)) as archive:
+                root = ET.fromstring(archive.read("3D/3dmodel.model"))
+            ns = "{" + NS + "}"
+            mesh = root.find(f"./{ns}resources/{ns}object[@id='3']/{ns}mesh")
+            return [tuple(float(node.attrib[k]) for k in ("x", "y", "z"))
+                    for node in mesh.findall(f"./{ns}vertices/{ns}vertex")]
+
+        original = child_vertices(parent)
+        moved_parent = {**parent, "rotation_deg": 90,
+                        "scale_xyz_percent": [150, 100, 100],
+                        "x_mm": 1, "y_mm": 1}
+        self.assertEqual(original, child_vertices(moved_parent))
+        midpoint = [sum(point[i] for point in original) / len(original)
+                    for i in range(3)]
+        for coordinate, expected in zip(midpoint, (110, 110, 5)):
+            self.assertAlmostEqual(coordinate, expected, places=3)
+        ranges = [max(point[i] for point in original) -
+                  min(point[i] for point in original) for i in range(3)]
+        for actual, expected in zip(ranges, (7, 14, 3.5)):
+            self.assertAlmostEqual(actual, expected, places=3)
+
     def test_non_intersecting_modifier_fails_closed(self):
         with self.assertRaisesRegex(SlicerProfileError, "does not intersect"):
             export_modifier_3mf_fixture(
