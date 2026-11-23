@@ -45,7 +45,9 @@ Bambu Studio), with the actual release binary and correct native profiles:
 6. Check desktop/mobile preview and parent/child selection, editing and reset
    operations. Confirm print-submission guards are unchanged.
 
-**Current state:** editor/model draft metadata and fail-closed execution
-foundation only; engine-native modifier-part export and the real-binary regional
-acceptance fixtures are not yet implemented. This branch must remain **Draft**
+**Current state:** editor/model draft metadata, translucent geometry preview,
+fail-closed execution and structural native-style modifier-part 3MF fixture
+export are implemented. **Actual native-engine parsing and regional G-code
+behaviour are not yet verified** for OrcaSlicer, Creality Print or Bambu Studio;
+the fixture exporter is not yet enabled for production slicing. This branch must remain **Draft**
 and issue #178 remains open until all acceptance gates above are met.
