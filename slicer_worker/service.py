@@ -77,7 +77,7 @@ def _decode_payload(payload):
         "model", "printer_profile", "filament_profile", "process_profile",
     }
     if not isinstance(payload, dict) or not expected.issubset(payload) or (
-            set(payload) - expected - {"model_format", "filament_profiles", "creality_model_stls", "creality_tool_ids", "creality_native_project"}):
+            set(payload) - expected - {"model_format", "filament_profiles", "creality_model_stls", "creality_tool_ids", "creality_native_project", "native_modifier_project"}):
         raise WorkerError("Invalid slicing job payload.")
     try:
         uuid.UUID(str(payload["job_id"]))
@@ -159,6 +159,24 @@ def _decode_payload(payload):
         files["creality_tool_ids"] = tools
     elif "creality_tool_ids" in payload:
         raise WorkerError("Creality tool assignments require native STL models.")
+    if "native_modifier_project" in payload:
+        # This is a distinct single-material contract. Neither a 2+ tool
+        # palette nor an arbitrary uploaded native project can request it.
+        approved = {"orcaslicer": "2.5.0", "bambustudio": "02.09.01.70",
+                    "crealityprint": "7.3.1"}
+        if (payload["native_modifier_project"] is not True
+                or approved.get(payload["engine"]) != payload["engine_version"]
+                or model_format != "3mf"
+                or any(key in payload for key in (
+                    "filament_profiles", "creality_native_project",
+                    "creality_model_stls", "creality_tool_ids"))):
+            raise WorkerError("Unverified modifier project execution contract.")
+        if payload["engine"] == "crealityprint":
+            from .creality_modifier_validation import validate_creality_modifier_project
+            validate_creality_modifier_project(files["model"])
+        else:
+            validate_worker_3mf(files["model"], allow_native_modifier_fixture=True)
+        files["native_modifier_project"] = True
     if "creality_native_project" in payload:
         if (payload["creality_native_project"] is not True or
                 payload["engine"] != "crealityprint" or model_format != "3mf" or
@@ -168,7 +186,7 @@ def _decode_payload(payload):
         from .creality_project_validation import validate_creality_project
         validate_creality_project(files["model"], native_tool_count=2)
         files["creality_native_project"] = True
-    elif model_format == "3mf":
+    elif model_format == "3mf" and not files.get("native_modifier_project"):
         options = {"native_tool_count": len(files["filament_profiles"])
                    if "filament_profiles" in files else None}
         if payload["engine"] == "bambustudio":
@@ -254,6 +272,8 @@ class Handler(BaseHTTPRequestHandler):
                         (workdir / ("filament-" + str(index) + ".json")).write_bytes(native)
                 if files.get("creality_native_project"):
                     (workdir / "creality-native-project.marker").write_text("v1")
+                if files.get("native_modifier_project"):
+                    (workdir / "native-modifier-project.marker").write_text("v1")
                 if "creality_model_stls" in files:
                     for index, raw in enumerate(files["creality_model_stls"]):
                         (workdir / ("input-" + str(index) + ".stl")).write_bytes(raw)
