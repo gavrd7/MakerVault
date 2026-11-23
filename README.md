@@ -34,9 +34,9 @@ Maker projects rarely live in one place. Components end up in boxes and spreadsh
 
 ## Install MakerVault
 
-MakerVault runs on your own computer or server using Docker. You can install the application first and add the optional slicer whenever you're ready.
+MakerVault runs on your own computer or server using Docker. The standard installation includes MakerVault Slicer in its own container, alongside the application, PostgreSQL and Redis.
 
-**Quick start on Linux** (requires Docker with Docker Compose, Git and Python 3):
+**Quick start on Linux** (requires Docker Compose, Git and Python 3; the v1.7.0 GHCR images must be published):
 
 ```bash
 git clone https://github.com/gavrd7/MakerVault.git
@@ -44,7 +44,7 @@ cd MakerVault
 python3 scripts/generate_env_secrets.py
 ```
 
-Edit the generated `.env` with your server address and review the settings, then start MakerVault:
+Edit the generated `.env` with your server address, then start the four-container stack:
 
 ```bash
 sudo docker compose up -d
@@ -52,7 +52,7 @@ sudo docker compose up -d
 
 Open **`http://YOUR-SERVER-IP:8765`** in your browser and follow the initial setup wizard.
 
-**Want to slice models inside MakerVault?** MakerVault Slicer supports OrcaSlicer, Creality Print and Bambu Studio. It's optional and uses the same `compose.yaml` file. Follow the separate [MakerVault Slicer setup guide](docs/guide/3d-printing/slicer.md) to enable it and install a verified slicing engine.
+**MakerVault Slicer** runs in a separate container and supports OrcaSlicer, Creality Print and Bambu Studio. Use the [slicer guide](docs/guide/3d-printing/slicer.md) to install and select your preferred engine.
 
 For detailed instructions, see the [Linux installation guide](docs/guide/getting-started/install.md), [Windows / Docker Desktop guide](docs/guide/getting-started/windows.md), [environment configuration](docs/guide/getting-started/environment.md) and [first sign-in guide](docs/guide/getting-started/first-sign-in.md). Already using MakerVault? Follow the [upgrade guide](docs/guide/administration/updates.md) and [backup guide](docs/guide/administration/backup.md) instead of starting from scratch.
 
