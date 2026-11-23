@@ -84,7 +84,7 @@ The first-time setup helper generates a strong worker token and a **different** 
 
 By default, Compose pulls the published combined slicer image from `ghcr.io/gavrd7/makervault-slicer:1.7.0`. Administrators install and choose individual OrcaSlicer, Creality Print and Bambu Studio engines through MakerVault. Advanced deployments can pin the combined image to its reviewed immutable digest using `MAKERVAULT_SLICER_WORKER_IMAGE` and configure explicit engine registry identity values if required for the release.
 
-The older `makervault-slicer:0.1.0` image is **not** the combined worker/installer and must not be used in v1.7.0. Publishing and verifying the new combined image is a release prerequisite.
+The older `makervault-slicer:0.1.0` image is **not** the combined worker/installer and must not be used in v1.7.0.
 
 Use `sudo docker compose config --quiet` to validate the complete configuration without revealing secret values. See the [Slicer guide](../3d-printing/slicer.md) for native engine installation and safe print checks.
 
