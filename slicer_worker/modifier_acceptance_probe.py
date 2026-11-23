@@ -14,6 +14,7 @@ import tempfile
 from unittest.mock import patch
 
 from .orca_runner import run_orca
+from .bambu_runner import run_bambu
 from .runner import WorkerError
 from .three_mf_validation import validate_worker_3mf as strict_worker_3mf
 
@@ -67,7 +68,9 @@ def regional_extrusion(gcode):
     return {"totals": totals, "moves": moves}
 
 
-def probe(fixtures, binary):
+def probe(fixtures, binary, *, engine="orcaslicer"):
+    if engine not in {"orcaslicer", "bambustudio"}:
+        raise WorkerError("Unsupported modifier acceptance engine.")
     fixtures = Path(fixtures)
     result = {}
     for label in ("baseline", "modified", "lower", "both"):
@@ -83,15 +86,28 @@ def probe(fixtures, binary):
             # still rejects nested modifier parts for production requests.
             # Never bypass the new explicit nested 3MF structural allowlist.
             def validate_fixture(data, **kwargs):
+                # Bambu's test-only fixture has no vendor printer/material
+                # project-settings sidecar; require the identical bounded
+                # nested geometry/metadata validator without assuming Bambu
+                # accepts the format. Real CLI acceptance remains mandatory.
+                if engine == "bambustudio":
+                    if kwargs.get("native_tool_count") is not None:
+                        raise WorkerError("Modifier trial requires one native filament.")
+                    kwargs.pop("allow_bambu_project", None)
+                    kwargs.pop("allow_bambu_combined_paint", None)
+                    kwargs.pop("allow_bambu_layer_ranges", None)
                 if label != "baseline":
                     return strict_worker_3mf(
                         data, allow_native_modifier_fixture=True, **kwargs)
                 return strict_worker_3mf(data, **kwargs)
-            with patch("slicer_worker.orca_runner.validate_worker_3mf",
-                       side_effect=validate_fixture):
-                receipt = run_orca(Path(binary), root, timeout_seconds=180)
+            module = ("slicer_worker.orca_runner.validate_worker_3mf"
+                      if engine == "orcaslicer" else
+                      "slicer_worker.bambu_runner.validate_worker_3mf")
+            runner = run_orca if engine == "orcaslicer" else run_bambu
+            with patch(module, side_effect=validate_fixture):
+                receipt = runner(Path(binary), root, timeout_seconds=180)
             if receipt.get("status") != "completed":
-                raise WorkerError("Actual Orca CLI did not complete " + label + " fixture.")
+                raise WorkerError("Actual " + engine + " CLI did not complete " + label + " fixture.")
             result[label] = regional_extrusion(root.joinpath("output.gcode").read_bytes())
     baseline = result["baseline"]
     modified = result["modified"]
@@ -125,7 +141,7 @@ def probe(fixtures, binary):
         actual = both["totals"][region]
         if abs(actual - expected) > expected * .12:
             raise WorkerError("Paired modifiers did not preserve isolated " + region + " effect.")
-    return {"status": "passed", "engine": "orcaslicer",
+    return {"status": "passed", "engine": engine,
             "change_ratio": round(altered / original, 3),
             "control_ratio": round(changed_control / baseline_control, 3),
             "lower_change_ratio": round(lower["totals"]["control"] / baseline_control, 3),
@@ -136,10 +152,11 @@ def probe(fixtures, binary):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--fixtures", type=Path, required=True)
+    parser.add_argument("--engine", choices=("orcaslicer", "bambustudio"), default="orcaslicer")
     parser.add_argument("--binary", type=Path, required=True)
     args = parser.parse_args()
     try:
-        print(json.dumps(probe(args.fixtures, args.binary), indent=2))
+        print(json.dumps(probe(args.fixtures, args.binary, engine=args.engine), indent=2))
     except (WorkerError, OSError, ValueError) as exc:
         parser.exit(1, "Native modifier real Orca diagnostic failed: " + str(exc) + "\n")
 
