@@ -19,14 +19,16 @@ class SetupEnvironmentTests(TestCase):
             encoding="utf-8",
         )
 
-    def test_generates_two_separate_secrets_and_preserves_them(self):
+    def test_generates_four_separate_secrets_and_preserves_them(self):
         self.assertEqual(set(setup_env(self.env, self.example)),
-                         {"DJANGO_SECRET_KEY", "POSTGRES_PASSWORD"})
+                         {"DJANGO_SECRET_KEY", "POSTGRES_PASSWORD", "MAKERVAULT_SLICER_WORKER_TOKEN", "MAKERVAULT_SLICER_INSTALLER_TOKEN"})
         first = self.env.read_text(encoding="utf-8")
         self.assertNotIn("CHANGE_ME", first)
         keys = dict(line.split("=", 1) for line in first.splitlines() if "=" in line)
         self.assertNotEqual(keys["DJANGO_SECRET_KEY"], keys["POSTGRES_PASSWORD"])
         self.assertGreaterEqual(len(keys["DJANGO_SECRET_KEY"]), 64)
+        self.assertNotEqual(keys["MAKERVAULT_SLICER_WORKER_TOKEN"], keys["MAKERVAULT_SLICER_INSTALLER_TOKEN"])
+        self.assertGreaterEqual(len(keys["MAKERVAULT_SLICER_WORKER_TOKEN"]), 64)
         self.assertEqual(keys["MAKERVAULT_PORT"], "8766")
         self.assertEqual(self.env.stat().st_mode & 0o777, 0o600)
         self.assertEqual(setup_env(self.env, self.example), [])
@@ -38,13 +40,13 @@ class SetupEnvironmentTests(TestCase):
             "POSTGRES_PASSWORD=CHANGE_ME_DATABASE_PASSWORD\n",
             encoding="utf-8",
         )
-        self.assertEqual(setup_env(self.env, self.example), ["POSTGRES_PASSWORD"])
+        self.assertEqual(set(setup_env(self.env, self.example)), {"POSTGRES_PASSWORD", "MAKERVAULT_SLICER_WORKER_TOKEN", "MAKERVAULT_SLICER_INSTALLER_TOKEN"})
         self.assertIn("DJANGO_SECRET_KEY=existing-secret-value\n",
                       self.env.read_text(encoding="utf-8"))
 
     def test_missing_secrets_are_appended(self):
         self.env.write_text("MAKERVAULT_PORT=8766\n", encoding="utf-8")
-        self.assertEqual(len(setup_env(self.env, self.example)), 2)
+        self.assertEqual(len(setup_env(self.env, self.example)), 4)
         self.assertIn("POSTGRES_PASSWORD=", self.env.read_text(encoding="utf-8"))
 
     def test_existing_custom_configuration_is_unchanged(self):
@@ -62,7 +64,7 @@ class SetupEnvironmentTests(TestCase):
         setup_env(self.env, self.example)
         updated = self.env.read_text(encoding="utf-8")
         original_lines = [line for line in original.splitlines() if not line.startswith(("DJANGO_SECRET_KEY=", "POSTGRES_PASSWORD="))]
-        updated_lines = [line for line in updated.splitlines() if not line.startswith(("DJANGO_SECRET_KEY=", "POSTGRES_PASSWORD="))]
+        updated_lines = [line for line in updated.splitlines() if not line.startswith(("DJANGO_SECRET_KEY=", "POSTGRES_PASSWORD=", "MAKERVAULT_SLICER_WORKER_TOKEN=", "MAKERVAULT_SLICER_INSTALLER_TOKEN="))]
         self.assertEqual(updated_lines, original_lines)
 
     def test_configured_secrets_are_not_rotated(self):
@@ -72,5 +74,5 @@ class SetupEnvironmentTests(TestCase):
             "CUSTOM_SETTING=keep-me\n"
         )
         self.env.write_text(original, encoding="utf-8")
-        self.assertEqual(setup_env(self.env, self.example), [])
-        self.assertEqual(self.env.read_text(encoding="utf-8"), original)
+        self.assertEqual(set(setup_env(self.env, self.example)), {"MAKERVAULT_SLICER_WORKER_TOKEN", "MAKERVAULT_SLICER_INSTALLER_TOKEN"})
+        self.assertIn("DJANGO_SECRET_KEY=keep-this-existing-secret", self.env.read_text(encoding="utf-8"))
