@@ -207,6 +207,18 @@ jobs:
               --fixtures "$root" \
               --binary /tmp/bambu-appimage-acceptance/squashfs-root/AppRun
           done
+      - name: Require native Bambu independent XYZ modifier transformation
+        shell: bash
+        run: |
+          set -euo pipefail
+          root=/tmp/bambu-modifier-world-pose
+          python3 scripts/build_native_modifier_fixture.py --output-dir "$root" --world-pose
+          for kind in printer process filament; do
+            cp "/tmp/bambu-verified-profiles/$kind.json" "$root/$kind.json"
+          done
+          timeout 240s python3 -m slicer_worker.modifier_acceptance_probe \
+            --engine bambustudio --fixtures "$root" \
+            --binary /tmp/bambu-appimage-acceptance/squashfs-root/AppRun
       - name: Record required Bambu modifier evidence without production approval
         if: always()
         run: |
