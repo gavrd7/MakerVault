@@ -138,17 +138,34 @@ def _modifier_parent_transform(item, raw, bed_width, bed_depth):
     return matrix, float(item.get("z_mm", 0)) - lowest_rotated
 
 
-def _add_child_mesh(resources, identifier, modifier, parent_bounds, matrix, bed_z):
+def _add_child_mesh(resources, identifier, modifier, parent_bounds, matrix, bed_z, bed_width, bed_depth):
     verts, faces = _primitive_geometry(modifier)
     centre = (modifier["x_mm"], modifier["y_mm"], modifier["z_mm"])
     positioned = []
-    for vertex in verts:
-        local = tuple(vertex[i] + centre[i] for i in range(3))
-        positioned.append(tuple(
-            sum(matrix[axis + 3 * i] * local[i] for i in range(3)) +
-            (matrix[9 + axis] if axis < 2 else bed_z)
-            for axis in range(3)
-        ))
+    if modifier.get("coordinate_space") == "world":
+        # An independent modifier is positioned in plate space and must not
+        # inherit the associated model's movement, rotation or scale.
+        own_pose = {
+            "x_mm": centre[0], "y_mm": centre[1], "z_mm": centre[2],
+            "rotation_deg": modifier["rotation_xyz_deg"][2],
+            "rotation_xyz_deg": modifier["rotation_xyz_deg"][:2],
+            "scale_xyz_percent": modifier["scale_xyz_percent"],
+        }
+        own_matrix = tuple(float(v) for v in _transform(
+            own_pose, bed_width / 2, bed_depth / 2).split())
+        for vertex in verts:
+            positioned.append(tuple(
+                sum(own_matrix[axis + 3 * i] * vertex[i] for i in range(3))
+                + own_matrix[9 + axis]
+                for axis in range(3)))
+    else:
+        # Existing draft fixtures remain in parent-local coordinates.
+        for vertex in verts:
+            local = tuple(vertex[i] + centre[i] for i in range(3))
+            positioned.append(tuple(
+                sum(matrix[axis + 3 * i] * local[i] for i in range(3)) +
+                (matrix[9 + axis] if axis < 2 else bed_z)
+                for axis in range(3)))
     if any(not math.isfinite(v) or abs(v) > 20000 for point in positioned for v in point):
         raise SlicerProfileError("Modifier geometry exceeds safe bounds.")
     # A modifier that does not overlap the parent cannot alter native toolpaths.
@@ -236,7 +253,7 @@ def export_modifier_3mf_fixture(objects_with_stl, *, bed_width, bed_depth):
             modifier_id = next_id
             next_id += 1
             _add_child_mesh(resources, modifier_id, modifier, parent_bounds,
-                            parent_transform, parent_bed_z)
+                            parent_transform, parent_bed_z, bed_width, bed_depth)
             ET.SubElement(components, f"{{{NS}}}component", {
                 "objectid": str(modifier_id), "transform": identity,
             })
