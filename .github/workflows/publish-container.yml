@@ -110,7 +110,9 @@ jobs:
           file: slicer_worker/Dockerfile.generic
           platforms: linux/amd64
           push: true
-          tags: ghcr.io/gavrd7/makervault-slicer:${{ steps.version.outputs.version }}
+          tags: |
+            ghcr.io/gavrd7/makervault-slicer:${{ steps.version.outputs.version }}
+            ${{ !contains(steps.version.outputs.version, '-') && 'ghcr.io/gavrd7/makervault-slicer:latest' || '' }}
           provenance: true
           sbom: true
           cache-from: type=gha,scope=combined-slicer
