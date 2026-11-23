@@ -4,7 +4,7 @@ on:
   pull_request:
     paths:
       - "slicer_worker/**"
-      - "compose.yaml"
+      - "docker-compose.yml"
       - "scripts/install_slicer_staging.py"
       - "scripts/orca_compatibility_patch.py"
       - "scripts/tests/test_install_slicer_staging.py"
@@ -19,7 +19,7 @@ on:
     branches: [main]
     paths:
       - "slicer_worker/**"
-      - "compose.yaml"
+      - "docker-compose.yml"
       - "scripts/install_slicer_staging.py"
       - "scripts/orca_compatibility_patch.py"
       - "scripts/tests/test_install_slicer_staging.py"
@@ -65,7 +65,7 @@ jobs:
           assert set(services) == {"makervault","postgres","redis","slicer-worker"}, services.keys()
           assert set(stack["networks"]) == {"makervault"}, stack["networks"]
           from pathlib import Path
-          compose=Path("compose.yaml").read_text()
+          compose=Path("docker-compose.yml").read_text()
           assert compose.index("  makervault:") < compose.index("  postgres:") < compose.index("  redis:") < compose.index("  slicer-worker:")
           assert services["slicer-worker"]["volumes"][0]["source"] == "makervault_slicer_engines"
           assert not any(p.get("target")==8555 for p in services["makervault"].get("ports",[]) if isinstance(p,dict))
