@@ -291,6 +291,12 @@ class Handler(BaseHTTPRequestHandler):
                 data = (workdir / "output.gcode").read_bytes()
                 if not data or len(data) > MAX_OUTPUT_BYTES:
                     raise WorkerError("Generated G-code exceeded the output size limit.")
+                if files.get("native_modifier_project"):
+                    # A successful native CLI exit is not proof that every
+                    # requested region was used in the generated toolpaths.
+                    from .modifier_gcode_audit import audit_modifier_positive_e
+                    audit_modifier_positive_e(
+                        data, files["model"], current["engine"])
                 if "filament_profiles" in files:
                     expected = (set(tool - 1 for tool in files["creality_tool_ids"])
                                 if "creality_tool_ids" in files
