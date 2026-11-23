@@ -37,7 +37,7 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 DOTENV = ROOT / ".slicer-staging.env"
 BUNDLE = ROOT / "slicer-engine-assets"
-OVERLAY = ROOT / "compose.slicer.staging.yaml"
+OVERLAY = ROOT / "compose.yaml"
 # Official upstream assets are pinned by version AND audited asset digest.
 # Staging can select an approved release independently of MakerVault app code.
 # New versions must first have an accepted digest and pass pinned-binary CI.
@@ -128,15 +128,13 @@ def _run(args, env=None, capture=False):
 
 
 def _compose_args():
-    files = ["compose.yaml", "compose.build.yaml"]
-    if (ROOT / "compose.staging.yaml").exists():
-        files.append("compose.staging.yaml")
-    files.append("compose.slicer.staging.yaml")
-    options = ["docker", "compose", "--env-file", ".env",
-               "--env-file", DOTENV.name]
-    for path in files:
-        options.extend(["-f", path])
-    return options
+    """Use the single supported Compose file with the optional slicer profile.
+
+    The private staging secrets file is retained for existing installations;
+    no extra Compose overlay is required or permitted.
+    """
+    return ["docker", "compose", "--env-file", ".env",
+            "--env-file", DOTENV.name, "--profile", "slicer"]
 
 
 def _read_env():
