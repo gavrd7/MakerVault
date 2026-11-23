@@ -115,7 +115,6 @@ def main():
                 "--pids-limit", "96", "--memory", "3g", "--cpus", "2",
                 "--tmpfs", "/tmp:rw,exec,nosuid,nodev,size=1g,mode=1777",
                 "--mount", f"type=bind,src={fixture_dir},dst=/fixtures,readonly",
-                "--env", "SLICER_WORKER_ENABLED=1",
                 "--env", "SLICER_WORKER_TOKEN=" + token,
                 "--env", "SLICER_ENGINES_JSON=" + ENGINE_REGISTRY,
                 "--env", "EXPECTED_ENGINE_SHA256=" + ENGINE_SHA256,
