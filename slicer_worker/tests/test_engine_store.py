@@ -108,6 +108,34 @@ class PersistentEngineRegistryTests(unittest.TestCase):
         apprun.symlink_to("/etc/passwd")
         self.assertNotIn("crealityprint", registry.configured_engines())
 
+
+    def test_unreadable_bambu_runtime_does_not_break_other_engines(self):
+        """A 0700 AppImage directory must not crash /health discovery."""
+        bambu = self.store / "versions" / "bambustudio" / registry.BAMBU_VERSION
+        runtime = bambu / "squashfs-root" / "AppRun"
+        runtime.parent.mkdir(parents=True)
+        runtime.write_bytes(b"test fixture")
+        runtime.chmod(0o755)
+        (self.store / "active.json").write_text(json.dumps({
+            "schema_version": 1, "engines": {
+                "orcaslicer": {"binary": str(self.binary),
+                              "version": "2.5.0", "binary_sha256": self.digest},
+                "bambustudio": {"binary": str(runtime),
+                                 "version": registry.BAMBU_VERSION,
+                                 "binary_sha256": registry.BAMBU_RUNTIME_SHA256},
+            },
+        }))
+        original = Path.is_file
+
+        def denied(path):
+            if path == runtime:
+                raise PermissionError(13, "Permission denied", str(path))
+            return original(path)
+
+        with patch.object(Path, "is_file", denied):
+            engines = registry.configured_engines()
+        self.assertEqual(set(engines), {"orcaslicer"})
+
     def test_manifest_symlink_rejected(self):
         self.save()
         other = self.store / "other.json"
