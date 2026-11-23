@@ -50,7 +50,7 @@ class CombinedSlicerTests(unittest.TestCase):
         # Other worker test fixtures may mutate a temporary checkout; verify
         # the committed deployment file, not an incidental working-tree state.
         result = subprocess.run(
-            ["git", "show", "HEAD:compose.yaml"], cwd=ROOT,
+            ["git", "show", "HEAD:docker-compose.yml"], cwd=ROOT,
             check=True, capture_output=True, text=True, timeout=10)
         compose = result.stdout
         self.assertIn("  slicer-worker:", compose)
