@@ -2849,6 +2849,7 @@ export default function SlicerPlateEditor({
       }
       scene.remove(measurementOverlay);
       for (const mesh of meshes.values()) {
+        syncModifierOverlays(mesh, {modifier_volumes: []}, sectionPlane);
         clearPaintRegionOverlay(mesh);
           clearSupportPaintPreview(mesh);
           clearSemanticPaintPreview(mesh,"seam");
