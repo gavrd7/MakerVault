@@ -1,0 +1,72 @@
+name: Native modifier real Orca diagnostic
+
+on:
+  pull_request:
+    paths:
+      - "backend/core/slicer_modifier_3mf.py"
+      - "backend/core/slicer_modifier_volumes.py"
+      - "backend/core/tests/test_slicer_modifier_3mf.py"
+      - "scripts/build_native_modifier_fixture.py"
+      - "slicer_worker/modifier_acceptance_probe.py"
+      - ".github/workflows/native-modifier-orca.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  real-orca-regional-effect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build offline baseline and 50% native modifier 3MF pair
+        run: |
+          python3 -m pip install --disable-pip-version-check --no-input "defusedxml>=0.7.1,<0.8"
+          python3 -m compileall -q scripts/build_native_modifier_fixture.py slicer_worker/modifier_acceptance_probe.py
+          python3 scripts/build_native_modifier_fixture.py --output-dir /tmp/native-modifier-fixtures
+      - name: Prepare reviewed, resolved Orca K1 native presets
+        run: |
+          python3 scripts/build_orca_reference_fixture.py --printer k1 --output /tmp/native-modifier-k1
+          cp /tmp/native-modifier-k1/printer.json /tmp/native-modifier-fixtures/printer.json
+          cp /tmp/native-modifier-k1/filament.json /tmp/native-modifier-fixtures/filament.json
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          source = Path("/tmp/native-modifier-k1/process.json")
+          output = Path("/tmp/native-modifier-fixtures/process.json")
+          profile = json.loads(source.read_text())
+          if profile.get("inherits"):
+              raise SystemExit("Fixture process profile has unresolved parent.")
+          profile["sparse_infill_density"] = "15%"
+          output.write_text(json.dumps(profile, separators=(",", ":")))
+          PY
+      - name: Prepare SHA-pinned isolated Orca worker image
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          printf 'POSTGRES_PASSWORD=ci-only-placeholder\n' > .env
+          python3 scripts/install_slicer_staging.py prepare-orca
+      - name: Probe actual native G-code region and unaffected control
+        id: regional
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -euo pipefail
+          IMAGE=$(sed -n 's/^MAKERVAULT_SLICER_WORKER_IMAGE=//p' .slicer-staging.env)
+          [[ "$IMAGE" =~ ^sha256:[0-9a-f]{64}$ ]]
+          docker run --rm --network none --read-only \
+            --user 10001:10001 --cap-drop ALL \
+            --security-opt no-new-privileges:true --pids-limit 96 \
+            --memory 3g --cpus 2 \
+            --tmpfs /tmp:rw,exec,nosuid,nodev,size=1g,mode=1777 \
+            --mount type=bind,src=/tmp/native-modifier-fixtures,dst=/fixtures,readonly \
+            --entrypoint python3 "$IMAGE" -m slicer_worker.modifier_acceptance_probe \
+            --fixtures /fixtures --binary /opt/engines/orcaslicer.AppImage
+      - name: Record evidence without enabling unsafe production slicing
+        if: always()
+        run: |
+          echo "### Native Orca parameter modifier real-binary diagnostic" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Actual slice regional-effect probe: ${{ steps.regional.outcome }}" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Production 3MF worker admission intentionally remains **disabled** until all three engines are verified." >> "$GITHUB_STEP_SUMMARY"
+          echo "- This diagnostic never starts a printer or modifies a running MakerVault instance." >> "$GITHUB_STEP_SUMMARY"
