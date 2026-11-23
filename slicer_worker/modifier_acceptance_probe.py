@@ -106,9 +106,27 @@ def probe(fixtures, binary, *, engine="orcaslicer", creality_native_project=Fals
                     expected = {"3D/3dmodel.model", "Metadata/model_settings.config",
                                 "_rels/.rels", "[Content_Types].xml",
                                 "Metadata/project_settings.config",
-                                "Metadata/creality.config"}
-                    if len(archive.infolist()) != 6 or set(archive.namelist()) != expected:
+                                "Metadata/creality.config",
+                                "3D/Objects/object_1.model",
+                                "3D/_rels/3dmodel.model.rels"}
+                    if len(archive.infolist()) != len(expected) or set(archive.namelist()) != expected:
                         raise WorkerError("Unexpected Creality native fixture members.")
+                    # A nested model must be linked through exactly the
+                    # official submodel part; no extra executable media.
+                    from defusedxml import ElementTree as SafeET
+                    main = SafeET.fromstring(archive.read("3D/3dmodel.model"))
+                    external = SafeET.fromstring(archive.read("3D/Objects/object_1.model"))
+                    ns = "{http://schemas.microsoft.com/3dmanufacturing/core/2015/02}"
+                    prod = "{http://schemas.microsoft.com/3dmanufacturing/production/2015/06}"
+                    root_obj = main.find(f"./{ns}resources/{ns}object")
+                    children = root_obj.find(ns + "components") if root_obj is not None else None
+                    meshes = external.findall(f"./{ns}resources/{ns}object")
+                    if (children is None or len(children) != len(meshes)
+                            or not 1 <= len(meshes) <= 13
+                            or any(node.get(prod + "path") != "/3D/Objects/object_1.model"
+                                   for node in children)
+                            or any(mesh.find(ns + "mesh") is None for mesh in meshes)):
+                        raise WorkerError("Unsafe Creality native external modifier mesh mapping.")
                 (root / "creality-native-project.marker").write_text("fixture-only")
                 (root / "input.3mf").write_bytes(data)
             else:
