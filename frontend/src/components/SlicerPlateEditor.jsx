@@ -628,6 +628,17 @@ export default function SlicerPlateEditor({
       setError("No available non-overlapping position for a duplicate on the plate.");
       return;
     }
+    // Duplicating the *model plus its modifier drafts* places copies at the
+    // same relative bed offsets initially. They remain independent after the
+    // duplication; changing either model's pose never implicitly moves them.
+    if (Array.isArray(placed.modifier_volumes)) {
+      const dx=Number(placed.x_mm||0)-Number(chosen.x_mm||0);
+      const dy=Number(placed.y_mm||0)-Number(chosen.y_mm||0);
+      placed.modifier_volumes=placed.modifier_volumes.map(modifier=>
+        modifier.coordinate_space==="world"
+          ? {...modifier,x_mm:pretty(modifier.x_mm+dx),y_mm:pretty(modifier.y_mm+dy)}
+          : modifier);
+    }
     onChange([...objects,placed]);
     setSelected(copy.instance_id);
     setError("");
