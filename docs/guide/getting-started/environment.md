@@ -78,7 +78,7 @@ This setting controls only the MakerVault application image. It does not change 
 
 ## Optional slicer environment settings (v1.7)
 
-If enabling the **combined** slicer profile, keep your existing base `.env` and add the required slicer settings there only after you have a verified worker image and engine registry. The default base Compose stack requires none of these settings.
+If enabling the combined slicer container, keep your existing base `.env` and add the required slicer settings there only after you have a verified worker image and engine registry. The default base Compose stack requires none of these settings.
 
 | Setting | Purpose |
 | --- | --- |
@@ -92,10 +92,10 @@ If enabling the **combined** slicer profile, keep your existing base `.env` and 
 
 Use the same secret-generation method described below, generating two **different** tokens. Do not commit real values, copied staging environment files, printer credentials, or an unreviewed worker image reference to the repository. Configure only the published/supported combinations; a missing release artifact is a blocker to the complete slicer install, not a reason to fabricate a digest.
 
-For a new deployment, The single Compose file is validated with the slicer profile:
+For a new deployment, The single Compose file is validated with the slicer container:
 
 ```bash
-sudo docker compose --profile slicer config --quiet
+sudo docker compose config --quiet
 ```
 
 The combined worker and installer are isolated processes within one `makervault-slicer` container defined by `compose.yaml`. Its one-shot volume-permissions service exits after configuration. The full installation therefore has **four long-running containers**, not separate always-on installer and worker services. See [installation](install.md#makervault-slicer-combined-four-container-deployment) and [slicer setup](../3d-printing/slicer.md).
