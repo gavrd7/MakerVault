@@ -127,7 +127,7 @@ The standard `docker compose up -d` starts four long-running containers: MakerVa
 
 Your private `.env` contains different, automatically generated worker and installer tokens. The slicer uses a verified GHCR image; individual OrcaSlicer, Creality Print and Bambu Studio engines are managed separately in MakerVault. The engine-store volume is initialised from the published image on first deployment.
 
-The **v1.7.0 combined slicer GHCR image must be published and validated before release**; the older `makervault-slicer:0.1.0` image does not contain the combined worker/installer. See [MakerVault Slicer](../3d-printing/slicer.md) for engine setup and compatibility checks.
+The v1.7.0 deployment uses the combined `ghcr.io/gavrd7/makervault-slicer:1.7.0` image. Do not substitute the earlier `0.1.0` image, which lacks the combined worker/installer. See [MakerVault Slicer](../3d-printing/slicer.md) for engine setup and compatibility checks.
 
 ## 5. Set up the first administrator
 
