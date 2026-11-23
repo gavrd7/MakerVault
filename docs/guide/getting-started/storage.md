@@ -35,7 +35,7 @@ Docker's [volumes guide](https://docs.docker.com/engine/storage/volumes/) and [b
 | `BACKUP_STORAGE` | Managed `.mvbackup` recovery bundles and validation metadata | `/app/backups` |
 | `SLICER_ENGINE_STORAGE` | Installed native slicer engines, version manifests and persistent engine registry | `/opt/engine-store` in `makervault-slicer` |
 
-Your source folder, containing `compose.yaml` and `.env`, is separate. Keeping a copy of the source folder alone does not back up these persistent data locations.
+Your source folder, containing `docker-compose.yml` and `.env`, is separate. Keeping a copy of the source folder alone does not back up these persistent data locations.
 
 ## Option A: keep the named-volume defaults
 
@@ -52,7 +52,7 @@ SLICER_ENGINE_STORAGE=makervault_slicer_engines
 
 You do not need to make directories named `makervault_media` beside your Compose file. Compose creates its declared named volumes when you start the stack. Their actual Docker names may include the project-name prefix.
 
-Keep the supplied names unless also editing the volume declarations in `compose.yaml`. Changing them to arbitrary new names in `.env` alone is not a supported shortcut to creating undeclared volumes.
+Keep the supplied names unless also editing the volume declarations in `docker-compose.yml`. Changing them to arbitrary new names in `.env` alone is not a supported shortcut to creating undeclared volumes.
 
 Use the [backup procedure](../administration/backup.md) without needing to know Docker's internal storage folder. Do not manually edit files under Docker's storage directory.
 
