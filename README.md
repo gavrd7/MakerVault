@@ -36,7 +36,7 @@ Maker projects rarely live in one place. Components end up in boxes and spreadsh
 
 MakerVault runs on your own computer or server using Docker. The standard installation includes MakerVault Slicer in its own container, alongside the application, PostgreSQL and Redis.
 
-**Quick start on Linux** (requires Docker Compose, Git and Python 3; the v1.7.0 GHCR images must be published):
+**Quick start on Linux** (requires Docker Compose, Git and Python 3):
 
 ```bash
 git clone https://github.com/gavrd7/MakerVault.git
