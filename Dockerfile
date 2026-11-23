@@ -12,6 +12,14 @@ FROM python:3.13-slim AS runtime
 ARG TARGETARCH
 ARG GO2RTC_VERSION=1.9.14
 
+# Populated by the v1.7 release workflow after the combined slicer image
+# has been published. These are public, immutable release identities, not secrets.
+# Developers can still opt into explicit overrides via their private .env.
+ARG MAKERVAULT_SLICER_WORKER_IMAGE=""
+ARG MAKERVAULT_SLICER_ENGINE_IMAGE_DIGEST=""
+ENV MAKERVAULT_SLICER_WORKER_IMAGE=${MAKERVAULT_SLICER_WORKER_IMAGE} \
+    MAKERVAULT_SLICER_ENGINE_IMAGE_DIGEST=${MAKERVAULT_SLICER_ENGINE_IMAGE_DIGEST}
+
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     PIP_DISABLE_PIP_VERSION_CHECK=1 \
