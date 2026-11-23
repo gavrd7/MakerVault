@@ -7,8 +7,13 @@ import argparse
 import json
 from pathlib import Path
 import re
+import sys
 from urllib.parse import quote
 from urllib.request import Request, urlopen
+
+ROOT = Path(__file__).resolve().parents[1]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
 
 BASE = "https://raw.githubusercontent.com/CrealityOfficial/CrealityPrint/v7.3.1/resources/profiles/Creality"
 FIXED = {
