@@ -8,7 +8,7 @@ For the basic host installation see [Install MakerVault](../getting-started/inst
 
 ## 1. Enable the slicer service
 
-The single `compose.yaml` starts MakerVault, PostgreSQL, Redis and the separate combined slicer container named `makervault-slicer` (Compose service `slicer-worker`) for **four long-running containers**.
+The single `docker-compose.yml` starts MakerVault, PostgreSQL, Redis and the separate combined slicer container named `makervault-slicer` (Compose service `slicer-worker`) for **four long-running containers**.
 
 The combined slicer container has two isolated processes with different credentials and filesystem permissions:
 
@@ -21,7 +21,7 @@ Before enabling the slicer container:
 
 1. Preserve your existing `.env`, database, media, encryption keys, backups and engine-store volumes. For a first installation, use [the environment guide](../getting-started/environment.md).
 2. Configure distinct worker and installer tokens, a **reviewed combined worker image pinned to its immutable digest**, and the native engine identity/checksum values. Only use actual release-approved values.
-3. Validate `compose.yaml`, including all required environment settings.
+3. Validate `docker-compose.yml`, including all required environment settings.
 4. Start the slicer container alongside the base services; check that the worker and installer endpoints are healthy before installing an engine.
 
 ```bash
@@ -34,7 +34,7 @@ sudo docker compose ps
 
 ### Choose where slicer engines are stored
 
-The single `compose.yaml` uses the `SLICER_ENGINE_STORAGE` variable. The default is the persistent Docker volume `makervault_slicer_engines`; an absolute host path such as `/srv/makervault/slicer-engines` is also supported. The slicer container always sees this storage at `/opt/engine-store`.
+The single `docker-compose.yml` uses the `SLICER_ENGINE_STORAGE` variable. The default is the persistent Docker volume `makervault_slicer_engines`; an absolute host path such as `/srv/makervault/slicer-engines` is also supported. The slicer container always sees this storage at `/opt/engine-store`.
 
 A custom host folder must be owned by installer UID/GID `10002:10002` and cannot be group/world-writable. A fresh named volume inherits the correct ownership from the slicer image. **Changing the setting does not migrate an existing engine installation.** Back up and copy installed engine data before switching storage, then verify the engine registry and permissions. See [the storage guide](../getting-started/storage.md#slicer-engine-store-permissions-important-for-custom-mounts).
 
