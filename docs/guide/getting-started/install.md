@@ -140,7 +140,7 @@ This builds the checked-out source using the repository Dockerfile and tags the 
 
 The source-build route changes only how the MakerVault application image is obtained. It uses the **same** PostgreSQL database, Redis data, media, encryption keys, backups, ports and `.env` settings as the GHCR route.
 
-### MakerVault Slicer — combined four-container deployment
+### MakerVault Slicer combined four-container deployment
 
 The base Compose stack starts **three** long-running containers (application, PostgreSQL and Redis), which remain usable for printer monitoring and G-code management without a slicer. The verified slicer deployment adds exactly **one** long-running combined worker/installer container, named `makervault-slicer`. Its one-off engine-store permissions helper exits after setup. See the [slicer installation and engine guide](../3d-printing/slicer.md) for approved engine sources, installation, native profile import and verification.
 
