@@ -82,7 +82,7 @@ The standard stack includes a separate `makervault-slicer` container. **You don'
 
 The first-time setup helper generates a strong worker token and a **different** installer token alongside the application and database secrets. They are kept in your private `.env` and must not be shared.
 
-By default, Compose pulls the published combined slicer image from `ghcr.io/gavrd7/makervault-slicer:1.7.0`. Administrators install and choose individual OrcaSlicer, Creality Print and Bambu Studio engines through MakerVault. Advanced deployments can pin the combined image to its reviewed immutable digest using `MAKERVAULT_SLICER_WORKER_IMAGE` and configure explicit engine registry identity values if required for the release.
+The v1.7.0 release workflow publishes the combined slicer image alongside the MakerVault application and embeds the reviewed slicer digest into the application image. By default, Compose pulls `ghcr.io/gavrd7/makervault-slicer:1.7.0`. Administrators install and choose individual OrcaSlicer, Creality Print and Bambu Studio engines through MakerVault. For the normal GHCR installation, no slicer image/digest environment variables are necessary. Advanced deployments can override image identities when using independently reviewed images; the approval check still requires matching immutable digests.
 
 The older `makervault-slicer:0.1.0` image is **not** the combined worker/installer and must not be used in v1.7.0.
 
