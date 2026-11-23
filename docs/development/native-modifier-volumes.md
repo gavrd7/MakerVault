@@ -51,3 +51,44 @@ export are implemented. **Actual native-engine parsing and regional G-code
 behaviour are not yet verified** for OrcaSlicer, Creality Print or Bambu Studio;
 the fixture exporter is not yet enabled for production slicing. This branch must remain **Draft**
 and issue #178 remains open until all acceptance gates above are met.
+
+
+## Current PR implementation and validation status (23 November 2026)
+
+The feature branch is reconciled with the released v1.7.1 main branch. It
+contains the model-owned draft editor and translucent preview, six bounded
+primitive meshes, and a native-style parent/component/part 3MF generator.
+Further fixes include independent modifier identities when duplicating a model,
+matching torus preview dimensions, preserving parent XYZ rotation, non-uniform
+scale and bottom-clearance transforms in the fixture, a 48-region plate-wide
+save/UI limit, and editable regional wall counts.
+
+The production queue **still refuses all modifier-bearing slice requests**.
+The standard worker 3MF validator also continues to reject nested modifier
+parts by default. An explicitly selected, bounded
+`allow_native_modifier_fixture` validation mode exists only for isolated
+acceptance fixtures and does not change the service or the normal admission
+path.
+
+`.github/workflows/native-modifier-orca.yml` builds matching 15%-baseline
+and 50%-regional modifier projects and exercises the pinned **real** Orca
+binary under UID 10001 with no network, printer or persistent state.
+`slicer_worker/modifier_acceptance_probe.py` compares central-region
+positive-E G-code with a lower, unaffected control region. Its first
+diagnostic run must be examined: a structural/CLI success alone is **not**
+proof of a regional modifier's effectiveness. Do not treat this workflow's
+`continue-on-error` diagnostic step as a required passing acceptance gate.
+
+**Still required before changing PR #196 from Draft to Ready:**
+- Actual Orca CLI acceptance and region-specific positive-E proof on the
+  pinned binary, including a reversed modifier and two-modifier case
+- Equivalent native project parsing and spatial G-code proof against pinned
+  Creality Print and Bambu Studio, not an assumption of BBS interoperability
+- Production worker admission for *only* proven engine+version configurations,
+  and demonstrated non-printing modifier parts and safe failure semantics
+- API save/reopen and duplication, rotated/scaled preview equivalence and
+  desktop/mobile UX review, plus full latest-head CI and staging acceptance
+
+Do not add feature flags that silently enable an unverified engine, export a
+modifier as an independently printed solid, or merge this PR solely on
+structural 3MF tests.
