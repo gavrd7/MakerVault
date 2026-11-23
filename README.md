@@ -19,14 +19,6 @@
   <img src="docs/guide/assets/makervault-cover.png" alt="MakerVault cover" width="100%">
 </p>
 
-## Installation and the integrated slicer
-
-The [Linux installation guide](docs/guide/getting-started/install.md) now documents the optional **combined MakerVault Slicer** deployment with **four long-running containers**: application, `makervault-slicer` (worker + engine installer), PostgreSQL and Redis. The standalone permissions-init helper exits after initialising the engine store. The base stack remains available for installations that do not enable slicing.
-
-The single deployment configuration is [`compose.yaml`](compose.yaml), using the `slicer` profile for the optional combined service and [`.env.example`](.env.example) for configuration. A verified, immutable combined worker image and exact native engine checksums are required before enabling slicer execution. The old staging overlays are not release installation files. No native engine is automatically installed or approved.
-
-See [environment settings](docs/guide/getting-started/environment.md), [slicer setup](docs/guide/3d-printing/slicer.md) and [upgrades](docs/guide/administration/updates.md). Preserve your existing `.env`, named volumes and engine store when upgrading.
-
 ## Why MakerVault?
 
 Maker projects rarely live in one place. Components end up in boxes and spreadsheets, model revisions in folders, filament in a separate tracker and build notes scattered across apps. **MakerVault connects your physical workshop with its digital records** so you can find what you own, see what a project needs, and keep track of what you made.
@@ -40,6 +32,30 @@ Maker projects rarely live in one place. Components end up in boxes and spreadsh
   <img src="https://raw.githubusercontent.com/gavrd7/MakerVault-docs/main/docs/guide/assets/screenshots/dashboard-overview.png" alt="MakerVault dashboard overview" width="92%">
 </p>
 
+## Install MakerVault
+
+MakerVault runs on your own computer or server using Docker. You can install the application first and add the optional slicer whenever you're ready.
+
+**Quick start on Linux** (requires Docker with Docker Compose, Git and Python 3):
+
+```bash
+git clone https://github.com/gavrd7/MakerVault.git
+cd MakerVault
+python3 scripts/generate_env_secrets.py
+```
+
+Edit the generated `.env` with your server address and review the settings, then start MakerVault:
+
+```bash
+sudo docker compose up -d
+```
+
+Open **`http://YOUR-SERVER-IP:8765`** in your browser and follow the initial setup wizard.
+
+**Want to slice models inside MakerVault?** MakerVault Slicer supports OrcaSlicer, Creality Print and Bambu Studio. It's optional and uses the same `compose.yaml` file. Follow the separate [MakerVault Slicer setup guide](docs/guide/3d-printing/slicer.md) to enable it and install a verified slicing engine.
+
+For detailed instructions, see the [Linux installation guide](docs/guide/getting-started/install.md), [Windows / Docker Desktop guide](docs/guide/getting-started/windows.md), [environment configuration](docs/guide/getting-started/environment.md) and [first sign-in guide](docs/guide/getting-started/first-sign-in.md). Already using MakerVault? Follow the [upgrade guide](docs/guide/administration/updates.md) and [backup guide](docs/guide/administration/backup.md) instead of starting from scratch.
+
 ## Features available now
 
 | Area | What MakerVault offers |
@@ -48,7 +64,8 @@ Maker projects rarely live in one place. Components end up in boxes and spreadsh
 | **Projects and bills of materials** | Project workspaces, notes, files, build information, BOMs, quantity-aware stock allocation and cost tracking |
 | **Wiring Lab** | Interactive wiring diagrams, catalogue-aware pin selection, basic electrical checks and JSON/SVG export |
 | **Files and 3D models** | Private files with version history; STL/3MF viewing and analysis; model revisions; printer-fit and orientation assistance; plain-text G-code library with bounded XY path preview, source inspection and save-as-new-version editing |
-| **MakerVault Slicer** | Independently installed OrcaSlicer, Creality Print and Bambu Studio engines; native profiles and build-plate preparation, supports, multicolour, painting, variable layers, G-code review, and per-engine version management |\n| **G-code transfer and printing** | Explicit upload-only, upload-and-start or start-existing-printer-file workflows from compatible live printer connections; per-adapter file browsing and print verification; Creality K2 CFS mapping where supported (hardware validation varies) |
+| **MakerVault Slicer** | Independently installed OrcaSlicer, Creality Print and Bambu Studio engines; native profiles and build-plate preparation, supports, multicolour, painting, variable layers, G-code review, and per-engine version management |
+| **G-code transfer and printing** | Explicit upload-only, upload-and-start or start-existing-printer-file workflows from compatible live printer connections; per-adapter file browsing and print verification; Creality K2 CFS mapping where supported (hardware validation varies) |
 | **3D printers and materials** | Printer inventory, filament products, physical spools, reusable spool hardware, printed parts, print history and material/cost reporting |
 | **Live integrations** | Optional local printer monitoring and compatible camera feeds, supported printer controls, Spoolman review and Creality CFS material-database read-only snapshots |
 | **MakerTags** | Printable QR labels, stable `MV-XXXXXXXX` identities, RFID/NFC UID association, reassignment history and verified NTAG215 URLs; **Clean NFC data**, **Remove MakerTag**, and optional clean-before-remove |
@@ -81,35 +98,6 @@ The matching terminal firmware in [MakerVault-Hardware PR #12](https://github.co
 
 For direct port-8443 deployments, the native Gunicorn HTTPS listener defaults to a **15-second keep-alive**, configurable with `HTTPS_KEEPALIVE_SECONDS`. This is long enough to span normal terminal idle polls; a separate reverse proxy must also allow reuse on its **device-facing HTTPS connection**. The maintainer's two-hour-plus physical terminal test showed stable idle heap, continuous successful polls and no memory-recovery reboots. Transport switching or keep-alive alone is not a substitute for TLS verification. See [HTTPS/reverse-proxy guidance](docs/guide/advanced/reverse-proxy.md) and [configuration reference](docs/guide/reference/configuration.md).
 
-## Get started
-
-MakerVault runs as a Docker Compose stack with the application, PostgreSQL and Redis. The normal installation pulls a prebuilt image from **GHCR**, so you do not need to compile the application yourself. Start with the complete [Linux installation guide](docs/guide/getting-started/install.md) or [Windows / Docker Desktop / WSL2 guide](docs/guide/getting-started/windows.md).
-
-For a new Linux installation:
-
-```bash
-git clone https://github.com/gavrd7/MakerVault.git
-cd MakerVault
-python3 scripts/generate_env_secrets.py
-# Review .env: allowed hosts, trusted origins, storage, timezone and currency
-sudo docker compose config --quiet
-sudo docker compose pull
-sudo docker compose up -d
-sudo docker compose ps
-```
-
-The base commands above start three long-running services. After configuring separate installer/worker tokens, a reviewed combined worker image and native engine checksums in your private `.env`, enable the fourth service with `sudo docker compose --profile slicer up -d`. Do not enable execution with placeholder credentials. The one-off engine-store initializer exits when done. See the [dedicated slicer guide](docs/guide/3d-printing/slicer.md).
-
-The supplied Compose configuration normally uses `ghcr.io/gavrd7/makervault:latest`. For first-time setup, open the server's configured address (default `http://SERVER-IP:8765`) and follow the administrator wizard. Retrieve the one-time setup token with:
-
-```bash
-sudo docker compose exec -u makervault makervault python manage.py first_run_token
-```
-
-Follow the [first sign-in guide](docs/guide/getting-started/first-sign-in.md) for the full process. **Configure and protect HTTPS** before connecting hardware, especially with a private CA. [Connected Devices guide](docs/guide/using/connected-devices.md)
-
-For existing installations, **back up first**, then update your checkout and Compose images as documented in the [upgrade guide](docs/guide/administration/updates.md) and [backup guide](docs/guide/administration/backup.md). A version rollback may require restoring data, not simply changing the image tag.
-
 ## Roadmap
 
 A concise view of what's delivered and where MakerVault may go next. Checkmarks refer to implemented functionality, **not** universal compatibility with every printer or hardware model. The [detailed roadmap](docs/ROADMAP.md), [issues](https://github.com/gavrd7/MakerVault/issues) and [changelog](CHANGELOG.md) provide scope, validation notes and release history.
@@ -117,7 +105,6 @@ A concise view of what's delivered and where MakerVault may go next. Checkmarks 
 ### Available
 
 - [x] Integrated MakerVault Slicer for OrcaSlicer, Creality Print and Bambu Studio, independently installed and explicitly verified through the combined slicer service.
-
 - [x] Self-hosted Docker deployment, first-run setup, account security and managed backup/restore
 - [x] Electronic component/board catalogues, physical inventory and storage locations
 - [x] Projects, BOMs, stock allocation, files and version history
