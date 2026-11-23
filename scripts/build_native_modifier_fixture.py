@@ -38,9 +38,13 @@ def build(output_dir, *, shape="box", world_pose=False):
         "settings": {"sparse_infill_density": 50},
     }
     if world_pose:
+        # Preserve a genuine unaffected lower control band despite 3D tilt.
+        # Larger tilted boxes crossed Z=8 and correctly failed the G-code
+        # control-region audit; this bounded case keeps the lower gap clear.
         modifier.update({
             "coordinate_space": "world",
-            "rotation_xyz_deg": [12, -8, 35],
+            "width_mm": 20, "depth_mm": 20, "height_mm": 8,
+            "rotation_xyz_deg": [6, -5, 35],
             "scale_xyz_percent": [110, 90, 105],
         })
     lower = {
