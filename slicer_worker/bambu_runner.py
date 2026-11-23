@@ -142,11 +142,15 @@ def bambu_command(binary: Path, workdir: Path) -> list[str]:
         # Validate extruder metadata against the *same* ordered native
         # palette used for the Bambu CLI. Validating without the palette
         # would accidentally reject legitimate per-object extruder keys.
+        native_modifiers = (workdir / "native-modifier-project.marker").exists()
+        if native_modifiers and palette:
+            raise WorkerError("Modifier jobs cannot include an unverified multi-tool palette.")
         validate_worker_3mf(model.read_bytes(),
             native_tool_count=len(palette) if palette else None,
-            allow_bambu_project=True,
+            allow_bambu_project=not native_modifiers,
             allow_bambu_combined_paint=bool(palette),
-            allow_bambu_layer_ranges=bool(palette))
+            allow_bambu_layer_ranges=bool(palette),
+            allow_native_modifier_fixture=native_modifiers)
         if palette:
             _native_project_matches_palette(model.read_bytes(), palette)
     _output_path(workdir)
