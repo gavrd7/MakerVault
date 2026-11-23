@@ -29,6 +29,7 @@ from .slicer_native_resolution import resolved_native_profile
 from .slicer_native_overrides import ORCA_PLATES
 from .slicer_plate_types import inspect_engine_plates
 from .slicer_process_settings import process_schema, validate_process_overrides, apply_process_overrides
+from .slicer_modifier_volumes import validate_modifier_volumes
 from .slicer_flush_settings import validate_flush_settings
 from .slicer_colour_painting import validate_colour_paint
 from .slicer_support_painting import validate_support_paint
@@ -375,7 +376,7 @@ def _draft_plate_settings(user, input_asset, settings):
         required = {"instance_id", "asset_id", "x_mm", "y_mm", "rotation_deg",
                     "scale_percent", "color"}
         if (not isinstance(item, dict) or not required.issubset(item)
-                or set(item) - required - {"scale_xyz_percent", "process_overrides", "rotation_xyz_deg", "assembly_id", "z_mm", "text_model", "material_slot", "colour_paint", "support_paint", "seam_paint", "fuzzy_skin_paint", "variable_layer_profile", "paint_asset_id"}):
+                or set(item) - required - {"scale_xyz_percent", "process_overrides", "rotation_xyz_deg", "assembly_id", "z_mm", "text_model", "material_slot", "colour_paint", "support_paint", "seam_paint", "fuzzy_skin_paint", "variable_layer_profile", "paint_asset_id", "modifier_volumes"}):
             raise ValueError("Invalid plate model instance.")
         instance_id = str(_uuid(item["instance_id"]))
         asset_id = _uuid(item["asset_id"])
@@ -438,6 +439,7 @@ def _draft_plate_settings(user, input_asset, settings):
                 "slot_index": slot_index,
             }}
         instance_overrides = validate_process_overrides(item.get("process_overrides"))
+        native_modifiers = validate_modifier_volumes(item.get("modifier_volumes"))
         assembly_id = item.get("assembly_id")
         if assembly_id is not None and (not isinstance(assembly_id, str) or
                 not re.fullmatch(r"assembly:[a-zA-Z0-9-]{8,64}", assembly_id)):
@@ -486,7 +488,8 @@ def _draft_plate_settings(user, input_asset, settings):
         saved.append({"instance_id": instance_id, "asset_id": str(asset_id),
                       **({"assembly_id": assembly_id} if assembly_id is not None else {}),
                       **values, "color": color.lower(), **text_fields, **material_fields, **paint_fields,
-                      **({"process_overrides": instance_overrides} if instance_overrides else {})})
+                      **({"process_overrides": instance_overrides} if instance_overrides else {}),
+                      **({"modifier_volumes": native_modifiers} if native_modifiers else {})})
     if saved[0]["asset_id"] != str(input_asset.pk):
         raise ValueError("The first plate model must match the selected primary STL.")
     return {"plate_objects": saved, "plate_label": label, "save_gcode_to_library": save_to_library,
