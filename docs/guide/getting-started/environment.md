@@ -98,7 +98,7 @@ For a new deployment, Compose overlays are loaded together:
 sudo docker compose -f compose.yaml -f compose.slicer.yaml config --quiet
 ```
 
-The combined worker and installer are isolated processes within one `makervault-slicer` container. Its one-shot volume-permissions service exits after configuration. The full installation therefore has **four long-running containers**, not separate always-on installer and worker services. See [installation](install.md#makervault-slicer--combined-four-container-deployment) and [slicer setup](../3d-printing/slicer.md).
+The combined worker and installer are isolated processes within one `makervault-slicer` container. Its one-shot volume-permissions service exits after configuration. The full installation therefore has **four long-running containers**, not separate always-on installer and worker services. See [installation](install.md#makervault-slicer-combined-four-container-deployment) and [slicer setup](../3d-printing/slicer.md).
 
 ## Generate the secrets
 
