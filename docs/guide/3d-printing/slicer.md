@@ -8,7 +8,7 @@ For the basic host installation see [Install MakerVault](../getting-started/inst
 
 ## 1. Enable the slicer service
 
-The base deployment runs the MakerVault app, PostgreSQL and Redis. The `slicer` profile in the same `compose.yaml` adds a single container named `makervault-slicer` (Compose service `slicer-worker`) for **four long-running containers**.
+The single `compose.yaml` starts MakerVault, PostgreSQL, Redis and the separate combined slicer container named `makervault-slicer` (Compose service `slicer-worker`) for **four long-running containers**.
 
 The combined slicer container has two isolated processes with different credentials and filesystem permissions:
 
@@ -17,17 +17,17 @@ The combined slicer container has two isolated processes with different credenti
 
 A separate permissions-initialisation helper runs and exits. It is not a fifth permanent container. The application does not require a Docker socket or direct access to printer credentials in the slicer worker.
 
-Before enabling the slicer profile:
+Before enabling the slicer container:
 
 1. Preserve your existing `.env`, database, media, encryption keys, backups and engine-store volumes. For a first installation, use [the environment guide](../getting-started/environment.md).
 2. Configure distinct worker and installer tokens, a **reviewed combined worker image pinned to its immutable digest**, and the native engine identity/checksum values. Only use actual release-approved values.
 3. Validate `compose.yaml`, including all required environment settings.
-4. Start the slicer profile alongside the base services; check that the worker and installer endpoints are healthy before installing an engine.
+4. Start the slicer container alongside the base services; check that the worker and installer endpoints are healthy before installing an engine.
 
 ```bash
-sudo docker compose --profile slicer config --quiet
-sudo docker compose --profile slicer up -d
-sudo docker compose --profile slicer ps
+sudo docker compose config --quiet
+sudo docker compose up -d
+sudo docker compose ps
 ```
 
 **Important:** The slicer profile requires a *real published/reviewed* combined worker image and verified engine identities; it cannot be deployed securely with placeholder tokens or example checksums. The old standalone staging and production Compose overlays have been retired; existing staging operators must review their private settings and volumes before switching to this one-file deployment. If these assets are not published for the target release, completing slicer setup is blocked rather than safe to guess.
@@ -95,7 +95,7 @@ See [printer controls](../integrations/printer-controls.md) and [printer compati
 
 Use the administrator's engine manager for individual engine lifecycle actions. Normal MakerVault application updates are **not** permission to replace every native slicer binary.
 
-For application updates, retain the `--profile slicer` option and the persistent engine volume. Read [Update MakerVault](../administration/updates.md). Never use `docker compose down -v`: it can remove database, media, encryption key and installed engine storage.
+For application updates, retain the persistent engine volume. Read [Update MakerVault](../administration/updates.md). Never use `docker compose down -v`: it can remove database, media, encryption key and installed engine storage.
 
 ## Troubleshooting
 
