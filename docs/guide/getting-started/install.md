@@ -123,6 +123,8 @@ Press **Ctrl+C** to stop following logs; this does not stop MakerVault.
 
 ### MakerVault Slicer in its own container
 
+**Platform requirement:** v1.7.0 publishes the slicer container for **Linux AMD64 (x86-64)** only. This includes x86-64 Docker Desktop hosts using Linux containers; native Windows/macOS slicer images are not shipped. The main application image supports AMD64 and ARM64, but the default four-container Compose stack is **not natively supported on ARM64** because the slicer image is AMD64-only. ARM64 users should not expect the slicer to start natively, and emulation is not validated. See [Slicer platform compatibility](../3d-printing/slicer.md#platform-compatibility-v170) before deploying on Raspberry Pi, Apple Silicon or other ARM64 systems.
+
 The standard `docker compose up -d` starts four long-running containers: MakerVault, **`makervault-slicer`**, PostgreSQL and Redis. There are **no profiles, extra Compose files or local builds**. The application and slicer are downloaded from GHCR. Only MakerVault's web/camera ports are published; the slicer, database and Redis are accessible only on the Docker network.
 
 Your private `.env` contains different, automatically generated worker and installer tokens. The slicer uses a verified GHCR image; individual OrcaSlicer, Creality Print and Bambu Studio engines are managed separately in MakerVault. The engine-store volume is initialised from the published image on first deployment.
