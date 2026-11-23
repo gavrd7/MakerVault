@@ -49,7 +49,9 @@ class CombinedSlicerTests(unittest.TestCase):
     def test_compose_has_only_one_slicer_runtime_service(self):
         compose = (ROOT / "compose.yaml").read_text()
         self.assertIn("  slicer-worker:", compose)
-        self.assertIn("    profiles: [slicer]", compose)
+        self.assertNotIn("    profiles: [slicer]", compose)
+        self.assertIn("  makervault:", compose)
+        self.assertIn("    name: makervault", compose)
         self.assertIn("    container_name: makervault-slicer", compose)
         self.assertNotIn("\n  slicer-engine-installer:", compose)
         self.assertIn("http://slicer-worker:8091", compose)
