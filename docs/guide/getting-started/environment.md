@@ -6,13 +6,13 @@ Work through this chapter at **step 3 of installation**, after downloading Maker
 
 ## What is .env?
 
-`.env` is a plain-text settings file in the same folder as `compose.yaml`. Docker Compose reads it to configure your installation. MakerVault's Compose file also passes settings from it to the application container.
+`.env` is a plain-text settings file in the same folder as `docker-compose.yml`. Docker Compose reads it to configure your installation. MakerVault's Compose file also passes settings from it to the application container.
 
 | File | Purpose | Should you edit it? |
 | --- | --- | --- |
 | `.env.example` | The project's example settings, updated with the source code | Normally no; use it as a reference |
 | `.env` | Your installation's real settings and secrets | Yes; this is your working configuration |
-| `compose.yaml` | Describes the services, ports and storage connections | Normally leave it alone for this setup |
+| `docker-compose.yml` | Describes the services, ports and storage connections | Normally leave it alone for this setup |
 
 The leading dot makes `.env` a hidden file on many systems. Its exact name matters: `.env.txt` is a different file. It is not a Python script and you do not need to run or `source` it.
 
