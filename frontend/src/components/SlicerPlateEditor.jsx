@@ -451,6 +451,15 @@ export default function SlicerPlateEditor({
   // The controls show the first model by default; only an explicitly selected
   // mesh should receive a visual highlight.
   const chosen = objects.find(item => item.instance_id === selected) || objects[0] || null;
+  const chosenModifier = chosen?.modifier_volumes?.find(row =>
+    row.id === selectedModifierId && row.coordinate_space === "world") || null;
+  const patchChosenModifier = patch => {
+    if (!chosen || !chosenModifier || !canEdit) return;
+    onChange(objects.map(item => item.instance_id !== chosen.instance_id ? item : {
+      ...item, modifier_volumes: (item.modifier_volumes || []).map(modifier =>
+        modifier.id === chosenModifier.id ? {...modifier, ...patch} : modifier),
+    }));
+  };
   const selectedMeasurement = chosen ? plateModelMeasurement(chosen, dimensions[chosen.instance_id]) : null;
   const pinDistance = measurePoints.length === 2 && measureMode === "distance"
     ? measurementDistance(measurePoints[0].point, measurePoints[1].point) : null;
@@ -3591,7 +3600,44 @@ export default function SlicerPlateEditor({
         <button type="button" disabled={!canEdit || ![groupDeltaX, groupDeltaY, groupRotation, groupScale].every(Number.isFinite)}
           onClick={() => transformGroup(groupDeltaX, groupDeltaY, groupRotation, groupScale)}>Apply group transform</button>
       </aside>}
-      {selection.length <= 1 && ["move", "rotate", "scale"].includes(toolMode) && chosen && <aside
+      {chosenModifier && ["move","rotate","scale"].includes(toolMode) && <aside
+        className="slicerViewportMeasurement slicerViewportTransform slicerViewportToolDock"
+        aria-label="Independent modifier transform controls">
+        <div className="slicerViewportMeasurementHeader">
+          <strong>Modifier · {toolMode === "move" ? "Move" : toolMode === "rotate" ? "Rotate" : "Scale"}</strong>
+          <button type="button" onClick={()=>onSelectedModifierChange?.(null)}>Select model</button>
+        </div>
+        <div className="slicerViewportMeasurementModel">
+          {chosenModifier.shape[0].toUpperCase()+chosenModifier.shape.slice(1)} parameter modifier
+        </div>
+        <div className="slicerViewportTransformGrid">
+          {["X","Y","Z"].map((axis,index)=><label key={axis}>{axis} {toolMode === "move"?"(mm)":toolMode === "rotate"?"(°)":"(%)"}
+            <input type="number" step={toolMode === "scale"?5:0.5}
+              min={toolMode === "scale"?5:toolMode === "rotate"?-360:-10000}
+              max={toolMode === "scale"?400:toolMode === "rotate"?360:10000}
+              disabled={!canEdit}
+              value={toolMode === "move" ? chosenModifier[["x_mm","y_mm","z_mm"][index]] :
+                toolMode === "rotate" ? chosenModifier.rotation_xyz_deg[index] :
+                chosenModifier.scale_xyz_percent[index]}
+              onChange={event=>{
+                const value=Number(event.target.value);
+                const low=toolMode==="scale"?5:toolMode==="rotate"?-360:-10000;
+                const high=toolMode==="scale"?400:toolMode==="rotate"?360:10000;
+                if (!Number.isFinite(value)||value<low||value>high) return;
+                if (toolMode==="move")
+                  patchChosenModifier({[["x_mm","y_mm","z_mm"][index]]:value});
+                else {
+                  const key=toolMode==="rotate"?"rotation_xyz_deg":"scale_xyz_percent";
+                  const next=[...chosenModifier[key]];
+                  next[index]=value;
+                  patchChosenModifier({[key]:next});
+                }
+              }}/>
+          </label>)}
+        </div>
+        <small>These controls and the on-plate gizmo move only the modifier, not its associated printable model.</small>
+      </aside>}
+      {selection.length <= 1 && ["move", "rotate", "scale"].includes(toolMode) && chosen && !chosenModifier && <aside
         className="slicerViewportMeasurement slicerViewportTransform slicerViewportToolDock"
         aria-label={toolMode === "move" ? "On-plate position controls" : toolMode === "rotate" ? "On-plate rotation controls" : "On-plate scale controls"}>
         <div className="slicerViewportMeasurementHeader">
