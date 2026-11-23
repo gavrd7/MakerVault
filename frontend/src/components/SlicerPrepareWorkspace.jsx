@@ -206,6 +206,37 @@ export default function SlicerPrepareWorkspace({
     return () => { live = false; };
   }, [engine, selectedProfiles?.process_id]);
   const selectedObject = objects.find(row => row.instance_id === selectedId) || null;
+  // Native modifier region drafts are child metadata, not printable plate objects.
+  // A separate real-binary acceptance gate controls when execution may use them.
+  const selectedModifiers = selectedObject?.modifier_volumes || [];
+  const changeModifier = (id, patch) => {
+    if (!selectedObject) return;
+    updatePlate(latest.current.map(item => item.instance_id !== selectedObject.instance_id ? item : {
+      ...item, modifier_volumes: (item.modifier_volumes || []).map(row =>
+        row.id === id ? {...row, ...patch} : row),
+    }));
+  };
+  const addModifier = () => {
+    const parent = selectedObject || objects[0];
+    if (!parent || (parent.modifier_volumes || []).length >= 12) return;
+    const fresh = {
+      id: crypto.randomUUID(), shape: "box",
+      width_mm: 20, depth_mm: 20, height_mm: 20,
+      x_mm: 0, y_mm: 0, z_mm: 10,
+      settings: {sparse_infill_density: 50},
+    };
+    updatePlate(latest.current.map(item => item.instance_id !== parent.instance_id ? item : {
+      ...item, modifier_volumes: [...(item.modifier_volumes || []), fresh],
+    }));
+    setSelectedId(parent.instance_id);
+    setScope("objects");
+  };
+  const removeModifier = id => {
+    if (!selectedObject) return;
+    updatePlate(latest.current.map(item => item.instance_id !== selectedObject.instance_id ? item : {
+      ...item, modifier_volumes: (item.modifier_volumes || []).filter(row => row.id !== id),
+    }));
+  };
   const objectOverrides = selectedObject?.process_overrides || {};
   const editingObject = scope === "objects";
   const editingOverrides = editingObject ? objectOverrides : processOverrides;
@@ -1105,6 +1136,44 @@ export default function SlicerPrepareWorkspace({
           <small>Object overrides inherit Global values unless changed.
             Wall loops and sparse infill density have passed native Orca 2.4.2 slicing tests.
             Other Object settings can be saved in drafts but remain unavailable for slicing until verified.</small>
+
+          <div className="slicerModifierDrafts" aria-label="Native primitive modifiers">
+            <div style={{display:"flex",gap:8,justifyContent:"space-between",alignItems:"center"}}>
+              <strong>Parameter modifiers</strong>
+              <button type="button" disabled={!canEdit||busy||!selectedObject||selectedModifiers.length>=12}
+                onClick={addModifier}>Add modifier</button>
+            </div>
+            <small>Modifier shapes belong to this model, not the printable object list. Native regional slicing remains blocked until Orca, Creality and Bambu binary verification.</small>
+            {selectedModifiers.map((modifier,index) => <fieldset key={modifier.id} style={{display:"grid",gap:6,border:"1px solid #53647a",borderRadius:6,padding:8}}>
+              <legend>Modifier {index+1}</legend>
+              <label>Primitive shape
+                <select aria-label={"Modifier "+(index+1)+" shape"} value={modifier.shape}
+                  disabled={!canEdit||busy} onChange={e=>changeModifier(modifier.id,{shape:e.target.value})}>
+                  {["box","cylinder","sphere","cone","disc","torus"].map(shape=>
+                    <option key={shape} value={shape}>{shape[0].toUpperCase()+shape.slice(1)}</option>)}
+                </select>
+              </label>
+              {[
+                ["width_mm","Width X",0.5,500],["depth_mm","Depth Y",0.5,500],
+                ["height_mm","Height Z",0.5,500],["x_mm","Offset X",-10000,10000],
+                ["y_mm","Offset Y",-10000,10000],["z_mm","Offset Z",-10000,10000]
+              ].map(([key,label,min,max])=><label key={key}>{label} (mm)
+                <input type="number" min={min} max={max} step="0.5"
+                  value={modifier[key]} disabled={!canEdit||busy}
+                  onChange={e=>{const value=Number(e.target.value);if(Number.isFinite(value)&&value>=min&&value<=max)
+                    changeModifier(modifier.id,{[key]:value});}} />
+              </label>)}
+              <label>Regional infill (%)
+                <input type="number" min="0" max="100" step="1" disabled={!canEdit||busy}
+                  value={modifier.settings?.sparse_infill_density ?? 50}
+                  onChange={e=>{const value=Number(e.target.value);if(Number.isFinite(value)&&value>=0&&value<=100)
+                    changeModifier(modifier.id,{settings:{...modifier.settings,sparse_infill_density:value}});}} />
+              </label>
+              <button type="button" disabled={!canEdit||busy} onClick={()=>removeModifier(modifier.id)}>
+                Remove modifier
+              </button>
+            </fieldset>)}
+          </div>
         </div>}
         <section aria-label={group + " native process controls"} className="slicerNativeSettingsFields">
             {nativeProcessLoading && <p role="status">Reading native process settings…</p>}
@@ -1518,6 +1587,10 @@ export default function SlicerPrepareWorkspace({
             setAddModelMenuOpen(false);setMobilePane("plate");
             setSolidRequest({kind:"svg",id:Date.now(),anchorRect:toolbarAnchor(event)});
           }}><SlicerUiIcon name="shape-svg" /> Add SVG</button>
+          <button type="button" className="slicerAddModelChoice" disabled={!objects.length||!canEdit}
+            onClick={()=>{setAddModelMenuOpen(false);addModifier();}}>
+            <SlicerUiIcon name="models" /> Add parameter modifier
+          </button>
           <button type="button" className="slicerAddModelChoice" disabled={!objects.length} onClick={event => {
             setAddModelMenuOpen(false);setMobilePane("plate");
             setSolidRequest({kind:"negative",id:Date.now(),anchorRect:toolbarAnchor(event)});
