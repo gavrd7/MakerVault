@@ -2,7 +2,7 @@
 
 **Goal:** move to the current deployable release while keeping a recoverable copy of your data.
 
-MakerVault updates use published GHCR images and the single repository `compose.yaml`.
+MakerVault updates use published GHCR images and the single repository `docker-compose.yml`.
 
 1. Read the release notes/CHANGELOG for changes since your installed version.
 2. If upgrading from before v0.7, read [the migration chapter](../advanced/legacy-upgrade.md) first.
@@ -36,7 +36,7 @@ MAKERVAULT_IMAGE=ghcr.io/gavrd7/makervault:1.7.0
 
 ## Updating the four-container stack
 
-The published images are downloaded from GHCR using **one `compose.yaml`**. MakerVault, its slicer, PostgreSQL and Redis are managed together; there are no profiles, extra Compose files or locally built production images.
+The published images are downloaded from GHCR using **one `docker-compose.yml`**. MakerVault, its slicer, PostgreSQL and Redis are managed together; there are no profiles, extra Compose files or locally built production images.
 
 ```bash
 sudo docker compose config --quiet
