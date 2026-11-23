@@ -75,10 +75,35 @@ jobs:
             --mount type=bind,src=/tmp/native-modifier-fixtures,dst=/fixtures,readonly \
             --entrypoint python3 "$IMAGE" -m slicer_worker.modifier_acceptance_probe \
             --fixtures /fixtures --binary /opt/engines/orcaslicer.AppImage
+      - name: Probe five additional native primitive modifier shapes
+        id: shape_matrix
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -euo pipefail
+          IMAGE=$(sed -n 's/^MAKERVAULT_SLICER_WORKER_IMAGE=//p' .slicer-staging.env)
+          [[ "$IMAGE" =~ ^sha256:[0-9a-f]{64}$ ]]
+          for shape in cylinder sphere cone disc torus; do
+            echo "Testing native Orca modifier shape: $shape"
+            output="/tmp/native-modifier-$shape"
+            python3 scripts/build_native_modifier_fixture.py --output-dir "$output" --shape "$shape"
+            for kind in printer process filament; do
+              cp "/tmp/native-modifier-fixtures/$kind.json" "$output/$kind.json"
+            done
+            timeout 180s docker run --rm --network none --read-only \
+              --user 10001:10001 --cap-drop ALL \
+              --security-opt no-new-privileges:true --pids-limit 96 \
+              --memory 3g --cpus 2 \
+              --tmpfs /tmp:rw,exec,nosuid,nodev,size=1g,mode=1777 \
+              --mount "type=bind,src=$output,dst=/fixtures,readonly" \
+              --entrypoint python3 "$IMAGE" -m slicer_worker.modifier_acceptance_probe \
+              --fixtures /fixtures --binary /opt/engines/orcaslicer.AppImage
+          done
       - name: Record evidence without enabling unsafe production slicing
         if: always()
         run: |
           echo "### Native Orca parameter modifier real-binary diagnostic" >> "$GITHUB_STEP_SUMMARY"
           echo "- Actual slice regional-effect probe: ${{ steps.regional.outcome }}" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Additional five-shape real-binary diagnostic: ${{ steps.shape_matrix.outcome }}" >> "$GITHUB_STEP_SUMMARY"
           echo "- Production 3MF worker admission intentionally remains **disabled** until all three engines are verified." >> "$GITHUB_STEP_SUMMARY"
           echo "- This diagnostic never starts a printer or modifies a running MakerVault instance." >> "$GITHUB_STEP_SUMMARY"
