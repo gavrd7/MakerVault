@@ -74,35 +74,23 @@ You normally do not need to add anything to `.env`. If you want to stay on a spe
 MAKERVAULT_IMAGE=ghcr.io/gavrd7/makervault:1.7.0
 ```
 
-This setting controls only the MakerVault application image. It does not change your database or storage. For a source build, set `MAKERVAULT_IMAGE=makervault-local:dev` and run `sudo docker compose build makervault`; the same Compose file is used for both routes.
+This setting controls only the MakerVault application image. It does not change your database or storage. MakerVault uses the published GHCR application image; no local build is part of the standard installation.
 
-## Optional slicer environment settings (v1.7)
+## MakerVault Slicer settings
 
-If enabling the combined slicer container, keep your existing base `.env` and add the required slicer settings there only after you have a verified worker image and engine registry. The default base Compose stack requires none of these settings.
+The standard stack includes a separate `makervault-slicer` container. **You don't need to configure Docker networks, bind slicer ports, choose a Compose profile or compile an image.**
 
-| Setting | Purpose |
-| --- | --- |
-| `MAKERVAULT_SLICER_WORKER_TOKEN` | Unique shared secret between MakerVault and the isolated worker |
-| `MAKERVAULT_SLICER_INSTALLER_TOKEN` | **Different** unique secret for explicit native engine installation |
-| `MAKERVAULT_SLICER_WORKER_IMAGE` | Reviewed combined image reference pinned to its immutable digest |
-| `MAKERVAULT_SLICER_ENGINE_IMAGE_DIGEST` | Exact image identity required by the application-side checks |
-| `MAKERVAULT_SLICER_ENGINES_JSON` | Approved native-engine identities consumed by the MakerVault application |
-| `SLICER_ENGINES_JSON` | Corresponding verified binary paths and SHA-256 hashes used by the worker |
-| `MAKERVAULT_SLICER_EXECUTION_ENABLED` | Keep at `0` until the worker and requested native engines pass verification |
+The first-time setup helper generates a strong worker token and a **different** installer token alongside the application and database secrets. They are kept in your private `.env` and must not be shared.
 
-Use the same secret-generation method described below, generating two **different** tokens. Do not commit real values, copied staging environment files, printer credentials, or an unreviewed worker image reference to the repository. Configure only the published/supported combinations; a missing release artifact is a blocker to the complete slicer install, not a reason to fabricate a digest.
+By default, Compose pulls the published combined slicer image from `ghcr.io/gavrd7/makervault-slicer:1.7.0`. Administrators install and choose individual OrcaSlicer, Creality Print and Bambu Studio engines through MakerVault. Advanced deployments can pin the combined image to its reviewed immutable digest using `MAKERVAULT_SLICER_WORKER_IMAGE` and configure explicit engine registry identity values if required for the release.
 
-For a new deployment, The single Compose file is validated with the slicer container:
+The older `makervault-slicer:0.1.0` image is **not** the combined worker/installer and must not be used in v1.7.0. Publishing and verifying the new combined image is a release prerequisite.
 
-```bash
-sudo docker compose config --quiet
-```
-
-The combined worker and installer are isolated processes within one `makervault-slicer` container defined by `compose.yaml`. Its one-shot volume-permissions service exits after configuration. The full installation therefore has **four long-running containers**, not separate always-on installer and worker services. See [installation](install.md#makervault-slicer-combined-four-container-deployment) and [slicer setup](../3d-printing/slicer.md).
+Use `sudo docker compose config --quiet` to validate the complete configuration without revealing secret values. See the [Slicer guide](../3d-printing/slicer.md) for native engine installation and safe print checks.
 
 ## Generate the secrets
 
-There are three different secrets to understand. They are not interchangeable.
+The setup helper creates application, database and separate slicer credentials. They are not interchangeable.
 
 | Secret | What it does | How it is created |
 | --- | --- | --- |
@@ -212,7 +200,7 @@ sudo docker compose config --quiet
 
 No output and a successful exit means Compose could parse the configuration. It does **not** prove the database credentials, network address or storage choices are correct.
 
-For the first launch, return to [installation step 4](install.md#4-pull-and-start-makervault-recommended) and build the app. For an existing installation after an ordinary settings edit:
+For the first launch, return to [installation](install.md) and start the published images. For an existing installation after an ordinary settings edit:
 
 ```bash
 sudo docker compose up -d
