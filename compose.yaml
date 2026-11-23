@@ -56,7 +56,7 @@ services:
   slicer-worker:
     # DNS name is slicer-worker; the single running container has a friendly name.
     container_name: makervault-slicer
-    image: ${MAKERVAULT_SLICER_WORKER_IMAGE:?Set the reviewed combined slicer GHCR image in .env}
+    image: ${MAKERVAULT_SLICER_WORKER_IMAGE:-ghcr.io/gavrd7/makervault-slicer:1.7.0}
     command: ["python3", "-m", "slicer_worker.combined_service"]
     restart: unless-stopped
     depends_on:
