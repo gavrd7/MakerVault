@@ -19,7 +19,9 @@ from core.slicer_plate_3mf import build_plate_3mf, NS
 from scripts.build_slicer_multimodel_fixture import cube_fixture_stl
 
 
-def build(output_dir):
+def build(output_dir, *, shape="box"):
+    if shape not in {"box", "cylinder", "sphere", "cone", "disc", "torus"}:
+        raise ValueError("Unsupported primitive test shape.")
     target = Path(output_dir)
     if target.is_symlink() or (target.exists() and any(target.iterdir())):
         raise ValueError("Modifier fixture target must be an empty directory.")
@@ -31,7 +33,7 @@ def build(output_dir):
     }
     modifier = {
         "id": str(uuid.uuid5(uuid.NAMESPACE_DNS, "makervault-modifier-acceptance")),
-        "shape": "box", "width_mm": 26, "depth_mm": 26,
+        "shape": shape, "width_mm": 26, "depth_mm": 26,
         "height_mm": 12, "x_mm": 0, "y_mm": 0, "z_mm": 15,
         "settings": {"sparse_infill_density": 50},
     }
@@ -70,8 +72,9 @@ def build(output_dir):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--output-dir", type=Path, required=True)
+    parser.add_argument("--shape", choices=("box", "cylinder", "sphere", "cone", "disc", "torus"), default="box")
     args = parser.parse_args()
-    print("Generated offline baseline, reversed and paired modifier fixtures:", build(args.output_dir))
+    print("Generated offline baseline, reversed and paired modifier fixtures:", build(args.output_dir, shape=args.shape))
 
 
 if __name__ == "__main__":
