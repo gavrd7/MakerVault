@@ -123,6 +123,15 @@ def _split_native_mesh_components(project, label):
     if len(objects) != 1 or objects[0].get("id") != "1":
         raise ValueError("Creality metadata must target exactly one built object.")
     objects[0].set("id", "2")
+    # Creality's actual simple-box native 3MF explicitly assigns its built
+    # object to nozzle/filament 1. Omitting this mapping can pass 3MF import
+    # but reach Flow::resolve_flow_nozzle_index with filament_id=0, producing
+    # "Filament nozzle mapping is incomplete" even for the plain baseline.
+    extruder = objects[0].find("./metadata[@key='extruder']")
+    if extruder is None:
+        ET.SubElement(objects[0], "metadata", {"key": "extruder", "value": "1"})
+    elif extruder.get("value") != "1":
+        raise ValueError("Unsafe native Creality object filament assignment.")
     parts = objects[0].findall("part")
     if len(parts) != len(source_objects):
         raise ValueError("Native part-to-geometry mapping is incomplete.")
