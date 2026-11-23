@@ -34,7 +34,10 @@ def prepare(fixtures):
             filament=filament, version="7.3.1", bed_width=220,
             bed_depth=220, label=uuid.uuid5(uuid.NAMESPACE_URL, label),
         ))
-        validate_creality_modifier_project(dest.read_bytes())
+        # The unmodified control has no modifier parts and must NOT be
+        # admitted by the modifier-only worker validator.
+        if label != "baseline":
+            validate_creality_modifier_project(dest.read_bytes())
         output.append(dest.name)
     return output
 
