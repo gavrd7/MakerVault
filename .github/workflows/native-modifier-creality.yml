@@ -5,6 +5,7 @@ on:
     paths:
       - "scripts/build_creality_modifier_profiles.py"
       - "scripts/build_creality_modifier_projects.py"
+      - "scripts/diagnose_creality_modifier_import.py"
       - "scripts/build_native_modifier_fixture.py"
       - "slicer_worker/modifier_acceptance_probe.py"
       - "slicer_worker/modifier_3mf_validation.py"
@@ -111,6 +112,20 @@ jobs:
             --engine crealityprint --creality-native-project \
             --fixtures /tmp/creality-native-modifiers \
             --binary "$(cat /tmp/creality-modifier-binary)"
+      - name: Compare genuine CLI import of baseline and modifier 3MF variants
+        id: import_matrix
+        if: steps.native_packaging.outcome == 'success'
+        continue-on-error: true
+        shell: bash
+        env:
+          QT_QPA_PLATFORM: offscreen
+          LIBGL_ALWAYS_SOFTWARE: "1"
+          HOME: /tmp
+        run: |
+          set -euo pipefail
+          timeout 1300s python3 scripts/diagnose_creality_modifier_import.py \
+            --fixtures /tmp/creality-native-modifiers \
+            --binary "$(cat /tmp/creality-modifier-binary)"
       - name: Diagnose native Creality 3MF rejection without retaining profiles
         if: steps.native_packaging.outcome == 'success' && steps.native_project.outcome == 'failure'
         shell: bash
@@ -136,6 +151,7 @@ jobs:
           echo "### Native Creality Print 7.3.1 parameter modifier probe" >> "$GITHUB_STEP_SUMMARY"
           echo "- Real CLI slice and regional G-code proof: ${{ steps.native_modifier.outcome }}" >> "$GITHUB_STEP_SUMMARY"
           echo "- Self-contained Creality project packager: ${{ steps.native_packaging.outcome }}" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Baseline vs modifier 3MF CLI import matrix: ${{ steps.import_matrix.outcome }}" >> "$GITHUB_STEP_SUMMARY"
           echo "- Native project-loader regional G-code proof: ${{ steps.native_project.outcome }}" >> "$GITHUB_STEP_SUMMARY"
           echo "- Diagnostic-only: Creality native self-contained projects may require project-specific settings; no automatic production enabling." >> "$GITHUB_STEP_SUMMARY"
           echo "- Official AppImage SHA-256 is verified. No printer connection or application data changes." >> "$GITHUB_STEP_SUMMARY"
