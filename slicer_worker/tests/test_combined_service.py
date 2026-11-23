@@ -47,7 +47,12 @@ class CombinedSlicerTests(unittest.TestCase):
         self.assertNotEqual(combined.WORKER_UID, combined.INSTALLER_UID)
 
     def test_compose_has_only_one_slicer_runtime_service(self):
-        compose = (ROOT / "compose.yaml").read_text()
+        # Other worker test fixtures may mutate a temporary checkout; verify
+        # the committed deployment file, not an incidental working-tree state.
+        result = subprocess.run(
+            ["git", "show", "HEAD:compose.yaml"], cwd=ROOT,
+            check=True, capture_output=True, text=True, timeout=10)
+        compose = result.stdout
         self.assertIn("  slicer-worker:", compose)
         self.assertNotIn("    profiles: [slicer]", compose)
         self.assertIn("  makervault:", compose)
