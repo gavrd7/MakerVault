@@ -123,7 +123,7 @@ jobs:
         run: |
           set -euo pipefail
           timeout 900s python3 -m slicer_worker.modifier_acceptance_probe \
-            --engine crealityprint --creality-native-project \
+            --engine crealityprint --creality-native-project --production-validator \
             --fixtures /tmp/creality-native-modifiers \
             --binary "$(cat /tmp/creality-modifier-binary)"
       - name: Verify all five additional Creality modifier primitives with real G-code
@@ -144,7 +144,7 @@ jobs:
             done
             python3 scripts/build_creality_modifier_projects.py --fixtures "$target"
             timeout 240s python3 -m slicer_worker.modifier_acceptance_probe \
-              --engine crealityprint --creality-native-project \
+              --engine crealityprint --creality-native-project --production-validator \
               --fixtures "$target" \
               --binary "$(cat /tmp/creality-modifier-binary)"
           done
@@ -163,7 +163,7 @@ jobs:
           done
           python3 scripts/build_creality_modifier_projects.py --fixtures "$root"
           timeout 240s python3 -m slicer_worker.modifier_acceptance_probe \
-            --engine crealityprint --creality-native-project \
+            --engine crealityprint --creality-native-project --production-validator \
             --fixtures "$root" --binary "$(cat /tmp/creality-modifier-binary)"
       - name: Compare genuine CLI import of baseline and modifier 3MF variants
         id: import_matrix
