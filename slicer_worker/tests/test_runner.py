@@ -76,12 +76,12 @@ class WorkerContractTests(TestCase):
 
     def test_actual_nul_in_native_profile_is_rejected(self):
         # A literal backslash-x-zero-zero sequence is not a binary NUL.
-        (self.root / "printer.ini").write_bytes(b"layer_height = 0.2\\n\\x00")
+        (self.root / "printer.ini").write_bytes(b"layer_height = 0.2\n\x00")
         with self.assertRaisesRegex(WorkerError, "binary"):
             prusa_command(self.executable, self.root)
 
     def test_plain_escaped_text_is_not_a_binary_nul(self):
-        (self.root / "printer.ini").write_bytes(b"; a literal \\\\x00 sequence\\nlayer_height = 0.2\\n")
+        (self.root / "printer.ini").write_bytes(b"; a literal \\x00 sequence\nlayer_height = 0.2\n")
         self.assertIn("--export-gcode", prusa_command(self.executable, self.root))
 
     def test_invalid_timeout_and_oversize_models_fail_without_execution(self):
