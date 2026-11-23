@@ -49,7 +49,7 @@ jobs:
         run: python3 -m unittest scripts.tests.test_orca_compatibility_patch -v
       - name: Verify real-engine acceptance probe isolation and fail-closed contracts offline
         run: python3 -m unittest discover -s scripts/tests -p "test_probe_slicer_staging.py" -v
-      - name: Validate four running services and one private Compose network
+      - name: Validate exactly four services on one private Compose network
         env:
           POSTGRES_PASSWORD: ci-only-placeholder
           MAKERVAULT_SLICER_WORKER_TOKEN: "0123456789012345678901234567890123456789"
@@ -62,7 +62,7 @@ jobs:
           import json,sys
           stack=json.load(sys.stdin)
           services=stack["services"]
-          assert set(services) == {"makervault","postgres","redis","slicer-worker","slicer-engine-store-init"}, services.keys()
+          assert set(services) == {"makervault","postgres","redis","slicer-worker"}, services.keys()
           assert set(stack["networks"]) == {"makervault"}, stack["networks"]
           for name in ("makervault","postgres","redis","slicer-worker"):
               assert len(services[name]["networks"]) == 1
@@ -71,11 +71,11 @@ jobs:
           for name in ("makervault","slicer-worker"):
               assert "build" not in services[name]
           assert not any("profiles" in value for value in services.values())
-          assert set(services["slicer-engine-store-init"]["cap_add"]) == {"CHOWN","FOWNER","DAC_READ_SEARCH"}
           assert set(services["slicer-worker"]["cap_add"]) == {"SETUID","SETGID","KILL"}
           assert services["slicer-worker"]["container_name"] == "makervault-slicer"
           assert services["slicer-worker"]["environment"]["SLICER_INSTALLER_TOKEN"] != services["slicer-worker"]["environment"]["SLICER_WORKER_TOKEN"]
           assert not any(k in services["slicer-worker"] for k in ("cpus","mem_limit"))
+          assert "slicer-engine-store-init" not in services
           '
 
 
