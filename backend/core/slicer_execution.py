@@ -284,7 +284,7 @@ def _validate_plate_execution(job):
     objects=settings.get("plate_objects")
     try:
         native_modifier_request = validate_native_modifier_execution(
-            objects, engine=job.engine, version=job.engine_version,
+            objects, engine=job.engine, version=getattr(job, "engine_version", None),
             settings=settings)
     except ValueError as exc:
         raise SlicerExecutionError(str(exc)) from exc
