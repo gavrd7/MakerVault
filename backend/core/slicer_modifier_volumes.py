@@ -37,7 +37,7 @@ def validate_modifier_volumes(raw):
         if uid in seen:
             raise ValueError("Duplicate modifier identity on one model.")
         seen.add(uid)
-        if entry["shape"] not in PRIMITIVE_SHAPES:
+        if not isinstance(entry["shape"], str) or entry["shape"] not in PRIMITIVE_SHAPES:
             raise ValueError("Unsupported primitive modifier shape.")
         values = {}
         for key in _NUMERIC:
