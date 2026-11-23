@@ -671,6 +671,8 @@ def process_queued_job(job_id):
         material_result = None
         is_multi_test = (job.settings or {}).get("multi_material_test") is True
         plate = (job.settings or {}).get("plate_objects")
+        has_native_modifiers = bool(plate and any(
+            item.get("modifier_volumes") for item in plate if isinstance(item, dict)))
         if plate:
             # Every source remains owner-scoped and verified at execution time;
             # arbitrary file paths and external 3MF projects are never accepted.
@@ -685,7 +687,19 @@ def process_queued_job(job_id):
                 if asset.sha256 and hashlib.sha256(raw).hexdigest() != asset.sha256:
                     raise SlicerExecutionError("A plate STL has changed since import.")
                 source_models.append((item, raw))
-            if is_multi_test:
+            if has_native_modifiers:
+                if is_multi_test:
+                    raise SlicerExecutionError(
+                        "Native modifier and multi-material combinations require separate real-binary acceptance.")
+                stage = "assembling non-printing native modifier components"
+                from .slicer_modifier_3mf import export_modifier_3mf_fixture
+                width, depth = trusted_plate_dimensions(job.printer_profile)
+                # Every parent source is already owner-scoped and SHA-checked
+                # above. Do not load an arbitrary 3MF from the browser.
+                model = export_modifier_3mf_fixture(
+                    source_models, bed_width=width, bed_depth=depth)
+                model_format = "3mf"
+            elif is_multi_test:
                 stage = "preparing the native multi-filament test plate"
                 if job.engine == "crealityprint":
                     width, depth = trusted_plate_dimensions(job.printer_profile)
@@ -913,6 +927,18 @@ def process_queued_job(job_id):
             profiles[1] = apply_creality_plate(
                 profiles[2], material_result["filament_profiles"][0],
                 job.plate, job.printer_profile)[1]
+        if has_native_modifiers and job.engine == "crealityprint":
+            # Preserve the proven native 7.3.1 external-component project
+            # structure without ever treating modifier meshes as printables.
+            stage = "wrapping bounded modifier geometry in a Creality project"
+            from .slicer_creality_modifier_project import (
+                build_creality_modifier_native_project,
+            )
+            width, depth = trusted_plate_dimensions(job.printer_profile)
+            model = build_creality_modifier_native_project(
+                model, printer=profiles[0], filament=profiles[1],
+                process=profiles[2], version=job.engine_version,
+                bed_width=width, bed_depth=depth, label=job.pk)
         selected_creality_multicolor = False
         if material_result is not None and job.engine == "crealityprint":
             stage = "building self-contained Creality native 3MF project"
@@ -967,6 +993,7 @@ def process_queued_job(job_id):
                                if material_result is not None else None),
             creality_native_project=(material_result is not None and
                                      job.engine == "crealityprint"),
+            native_modifier_project=has_native_modifiers,
         )
         if material_result is not None:
             stage = "auditing multi-material tool selections and extrusion"
