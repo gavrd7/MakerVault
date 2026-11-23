@@ -1151,7 +1151,7 @@ export default function SlicerPrepareWorkspace({
             <div style={{display:"flex",gap:8,justifyContent:"space-between",alignItems:"center"}}>
               <strong>Parameter modifiers</strong>
               <button type="button" disabled={!canEdit||busy||!selectedObject||selectedModifiers.length>=12||totalModifierCount>=48}
-                onClick={addModifier}>Add modifier</button>
+                onClick={()=>addModifier()}>Add modifier</button>
             </div>
             <small>Modifier shapes belong to this model, not the printable object list. {totalModifierCount}/48 regions on this plate. Native regional slicing remains blocked until Orca, Creality and Bambu binary verification.</small>
             {selectedModifiers.map((modifier,index) => <fieldset key={modifier.id} style={{display:"grid",gap:6,border:"1px solid #53647a",borderRadius:6,padding:8}}>
