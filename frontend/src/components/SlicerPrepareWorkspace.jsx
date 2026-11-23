@@ -220,7 +220,12 @@ export default function SlicerPrepareWorkspace({
     const parent = selectedObject || objects[0];
     if (!parent || (parent.modifier_volumes || []).length >= 12) return;
     const fresh = {
-      id: crypto.randomUUID(), shape: "box",
+      id: (typeof crypto !== "undefined" && crypto.randomUUID
+        ? crypto.randomUUID()
+        : "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, ch => {
+            const n = Math.floor(Math.random() * 16);
+            return (ch === "x" ? n : (n & 3) | 8).toString(16);
+          })), shape: "box",
       width_mm: 20, depth_mm: 20, height_mm: 20,
       x_mm: 0, y_mm: 0, z_mm: 10,
       settings: {sparse_infill_density: 50},
