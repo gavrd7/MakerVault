@@ -56,7 +56,6 @@ jobs:
             --sha256 b30b0ae933e653692cf85a493287a949215ae4c14d547a00203d16dfcadb8054
           docker run --rm --network none --user 10001:10001 \
             -v "$volume:/opt/engine-store:ro" \
-            -e SLICER_WORKER_ENABLED=1 \
             -e SLICER_WORKER_TOKEN=0123456789012345678901234567890123456789 \
             --entrypoint python3 makervault-slicer-generic:acceptance \
             -c 'from slicer_worker.engine_registry import configured_engines; e=configured_engines(); assert e["orcaslicer"]["version"]=="2.5.0"; print("PASS: persistent volume registry")'
