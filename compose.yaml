@@ -3,51 +3,16 @@ name: makervault
 services:
   makervault:
     image: ${MAKERVAULT_IMAGE:-ghcr.io/gavrd7/makervault:latest}
-    # Keep one Compose file for published GHCR installs and intentional source builds.
-    # Local source build: MAKERVAULT_IMAGE=makervault-local:dev docker compose build makervault
-    build:
-      context: .
-      dockerfile: Dockerfile
     container_name: makervault
     restart: unless-stopped
     env_file:
       - .env
     environment:
-      TZ: ${TZ:-Europe/London}
-      DJANGO_TIME_ZONE: ${DJANGO_TIME_ZONE:-Europe/London}
-      DJANGO_LANGUAGE_CODE: ${DJANGO_LANGUAGE_CODE:-en-gb}
-      PUID: ${PUID:-1000}
-      PGID: ${PGID:-1000}
-      UMASK: ${UMASK:-0022}
-      FIX_PERMISSIONS: ${FIX_PERMISSIONS:-true}
-      DATABASE_HOST: ${DATABASE_HOST:-postgres}
-      DATABASE_PORT: ${DATABASE_PORT:-5432}
-      REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
-      CELERY_CONCURRENCY: ${CELERY_CONCURRENCY:-2}
-      WEB_CONCURRENCY: ${WEB_CONCURRENCY:-2}
-      GUNICORN_TIMEOUT: ${GUNICORN_TIMEOUT:-120}
+      # The user's .env provides application settings; only the internal
+      # slicer endpoints and container-local backup path are fixed here.
       MAKERVAULT_BACKUP_ROOT: /app/backups
-      # Base Compose remains usable without slicer engine execution.
-      # For the verified combined slicer deployment, add compose.slicer.yaml.
-      # Never enable legacy standalone worker/installer services here.
-      MAKERVAULT_SLICER_PREVIEW_ENABLED: ${MAKERVAULT_SLICER_PREVIEW_ENABLED:-0}
-      MAKERVAULT_SLICER_HOST_UPDATER_ENABLED: "0"
-      MAKERVAULT_SLICER_INSTALLER_URL: http://slicer-worker:8091
-      MAKERVAULT_SLICER_INSTALLER_TOKEN: ${MAKERVAULT_SLICER_INSTALLER_TOKEN:-disabled}
       MAKERVAULT_SLICER_WORKER_URL: http://slicer-worker:8088
-      MAKERVAULT_SLICER_WORKER_TOKEN: ${MAKERVAULT_SLICER_WORKER_TOKEN:-disabled}
-      MAKERVAULT_SLICER_EXECUTION_ENABLED: ${MAKERVAULT_SLICER_EXECUTION_ENABLED:-0}
-      MAKERVAULT_SLICER_WORKER_IMAGE: ${MAKERVAULT_SLICER_WORKER_IMAGE:-unconfigured}
-      MAKERVAULT_SLICER_ENGINE_IMAGE_DIGEST: ${MAKERVAULT_SLICER_ENGINE_IMAGE_DIGEST:-unconfigured}
-      MAKERVAULT_SLICER_ENGINES_JSON: "${MAKERVAULT_SLICER_ENGINES_JSON:-{}}"
-      MAKERVAULT_HTTPS_ENABLED: ${MAKERVAULT_HTTPS_ENABLED:-auto}
-      MAKERVAULT_HTTPS_SELF_SIGNED: ${MAKERVAULT_HTTPS_SELF_SIGNED:-false}
-      MAKERVAULT_HTTPS_SELF_SIGNED_NAMES: ${MAKERVAULT_HTTPS_SELF_SIGNED_NAMES:-}
-      MAKERVAULT_TLS_CERT_FILE: ${MAKERVAULT_TLS_CERT_FILE:-/app/keys/tls/cert.pem}
-      MAKERVAULT_TLS_KEY_FILE: ${MAKERVAULT_TLS_KEY_FILE:-/app/keys/tls/key.pem}
-      HTTPS_WEB_CONCURRENCY: ${HTTPS_WEB_CONCURRENCY:-2}
-      HTTPS_WEB_THREADS: ${HTTPS_WEB_THREADS:-4}
-      HTTPS_KEEPALIVE_SECONDS: ${HTTPS_KEEPALIVE_SECONDS:-15}
+      MAKERVAULT_SLICER_INSTALLER_URL: http://slicer-worker:8091
     ports:
       - "${MAKERVAULT_BIND_ADDRESS:-0.0.0.0}:${MAKERVAULT_PORT:-8765}:8000"
       - "${MAKERVAULT_HTTPS_BIND_ADDRESS:-0.0.0.0}:${MAKERVAULT_HTTPS_PORT:-8443}:8443"
@@ -64,8 +29,7 @@ services:
       redis:
         condition: service_healthy
     networks:
-      - makervault_backend
-      - makervault_slicer
+      - makervault
     healthcheck:
       test: ["CMD", "python", "/app/backend/manage.py", "healthcheck"]
       interval: 30s
@@ -73,13 +37,12 @@ services:
       retries: 3
       start_period: 45s
 
-  # Opt-in slicer: docker compose --profile slicer up -d
-  # Three base daemons + one combined slicer daemon = four long-running containers.
+  # Slicer runs as its own container alongside the application and data services.
+  # Four long-running containers. The permissions helper runs once and exits.
   # The engine-store initializer is one-shot and exits. Set distinct credentials,
   # immutable image identity and verified engine hashes in .env BEFORE enabling
-  # execution. Disabled defaults must never be used as production credentials.
+  # execution. Use real credentials; never ship default tokens.
   slicer-engine-store-init:
-    profiles: [slicer]
     # One-off permissions preparation, not a long-running container.
     image: busybox:1.37.0
     command: ["sh", "-ec", "chown -R 10002:10002 /engine-store; find /engine-store -type d -exec chmod 0755 {} +; find /engine-store -type f -exec chmod go-w,a+rX {} +"]
@@ -93,13 +56,9 @@ services:
       - makervault_slicer_engines:/engine-store:rw
 
   slicer-worker:
-    profiles: [slicer]
     # DNS name is slicer-worker; the single running container has a friendly name.
     container_name: makervault-slicer
-    image: ${MAKERVAULT_SLICER_WORKER_IMAGE:-makervault-slicer-combined:local}
-    build:
-      context: .
-      dockerfile: slicer_worker/Dockerfile.generic
+    image: ${MAKERVAULT_SLICER_WORKER_IMAGE:-ghcr.io/gavrd7/makervault-slicer:0.1.0}
     command: ["python3", "-m", "slicer_worker.combined_service"]
     restart: unless-stopped
     depends_on:
@@ -112,28 +71,25 @@ services:
     cap_drop: [ALL]
     cap_add: [SETUID, SETGID, KILL]
     security_opt: ["no-new-privileges:true"]
-    pids_limit: 144
-    mem_limit: 4g
-    cpus: 3
     tmpfs:
       - /tmp:rw,nosuid,size=1g,mode=1777
     volumes:
       - makervault_slicer_engines:/opt/engine-store:rw
     environment:
       SLICER_WORKER_ENABLED: "1"
-      SLICER_WORKER_TOKEN: "${MAKERVAULT_SLICER_WORKER_TOKEN:-disabled}"
-      SLICER_INSTALLER_TOKEN: "${MAKERVAULT_SLICER_INSTALLER_TOKEN:-disabled}"
-      SLICER_ENGINES_JSON: "${SLICER_ENGINES_JSON:-{}}"
+      SLICER_WORKER_TOKEN: ${MAKERVAULT_SLICER_WORKER_TOKEN:?Set a unique worker token in .env}
+      SLICER_INSTALLER_TOKEN: ${MAKERVAULT_SLICER_INSTALLER_TOKEN:?Set a different installer token in .env}
+      SLICER_ENGINES_JSON: '${SLICER_ENGINES_JSON:-{}}'
     networks:
-      - makervault_slicer
-      - makervault_installer_egress
+      - makervault
+      - makervault
     healthcheck:
       test: ["CMD", "python3", "-c", "import urllib.request,socket,json,sys; d=json.load(urllib.request.urlopen('http://127.0.0.1:8088/health',timeout=2)); s=socket.create_connection(('127.0.0.1',8091),timeout=2); s.close(); sys.exit(0 if d.get('ready') else 1)"]
       interval: 30s
       timeout: 5s
       retries: 3
       start_period: 120s
-    # No published worker/installer ports, Docker socket, printer, database or media mounts.
+    # No published worker/installer ports or Docker socket mount.
 
   postgres:
     image: postgres:18.6
@@ -148,7 +104,7 @@ services:
       # PostgreSQL 18+ expects the persistent mount at /var/lib/postgresql.
       - ${POSTGRES_STORAGE:-makervault_postgres}:/var/lib/postgresql
     networks:
-      - makervault_backend
+      - makervault
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-makervault} -d ${POSTGRES_DB:-makervault}"]
       interval: 10s
@@ -165,7 +121,7 @@ services:
     volumes:
       - ${REDIS_STORAGE:-makervault_redis}:/data
     networks:
-      - makervault_backend
+      - makervault
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 10s
@@ -173,11 +129,8 @@ services:
       retries: 10
 
 networks:
-  makervault_backend:
-    driver: bridge
-  makervault_slicer:
-    internal: true
-  makervault_installer_egress:
+  makervault:
+    name: makervault
     driver: bridge
 
 # These named volumes are used by default. If a *_STORAGE variable is an absolute
