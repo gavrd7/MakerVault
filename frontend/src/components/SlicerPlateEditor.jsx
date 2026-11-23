@@ -2890,6 +2890,62 @@ export default function SlicerPlateEditor({
   }, [bedX, bedY, plate?.polygon_mm, plate?.bounds_mm, plateType, printerLabel,
     showNativeArtwork, showOrientationLabels, showMachineLabel, showDimensionsLabel, showAxisLabels, plate?.bed_model_url, plate?.artwork_url]);
 
+  // Read-only translucent modifier ghosts. They are children of the selected
+  // model's mesh and inherit all its transforms, but never participate in STL
+  // export, collision detection, raycasting or the printable-object list.
+  function syncModifierOverlays(parent, item, plane) {
+    const previous = parent.userData.modifierGhosts || [];
+    for (const ghost of previous) {
+      parent.remove(ghost);
+      ghost.geometry.dispose();
+      ghost.material.dispose();
+    }
+    const ghosts = [];
+    for (const modifier of (item.modifier_volumes || []).slice(0, 12)) {
+      const w = Number(modifier.width_mm), d = Number(modifier.depth_mm),
+        h = Number(modifier.height_mm);
+      if (![w,d,h].every(v => Number.isFinite(v) && v >= .5 && v <= 500)) continue;
+      let geometry;
+      switch (modifier.shape) {
+        case "box": geometry = new THREE.BoxGeometry(w, d, h); break;
+        case "cylinder":
+        case "disc":
+          geometry = new THREE.CylinderGeometry(w / 2, w / 2, h, 32);
+          geometry.rotateX(Math.PI / 2);
+          geometry.scale(1, d / w, 1); break;
+        case "cone":
+          geometry = new THREE.ConeGeometry(w / 2, h, 32);
+          geometry.rotateX(Math.PI / 2);
+          geometry.scale(1, d / w, 1); break;
+        case "sphere":
+          geometry = new THREE.SphereGeometry(1, 24, 16);
+          geometry.scale(w / 2, d / 2, h / 2); break;
+        case "torus":
+          geometry = new THREE.TorusGeometry(1, .35, 12, 32);
+          geometry.scale(w / 2.7, d / 2.7, h / .7); break;
+        default: continue;
+      }
+      const ghost = new THREE.Mesh(geometry, new THREE.MeshBasicMaterial({
+        color: "#ab90ff", transparent: true, opacity: .24,
+        depthWrite: false, side: THREE.DoubleSide,
+        clippingPlanes: [plane],
+      }));
+      const pos = [modifier.x_mm, modifier.y_mm, modifier.z_mm].map(Number);
+      if (!pos.every(Number.isFinite)) {
+        geometry.dispose();
+        ghost.material.dispose();
+        continue;
+      }
+      ghost.position.set(...pos);
+      ghost.renderOrder = 18;
+      ghost.userData.isModifierVolume = true;
+      ghost.raycast = () => {};
+      parent.add(ghost);
+      ghosts.push(ghost);
+    }
+    parent.userData.modifierGhosts = ghosts;
+  }
+
   useEffect(() => {
     const state = sceneRef.current;
     if (!state) return undefined;
@@ -2903,6 +2959,7 @@ export default function SlicerPlateEditor({
           clearSupportPaintPreview(mesh);
           clearSemanticPaintPreview(mesh,"seam");
           clearSemanticPaintPreview(mesh,"fuzzy");
+      syncModifierOverlays(mesh, {modifier_volumes: []}, state.sectionPlane);
       state.scene.remove(mesh);
       mesh.geometry.dispose();
       mesh.material.dispose();
@@ -2947,6 +3004,7 @@ export default function SlicerPlateEditor({
           positionOrientedMesh(mesh, latest);
           try {paintPreview(mesh, {...latest,colour_paint:latest.colour_paint}, PALETTE[0]);supportPaintPreview(mesh,latestToolModeRef.current==="paint_support"?latest.support_paint:null);semanticPaintPreview(mesh,latestToolModeRef.current==="paint_seam"?latest.seam_paint:null,"seam");semanticPaintPreview(mesh,latestToolModeRef.current==="paint_fuzzy"?latest.fuzzy_skin_paint:null,"fuzzy");}
           catch (error) {latestPaintErrorRef.current?.(error.message || "Invalid saved colour painting.");}
+          syncModifierOverlays(mesh, latest, state.sectionPlane);
           state.meshes.set(item.instance_id, mesh);
           state.scene.add(mesh);
           if (latestToolModeRef.current === "variable_layers") state.showVariableHeightGuide?.();
@@ -2987,6 +3045,7 @@ export default function SlicerPlateEditor({
       const mesh = state.meshes.get(item.instance_id);
       if (!mesh) continue;
       positionOrientedMesh(mesh, item);
+      syncModifierOverlays(mesh, item, state.sectionPlane);
       // Position-only changes must never alter the displayed filament colour.
       try {paintPreview(mesh, {...item,colour_paint:item.colour_paint}, PALETTE[0]);supportPaintPreview(mesh,toolMode==="paint_support"?item.support_paint:null);semanticPaintPreview(mesh,toolMode==="paint_seam"?item.seam_paint:null,"seam");semanticPaintPreview(mesh,toolMode==="paint_fuzzy"?item.fuzzy_skin_paint:null,"fuzzy");}
       catch (error) {latestPaintErrorRef.current?.(error.message || "Invalid saved colour painting.");}
