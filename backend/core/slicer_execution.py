@@ -32,6 +32,7 @@ from .slicer_paint_assets import expand_painted_settings
 from .slicer_process_settings import apply_process_overrides
 from .slicer_profiles import SlicerProfileError
 from .slicer_plate_3mf import build_plate_3mf, build_compound_plate_3mf
+from .slicer_modifier_volumes import refuse_unverified_native_modifiers
 from .slicer_plate_validation import validate_plate_collisions, PlateCollisionError
 from .slicer_worker_client import SlicerWorkerError, health, run_remote_job
 
@@ -245,7 +246,7 @@ def _plate_builder(objects_with_stl):
     Admission still rejects per-object jobs until real-binary proof exists.
     """
     return (build_plate_3mf if any(
-        isinstance(item, dict) and (bool(item.get("process_overrides")) or
+        isinstance(item, dict) and (bool(item.get("modifier_volumes")) or bool(item.get("process_overrides")) or
             bool((item.get("variable_layer_profile") or {}).get("bands")) or
             bool((item.get("support_paint") or {}).get("regions")) or
             bool((item.get("seam_paint") or {}).get("regions")) or
@@ -281,6 +282,10 @@ def _validate_plate_execution(job):
             "disabled for offline multi-material test G-code."
         )
     objects=settings.get("plate_objects")
+    try:
+        refuse_unverified_native_modifiers(objects, job.engine)
+    except ValueError as exc:
+        raise SlicerExecutionError(str(exc)) from exc
     project=settings.get("plates")
     if project is not None:
         active=next((plate for plate in project
@@ -614,7 +619,7 @@ def _single_unmodified_stl(plate):
     if not isinstance(plate, list) or len(plate) != 1 or not isinstance(plate[0], dict):
         return False
     item = plate[0]
-    if (item.get("process_overrides") or (item.get("variable_layer_profile") or {}).get("bands")
+    if (item.get("modifier_volumes") or item.get("process_overrides") or (item.get("variable_layer_profile") or {}).get("bands")
             or (item.get("support_paint") or {}).get("regions")
             or (item.get("seam_paint") or {}).get("regions")
             or (item.get("fuzzy_skin_paint") or {}).get("regions")):
