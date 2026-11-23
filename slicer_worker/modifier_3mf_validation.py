@@ -160,8 +160,6 @@ def validate_modifier_fixture_3mf(data):
             raise WorkerError("Modifier part has no validated regional settings.")
     if plate.tag != "plate" or plate.attrib or len(plate) != 2:
         raise WorkerError("Modifier project must contain one native plate mapping.")
-    if _metadata(ET.Element("temp"), permitted=set()):
-        raise WorkerError("Invalid placeholder.")
     marker, instance = plate
     if (marker.tag != "metadata" or marker.attrib != {"key": "plater_id", "value": "1"}
             or instance.tag != "model_instance" or instance.attrib or len(instance) != 3
