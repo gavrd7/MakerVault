@@ -31,64 +31,35 @@ sudo docker compose exec -T makervault python manage.py v1_release_preflight
 If you pin `MAKERVAULT_IMAGE` in `.env`, change that value to the release you intend to run before pulling. For example:
 
 ```dotenv
-MAKERVAULT_IMAGE=ghcr.io/gavrd7/makervault:1.0.0
+MAKERVAULT_IMAGE=ghcr.io/gavrd7/makervault:1.7.0
 ```
 
-## Build-it-yourself update
+## Update using one Compose file
 
-If your installation intentionally builds MakerVault locally, update the checkout and rebuild with the override file:
+The checkout always uses **`compose.yaml`**. Keep your existing private `.env` and storage. For ordinary published-image upgrades, the commands above are sufficient.
+
+For an intentional **source build**, retain `MAKERVAULT_IMAGE=makervault-local:dev` in your environment, update the checkout as above and rebuild only the app:
 
 ```bash
-git status --short
-git rev-parse HEAD
-git fetch --prune origin
-git switch main
-git pull --ff-only origin main
-sudo docker compose -f compose.yaml -f compose.build.yaml up -d --build
-sudo docker compose -f compose.yaml -f compose.build.yaml ps
-sudo docker compose -f compose.yaml -f compose.build.yaml logs --tail=100 makervault
-sudo docker compose -f compose.yaml -f compose.build.yaml exec -T makervault python manage.py v1_release_preflight
+sudo docker compose build makervault
+sudo docker compose up -d
+sudo docker compose ps
 ```
 
-If `git status --short` shows your own changes, stop before switching/pulling and preserve them. Do not use a hard reset to discard unknown local work.
-
-## Switching between GHCR and local builds
-
-Both routes use the same service names and persistent storage. You can therefore switch image source without migrating your data.
-
-To switch from a local build to the published image:
+For an installation that already uses the verified combined slicer, include the same **`slicer` profile** at each update. Keep the immutable slicer-worker image, native engine store and imported profiles unchanged unless you explicitly choose an approved version update:
 
 ```bash
-sudo docker compose pull makervault
-sudo docker compose up -d makervault
+sudo docker compose --profile slicer config --quiet
+sudo docker compose --profile slicer pull makervault postgres redis
+sudo docker compose --profile slicer up -d
+sudo docker compose --profile slicer ps
 ```
 
-To switch back to a source build:
+If running a local source build with the slicer profile, run `sudo docker compose build makervault` before `sudo docker compose --profile slicer up -d`. Rebuild the slicer worker separately and deliberately only when needed. The combined container runs the worker and installer on separate UIDs, and the one-shot permission helper is not a fifth running daemon.
 
-```bash
-sudo docker compose -f compose.yaml -f compose.build.yaml up -d --build makervault
-```
+**Migration from previous overlays:** the old `compose.build.yaml`, `compose.slicer.yaml` and `compose.slicer.staging.yaml` files have been retired. Before using the single Compose stack on an existing development/staging host, inspect the current engine image ID, private `.slicer-staging.env`, `.env`, named volumes and any local custom Compose file. Preserve the full environment and volume data, then map relevant settings into the private `.env` and validate `docker compose --profile slicer config --quiet`. Do not blindly run old multi-file commands after updating source. No automatic migration or database reset is required, and do not delete the legacy container, its image or any volume before verification.
 
-A database migration is not guaranteed to be reversible simply by switching to an older application image. Back up before changing versions.
-
-## Updating with the combined slicer service (v1.7)
-
-If you enabled the verified slicer release overlay, use **the same Compose files for every update**. The following commands keep the engine-store volume, profiles, media, database, encryption keys and backups in place:
-
-```bash
-git status --short
-git fetch --prune origin
-git switch main
-git pull --ff-only origin main
-sudo docker compose -f compose.yaml -f compose.slicer.yaml config --quiet
-sudo docker compose -f compose.yaml -f compose.slicer.yaml pull
-sudo docker compose -f compose.yaml -f compose.slicer.yaml up -d
-sudo docker compose -f compose.yaml -f compose.slicer.yaml ps
-```
-
-For a self-built application, insert `-f compose.build.yaml` **between** the base file and the slicer overlay, then use `up -d --build` for the application build. Pin and verify the combined worker image before changing its digest; do not silently update native slicers or their approved hashes as part of an application upgrade. The engine installer is the only writer of installed engines, and individual engine updates must be administrator-initiated.
-
-Existing `.slicer-staging.env` and `compose.slicer.staging.yaml` are development-only. Do not replace a working staging installation with the release overlay until you have the published combined image, reviewed engine registry and migration checks. Never run `docker compose down -v` to upgrade or troubleshoot: it can erase persistent engine binaries and application data.
+**Never run `docker compose down -v`** as an upgrade step: it may delete the database, private media encryption keys, backups and installed slicer engines. Backup and independently verify recovery first.
 
 ## Check the result
 
