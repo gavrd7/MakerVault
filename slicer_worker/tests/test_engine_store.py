@@ -22,7 +22,6 @@ class PersistentEngineRegistryTests(unittest.TestCase):
         self.binary.chmod(0o755)
         self.digest = hashlib.sha256(self.binary.read_bytes()).hexdigest()
         self.env = patch.dict(os.environ, {
-            "SLICER_WORKER_ENABLED": "1",
             "SLICER_WORKER_TOKEN": "x" * 64,
             "SLICER_ENGINES_JSON": "{}",
         })
@@ -46,6 +45,11 @@ class PersistentEngineRegistryTests(unittest.TestCase):
                 "binary_sha256": digest or self.digest,
             }},
         }))
+
+    def test_no_worker_token_fail_closed(self):
+        self.save()
+        with patch.dict(os.environ, {"SLICER_WORKER_TOKEN": ""}):
+            self.assertEqual(registry.configured_engines(), {})
 
     def test_approved_versioned_engine_appears_in_one_worker(self):
         self.save()
