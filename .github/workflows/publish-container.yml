@@ -132,7 +132,7 @@ jobs:
           file: ./Dockerfile
           platforms: linux/amd64,linux/arm64
           build-args: |
-            MAKERVAULT_SLICER_WORKER_IMAGE=${{ steps.version.outputs.is_dev == 'true' && '' || format('ghcr.io/gavrd7/makervault-slicer@{0}', steps.slicer.outputs.digest) }}
+            MAKERVAULT_SLICER_WORKER_IMAGE=${{ steps.version.outputs.is_dev != 'true' && format('ghcr.io/gavrd7/makervault-slicer@{0}', steps.slicer.outputs.digest) || '' }}
             MAKERVAULT_SLICER_ENGINE_IMAGE_DIGEST=${{ steps.slicer.outputs.digest }}
           push: true
           tags: ${{ steps.meta.outputs.tags }}
@@ -141,3 +141,20 @@ jobs:
           cache-to: type=gha,mode=max
           provenance: true
           sbom: true
+
+      - name: Verify released application embeds the matching slicer digest
+        if: ${{ steps.version.outputs.is_dev != 'true' }}
+        env:
+          RELEASE_VERSION: ${{ steps.version.outputs.version }}
+          SLICER_DIGEST: ${{ steps.slicer.outputs.digest }}
+        run: |
+          set -euo pipefail
+          docker pull "ghcr.io/gavrd7/makervault:$RELEASE_VERSION"
+          docker run --rm --network none -e EXPECTED_SLICER_DIGEST="$SLICER_DIGEST" --entrypoint python "ghcr.io/gavrd7/makervault:$RELEASE_VERSION" -c '
+          import os,sys
+          expected=os.environ.get("EXPECTED_SLICER_DIGEST")
+          assert expected and expected.startswith("sha256:")
+          assert os.getenv("MAKERVAULT_SLICER_ENGINE_IMAGE_DIGEST")==expected
+          assert os.getenv("MAKERVAULT_SLICER_WORKER_IMAGE")=="ghcr.io/gavrd7/makervault-slicer@"+expected
+          '
+          echo "Validated application and slicer GHCR image identity: $SLICER_DIGEST" >> "$GITHUB_STEP_SUMMARY"
