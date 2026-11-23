@@ -364,6 +364,7 @@ class Handler(BaseHTTPRequestHandler):
                 "OrcaSlicer produced unsupported binary G-code.": "invalid-gcode",
                 "G-code exceeded size limit.": "output-too-large",
                 "Isolated worker could not run OrcaSlicer.": "engine-launch-failed",
+                "Modifier fixtures cannot activate other native project extensions.": "invalid-3mf",
                 "3MF input exceeds worker limits.": "invalid-3mf",
                 "3MF triangle count exceeds worker limit.": "invalid-3mf",
                 "3MF vertex count exceeds worker limit.": "invalid-3mf",
