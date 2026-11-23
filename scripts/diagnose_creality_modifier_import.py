@@ -37,6 +37,17 @@ def inspect_archive(path):
         if project.getinfo("Metadata/model_settings.config").file_size > 4 * 1024 * 1024:
             raise ValueError("Oversized candidate settings XML.")
         settings = ET.fromstring(project.read("Metadata/model_settings.config"))
+        native = "Metadata/creality.config" in names
+        if native:
+            # Genuine Creality sample: built parent resource ID2, external
+            # meshes in 3D/Objects and an explicit model-level extruder 1.
+            p = settings.find("./object[@id='2']")
+            metadata = p.find("./metadata[@key='extruder']") if p is not None else None
+            built = build[0].get("objectid")
+            if (built != "2" or metadata is None or metadata.get("value") != "1"
+                    or "3D/Objects/object_1.model" not in names
+                    or "3D/_rels/3dmodel.model.rels" not in names):
+                raise ValueError("Native Creality baseline lacks genuine object or filament mapping.")
         return {
             "members": len(names),
             "objects": len(objects),
@@ -44,7 +55,8 @@ def inspect_archive(path):
                               for obj in objects if obj.find(ns + "components") is not None),
             "parts": len(settings.findall("./object/part")),
             "assembly_items": len(settings.findall("./assemble/assemble_item")),
-            "creality_sidecar": "Metadata/creality.config" in names,
+            "creality_sidecar": native,
+            "object_filament": "1" if native else None,
         }
 
 
