@@ -94,6 +94,14 @@ modifier as an independently printed solid, or merge this PR solely on
 structural 3MF tests.
 
 
+## 23 November 2026 — native binary acceptance checkpoint
+
+Actual pinned **OrcaSlicer 2.5.0**, **Bambu Studio 02.09.01.70** and **Creality Print 7.3.1** binaries now accept isolated native modifier fixtures for **all six primitive shapes**: box, cylinder, sphere, cone, disc, torus. The tests compare genuine positive-E extrusion in affected and unaffected regions across baseline, upper, lower and paired modifiers. Creality's *native* eight-member external-mesh 3MF is required; a generic BBS-style 3MF fails its native input checks and is not a valid substitute.
+
+The Creality native project-loader and additional five shapes are now **required** GitHub Actions gates. The deliberately unsupported generic-format import remains informational only. These tests exercise fixture-only validation and do **not** mean the production backend/worker has secure native-project export or admission. Production modifier-bearing jobs remain rejected intentionally.
+
+**Merge blockers:** per-engine production export with strict owning-asset and bounded archive admission, full result validation and no silent modifier loss; real-binary independent XYZ move/rotation/nonuniform scale cases; persistence/reopen/duplicate and responsive UI acceptance; current-head green checks and staging trial. Keep PR draft until those are satisfied.
+
 ## Independent modifier transforms (PR #196 follow-up)
 
 New modifiers created through **Add model → Add parameter modifier** now use
