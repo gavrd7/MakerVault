@@ -53,6 +53,32 @@ class NativeModifierProjectTests(SimpleTestCase):
                 self.assertIsNotNone(mesh)
                 self.assertGreater(len(mesh.findall(f"./{ns}triangles/{ns}triangle")), 0)
 
+
+    def test_modifier_respects_rotated_anisotropic_parent_and_bed_elevation(self):
+        # A modifier follows the same local->bed transform as the preview,
+        # never the parent's rotated world-space bounding-box midpoint.
+        parent = item(x=3, y=4, z=6)
+        parent.update({"x_mm": 10, "y_mm": -15, "z_mm": 2,
+                       "rotation_deg": 90, "scale_xyz_percent": [200, 100, 50]})
+        output = export_modifier_3mf_fixture(
+            [(parent, fixture_stl())], bed_width=220, bed_depth=220)
+        with zipfile.ZipFile(io.BytesIO(output)) as archive:
+            root = ET.fromstring(archive.read("3D/3dmodel.model"))
+        ns = "{" + NS + "}"
+        child = root.find(f"./{ns}resources/{ns}object[@id='3']/{ns}mesh")
+        self.assertIsNotNone(child)
+        vertices = [
+            tuple(float(row.attrib[axis]) for axis in ("x", "y", "z"))
+            for row in child.findall(f"./{ns}vertices/{ns}vertex")
+        ]
+        centroid = tuple(sum(v[axis] for v in vertices) / len(vertices)
+                         for axis in range(3))
+        # X=(bed 110 + position 10) - local Y(4) * scaleY(1)
+        # Y=(bed 110 + position -15) + local X(3) * scaleX(2)
+        # Z=bed lift 2 + local Z(6) * scaleZ(.5)
+        for actual, expected in zip(centroid, (116, 101, 5)):
+            self.assertAlmostEqual(actual, expected, places=4)
+
     def test_non_intersecting_modifier_fails_closed(self):
         with self.assertRaisesRegex(SlicerProfileError, "does not intersect"):
             export_modifier_3mf_fixture(
