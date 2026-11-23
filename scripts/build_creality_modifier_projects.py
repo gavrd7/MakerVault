@@ -184,7 +184,8 @@ def prepare(fixtures):
         )
         # Keep this strictly in the disposable Creality trial; production
         # native project packaging is not changed or approved.
-        dest.write_bytes(_split_native_mesh_components(\n            _remove_unresolvable_assembly_entries(project), label))
+        dest.write_bytes(_split_native_mesh_components(
+            _remove_unresolvable_assembly_entries(project), label))
         output.append(dest.name)
     return output
 
