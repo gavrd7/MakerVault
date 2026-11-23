@@ -305,6 +305,7 @@ export default function SlicerPlateEditor({
   plateLabel = "Plate 1", onPlateLabelChange, plateIndex = 0, plateCount = 1, printerLabel = "",
   canEdit = false, onFilesUploaded, defaultColor = null, onManualColorChange, footer = null,
   selectedInstanceId = null, onSelectedInstanceChange, selectedInstanceIds = [], selectionClearVersion = 0, onSelectModel, toolMode = "select",
+  selectedModifierId = null, onSelectedModifierChange,
   autoOrientGoal = "balanced", autoOrientRequest = 0, splitRequest = 0, solidRequest = null,
   measurementVisible = false, measureMode = "distance", measureUnit = "mm", measureSnapMode = "auto", measureClearVersion = 0,
   onMeasurePinPlaced, onMeasureModeChange, onMeasureSnapModeChange, onMeasureUnitChange,
@@ -320,6 +321,8 @@ export default function SlicerPlateEditor({
   latestPrimeTowerRef.current={position:primeTower,change:onPrimeTowerChange,enabled:primeTowerEnabled,width:primeTowerWidth};
   const latestOnChangeRef = useRef(onChange);
   const latestToolModeRef = useRef(toolMode);
+  const modifierSelectionRef = useRef({id:selectedModifierId,onChange:onSelectedModifierChange});
+  modifierSelectionRef.current = {id:selectedModifierId,onChange:onSelectedModifierChange};
   const measurePinPlacedRef = useRef(onMeasurePinPlaced);
   measurePinPlacedRef.current = onMeasurePinPlaced;
   const exitToolModeRef = useRef(onExitToolMode);
