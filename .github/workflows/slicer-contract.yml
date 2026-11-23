@@ -96,6 +96,15 @@ jobs:
             --engine crealityprint 7.3.0 /tmp/creality-fixture.AppImage "$SHA"
       - name: Build combined slicer runtime with approved bundled Orca
         run: docker build -f slicer_worker/Dockerfile.generic -t makervault-slicer-ci:combined .
+      - name: Verify fresh named volume inherits installer ownership without helper
+        run: |
+          set -euo pipefail
+          docker volume create mv-contract-fresh-engine-store
+          trap 'docker volume rm mv-contract-fresh-engine-store >/dev/null 2>&1 || true' EXIT
+          docker run --rm --network none \
+            -v mv-contract-fresh-engine-store:/opt/engine-store \
+            --entrypoint python3 makervault-slicer-ci:combined -c \
+            'import os,stat; path="/opt/engine-store"; s=os.stat(path); assert s.st_uid == 10002, s.st_uid; assert not (s.st_mode & 0o022), oct(s.st_mode)'
       - name: Confirm compiled worker/installer modules and reviewed Orca identity
         run: |
           docker run --rm --network none --entrypoint python3 makervault-slicer-ci:combined \
