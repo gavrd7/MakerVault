@@ -601,6 +601,12 @@ export default function SlicerPlateEditor({
     // A duplicate must retain orientation, colour and individual XYZ scale.
     // Assign a new instance identity, then arrange after its mesh is measured.
     const copy = { ...chosen, instance_id: plateUuid() };
+    // A copied parent owns new modifier identities and independent settings.
+    if (Array.isArray(chosen.modifier_volumes)) {
+      copy.modifier_volumes = chosen.modifier_volumes.map(modifier => ({
+        ...modifier, id: plateUuid(), settings: {...modifier.settings},
+      }));
+    }
     if (Array.isArray(chosen.scale_xyz_percent))
       copy.scale_xyz_percent = [...chosen.scale_xyz_percent];
     const known={...dimensionsRef.current,
@@ -2922,8 +2928,9 @@ export default function SlicerPlateEditor({
           geometry = new THREE.SphereGeometry(1, 24, 16);
           geometry.scale(w / 2, d / 2, h / 2); break;
         case "torus":
-          geometry = new THREE.TorusGeometry(1, .35, 12, 32);
-          geometry.scale(w / 2.7, d / 2.7, h / .7); break;
+          // Match the native fixture: major radius .30, minor radius .20.
+          geometry = new THREE.TorusGeometry(.30, .20, 16, 32);
+          geometry.scale(w, d, h / .4); break;
         default: continue;
       }
       const ghost = new THREE.Mesh(geometry, new THREE.MeshBasicMaterial({
