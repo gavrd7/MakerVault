@@ -27,6 +27,35 @@ class ModifierDraftContractTests(SimpleTestCase):
                 self.assertEqual(result[0]["shape"], shape)
                 self.assertEqual(result[0]["settings"], {"sparse_infill_density": 50})
 
+
+    def test_world_space_modifier_has_bounded_independent_pose(self):
+        pose = box(coordinate_space="world",
+                   rotation_xyz_deg=[12, -24, 90],
+                   scale_xyz_percent=[125, 80, 200])
+        result = validate_modifier_volumes([pose])[0]
+        self.assertEqual(result["coordinate_space"], "world")
+        self.assertEqual(result["rotation_xyz_deg"], [12.0, -24.0, 90.0])
+        self.assertEqual(result["scale_xyz_percent"], [125.0, 80.0, 200.0])
+        # Existing parent-local fixtures remain unchanged.
+        self.assertNotIn("coordinate_space", validate_modifier_volumes([box()])[0])
+
+    def test_rejects_partial_or_out_of_bounds_world_poses(self):
+        pose = box(coordinate_space="world",
+                   rotation_xyz_deg=[0, 0, 0],
+                   scale_xyz_percent=[100, 100, 100])
+        for candidate in (
+            box(coordinate_space="world"),
+            {**pose, "coordinate_space": "local"},
+            {**pose, "rotation_xyz_deg": [0, 0]},
+            {**pose, "rotation_xyz_deg": [0, False, 0]},
+            {**pose, "rotation_xyz_deg": [0, 361, 0]},
+            {**pose, "scale_xyz_percent": [100, 0, 100]},
+            {**pose, "scale_xyz_percent": [100, float("inf"), 100]},
+            {**pose, "scale_xyz_percent": "100%"},
+        ):
+            with self.subTest(candidate=candidate), self.assertRaises(ValueError):
+                validate_modifier_volumes([candidate])
+
     def test_rejects_untrusted_shapes_fields_and_ids(self):
         record = box()
         for candidate in (
