@@ -8,7 +8,7 @@ import io
 import math
 import re
 import zipfile
-from defusedxml import ElementTree as SafeET
+from xml.etree import ElementTree as SafeET
 
 from .runner import WorkerError
 from .modifier_3mf_validation import NS
@@ -28,6 +28,8 @@ def modifier_bounds(project, engine):
             else:
                 source = archive.read("3D/3dmodel.model")
                 start = 2
+            if b"<!DOCTYPE" in source.upper() or b"<!ENTITY" in source.upper():
+                raise WorkerError("Unsafe modifier geometry XML declaration.")
             root = SafeET.fromstring(source)
         objects = root.findall(NS + "resources/" + NS + "object")
         if not 2 <= len(objects) - start + 1 <= 13:
