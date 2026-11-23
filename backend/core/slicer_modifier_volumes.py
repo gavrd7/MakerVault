@@ -26,9 +26,10 @@ def validate_modifier_volumes(raw):
     seen = set()
     result = []
     for entry in raw:
-        if not isinstance(entry, dict) or set(entry) != {
-            "id", "shape", *_NUMERIC, "settings"
-        }:
+        base_fields = {"id", "shape", *_NUMERIC, "settings"}
+        pose_fields = {"coordinate_space", "rotation_xyz_deg", "scale_xyz_percent"}
+        fields = set(entry)
+        if fields not in (base_fields, base_fields | pose_fields):
             raise ValueError("Invalid native modifier fields.")
         try:
             uid = str(uuid.UUID(str(entry["id"])))
@@ -50,10 +51,25 @@ def validate_modifier_volumes(raw):
             elif not -10000 <= value <= 10000:
                 raise ValueError("Modifier position is out of bounds.")
             values[key] = round(float(value), 3)
+        pose = {}
+        if fields & pose_fields:
+            if entry["coordinate_space"] != "world":
+                raise ValueError("New independent modifier poses must use plate coordinates.")
+            for key, size, low, high in (
+                ("rotation_xyz_deg", 3, -360, 360),
+                ("scale_xyz_percent", 3, 5, 400),
+            ):
+                axes = entry[key]
+                if (not isinstance(axes, list) or len(axes) != size or
+                    any(isinstance(v, bool) or not isinstance(v, (int, float)) or
+                        not math.isfinite(v) or not low <= v <= high for v in axes)):
+                    raise ValueError("Invalid independent modifier rotation or scale.")
+                pose[key] = [round(float(v), 3) for v in axes]
+            pose["coordinate_space"] = "world"
         settings = validate_process_overrides(entry["settings"])
         if not settings or set(settings) - INITIAL_OVERRIDE_KEYS:
             raise ValueError("Modifier requires verified candidate wall or infill settings.")
-        result.append({"id": uid, "shape": entry["shape"], **values, "settings": settings})
+        result.append({"id": uid, "shape": entry["shape"], **values, **pose, "settings": settings})
     return result
 
 
