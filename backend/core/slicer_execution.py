@@ -32,7 +32,7 @@ from .slicer_paint_assets import expand_painted_settings
 from .slicer_process_settings import apply_process_overrides
 from .slicer_profiles import SlicerProfileError
 from .slicer_plate_3mf import build_plate_3mf, build_compound_plate_3mf
-from .slicer_modifier_volumes import refuse_unverified_native_modifiers
+from .slicer_modifier_volumes import validate_native_modifier_execution
 from .slicer_plate_validation import validate_plate_collisions, PlateCollisionError
 from .slicer_worker_client import SlicerWorkerError, health, run_remote_job
 
@@ -283,7 +283,9 @@ def _validate_plate_execution(job):
         )
     objects=settings.get("plate_objects")
     try:
-        refuse_unverified_native_modifiers(objects, job.engine)
+        native_modifier_request = validate_native_modifier_execution(
+            objects, engine=job.engine, version=job.engine_version,
+            settings=settings)
     except ValueError as exc:
         raise SlicerExecutionError(str(exc)) from exc
     project=settings.get("plates")
@@ -476,7 +478,9 @@ def _validate_plate_execution(job):
     if job.engine == "crealityprint":
         # Creality receives the same validated STL/3MF geometry route, but
         # Orca-only per-object modifiers must not be silently discarded.
-        if any(isinstance(item, dict) and item.get("process_overrides") for item in objects):
+        if (not native_modifier_request and
+                any(isinstance(item, dict) and item.get("process_overrides")
+                    for item in objects)):
             raise SlicerExecutionError(
                 "Per-object process overrides are not yet supported by Creality Print.")
         if settings.get("process_overrides"):
