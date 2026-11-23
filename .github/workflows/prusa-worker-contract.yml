@@ -1,0 +1,23 @@
+name: PrusaSlicer worker contract
+
+on:
+  pull_request:
+    paths:
+      - "slicer_worker/runner.py"
+      - "slicer_worker/tests/test_runner.py"
+      - ".github/workflows/prusa-worker-contract.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  prusa-worker-unit:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify bounded Prusa CLI contract (no slicer download)
+        run: |
+          set -euo pipefail
+          python3 -m unittest -v slicer_worker.tests.test_runner
