@@ -49,3 +49,22 @@ test("Add model menu offers six parameter modifier shapes with non-printing chil
   assert.match(prepare, /totalModifierCount>=48/);
   assert.match(prepare, /modifier_volumes: \[\.\.\.\(item\.modifier_volumes \|\| \[\]\), fresh\]/);
 });
+
+test("new modifier draft is placed independently with XYZ rotation and scale", () => {
+  assert.match(prepare, /coordinate_space: "world"/);
+  assert.match(prepare, /rotation_xyz_deg: \[0, 0, 0\]/);
+  assert.match(prepare, /scale_xyz_percent: \[100, 100, 100\]/);
+  assert.match(prepare, /Independent modifier transform/);
+  assert.match(prepare, /Move \/ Rotate \/ Scale on plate/);
+  assert.match(prepare, /selectedModifierId=\{selectedModifierId\}/);
+  assert.match(editor, /ghost\.userData\.isWorldModifier = modifier\.coordinate_space === "world"/);
+  assert.match(editor, /state\.transform\.attach\(activeModifier\)/);
+  assert.match(editor, /Independent modifier transform controls/);
+});
+
+test("world modifier cannot become a model drag and preserves independent pose", () => {
+  assert.match(editor, /mesh\.userData\.isWorldModifier/);
+  assert.match(editor, /modifierSelectionRef\.current\.onChange/);
+  assert.match(editor, /latestOnChangeRef\.current\(current\.map/);
+  assert.match(editor, /coordinate_space==="world"/);
+});
