@@ -11,8 +11,11 @@ import uuid
 ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT / "backend") not in sys.path:
     sys.path.insert(0, str(ROOT / "backend"))
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
 
 from core.slicer_creality_modifier_project import build_creality_modifier_native_project
+from slicer_worker.creality_modifier_validation import validate_creality_modifier_project
 
 
 def prepare(fixtures):
@@ -31,6 +34,7 @@ def prepare(fixtures):
             filament=filament, version="7.3.1", bed_width=220,
             bed_depth=220, label=uuid.uuid5(uuid.NAMESPACE_URL, label),
         ))
+        validate_creality_modifier_project(dest.read_bytes())
         output.append(dest.name)
     return output
 
