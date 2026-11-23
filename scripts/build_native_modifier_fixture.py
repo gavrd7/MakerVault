@@ -49,7 +49,7 @@ def build(output_dir, *, shape="box", world_pose=False):
         })
     lower = {
         **modifier, "id": str(uuid.uuid5(uuid.NAMESPACE_DNS, "makervault-modifier-lower")),
-        "z_mm": 6,
+        "z_mm": 5 if world_pose else 6,
     }
     baseline = build_plate_3mf([(parent, source)], bed_width=220, bed_depth=220)
     cases = {
