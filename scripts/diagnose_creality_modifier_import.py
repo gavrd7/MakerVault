@@ -25,14 +25,14 @@ def inspect_archive(path):
         required = {"3D/3dmodel.model", "Metadata/model_settings.config"}
         if not required.issubset(names):
             raise ValueError("Missing native 3MF model metadata.")
-        from defusedxml import ElementTree as ET
-        model = ET.fromstring(project.read("3D/3dmodel.model"))
+        from xml.etree import ElementTree as ET
+        if project.getinfo("3D/3dmodel.model").file_size > 4 * 1024 * 1024:\n            raise ValueError("Oversized candidate model XML.")\n        model = ET.fromstring(project.read("3D/3dmodel.model"))
         ns = "{http://schemas.microsoft.com/3dmanufacturing/core/2015/02}"
         build = model.find(ns + "build")
         objects = model.find(ns + "resources")
         if build is None or objects is None or len(build) != 1:
             raise ValueError("Not a one-build-item test project.")
-        settings = ET.fromstring(project.read("Metadata/model_settings.config"))
+        if project.getinfo("Metadata/model_settings.config").file_size > 4 * 1024 * 1024:\n            raise ValueError("Oversized candidate settings XML.")\n        settings = ET.fromstring(project.read("Metadata/model_settings.config"))
         return {
             "members": len(names),
             "objects": len(objects),
@@ -56,7 +56,7 @@ def reference_structure(path):
         names = z.namelist()
         if len(names) > 150 or len(set(names)) != len(names):
             raise ValueError("Unsafe upstream reference archive.")
-        model = ET.fromstring(z.read("3D/3dmodel.model"))
+        if z.getinfo("3D/3dmodel.model").file_size > 4 * 1024 * 1024:\n            raise ValueError("Oversized reference model XML.")\n        model = ET.fromstring(z.read("3D/3dmodel.model"))
         metadata = {
             tag.attrib.get("name"): tag.text
             for tag in model.findall(ns + "metadata")
@@ -69,7 +69,7 @@ def reference_structure(path):
             "creality_sidecar": "Metadata/creality.config" in names,
         }
         if "Metadata/model_settings.config" in names:
-            settings = ET.fromstring(z.read("Metadata/model_settings.config"))
+            if z.getinfo("Metadata/model_settings.config").file_size > 4 * 1024 * 1024:\n                raise ValueError("Oversized reference settings XML.")\n            settings = ET.fromstring(z.read("Metadata/model_settings.config"))
             info.update({
                 "object_metadata_count": len(settings.findall("object")),
                 "part_subtypes": sorted(part.attrib.get("subtype", "")
