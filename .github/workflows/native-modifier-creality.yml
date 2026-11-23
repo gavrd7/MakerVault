@@ -123,9 +123,26 @@ jobs:
           HOME: /tmp
         run: |
           set -euo pipefail
+          # Compare model/part/assembly XML against a genuine, pinned
+          # upstream Creality 3MF test fixture, not an invented template.
+          reference=()
+          if curl --fail --location --silent --show-error --retry 2 \
+            --max-time 50 \
+            "https://raw.githubusercontent.com/CrealityOfficial/CrealityPrint/v7.3.1/tests/engine_test/baseline/simple-box.3mf" \
+            --output /tmp/creality-genuine-simple-box.3mf; then
+            if python3 -c 'import sys,zipfile;sys.exit(0 if zipfile.is_zipfile(sys.argv[1]) else 1)' \
+              /tmp/creality-genuine-simple-box.3mf; then
+              reference=(--reference /tmp/creality-genuine-simple-box.3mf)
+            else
+              echo "::warning::Upstream native 3MF is not a ZIP fixture (possibly Git LFS)."
+            fi
+          else
+            echo "::warning::Upstream native 3MF reference unavailable; local import matrix still runs."
+          fi
           timeout 1300s python3 scripts/diagnose_creality_modifier_import.py \
             --fixtures /tmp/creality-native-modifiers \
-            --binary "$(cat /tmp/creality-modifier-binary)"
+            --binary "$(cat /tmp/creality-modifier-binary)" \
+            "${reference[@]}"
       - name: Diagnose native Creality 3MF rejection without retaining profiles
         if: steps.native_packaging.outcome == 'success' && steps.native_project.outcome == 'failure'
         shell: bash
