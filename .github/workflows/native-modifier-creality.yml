@@ -1,0 +1,73 @@
+name: Creality Print native modifier diagnostic
+
+on:
+  pull_request:
+    paths:
+      - "scripts/build_creality_modifier_profiles.py"
+      - "scripts/build_native_modifier_fixture.py"
+      - "slicer_worker/modifier_acceptance_probe.py"
+      - "slicer_worker/modifier_3mf_validation.py"
+      - "backend/core/slicer_modifier_3mf.py"
+      - ".github/workflows/native-modifier-creality.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  real-creality-regional-effect:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+      - name: Resolve exact-version Creality native profiles and bounded modifier projects
+        run: |
+          set -euo pipefail
+          python3 -m pip install --disable-pip-version-check --no-input "defusedxml>=0.7.1,<0.8"
+          python3 scripts/build_creality_modifier_profiles.py --output /tmp/creality-pinned-profiles
+          python3 scripts/build_native_modifier_fixture.py --output-dir /tmp/creality-native-modifiers
+          for kind in printer filament process; do
+            cp "/tmp/creality-pinned-profiles/$kind.json" "/tmp/creality-native-modifiers/$kind.json"
+          done
+      - name: Download SHA-256 pinned official Creality Print 7.3.1
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl --fail --location --silent --show-error \
+            --retry 3 --connect-timeout 15 --max-time 600 \
+            "https://github.com/CrealityOfficial/CrealityPrint/releases/download/v7.3.1/CrealityPrint-V7.3.1.6378-x86_64-Release.AppImage" \
+            --output /tmp/crealityprint-7.3.1.AppImage
+          echo "f8c8dbf18a6b0d5878961b24490fc20958eefe2f03f6a89f524cb9b21e55a107  /tmp/crealityprint-7.3.1.AppImage" | sha256sum --check
+          chmod 755 /tmp/crealityprint-7.3.1.AppImage
+      - name: Extract pinned AppImage without FUSE or printer/network access
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/creality-modifier-app
+          cd /tmp/creality-modifier-app
+          timeout 180s /tmp/crealityprint-7.3.1.AppImage --appimage-extract >/dev/null
+          test -e squashfs-root/AppRun
+          readlink -f squashfs-root/AppRun > /tmp/creality-modifier-binary
+          test -x "$(cat /tmp/creality-modifier-binary)"
+      - name: Run exact Creality CLI regional-effect and project-loader probe
+        id: native_modifier
+        continue-on-error: true
+        shell: bash
+        env:
+          QT_QPA_PLATFORM: offscreen
+          QT_OPENGL: software
+          LIBGL_ALWAYS_SOFTWARE: "1"
+          HOME: /tmp
+        run: |
+          set -euo pipefail
+          timeout 900s python3 -m slicer_worker.modifier_acceptance_probe \
+            --engine crealityprint \
+            --fixtures /tmp/creality-native-modifiers \
+            --binary "$(cat /tmp/creality-modifier-binary)"
+      - name: Record Creality parser and regional effects result
+        if: always()
+        run: |
+          echo "### Native Creality Print 7.3.1 parameter modifier probe" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Real CLI slice and regional G-code proof: ${{ steps.native_modifier.outcome }}" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Diagnostic-only: Creality native self-contained projects may require project-specific settings; no automatic production enabling." >> "$GITHUB_STEP_SUMMARY"
+          echo "- Official AppImage SHA-256 is verified. No printer connection or application data changes." >> "$GITHUB_STEP_SUMMARY"
