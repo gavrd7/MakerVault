@@ -74,7 +74,7 @@ jobs:
             --tmpfs /tmp:rw,exec,nosuid,nodev,size=1g,mode=1777 \
             --mount type=bind,src=/tmp/native-modifier-fixtures,dst=/fixtures,readonly \
             --entrypoint python3 "$IMAGE" -m slicer_worker.modifier_acceptance_probe \
-            --fixtures /fixtures --binary /opt/engines/orcaslicer.AppImage
+            --fixtures /fixtures --binary /opt/engines/orcaslicer.AppImage --production-validator
       - name: Probe five additional native primitive modifier shapes
         id: shape_matrix
         shell: bash
@@ -96,7 +96,7 @@ jobs:
               --tmpfs /tmp:rw,exec,nosuid,nodev,size=1g,mode=1777 \
               --mount "type=bind,src=$output,dst=/fixtures,readonly" \
               --entrypoint python3 "$IMAGE" -m slicer_worker.modifier_acceptance_probe \
-              --fixtures /fixtures --binary /opt/engines/orcaslicer.AppImage
+              --fixtures /fixtures --binary /opt/engines/orcaslicer.AppImage --production-validator
           done
       - name: Require real Orca independent modifier XYZ pose and regional extrusion
         shell: bash
@@ -116,7 +116,7 @@ jobs:
             --tmpfs /tmp:rw,exec,nosuid,nodev,size=1g,mode=1777 \
             --mount "type=bind,src=$output,dst=/fixtures,readonly" \
             --entrypoint python3 "$IMAGE" -m slicer_worker.modifier_acceptance_probe \
-            --fixtures /fixtures --binary /opt/engines/orcaslicer.AppImage
+            --fixtures /fixtures --binary /opt/engines/orcaslicer.AppImage --production-validator
       - name: Record evidence without enabling unsafe production slicing
         if: always()
         run: |
