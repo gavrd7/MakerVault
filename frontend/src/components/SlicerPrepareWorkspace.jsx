@@ -146,6 +146,7 @@ export default function SlicerPrepareWorkspace({
   const [solidRequest, setSolidRequest] = useState(null);
   const [autoOrientMenuOpen, setAutoOrientMenuOpen] = useState(false);
   const [addModelMenuOpen, setAddModelMenuOpen] = useState(false);
+  const [modifierShapeMenuOpen, setModifierShapeMenuOpen] = useState(false);
   const [toolDescriptor, setToolDescriptor] = useState("");
   const [toolPopupStyle, setToolPopupStyle] = useState(null);
   const [autoOrientGoal, setAutoOrientGoal] = useState("balanced");
@@ -217,7 +218,8 @@ export default function SlicerPrepareWorkspace({
         row.id === id ? {...row, ...patch} : row),
     }));
   };
-  const addModifier = () => {
+  const addModifier = (shape = "box") => {
+    if (!["box","cylinder","sphere","cone","disc","torus"].includes(shape)) return;
     const parent = selectedObject || objects[0];
     if (!parent || (parent.modifier_volumes || []).length >= 12 || totalModifierCount >= 48) return;
     const fresh = {
@@ -226,7 +228,7 @@ export default function SlicerPrepareWorkspace({
         : "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, ch => {
             const n = Math.floor(Math.random() * 16);
             return (ch === "x" ? n : (n & 3) | 8).toString(16);
-          })), shape: "box",
+          })), shape,
       width_mm: 20, depth_mm: 20, height_mm: 20,
       x_mm: 0, y_mm: 0, z_mm: 10,
       settings: {sparse_infill_density: 50},
@@ -781,9 +783,11 @@ export default function SlicerPrepareWorkspace({
     if (tool.target === "import") {
       setAutoOrientMenuOpen(false);
       setAddModelMenuOpen(open => !open);
+      setModifierShapeMenuOpen(false);
       return;
     }
     setAddModelMenuOpen(false);
+    setModifierShapeMenuOpen(false);
     if (["paint_colour","paint_support","paint_seam","paint_fuzzy"].includes(tool.target)) {
       if (!selectedId && objects[0]?.instance_id) selectSingle(objects[0].instance_id);
       setMeasurementVisible(false);setAutoOrientMenuOpen(false);
@@ -1608,10 +1612,22 @@ export default function SlicerPrepareWorkspace({
             setAddModelMenuOpen(false);setMobilePane("plate");
             setSolidRequest({kind:"svg",id:Date.now(),anchorRect:toolbarAnchor(event)});
           }}><SlicerUiIcon name="shape-svg" /> Add SVG</button>
-          <button type="button" className="slicerAddModelChoice" disabled={!objects.length||!canEdit}
-            onClick={()=>{setAddModelMenuOpen(false);addModifier();}}>
+          <button type="button" className="slicerAddModelChoice"
+            aria-expanded={modifierShapeMenuOpen} aria-controls="slicer-add-modifier-shapes"
+            disabled={!objects.length||!canEdit||busy||totalModifierCount>=48||
+              (selectedObject?.modifier_volumes||objects[0]?.modifier_volumes||[]).length>=12}
+            onClick={()=>setModifierShapeMenuOpen(open=>!open)}>
             <SlicerUiIcon name="models" /> Add parameter modifier
           </button>
+          {modifierShapeMenuOpen && <div id="slicer-add-modifier-shapes"
+            role="group" aria-label="Choose parameter modifier primitive"
+            style={{display:"grid",gridTemplateColumns:"repeat(2,minmax(0,1fr))",gap:5,padding:"4px 8px"}}>
+            {["box","cylinder","sphere","cone","disc","torus"].map(shape=>
+              <button key={shape} type="button" className="slicerAddModelChoice"
+                onClick={()=>{addModifier(shape);setModifierShapeMenuOpen(false);setAddModelMenuOpen(false);setMobilePane("plate");}}>
+                {shape[0].toUpperCase()+shape.slice(1)}
+              </button>)}
+          </div>}
           <button type="button" className="slicerAddModelChoice" disabled={!objects.length} onClick={event => {
             setAddModelMenuOpen(false);setMobilePane("plate");
             setSolidRequest({kind:"negative",id:Date.now(),anchorRect:toolbarAnchor(event)});
