@@ -35,22 +35,35 @@ def build(output_dir):
         "height_mm": 12, "x_mm": 0, "y_mm": 0, "z_mm": 15,
         "settings": {"sparse_infill_density": 50},
     }
+    lower = {
+        **modifier, "id": str(uuid.uuid5(uuid.NAMESPACE_DNS, "makervault-modifier-lower")),
+        "z_mm": 6,
+    }
     baseline = build_plate_3mf([(parent, source)], bed_width=220, bed_depth=220)
-    altered = export_modifier_3mf_fixture(
-        [({**parent, "modifier_volumes": [modifier]}, source)],
-        bed_width=220, bed_depth=220,
-    )
-    for name, blob in (("baseline.3mf", baseline), ("modified.3mf", altered)):
+    cases = {
+        "baseline.3mf": baseline,
+        "modified.3mf": export_modifier_3mf_fixture(
+            [({**parent, "modifier_volumes": [modifier]}, source)],
+            bed_width=220, bed_depth=220),
+        "lower.3mf": export_modifier_3mf_fixture(
+            [({**parent, "modifier_volumes": [lower]}, source)],
+            bed_width=220, bed_depth=220),
+        "both.3mf": export_modifier_3mf_fixture(
+            [({**parent, "modifier_volumes": [modifier, lower]}, source)],
+            bed_width=220, bed_depth=220),
+    }
+    for name, blob in cases.items():
         with zipfile.ZipFile(io.BytesIO(blob)) as archive:
             root = ET.fromstring(archive.read("3D/3dmodel.model"))
             items = root.findall(f"./{{{NS}}}build/{{{NS}}}item")
             if len(items) != 1 or items[0].attrib.get("objectid") != "1":
                 raise ValueError("Modifier acceptance fixture must build exactly one parent model.")
         (target / name).write_bytes(blob)
-    with zipfile.ZipFile(io.BytesIO(altered)) as archive:
-        manifest = ET.fromstring(archive.read("Metadata/model_settings.config"))
-        if len(manifest.findall("object/part[@subtype='modifier_part']")) != 1:
-            raise ValueError("Native modifier metadata was not attached to the parent.")
+    for name, expected in (("modified.3mf", 1), ("lower.3mf", 1), ("both.3mf", 2)):
+        with zipfile.ZipFile(io.BytesIO(cases[name])) as archive:
+            manifest = ET.fromstring(archive.read("Metadata/model_settings.config"))
+            if len(manifest.findall("object/part[@subtype='modifier_part']")) != expected:
+                raise ValueError("Native modifier metadata was not attached to the parent.")
     return target
 
 
@@ -58,7 +71,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--output-dir", type=Path, required=True)
     args = parser.parse_args()
-    print("Generated offline modifier A/B fixture:", build(args.output_dir))
+    print("Generated offline baseline, reversed and paired modifier fixtures:", build(args.output_dir))
 
 
 if __name__ == "__main__":
