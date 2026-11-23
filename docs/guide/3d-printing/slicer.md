@@ -32,6 +32,12 @@ sudo docker compose ps
 
 **Important:** The slicer requires a *real published/reviewed* combined GHCR image and verified engine identities; it cannot be deployed securely with placeholder tokens or example checksums. The old standalone staging and production Compose overlays have been retired; existing staging operators must review their private settings and volumes before switching to this one-file deployment. Use the reviewed combined `makervault-slicer:1.7.0` image; the older `0.1.0` image is incompatible. Do not substitute the older image or build one locally as part of routine installation.
 
+### Choose where slicer engines are stored
+
+The single `compose.yaml` uses the `SLICER_ENGINE_STORAGE` variable. The default is the persistent Docker volume `makervault_slicer_engines`; an absolute host path such as `/srv/makervault/slicer-engines` is also supported. The slicer container always sees this storage at `/opt/engine-store`.
+
+A custom host folder must be owned by installer UID/GID `10002:10002` and cannot be group/world-writable. A fresh named volume inherits the correct ownership from the slicer image. **Changing the setting does not migrate an existing engine installation.** Back up and copy installed engine data before switching storage, then verify the engine registry and permissions. See [the storage guide](../getting-started/storage.md#slicer-engine-store-permissions-important-for-custom-mounts).
+
 ## 2. Install an engine
 
 Open **MakerVault Slicer** and select **View engine installations** (or its equivalent engine-management action). Administrators can review installed and available versions, choose an engine and request an explicit **Install**, **Update**, **Switch** to an approved installed version, or **Uninstall**.
