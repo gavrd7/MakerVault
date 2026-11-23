@@ -15,7 +15,7 @@ The combined slicer container has two isolated processes with different credenti
 - The **worker** runs verified slicer binaries and cannot write to the engine store or make outbound connections.
 - The **installer** installs or switches an individual approved engine version into persistent storage when explicitly requested by an administrator.
 
-A separate permissions-initialisation helper runs and exits. It is not a fifth permanent container. The application does not require a Docker socket or direct access to printer credentials in the slicer worker.
+A separate permissions-initialisation helper runs and exits. It is not a fifth permanent container. The application does not require a Docker socket, and Redis, PostgreSQL and the slicer publish no host ports. All services share the one `makervault` Docker network.
 
 Before enabling the slicer container:
 
@@ -30,7 +30,7 @@ sudo docker compose up -d
 sudo docker compose ps
 ```
 
-**Important:** The slicer profile requires a *real published/reviewed* combined worker image and verified engine identities; it cannot be deployed securely with placeholder tokens or example checksums. The old standalone staging and production Compose overlays have been retired; existing staging operators must review their private settings and volumes before switching to this one-file deployment. If these assets are not published for the target release, completing slicer setup is blocked rather than safe to guess.
+**Important:** The slicer requires a *real published/reviewed* combined GHCR image and verified engine identities; it cannot be deployed securely with placeholder tokens or example checksums. The old standalone staging and production Compose overlays have been retired; existing staging operators must review their private settings and volumes before switching to this one-file deployment. The combined `makervault-slicer:1.7.0` image must be published and verified before release; the older `0.1.0` image is incompatible. Do not substitute the older image or build one locally as part of routine installation.
 
 ## 2. Install an engine
 
@@ -101,7 +101,7 @@ For application updates, retain the persistent engine volume. Read [Update Maker
 
 | Symptom | Check |
 | --- | --- |
-| **MakerVault Slicer unavailable** | Worker health, Compose overlay, service DNS, separate credentials and published image identity |
+| **MakerVault Slicer unavailable** | Worker health, service DNS, separate credentials and published image identity |
 | **No engines shown as installed** | Installer health, persistent engine-store permissions and approved engine versions |
 | **Profiles cannot be selected** | Native profile type, required parent profiles, engine/version and printer/nozzle compatibility |
 | **Slice rejected** | Real native capability, model/3MF integrity, assigned material/tool count and process settings |
