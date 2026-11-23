@@ -64,10 +64,9 @@ class ConfigurationTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "insecure"):
             installer._read_env()
 
-    def test_compose_uses_one_file_with_slicer_profile(self):
+    def test_compose_uses_one_file_without_profiles(self):
         args = installer._compose_args()
-        self.assertIn("--profile", args)
-        self.assertIn("slicer", args)
+        self.assertNotIn("--profile", args)
         self.assertIn("--env-file", args)
         self.assertNotIn("-f", args)
         self.assertIn(".slicer-staging.env", args)
@@ -103,7 +102,7 @@ class ConfigurationTests(unittest.TestCase):
         self.assertTrue(any(cmd[-2:] == ["config", "--quiet"] for cmd in calls))
         updater = next(cmd for cmd in calls if "up" in cmd)
         self.assertEqual(updater[-4:], ["up", "-d", "--build", "makervault"])
-        self.assertIn("--profile", updater)
+        self.assertNotIn("--profile", updater)
         self.assertIn(".slicer-staging.env", updater)
         self.assertNotIn("slicer-worker", updater[-4:])
 
