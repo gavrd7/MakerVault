@@ -50,7 +50,7 @@ class ConfigurationTests(unittest.TestCase):
         self.env.chmod(0o600)
         self.variables = patch.multiple(installer, ROOT=self.root,
                                         DOTENV=self.env, BUNDLE=self.root / "slicer-engine-assets",
-                                        OVERLAY=self.root / "compose.yaml")
+                                        OVERLAY=self.root / "docker-compose.yml")
         self.variables.start()
         self.addCleanup(self.variables.stop)
 
@@ -93,7 +93,7 @@ class ConfigurationTests(unittest.TestCase):
             installer._resume_staged_bundle()
 
     def test_update_retains_slicer_worker_compose_and_existing_private_config(self):
-        (self.root / "compose.yaml").touch()
+        (self.root / "docker-compose.yml").touch()
         calls = []
         before = self.env.read_bytes()
         with patch.object(installer, "_run", side_effect=lambda args, **kwargs: calls.append(args)):
