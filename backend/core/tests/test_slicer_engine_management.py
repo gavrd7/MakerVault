@@ -70,7 +70,7 @@ class EngineManagementAPITests(TestCase):
                 self.assertEqual(response.status_code, expected)
         self.assertFalse(SlicerEngineOperation.objects.exists())
 
-    @patch.dict(os.environ, {"MAKERVAULT_SLICER_HOST_UPDATER_ENABLED": "1"})
+    @patch.dict(os.environ, {"MAKERVAULT_SLICER_INSTALLER_URL": "http://slicer-worker:8091"})
     def test_signed_in_user_can_queue_official_install_and_competing_blocked(self):
         import uuid
         operation_id = str(uuid.uuid4())
@@ -107,7 +107,7 @@ class EngineManagementAPITests(TestCase):
                              content_type="application/json").status_code, 409)
             self.assertEqual(SlicerEngineOperation.objects.count(), 1)
 
-    @patch.dict(os.environ, {"MAKERVAULT_SLICER_HOST_UPDATER_ENABLED": "1"})
+    @patch.dict(os.environ, {"MAKERVAULT_SLICER_INSTALLER_URL": "http://slicer-worker:8091"})
     def test_status_progress_is_copied_from_installer(self):
         import uuid
         from core.models import SlicerEngineOperation
@@ -131,7 +131,7 @@ class EngineManagementAPITests(TestCase):
         self.assertEqual(record.progress, 100)
         self.assertIsNotNone(record.completed_at)
 
-    @patch.dict(os.environ, {"MAKERVAULT_SLICER_HOST_UPDATER_ENABLED": "1"})
+    @patch.dict(os.environ, {"MAKERVAULT_SLICER_INSTALLER_URL": "http://slicer-worker:8091"})
     def test_installed_versions_are_visible_without_new_release_catalogue(self):
         self.client.force_login(self.user)
         def installer(method, path, payload=None):
@@ -150,7 +150,7 @@ class EngineManagementAPITests(TestCase):
         self.assertTrue(result["host_updater_connected"])
         self.assertFalse(result["installation_available"])
 
-    @patch.dict(os.environ, {"MAKERVAULT_SLICER_HOST_UPDATER_ENABLED": "1"})
+    @patch.dict(os.environ, {"MAKERVAULT_SLICER_INSTALLER_URL": "http://slicer-worker:8091"})
     def test_any_signed_in_user_can_switch_and_uninstall_unless_restricted(self):
         import uuid
         from core.models import SlicerEngineAccessSettings
@@ -188,7 +188,7 @@ class EngineManagementAPITests(TestCase):
             self.assertEqual(self.client.post(self.endpoint, data=remove,
                              content_type="application/json").status_code, 403)
 
-    @patch.dict(os.environ, {"MAKERVAULT_SLICER_HOST_UPDATER_ENABLED": "1"})
+    @patch.dict(os.environ, {"MAKERVAULT_SLICER_INSTALLER_URL": "http://slicer-worker:8091"})
     def test_engine_lifecycle_rejects_untrusted_request_forms(self):
         self.client.force_login(self.user)
         for mutation in (
