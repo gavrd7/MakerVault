@@ -30,7 +30,7 @@ sudo docker compose up -d
 sudo docker compose ps
 ```
 
-**Important:** The slicer requires a *real published/reviewed* combined GHCR image and verified engine identities; it cannot be deployed securely with placeholder tokens or example checksums. The old standalone staging and production Compose overlays have been retired; existing staging operators must review their private settings and volumes before switching to this one-file deployment. Use the reviewed combined `makervault-slicer:1.7.0` image; the older `0.1.0` image is incompatible. Do not substitute the older image or build one locally as part of routine installation.
+**Important:** The v1.7.0 release automatically publishes the separate combined GHCR slicer image before the main image, and bakes the reviewed slicer digest into the main application image. The slicer still requires verified native engine identities; it cannot be deployed securely with placeholder tokens or example checksums. The old standalone staging and production Compose overlays have been retired; existing staging operators must review their private settings and volumes before switching to this one-file deployment. Use the release-matched combined `makervault-slicer:1.7.0` image; the older `0.1.0` image is incompatible. No manual slicer-image publishing or digest copy/paste is needed for normal installations. Do not substitute the older image or build one locally as part of routine installation.
 
 ### Choose where slicer engines are stored
 
