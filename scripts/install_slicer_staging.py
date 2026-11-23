@@ -128,13 +128,13 @@ def _run(args, env=None, capture=False):
 
 
 def _compose_args():
-    """Use the single supported Compose file with the optional slicer profile.
+    """Use the single supported Compose file with a private staging env file.
 
     The private staging secrets file is retained for existing installations;
     no extra Compose overlay is required or permitted.
     """
     return ["docker", "compose", "--env-file", ".env",
-            "--env-file", DOTENV.name, "--profile", "slicer"]
+            "--env-file", DOTENV.name]
 
 
 def _read_env():
