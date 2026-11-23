@@ -8,6 +8,7 @@
 <p align="center"><strong>Application version: v1.7.0</strong></p>
 <p align="center">
   <a href="https://gavrd7.github.io/MakerVault-docs/">User guide</a> ·
+  <a href="https://gavrd7.github.io/MakerVault-docs/slicer/">Slicer guide</a> ·
   <a href="docs/guide/getting-started/install.md">Install</a> ·
   <a href="docs/ROADMAP.md">Detailed roadmap</a> ·
   <a href="CHANGELOG.md">Changelog</a> ·
@@ -52,7 +53,7 @@ sudo docker compose up -d
 
 Open **`http://YOUR-SERVER-IP:8765`** in your browser and follow the initial setup wizard.
 
-**MakerVault Slicer** runs in a separate container and supports OrcaSlicer, Creality Print and Bambu Studio. Use the [slicer guide](docs/guide/3d-printing/slicer.md) to install and select your preferred engine.
+**MakerVault Slicer** runs in a separate container and supports OrcaSlicer, Creality Print and Bambu Studio. Use the [dedicated slicer guide](https://gavrd7.github.io/MakerVault-docs/slicer/) for installation, engine management, profiles and painting, or the [in-repository reference](docs/guide/3d-printing/slicer.md).
 
 For detailed instructions, see the [Linux installation guide](docs/guide/getting-started/install.md), [Windows / Docker Desktop guide](docs/guide/getting-started/windows.md), [environment configuration](docs/guide/getting-started/environment.md) and [first sign-in guide](docs/guide/getting-started/first-sign-in.md). Already using MakerVault? Follow the [upgrade guide](docs/guide/administration/updates.md) and [backup guide](docs/guide/administration/backup.md) instead of starting from scratch.
 
@@ -130,6 +131,7 @@ These are roadmap intentions, not promises for the next release.
 ## Project and documentation
 
 - **[MakerVault User Guide](https://gavrd7.github.io/MakerVault-docs/)** ([source](https://github.com/gavrd7/MakerVault-docs)) — installation, daily use, administration and troubleshooting.
+- **[MakerVault Slicer Guide](https://gavrd7.github.io/MakerVault-docs/slicer/)** — a dedicated walkthrough for OrcaSlicer, Creality Print, Bambu Studio, profiles, painting and G-code review.
 - **[MakerVault-Hardware](https://github.com/gavrd7/MakerVault-Hardware)** — terminal firmware, 3D-printable enclosure, wiring and future connected hardware.
 - **[Changelog](CHANGELOG.md)** — release-by-release features and fixes.
 - **[Detailed roadmap](docs/ROADMAP.md)** — delivered milestones, implementation constraints and outstanding validation.
