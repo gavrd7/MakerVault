@@ -7,6 +7,7 @@ Learn to install MakerVault, record what you own and bring your projects, files 
 
 [Start here](getting-started/before-you-begin.md){ .md-button .md-button--primary }
 [Follow a first project](getting-started/first-project.md){ .md-button }
+[MakerVault Slicer guide](3d-printing/slicer.md)
 </div>
 
 !!! info "MakerVault v1.7.0"
