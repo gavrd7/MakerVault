@@ -29,7 +29,7 @@ from .slicer_native_resolution import resolved_native_profile
 from .slicer_native_overrides import ORCA_PLATES
 from .slicer_plate_types import inspect_engine_plates
 from .slicer_process_settings import process_schema, validate_process_overrides, apply_process_overrides
-from .slicer_modifier_volumes import validate_modifier_volumes
+from .slicer_modifier_volumes import validate_modifier_volumes, MAX_TOTAL_MODIFIERS
 from .slicer_flush_settings import validate_flush_settings
 from .slicer_colour_painting import validate_colour_paint
 from .slicer_support_painting import validate_support_paint
@@ -490,6 +490,8 @@ def _draft_plate_settings(user, input_asset, settings):
                       **values, "color": color.lower(), **text_fields, **material_fields, **paint_fields,
                       **({"process_overrides": instance_overrides} if instance_overrides else {}),
                       **({"modifier_volumes": native_modifiers} if native_modifiers else {})})
+    if sum(len(row.get("modifier_volumes", ())) for row in saved) > MAX_TOTAL_MODIFIERS:
+        raise ValueError("Too many native modifiers on the build plate.")
     if saved[0]["asset_id"] != str(input_asset.pk):
         raise ValueError("The first plate model must match the selected primary STL.")
     return {"plate_objects": saved, "plate_label": label, "save_gcode_to_library": save_to_library,
