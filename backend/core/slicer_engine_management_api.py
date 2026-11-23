@@ -59,7 +59,7 @@ def engine_operations(request):
     if request.method == "POST" and not can_manage:
         return JsonResponse({"error": "Engine changes are restricted by this installation."},
                             status=403)
-    enabled = os.environ.get("MAKERVAULT_SLICER_HOST_UPDATER_ENABLED") == "1"
+    enabled = bool(os.environ.get("MAKERVAULT_SLICER_INSTALLER_URL"))
 
     if request.method == "GET":
         releases, connected, rollback_available = [], False, False
