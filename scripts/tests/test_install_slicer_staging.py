@@ -50,7 +50,7 @@ class ConfigurationTests(unittest.TestCase):
         self.env.chmod(0o600)
         self.variables = patch.multiple(installer, ROOT=self.root,
                                         DOTENV=self.env, BUNDLE=self.root / "slicer-engine-assets",
-                                        OVERLAY=self.root / "compose.slicer.staging.yaml")
+                                        OVERLAY=self.root / "docker-compose.yml")
         self.variables.start()
         self.addCleanup(self.variables.stop)
 
@@ -64,13 +64,12 @@ class ConfigurationTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "insecure"):
             installer._read_env()
 
-    def test_compose_uses_staging_overlay_without_profiles(self):
-        (self.root / "compose.staging.yaml").touch()
+    def test_compose_uses_one_file_without_profiles(self):
         args = installer._compose_args()
-        self.assertIn("compose.slicer.staging.yaml", args)
-        self.assertIn("compose.staging.yaml", args)
         self.assertNotIn("--profile", args)
         self.assertIn("--env-file", args)
+        self.assertNotIn("-f", args)
+        self.assertIn(".slicer-staging.env", args)
 
     def test_interrupted_build_can_resume_only_checksum_verified_assets(self):
         import hashlib
@@ -94,7 +93,7 @@ class ConfigurationTests(unittest.TestCase):
             installer._resume_staged_bundle()
 
     def test_update_retains_slicer_worker_compose_and_existing_private_config(self):
-        (self.root / "compose.slicer.staging.yaml").touch()
+        (self.root / "docker-compose.yml").touch()
         calls = []
         before = self.env.read_bytes()
         with patch.object(installer, "_run", side_effect=lambda args, **kwargs: calls.append(args)):
@@ -103,7 +102,7 @@ class ConfigurationTests(unittest.TestCase):
         self.assertTrue(any(cmd[-2:] == ["config", "--quiet"] for cmd in calls))
         updater = next(cmd for cmd in calls if "up" in cmd)
         self.assertEqual(updater[-4:], ["up", "-d", "--build", "makervault"])
-        self.assertIn("compose.slicer.staging.yaml", updater)
+        self.assertNotIn("--profile", updater)
         self.assertIn(".slicer-staging.env", updater)
         self.assertNotIn("slicer-worker", updater[-4:])
 

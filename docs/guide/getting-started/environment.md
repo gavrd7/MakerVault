@@ -6,13 +6,13 @@ Work through this chapter at **step 3 of installation**, after downloading Maker
 
 ## What is .env?
 
-`.env` is a plain-text settings file in the same folder as `compose.yaml`. Docker Compose reads it to configure your installation. MakerVault's Compose file also passes settings from it to the application container.
+`.env` is a plain-text settings file in the same folder as `docker-compose.yml`. Docker Compose reads it to configure your installation. MakerVault's Compose file also passes settings from it to the application container.
 
 | File | Purpose | Should you edit it? |
 | --- | --- | --- |
 | `.env.example` | The project's example settings, updated with the source code | Normally no; use it as a reference |
 | `.env` | Your installation's real settings and secrets | Yes; this is your working configuration |
-| `compose.yaml` | Describes the services, ports and storage connections | Normally leave it alone for this setup |
+| `docker-compose.yml` | Describes the services, ports and storage connections | Normally leave it alone for this setup |
 
 The leading dot makes `.env` a hidden file on many systems. Its exact name matters: `.env.txt` is a different file. It is not a Python script and you do not need to run or `source` it.
 
@@ -71,14 +71,26 @@ ghcr.io/gavrd7/makervault:latest
 You normally do not need to add anything to `.env`. If you want to stay on a specific release until you deliberately upgrade, set:
 
 ```dotenv
-MAKERVAULT_IMAGE=ghcr.io/gavrd7/makervault:1.1.0
+MAKERVAULT_IMAGE=ghcr.io/gavrd7/makervault:1.7.0
 ```
 
-This setting controls only the MakerVault application image. It does not change your database or storage. Users following the build-it-yourself route use `compose.build.yaml`, which replaces the published image with a locally built one.
+This setting controls only the MakerVault application image. It does not change your database or storage. MakerVault uses the published GHCR application image; no local build is part of the standard installation.
+
+## MakerVault Slicer settings
+
+The standard stack includes a separate `makervault-slicer` container. **You don't need to configure Docker networks, bind slicer ports, choose a Compose profile or compile an image.**
+
+The first-time setup helper generates a strong worker token and a **different** installer token alongside the application and database secrets. They are kept in your private `.env` and must not be shared.
+
+The v1.7.0 release workflow publishes the combined slicer image alongside the MakerVault application and embeds the reviewed slicer digest into the application image. By default, Compose pulls `ghcr.io/gavrd7/makervault-slicer:1.7.0`. Administrators install and choose individual OrcaSlicer, Creality Print and Bambu Studio engines through MakerVault. For the normal GHCR installation, no slicer image/digest environment variables are necessary. Advanced deployments can override image identities when using independently reviewed images; the approval check still requires matching immutable digests.
+
+The older `makervault-slicer:0.1.0` image is **not** the combined worker/installer and must not be used in v1.7.0.
+
+For persistent storage, `SLICER_ENGINE_STORAGE` can be a Docker volume name or an absolute host directory, just like `MEDIA_STORAGE`, `KEY_STORAGE`, `BACKUP_STORAGE`, `POSTGRES_STORAGE` and `REDIS_STORAGE`. The slicer folder must be owned by UID 10002 with no group/world write permission; see [storage options](storage.md#slicer-engine-store-permissions-important-for-custom-mounts). Use `sudo docker compose config --quiet` to validate the complete configuration without revealing secret values. See the [Slicer guide](../3d-printing/slicer.md) for native engine installation and safe print checks.
 
 ## Generate the secrets
 
-There are three different secrets to understand. They are not interchangeable.
+The setup helper creates application, database and separate slicer credentials. They are not interchangeable.
 
 | Secret | What it does | How it is created |
 | --- | --- | --- |
@@ -188,7 +200,7 @@ sudo docker compose config --quiet
 
 No output and a successful exit means Compose could parse the configuration. It does **not** prove the database credentials, network address or storage choices are correct.
 
-For the first launch, return to [installation step 4](install.md#4-pull-and-start-makervault-recommended) and build the app. For an existing installation after an ordinary settings edit:
+For the first launch, return to [installation](install.md) and start the published images. For an existing installation after an ordinary settings edit:
 
 ```bash
 sudo docker compose up -d

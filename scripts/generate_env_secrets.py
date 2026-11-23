@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Safely initialize MakerVault's .env and its two required application secrets."""
+"""Safely initialize MakerVault's .env and application/slicer secrets."""
 
 from __future__ import annotations
 
@@ -12,6 +12,8 @@ import tempfile
 PLACEHOLDERS = {
     "DJANGO_SECRET_KEY": {"", "CHANGE_ME_TO_A_LONG_RANDOM_VALUE"},
     "POSTGRES_PASSWORD": {"", "CHANGE_ME_DATABASE_PASSWORD"},
+    "MAKERVAULT_SLICER_WORKER_TOKEN": {"", "CHANGE_ME_SLICER_WORKER_TOKEN"},
+    "MAKERVAULT_SLICER_INSTALLER_TOKEN": {"", "CHANGE_ME_SLICER_INSTALLER_TOKEN"},
 }
 
 

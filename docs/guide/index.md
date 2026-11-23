@@ -7,10 +7,11 @@ Learn to install MakerVault, record what you own and bring your projects, files 
 
 [Start here](getting-started/before-you-begin.md){ .md-button .md-button--primary }
 [Follow a first project](getting-started/first-project.md){ .md-button }
+[MakerVault Slicer guide](3d-printing/slicer.md)
 </div>
 
-!!! info "Current source release candidate: v1.5.1"
-    MakerVault v1.5.1 adds Clean/Remove MakerTag workflows, consolidated connected-terminal polling and native HTTPS keep-alive improvements, for the matching Terminal v1.0.1 firmware. The prior v1.5.0 release brought read-only Creality CFS material lookup and physical spool RFID identity linking. Version v1.4.0 added terminal lookup, registration, reassignment and permanent MakerTag IDs. The earlier v1.2.2 release included improved Maker Tags QR label preview, custom label sizes, print-only output, batch label printing and target-type filters. v1.2.0 added reusable spool hardware inventory, catalogue references and reviewed corrections, personal images, branded QR labels and Maker Tag support for reusable reels. The v1.1.0 background catalogue improvements remain included.
+!!! info "MakerVault v1.7.0"
+    MakerVault includes the browser-based **MakerVault Slicer**, with integrated **OrcaSlicer, Creality Print and Bambu Studio** engines. Install native engine binaries and printer/process/filament presets separately using the verified combined slicer service. The same release retains the G-code Library, explicit printer submission, live monitoring, MakerTags, connected terminal support and the existing inventory/project workflows. Printer-specific compatibility and successful physical printing require independent verification.
 
 <div class="guide-grid" markdown>
 <div class="guide-card" markdown>
@@ -27,9 +28,9 @@ Find a board, add the units you own, plan a build and keep its files together.
 </div>
 <div class="guide-card" markdown>
 ### Organise 3D printing
-Keep track of printers, camera feeds, physical spools, catalogue-matched filament products, models, print history and explicitly retained printed parts.
+Keep track of printers, cameras, physical spools, filament products, models and prints; prepare and slice models with a separately installed verified engine.
 
-[3D printing →](using/printing.md)
+[3D printing →](using/printing.md) · [MakerVault Slicer →](3d-printing/slicer.md)
 </div>
 <div class="guide-card" markdown>
 ### Keep your data safe
@@ -49,7 +50,7 @@ MakerVault is a self-hosted workshop management application. You open it in a we
 | What you actually own | Inventory | Three boards in drawer A2 |
 | What you are building | Projects | A voice-assistant speaker and its bill of materials |
 | Digital assets | Files | Firmware, wiring diagram, CAD and instructions |
-| What you design and print | 3D Printing | Enclosure revisions, spools, live cameras and retained parts |
+| What you design and print | 3D Printing / MakerVault Slicer | Enclosure revisions, spools, live cameras, saved G-code, native slicing and retained parts |
 | Physical identification | Maker Tags | A QR/NFC/RFID identity linked to a spool or project |
 | Connections in a build | Interactive Wiring | A diagram of boards, pins and wires |
 

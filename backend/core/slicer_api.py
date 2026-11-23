@@ -1079,8 +1079,8 @@ def engines(request):
         "can_verify_profiles": request.user.is_superuser,
         # Deployment intent is distinct from a healthy, approved engine.
         # Never infer an installed container merely because code is present.
-        "deployment_enabled": os.environ.get("MAKERVAULT_SLICER_EXECUTION_ENABLED") == "1",
-        "preview_enabled": os.environ.get("MAKERVAULT_SLICER_PREVIEW_ENABLED") == "1" and request.user.is_superuser,
+        "deployment_enabled": bool(os.environ.get("MAKERVAULT_SLICER_WORKER_URL")),
+        "preview_enabled": request.user.is_superuser,
     })
 
 

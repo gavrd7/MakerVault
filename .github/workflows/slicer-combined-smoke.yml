@@ -4,7 +4,7 @@ on:
   pull_request:
     paths:
       - "slicer_worker/**"
-      - "compose.slicer.staging.yaml"
+      - "docker-compose.yml"
       - ".github/workflows/slicer-combined-smoke.yml"
   workflow_dispatch:
 
@@ -49,7 +49,6 @@ jobs:
             --pids-limit 144 --memory 4g \
             --tmpfs /tmp:rw,nosuid,size=1g,mode=1777 \
             -v mv-ci-engine-store:/opt/engine-store:rw \
-            -e SLICER_WORKER_ENABLED=1 \
             -e SLICER_WORKER_TOKEN=0123456789012345678901234567890123456789 \
             -e SLICER_INSTALLER_TOKEN=9876543210987654321098765432109876543210 \
             -e 'SLICER_ENGINES_JSON={}' \

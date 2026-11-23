@@ -4,8 +4,7 @@ on:
   pull_request:
     paths:
       - "slicer_worker/**"
-      - "compose.slicer.yaml"
-      - "compose.slicer.staging.yaml"
+      - "docker-compose.yml"
       - "scripts/install_slicer_staging.py"
       - "scripts/orca_compatibility_patch.py"
       - "scripts/tests/test_install_slicer_staging.py"
@@ -16,12 +15,14 @@ on:
       - "scripts/tests/test_probe_slicer_staging.py"
       - ".dockerignore"
       - ".github/workflows/slicer-contract.yml"
+      - ".github/workflows/publish-container.yml"
+      - "Dockerfile"
+      - "scripts/tests/test_release_image_contract.py"
   push:
     branches: [main]
     paths:
       - "slicer_worker/**"
-      - "compose.slicer.yaml"
-      - "compose.slicer.staging.yaml"
+      - "docker-compose.yml"
       - "scripts/install_slicer_staging.py"
       - "scripts/orca_compatibility_patch.py"
       - "scripts/tests/test_install_slicer_staging.py"
@@ -29,6 +30,9 @@ on:
       - "scripts/probe_slicer_staging.py"
       - "scripts/tests/test_probe_slicer_staging.py"
       - ".github/workflows/slicer-contract.yml"
+      - ".github/workflows/publish-container.yml"
+      - "Dockerfile"
+      - "scripts/tests/test_release_image_contract.py"
 
 permissions:
   contents: read
@@ -41,6 +45,8 @@ jobs:
       - uses: actions/checkout@v4
       - name: Worker contract unit tests (no engine binaries)
         run: python3 -m unittest discover -s slicer_worker/tests -p "test_*.py" -v
+      - name: Verify paired GHCR release publication and immutable image identities
+        run: python3 -m unittest scripts.tests.test_release_image_contract -v
       - name: Compile worker modules
         run: python3 -m compileall -q slicer_worker
       - name: Verify staging installer release, secret and lifecycle contracts offline
@@ -51,48 +57,58 @@ jobs:
         run: python3 -m unittest scripts.tests.test_orca_compatibility_patch -v
       - name: Verify real-engine acceptance probe isolation and fail-closed contracts offline
         run: python3 -m unittest discover -s scripts/tests -p "test_probe_slicer_staging.py" -v
-      - name: Validate explicit staging engine overlay without connecting to printers
+      - name: Validate exactly four services on one private Compose network
         env:
           POSTGRES_PASSWORD: ci-only-placeholder
           MAKERVAULT_SLICER_WORKER_TOKEN: "0123456789012345678901234567890123456789"
+          MAKERVAULT_SLICER_INSTALLER_TOKEN: "9876543210987654321098765432109876543210"
+          MAKERVAULT_SLICER_WORKER_IMAGE: "ghcr.io/gavrd7/makervault-slicer:0.1.0"
         run: |
           printf 'POSTGRES_PASSWORD=ci-only-placeholder\n' > .env
-          cat > .slicer-staging.env <<'ENV'
-          MAKERVAULT_SLICER_EXECUTION_ENABLED=1
-          MAKERVAULT_SLICER_WORKER_IMAGE=sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
-          MAKERVAULT_SLICER_ENGINE_IMAGE_DIGEST=sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
-          MAKERVAULT_SLICER_ENGINES_JSON='{"orcaslicer":{"version":"2.4.2","binary_sha256":"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"}}'
-          SLICER_ENGINES_JSON='{"orcaslicer":{"binary":"/opt/engines/orcaslicer.AppImage","version":"2.4.2","binary_sha256":"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"}}'
-          ENV
-          chmod 600 .slicer-staging.env
-          docker compose --env-file .env --env-file .slicer-staging.env \
-            -f compose.yaml -f compose.build.yaml -f compose.slicer.staging.yaml config --quiet
-          # Validate effective Compose semantics (not source comments/grep).
-          docker compose --env-file .env --env-file .slicer-staging.env \
-            -f compose.yaml -f compose.build.yaml -f compose.slicer.staging.yaml \
-            config --format json | python3 -c '
+          docker compose config --quiet
+          docker compose config --format json | python3 -c '
+          import json,sys
+          stack=json.load(sys.stdin)
+          services=stack["services"]
+          assert set(services) == {"makervault","postgres","redis","slicer-worker"}, services.keys()
+          assert set(stack["networks"]) == {"makervault"}, stack["networks"]
+          from pathlib import Path
+          compose=Path("docker-compose.yml").read_text()
+          assert compose.index("  makervault:") < compose.index("  postgres:") < compose.index("  redis:") < compose.index("  slicer-worker:")
+          assert services["slicer-worker"]["volumes"][0]["source"] == "makervault_slicer_engines"
+          assert not any(p.get("target")==8555 for p in services["makervault"].get("ports",[]) if isinstance(p,dict))
+          for name in ("makervault","postgres","redis","slicer-worker"):
+              assert len(services[name]["networks"]) == 1
+          for name in ("postgres","redis","slicer-worker"):
+              assert not services[name].get("ports"), name
+          for name in ("makervault","slicer-worker"):
+              assert "build" not in services[name]
+          assert not any("profiles" in value for value in services.values())
+          assert set(services["slicer-worker"]["cap_add"]) == {"SETUID","SETGID","KILL"}
+          assert services["slicer-worker"]["container_name"] == "makervault-slicer"
+          assert services["slicer-worker"]["environment"]["SLICER_INSTALLER_TOKEN"] != services["slicer-worker"]["environment"]["SLICER_WORKER_TOKEN"]
+          assert not any(k in services["slicer-worker"] for k in ("cpus","mem_limit"))
+          assert "slicer-engine-store-init" not in services
+          '
+
+
+      - name: Validate independent custom slicer storage bind mount
+        env:
+          POSTGRES_PASSWORD: ci-only-placeholder
+          MAKERVAULT_SLICER_WORKER_TOKEN: "0123456789012345678901234567890123456789"
+          MAKERVAULT_SLICER_INSTALLER_TOKEN: "9876543210987654321098765432109876543210"
+          SLICER_ENGINE_STORAGE: /srv/makervault/slicer-engines
+          MEDIA_STORAGE: /srv/makervault/media
+        run: |
+          docker compose config --format json | python3 -c '
           import json,sys
           services=json.load(sys.stdin)["services"]
-          helper=set(services["slicer-engine-store-init"]["cap_add"])
-          slicer=set(services["slicer-worker"]["cap_add"])
-          assert helper == {"CHOWN","FOWNER","DAC_READ_SEARCH"}, helper
-          assert slicer == {"SETUID","SETGID","KILL"}, slicer
-          assert "slicer-engine-installer" not in services
+          slicer=services["slicer-worker"]["volumes"][0]
+          media=services["makervault"]["volumes"][0]
+          assert slicer["type"] == "bind" and slicer["source"] == "/srv/makervault/slicer-engines"
+          assert slicer["target"] == "/opt/engine-store"
+          assert media["type"] == "bind" and media["source"] == "/srv/makervault/media"
           '
-      - name: Validate opt-in worker Compose overlay without starting containers
-        env:
-          POSTGRES_PASSWORD: ci-only-placeholder
-          MAKERVAULT_SLICER_WORKER_TOKEN: "0123456789012345678901234567890123456789"
-          MAKERVAULT_SLICER_WORKER_IMAGE: "ghcr.io/example/slicer@sha256:0000000000000000000000000000000000000000000000000000000000000000"
-          MAKERVAULT_SLICER_ENGINE_IMAGE_DIGEST: "sha256:0000000000000000000000000000000000000000000000000000000000000000"
-          MAKERVAULT_SLICER_ENGINE_BINARY_SHA256: "0000000000000000000000000000000000000000000000000000000000000000"
-          MAKERVAULT_SLICER_ENGINE_VERSION: "ci-only-placeholder"
-          MAKERVAULT_SLICER_ENGINES_JSON: '{"orcaslicer":{"version":"2.4.2","binary_sha256":"0000000000000000000000000000000000000000000000000000000000000000"}}'
-          SLICER_ENGINES_JSON: '{"orcaslicer":{"binary":"/opt/engines/orcaslicer.AppImage","version":"2.4.2","binary_sha256":"0000000000000000000000000000000000000000000000000000000000000000"}}'
-        run: |
-          printf 'POSTGRES_PASSWORD=ci-only-placeholder\n' > .env
-          docker compose -f compose.yaml -f compose.slicer.yaml --profile slicer config --quiet
-
 
   candidate-image-build:
     # Legacy worker-only smoke has been replaced: the deployed staging image
@@ -111,6 +127,15 @@ jobs:
             --engine crealityprint 7.3.0 /tmp/creality-fixture.AppImage "$SHA"
       - name: Build combined slicer runtime with approved bundled Orca
         run: docker build -f slicer_worker/Dockerfile.generic -t makervault-slicer-ci:combined .
+      - name: Verify fresh named volume inherits installer ownership without helper
+        run: |
+          set -euo pipefail
+          docker volume create mv-contract-fresh-engine-store
+          trap 'docker volume rm mv-contract-fresh-engine-store >/dev/null 2>&1 || true' EXIT
+          docker run --rm --network none \
+            -v mv-contract-fresh-engine-store:/opt/engine-store \
+            --entrypoint python3 makervault-slicer-ci:combined -c \
+            'import os,stat; path="/opt/engine-store"; s=os.stat(path); assert s.st_uid == 10002, s.st_uid; assert not (s.st_mode & 0o022), oct(s.st_mode)'
       - name: Confirm compiled worker/installer modules and reviewed Orca identity
         run: |
           docker run --rm --network none --entrypoint python3 makervault-slicer-ci:combined \
@@ -128,7 +153,6 @@ jobs:
             --pids-limit 144 --memory 4g \
             --tmpfs /tmp:rw,nosuid,size=1g,mode=1777 \
             -v mv-contract-engine-store:/opt/engine-store:rw \
-            -e SLICER_WORKER_ENABLED=1 \
             -e SLICER_WORKER_TOKEN=0123456789012345678901234567890123456789 \
             -e SLICER_INSTALLER_TOKEN=9876543210987654321098765432109876543210 \
             -e 'SLICER_ENGINES_JSON={}' \

@@ -40,7 +40,7 @@ class GenericStagingMigrationTests(unittest.TestCase):
         self.env = self.root / ".slicer-staging.env"
         self.env.write_text(previous_env())
         self.env.chmod(0o600)
-        self.overlay = self.root / "compose.slicer.staging.yaml"
+        self.overlay = self.root / "docker-compose.yml"
         self.overlay.write_text("volumes:\n  makervault_slicer_engines:\n")
         self.backup = self.root / ".slicer-staging.env.pre-generic"
         patches = [

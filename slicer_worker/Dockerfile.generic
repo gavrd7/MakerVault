@@ -15,6 +15,10 @@ RUN python3 -m compileall -q /opt/makervault-slicer/slicer_worker && \
     test -f /opt/engines/manifest.json && \
     test -x /opt/engines/squashfs-root/AppRun && \
     echo 'b30b0ae933e653692cf85a493287a949215ae4c14d547a00203d16dfcadb8054  /opt/engines/orcaslicer.AppImage' | sha256sum --check --status
+# Docker initialises a NEW named volume from this pre-owned mountpoint.
+# The installer can write; the worker UID 10001 can only read.
+# Existing volumes with legacy ownership must be migrated explicitly.
+RUN install -d -o 10002 -g 10002 -m 0755 /opt/engine-store
 LABEL org.opencontainers.image.title="MakerVault Slicer" \
       org.opencontainers.image.description="One worker runtime with independent verified engine installations" \
       org.opencontainers.image.version="0.1.0"

@@ -78,8 +78,6 @@ def _hash_binary(path, size, mtime_ns, inode):
 
 
 def configured_engines():
-    if os.environ.get("SLICER_WORKER_ENABLED") != "1":
-        return {}
     token = os.environ.get("SLICER_WORKER_TOKEN", "")
     if len(token) < 32:
         return {}

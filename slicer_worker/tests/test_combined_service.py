@@ -47,15 +47,26 @@ class CombinedSlicerTests(unittest.TestCase):
         self.assertNotEqual(combined.WORKER_UID, combined.INSTALLER_UID)
 
     def test_compose_has_only_one_slicer_runtime_service(self):
-        compose = (ROOT / "compose.slicer.staging.yaml").read_text()
+        # Other worker test fixtures may mutate a temporary checkout; verify
+        # the committed deployment file, not an incidental working-tree state.
+        result = subprocess.run(
+            ["git", "show", "HEAD:docker-compose.yml"], cwd=ROOT,
+            check=True, capture_output=True, text=True, timeout=10)
+        compose = result.stdout
         self.assertIn("  slicer-worker:", compose)
+        self.assertNotIn("    profiles: [slicer]", compose)
+        self.assertIn("  makervault:", compose)
+        self.assertIn("    name: makervault", compose)
         self.assertIn("    container_name: makervault-slicer", compose)
         self.assertNotIn("\n  slicer-engine-installer:", compose)
         self.assertIn("http://slicer-worker:8091", compose)
         self.assertIn("slicer_worker.combined_service", compose)
         self.assertIn("cap_add: [SETUID, SETGID, KILL]", compose)
-        self.assertIn("10002:10002", compose)
-        self.assertIn("makervault_slicer_engines:/opt/engine-store:rw", compose)
+        self.assertNotIn("\\n  slicer-engine-store-init:", compose)
+        dockerfile = (ROOT / "slicer_worker/Dockerfile.generic").read_text()
+        self.assertIn("install -d -o 10002 -g 10002", dockerfile)
+        self.assertIn("SLICER_ENGINE_STORAGE:-makervault_slicer_engines", compose)
+        self.assertNotIn("SLICER_WORKER_ENABLED", compose)
 
     def test_combined_runtime_has_single_pinned_reviewed_binary(self):
         dockerfile = (ROOT / "slicer_worker/Dockerfile.generic").read_text()

@@ -449,13 +449,10 @@ class SliceJobApiTests(TestCase):
         self.assertEqual(self.client.post(orca_url, json.dumps({"default": "yes"}),
             content_type="application/json").status_code, 400)
 
-    def test_preview_is_admin_only_and_never_reports_worker_installed(self):
+    def test_preview_requires_admin_and_never_reports_worker_installed(self):
         from unittest.mock import patch
         url = "/api/printing/slicer/engines/"
-        with patch.dict("os.environ", {
-            "MAKERVAULT_SLICER_PREVIEW_ENABLED": "1",
-            "MAKERVAULT_SLICER_EXECUTION_ENABLED": "0",
-        }):
+        with patch.dict("os.environ", {"MAKERVAULT_SLICER_WORKER_URL": ""}):
             self.client.force_login(self.owner)
             result = self.client.get(url)
             self.assertFalse(result.json()["preview_enabled"])
@@ -472,20 +469,20 @@ class SliceJobApiTests(TestCase):
 
         self.client.force_login(self.owner)
         url = "/api/printing/slicer/engines/"
-        with patch.dict("os.environ", {"MAKERVAULT_SLICER_EXECUTION_ENABLED": "0"}):
+        with patch.dict("os.environ", {"MAKERVAULT_SLICER_WORKER_URL": ""}):
             response = self.client.get(url)
             self.assertEqual(response.status_code, 200)
             self.assertFalse(response.json()["deployment_enabled"])
             self.assertFalse(response.json()["worker_configured"])
 
-        # Execution enabled is not evidence of an installed or approved worker.
-        with patch.dict("os.environ", {"MAKERVAULT_SLICER_EXECUTION_ENABLED": "1"}):
+        # A configured worker URL is not evidence of an installed/approved engine.
+        with patch.dict("os.environ", {"MAKERVAULT_SLICER_WORKER_URL": "http://slicer-worker:8088"}):
             with patch("core.slicer_api.verified_installation", return_value={}):
                 response = self.client.get(url)
                 self.assertTrue(response.json()["deployment_enabled"])
                 self.assertFalse(response.json()["worker_configured"])
 
-        with patch.dict("os.environ", {"MAKERVAULT_SLICER_EXECUTION_ENABLED": "1"}):
+        with patch.dict("os.environ", {"MAKERVAULT_SLICER_WORKER_URL": "http://slicer-worker:8088"}):
             with patch("core.slicer_api.verified_installation", return_value={
                 "orcaslicer": {"version": "2.4.2", "enabled": True, "verified": True}
             }):

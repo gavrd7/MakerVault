@@ -126,8 +126,6 @@ def verified_installation():
     a pinned image reference (registry digest or local image ID) and exact hashes.
     The API only reports an engine available when that exact entry is healthy.
     """
-    if os.environ.get("MAKERVAULT_SLICER_EXECUTION_ENABLED") != "1":
-        return {}
     digest = os.environ.get("MAKERVAULT_SLICER_ENGINE_IMAGE_DIGEST", "")
     image_ref = os.environ.get("MAKERVAULT_SLICER_WORKER_IMAGE", "")
     if (
@@ -137,9 +135,11 @@ def verified_installation():
                 (image_ref.endswith("@" + digest) and image_ref.count("@") == 1))
     ):
         return {}
+    # Managed engine installation is selected by the configured installer endpoint,
+    # not by a separate environment feature toggle.
+    managed_installation = bool(os.environ.get("MAKERVAULT_SLICER_INSTALLER_URL"))
     configured = (os.environ.get("MAKERVAULT_SLICER_ENGINES_JSON", "")
-                  if os.environ.get("MAKERVAULT_SLICER_HOST_UPDATER_ENABLED") != "1"
-                  else "")
+                  if not managed_installation else "")
     if configured:
         try:
             import json
@@ -171,7 +171,7 @@ def verified_installation():
     # atomically activated manifest from its read-only versioned engine store.
     # Each entry is checked by the worker against its actual on-disk digest;
     # no administrator-managed environment approval list is required.
-    if os.environ.get("MAKERVAULT_SLICER_HOST_UPDATER_ENABLED") == "1":
+    if managed_installation:
         installed = {}
         for engine, entry in health_engines.items():
             version, checksum = entry.get("version"), entry.get("binary_sha256")

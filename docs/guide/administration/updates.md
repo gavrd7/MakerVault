@@ -2,7 +2,7 @@
 
 **Goal:** move to the current deployable release while keeping a recoverable copy of your data.
 
-MakerVault can be updated either by pulling the published GHCR image or by rebuilding from source. Use the same route you chose for installation unless you deliberately want to switch.
+MakerVault updates use published GHCR images and the single repository `docker-compose.yml`.
 
 1. Read the release notes/CHANGELOG for changes since your installed version.
 2. If upgrading from before v0.7, read [the migration chapter](../advanced/legacy-upgrade.md) first.
@@ -31,45 +31,25 @@ sudo docker compose exec -T makervault python manage.py v1_release_preflight
 If you pin `MAKERVAULT_IMAGE` in `.env`, change that value to the release you intend to run before pulling. For example:
 
 ```dotenv
-MAKERVAULT_IMAGE=ghcr.io/gavrd7/makervault:1.0.0
+MAKERVAULT_IMAGE=ghcr.io/gavrd7/makervault:1.7.0
 ```
 
-## Build-it-yourself update
+## Updating the four-container stack
 
-If your installation intentionally builds MakerVault locally, update the checkout and rebuild with the override file:
+The published images are downloaded from GHCR using **one `docker-compose.yml`**. MakerVault, its slicer, PostgreSQL and Redis are managed together; there are no profiles, extra Compose files or locally built production images.
 
 ```bash
-git status --short
-git rev-parse HEAD
-git fetch --prune origin
-git switch main
-git pull --ff-only origin main
-sudo docker compose -f compose.yaml -f compose.build.yaml up -d --build
-sudo docker compose -f compose.yaml -f compose.build.yaml ps
-sudo docker compose -f compose.yaml -f compose.build.yaml logs --tail=100 makervault
-sudo docker compose -f compose.yaml -f compose.build.yaml exec -T makervault python manage.py v1_release_preflight
+sudo docker compose config --quiet
+sudo docker compose pull
+sudo docker compose up -d
+sudo docker compose ps
 ```
 
-If `git status --short` shows your own changes, stop before switching/pulling and preserve them. Do not use a hard reset to discard unknown local work.
+Installed native slicer engines and their registry live in a separate persistent Docker volume. Updating the MakerVault and combined slicer images does not by itself authorise changing the versions of those native engines; use the application engine manager for explicit changes.
 
-## Switching between GHCR and local builds
+**Upgrading an older multi-file staging deployment:** first back up the complete installation, inspect existing custom files and private `.slicer-staging.env`, and preserve existing image identities and the named engine volume. Map relevant settings into the private `.env` before using the one-file configuration. Do **not** delete legacy containers or volumes until the new deployment has been checked and engine installations have been verified. Consult the dedicated [slicer guide](../3d-printing/slicer.md).
 
-Both routes use the same service names and persistent storage. You can therefore switch image source without migrating your data.
-
-To switch from a local build to the published image:
-
-```bash
-sudo docker compose pull makervault
-sudo docker compose up -d makervault
-```
-
-To switch back to a source build:
-
-```bash
-sudo docker compose -f compose.yaml -f compose.build.yaml up -d --build makervault
-```
-
-A database migration is not guaranteed to be reversible simply by switching to an older application image. Back up before changing versions.
+Never use `docker compose down -v` for upgrades; it can delete persistent database, media, keys and native engine storage.
 
 ## Check the result
 
