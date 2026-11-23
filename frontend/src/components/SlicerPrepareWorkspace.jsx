@@ -81,13 +81,14 @@ export default function SlicerPrepareWorkspace({
   const redoRef = useRef([]);
   const [, setHistoryVersion] = useState(0);
   const [selectedId, setSelectedId] = useState("");
+  const [selectedModifierId, setSelectedModifierId] = useState(null);
   const [selectedIds, setSelectedIds] = useState([]);
   const [selectionClearVersion, setSelectionClearVersion] = useState(0);
   const [expandedAssemblies, setExpandedAssemblies] = useState([]);
   const [movePlateTarget,setMovePlateTarget]=useState("");
   const [sliceMenuOpen,setSliceMenuOpen]=useState(false);
   const [showAllPlates,setShowAllPlates]=useState(false);
-  const selectSingle = id => { setSelectedId(id); setSelectedIds(id ? [id] : []); };
+  const selectSingle = id => { setSelectedId(id); setSelectedIds(id ? [id] : []); setSelectedModifierId(null); };
   const finishPainting = () => {
     setToolMode("select");
     setPaintError("");
@@ -241,10 +242,12 @@ export default function SlicerPrepareWorkspace({
       ...item, modifier_volumes: [...(item.modifier_volumes || []), fresh],
     }));
     setSelectedId(parent.instance_id);
+    setSelectedModifierId(fresh.id);
     setScope("objects");
   };
   const removeModifier = id => {
     if (!selectedObject) return;
+    if (selectedModifierId === id) setSelectedModifierId(null);
     updatePlate(latest.current.map(item => item.instance_id !== selectedObject.instance_id ? item : {
       ...item, modifier_volumes: (item.modifier_volumes || []).filter(row => row.id !== id),
     }));
@@ -1160,6 +1163,11 @@ export default function SlicerPrepareWorkspace({
             <small>Modifier shapes belong to this model, not the printable object list. {totalModifierCount}/48 regions on this plate. Native regional slicing remains blocked until Orca, Creality and Bambu binary verification.</small>
             {selectedModifiers.map((modifier,index) => <fieldset key={modifier.id} style={{display:"grid",gap:6,border:"1px solid #53647a",borderRadius:6,padding:8}}>
               <legend>Modifier {index+1}</legend>
+              {modifier.coordinate_space === "world" && <button type="button"
+                disabled={!canEdit||busy} aria-pressed={selectedModifierId === modifier.id}
+                onClick={()=>{setSelectedModifierId(modifier.id);setToolMode("move");setMobilePane("plate");}}>
+                {selectedModifierId===modifier.id?"Editing modifier on plate":"Move / Rotate / Scale on plate"}
+              </button>}
               <label>Primitive shape
                 <select aria-label={"Modifier "+(index+1)+" shape"} value={modifier.shape}
                   disabled={!canEdit||busy} onChange={e=>changeModifier(modifier.id,{shape:e.target.value})}>
@@ -2214,6 +2222,7 @@ export default function SlicerPrepareWorkspace({
           autoOrientGoal={autoOrientGoal} autoOrientRequest={autoOrientRequest}
           splitRequest={splitRequest} solidRequest={solidRequest}
           selectedInstanceIds={validSelection} selectionClearVersion={selectionClearVersion} onSelectModel={selectMultiple}
+          selectedModifierId={selectedModifierId} onSelectedModifierChange={setSelectedModifierId}
           onSelectedInstanceChange={selectSingle} measurementVisible={measurementVisible}
           measureMode={measureMode} measureUnit={measureUnit} measureSnapMode={measureSnapMode}
           measureClearVersion={measureClearVersion}
