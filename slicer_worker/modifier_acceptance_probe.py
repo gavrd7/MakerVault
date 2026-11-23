@@ -177,7 +177,12 @@ def probe(fixtures, binary, *, engine="orcaslicer", creality_native_project=Fals
                 receipt = runner(Path(binary), root, timeout_seconds=180)
             if receipt.get("status") != "completed":
                 raise WorkerError("Actual " + engine + " CLI did not complete " + label + " fixture.")
-            result[label] = regional_extrusion(root.joinpath("output.gcode").read_bytes())
+            emitted = root.joinpath("output.gcode").read_bytes()
+            if production_validator and label != "baseline":
+                from .modifier_gcode_audit import audit_modifier_positive_e
+                audit_modifier_positive_e(
+                    emitted, (root / "input.3mf").read_bytes(), engine)
+            result[label] = regional_extrusion(emitted)
     baseline = result["baseline"]
     modified = result["modified"]
     for label in ("control", "changed"):
