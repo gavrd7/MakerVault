@@ -39,9 +39,7 @@ services:
 
   # Slicer runs as its own container alongside the application and data services.
   # Four long-running containers. The permissions helper runs once and exits.
-  # The engine-store initializer is one-shot and exits. Set distinct credentials,
-  # immutable image identity and verified engine hashes in .env BEFORE enabling
-  # execution. Use real credentials; never ship default tokens.
+  # Engine-store setup is one-off; use unique private worker/installer tokens.
   slicer-engine-store-init:
     # One-off permissions preparation, not a long-running container.
     image: busybox:1.37.0
@@ -81,7 +79,6 @@ services:
       SLICER_INSTALLER_TOKEN: ${MAKERVAULT_SLICER_INSTALLER_TOKEN:?Set a different installer token in .env}
       SLICER_ENGINES_JSON: '${SLICER_ENGINES_JSON:-{}}'
     networks:
-      - makervault
       - makervault
     healthcheck:
       test: ["CMD", "python3", "-c", "import urllib.request,socket,json,sys; d=json.load(urllib.request.urlopen('http://127.0.0.1:8088/health',timeout=2)); s=socket.create_connection(('127.0.0.1',8091),timeout=2); s.close(); sys.exit(0 if d.get('ready') else 1)"]
