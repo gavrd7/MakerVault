@@ -173,10 +173,9 @@ jobs:
             --filament /tmp/bambu-verified-profiles/filament.json \
             --bambu-core-3mf --timeout 180
 
-      - name: Probe native Bambu modifier regional effects (diagnostic only)
+      - name: Verify native Bambu modifier regional effects (required)
         id: modifiers
         shell: bash
-        continue-on-error: true
         run: |
           set -euo pipefail
           python3 -m pip install --disable-pip-version-check --no-input 'defusedxml>=0.7.1,<0.8'
@@ -194,7 +193,6 @@ jobs:
       - name: Probe five additional native Bambu modifier shapes
         id: modifier_shapes
         shell: bash
-        continue-on-error: true
         run: |
           set -euo pipefail
           for shape in cylinder sphere cone disc torus; do
@@ -209,13 +207,13 @@ jobs:
               --fixtures "$root" \
               --binary /tmp/bambu-appimage-acceptance/squashfs-root/AppRun
           done
-      - name: Record Bambu modifier diagnostic without production approval
+      - name: Record required Bambu modifier evidence without production approval
         if: always()
         run: |
           echo "### Native Bambu primitive modifier probe" >> "$GITHUB_STEP_SUMMARY"
           echo "- Regional positive-E validation: ${{ steps.modifiers.outcome }}" >> "$GITHUB_STEP_SUMMARY"
           echo "- Additional five primitive shapes: ${{ steps.modifier_shapes.outcome }}" >> "$GITHUB_STEP_SUMMARY"
-          echo "- This step is diagnostic until native 3MF import and region G-code parity are proven." >> "$GITHUB_STEP_SUMMARY"
+          echo "- REQUIRED real-binary region and shape tests; fixture-only evidence does not enable production modifier slicing." >> "$GITHUB_STEP_SUMMARY"
 
       - name: Compare genuine pinned Bambu Studio 3MF metadata (diagnostic)
         shell: bash
