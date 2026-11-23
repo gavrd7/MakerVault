@@ -191,11 +191,30 @@ jobs:
             --engine bambustudio \
             --fixtures /tmp/bambu-modifier-fixtures \
             --binary /tmp/bambu-appimage-acceptance/squashfs-root/AppRun
+      - name: Probe five additional native Bambu modifier shapes
+        id: modifier_shapes
+        shell: bash
+        continue-on-error: true
+        run: |
+          set -euo pipefail
+          for shape in cylinder sphere cone disc torus; do
+            echo "Pinned Bambu regional native shape: $shape"
+            root="/tmp/bambu-modifier-$shape"
+            python3 scripts/build_native_modifier_fixture.py --output-dir "$root" --shape "$shape"
+            for kind in printer process filament; do
+              cp "/tmp/bambu-verified-profiles/$kind.json" "$root/$kind.json"
+            done
+            timeout 180s python3 -m slicer_worker.modifier_acceptance_probe \
+              --engine bambustudio \
+              --fixtures "$root" \
+              --binary /tmp/bambu-appimage-acceptance/squashfs-root/AppRun
+          done
       - name: Record Bambu modifier diagnostic without production approval
         if: always()
         run: |
           echo "### Native Bambu primitive modifier probe" >> "$GITHUB_STEP_SUMMARY"
           echo "- Regional positive-E validation: ${{ steps.modifiers.outcome }}" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Additional five primitive shapes: ${{ steps.modifier_shapes.outcome }}" >> "$GITHUB_STEP_SUMMARY"
           echo "- This step is diagnostic until native 3MF import and region G-code parity are proven." >> "$GITHUB_STEP_SUMMARY"
 
       - name: Compare genuine pinned Bambu Studio 3MF metadata (diagnostic)
