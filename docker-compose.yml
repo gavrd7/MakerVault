@@ -13,9 +13,8 @@ services:
       MAKERVAULT_BACKUP_ROOT: /app/backups
       MAKERVAULT_SLICER_WORKER_URL: http://slicer-worker:8088
       MAKERVAULT_SLICER_INSTALLER_URL: http://slicer-worker:8091
-      # Release-verified image identity; digest remains mandatory for execution.
-      MAKERVAULT_SLICER_WORKER_IMAGE: ${MAKERVAULT_SLICER_WORKER_IMAGE:-ghcr.io/gavrd7/makervault-slicer:1.7.0}
-      MAKERVAULT_SLICER_ENGINE_IMAGE_DIGEST: ${MAKERVAULT_SLICER_ENGINE_IMAGE_DIGEST:-}
+      # The published MakerVault application image already carries the
+      # verified slicer digest. No user-supplied integrity variables needed.
     ports:
       - "${MAKERVAULT_BIND_ADDRESS:-0.0.0.0}:${MAKERVAULT_PORT:-8765}:8000"
       - "${MAKERVAULT_HTTPS_BIND_ADDRESS:-0.0.0.0}:${MAKERVAULT_HTTPS_PORT:-8443}:8443"
