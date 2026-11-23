@@ -5,7 +5,7 @@
 <h1 align="center">MakerVault</h1>
 <p align="center"><strong>Your workshop, organised.</strong></p>
 <p align="center">A self-hosted workspace for electronics, making and 3D printing — from the parts you own to the things you build.</p>
-<p align="center"><strong>Application version: v1.6.0</strong></p>
+<p align="center"><strong>Application version: v1.7.0</strong></p>
 <p align="center">
   <a href="https://gavrd7.github.io/MakerVault-docs/">User guide</a> ·
   <a href="docs/guide/getting-started/install.md">Install</a> ·
@@ -19,11 +19,11 @@
   <img src="docs/guide/assets/makervault-cover.png" alt="MakerVault cover" width="100%">
 </p>
 
-## v1.7.0 installation preparation
+## Installation and the integrated slicer
 
 The [Linux installation guide](docs/guide/getting-started/install.md) now documents the optional **combined MakerVault Slicer** deployment with **four long-running containers**: application, `makervault-slicer` (worker + engine installer), PostgreSQL and Redis. The standalone permissions-init helper exits after initialising the engine store. The base stack remains available for installations that do not enable slicing.
 
-The reviewed production overlay is [`compose.slicer.yaml`](compose.slicer.yaml), alongside [`compose.yaml`](compose.yaml) and the [`.env.example`](.env.example) reference. A verified, immutable combined worker image and exact native engine checksums are required before starting the overlay with slicing enabled; the staging-only overlay is **not** a substitute for release artifacts. No native engine is automatically installed or approved.
+The single deployment configuration is [`compose.yaml`](compose.yaml), using the `slicer` profile for the optional combined service and [`.env.example`](.env.example) for configuration. A verified, immutable combined worker image and exact native engine checksums are required before enabling slicer execution. The old staging overlays are not release installation files. No native engine is automatically installed or approved.
 
 See [environment settings](docs/guide/getting-started/environment.md), [slicer setup](docs/guide/3d-printing/slicer.md) and [upgrades](docs/guide/administration/updates.md). Preserve your existing `.env`, named volumes and engine store when upgrading.
 
@@ -48,14 +48,14 @@ Maker projects rarely live in one place. Components end up in boxes and spreadsh
 | **Projects and bills of materials** | Project workspaces, notes, files, build information, BOMs, quantity-aware stock allocation and cost tracking |
 | **Wiring Lab** | Interactive wiring diagrams, catalogue-aware pin selection, basic electrical checks and JSON/SVG export |
 | **Files and 3D models** | Private files with version history; STL/3MF viewing and analysis; model revisions; printer-fit and orientation assistance; plain-text G-code library with bounded XY path preview, source inspection and save-as-new-version editing |
-| **G-code transfer and printing** | Explicit upload-only, upload-and-start or start-existing-printer-file workflows from compatible live printer connections; per-adapter file browsing and print verification; Creality K2 CFS mapping where supported (hardware validation varies) |
+| **MakerVault Slicer** | Independently installed OrcaSlicer, Creality Print and Bambu Studio engines; native profiles and build-plate preparation, supports, multicolour, painting, variable layers, G-code review, and per-engine version management |\n| **G-code transfer and printing** | Explicit upload-only, upload-and-start or start-existing-printer-file workflows from compatible live printer connections; per-adapter file browsing and print verification; Creality K2 CFS mapping where supported (hardware validation varies) |
 | **3D printers and materials** | Printer inventory, filament products, physical spools, reusable spool hardware, printed parts, print history and material/cost reporting |
 | **Live integrations** | Optional local printer monitoring and compatible camera feeds, supported printer controls, Spoolman review and Creality CFS material-database read-only snapshots |
-| **MakerTags** | Printable QR labels, stable `MV-XXXXXXXX` identities, RFID/NFC UID association, reassignment history and verified NTAG215 URLs; **Clean NFC data**, **Remove MakerTag**, and optional clean-before-remove are implemented in the #159 feature branch (not yet released) |
+| **MakerTags** | Printable QR labels, stable `MV-XXXXXXXX` identities, RFID/NFC UID association, reassignment history and verified NTAG215 URLs; **Clean NFC data**, **Remove MakerTag**, and optional clean-before-remove |
 | **Connected Devices** | Certificate-verified HTTPS pairing, device permissions and heartbeats; with **MakerVault Terminal v1.0**, browse records, create MakerTags, scan filament RFID tags and identify physical spools from the handheld |
 | **Search and administration** | Universal search, role-based access, optional OIDC/MFA, account quotas, backups, guarded restore and catalogue-maintenance tools |
 
-**G-code availability:** K1 native storage browsing and print-start were tested on a clean stock-firmware installation; K2 native HTTP transfer, Moonraker print-start and K1/K2 same-origin camera previews were also tested. A print-start command is sent only after confirmation, is not silently retried, and counts as verified only after correlated printer telemetry. Proprietary K2 mapped-CFS start and other manufacturer-specific transfers remain subject to hardware/firmware checks. The library is not a slicer and does not support binary BGCODE preview/editing.
+**G-code availability:** K1 native storage browsing and print-start were tested on a clean stock-firmware installation; K2 native HTTP transfer, Moonraker print-start and K1/K2 same-origin camera previews were also tested. A print-start command is sent only after confirmation, is not silently retried, and counts as verified only after correlated printer telemetry. Proprietary K2 mapped-CFS start and other manufacturer-specific transfers remain subject to hardware/firmware checks. The G-code Library reviews existing output, while MakerVault Slicer generates G-code through an installed and verified native engine; binary BGCODE editing is not supported.
 
 **Compatibility notes:** Printer support and available controls vary by manufacturer, firmware and connection method. Some adapters are monitoring-only or have limited real-hardware validation; see the [user guide](https://gavrd7.github.io/MakerVault-docs/) and [hardware-validation issue](https://github.com/gavrd7/MakerVault/issues/37). MakerVault does not automatically deduct physical spool stock from every estimated print.
 
@@ -63,21 +63,21 @@ Maker projects rarely live in one place. Components end up in boxes and spreadsh
 
 An inventory item can be allocated to a project BOM. A model and its revisions can be associated with a build; a recorded print can produce a tracked physical part. A MakerTag on a box, spool or printed object can bring you back to its current record. These links make the system more useful than isolated inventory or printer dashboards.
 
-**Terminal interoperability (introduced in v1.5.0; retained in v1.6.0):** a paired terminal can resolve CFS material identifiers against cached Creality printer databases, identify physical spools by either of up to two separate RFID UIDs, and scan each side of a spool on request from the Physical Identity form. Manufacturer material names require online MakerVault access; offline tag data remains readable. Third-party RFID support depends on compatible tags and available documentation, not universal compatibility.
+**Terminal interoperability:** a paired terminal can resolve CFS material identifiers against cached Creality printer databases, identify physical spools by either of up to two separate RFID UIDs, and scan each side of a spool on request from the Physical Identity form. Manufacturer material names require online MakerVault access; offline tag data remains readable. Third-party RFID support depends on compatible tags and available documentation, not universal compatibility.
 
-### MakerTag cleaning and removal (feature branch #159)
+### MakerTag cleaning and removal
 
-The release-candidate MakerTag maintenance workflow has three **distinct** actions:
+The MakerTag maintenance workflow has three **distinct** actions:
 
 - **Clean NFC data:** a paired MakerVault Terminal erases and independently verifies the writable NTAG215 NDEF user data, while **keeping** the MakerTag registration, linked inventory record and permanent URL in MakerVault.
 - **Remove MakerTag:** removes the registration (and makes its short URL stop resolving) but leaves the physical NFC tag unchanged.
 - **Remove and clean:** explicitly cleans and verifies the physical tag **first**, then removes the registration. If the wipe fails, the record is kept; if later server removal fails, MakerVault reports partial completion rather than claiming both steps succeeded.
 
-These operations are implemented and maintainer-tested in the merged [application PR #165](https://github.com/gavrd7/MakerVault/pull/165) and [terminal firmware PR #12](https://github.com/gavrd7/MakerVault-Hardware/pull/12), **included in MakerVault v1.6.0 (introduced in v1.5.1) and the matching Terminal v1.0.1 firmware**; published availability depends on the release tag and container/firmware assets. Cleaning applies to supported, writable, unprotected **NTAG215 MakerTags only**; it never erases the chip UID or manufacturer/configuration pages, unrelated inventory records, or Creality/Bambu/Elegoo filament tags. See the [MakerTags guide](https://gavrd7.github.io/MakerVault-docs/using/maker-tags/) for the end-user instructions in the corresponding updated guide.
+These operations are implemented and maintainer-tested in the merged [application PR #165](https://github.com/gavrd7/MakerVault/pull/165) and [terminal firmware PR #12](https://github.com/gavrd7/MakerVault-Hardware/pull/12), **available since MakerVault v1.5.1 and included in v1.7.0**, with matching Terminal firmware v1.0.1. Cleaning applies to supported, writable, unprotected **NTAG215 MakerTags only**; it never erases the chip UID or manufacturer/configuration pages, unrelated inventory records, or Creality/Bambu/Elegoo filament tags. See the [MakerTags guide](https://gavrd7.github.io/MakerVault-docs/using/maker-tags/) for the end-user instructions in the corresponding updated guide.
 
-### Terminal v1.0.0 connection reliability
+### Terminal connection reliability
 
-The matching terminal firmware in [MakerVault-Hardware PR #12](https://github.com/gavrd7/MakerVault-Hardware/pull/12) now uses native ESP-IDF `esp_http_client`, a persistent verified HTTPS session and correct C++/FreeRTOS worker-buffer cleanup. MakerVault v1.6.0 retains the **single authenticated five-second idle snapshot** (`GET /api/device/v1/pending-work/`) in place of four separate pending-operation requests. Heartbeats, device scope checks and physical-write authorisation remain separate and cannot be inferred from the snapshot.
+The matching terminal firmware in [MakerVault-Hardware PR #12](https://github.com/gavrd7/MakerVault-Hardware/pull/12) now uses native ESP-IDF `esp_http_client`, a persistent verified HTTPS session and correct C++/FreeRTOS worker-buffer cleanup. MakerVault retains the **single authenticated five-second idle snapshot** (`GET /api/device/v1/pending-work/`) in place of four separate pending-operation requests. Heartbeats, device scope checks and physical-write authorisation remain separate and cannot be inferred from the snapshot.
 
 For direct port-8443 deployments, the native Gunicorn HTTPS listener defaults to a **15-second keep-alive**, configurable with `HTTPS_KEEPALIVE_SECONDS`. This is long enough to span normal terminal idle polls; a separate reverse proxy must also allow reuse on its **device-facing HTTPS connection**. The maintainer's two-hour-plus physical terminal test showed stable idle heap, continuous successful polls and no memory-recovery reboots. Transport switching or keep-alive alone is not a substitute for TLS verification. See [HTTPS/reverse-proxy guidance](docs/guide/advanced/reverse-proxy.md) and [configuration reference](docs/guide/reference/configuration.md).
 
@@ -98,6 +98,8 @@ sudo docker compose up -d
 sudo docker compose ps
 ```
 
+The base commands above start three long-running services. After configuring separate installer/worker tokens, a reviewed combined worker image and native engine checksums in your private `.env`, enable the fourth service with `sudo docker compose --profile slicer up -d`. Do not enable execution with placeholder credentials. The one-off engine-store initializer exits when done. See the [dedicated slicer guide](docs/guide/3d-printing/slicer.md).
+
 The supplied Compose configuration normally uses `ghcr.io/gavrd7/makervault:latest`. For first-time setup, open the server's configured address (default `http://SERVER-IP:8765`) and follow the administrator wizard. Retrieve the one-time setup token with:
 
 ```bash
@@ -106,13 +108,15 @@ sudo docker compose exec -u makervault makervault python manage.py first_run_tok
 
 Follow the [first sign-in guide](docs/guide/getting-started/first-sign-in.md) for the full process. **Configure and protect HTTPS** before connecting hardware, especially with a private CA. [Connected Devices guide](docs/guide/using/connected-devices.md)
 
-For existing installations, **back up first**, then update your checkout and Compose images as documented in the [installation guide](docs/guide/getting-started/install.md) and [backup guide](docs/guide/administration/backup.md). A version rollback may require restoring data, not simply changing the image tag.
+For existing installations, **back up first**, then update your checkout and Compose images as documented in the [upgrade guide](docs/guide/administration/updates.md) and [backup guide](docs/guide/administration/backup.md). A version rollback may require restoring data, not simply changing the image tag.
 
 ## Roadmap
 
 A concise view of what's delivered and where MakerVault may go next. Checkmarks refer to implemented functionality, **not** universal compatibility with every printer or hardware model. The [detailed roadmap](docs/ROADMAP.md), [issues](https://github.com/gavrd7/MakerVault/issues) and [changelog](CHANGELOG.md) provide scope, validation notes and release history.
 
 ### Available
+
+- [x] Integrated MakerVault Slicer for OrcaSlicer, Creality Print and Bambu Studio, independently installed and explicitly verified through the combined slicer service.
 
 - [x] Self-hosted Docker deployment, first-run setup, account security and managed backup/restore
 - [x] Electronic component/board catalogues, physical inventory and storage locations
@@ -128,7 +132,7 @@ A concise view of what's delivered and where MakerVault may go next. Checkmarks 
 ### Planned / under evaluation
 
 
-- [ ] **Self-hosted multi-engine FDM slicing:** optional local slicing service and one MakerVault UI, subject to engine, CLI and licence evaluation
+- [ ] **Additional native slicing engines and interoperability:** build on the existing OrcaSlicer, Creality Print and Bambu Studio integrations after per-engine validation.
 - [ ] **MakerVault Weigh Station:** connected scale/RFID hardware with a removable printable platform (hardware development)
 - [x] **Read-only CFS material-tag decoding**, K2 printer material-database snapshots, scoped online material lookup and explicit physical spool UID association; no CFS tag writing or printer database push
 - [ ] Expanded real-hardware validation and compatibility for printer/camera adapters ([issue #37](https://github.com/gavrd7/MakerVault/issues/37))
