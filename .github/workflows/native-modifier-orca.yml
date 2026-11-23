@@ -16,8 +16,8 @@ permissions:
 
 jobs:
   real-orca-regional-effect:
-    runs-on: ubuntu-latest
-    timeout-minutes: 30
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
       - name: Build offline baseline and 50% native modifier 3MF pair
@@ -46,7 +46,19 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           printf 'POSTGRES_PASSWORD=ci-only-placeholder\n' > .env
-          python3 scripts/install_slicer_staging.py prepare-orca
+          # Debian package indexes used by the disposable engine image can
+          # transiently fail; retry the same pinned download + Dockerfile
+          # without relaxing any asset digest or image integrity checks.
+          for attempt in 1 2 3; do
+            if python3 scripts/install_slicer_staging.py prepare-orca; then
+              exit 0
+            fi
+            if [ "$attempt" -eq 3 ]; then
+              echo "::error::Pinned Orca staging image could not be prepared after retries."
+              exit 1
+            fi
+            sleep 20
+          done
       - name: Probe actual native G-code region and unaffected control
         id: regional
         continue-on-error: true
