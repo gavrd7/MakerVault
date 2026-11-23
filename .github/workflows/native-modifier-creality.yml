@@ -25,6 +25,7 @@ jobs:
       - name: Resolve exact-version Creality native profiles and bounded modifier projects
         run: |
           set -euo pipefail
+          python3 -m py_compile scripts/diagnose_creality_modifier_import.py scripts/build_creality_modifier_projects.py
           python3 -m pip install --disable-pip-version-check --no-input "defusedxml>=0.7.1,<0.8"
           python3 scripts/build_creality_modifier_profiles.py --output /tmp/creality-pinned-profiles
           python3 scripts/build_native_modifier_fixture.py --output-dir /tmp/creality-native-modifiers
