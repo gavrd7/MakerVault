@@ -128,7 +128,8 @@ def probe(fixtures, binary, *, engine="orcaslicer", creality_native_project=Fals
                                    for node in children)
                             or any(mesh.find(ns + "mesh") is None for mesh in meshes)):
                         raise WorkerError("Unsafe Creality native external modifier mesh mapping.")
-                (root / "creality-native-project.marker").write_text("fixture-only")
+                if not production_validator or label == "baseline":
+                    (root / "creality-native-project.marker").write_text("fixture-only")
                 (root / "input.3mf").write_bytes(data)
             else:
                 (root / "input.3mf").write_bytes(source_data)
