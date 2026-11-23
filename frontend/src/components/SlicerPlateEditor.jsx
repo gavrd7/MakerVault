@@ -2699,6 +2699,41 @@ export default function SlicerPlateEditor({
       setLiveRotation(null);
       const mesh = transform.object;
       if (!mesh) return;
+      if (mesh.userData.isWorldModifier) {
+        const current = latestObjectsRef.current;
+        const owner = current.find(item =>
+          item.instance_id === mesh.userData.modifierParentId);
+        const original = owner?.modifier_volumes?.find(row =>
+          row.id === mesh.userData.modifierId && row.coordinate_space === "world");
+        if (!original) return;
+        const positions = [mesh.position.x, mesh.position.y, mesh.position.z];
+        const rotations = [mesh.rotation.x, mesh.rotation.y, mesh.rotation.z]
+          .map(v => pretty(THREE.MathUtils.radToDeg(v)));
+        const scales = [mesh.scale.x, mesh.scale.y, mesh.scale.z]
+          .map(v => pretty(v * 100));
+        if (positions.some(v => !Number.isFinite(v) || Math.abs(v) > 10000)
+            || rotations.some(v => !Number.isFinite(v) || Math.abs(v) > 360)
+            || scales.some(v => !Number.isFinite(v) || v < 5 || v > 400)) {
+          setError("Modifier position, rotation or scale exceeds the supported limits.");
+          mesh.position.set(original.x_mm, original.y_mm, original.z_mm);
+          mesh.rotation.set(...original.rotation_xyz_deg.map(v =>
+            THREE.MathUtils.degToRad(v)), "XYZ");
+          mesh.scale.set(...original.scale_xyz_percent.map(v => v / 100));
+          return;
+        }
+        const updated = {
+          ...original, x_mm: pretty(positions[0]), y_mm: pretty(positions[1]),
+          z_mm: pretty(positions[2]), rotation_xyz_deg: rotations,
+          scale_xyz_percent: scales,
+        };
+        setError("");
+        latestOnChangeRef.current(current.map(row =>
+          row.instance_id !== owner.instance_id ? row : {
+            ...row, modifier_volumes: row.modifier_volumes.map(modifier =>
+              modifier.id === original.id ? updated : modifier),
+          }));
+        return;
+      }
       if (mesh===groupProxy) {
         const pivot=groupProxy.userData.pivot || {x:0,y:0,z:0};
         const dx=pretty(groupProxy.position.x-pivot.x);
@@ -3094,11 +3129,25 @@ export default function SlicerPlateEditor({
         selection.includes(item.instance_id) ? 0.32 : 0;
     }
     const selectedMesh = state.meshes.get(selected);
+    const activeModifier = selectedMesh?.userData.modifierGhosts?.find(ghost =>
+      ghost.userData.isWorldModifier && ghost.userData.modifierId === selectedModifierId);
     state.setSelectionOutlines(["paint_colour","paint_support","paint_seam","paint_fuzzy","variable_layers"].includes(toolMode) ? [] : selection.map(id=>state.meshes.get(id)).filter(Boolean));
     const singleEditable = canEdit && toolMode !== "paint_colour" && !solidDialog && selectedMesh && selection.length < 2;
     const groupEditable = canEdit && !solidDialog && selection.length > 1 &&
       ["move","rotate","scale"].includes(toolMode);
-    if (groupEditable) {
+    if (activeModifier && canEdit && !solidDialog &&
+        ["move", "rotate", "scale"].includes(toolMode)) {
+      // Only the selected modifier is attached to the existing on-plate gizmo.
+      // Its owning printable model does not move or rotate.
+      state.rotationGizmo?.update(null);
+      state.transform.setMode(toolMode === "move" ? "translate" :
+        toolMode === "rotate" ? "rotate" : "scale");
+      state.transform.setSpace(toolMode === "rotate" || toolMode === "scale" ? "local" : "world");
+      state.transform.showX = true;
+      state.transform.showY = true;
+      state.transform.showZ = true;
+      state.transform.attach(activeModifier);
+    } else if (groupEditable) {
       const members=objects.filter(item=>selection.includes(item.instance_id));
       const centerX=members.reduce((sum,item)=>sum+Number(item.x_mm||0),0)/members.length;
       const centerY=members.reduce((sum,item)=>sum+Number(item.y_mm||0),0)/members.length;
@@ -3131,7 +3180,7 @@ export default function SlicerPlateEditor({
         state.transform.detach();
       }
     }
-  }, [objects, selected, selectedInstanceIds, toolMode, canEdit, dimensions, issueKey, solidDialog]);
+  }, [objects, selected, selectedInstanceIds, selectedModifierId, toolMode, canEdit, dimensions, issueKey, solidDialog]);
 
   // Done on a paint or variable-layer panel must remove the *rendered* selection
   // as well as clearing React selection state. These helpers live in Three.js
