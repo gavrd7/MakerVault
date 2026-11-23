@@ -187,7 +187,7 @@ jobs:
           # formats with changed/control-region positive-E proof. No
           # guessing from 3MF metadata, no printer access or dispatch.
           timeout 900s python3 -m slicer_worker.modifier_acceptance_probe \
-            --engine bambustudio \
+            --engine bambustudio \ --production-validator
             --fixtures /tmp/bambu-modifier-fixtures \
             --binary /tmp/bambu-appimage-acceptance/squashfs-root/AppRun
       - name: Probe five additional native Bambu modifier shapes
@@ -203,7 +203,7 @@ jobs:
               cp "/tmp/bambu-verified-profiles/$kind.json" "$root/$kind.json"
             done
             timeout 180s python3 -m slicer_worker.modifier_acceptance_probe \
-              --engine bambustudio \
+              --engine bambustudio \ --production-validator
               --fixtures "$root" \
               --binary /tmp/bambu-appimage-acceptance/squashfs-root/AppRun
           done
