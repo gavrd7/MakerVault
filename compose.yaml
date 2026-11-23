@@ -37,31 +37,14 @@ services:
       retries: 3
       start_period: 45s
 
-  # Slicer runs as its own container alongside the application and data services.
-  # Four long-running containers. The permissions helper runs once and exits.
-  # Engine-store setup is one-off; use unique private worker/installer tokens.
-  slicer-engine-store-init:
-    # One-off permissions preparation, not a long-running container.
-    image: busybox:1.37.0
-    command: ["sh", "-ec", "chown -R 10002:10002 /engine-store; find /engine-store -type d -exec chmod 0755 {} +; find /engine-store -type f -exec chmod go-w,a+rX {} +"]
-    user: "0:0"
-    restart: "no"
-    cap_drop: [ALL]
-    cap_add: [CHOWN, FOWNER, DAC_READ_SEARCH]
-    security_opt: ["no-new-privileges:true"]
-    network_mode: "none"
-    volumes:
-      - makervault_slicer_engines:/engine-store:rw
-
+  # Dedicated GHCR slicer runtime. A fresh named volume inherits installer
+  # ownership from the reviewed image. Preserve legacy volumes on upgrades.
   slicer-worker:
     # DNS name is slicer-worker; the single running container has a friendly name.
     container_name: makervault-slicer
     image: ${MAKERVAULT_SLICER_WORKER_IMAGE:-ghcr.io/gavrd7/makervault-slicer:1.7.0}
     command: ["python3", "-m", "slicer_worker.combined_service"]
     restart: unless-stopped
-    depends_on:
-      slicer-engine-store-init:
-        condition: service_completed_successfully
     # Entry-point drops worker and installer processes to separate UIDs.
     user: "0:0"
     init: true
