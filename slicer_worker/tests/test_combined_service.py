@@ -57,7 +57,9 @@ class CombinedSlicerTests(unittest.TestCase):
         self.assertIn("http://slicer-worker:8091", compose)
         self.assertIn("slicer_worker.combined_service", compose)
         self.assertIn("cap_add: [SETUID, SETGID, KILL]", compose)
-        self.assertIn("10002:10002", compose)
+        self.assertNotIn("\\n  slicer-engine-store-init:", compose)
+        dockerfile = (ROOT / "slicer_worker/Dockerfile.generic").read_text()
+        self.assertIn("install -d -o 10002 -g 10002", dockerfile)
         self.assertIn("makervault_slicer_engines:/opt/engine-store:rw", compose)
 
     def test_combined_runtime_has_single_pinned_reviewed_binary(self):
