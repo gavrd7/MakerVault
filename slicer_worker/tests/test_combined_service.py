@@ -60,7 +60,8 @@ class CombinedSlicerTests(unittest.TestCase):
         self.assertNotIn("\\n  slicer-engine-store-init:", compose)
         dockerfile = (ROOT / "slicer_worker/Dockerfile.generic").read_text()
         self.assertIn("install -d -o 10002 -g 10002", dockerfile)
-        self.assertIn("makervault_slicer_engines:/opt/engine-store:rw", compose)
+        self.assertIn("SLICER_ENGINE_STORAGE:-makervault_slicer_engines", compose)
+        self.assertNotIn("SLICER_WORKER_ENABLED", compose)
 
     def test_combined_runtime_has_single_pinned_reviewed_binary(self):
         dockerfile = (ROOT / "slicer_worker/Dockerfile.generic").read_text()
