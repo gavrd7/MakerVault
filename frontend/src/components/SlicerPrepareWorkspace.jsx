@@ -243,6 +243,7 @@ export default function SlicerPrepareWorkspace({
     }));
     setSelectedId(parent.instance_id);
     setSelectedModifierId(fresh.id);
+    setToolMode("move");
     setScope("objects");
   };
   const removeModifier = id => {
@@ -1144,7 +1145,7 @@ export default function SlicerPrepareWorkspace({
         {editingObject && <div className="slicerObjectSettingsInfo">
           <label htmlFor="slicer-object-settings-instance">Selected object</label>
           <select id="slicer-object-settings-instance" value={selectedObject?.instance_id || ""}
-            onChange={event => setSelectedId(event.target.value)}>
+            onChange={event => {setSelectedId(event.target.value);setSelectedModifierId(null);}}>
             {!selectedObject && <option value="">Select a model</option>}
             {objects.map(item => <option key={item.instance_id} value={item.instance_id}>
               {itemName(item)}
