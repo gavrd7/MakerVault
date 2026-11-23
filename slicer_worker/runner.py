@@ -53,7 +53,7 @@ def prusa_command(binary: Path, workdir: Path) -> list[str]:
         # Native profiles can include arbitrary post-processing scripts.
         # Reject execution hooks before launching any slicer.
         data = profile.read_bytes()
-        if b"\\x00" in data:
+        if b"\x00" in data:
             raise WorkerError("Native profile contains binary data.")
         for line in data.decode("utf-8", "replace").splitlines():
             key = line.partition("=")[0].strip().lower()
