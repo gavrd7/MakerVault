@@ -15,6 +15,7 @@ from unittest.mock import patch
 
 from .orca_runner import run_orca
 from .bambu_runner import run_bambu
+from .creality_runner import run_creality
 from .runner import WorkerError
 from .three_mf_validation import validate_worker_3mf as strict_worker_3mf
 
@@ -69,7 +70,7 @@ def regional_extrusion(gcode):
 
 
 def probe(fixtures, binary, *, engine="orcaslicer"):
-    if engine not in {"orcaslicer", "bambustudio"}:
+    if engine not in {"orcaslicer", "bambustudio", "crealityprint"}:
         raise WorkerError("Unsupported modifier acceptance engine.")
     fixtures = Path(fixtures)
     result = {}
@@ -100,10 +101,15 @@ def probe(fixtures, binary, *, engine="orcaslicer"):
                     return strict_worker_3mf(
                         data, allow_native_modifier_fixture=True, **kwargs)
                 return strict_worker_3mf(data, **kwargs)
-            module = ("slicer_worker.orca_runner.validate_worker_3mf"
-                      if engine == "orcaslicer" else
-                      "slicer_worker.bambu_runner.validate_worker_3mf")
-            runner = run_orca if engine == "orcaslicer" else run_bambu
+            module = {
+                "orcaslicer": "slicer_worker.orca_runner.validate_worker_3mf",
+                "bambustudio": "slicer_worker.bambu_runner.validate_worker_3mf",
+                "crealityprint": "slicer_worker.creality_runner.validate_worker_3mf",
+            }[engine]
+            runner = {
+                "orcaslicer": run_orca, "bambustudio": run_bambu,
+                "crealityprint": run_creality,
+            }[engine]
             with patch(module, side_effect=validate_fixture):
                 receipt = runner(Path(binary), root, timeout_seconds=180)
             if receipt.get("status") != "completed":
@@ -152,7 +158,7 @@ def probe(fixtures, binary, *, engine="orcaslicer"):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--fixtures", type=Path, required=True)
-    parser.add_argument("--engine", choices=("orcaslicer", "bambustudio"), default="orcaslicer")
+    parser.add_argument("--engine", choices=("orcaslicer", "bambustudio", "crealityprint"), default="orcaslicer")
     parser.add_argument("--binary", type=Path, required=True)
     args = parser.parse_args()
     try:
