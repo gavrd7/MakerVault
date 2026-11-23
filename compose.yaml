@@ -71,15 +71,11 @@ services:
       timeout: 5s
       retries: 10
 
-  # Dedicated GHCR slicer runtime. A fresh named volume inherits installer
-  # ownership from the reviewed image. Preserve legacy volumes on upgrades.
   slicer-worker:
-    # DNS name is slicer-worker; the single running container has a friendly name.
     container_name: makervault-slicer
     image: ${MAKERVAULT_SLICER_WORKER_IMAGE:-ghcr.io/gavrd7/makervault-slicer:1.7.0}
     command: ["python3", "-m", "slicer_worker.combined_service"]
     restart: unless-stopped
-    # Entry-point drops worker and installer processes to separate UIDs.
     user: "0:0"
     init: true
     read_only: true
@@ -103,7 +99,6 @@ services:
       timeout: 5s
       retries: 3
       start_period: 120s
-    # No published worker/installer ports or Docker socket mount.
 
 networks:
   makervault:
