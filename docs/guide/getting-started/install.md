@@ -6,7 +6,7 @@ Using Windows instead? Follow [Install MakerVault on Windows](windows.md) for Do
 
 This chapter covers a native Linux Docker host. MakerVault also supports the same Compose stack on Windows through the separate Windows guide.
 
-MakerVault uses the published **GitHub Container Registry (GHCR)** images and one `compose.yaml` file. No compilation or extra deployment overlays are required.
+MakerVault uses the published **GitHub Container Registry (GHCR)** images and one `docker-compose.yml` file. No compilation or extra deployment overlays are required.
 
 ## 1. Install Docker and the basic tools
 
@@ -40,7 +40,7 @@ git clone https://github.com/gavrd7/MakerVault.git
 cd MakerVault
 ```
 
-The repository contains one Compose file (`compose.yaml`), `.env.example`, and the application and slicer source. The normal installation uses the published container image rather than compiling that source.
+The repository contains one Compose file (`docker-compose.yml`), `.env.example`, and the application and slicer source. The normal installation uses the published container image rather than compiling that source.
 
 The default image is:
 
