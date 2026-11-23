@@ -70,7 +70,7 @@ def regional_extrusion(gcode):
 def probe(fixtures, binary):
     fixtures = Path(fixtures)
     result = {}
-    for label in ("baseline", "modified"):
+    for label in ("baseline", "modified", "lower", "both"):
         with tempfile.TemporaryDirectory(prefix="modifier-real-orca-") as tmp:
             root = Path(tmp)
             for name in ("printer.json", "filament.json", "process.json"):
@@ -83,7 +83,7 @@ def probe(fixtures, binary):
             # still rejects nested modifier parts for production requests.
             # Never bypass the new explicit nested 3MF structural allowlist.
             def validate_fixture(data, **kwargs):
-                if label == "modified":
+                if label != "baseline":
                     return strict_worker_3mf(
                         data, allow_native_modifier_fixture=True, **kwargs)
                 return strict_worker_3mf(data, **kwargs)
@@ -106,9 +106,29 @@ def probe(fixtures, binary):
     changed_control = modified["totals"]["control"]
     if baseline_control <= 0 or abs(changed_control - baseline_control) > .10 * baseline_control:
         raise WorkerError("Native modifier changed the unaffected lower control region.")
+    # Move the same modifier to the opposite Z band: the effect must
+    # reverse, and two independent modifiers must change both bands.
+    lower = result["lower"]
+    both = result["both"]
+    def enough_moves(case, region):
+        if case["moves"][region] < 20:
+            raise WorkerError("Missing positive-E deposition for " + region)
+    for label in ("lower", "both"):
+        for region in ("control", "changed"):
+            enough_moves(result[label], region)
+    if lower["totals"]["control"] <= baseline_control * 1.20:
+        raise WorkerError("Moving the modifier to the lower region did not increase lower extrusion.")
+    if abs(lower["totals"]["changed"] - original) > original * .10:
+        raise WorkerError("Lower modifier unexpectedly changed the upper control region.")
+    for region, isolated in (("control", lower), ("changed", modified)):
+        expected = isolated["totals"][region]
+        actual = both["totals"][region]
+        if abs(actual - expected) > expected * .12:
+            raise WorkerError("Paired modifiers did not preserve isolated " + region + " effect.")
     return {"status": "passed", "engine": "orcaslicer",
             "change_ratio": round(altered / original, 3),
             "control_ratio": round(changed_control / baseline_control, 3),
+            "lower_change_ratio": round(lower["totals"]["control"] / baseline_control, 3),
             "evidence": result,
             "note": "Offline actual CLI G-code evidence; production modifier admission remains disabled."}
 
