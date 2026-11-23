@@ -1,8 +1,8 @@
 """Offline diagnostic for actual Orca modifier-region G-code (never production).
 
 Runs only with repository-generated fixture files inside a networkless disposable
-container. Temporarily bypasses the *production* flat-3MF admission validator
-for this one trusted test fixture so native parser/effectiveness can be examined.
+container. Uses an explicit, strictly validated fixture-only 3MF gate for the nested
+modifier object so real native parser/effectiveness can be examined.
 A pass is diagnostic evidence, NOT approval to enable modifier execution.
 """
 import argparse
@@ -15,6 +15,7 @@ from unittest.mock import patch
 
 from .orca_runner import run_orca
 from .runner import WorkerError
+from .three_mf_validation import validate_worker_3mf as strict_worker_3mf
 
 
 _COMMAND = re.compile(r"^(G0?0|G0?1|G92|M82|M83|G90|G91)\b", re.I)
@@ -78,8 +79,16 @@ def probe(fixtures, binary):
             if source.is_symlink() or not source.is_file():
                 raise WorkerError("Native modifier test fixture missing.")
             shutil.copyfile(source, root / "input.3mf")
-            # Test-only admission bypass: do not import this into service.py.
-            with patch("slicer_worker.orca_runner.validate_worker_3mf", return_value=True):
+            # Test-only alternate admission: the default worker validator
+            # still rejects nested modifier parts for production requests.
+            # Never bypass the new explicit nested 3MF structural allowlist.
+            def validate_fixture(data, **kwargs):
+                if label == "modified":
+                    return strict_worker_3mf(
+                        data, allow_native_modifier_fixture=True, **kwargs)
+                return strict_worker_3mf(data, **kwargs)
+            with patch("slicer_worker.orca_runner.validate_worker_3mf",
+                       side_effect=validate_fixture):
                 receipt = run_orca(Path(binary), root, timeout_seconds=180)
             if receipt.get("status") != "completed":
                 raise WorkerError("Actual Orca CLI did not complete " + label + " fixture.")
