@@ -86,7 +86,7 @@ By default, Compose pulls the published combined slicer image from `ghcr.io/gavr
 
 The older `makervault-slicer:0.1.0` image is **not** the combined worker/installer and must not be used in v1.7.0.
 
-Use `sudo docker compose config --quiet` to validate the complete configuration without revealing secret values. See the [Slicer guide](../3d-printing/slicer.md) for native engine installation and safe print checks.
+For persistent storage, `SLICER_ENGINE_STORAGE` can be a Docker volume name or an absolute host directory, just like `MEDIA_STORAGE`, `KEY_STORAGE`, `BACKUP_STORAGE`, `POSTGRES_STORAGE` and `REDIS_STORAGE`. The slicer folder must be owned by UID 10002 with no group/world write permission; see [storage options](storage.md#slicer-engine-store-permissions-important-for-custom-mounts). Use `sudo docker compose config --quiet` to validate the complete configuration without revealing secret values. See the [Slicer guide](../3d-printing/slicer.md) for native engine installation and safe print checks.
 
 ## Generate the secrets
 
