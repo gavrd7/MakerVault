@@ -92,7 +92,6 @@ def supervise():
     installer_env = os.environ.copy()
     installer_env.pop("SLICER_WORKER_TOKEN", None)
     installer_env.pop("SLICER_ENGINES_JSON", None)
-    installer_env.pop("SLICER_WORKER_ENABLED", None)
     children = []
     stopping = False
 
