@@ -53,7 +53,7 @@ sudo docker compose up -d
 
 Open **`http://YOUR-SERVER-IP:8765`** in your browser and follow the initial setup wizard.
 
-**MakerVault Slicer** runs in a separate container and supports OrcaSlicer, Creality Print and Bambu Studio. Use the [dedicated slicer guide](https://gavrd7.github.io/MakerVault-docs/slicer/) for installation, engine management, profiles and painting, or the [in-repository reference](docs/guide/3d-printing/slicer.md).
+**MakerVault Slicer** is published automatically alongside the main MakerVault GHCR image for each versioned release. It runs in a separate container and supports OrcaSlicer, Creality Print and Bambu Studio. Use the [dedicated slicer guide](https://gavrd7.github.io/MakerVault-docs/slicer/) for installation, engine management, profiles and painting, or the [in-repository reference](docs/guide/3d-printing/slicer.md).
 
 For detailed instructions, see the [Linux installation guide](docs/guide/getting-started/install.md), [Windows / Docker Desktop guide](docs/guide/getting-started/windows.md), [environment configuration](docs/guide/getting-started/environment.md) and [first sign-in guide](docs/guide/getting-started/first-sign-in.md). Already using MakerVault? Follow the [upgrade guide](docs/guide/administration/updates.md) and [backup guide](docs/guide/administration/backup.md) instead of starting from scratch.
 
