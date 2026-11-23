@@ -32,3 +32,10 @@ test("torus preview uses the exact backend major and minor radii", () => {
   assert.match(editor, /TorusGeometry\(\.30, \.20, 16, 32\)/);
   assert.match(editor, /geometry\.scale\(w, d, h \/ \.4\)/);
 });
+
+test("object settings exposes regional walls and enforces total plate modifier count", () => {
+  assert.match(prepare, /Regional wall loops/);
+  assert.match(prepare, /totalModifierCount >= 48/);
+  assert.match(prepare, /totalModifierCount>=48/);
+  assert.match(prepare, /if\(raw===""\) delete settings\.wall_loops/);
+});
