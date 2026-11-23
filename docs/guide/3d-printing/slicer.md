@@ -15,7 +15,7 @@ The combined slicer container has two isolated processes with different credenti
 - The **worker** runs verified slicer binaries and cannot write to the engine store or make outbound connections.
 - The **installer** installs or switches an individual approved engine version into persistent storage when explicitly requested by an administrator.
 
-A separate permissions-initialisation helper runs and exits. It is not a fifth permanent container. The application does not require a Docker socket, and Redis, PostgreSQL and the slicer publish no host ports. All services share the one `makervault` Docker network.
+The published image prepares the persistent engine-store volume on a new installation. Older volumes require an explicit ownership check before upgrading. The application does not require a Docker socket, and Redis, PostgreSQL and the slicer publish no host ports. All services share the one `makervault` Docker network.
 
 Before enabling the slicer container:
 
