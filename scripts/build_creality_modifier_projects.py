@@ -29,6 +29,10 @@ def prepare(fixtures):
             src.read_bytes(), printer=printer, process=process,
             filaments=[filament, filament], version="7.3.1",
             bed_width=220, bed_depth=220,
+            # The generic tower collision helper examines direct meshes;
+            # nested 3MF modifiers use a component parent. Use a fixed, valid
+            # test-only rear corner, with the actual CLI as acceptance gate.
+            prime_tower={"x": 170, "y": 170},
         )
         dest.write_bytes(project)
         output.append(dest.name)
