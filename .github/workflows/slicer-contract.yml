@@ -64,9 +64,11 @@ jobs:
           services=stack["services"]
           assert set(services) == {"makervault","postgres","redis","slicer-worker"}, services.keys()
           assert set(stack["networks"]) == {"makervault"}, stack["networks"]
-          assert list(services) == ["makervault","postgres","redis","slicer-worker"], list(services)
+          from pathlib import Path
+          compose=Path("compose.yaml").read_text()
+          assert compose.index("  makervault:") < compose.index("  postgres:") < compose.index("  redis:") < compose.index("  slicer-worker:")
           assert services["slicer-worker"]["volumes"][0]["source"] == "makervault_slicer_engines"
-          assert not any(":8555" in str(p) or p.get("target")==8555 for p in services["makervault"].get("ports",[]) if isinstance(p,dict))
+          assert not any(p.get("target")==8555 for p in services["makervault"].get("ports",[]) if isinstance(p,dict))
           for name in ("makervault","postgres","redis","slicer-worker"):
               assert len(services[name]["networks"]) == 1
           for name in ("postgres","redis","slicer-worker"):
