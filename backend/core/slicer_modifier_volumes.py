@@ -73,6 +73,52 @@ def validate_modifier_volumes(raw):
     return result
 
 
+
+# Explicit exact-version scope for the first owner-verified, single-material
+# production modifier route. A new binary must re-prove regional G-code effects.
+VERIFIED_NATIVE_MODIFIER_VERSIONS = {
+    "orcaslicer": "2.5.0",
+    "crealityprint": "7.3.1",
+    "bambustudio": "02.09.01.70",
+}
+
+
+def validate_native_modifier_execution(plate, *, engine, version, settings):
+    """Accept only one safe native modifier owner; reject unproven combinations.
+
+    This validates the request contract; archive, native profile and emitted
+    G-code checks remain independently mandatory at worker execution.
+    """
+    if not isinstance(plate, list):
+        return False
+    count = sum(len(row.get("modifier_volumes") or [])
+                for row in plate if isinstance(row, dict))
+    if not count:
+        return False
+    if count > MAX_TOTAL_MODIFIERS or len(plate) != 1:
+        raise ValueError("Native modifier slicing currently requires one model and at most twelve modifiers.")
+    if VERIFIED_NATIVE_MODIFIER_VERSIONS.get(engine) != version:
+        raise ValueError("Native modifier engine/version has not passed pinned real-binary acceptance.")
+    if not isinstance(settings, dict):
+        raise ValueError("Invalid modifier slicing request settings.")
+    if (settings.get("multi_material_test") or settings.get("flush_settings")
+            or settings.get("material_tool_bindings")
+            or settings.get("slot_filament_profiles") or settings.get("prime_tower")):
+        raise ValueError("Combining modifiers with native multi-material tool routing is not yet verified.")
+    model = plate[0]
+    if not isinstance(model, dict):
+        raise ValueError("Invalid native modifier parent.")
+    fields = ("colour_paint", "support_paint", "seam_paint",
+              "fuzzy_skin_paint", "negative_volumes", "variable_layer_profile")
+    if any(model.get(field) for field in fields):
+        raise ValueError("Combining modifiers with other native geometry extensions requires separate verification.")
+    validated = validate_modifier_volumes(model.get("modifier_volumes"))
+    if len(validated) != count or count > MAX_MODIFIERS_PER_MODEL:
+        raise ValueError("Invalid native modifier instance count.")
+    return True
+
+
+
 def refuse_unverified_native_modifiers(plate, engine):
     """Never silently slice modifiers as normal printable primitives or drop them."""
     if not isinstance(plate, list):
