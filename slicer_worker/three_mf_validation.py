@@ -44,7 +44,17 @@ BAMBU_VARIANT_OPTIONS = {
 
 def validate_worker_3mf(data, *, native_tool_count=None, allow_creality_combined_paint=False,
                         allow_creality_layer_ranges=False, allow_bambu_project=False,
-                        allow_bambu_combined_paint=False, allow_bambu_layer_ranges=False):
+                        allow_bambu_combined_paint=False, allow_bambu_layer_ranges=False,
+                        allow_native_modifier_fixture=False):
+    if allow_native_modifier_fixture:
+        if (native_tool_count is not None or allow_creality_combined_paint
+                or allow_creality_layer_ranges or allow_bambu_project
+                or allow_bambu_combined_paint or allow_bambu_layer_ranges):
+            raise WorkerError("Modifier fixtures cannot activate other native project extensions.")
+        # Explicit offline fixture switch only. Normal untrusted /v1/slice
+        # calls do not supply this flag and remain fail-closed.
+        from .modifier_3mf_validation import validate_modifier_fixture_3mf
+        return validate_modifier_fixture_3mf(data)
     if native_tool_count is not None and (isinstance(native_tool_count, bool) or
             not isinstance(native_tool_count, int) or not 2 <= native_tool_count <= 16):
         raise WorkerError("Invalid native filament tool count.")
