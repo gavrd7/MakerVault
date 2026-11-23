@@ -4,6 +4,7 @@ on:
   pull_request:
     paths:
       - "scripts/build_creality_modifier_profiles.py"
+      - "scripts/build_creality_modifier_projects.py"
       - "scripts/build_native_modifier_fixture.py"
       - "slicer_worker/modifier_acceptance_probe.py"
       - "slicer_worker/modifier_3mf_validation.py"
@@ -93,10 +94,29 @@ jobs:
             --engine crealityprint \
             --fixtures /tmp/creality-native-modifiers \
             --binary "$(cat /tmp/creality-modifier-binary)"
+      - name: Build native Creality 7.3.1 self-contained modifier projects
+        id: native_packaging
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 scripts/build_creality_modifier_projects.py \
+            --fixtures /tmp/creality-native-modifiers
+      - name: Probe Creality's actual native project loader and regional G-code
+        id: native_project
+        shell: bash
+        continue-on-error: true
+        run: |
+          set -euo pipefail
+          timeout 900s python3 -m slicer_worker.modifier_acceptance_probe \
+            --engine crealityprint --creality-native-project \
+            --fixtures /tmp/creality-native-modifiers \
+            --binary "$(cat /tmp/creality-modifier-binary)"
       - name: Record Creality parser and regional effects result
         if: always()
         run: |
           echo "### Native Creality Print 7.3.1 parameter modifier probe" >> "$GITHUB_STEP_SUMMARY"
           echo "- Real CLI slice and regional G-code proof: ${{ steps.native_modifier.outcome }}" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Self-contained Creality project packager: ${{ steps.native_packaging.outcome }}" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Native project-loader regional G-code proof: ${{ steps.native_project.outcome }}" >> "$GITHUB_STEP_SUMMARY"
           echo "- Diagnostic-only: Creality native self-contained projects may require project-specific settings; no automatic production enabling." >> "$GITHUB_STEP_SUMMARY"
           echo "- Official AppImage SHA-256 is verified. No printer connection or application data changes." >> "$GITHUB_STEP_SUMMARY"
