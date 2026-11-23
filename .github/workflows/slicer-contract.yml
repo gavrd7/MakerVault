@@ -84,6 +84,24 @@ jobs:
           '
 
 
+      - name: Validate independent custom slicer storage bind mount
+        env:
+          POSTGRES_PASSWORD: ci-only-placeholder
+          MAKERVAULT_SLICER_WORKER_TOKEN: "0123456789012345678901234567890123456789"
+          MAKERVAULT_SLICER_INSTALLER_TOKEN: "9876543210987654321098765432109876543210"
+          SLICER_ENGINE_STORAGE: /srv/makervault/slicer-engines
+          MEDIA_STORAGE: /srv/makervault/media
+        run: |
+          docker compose config --format json | python3 -c '
+          import json,sys
+          services=json.load(sys.stdin)["services"]
+          slicer=services["slicer-worker"]["volumes"][0]
+          media=services["makervault"]["volumes"][0]
+          assert slicer["type"] == "bind" and slicer["source"] == "/srv/makervault/slicer-engines"
+          assert slicer["target"] == "/opt/engine-store"
+          assert media["type"] == "bind" and media["source"] == "/srv/makervault/media"
+          '
+
   candidate-image-build:
     # Legacy worker-only smoke has been replaced: the deployed staging image
     # now runs the worker and installer as separate UIDs in ONE container.
