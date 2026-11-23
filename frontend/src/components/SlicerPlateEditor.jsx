@@ -2903,7 +2903,7 @@ export default function SlicerPlateEditor({
   function syncModifierOverlays(parent, item, plane) {
     const previous = parent.userData.modifierGhosts || [];
     for (const ghost of previous) {
-      parent.remove(ghost);
+      ghost.parent?.remove(ghost);
       ghost.geometry.dispose();
       ghost.material.dispose();
     }
@@ -2945,10 +2945,25 @@ export default function SlicerPlateEditor({
         continue;
       }
       ghost.position.set(...pos);
+      if (modifier.coordinate_space === "world") {
+        // A free modifier has its own plate-space pose and remains stationary
+        // when the associated printable mesh moves or rotates.
+        const angles = modifier.rotation_xyz_deg || [0, 0, 0];
+        const scales = modifier.scale_xyz_percent || [100, 100, 100];
+        ghost.rotation.set(...angles.map(v => THREE.MathUtils.degToRad(Number(v))), "XYZ");
+        ghost.scale.set(...scales.map(v => Number(v) / 100));
+        (parent.parent || parent).add(ghost);
+      } else {
+        // Existing drafts are interpreted in parent-local coordinates.
+        parent.add(ghost);
+      }
       ghost.renderOrder = 18;
       ghost.userData.isModifierVolume = true;
+      ghost.userData.modifierId = modifier.id;
+      ghost.userData.modifierParentId = item.instance_id;
+      // Modifiers are editable independently but must not be hit by the
+      // standard printable model raycast or mesh collision calculations.
       ghost.raycast = () => {};
-      parent.add(ghost);
       ghosts.push(ghost);
     }
     parent.userData.modifierGhosts = ghosts;
