@@ -11,7 +11,7 @@ from xml.etree import ElementTree as ET
 from defusedxml import ElementTree as SafeET
 
 from .slicer_modifier_volumes import validate_modifier_volumes, MAX_TOTAL_MODIFIERS
-from .slicer_plate_3mf import build_plate_3mf, NS, MAX_PROJECT_BYTES
+from .slicer_plate_3mf import build_plate_3mf, _transform, _triangles, NS, MAX_PROJECT_BYTES
 from .slicer_process_settings import PROCESS_FIELDS
 from .slicer_profiles import SlicerProfileError
 
@@ -108,14 +108,47 @@ def _primitive_geometry(modifier):
     return vertices, triangles
 
 
-def _add_child_mesh(resources, identifier, modifier, parent_bounds):
+def _modifier_parent_transform(item, raw, bed_width, bed_depth):
+    """Match native STL centring and THREE's XYZ rotation/XYZ scaling/Z bed lift.
+
+    The normal plate builder bakes the fully posed parent mesh. Do not place
+    modifiers from its world-axis bounding-box centre: that loses rotation,
+    tilt, non-uniform scaling and the lowest-vertex bed adjustment.
+    """
+    low = [math.inf] * 3
+    high = [-math.inf] * 3
+    for tri in _triangles(raw):
+        for point in tri:
+            for axis in range(3):
+                low[axis] = min(low[axis], point[axis])
+                high[axis] = max(high[axis], point[axis])
+    if any(not math.isfinite(value) for value in low + high):
+        raise SlicerProfileError("Modifier parent has invalid source geometry.")
+    origin = ((low[0] + high[0]) / 2, (low[1] + high[1]) / 2, low[2])
+    matrix = tuple(float(v) for v in _transform(
+        item, bed_width / 2, bed_depth / 2).split())
+    lowest_rotated = math.inf
+    for tri in _triangles(raw):
+        for point in tri:
+            local = tuple(point[i] - origin[i] for i in range(3))
+            rotated_z = sum(matrix[2 + 3 * i] * local[i] for i in range(3))
+            lowest_rotated = min(lowest_rotated, rotated_z)
+    if not math.isfinite(lowest_rotated):
+        raise SlicerProfileError("Modifier parent transform is invalid.")
+    return matrix, float(item.get("z_mm", 0)) - lowest_rotated
+
+
+def _add_child_mesh(resources, identifier, modifier, parent_bounds, matrix, bed_z):
     verts, faces = _primitive_geometry(modifier)
-    centre = (
-        (parent_bounds[0][0] + parent_bounds[0][1]) / 2 + modifier["x_mm"],
-        (parent_bounds[1][0] + parent_bounds[1][1]) / 2 + modifier["y_mm"],
-        parent_bounds[2][0] + modifier["z_mm"],
-    )
-    positioned = [tuple(point[i] + centre[i] for i in range(3)) for point in verts]
+    centre = (modifier["x_mm"], modifier["y_mm"], modifier["z_mm"])
+    positioned = []
+    for vertex in verts:
+        local = tuple(vertex[i] + centre[i] for i in range(3))
+        positioned.append(tuple(
+            sum(matrix[axis + 3 * i] * local[i] for i in range(3)) +
+            (matrix[9 + axis] if axis < 2 else bed_z)
+            for axis in range(3)
+        ))
     if any(not math.isfinite(v) or abs(v) > 20000 for point in positioned for v in point):
         raise SlicerProfileError("Modifier geometry exceeds safe bounds.")
     # A modifier that does not overlap the parent cannot alter native toolpaths.
@@ -197,10 +230,13 @@ def export_modifier_3mf_fixture(objects_with_stl, *, bed_width, bed_depth):
         base_part = ET.SubElement(settings, "part", {"id": str(base_id), "subtype": "normal_part"})
         ET.SubElement(base_part, "metadata", {"key": "name", "value": "Base model"})
         ET.SubElement(base_part, "metadata", {"key": "matrix", "value": identity4})
+        parent_transform, parent_bed_z = _modifier_parent_transform(
+            item, objects_with_stl[index - 1][1], bed_width, bed_depth)
         for number, modifier in enumerate(modifiers, start=1):
             modifier_id = next_id
             next_id += 1
-            _add_child_mesh(resources, modifier_id, modifier, parent_bounds)
+            _add_child_mesh(resources, modifier_id, modifier, parent_bounds,
+                            parent_transform, parent_bed_z)
             ET.SubElement(components, f"{{{NS}}}component", {
                 "objectid": str(modifier_id), "transform": identity,
             })
