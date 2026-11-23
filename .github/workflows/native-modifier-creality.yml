@@ -49,6 +49,17 @@ jobs:
           test -e squashfs-root/AppRun
           readlink -f squashfs-root/AppRun > /tmp/creality-modifier-binary
           test -x "$(cat /tmp/creality-modifier-binary)"
+      - name: Inspect only official extracted Creality runtime dependencies
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd /tmp/creality-modifier-app
+          file squashfs-root/AppRun
+          echo "Resolved launcher: $(readlink -f squashfs-root/AppRun)"
+          echo "Missing system runtime libraries (diagnostic):"
+          ldd "$(cat /tmp/creality-modifier-binary)" 2>/dev/null | grep 'not found' || true
+          echo "Official extracted bundled library paths:"
+          find squashfs-root -maxdepth 3 -type d \\( -name lib -o -name lib64 \\) -print | head -20
       - name: Run exact Creality CLI regional-effect and project-loader probe
         id: native_modifier
         continue-on-error: true
