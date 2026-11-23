@@ -37,7 +37,7 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 DOTENV = ROOT / ".slicer-staging.env"
 BUNDLE = ROOT / "slicer-engine-assets"
-OVERLAY = ROOT / "compose.yaml"
+OVERLAY = ROOT / "docker-compose.yml"
 # Official upstream assets are pinned by version AND audited asset digest.
 # Staging can select an approved release independently of MakerVault app code.
 # New versions must first have an accepted digest and pass pinned-binary CI.
