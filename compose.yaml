@@ -87,7 +87,6 @@ services:
     volumes:
       - ${SLICER_ENGINE_STORAGE:-makervault_slicer_engines}:/opt/engine-store:rw
     environment:
-      SLICER_WORKER_ENABLED: "1"
       SLICER_WORKER_TOKEN: ${MAKERVAULT_SLICER_WORKER_TOKEN:?Set a unique worker token in .env}
       SLICER_INSTALLER_TOKEN: ${MAKERVAULT_SLICER_INSTALLER_TOKEN:?Set a different installer token in .env}
       SLICER_ENGINES_JSON: '${SLICER_ENGINES_JSON:-{}}'
