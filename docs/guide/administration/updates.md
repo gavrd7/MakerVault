@@ -49,15 +49,15 @@ sudo docker compose ps
 For an installation that already uses the verified combined slicer, include the same **`slicer` profile** at each update. Keep the immutable slicer-worker image, native engine store and imported profiles unchanged unless you explicitly choose an approved version update:
 
 ```bash
-sudo docker compose --profile slicer config --quiet
-sudo docker compose --profile slicer pull makervault postgres redis
-sudo docker compose --profile slicer up -d
-sudo docker compose --profile slicer ps
+sudo docker compose config --quiet
+sudo docker compose pull makervault postgres redis
+sudo docker compose up -d
+sudo docker compose ps
 ```
 
-If running a local source build with the slicer profile, run `sudo docker compose build makervault` before `sudo docker compose --profile slicer up -d`. Rebuild the slicer worker separately and deliberately only when needed. The combined container runs the worker and installer on separate UIDs, and the one-shot permission helper is not a fifth running daemon.
+If running a local source build with the slicer container, run `sudo docker compose build makervault` before `sudo docker compose up -d`. Rebuild the slicer worker separately and deliberately only when needed. The combined container runs the worker and installer on separate UIDs, and the one-shot permission helper is not a fifth running daemon.
 
-**Migration from previous overlays:** the old `compose.build.yaml`, `compose.slicer.yaml` and `compose.slicer.staging.yaml` files have been retired. Before using the single Compose stack on an existing development/staging host, inspect the current engine image ID, private `.slicer-staging.env`, `.env`, named volumes and any local custom Compose file. Preserve the full environment and volume data, then map relevant settings into the private `.env` and validate `docker compose --profile slicer config --quiet`. Do not blindly run old multi-file commands after updating source. No automatic migration or database reset is required, and do not delete the legacy container, its image or any volume before verification.
+**Migration from previous overlays:** the old `compose.build.yaml`, `compose.slicer.yaml` and `compose.slicer.staging.yaml` files have been retired. Before using the single Compose stack on an existing development/staging host, inspect the current engine image ID, private `.slicer-staging.env`, `.env`, named volumes and any local custom Compose file. Preserve the full environment and volume data, then map relevant settings into the private `.env` and validate `docker compose config --quiet`. Do not blindly run old multi-file commands after updating source. No automatic migration or database reset is required, and do not delete the legacy container, its image or any volume before verification.
 
 **Never run `docker compose down -v`** as an upgrade step: it may delete the database, private media encryption keys, backups and installed slicer engines. Backup and independently verify recovery first.
 
