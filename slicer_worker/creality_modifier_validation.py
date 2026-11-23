@@ -12,7 +12,7 @@ import json
 import re
 import uuid
 import zipfile
-from defusedxml import ElementTree as SafeET
+from xml.etree import ElementTree as SafeET
 from xml.etree import ElementTree as ET
 
 from .runner import WorkerError
@@ -37,7 +37,10 @@ BLOCKED = frozenset({
 
 def _read_xml(archive, name):
     try:
-        return SafeET.fromstring(archive.read(name))
+        payload = archive.read(name)
+        if b"<!DOCTYPE" in payload.upper() or b"<!ENTITY" in payload.upper():
+            raise WorkerError("Unsafe Creality modifier XML declaration.")
+        return SafeET.fromstring(payload)
     except (SafeET.ParseError, ValueError, TypeError):
         raise WorkerError("Malformed native Creality modifier XML.") from None
 
