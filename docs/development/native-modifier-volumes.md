@@ -92,3 +92,30 @@ proof of a regional modifier's effectiveness. Do not treat this workflow's
 Do not add feature flags that silently enable an unverified engine, export a
 modifier as an independently printed solid, or merge this PR solely on
 structural 3MF tests.
+
+
+## Independent modifier transforms (PR #196 follow-up)
+
+New modifiers created through **Add model → Add parameter modifier** now use
+`coordinate_space: "world"`, an independently persisted plate-centred
+position, three XYZ Euler angles and three XYZ scaling percentages. A modifier
+can be selected on the plate and manipulated using its own Move / Rotate /
+Scale gizmo or numeric controls, without modifying the associated STL mesh.
+The associated model is still the *regional slicing target* and the modifier
+is **never** added to the printable build list.
+
+New modifiers do not follow later transformations of the target model.
+For predictable duplication, copying a model together with its modifier
+drafts initially offsets the newly cloned modifier poses by the copied
+model's X/Y displacement; the copies are independent thereafter.
+
+Existing draft records with no `coordinate_space` retain their original
+parent-local semantics and validator contract. Never silently reinterpret
+saved local records as world-space positions. Explicit Assemble grouping
+remains separate from model boolean/geometry merging; this change does
+not automatically convert modifiers into printable solids or add a new
+Assemble operation.
+
+The fixture exporter bakes independent modifier transforms into modifier
+mesh vertices. The production worker remains fail-closed until all
+engine/version acceptance and secure project admission requirements pass.
