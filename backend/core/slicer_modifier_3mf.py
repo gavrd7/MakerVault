@@ -145,7 +145,8 @@ def export_modifier_3mf_fixture(objects_with_stl, *, bed_width, bed_depth):
                 for item, _ in objects_with_stl)
     if not count or count > MAX_TOTAL_MODIFIERS:
         raise SlicerProfileError("No valid modifiers or too many modifier regions.")
-    original = build_plate_3mf(objects_with_stl, bed_width=bed_width, bed_depth=bed_depth)
+    original = build_plate_3mf(objects_with_stl, bed_width=bed_width, bed_depth=bed_depth,
+                               allow_modifier_fixture=True);
     with zipfile.ZipFile(io.BytesIO(original), "r") as source:
         members = {name: source.read(name) for name in source.namelist()}
     root = SafeET.fromstring(members["3D/3dmodel.model"])
