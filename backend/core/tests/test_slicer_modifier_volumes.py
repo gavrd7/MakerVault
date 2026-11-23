@@ -4,7 +4,7 @@ import uuid
 from django.test import SimpleTestCase
 from core.slicer_modifier_volumes import (
     MAX_MODIFIERS_PER_MODEL, validate_modifier_volumes,
-    refuse_unverified_native_modifiers,
+    refuse_unverified_native_modifiers, validate_native_modifier_execution,
 )
 
 
@@ -83,6 +83,34 @@ class ModifierDraftContractTests(SimpleTestCase):
                 refuse_unverified_native_modifiers(plate, engine)
         for engine in ("orcaslicer", "crealityprint", "bambustudio"):
             refuse_unverified_native_modifiers([{"modifier_volumes": []}], engine)
+
+
+    def test_execution_requires_single_owner_and_pinned_native_version(self):
+        plate = [{"modifier_volumes": [box()]}]
+        for engine, version in (("orcaslicer", "2.5.0"),
+                                ("crealityprint", "7.3.1"),
+                                ("bambustudio", "02.09.01.70")):
+            with self.subTest(engine=engine):
+                self.assertTrue(validate_native_modifier_execution(
+                    plate, engine=engine, version=version, settings={}))
+                with self.assertRaisesRegex(ValueError, "version"):
+                    validate_native_modifier_execution(
+                        plate, engine=engine, version=version + ".1", settings={})
+        for edited_plate, settings in (
+            (plate * 2, {}),
+            (plate, {"multi_material_test": True}),
+            (plate, {"material_tool_bindings": [{"slot_id": "cfs", "tool_index": 0}]}),
+            (plate, {"flush_settings": {"multiplier": 2}}),
+            ([{**plate[0], "colour_paint": {"faces": [1]}}], {}),
+            ([{**plate[0], "variable_layer_profile": {"bands": [{"height": 0.1}]}}], {}),
+        ):
+            with self.subTest(settings=settings), self.assertRaises(ValueError):
+                validate_native_modifier_execution(
+                    edited_plate, engine="orcaslicer", version="2.5.0",
+                    settings=settings)
+        self.assertFalse(validate_native_modifier_execution(
+            [{"modifier_volumes": []}], engine="orcaslicer",
+            version="2.5.0", settings={}))
 
     def test_missing_modifier_field_does_not_change_existing_drafts(self):
         self.assertEqual(validate_modifier_volumes(None), [])
