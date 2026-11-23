@@ -37,7 +37,8 @@ class ProductionModifierProtocolTests(unittest.TestCase):
 
     def test_creality_requires_explicit_native_project_validation(self):
         item = payload("crealityprint", "7.3.1")
-        with patch("slicer_worker.creality_modifier_validation.validate_creality_modifier_project",
+        from slicer_worker import creality_modifier_validation
+        with patch.object(creality_modifier_validation, "validate_creality_modifier_project",
                    return_value=True) as validator:
             decoded = _decode_payload(item)
             self.assertTrue(decoded["native_modifier_project"])
