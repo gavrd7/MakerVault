@@ -29,10 +29,12 @@ test("moving the final printable leaves independent volumes in the canonical sou
   assert.equal(source[0].modifier_volumes[0].id, "cut");
 });
 
-test("reject capacity exhaustion without modifying input or dropping regions", () => {
+test("adapter capacity exhaustion does not block moves or erase canonical free regions", () => {
   const existing = Array.from({length: 12}, (_, i) => volume("old-" + i));
   const source = [model("one", 0, [volume("cut")]), model("two", 0, existing)];
-  assert.throws(() => movePrintablesPreservingVolumes(source, ["one"]), /capacity/);
+  const {remaining, moving} = movePrintablesPreservingVolumes(source, ["one"]);
+  assert.equal(moving[0].modifier_volumes.length, 0);
+  assert.equal(remaining[0].modifier_volumes.length, 12);
   assert.equal(source[0].modifier_volumes.length, 1);
   assert.equal(source[1].modifier_volumes.length, 12);
 });
