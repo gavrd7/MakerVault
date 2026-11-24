@@ -69,5 +69,13 @@ export function updateCanonicalPlate(plate, nextObjects, options = {}) {
   const updated = [...volumes, ...pending.filter(volume => !volumes.some(v => v.id === volume.id))]
     .filter(volume => !removed.has(volume.id));
   if (updated.length > MAX_PLATE_VOLUMES) throw new Error("Too many independent volumes on this plate.");
+  if (!models.length) {
+    const assemblyCounts = new Map();
+    updated.forEach(v => {
+      if (v.assembly_id) assemblyCounts.set(v.assembly_id, (assemblyCounts.get(v.assembly_id) || 0) + 1);
+    });
+    return {...plate, objects: models, volumes: updated.map(v => v.assembly_id &&
+      assemblyCounts.get(v.assembly_id) < 2 ? {...v, assembly_id: null} : v)};
+  }
   return {...plate, objects: models, volumes: updated};
 }
