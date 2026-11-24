@@ -3968,7 +3968,9 @@ export default function SlicerPlateEditor({
           </div>
         </div>
       </aside>}
-      <div ref={setMobileMeshDock} className="slicerMobileGeometryDock"
+      <div ref={setMobileMeshDock}
+        className={"slicerMobileGeometryDock"+(solidDialog && ["primitive","text","svg","modifier","negative"].includes(solidDialog.kind)
+          ? " slicerMobileAddGeometryDock" : "")}
         aria-label="On-plate geometry inspector" />
     </div>
 
