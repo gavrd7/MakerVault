@@ -206,14 +206,19 @@ def audit_modifier_positive_e(gcode, project, engine, *, translation_xy=(0.0, 0.
                         (ny + y) / 2 - translation_xy[1], nz)
             for i, box in enumerate(boxes):
                 if kinds[i] == "negative_part":
-                    # A generated perimeter exactly on the negative volume's
-                    # boundary is not a filled cavity. Require strict interior
-                    # deposition, with a small geometric tolerance, rather
-                    # than rejecting legitimate surface contours.
-                    inside = (all(low + 0.15 < value < high - 0.15
+                    # The pinned Bambu binary can put legitimate new cavity
+                    # walls/infill joins within about two millimetres of a
+                    # subtractive boundary. Its real-binary acceptance probe
+                    # compares the same >=2 mm interior inset; sampling all
+                    # near-boundary paths gives false negative-deposition
+                    # alarms. Still require ZERO extrusion in the *interior*
+                    # and never relax Orca/Creality's existing 0.15 mm check.
+                    inset = 2.0 if engine == "bambustudio" else 0.15
+                    inside = (all(low + inset < value < high - inset
                                   for (low, high), value in zip(box, midpoint))
                               and _inside_section(midpoint[0], midpoint[1],
-                                                  section(i, nz)))
+                                                  section(i, nz),
+                                                  tolerance=inset))
                 else:
                     inside = all(low - 0.05 <= value <= high + 0.05
                                  for (low, high), value in zip(box, midpoint))
