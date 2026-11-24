@@ -108,28 +108,32 @@ def flatten_prusa_vendor_preset(
     ):
         raise PrusaPresetError("Prusa vendor source checksum mismatch.")
     sections = parse_prusa_vendor_bundle(raw)
-    visited: set[str] = set()
+    cache: dict[str, dict[str, str]] = {}
 
-    def resolve(label: str, depth: int) -> dict[str, str]:
+    def resolve(label: str, depth: int, active=frozenset()) -> dict[str, str]:
         section = kind + ":" + label
-        if depth >= MAX_DEPTH or section in visited:
+        if depth >= MAX_DEPTH or section in active:
             raise PrusaPresetError("Prusa preset inheritance is cyclic or too deep.")
+        if section in cache:
+            return dict(cache[section])
         data = sections.get(section)
         if data is None:
             raise PrusaPresetError("Prusa native preset parent is missing.")
-        visited.add(section)
-        parent = data.get("inherits", "").strip()
-        if parent:
-            if not NAME.fullmatch(parent):
+        merged = {}
+        parents = data.get("inherits", "").strip()
+        if parents:
+            # Native Prusa bundles support multiple parents separated by ';'.
+            # Later parents override earlier parents; the selected child wins.
+            names = [part.strip() for part in parents.split(";")]
+            if len(names) > 12 or any(not NAME.fullmatch(parent) for parent in names):
                 raise PrusaPresetError("Invalid Prusa preset parent.")
-            # Only a parent in this exact kind and bundle can be inherited.
-            merged = resolve(parent, depth + 1)
-        else:
-            merged = {}
+            for parent in names:
+                merged.update(resolve(parent, depth + 1, active | {section}))
         merged.update({key: value for key, value in data.items()
                        if key != "inherits"})
         if len(merged) > MAX_KEYS:
             raise PrusaPresetError("Prusa preset has too many resolved settings.")
+        cache[section] = dict(merged)
         return merged
 
     settings = resolve(name, 0)
