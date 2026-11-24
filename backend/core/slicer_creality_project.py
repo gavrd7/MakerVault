@@ -721,6 +721,11 @@ def build_creality_project_candidate(plate, *, printer, process, filaments,
             raise SlicerProfileError("Creality prime tower is outside the printable bed.")
         project["wipe_tower_x"] = [str(round(x, 3))]
         project["wipe_tower_y"] = [str(round(y, 3))]
+    # Official resolved Creality machine presets may carry host-connection UI
+    # metadata. It is not slicing input and must never enter executable 3MF
+    # project settings; the worker independently forbids these keys.
+    for key in ("printhost_authorization_type", "printhost_password", "printer_agent"):
+        project.pop(key, None)
     encoded = json.dumps(project, separators=(",", ":"), ensure_ascii=False).encode("utf-8")
     if len(encoded) > 4 * 1024 * 1024:
         raise SlicerProfileError("Creality project settings exceed safe limits.")
