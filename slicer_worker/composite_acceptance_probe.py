@@ -6,6 +6,7 @@ send to a printer, deploy, or grant production permission.
 import argparse
 from contextlib import ExitStack
 import json
+import math
 from pathlib import Path
 import shutil
 import tempfile
@@ -22,7 +23,7 @@ from .three_mf_validation import validate_worker_3mf
 from .creality_modifier_validation import validate_creality_modifier_project
 
 
-def two_model_region_extrusion(gcode):
+def two_model_region_extrusion(gcode, *, shift_x=0.0, shift_y=0.0):
     x = y = z = e = 0.0
     relative_xyz = relative_e = False
     totals = {"left":0.0,"right":0.0}
@@ -64,14 +65,49 @@ def two_model_region_extrusion(gcode):
             # those are cavity boundaries, NOT unremoved material. Measure
             # a conservative 2 mm inset so only filled cavity interiors count.
             # Keep this same interior sample for baseline and changed fixtures.
-            if 12<=nz<=18 and 102<cy<118:
-                label="left" if 78<=cx<=102 else "right" if 118<=cx<=142 else None
+            if 12<=nz<=18 and 102+shift_y<cy<118+shift_y:
+                label=("left" if 78+shift_x<=cx<=102+shift_x
+                       else "right" if 118+shift_x<=cx<=142+shift_x else None)
                 if label:
                     totals[label]+=ex
                     counts[label]+=1
                     features[label][feature] = features[label].get(feature, 0.0) + ex
         x,y,z=nx,ny,nz
     return {"totals":totals,"counts":counts,"features":features}
+
+
+def bambu_output_placement_shift(sliced_project):
+    """Read only the bounded placement translation from Bambu's own output.
+
+    MakerVault's disposable *composite* fixture has an identity build item.
+    Bambu Studio may recenter the entire assembly onto its native printer bed
+    while retaining all part roles. Comparing G-code against the original
+    220-mm fixture coordinates would measure material *outside* the cutter.
+    Do not alter the actual 3MF or allow arbitrary transforms as a workaround.
+    """
+    namespace = "{http://schemas.microsoft.com/3dmanufacturing/core/2015/02}"
+    with zipfile.ZipFile(sliced_project) as archive:
+        info = archive.getinfo("3D/3dmodel.model")
+        if not 0 < info.file_size <= 1024 * 1024:
+            raise WorkerError("Bambu output placement XML is too large.")
+        payload = archive.read(info)
+    if b"<!DOCTYPE" in payload.upper() or b"<!ENTITY" in payload.upper():
+        raise WorkerError("Unsafe Bambu output placement XML.")
+    root = ET.fromstring(payload)
+    items = root.findall("./" + namespace + "build/" + namespace + "item")
+    if len(items) != 1:
+        raise WorkerError("Bambu output must keep one native composite build item.")
+    try:
+        values = [float(value) for value in items[0].attrib["transform"].split()]
+    except (KeyError, ValueError):
+        raise WorkerError("Bambu output has no usable native placement.") from None
+    if (len(values) != 12 or any(not math.isfinite(v) for v in values)
+            or any(abs(values[i] - (1.0 if i in (0, 4, 8) else 0.0)) > 0.0001
+                   for i in range(9))
+            or not all(-256 <= values[i] <= 256 for i in (9, 10))
+            or abs(values[11]) > 0.001):
+        raise WorkerError("Bambu output applied an unexpected native geometry transform.")
+    return values[9], values[10]
 
 
 def probe(fixtures,binary,engine,creality_native=False):
@@ -102,7 +138,14 @@ def probe(fixtures,binary,engine,creality_native=False):
             gcode_path=Path(results[name]["gcode_path"])
             if gcode_path.resolve().parent != root.resolve() or not gcode_path.is_file():
                 raise WorkerError("Native CLI returned unsafe composite G-code output.")
-            results[name]=two_model_region_extrusion(gcode_path.read_bytes())
+            shift = (0.0, 0.0)
+            if engine == "bambustudio":
+                shift = bambu_output_placement_shift(root / "bambu-sliced.3mf")
+            results[name]=two_model_region_extrusion(
+                gcode_path.read_bytes(), shift_x=shift[0], shift_y=shift[1])
+            if engine == "bambustudio":
+                results[name]["native_output_shift_xy"] = [
+                    round(shift[0], 4), round(shift[1], 4)]
             # Inspect only part roles from the disposable native output, not
             # arbitrary archive contents. This separates importer loss from
             # subsequent slicing or measurement errors.
