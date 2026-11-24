@@ -2329,7 +2329,7 @@ export default function SlicerPlateEditor({
         const modifierGhosts = [...meshes.values()].flatMap(mesh =>
           (mesh.userData.modifierGhosts || []).filter(ghost => ghost.userData.isWorldModifier));
         const candidate = raycaster.intersectObjects(modifierGhosts, false)[0];
-        if (candidate && (!hits[0] || candidate.distance <= hits[0].distance + 0.01)) {
+        if (candidate) {
           modifierSelectionRef.current.onChange?.(candidate.object.userData.modifierId, candidate.object.userData.modifierParentId);
           event.preventDefault();
           return;
@@ -3022,8 +3022,8 @@ export default function SlicerPlateEditor({
         default: continue;
       }
       const ghost = new THREE.Mesh(geometry, new THREE.MeshBasicMaterial({
-        color: "#ab90ff", transparent: true, opacity: .24,
-        depthWrite: false, side: THREE.DoubleSide,
+        color: "#22d3ee", transparent: true, opacity: .28,
+        depthTest: false, depthWrite: false, side: THREE.FrontSide,
         clippingPlanes: [plane],
       }));
       const pos = [modifier.x_mm, modifier.y_mm, modifier.z_mm].map(Number);
@@ -3047,7 +3047,7 @@ export default function SlicerPlateEditor({
       }
       ghost.renderOrder = 18;
       if (modifier.id === modifierSelectionRef.current.id) {
-        ghost.material.color.set("#40c8ff");
+        ghost.material.color.set("#67e8f9");
         ghost.material.opacity = .42;
       }
       ghost.userData.isModifierVolume = true;
