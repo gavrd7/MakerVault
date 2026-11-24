@@ -123,6 +123,73 @@ class SliceJobApiTests(TestCase):
                     "plate_objects": models, "plate_label": "Unique IDs",
                 })
 
+    def test_independent_plate_volume_storage_roundtrips_and_prevents_omission(self):
+        from core.slicer_api import _draft_plate_settings
+
+        model = {
+            "instance_id": str(uuid.uuid4()), "asset_id": str(self.input_asset.pk),
+            "x_mm": 0, "y_mm": 0, "rotation_deg": 0,
+            "scale_percent": 100, "color": "#abcdef",
+        }
+        region = {
+            "id": str(uuid.uuid4()), "shape": "box",
+            "width_mm": 15, "depth_mm": 15, "height_mm": 15,
+            "x_mm": 0, "y_mm": 0, "z_mm": 8,
+            "coordinate_space": "world",
+            "rotation_xyz_deg": [0, 0, 0],
+            "scale_xyz_percent": [100, 100, 100],
+            "kind": "negative", "assembly_id": None, "settings": {},
+        }
+        settings = {
+            "plate_objects": [{**model, "modifier_volumes": [region]}],
+            "plate_volumes": [region], "plate_label": "Independent regions",
+            "plates": [{"id": "plate-1", "name": "Independent regions",
+                        "objects": [model], "volumes": [region]}],
+            "active_plate_id": "plate-1",
+        }
+        result = _draft_plate_settings(self.owner, self.input_asset, settings)
+        self.assertNotIn("modifier_volumes", result["plates"][0]["objects"][0])
+        self.assertEqual(result["plates"][0]["volumes"][0]["id"], region["id"])
+        self.assertEqual(result["plate_volumes"][0]["id"], region["id"])
+        self.assertEqual(result["plate_objects"][0]["modifier_volumes"][0]["id"], region["id"])
+
+        for tampered in (
+            {**settings, "plate_objects": [model]},
+            {**settings, "plate_volumes": []},
+            {**settings, "plates": [{**settings["plates"][0], "volumes": []}]},
+        ):
+            with self.subTest(tampered=tampered), self.assertRaises(ValueError):
+                _draft_plate_settings(self.owner, self.input_asset, tampered)
+
+    def test_empty_plate_can_preserve_independent_volumes_with_another_printable_plate(self):
+        from core.slicer_api import _draft_plate_settings
+
+        model = {
+            "instance_id": str(uuid.uuid4()), "asset_id": str(self.input_asset.pk),
+            "x_mm": 0, "y_mm": 0, "rotation_deg": 0,
+            "scale_percent": 100, "color": "#abcdef",
+        }
+        region = {
+            "id": str(uuid.uuid4()), "shape": "box",
+            "width_mm": 10, "depth_mm": 10, "height_mm": 10,
+            "x_mm": 0, "y_mm": 0, "z_mm": 5,
+            "coordinate_space": "world",
+            "rotation_xyz_deg": [0, 0, 0],
+            "scale_xyz_percent": [100, 100, 100],
+            "kind": "negative", "assembly_id": None, "settings": {},
+        }
+        submitted = {
+            "plate_label": "Empty", "plate_volumes": [region],
+            "plates": [
+                {"id": "plate-1", "name": "Empty", "objects": [], "volumes": [region]},
+                {"id": "plate-2", "name": "Printable", "objects": [model], "volumes": []},
+            ],
+            "active_plate_id": "plate-1",
+        }
+        saved = _draft_plate_settings(self.owner, self.input_asset, submitted)
+        self.assertNotIn("plate_objects", saved)
+        self.assertEqual(saved["plates"][0]["volumes"][0]["id"], region["id"])
+
     def test_prime_tower_per_plate_roundtrip_and_validation(self):
         from core.slicer_api import _draft_plate_settings
         model = {
