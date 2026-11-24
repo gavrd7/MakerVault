@@ -932,6 +932,7 @@ export default function SlicerPlateEditor({
       secondId: objects.find(row => row.instance_id!==item?.instance_id)?.instance_id || "",
       booleanIds: selectedInstanceIds.filter(id=>id!==item?.instance_id),
       primitiveType:editingVolume?.shape || solidRequest.shape || "box",
+      volume_scale_xyz_percent:[...(editingVolume?.scale_xyz_percent || [100,100,100])],
       width:editingVolume?.width_mm ?? (editingText ? item.text_model.width : 20),
       depth:editingVolume?.depth_mm ?? (editingText ? item.text_model.depth : 20),
       height:editingVolume?.height_mm ?? (editingText ? item.text_model.height : 20),
@@ -1034,6 +1035,8 @@ export default function SlicerPlateEditor({
         Number(solidOptions.z_mm));
       ghost.rotation.set(...["rotation_x","rotation_y","rotation_z"].map(key=>
         THREE.MathUtils.degToRad(Number(solidOptions[key]||0))),"XYZ");
+      ghost.scale.set(...(solidOptions.volume_scale_xyz_percent || [100,100,100])
+        .map(value=>Number(value)/100));
       ghost.renderOrder=101;
       state.scene.add(ghost);negativeGhostRef.current=ghost;
     }catch { return undefined; }
@@ -1232,10 +1235,19 @@ export default function SlicerPlateEditor({
         setSolidOptions(old=>({...old,x_mm:pretty(position.x),y_mm:pretty(position.y),
           z_mm:pretty(position.z)}));
       } else if(insertionMode==="scale") {
-        const toSize=(old,scale)=>Math.max(0.5,Math.min(500,
-          Math.round(Number(old||20)*Math.max(0.025,Math.abs(scale))*100)/100));
-        setSolidOptions(old=>({...old,width:toSize(old.width,ghost.scale.x),
-          depth:toSize(old.depth,ghost.scale.y),height:toSize(old.height,ghost.scale.z)}));
+        if (["modifier","negative"].includes(solidDialog.kind)) {
+          // Native regions have independent XYZ scale, distinct from their
+          // nominal width/depth/height. Store the absolute gizmo values to
+          // avoid multiplying a previously scaled region a second time.
+          setSolidOptions(old=>({...old,volume_scale_xyz_percent:
+            [ghost.scale.x,ghost.scale.y,ghost.scale.z]
+              .map(value=>pretty(Math.max(5,Math.min(400,Math.abs(value)*100))))}));
+        } else {
+          const toSize=(old,scale)=>Math.max(0.5,Math.min(500,
+            Math.round(Number(old||20)*Math.max(0.025,Math.abs(scale))*100)/100));
+          setSolidOptions(old=>({...old,width:toSize(old.width,ghost.scale.x),
+            depth:toSize(old.depth,ghost.scale.y),height:toSize(old.height,ghost.scale.z)}));
+        }
       } else if(insertionMode==="rotate") {
         const degrees=axis=>Math.round(THREE.MathUtils.radToDeg(axis)*10)/10;
         const volume=["negative","modifier"].includes(solidDialog.kind);
@@ -1326,7 +1338,10 @@ export default function SlicerPlateEditor({
       const numbers=[solidOptions.width,solidOptions.depth,solidOptions.height,
         solidOptions.x_mm,solidOptions.y_mm,solidOptions.z_mm,
         solidOptions.rotation_x,solidOptions.rotation_y,solidOptions.rotation_z].map(Number);
-      if (numbers.some(n=>!Number.isFinite(n)) || numbers.slice(0,3).some(n=>n<0.5||n>500)
+      const volumeScale=solidOptions.volume_scale_xyz_percent || [100,100,100];
+      if (!Array.isArray(volumeScale) || volumeScale.length!==3 ||
+          volumeScale.some(value=>!Number.isFinite(Number(value))||Number(value)<5||Number(value)>400) ||
+          numbers.some(n=>!Number.isFinite(n)) || numbers.slice(0,3).some(n=>n<0.5||n>500)
           || numbers.slice(3,6).some(n=>Math.abs(n)>10000)
           || numbers.slice(6,9).some(n=>Math.abs(n)>360)) {
         setSolidError("Volume dimensions must be finite and 0.5–500 mm.");return;
@@ -1340,7 +1355,8 @@ export default function SlicerPlateEditor({
         width_mm:pretty(numbers[0]),depth_mm:pretty(numbers[1]),height_mm:pretty(numbers[2]),
         x_mm:pretty(numbers[3]),y_mm:pretty(numbers[4]),z_mm:pretty(numbers[5]),
         coordinate_space:"world",rotation_xyz_deg:numbers.slice(6,9).map(pretty),
-        scale_xyz_percent:previous?.scale_xyz_percent || [100,100,100],
+        scale_xyz_percent:(solidOptions.volume_scale_xyz_percent || [100,100,100])
+          .map(value=>pretty(Number(value))),
         kind:solidDialog.kind,assembly_id:previous?.assembly_id||null,
         settings:solidDialog.kind==="negative"?{}:(previous?.settings||{sparse_infill_density:50}),
       };
