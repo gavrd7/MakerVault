@@ -28,8 +28,11 @@ def validate_modifier_volumes(raw):
     for entry in raw:
         base_fields = {"id", "shape", *_NUMERIC, "settings"}
         pose_fields = {"coordinate_space", "rotation_xyz_deg", "scale_xyz_percent"}
+        optional_fields = {"assembly_id", "kind"}
+        if not isinstance(entry, dict):
+            raise ValueError("Invalid native modifier record.")
         fields = set(entry)
-        if fields not in (base_fields, base_fields | pose_fields):
+        if not base_fields.issubset(fields) or (fields - base_fields - optional_fields) not in (set(), pose_fields):
             raise ValueError("Invalid native modifier fields.")
         try:
             uid = str(uuid.UUID(str(entry["id"])))
@@ -66,10 +69,20 @@ def validate_modifier_volumes(raw):
                     raise ValueError("Invalid independent modifier rotation or scale.")
                 pose[key] = [round(float(v), 3) for v in axes]
             pose["coordinate_space"] = "world"
+        kind = entry.get("kind", "modifier")
+        if kind not in ("modifier", "negative"):
+            raise ValueError("Unknown non-printing volume type.")
+        assembly = entry.get("assembly_id")
+        if assembly is not None and (not isinstance(assembly, str) or
+                                    not assembly.startswith("assembly:") or len(assembly) > 100):
+            raise ValueError("Invalid volume assembly identity.")
         settings = validate_process_overrides(entry["settings"])
-        if not settings or set(settings) - INITIAL_OVERRIDE_KEYS:
+        if kind == "modifier" and (not settings or set(settings) - INITIAL_OVERRIDE_KEYS):
             raise ValueError("Modifier requires verified candidate wall or infill settings.")
-        result.append({"id": uid, "shape": entry["shape"], **values, **pose, "settings": settings})
+        if kind == "negative" and settings:
+            raise ValueError("Negative volumes cannot contain process overrides.")
+        result.append({"id": uid, "shape": entry["shape"], **values, **pose,
+                       "kind": kind, "assembly_id": assembly, "settings": settings})
     return result
 
 
@@ -113,6 +126,8 @@ def validate_native_modifier_execution(plate, *, engine, version, settings):
     if any(model.get(field) for field in fields):
         raise ValueError("Combining modifiers with other native geometry extensions requires separate verification.")
     validated = validate_modifier_volumes(model.get("modifier_volumes"))
+    if any(volume["kind"] == "negative" for volume in validated):
+        raise ValueError("Native negative-volume slicing requires verified engine-specific subtraction; the draft has been retained.")
     if len(validated) != count or count > MAX_MODIFIERS_PER_MODEL:
         raise ValueError("Invalid native modifier instance count.")
     return True
