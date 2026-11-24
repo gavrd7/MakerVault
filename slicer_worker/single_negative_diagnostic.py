@@ -4,7 +4,9 @@ No production feature approvals, image publishing, deployment, or printer I/O.
 The independent two-model composite test remains the required acceptance gate.
 """
 import argparse
+import io
 import json
+import math
 from pathlib import Path
 import shutil
 from tempfile import TemporaryDirectory
@@ -17,6 +19,32 @@ from .modifier_acceptance_probe import _COMMAND, _WORDS
 import zipfile
 from xml.etree import ElementTree as ET
 
+
+
+def _build_xy_translation(project):
+    """Read a bounded core-3MF build translation for before/after comparison."""
+    ns = "{http://schemas.microsoft.com/3dmanufacturing/core/2015/02}"
+    with zipfile.ZipFile(project) as archive:
+        info = archive.getinfo("3D/3dmodel.model")
+        if not 0 < info.file_size <= 1024 * 1024:
+            raise WorkerError("Bambu native diagnostic build XML is oversized.")
+        xml = archive.read(info)
+    if b"<!DOCTYPE" in xml.upper() or b"<!ENTITY" in xml.upper():
+        raise WorkerError("Unsafe native diagnostic build XML.")
+    root = ET.fromstring(xml)
+    items = root.findall("./" + ns + "build/" + ns + "item")
+    if len(items) != 1:
+        raise WorkerError("The one-model diagnostic needs one build item.")
+    try:
+        transform = [float(item) for item in items[0].attrib["transform"].split()]
+    except (ValueError, KeyError):
+        raise WorkerError("Bambu native build transform is missing.") from None
+    if (len(transform) != 12 or
+            any(not math.isfinite(value) for value in transform) or
+            any(abs(transform[index] - (1.0 if index in (0, 4, 8) else 0.0)) > .0001
+                for index in range(9))):
+        raise WorkerError("Unexpected Bambu native diagnostic orientation.")
+    return transform[9], transform[10]
 
 
 def _native_part_bounds(sliced_3mf):
@@ -59,10 +87,10 @@ def _native_part_bounds(sliced_3mf):
     return summary[:40]
 
 
-def _cavity_y_bands(gcode):
+def _cavity_y_bands(gcode, *, centre_x=130.0, centre_y=110.0):
     """Diagnostic extrusion histogram through the middle of the true cut.
 
-    Tracks valid positive-E moves with X midpoints 122..138 and Z 12..18;
+    Tracks positive-E moves near the actual native model centre and Z 12..18;
     2-mm Y bands distinguish cavity walls from actual interior deposition.
     Does NOT grant native execution approval.
     """
@@ -99,10 +127,11 @@ def _cavity_y_bands(gcode):
             if not relative_e:
                 e = words["E"]
         if (op in ("G1", "G01") and deposited > 0 and
-                122 < (x + nx) / 2 < 138 and 12 <= nz <= 18):
+                centre_x - 8 < (x + nx) / 2 < centre_x + 8 and 12 <= nz <= 18):
             cy = (y + ny) / 2
-            if 94 <= cy < 126:
-                band = "%03d" % (94 + 2 * int((cy - 94) // 2))
+            low_y = centre_y - 16
+            if low_y <= cy < centre_y + 16:
+                band = "%03d" % round(low_y + 2 * int((cy - low_y) // 2))
                 item = results.setdefault(band, {"E": 0., "count": 0, "features": {}})
                 item["E"] += deposited
                 item["count"] += 1
@@ -134,16 +163,26 @@ def diagnose(fixtures, binary):
             if result.get("status") != "completed":
                 raise WorkerError("Bambu single negative diagnostic failed to complete.")
             gcode = Path(result["gcode_path"]).read_bytes()
-            output[name] = two_model_region_extrusion(gcode)
+            native_output = root / "bambu-sliced.3mf"
+            origin = _build_xy_translation(root / "input.3mf")
+            placement = _build_xy_translation(native_output)
+            shift = (placement[0] - origin[0], placement[1] - origin[1])
+            if any(abs(value) > 256 for value in shift):
+                raise WorkerError("Native one-model placement shift exceeds safe bounds.")
+            output[name] = two_model_region_extrusion(
+                gcode, shift_x=shift[0], shift_y=shift[1])
+            print("Single model native placement shift:", name, shift, flush=True)
             print("Single model native negative diagnostic:", name,
                   json.dumps(output[name], sort_keys=True), flush=True)
             print("Single model Bambu native mesh bounds:", name,
-                  json.dumps(_native_part_bounds(root / "bambu-sliced.3mf")), flush=True)
+                  json.dumps(_native_part_bounds(native_output)), flush=True)
             print("Single model cavity Y-band deposition:", name,
-                  json.dumps(_cavity_y_bands(gcode), sort_keys=True), flush=True)
-    # The pinned Bambu CLI repositions a single imported model into the
-    # right-hand sample. Choose the populated region rather than wrongly
-    # reporting the zero-extrusion left-hand sample as the test result.
+                  json.dumps(_cavity_y_bands(
+                      gcode, centre_x=90+shift[0], centre_y=110+shift[1]),
+                      sort_keys=True), flush=True)
+    # Compare identical world-space cavity interiors after Bambu's
+    # automatic model placement; additional cavity perimeter walls outside
+    # this window must not be mistaken for unremoved cutter material.
     region = max(("left", "right"),
                  key=lambda side: output["single-baseline"]["totals"][side])
     base = output["single-baseline"]["totals"][region]
