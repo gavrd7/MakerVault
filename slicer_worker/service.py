@@ -536,7 +536,7 @@ class Handler(BaseHTTPRequestHandler):
             # For an otherwise unclassified worker admission error, record
             # only a bounded, code-owned source location. Never log exception
             # text, native project data, file paths, profiles or CLI output.
-            if stage == "validating model and profile payloads" and reason == "validation-error":
+            if (stage == "validating model and profile payloads" and reason in {"validation-error", "creality-region-profiles-invalid"}):
                 origin = None
                 tb = exc.__traceback__
                 while tb is not None:
