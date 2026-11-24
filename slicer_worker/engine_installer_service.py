@@ -411,7 +411,11 @@ def _install(op_id, release):
         # can inspect it, but the worker (UID 10001) cannot traverse a
         # published version directory unless the root is made searchable.
         # Only expose traversal/read; retain installer-only write access.
-        make_runtime_worker_readable(stage / "squashfs-root")
+        make_runtime_worker_readable(
+            stage / "squashfs-root",
+            required_executables=("bin/bambu-studio",)
+            if engine == "bambustudio" else (),
+        )
         stage.chmod(0o755)
         os.rename(stage, target)
         stage = None
