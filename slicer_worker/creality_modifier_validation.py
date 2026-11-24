@@ -155,7 +155,7 @@ def validate_creality_modifier_project(data):
                 raise WorkerError("Nonprinting modifier may not enter the build.")
             children = list(parent[0])
             meshes = list(external_resources)
-            if not 2 <= len(children) == len(meshes) <= 13:
+            if not 2 <= len(children) == len(meshes) <= 60:
                 raise WorkerError("Invalid external modifier mesh count.")
             canonical = ET.Element(NS + "model", {"unit": "millimeter"})
             resources = ET.SubElement(canonical, NS + "resources")
@@ -215,9 +215,8 @@ def validate_creality_modifier_project(data):
             for index, part in enumerate(clone.findall("part"), start=1):
                 source_id = int(index)
                 if part.attrib.get("id") != str(index + 1) or (
-                        part.get("subtype") !=
-                        ("normal_part" if index == 1 else "modifier_part")):
-                    raise WorkerError("Creality modifier part type mismatch.")
+                        part.get("subtype") not in ("normal_part", "modifier_part", "negative_part")):
+                    raise WorkerError("Creality native region part type mismatch.")
             native_plate = plates[0]
             if native_plate.attrib or native_plate.tag != "plate":
                 raise WorkerError("Unsafe Creality modifier plate.")
