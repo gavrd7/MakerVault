@@ -389,6 +389,7 @@ class Handler(BaseHTTPRequestHandler):
                 "OrcaSlicer failed. Check the engine-native profiles.": "engine-exited",
                 "Reviewed Bambu Studio executable is unavailable.": "engine-unavailable",
                 "Bambu Studio CLI rejected the native profiles or model.": "bambu-cli-exited",
+                "Bambu Studio native runtime exited with status 126.": "bambu-runtime-exit-126",
                 "Bambu generated unsupported binary or empty G-code.": "invalid-gcode",
                 "Bambu native output must contain exactly one G-code plate.": "unexpected-output-layout",
                 "Bambu native output includes an unexpected G-code plate.": "unexpected-output-layout",
