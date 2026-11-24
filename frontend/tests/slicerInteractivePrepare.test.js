@@ -95,7 +95,8 @@ test("active 3D model has a temporary outline and preserves preview filament col
   assert.match(scene, /selectMultiple\(object.instance_id, event.ctrlKey/);
   assert.match(editor, /const helper = new THREE.BoxHelper\(mesh, 0x39d9ff\)/);
   assert.match(editor, /selectionOutlines\.forEach\(helper=>helper\.update\(\)\)/);
-  assert.match(editor, /state\.setSelectionOutlines\(\["paint_colour","paint_support","paint_seam","paint_fuzzy","variable_layers"\]\.includes\(toolMode\) \? \[\] : selection\.map\(id=>state\.meshes\.get\(id\)\)/);
+  assert.match(editor, /state\.setSelectionOutlines\(\["paint_colour","paint_support","paint_seam","paint_fuzzy","variable_layers"\]\.includes\(toolMode\) \? \[\] : \[/);
+  assert.match(editor, /selection\.map\(id=>state\.meshes\.get\(id\)\)/);
   assert.match(editor, /paintPreview\(mesh, \{\.\.\.item,colour_paint:item\.colour_paint\}, PALETTE\[0\]\)/);
   assert.match(editor, /selection.includes\(item.instance_id\) \? "#168ab4" : "#000000"/);
   assert.match(editor, /setSelectionOutlines\(\[\]\)/);
@@ -534,7 +535,8 @@ test("multi-select assembles without merging STL assets and provides guarded gro
   assert.match(scene, /assembly_id: null/);
   assert.match(editor, /function transformGroup\(/);
   assert.match(editor, /Group transform would leave the build plate/);
-  assert.match(editor, /onChange\(objects\.map\(row => byId\.get\(row\.instance_id\) \|\| row\)\)/);
+  assert.match(editor, /modelsById\.get\(row\.instance_id\)\|\|row/);
+  assert.match(editor, /volumesById\.get\(volume\.id\)\|\|volume/);
   assert.match(editor, /aria-label="Multi-model assembly controls"/);
 });
 test("Move and Rotate have matching on-plate controls and all three rotate gizmo axes", () => {
@@ -724,7 +726,8 @@ test("assembly toolbar gizmos use a shared pivot and keep meshes independent",()
   assert.match(scene,/state\.transform\.attach\(pivot\)/);
   assert.match(scene,/groupCommitRef\.current\?\.\(dx,dy,rotation,scale\)/);
   assert.match(scene,/groupEditable = canEdit && !solidDialog && selection\.length > 1/);
-  assert.match(scene,/state\.setSelectionOutlines\(\["paint_colour","paint_support","paint_seam","paint_fuzzy","variable_layers"\]\.includes\(toolMode\) \? \[\] : selection\.map/);
+  assert.match(scene,/state\.setSelectionOutlines\(\["paint_colour","paint_support","paint_seam","paint_fuzzy","variable_layers"\]\.includes\(toolMode\) \? \[\] : \[/);
+  assert.match(scene,/selection\.includes\(ghost\.userData\.modifierId\)/);
   assert.match(scene,/transformGroup\(groupDeltaX, groupDeltaY, groupRotation, groupScale\)/);
   assert.match(workspace,/const memberIds = item\.assembly_id/);
   assert.match(workspace,/memberIds\.every\(value => current\.includes\(value\)\)/);
