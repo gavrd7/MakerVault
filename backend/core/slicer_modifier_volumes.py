@@ -95,43 +95,62 @@ VERIFIED_NATIVE_MODIFIER_VERSIONS = {
     "bambustudio": "02.09.01.70",
 }
 
+# Composite and subtraction approvals must be populated ONLY after each
+# exact pinned binary demonstrates actual two-model modifier/subtraction
+# G-code changes, never on archive-shape or settings metadata alone.
+VERIFIED_NATIVE_COMPOSITE_VERSIONS = {}
+VERIFIED_NATIVE_NEGATIVE_VERSIONS = {}
+MAX_NATIVE_COMPOSITE_MODELS = 12
+
 
 def validate_native_modifier_execution(plate, *, engine, version, settings):
-    """Accept only one safe native modifier owner; reject unproven combinations.
-
-    This validates the request contract; archive, native profile and emitted
-    G-code checks remain independently mandatory at worker execution.
-    """
+    """Strict exact-version native region admission. No unverified combinations."""
     if not isinstance(plate, list):
         return False
-    count = sum(len(row.get("modifier_volumes") or [])
-                for row in plate if isinstance(row, dict))
+    if any(not isinstance(row, dict) for row in plate):
+        raise ValueError("Native modifier plate entries must be objects.")
+    count = sum(len(row.get("modifier_volumes") or []) for row in plate)
     if not count:
         return False
-    if count > MAX_TOTAL_MODIFIERS or len(plate) != 1:
-        raise ValueError("Native modifier slicing currently requires one model and at most twelve modifiers.")
+    if not 1 <= len(plate) <= MAX_NATIVE_COMPOSITE_MODELS or count > MAX_TOTAL_MODIFIERS:
+        raise ValueError("Native region slicing exceeds the bounded model or volume limit.")
     if VERIFIED_NATIVE_MODIFIER_VERSIONS.get(engine) != version:
         raise ValueError("Native modifier engine/version has not passed pinned real-binary acceptance.")
+    if len(plate) > 1 and VERIFIED_NATIVE_COMPOSITE_VERSIONS.get(engine) != version:
+        raise ValueError("Composite native modifier slicing requires real-binary multi-model acceptance for this engine/version.")
     if not isinstance(settings, dict):
-        raise ValueError("Invalid modifier slicing request settings.")
+        raise ValueError("Invalid native modifier slicing request settings.")
     if (settings.get("multi_material_test") or settings.get("flush_settings")
             or settings.get("material_tool_bindings")
             or settings.get("slot_filament_profiles") or settings.get("prime_tower")):
-        raise ValueError("Combining modifiers with native multi-material tool routing is not yet verified.")
-    model = plate[0]
-    if not isinstance(model, dict):
-        raise ValueError("Invalid native modifier parent.")
-    fields = ("colour_paint", "support_paint", "seam_paint",
-              "fuzzy_skin_paint", "negative_volumes", "variable_layer_profile")
-    if any(model.get(field) for field in fields):
-        raise ValueError("Combining modifiers with other native geometry extensions requires separate verification.")
-    validated = validate_modifier_volumes(model.get("modifier_volumes"))
-    if any(volume["kind"] == "negative" for volume in validated):
-        raise ValueError("Native negative-volume slicing requires verified engine-specific subtraction; the draft has been retained.")
-    if len(validated) != count or count > MAX_MODIFIERS_PER_MODEL:
-        raise ValueError("Invalid native modifier instance count.")
+        raise ValueError("Combining regions with native multi-material routing is unverified.")
+    seen = set()
+    negative = False
+    for model in plate:
+        fields = ("colour_paint", "support_paint", "seam_paint",
+                  "fuzzy_skin_paint", "negative_volumes", "variable_layer_profile")
+        if any(model.get(field) for field in fields):
+            raise ValueError("Native regions with other geometry extensions require separate verification.")
+        volumes = validate_modifier_volumes(model.get("modifier_volumes"))
+        if len(volumes) > MAX_MODIFIERS_PER_MODEL:
+            raise ValueError("Too many native region volumes on one model.")
+        if len(plate) > 1 and model.get("process_overrides"):
+            raise ValueError("Composite native regional and per-model process settings are not verified together.")
+        for volume in volumes:
+            if volume["id"] in seen:
+                raise ValueError("Native volume identities must be unique across the plate.")
+            seen.add(volume["id"])
+            if volume["kind"] == "negative":
+                negative = True
+                if volume.get("coordinate_space") != "world":
+                    raise ValueError("Negative volumes require independent plate-space coordinates.")
+            if len(plate) > 1 and volume.get("coordinate_space") != "world":
+                raise ValueError("Composite regions require independent world-space coordinates.")
+    if len(seen) != count:
+        raise ValueError("Invalid native region count.")
+    if negative and VERIFIED_NATIVE_NEGATIVE_VERSIONS.get(engine) != version:
+        raise ValueError("Native negative-volume slicing requires pinned real-binary subtraction evidence for this engine/version.")
     return True
-
 
 
 def refuse_unverified_native_modifiers(plate, engine):
