@@ -187,10 +187,124 @@ def _add_child_mesh(resources, identifier, modifier, parent_bounds, matrix, bed_
     return obj
 
 
+def _export_composite_volume_plate(objects_with_stl, *, bed_width, bed_depth):
+    """Build an assembly with several printable parts and plate-space regions.
+
+    All printable meshes remain separate `normal_part` components. Each
+    non-printing region is emitted exactly once as a sibling of every printable
+    part, so overlapping models are affected without copying or welding STL
+    sources. This format still requires pinned worker and G-code acceptance.
+    """
+    if not 2 <= len(objects_with_stl) <= 12:
+        raise SlicerProfileError("Composite native volumes support 2–12 printable models.")
+    if any(item.get("process_overrides") for item, _ in objects_with_stl):
+        raise SlicerProfileError("Composite modifier and per-model process combinations require independent verification.")
+    if any(volume.get("coordinate_space") != "world"
+           for item, _ in objects_with_stl
+           for volume in validate_modifier_volumes(item.get("modifier_volumes"))):
+        raise SlicerProfileError("All composite volumes must have independent plate-space poses.")
+    count = sum(len(validate_modifier_volumes(item.get("modifier_volumes")))
+                for item, _ in objects_with_stl)
+    if not 1 <= count <= MAX_TOTAL_MODIFIERS:
+        raise SlicerProfileError("Composite plate has no non-printing volumes or exceeds the limit.")
+    original = build_plate_3mf(
+        objects_with_stl, bed_width=bed_width, bed_depth=bed_depth,
+        allow_modifier_fixture=True)
+    with zipfile.ZipFile(io.BytesIO(original), "r") as source:
+        members = {name: source.read(name) for name in source.namelist()}
+    root = SafeET.fromstring(members["3D/3dmodel.model"])
+    resources = root.find(f"{{{NS}}}resources")
+    build = root.find(f"{{{NS}}}build")
+    if resources is None or build is None:
+        raise SlicerProfileError("Invalid compound native source.")
+    printable = list(resources.findall(f"{{{NS}}}object"))
+    if len(printable) != len(objects_with_stl) or any(
+            obj.find(f"{{{NS}}}mesh") is None for obj in printable):
+        raise SlicerProfileError("Native composite source has unexpected geometry.")
+    for child in list(resources):
+        resources.remove(child)
+    for child in list(build):
+        build.remove(child)
+    identity = "1 0 0 0 1 0 0 0 1 0 0 0"
+    identity4 = "1 0 0 0 0 1 0 0 0 0 1 0 0 0 0 1"
+    parent = ET.SubElement(resources, f"{{{NS}}}object", {"id": "1", "type": "model"})
+    components = ET.SubElement(parent, f"{{{NS}}}components")
+    ET.SubElement(build, f"{{{NS}}}item", {"objectid": "1", "transform": identity})
+    manifest = ET.Element("config")
+    settings = ET.SubElement(manifest, "object", {"id": "1"})
+    bounds = []
+    for index, mesh_obj in enumerate(printable, start=2):
+        mesh = mesh_obj.find(f"{{{NS}}}mesh")
+        points = [tuple(float(vertex.attrib[axis]) for axis in ("x", "y", "z"))
+                  for vertex in mesh.findall(f"{{{NS}}}vertices/{{{NS}}}vertex")]
+        if not points:
+            raise SlicerProfileError("Missing printable composite mesh vertices.")
+        bounds.append(tuple((min(point[axis] for point in points),
+                             max(point[axis] for point in points))
+                            for axis in range(3)))
+        child = ET.SubElement(resources, f"{{{NS}}}object",
+                              {"id": str(index), "type": "model"})
+        child.append(mesh)
+        ET.SubElement(components, f"{{{NS}}}component",
+                      {"objectid": str(index), "transform": identity})
+        part = ET.SubElement(settings, "part",
+                             {"id": str(index), "subtype": "normal_part"})
+        ET.SubElement(part, "metadata",
+                      {"key": "name", "value": f"Printable model {index-1}"})
+        ET.SubElement(part, "metadata", {"key": "matrix", "value": identity4})
+    envelope = tuple((min(box[axis][0] for box in bounds),
+                      max(box[axis][1] for box in bounds)) for axis in range(3))
+    next_id = len(printable) + 2
+    for item, _raw in objects_with_stl:
+        for volume in validate_modifier_volumes(item.get("modifier_volumes")):
+            identifier = next_id
+            next_id += 1
+            _add_child_mesh(resources, identifier, volume, envelope,
+                            None, None, bed_width, bed_depth)
+            ET.SubElement(components, f"{{{NS}}}component",
+                          {"objectid": str(identifier), "transform": identity})
+            subtype = ("negative_part" if volume["kind"] == "negative"
+                       else "modifier_part")
+            part = ET.SubElement(settings, "part",
+                                 {"id": str(identifier), "subtype": subtype})
+            ET.SubElement(part, "metadata", {
+                "key": "name",
+                "value": f"{volume['shape'].title()} {volume['kind']}",
+            })
+            ET.SubElement(part, "metadata", {"key": "matrix", "value": identity4})
+            for key, value in sorted(volume["settings"].items()):
+                suffix = "%" if PROCESS_FIELDS[key][2] == "%" else ""
+                ET.SubElement(part, "metadata",
+                              {"key": key, "value": f"{value}{suffix}"})
+    plate = ET.SubElement(manifest, "plate")
+    ET.SubElement(plate, "metadata", {"key": "plater_id", "value": "1"})
+    instance = ET.SubElement(plate, "model_instance")
+    for key, value in (("object_id", "1"), ("instance_id", "0"),
+                       ("identify_id", "1")):
+        ET.SubElement(instance, "metadata", {"key": key, "value": value})
+    ET.register_namespace("", NS)
+    members["3D/3dmodel.model"] = ET.tostring(
+        root, encoding="utf-8", xml_declaration=True)
+    members["Metadata/model_settings.config"] = ET.tostring(
+        manifest, encoding="utf-8", xml_declaration=True)
+    output = io.BytesIO()
+    with zipfile.ZipFile(output, "w", compression=zipfile.ZIP_DEFLATED,
+                         compresslevel=6, allowZip64=False) as result:
+        for name, payload in members.items():
+            result.writestr(name, payload)
+    data = output.getvalue()
+    if len(data) > MAX_PROJECT_BYTES:
+        raise SlicerProfileError("Native composite project exceeds upload limits.")
+    return data
+
+
 def export_modifier_3mf_fixture(objects_with_stl, *, bed_width, bed_depth):
     """Produce native-looking nested volume fixture, never bypass runtime gates."""
     if not isinstance(objects_with_stl, list):
         raise SlicerProfileError("Invalid modifier plate.")
+    if len(objects_with_stl) > 1:
+        return _export_composite_volume_plate(
+            objects_with_stl, bed_width=bed_width, bed_depth=bed_depth)
     count = sum(len(validate_modifier_volumes(item.get("modifier_volumes")))
                 for item, _ in objects_with_stl)
     if not count or count > MAX_TOTAL_MODIFIERS:
