@@ -10,8 +10,9 @@ function javascriptFiles(dir) {
   return readdirSync(dir).flatMap(name => {
     const path = join(dir, name);
     if (statSync(path).isDirectory()) return javascriptFiles(path);
-    if (name.endsWith(".wasm"))
-      throw new Error("Manifold WASM must not be a standalone network asset: " + name);
+    // The upstream Emscripten package may additionally emit its own WASM
+    // asset when bundling its factory. That artifact is not used: MakerVault
+    // passes the inlined wasmBinary directly, so no runtime fetch is needed.
     return name.endsWith(".js") ? [path] : [];
   });
 }
