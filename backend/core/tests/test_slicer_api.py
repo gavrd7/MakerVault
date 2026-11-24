@@ -92,6 +92,37 @@ class SliceJobApiTests(TestCase):
         self.assertIs(job.settings.get("multi_material_test"), True)
         self.assertEqual(len(job.settings["plate_objects"]), 1)
 
+    def test_native_volume_ids_cannot_collide_with_models_or_other_volumes(self):
+        from core.slicer_api import _draft_plate_settings
+        first_id, second_id = str(uuid.uuid4()), str(uuid.uuid4())
+        volume_id = str(uuid.uuid4())
+        def model(identity, volumes):
+            return {
+                "instance_id": identity, "asset_id": str(self.input_asset.pk),
+                "x_mm": 0, "y_mm": 0, "rotation_deg": 0,
+                "scale_percent": 100, "color": "#abcdef",
+                "modifier_volumes": volumes,
+            }
+        def region(identity):
+            return {
+                "id": identity, "shape": "box",
+                "width_mm": 15, "depth_mm": 15, "height_mm": 15,
+                "x_mm": 0, "y_mm": 0, "z_mm": 8,
+                "coordinate_space": "world",
+                "rotation_xyz_deg": [0, 0, 0],
+                "scale_xyz_percent": [100, 100, 100],
+                "kind": "modifier", "assembly_id": None,
+                "settings": {"sparse_infill_density": 50},
+            }
+        for models in (
+            [model(first_id, [region(second_id)]), model(second_id, [])],
+            [model(first_id, [region(volume_id)]), model(second_id, [region(volume_id)])],
+        ):
+            with self.subTest(models=models), self.assertRaisesRegex(ValueError, "unique"):
+                _draft_plate_settings(self.owner, self.input_asset, {
+                    "plate_objects": models, "plate_label": "Unique IDs",
+                })
+
     def test_prime_tower_per_plate_roundtrip_and_validation(self):
         from core.slicer_api import _draft_plate_settings
         model = {
