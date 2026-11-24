@@ -145,3 +145,43 @@ def flatten_prusa_vendor_preset(
     if not 0 < len(result) <= MAX_FLAT_BYTES:
         raise PrusaPresetError("Resolved Prusa native preset exceeds its limit.")
     return result
+
+
+# Prusa's --load accepts flat native settings. An upstream vendor catalogue
+# [printer:NAME] section is *not* executable without inheritance resolution.
+REQUIRED_FLAT_KEYS = {
+    "printer": frozenset({"nozzle_diameter", "bed_shape"}),
+    "filament": frozenset({"filament_diameter"}),
+    "print": frozenset({"layer_height"}),
+}
+
+
+def validate_flat_prusa_preset(raw: bytes, *, kind: str) -> dict[str, str]:
+    """Validate one resolved Prusa CLI preset, never executing external input."""
+    if kind not in KINDS:
+        raise PrusaPresetError("Unsupported Prusa native preset kind.")
+    if not isinstance(raw, bytes) or not 0 < len(raw) <= MAX_FLAT_BYTES:
+        raise PrusaPresetError("Prusa flat preset size is invalid.")
+    text = _decode(raw)
+    settings: dict[str, str] = {}
+    for line in text.splitlines():
+        stripped = line.strip()
+        if not stripped or stripped.startswith(("#", ";")):
+            continue
+        if stripped.startswith("[") or "=" not in line:
+            raise PrusaPresetError("Prusa CLI requires a flattened native preset.")
+        key, _, value = line.partition("=")
+        key, value = key.strip(), value.strip()
+        _checked_setting(key, value)
+        if key in settings or len(settings) >= MAX_KEYS:
+            raise PrusaPresetError("Duplicate or excessive Prusa native preset setting.")
+        if key == "inherits":
+            raise PrusaPresetError("Prusa preset inheritance must be resolved first.")
+        if key == "binary_gcode" and value.strip().lower() not in {"", "0", "false", "no"}:
+            raise PrusaPresetError("Only text Prusa G-code is supported.")
+        settings[key] = value
+    if not REQUIRED_FLAT_KEYS[kind].issubset(settings):
+        raise PrusaPresetError("Prusa CLI preset lacks required native settings.")
+    if kind == "printer" and settings.get("printer_technology", "FFF") != "FFF":
+        raise PrusaPresetError("Only Prusa FFF printer presets are supported.")
+    return settings
