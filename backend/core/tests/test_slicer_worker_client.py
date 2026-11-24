@@ -306,6 +306,10 @@ class SlicerWorkerClientTests(SimpleTestCase):
         text = explain_worker_failure("bambu-cli-exited", 422)
         self.assertIn("Bambu Studio", text)
         self.assertNotIn("OrcaSlicer", text)
+        runtime = explain_worker_failure("bambu-runtime-exit-126", 422)
+        self.assertIn("exit 126", runtime)
+        self.assertIn("runtime", runtime)
+        self.assertNotIn("OrcaSlicer", runtime)
         self.assertIn("selected slicer", explain_worker_failure("engine-exited", 422))
 
     def test_creality_region_rejection_has_bounded_help_categories(self):
