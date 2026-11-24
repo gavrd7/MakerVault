@@ -75,6 +75,22 @@ class ModifierGcodeCoverageTests(unittest.TestCase):
             audit_modifier_positive_e(
                 b"\n".join(inside), project, "orcaslicer")
 
+    def test_bambu_negative_deposition_logs_only_aggregate_bands(self):
+        project = composite_fixture(negative=True)
+        interior = [b"G90", b"M83", b"G0 X1 Y1 Z5"]
+        interior.extend((b"G1 X2 Y2 E0.5" if i % 2 == 0 else
+                         b"G1 X1 Y1 E0.5") for i in range(20))
+        with self.assertLogs("slicer_worker.modifier_gcode_audit", level="WARNING") as log:
+            with self.assertRaisesRegex(WorkerError, "deposits material"):
+                audit_modifier_positive_e(
+                    b"\\n".join(interior), project, "bambustudio")
+        message = "\\n".join(log.output)
+        self.assertIn("Bambu negative subtraction audit rejected G-code", message)
+        self.assertIn("z_bands=", message)
+        self.assertNotIn("X1", message)
+        self.assertNotIn("Y1", message)
+        self.assertNotIn("G1", message)
+
     def test_conical_negative_does_not_reject_material_outside_actual_cut(self):
         from slicer_worker.tests.test_modifier_3mf_validation import NS
         ns = "{" + NS + "}"
