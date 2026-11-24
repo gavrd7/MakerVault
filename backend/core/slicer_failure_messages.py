@@ -182,6 +182,11 @@ REASONS = {
         "multi-material tool routing before printer submission."
     ),
     "validation-error": "The worker rejected an input or generated result. Check model and profile integrity.",
+    "bambu-runtime-exit-126": (
+        "Bambu Studio could not execute a required runtime command (exit 126). "
+        "Check executable permissions, mount options and bundled runtime dependencies "
+        "inside the isolated slicer worker. This does not establish a model or preset error."
+    ),
     "bambu-cli-exited": (
         "Bambu Studio exited without producing a completed slice. "
         "The worker confirmed a CLI failure, but has not established whether "
