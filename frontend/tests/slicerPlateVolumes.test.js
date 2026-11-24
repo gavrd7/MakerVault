@@ -71,3 +71,26 @@ test("final printable deletion retains orphan volumes but removes explicitly sel
   assert.deepEqual(retained.volumes.map(v => v.id), ["free"]);
   assert.equal(retained.volumes[0].assembly_id, null);
 });
+
+test("adding a printable to an existing saved plate never duplicates or re-parents free volumes", () => {
+  const free = {...region("existing-cut"), x_mm: 90, y_mm: 90};
+  const saved = canonicalPlate({objects: [model()], volumes: [free]});
+  const another = {...model(), instance_id: "printable-2", x_mm: 90, y_mm: 90};
+  const edited = updateCanonicalPlate(saved, [...hydratePlateObjects(saved), another]);
+  assert.deepEqual(edited.volumes.map(volume => volume.id), ["existing-cut"]);
+  const hydrated = hydratePlateObjects(edited);
+  assert.deepEqual(hydrated[0].modifier_volumes.map(volume => volume.id), ["existing-cut"]);
+  assert.deepEqual(hydrated[1].modifier_volumes, []);
+  assert.equal(new Set(edited.volumes.map(volume => volume.id)).size, 1);
+  const reopened = canonicalPlate(edited);
+  assert.deepEqual(reopened.volumes.map(volume => volume.id), ["existing-cut"]);
+});
+
+test("fresh empty plate contains no remnants from an old saved draft", () => {
+  const saved = canonicalPlate({objects: [model(region("modifier"))], volumes: [region("negative")]});
+  assert.equal(saved.volumes.length, 2);
+  const fresh = canonicalPlate({id: "plate-1", objects: [], volumes: []});
+  const added = updateCanonicalPlate(fresh, [model()]);
+  assert.deepEqual(added.volumes, []);
+  assert.deepEqual(hydratePlateObjects(added)[0].modifier_volumes, []);
+});
