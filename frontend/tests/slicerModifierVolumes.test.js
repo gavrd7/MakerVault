@@ -86,3 +86,12 @@ test("modifier and negative volumes share primitive shape and transform modal", 
   assert.match(editor, /solidRequest\.editVolumeId/);
   assert.match(editor, /editingVolume\?\.rotation_xyz_deg/);
 });
+
+test("stored free modifiers and negative volumes reopen the shared shape and transform editor", () => {
+  assert.match(prepare, /Edit volume<\/button>/);
+  assert.match(prepare, /editTargetId:object\.owner_instance_id,editVolumeId:object\.id/);
+  assert.match(prepare, /kind:object\.kind==="negative"\?"negative":"modifier"/);
+  assert.match(editor, /editingVolume\?\.width_mm/);
+  assert.match(editor, /editingVolume\?\.rotation_xyz_deg/);
+  assert.match(editor, /solidDialog\.editVolumeId/);
+});
