@@ -182,6 +182,11 @@ REASONS = {
         "multi-material tool routing before printer submission."
     ),
     "validation-error": "The worker rejected an input or generated result. Check model and profile integrity.",
+    "bambu-cli-aborted": (
+        "Bambu Studio launched but aborted with SIGABRT during native slicing. "
+        "The project, profile compatibility and slicer runtime require further verification; "
+        "this is not an executable-permissions failure."
+    ),
     "bambu-runtime-exit-126": (
         "Bambu Studio could not execute a required runtime command (exit 126). "
         "Check executable permissions, mount options and bundled runtime dependencies "
