@@ -11,8 +11,9 @@ export function splitPlateVolumes(objects, orphaned = []) {
   const volumes = [];
   for (const object of objects || []) {
     const {modifier_volumes = [], ...model} = object;
-    models.push(model);
-    volumes.push(...modifier_volumes);
+    const legacy = modifier_volumes.filter(volume => volume.coordinate_space !== "world");
+    models.push(legacy.length ? {...model, modifier_volumes: legacy} : model);
+    volumes.push(...modifier_volumes.filter(volume => volume.coordinate_space === "world"));
   }
   // When no printable remains, keep already-detached volumes. The caller
   // must provide an explicit volume deletion action to remove these.
@@ -49,10 +50,10 @@ export function hydratePlateObjects(plate) {
 
 export function canonicalPlate(plate) {
   const original = plate.objects || [];
-  const inline = original.some(row => Object.hasOwn(row, "modifier_volumes"));
+  const hasWorldInline = original.some(row => (row.modifier_volumes || []).some(v => v.coordinate_space === "world"));
   const {models, volumes} = splitPlateVolumes(original, plate.volumes || []);
   return {...plate, objects: models,
-    volumes: !inline && models.length ? [...(plate.volumes || [])] : volumes};
+    volumes: !hasWorldInline && models.length ? [...(plate.volumes || [])] : volumes};
 }
 
 export function updateCanonicalPlate(plate, nextObjects) {
