@@ -311,6 +311,26 @@ class Handler(BaseHTTPRequestHandler):
             # Only report a bounded diagnostic category, never command output,
             # profile JSON, private paths, bearer tokens or source filenames.
             safe_reasons = {
+                # Fixed worker-authored error strings only: never echo raw
+                # native 3MF/project contents or private preset data.
+                "Unsafe Creality modifier project archive.": "creality-region-archive-invalid",
+                "Invalid Creality native modifier parent.": "creality-region-graph-invalid",
+                "Invalid native external modifier object graph.": "creality-region-graph-invalid",
+                "Unsafe Creality modifier external link.": "creality-region-graph-invalid",
+                "Unsafe external modifier mesh identity.": "creality-region-graph-invalid",
+                "Invalid external modifier mesh count.": "creality-region-graph-invalid",
+                "Creality modifier part count mismatch.": "creality-region-parts-invalid",
+                "Creality native region part type mismatch.": "creality-region-parts-invalid",
+                "Unexpected Creality modifier settings sections.": "creality-region-metadata-invalid",
+                "Creality modifier source object mapping is invalid.": "creality-region-metadata-invalid",
+                "Creality modifier native metadata owner mismatch.": "creality-region-metadata-invalid",
+                "Invalid native modifier profile vector.": "creality-region-profiles-invalid",
+                "Invalid Creality modifier native palette.": "creality-region-profiles-invalid",
+                "Unapproved native modifier process settings.": "creality-region-profiles-invalid",
+                "Malformed Creality native modifier archive.": "creality-region-archive-invalid",
+                "Invalid native region part-to-component mapping.": "creality-region-parts-invalid",
+                "Unsafe native region component graph.": "creality-region-graph-invalid",
+
                 "Generated G-code deposits material inside a requested negative volume.": "native-negative-deposition",
                 "Requested native modifier has no model deposition in the generated G-code.": "native-modifier-no-deposition",
                 "Unable to audit native modifier geometry.": "native-region-geometry-invalid",
@@ -343,7 +363,7 @@ class Handler(BaseHTTPRequestHandler):
                 "Creality Print worker could not launch the approved binary.": "creality-launch-failed",
                 "OrcaSlicer failed. Check the engine-native profiles.": "engine-exited",
                 "Reviewed Bambu Studio executable is unavailable.": "engine-unavailable",
-                "Bambu Studio CLI rejected the native profiles or model.": "engine-exited",
+                "Bambu Studio CLI rejected the native profiles or model.": "bambu-cli-exited",
                 "Bambu generated unsupported binary or empty G-code.": "invalid-gcode",
                 "Bambu native output must contain exactly one G-code plate.": "unexpected-output-layout",
                 "Bambu native output includes an unexpected G-code plate.": "unexpected-output-layout",
