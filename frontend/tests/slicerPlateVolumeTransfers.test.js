@@ -19,9 +19,14 @@ test("moving a printable keeps its free volumes on the source plate", () => {
   assert.equal(before[0].modifier_volumes.length, 2, "the original draft must remain unchanged");
 });
 
-test("moving the last printable never silently destroys its volumes", () => {
-  assert.throws(() => movePrintablesPreservingVolumes(
-    [model("one", 0, [volume("cut")])], ["one"]), /original plate|remain on their plate/);
+test("moving the final printable leaves independent volumes in the canonical source plate", () => {
+  const source = [model("one", 0, [volume("cut")])];
+  const {remaining, moving} = movePrintablesPreservingVolumes(source, ["one"]);
+  assert.deepEqual(remaining, []);
+  assert.deepEqual(moving[0].modifier_volumes, []);
+  // The canonical source plate stores the volume independently, so moving
+  // its last printable cannot delete or silently relocate the cutter.
+  assert.equal(source[0].modifier_volumes[0].id, "cut");
 });
 
 test("reject capacity exhaustion without modifying input or dropping regions", () => {
