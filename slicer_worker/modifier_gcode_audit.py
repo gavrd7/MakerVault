@@ -128,8 +128,17 @@ def audit_modifier_positive_e(gcode, project, engine):
             deposited += 1
             midpoint = ((nx + x) / 2, (ny + y) / 2, nz)
             for i, box in enumerate(boxes):
-                if all(low - 0.05 <= value <= high + 0.05
-                       for (low, high), value in zip(box, midpoint)):
+                if kinds[i] == "negative_part":
+                    # A generated perimeter exactly on the negative volume's
+                    # boundary is not a filled cavity. Require strict interior
+                    # deposition, with a small geometric tolerance, rather
+                    # than rejecting legitimate surface contours.
+                    inside = all(low + 0.15 < value < high - 0.15
+                                 for (low, high), value in zip(box, midpoint))
+                else:
+                    inside = all(low - 0.05 <= value <= high + 0.05
+                                 for (low, high), value in zip(box, midpoint))
+                if inside:
                     hits[i] += 1
         x, y, z = nx, ny, nz
     if deposited < 10 or any(hits[i] == 0 for i,kind in enumerate(kinds)
