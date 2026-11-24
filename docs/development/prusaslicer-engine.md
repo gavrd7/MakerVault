@@ -2,6 +2,13 @@
 
 **Status (24 November 2026):** PR #199 is reconciled with released MakerVault v1.7.2. PrusaSlicer remains **disabled and uninstalled** in MakerVault. No released OrcaSlicer, Creality Print, Bambu Studio, staging, or production engine has been modified.
 
+## 24 November follow-up: true native compiler and smoke qualification
+
+- Previous genuine source-build run [45477598819](https://github.com/gavrd7/MakerVault/actions/runs/45477598819) **failed** in wxWidgets: CMake selected GTK2 (`DEP_WX_GTK3=OFF`) while the runner installed only `libgtk-3-dev`; `gtk/gtk.h` was missing. Isolated branch commit `465aa7f` now selects GTK3 (`DEP_WX_GTK3=ON`) without changing any released engine or native upstream source. Real compiler run [45501899820](https://github.com/gavrd7/MakerVault/actions/runs/45501899820) was still building dependencies at last inspection; its eventual result must be read before any approval.
+- Discovered a separate deterministic final-step failure: the candidate workflow referred to `$GITHUB_WORKSPACE/scripts/prusa_real_binary_smoke.py` without checking out MakerVault. Commit `919a5da` adds read-only `actions/checkout@v4` before upstream clone. **The in-flight older SHA build does not contain this follow-up change**; retest the final head with an explicitly tagged build once compilation is proven.
+- The five regular CI workflows passed on `465aa7f`: MakerVault CI, worker contract, Prusa contract, combined isolation, Orca real-binary smoke. They must all be rechecked on the final head. Neither source compilation nor actual single-material runtime is approved from these passes alone.
+- Runtime admission remains disabled. No Prusa installer, worker activation, native 3MF, MMU/XL, painting, or modifiers should be advertised as implemented until separately demonstrated; staging/production and all working engines remain untouched.
+
 ## Implemented on the isolated Prusa branch
 
 - Prusa-only **native INI** parser and flattening of exact named `[printer:...]`, `[filament:...]`, `[print:...]` upstream sections; supports official `;`-delimited **ordered multiple inheritance**, shared ancestor DAGs, and hard-fails on cycles, missing parents, wrong preset kind, excessive depth and size, unsafe directives, or nonempty post-processing commands.
