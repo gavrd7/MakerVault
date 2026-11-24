@@ -22,6 +22,17 @@ class PrusaGcodeAuditTests(TestCase):
                 result = audit_prusa_positive_e(self.gcode(relative=relative))
                 self.assertEqual(result["positive_e_moves"], 32)
 
+    def test_extruder_position_survives_mode_switch(self):
+        # Relative E+1 repeated 25 times reaches E=25. Switching to M82
+        # and commanding E=20 is retraction, not a new positive extrusion.
+        prefix = b"; harmless header\n" * 200 + b"M83\nG92 E0\n"
+        deposits = b"".join(
+            f"G1 X{i+40} Y50 E1\n".encode() for i in range(25)
+        )
+        tail = b"M82\nG1 X85 Y50 E20\n"
+        result = audit_prusa_positive_e(prefix + deposits + tail)
+        self.assertEqual(result["positive_e_moves"], 25)
+
     def test_reset_and_retraction_cannot_fake_positive_material(self):
         data = b"; padding\n" * 300 + b"M82\nG92 E0\n"
         data += b"G1 E10 F2400\nG1 X30 Y40 E10\n" * 25
