@@ -44,6 +44,36 @@ class OfficialProfileApiTests(TestCase):
         self.assertEqual(response.json()["engine_version"], "2.4.2")
         self.assertEqual(fetch.call_args.args, ("K2", "printer", "Creality"))
 
+    def test_prusa_imports_flat_native_ini_only_as_owner_candidate(self):
+        self.client.force_login(self.user)
+        selection = {
+            "engine": "prusaslicer", "engine_version": "2.9.7",
+            "vendor": "PrusaResearch", "kind": "printer",
+            "name": "Original Prusa MK4S", "sub_path": "PrusaResearch.ini",
+        }
+        native = (b"bed_shape = 0x0,250x0,250x210,0x210\n"
+                  b"nozzle_diameter = 0.4\nprinter_technology = FFF\n")
+        with patch("core.slicer_api.fetch_prusa_profile", return_value=native) as fetch:
+            response = self.post(selection)
+        self.assertEqual(response.status_code, 201, response.content)
+        fetch.assert_called_once_with(
+            "printer", "Original Prusa MK4S", "PrusaResearch.ini",
+            "PrusaResearch")
+        self.assertFalse(response.json()["execution_available"])
+        profile = SlicerProfile.objects.get(pk=response.json()["profile"]["id"])
+        self.assertEqual(profile.engine, "prusaslicer")
+        self.assertEqual(profile.engine_version, "2.9.7")
+        self.assertEqual(profile.status, "candidate")
+        self.assertEqual(profile.file_asset.owner, self.user)
+        self.assertIn("PrusaSlicer@version_2.9.7", profile.provenance)
+        with profile.file_asset.file.open("rb") as stream:
+            self.assertEqual(stream.read(), native)
+        self.addCleanup(lambda file=profile.file_asset.file: file.delete(save=False))
+        with patch("core.slicer_api.fetch_prusa_profile", return_value=native):
+            duplicate = self.post(selection)
+        self.assertEqual(duplicate.status_code, 200, duplicate.content)
+        self.assertEqual(duplicate.json()["imported_profiles"], [])
+
     def test_any_pinned_orca_vendor_is_available_without_download(self):
         self.client.force_login(self.user)
         with patch("core.slicer_api.search_official_profiles") as search:
