@@ -4197,6 +4197,18 @@ export default function SlicerPlateEditor({
                   value={solidOptions[field]} onChange={event=>
                     setSolidOptions(v=>({...v,[field]:event.target.value}))}/></label>)}
             </div>
+            {["negative","modifier"].includes(solidDialog.kind) && <div className="slicerSolidGrid">
+              {(solidOptions.volume_scale_xyz_percent || [100,100,100]).map((value,index)=>
+                <label key={"volume-scale-"+index}>
+                  {"Scale "+["X","Y","Z"][index]+" (%)"}
+                  <input type="number" min="5" max="400" step="1" value={value}
+                    onChange={event=>setSolidOptions(old=>{
+                      const axes=[...(old.volume_scale_xyz_percent || [100,100,100])];
+                      axes[index]=event.target.value;
+                      return {...old,volume_scale_xyz_percent:axes};
+                    })}/>
+                </label>)}
+            </div>}
             {["primitive","negative","modifier","text","svg"].includes(solidDialog.kind) && <div className="slicerSolidGrid">
               {["rotation_x","rotation_y","rotation_z"].map((field,index)=><label key={field}>
                 {["Rotate X","Rotate Y","Rotate Z"][index]} (°)
