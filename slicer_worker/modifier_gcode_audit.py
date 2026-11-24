@@ -1,4 +1,4 @@
-"""Bounded positive-E coverage check for verified native parameter modifiers.
+"""Bounded positive-E coverage and subtraction checks for native plate volumes.
 
 The pin/version tests separately prove that changing a regional setting changes
 real G-code. This per-job safety check ensures every requested modifier actually
@@ -17,7 +17,7 @@ CMD = re.compile(r"^(G0?[01]|G92|M82|M83|G90|G91)\b", re.I)
 WORDS = re.compile(r"\b([XYZE])([-+]?(?:\d+(?:\.\d*)?|\.\d+))", re.I)
 
 
-def modifier_bounds(project, engine):
+def modifier_bounds(project, engine, *, include_kinds=False):
     if not isinstance(project, bytes) or len(project) > 32 * 1024 * 1024:
         raise WorkerError("Invalid modifier geometry for G-code audit.")
     try:
@@ -48,15 +48,13 @@ def modifier_bounds(project, engine):
         if not 2 <= len(parts) == expected_count <= 60:
             raise WorkerError("Missing bounded native region part coordinates.")
         bounds = []
-        negative_count = 0
+        kinds = []
         for part in parts:
             subtype = part.get("subtype")
             if subtype == "normal_part":
                 continue
             if subtype not in ("modifier_part", "negative_part"):
                 raise WorkerError("Unknown native non-printing subtype.")
-            if subtype == "negative_part":
-                negative_count += 1
             identifier = part.get("id")
             try:
                 object_index = int(identifier) - 1
@@ -76,13 +74,10 @@ def modifier_bounds(project, engine):
                 points.append(coords)
             bounds.append(tuple((min(v[i] for v in points), max(v[i] for v in points))
                                 for i in range(3)))
-        if negative_count:
-            raise WorkerError(
-                "Negative volume G-code requires pinned subtraction-effect acceptance; "
-                "do not treat missing deposition as positive modifier coverage.")
+            kinds.append(subtype)
         if not bounds:
             raise WorkerError("No modifier regions available for G-code audit.")
-        return bounds
+        return (bounds, kinds) if include_kinds else bounds
     except WorkerError:
         raise
     except (KeyError, ValueError, OSError, zipfile.BadZipFile,
@@ -91,10 +86,10 @@ def modifier_bounds(project, engine):
 
 
 def audit_modifier_positive_e(gcode, project, engine):
-    """Require model deposition inside each non-printing modifier's 3D bbox."""
+    """Require modifier coverage and safe negative-volume subtraction instead of model deposition inside each non-printing modifier's 3D bbox."""
     if not isinstance(gcode, bytes) or not 0 < len(gcode) <= 64 * 1024 * 1024:
         raise WorkerError("Invalid modifier G-code output.")
-    boxes = modifier_bounds(project, engine)
+    boxes, kinds = modifier_bounds(project, engine, include_kinds=True)
     x = y = z = e = 0.0
     relative_xyz = relative_e = False
     hits = [0] * len(boxes)
@@ -137,7 +132,15 @@ def audit_modifier_positive_e(gcode, project, engine):
                        for (low, high), value in zip(box, midpoint)):
                     hits[i] += 1
         x, y, z = nx, ny, nz
-    if deposited < 10 or any(count == 0 for count in hits):
+    if deposited < 10 or any(hits[i] == 0 for i,kind in enumerate(kinds)
+                            if kind == "modifier_part"):
         raise WorkerError("Requested native modifier has no model deposition in the generated G-code.")
+    # Successfully subtracting a negative region may remove ALL material there.
+    # This requires zero positive-E paths, unlike a modifier. Comparative
+    # pinned-binary fixture acceptance remains an independent prerequisite.
+    if any(hits[i] > 0 for i,kind in enumerate(kinds)
+           if kind == "negative_part"):
+        raise WorkerError("Generated G-code deposits material inside a requested negative volume.")
     return {"modifier_count": len(boxes), "positive_e_paths": deposited,
-            "modifier_region_paths": hits}
+            "modifier_region_paths": hits,
+            "negative_volume_count": kinds.count("negative_part")}
