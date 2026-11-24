@@ -311,6 +311,7 @@ def _bambu_headless_environment(workdir: Path) -> dict[str, str]:
 
 def _filesystem_error_details(tail: bytes) -> tuple[str, str]:
     """Only derive fixed diagnostic categories; never relay exception paths."""
+    tail = tail.lower()
     if b"permission denied" in tail or b"operation not permitted" in tail:
         reason = "permission"
     elif b"no such file or directory" in tail:
