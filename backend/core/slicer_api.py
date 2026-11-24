@@ -492,6 +492,13 @@ def _draft_plate_settings(user, input_asset, settings):
                       **({"modifier_volumes": native_modifiers} if native_modifiers else {})})
     if sum(len(row.get("modifier_volumes", ())) for row in saved) > MAX_TOTAL_MODIFIERS:
         raise ValueError("Too many native modifiers on the build plate.")
+    # The editor uses a single selection namespace for printable instances and
+    # independent volumes. Reject collisions across storage owners as well as
+    # collisions with printable IDs before saving or slicing a plate.
+    volume_ids = [volume["id"] for row in saved
+                  for volume in row.get("modifier_volumes", ())]
+    if len(set(volume_ids)) != len(volume_ids) or seen.intersection(volume_ids):
+        raise ValueError("Plate model and volume instance IDs must be unique.")
     if saved[0]["asset_id"] != str(input_asset.pk):
         raise ValueError("The first plate model must match the selected primary STL.")
     return {"plate_objects": saved, "plate_label": label, "save_gcode_to_library": save_to_library,
