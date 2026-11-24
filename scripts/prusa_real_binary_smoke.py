@@ -14,6 +14,7 @@ from tempfile import TemporaryDirectory
 from slicer_worker.prusa_vendor_profiles import (
     flatten_prusa_vendor_preset, validate_flat_prusa_preset)
 from slicer_worker.runner import run_prusa
+from slicer_worker.prusa_gcode_audit import audit_prusa_positive_e
 
 
 def cube_stl() -> bytes:
@@ -33,28 +34,6 @@ def cube_stl() -> bytes:
         vec = [value for index in triangle for value in points[index]]
         output.extend(struct.pack("<12fH", 0, 0, 0, *vec, 0))
     return bytes(output)
-
-
-def audit_positive_extrusion(gcode: bytes) -> dict:
-    """Require actual XYZ/E deposition, not just a header, preview or G0."""
-    if len(gcode) < 2000 or b"\0" in gcode[:4096]:
-        raise ValueError("Prusa real-binary smoke emitted empty or binary output.")
-    count = 0
-    total_e = 0.
-    for line in gcode.decode("utf-8", "replace").splitlines():
-        command = line.split(";", 1)[0].strip()
-        if not re.match(r"^G0?1(?:\s|$)", command):
-            continue
-        params = dict((key.upper(), float(value)) for key, value in
-                      re.findall(r"([XYZE])\s*([-+]?(?:\d+\.?\d*|\.\d+))", command))
-        if "E" in params and {"X", "Y"} & params.keys() and params["E"] > 0:
-            if not math.isfinite(params["E"]):
-                raise ValueError("Prusa CLI emitted nonfinite extrusion.")
-            count += 1
-            total_e += params["E"]
-    if count < 20 or total_e <= 0:
-        raise ValueError("Prusa CLI smoke did not produce positive-E toolpaths.")
-    return {"positive_e_moves": count, "sample_positive_e_sum": round(total_e, 4)}
 
 
 def main() -> None:
@@ -79,7 +58,7 @@ def main() -> None:
             (folder / filename).write_bytes(flat)
         receipt = run_prusa(args.binary.resolve(strict=True), folder, timeout_seconds=300)
         data = Path(receipt["gcode_path"]).read_bytes()
-        result = audit_positive_extrusion(data)
+        result = audit_prusa_positive_e(data)
         print(
             f"Prusa 2.9.7 genuine FFF cube slice passed: {len(data)} G-code bytes, "
             f"{result['positive_e_moves']} positive-E moves, "
