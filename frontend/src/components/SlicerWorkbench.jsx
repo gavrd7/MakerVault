@@ -1546,20 +1546,18 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
         <p>Choose a model, printer and filament, then configure the native slicing profiles. Prepare the build plate, save drafts, and slice when the selected engine is available.</p>
       </div>
       <div className="printingHeroActions slicerHeroActions">
-        {editorOpen && <div className="slicerHeroProjectNavigation">
-          <button type="button" className="slicerHeroBack" onClick={() => setEditorOpen(false)}>← Slicer setup</button>
-          <div className="slicerHeroProjectFileActions">
-            <button type="button" disabled={busy||loading||!canPrepare||!projectPlates.some(plate=>plate.objects.length)}
-              onClick={()=>openProjectNameDialog("project")}>Save project (.3mf)</button>
-            <button type="button" disabled={busy||loading||!canPrepare}
-              onClick={()=>projectFileRef.current?.click()}>Open project (.3mf)</button>
-          </div>
-          <input ref={projectFileRef} className="slicerProjectHiddenInput" type="file" accept=".3mf"
-            aria-label="Choose MakerVault project 3MF" onChange={event=>{
-              const file=event.target.files?.[0];event.target.value="";
-              if(file)importProjectFile(file);
-            }}/>
-        </div>}
+        {editorOpen && <button type="button" className="slicerHeroBack"
+          onClick={() => setEditorOpen(false)}>← Slicer setup</button>}
+        {editorOpen && <button type="button"
+          disabled={busy||loading||!canPrepare||!projectPlates.some(plate=>plate.objects.length)}
+          onClick={()=>openProjectNameDialog("project")}>Save project (.3mf)</button>}
+        {editorOpen && <button type="button" disabled={busy||loading||!canPrepare}
+          onClick={()=>projectFileRef.current?.click()}>Open project (.3mf)</button>}
+        {editorOpen && <input ref={projectFileRef} className="slicerProjectHiddenInput" type="file" accept=".3mf"
+          aria-label="Choose MakerVault project 3MF" onChange={event=>{
+            const file=event.target.files?.[0];event.target.value="";
+            if(file)importProjectFile(file);
+          }}/>}
         <button type="button" disabled={busy||loading||!canPrepare}
           onClick={resetSlicerWorkspace}>New project / Reset slicer</button>
         <button type="button" onClick={onBack}>← Printing overview</button>
