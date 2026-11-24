@@ -12,6 +12,7 @@ on:
       - 'scripts/build_native_modifier_fixture.py'
       - 'scripts/build_native_composite_fixture.py'
       - 'slicer_worker/composite_acceptance_probe.py'
+      - 'slicer_worker/single_negative_diagnostic.py'
       - 'backend/core/slicer_modifier_3mf.py'
       - 'slicer_worker/stage_engines.py'
       - 'slicer_worker/probe.py'
@@ -233,6 +234,20 @@ jobs:
           timeout 900s python3 -m slicer_worker.composite_acceptance_probe \
             --engine bambustudio --fixtures "$root" \
             --binary /tmp/bambu-appimage-acceptance/squashfs-root/AppRun
+      - name: Diagnose native single-model Bambu subtraction independently of composite proof
+        if: always()
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -euo pipefail
+          root=/tmp/native-composite-bambu
+          binary=/tmp/bambu-appimage-acceptance/squashfs-root/AppRun
+          if [ -f "$root/single-negative.3mf" ] && [ -f "$root/printer.json" ] && [ -e "$binary" ]; then
+            timeout 480s python3 -m slicer_worker.single_negative_diagnostic \
+              --fixtures "$root" --binary "$binary"
+          else
+            echo "Single-model negative diagnostic skipped: native fixture or binary unavailable"
+          fi
       - name: Record required Bambu modifier evidence without production approval
         if: always()
         run: |
