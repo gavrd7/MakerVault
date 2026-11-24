@@ -77,9 +77,9 @@ class ModifierGcodeCoverageTests(unittest.TestCase):
 
     def test_bambu_negative_deposition_logs_only_aggregate_bands(self):
         project = composite_fixture(negative=True)
-        interior = [b"G90", b"M83", b"G0 X1 Y1 Z5"]
-        interior.extend((b"G1 X2 Y2 E0.5" if i % 2 == 0 else
-                         b"G1 X1 Y1 E0.5") for i in range(20))
+        interior = [b"G90", b"M83", b"G0 X2.8 Y3 Z1"]
+        interior.extend((b"G1 X3 Y2.8 E0.5" if i % 2 == 0 else
+                         b"G1 X2.8 Y3 E0.5") for i in range(20))
         with self.assertLogs("slicer_worker.modifier_gcode_audit", level="WARNING") as log:
             with self.assertRaisesRegex(WorkerError, "deposits material"):
                 audit_modifier_positive_e(
@@ -101,9 +101,9 @@ class ModifierGcodeCoverageTests(unittest.TestCase):
             b"\n".join(outside), project, "bambustudio",
             translation_xy=(18.0, 18.0))
         self.assertEqual(result["modifier_region_paths"], [0])
-        interior = [b"G90", b"M83", b"G0 X19 Y19 Z5"]
+        interior = [b"G90", b"M83", b"G0 X20.8 Y21 Z1"]
         interior.extend(
-            (b"G1 X20 Y20 E0.5" if i % 2 == 0 else b"G1 X19 Y19 E0.5")
+            (b"G1 X21 Y20.8 E0.5" if i % 2 == 0 else b"G1 X20.8 Y21 E0.5")
             for i in range(20))
         with self.assertRaisesRegex(WorkerError, "deposits material"):
             audit_modifier_positive_e(
