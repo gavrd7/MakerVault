@@ -10,7 +10,7 @@ import io
 import zipfile
 from pathlib import Path
 from tempfile import TemporaryDirectory
-from slicer_worker.single_negative_diagnostic import _cavity_y_bands
+from slicer_worker.single_negative_diagnostic import _cavity_y_bands, _build_xy_translation
 
 
 class CompositeNativeEvidenceTests(unittest.TestCase):
@@ -109,6 +109,32 @@ class CompositeNativeEvidenceTests(unittest.TestCase):
             from slicer_worker.runner import WorkerError
             with self.assertRaisesRegex(WorkerError, "unexpected native geometry"):
                 bambu_output_placement_shift(filename)
+
+    def test_single_model_native_build_delta_recovers_bambu_recentered_cut(self):
+        ns = "http://schemas.microsoft.com/3dmanufacturing/core/2015/02"
+        def project(dx, dy, dz):
+            xml = ('<model xmlns="' + ns + '" unit="millimeter">'
+                   '<resources/><build><item objectid="1" transform="'
+                   f'1 0 0 0 1 0 0 0 1 {dx} {dy} {dz}"/></build></model>')
+            return xml
+        with TemporaryDirectory() as folder:
+            before = Path(folder) / "source.3mf"
+            after = Path(folder) / "result.3mf"
+            with zipfile.ZipFile(before, "w") as archive:
+                archive.writestr("3D/3dmodel.model", project(90, 110, 0))
+            with zipfile.ZipFile(after, "w") as archive:
+                archive.writestr("3D/3dmodel.model", project(128, 128, 15))
+            source_xy = _build_xy_translation(before)
+            result_xy = _build_xy_translation(after)
+            self.assertEqual(tuple(result_xy[i]-source_xy[i] for i in (0,1)),
+                             (38, 18))
+        gcode = b"\n".join([
+            b"G90", b"M83", b"G0 X123 Y127 Z15",
+            b"; FEATURE: Sparse infill", b"G1 X133 Y127 E1.2",
+        ])
+        result = _cavity_y_bands(gcode, centre_x=128, centre_y=128)
+        self.assertAlmostEqual(result["126"]["E"], 1.2)
+        self.assertEqual(_cavity_y_bands(gcode), {})
 
     def test_absolute_extrusion_reset_only_counts_positive_e(self):
         code = b"\n".join([
