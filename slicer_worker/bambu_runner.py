@@ -83,6 +83,53 @@ def _native_project_matches_palette(model: bytes, palette: list[Path]):
             "Bambu native project does not match the selected filament profiles.") from None
 
 
+def _select_single_nozzle_cli_variant(printer: Path) -> bool:
+    """Normalise a proven Bambu CLI dual-variant fault in scratch only.
+
+    Upstream BambuStudio issue #11893 documents that a single CSV value
+    advertising Standard + High Flow can trigger a multi-extruder CLI path.
+    Never guess a nozzle/extruder type: require a single physical nozzle and
+    an unambiguous selected Standard/High Flow variant. This file is the
+    isolated worker's transient copy; imported original profiles stay intact.
+    """
+    try:
+        profile = json.loads(printer.read_text(encoding="utf-8-sig"))
+    except (ValueError, UnicodeError, OSError):
+        raise WorkerError("Invalid Bambu CLI machine profile.") from None
+    if not isinstance(profile, dict):
+        raise WorkerError("Invalid Bambu CLI machine profile.")
+    nozzle = profile.get("nozzle_diameter")
+    if not isinstance(nozzle, list) or len(nozzle) != 1:
+        return False  # Do not collapse actual multiple-nozzle configurations.
+    options = profile.get("extruder_variant_list")
+    selected = profile.get("printer_extruder_variant")
+    allowed = ("Direct Drive Standard", "Direct Drive High Flow")
+    combined = ",".join(allowed)
+    if options not in ([combined], list(allowed)):
+        return False
+    if selected not in ([combined], [allowed[0]], [allowed[1]]):
+        return False
+    if selected in ([allowed[0]], [allowed[1]]):
+        chosen = selected[0]
+    else:
+        # A preset exposing both possible extruders is not by itself proof
+        # which is fitted. The explicit native nozzle-volume selection is.
+        volume = profile.get("nozzle_volume_type")
+        if volume in ("Standard", ["Standard"]):
+            chosen = allowed[0]
+        elif volume in ("High Flow", ["High Flow"]):
+            chosen = allowed[1]
+        else:
+            logger.warning("Bambu CLI extruder variant: ambiguous single-nozzle selection")
+            return False
+    profile["extruder_variant_list"] = [chosen]
+    profile["printer_extruder_variant"] = [chosen]
+    printer.write_text(json.dumps(profile, ensure_ascii=False, separators=(",", ":")),
+                       encoding="utf-8")
+    logger.info("Bambu CLI single-nozzle variant normalised in worker scratch")
+    return True
+
+
 def bambu_command(binary: Path, workdir: Path) -> list[str]:
     """Build fixed, documented Bambu CLI flags; no user-selected arguments."""
     binary = Path(binary)
@@ -121,6 +168,7 @@ def bambu_command(binary: Path, workdir: Path) -> list[str]:
     # rejection; never resolve unknown inheritance to arbitrary host files.
     for profile in (printer, process, filament):
         _native_json(profile)
+    _select_single_nozzle_cli_variant(printer)
     # Use the exact worker-validated 0-based native filament palette.
     # Bambu CLI accepts a semicolon-separated list of complete native JSON
     # presets; never infer it from a physical AMS/CFS slot index.
