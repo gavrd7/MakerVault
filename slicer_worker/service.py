@@ -88,6 +88,10 @@ def _decode_payload(payload):
     model_format = payload.get("model_format", "stl")
     if model_format not in {"stl", "3mf"}:
         raise WorkerError("Unsupported model input format.")
+    # Prusa's 3MF project dialect has not passed independent native acceptance.
+    # Other three engine contracts are deliberately unchanged.
+    if payload["engine"] == "prusaslicer" and model_format != "stl":
+        raise WorkerError("Prusa native 3MF input is not yet verified.")
     files = {"model_format": model_format}
     for key, limit in (
         ("model", MAX_MODEL_BYTES),
