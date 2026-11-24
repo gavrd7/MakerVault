@@ -230,6 +230,25 @@ class BambuRunnerContractTests(TestCase):
                 with self.assertRaisesRegex(WorkerError, "timeout"):
                     run_bambu(self.binary, self.root, timeout_seconds=timeout)
 
+    def test_sigabrt_reports_only_whitelisted_exception_type(self):
+        process = MagicMock()
+        process.returncode = -6
+        with patch("slicer_worker.bambu_runner.subprocess.Popen",
+                   return_value=process) as popen:
+            def emit(**kwargs):
+                popen.call_args.kwargs["stdout"].write(
+                    b"terminate called after throwing an instance of "
+                    b"'std::filesystem::filesystem_error'\\n"
+                    b"what(): /private/sensitive-model-location\\n")
+            process.communicate.side_effect = emit
+            with self.assertLogs("slicer_worker.bambu_runner", level="WARNING") as logs:
+                with self.assertRaisesRegex(WorkerError, "SIGABRT"):
+                    run_bambu(self.binary, self.root)
+        messages = "\\n".join(logs.output)
+        self.assertIn("exception type: filesystem-error", messages)
+        self.assertIn("SIGABRT classified: uncaught-exception", messages)
+        self.assertNotIn("sensitive-model-location", messages)
+
     def test_bambu_runner_uses_standard_worker_admission(self):
         from slicer_worker.engine_registry import SUPPORTED
         from slicer_worker.service import _decode_payload
