@@ -7,7 +7,7 @@ const editor = readFileSync(new URL("../src/components/SlicerPlateEditor.jsx", i
 
 test("modifier and negative are non-printing plate-tree rows without STL uploads", () => {
   assert.match(prepare, /Add parameter modifier/);
-  assert.match(prepare, /modifier_volumes: \[\.\.\.\(item\.modifier_volumes \|\| \[\]\), fresh\]/);
+  assert.match(editor, /modifier_volumes:solidDialog\.editVolumeId/);
   assert.match(prepare, /allPlateRows = objects.flatMap/);
   assert.match(prepare, /isPlateVolume: true/);
   assert.doesNotMatch(prepare, /newPlateInstance\(id,objects\.length\+index\).*modifier/s);
@@ -36,7 +36,7 @@ test("torus preview uses the exact backend major and minor radii", () => {
 
 test("object settings exposes regional walls and enforces total plate modifier count", () => {
   assert.match(prepare, /Regional wall loops/);
-  assert.match(prepare, /totalModifierCount >= 48/);
+  assert.match(prepare, /Regional slicing settings/);
   assert.match(prepare, /totalModifierCount>=48/);
   assert.match(prepare, /if\(raw===""\) delete settings\.wall_loops/);
 });
@@ -46,16 +46,15 @@ test("Add model menu uses shared insertion editor for six non-printing modifier 
   assert.match(prepare, /Choose parameter modifier primitive/);
   assert.match(prepare, /modifierShapeMenuOpen/);
   assert.match(prepare, /setSolidRequest\(\{kind:"modifier",shape,id:Date\.now\(\)\}\)/);
-  assert.match(prepare, /setSolidRequest\(\{kind:"modifier",id:Date\.now\(\)\}\)/);
   assert.match(prepare, /totalModifierCount>=48/);
-  assert.match(prepare, /modifier_volumes: \[\.\.\.\(item\.modifier_volumes \|\| \[\]\), fresh\]/);
+  assert.match(editor, /modifier_volumes:solidDialog\.editVolumeId/);
 });
 
 test("new modifier draft is placed independently with XYZ rotation and scale", () => {
-  assert.match(prepare, /coordinate_space: "world"/);
-  assert.match(prepare, /rotation_xyz_deg: \[0, 0, 0\]/);
-  assert.match(prepare, /scale_xyz_percent: \[100, 100, 100\]/);
-  assert.match(prepare, /Edit shape \/ Move \/ Scale \/ Rotate/);
+  assert.match(editor, /coordinate_space:"world"/);
+  assert.match(editor, /rotation_xyz_deg:numbers\.slice\(6,9\)/);
+  assert.match(editor, /scale_xyz_percent:previous\?\.scale_xyz_percent \|\| \[100,100,100\]/);
+  assert.match(prepare, /Edit volume/);
   assert.match(prepare, /selectedModifierId=\{activeModifier\?\.id \|\| null\}/);
   assert.match(editor, /ghost\.userData\.isWorldModifier = modifier\.coordinate_space === "world"/);
   assert.match(editor, /state\.transform\.attach\(activeModifier\)/);
@@ -81,7 +80,7 @@ test("non-destructive negative volume uses shared insertion and is a selectable 
 
 test("modifier and negative volumes share primitive shape and transform modal", () => {
   assert.match(prepare, /kind:"modifier",shape,id:Date\.now\(\)/);
-  assert.match(prepare, /Edit shape \/ Move \/ Scale \/ Rotate/);
+  assert.match(prepare, /Edit volume/);
   assert.match(editor, /"modifier","negative"\]\.includes\(solidDialog\.kind\)/);
   assert.match(editor, /solidRequest\.editVolumeId/);
   assert.match(editor, /editingVolume\?\.rotation_xyz_deg/);
