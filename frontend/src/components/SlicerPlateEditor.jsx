@@ -414,7 +414,7 @@ export default function SlicerPlateEditor({
     const handle = setTimeout(() => {
       lastPreviewKeyRef.current = key;
       previewSolid();
-    }, ["primitive","text","svg"].includes(solidDialog.kind)?350:900);
+    }, ["primitive","modifier","negative","text","svg"].includes(solidDialog.kind)?350:900);
     return () => clearTimeout(handle);
   }, [solidDialog, solidOptions, solidBusy]);
   const [measureOverlayExpanded, setMeasureOverlayExpanded] = useState(false);
@@ -870,6 +870,7 @@ export default function SlicerPlateEditor({
     if (!solidRequest?.id || !canEdit) return;
     const item = objects.find(row => row.instance_id === (solidRequest.editTargetId||selected)) || objects[0];
     const editingText = solidRequest.kind==="text" && !!solidRequest.editTargetId;
+    const editingVolume = item?.modifier_volumes?.find(volume=>volume.id===solidRequest.editVolumeId);
     if(editingText && !item?.text_model) {
       setSolidError("This object was not created with the editable text tool.");
       return;
@@ -891,20 +892,20 @@ export default function SlicerPlateEditor({
     setSolidOptions({
       wall: pretty(Math.max(0.4, Math.min(size.x,size.y,size.z)*0.08)),
       radius: pretty(Math.max(0.5,Math.min(size.x,size.y)/10)),
-      x_mm: ["primitive","text","svg"].includes(solidRequest.kind)&&!editingText?0:pretty(center.x),
-      y_mm: ["primitive","text","svg"].includes(solidRequest.kind)&&!editingText?0:pretty(center.y),
+      x_mm: editingVolume?.x_mm ?? (["primitive","text","svg"].includes(solidRequest.kind)&&!editingText?0:pretty(center.x)),
+      y_mm: editingVolume?.y_mm ?? (["primitive","text","svg"].includes(solidRequest.kind)&&!editingText?0:pretty(center.y)),
       cutHeight: pretty((box.min.z+box.max.z)/2), cutAxis: "z",
       keep: "both", booleanMode: "union",
       secondId: objects.find(row => row.instance_id!==item?.instance_id)?.instance_id || "",
       booleanIds: selectedInstanceIds.filter(id=>id!==item?.instance_id),
-      primitiveType:solidRequest.shape||"box",
-      width:editingText ? item.text_model.width : 20,
-      depth:editingText ? item.text_model.depth : 20,
-      height:editingText ? item.text_model.height : 20,
-      z_mm:solidRequest.kind==="negative"?pretty(center.z):editingText?Number(item.z_mm||0):0,
-      rotation_x:editingText?Number(item.text_model.rotation_x||0):0,
-      rotation_y:editingText?Number(item.text_model.rotation_y||0):0,
-      rotation_z:editingText?Number(item.text_model.rotation_z||0):0,
+      primitiveType:editingVolume?.shape || solidRequest.shape || "box",
+      width:editingVolume?.width_mm ?? (editingText ? item.text_model.width : 20),
+      depth:editingVolume?.depth_mm ?? (editingText ? item.text_model.depth : 20),
+      height:editingVolume?.height_mm ?? (editingText ? item.text_model.height : 20),
+      z_mm:editingVolume?.z_mm ?? (["negative","modifier"].includes(solidRequest.kind)?pretty(center.z):editingText?Number(item.z_mm||0):0),
+      rotation_x:editingVolume?.rotation_xyz_deg?.[0] ?? (editingText?Number(item.text_model.rotation_x||0):0),
+      rotation_y:editingVolume?.rotation_xyz_deg?.[1] ?? (editingText?Number(item.text_model.rotation_y||0):0),
+      rotation_z:editingVolume?.rotation_xyz_deg?.[2] ?? (editingText?Number(item.text_model.rotation_z||0):0),
       text:editingText?item.text_model.text:"MakerVault",
       font:editingText?item.text_model.font||"block":"block",svgData:"",
       cavity_x_mm:0,cavity_y_mm:0,cavity_z_mm:0,
@@ -993,7 +994,7 @@ export default function SlicerPlateEditor({
       ghost.material.dispose();
       ghost.material=new THREE.MeshBasicMaterial({
         color:solidDialog.kind==="negative"?"#fb7185":"#22d3ee",transparent:true,opacity:0.28,
-        depthWrite:false,side:THREE.DoubleSide,
+        depthTest:false,depthWrite:false,side:THREE.DoubleSide,
         clippingPlanes:[state.sectionPlane],
       });
       ghost.renderOrder=101;
@@ -1299,10 +1300,15 @@ export default function SlicerPlateEditor({
       const numbers=[solidOptions.width,solidOptions.depth,solidOptions.height,
         solidOptions.x_mm,solidOptions.y_mm,solidOptions.z_mm,
         solidOptions.rotation_x,solidOptions.rotation_y,solidOptions.rotation_z].map(Number);
-      if (numbers.some(n=>!Number.isFinite(n)) || numbers.slice(0,3).some(n=>n<0.5||n>500)) {
+      if (numbers.some(n=>!Number.isFinite(n)) || numbers.slice(0,3).some(n=>n<0.5||n>500)
+          || numbers.slice(3,6).some(n=>Math.abs(n)>10000)
+          || numbers.slice(6,9).some(n=>Math.abs(n)>360)) {
         setSolidError("Volume dimensions must be finite and 0.5–500 mm.");return;
       }
       const previous=current.find(v=>v.id===solidDialog.editVolumeId);
+      if (solidDialog.editVolumeId && !previous) {
+        setSolidError("Selected volume changed. Reopen its editor.");return;
+      }
       const volume = {
         id:previous?.id || plateUuid(), shape:solidOptions.primitiveType,
         width_mm:pretty(numbers[0]),depth_mm:pretty(numbers[1]),height_mm:pretty(numbers[2]),
@@ -4278,7 +4284,7 @@ export default function SlicerPlateEditor({
               {solidBusy?"Updating preview…":solidPreview?"Preview up to date":"Preview updates automatically"}
             </span>
             <button type="button" disabled={!solidPreview||solidBusy||solidPreview.parts.some(part=>part.validationWarning)} onClick={applySolid}>
-              {solidBusy?"Saving…":["modifier","negative"].includes(solidDialog.kind)?"Add "+(solidDialog.kind==="negative"?"negative volume":"modifier"):"Apply mesh edit"}</button>
+              {solidBusy?"Saving…":["modifier","negative"].includes(solidDialog.kind)?(solidDialog.editVolumeId?"Save ":"Add ")+(solidDialog.kind==="negative"?"negative volume":"modifier"):"Apply mesh edit"}</button>
           </footer>
         </section>
       </div>,meshInspectorHost
