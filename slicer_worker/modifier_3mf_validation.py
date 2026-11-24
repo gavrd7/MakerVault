@@ -1,4 +1,4 @@
-"""Strict, fixture-only admission for one native non-printing modifier project.
+"""Strict admission for bounded composite non-printing native volume projects.
 
 Not enabled by the production slicing request path. No vendor scripts,
 arbitrary project settings, extra members or executable paths are accepted.
@@ -87,7 +87,7 @@ def _mesh(obj):
 
 
 def validate_modifier_fixture_3mf(data):
-    """Validate precisely one composed parent with 1-12 non-printing children."""
+    """Validate one composed build object with printable and non-printing siblings."""
     if not isinstance(data, bytes) or not 0 < len(data) <= 32 * 1024 * 1024:
         raise WorkerError("Native modifier fixture exceeds upload limits.")
     try:
@@ -110,17 +110,17 @@ def validate_modifier_fixture_3mf(data):
     resources = root.find(NS + "resources")
     build = root.find(NS + "build")
     if resources is None or build is None or len(root) != 2 or len(build) != 1:
-        raise WorkerError("Native modifier fixture must have exactly one build item.")
+        raise WorkerError("Native region project must contain one bounded assembly build item.")
     objs = list(resources)
-    if not 3 <= len(objs) <= MAX_MODIFIERS + 2:
-        raise WorkerError("Native modifier fixture must contain one base and modifiers.")
+    if not 3 <= len(objs) <= 61:
+        raise WorkerError("Native region assembly part count is invalid.")
     ids = [obj.attrib.get("id") for obj in objs]
     if ids != [str(i) for i in range(1, len(objs) + 1)]:
-        raise WorkerError("Unexpected native modifier resource IDs.")
+        raise WorkerError("Unexpected native region resource identities.")
     parent = objs[0]
     if (parent.attrib != {"id": "1", "type": "model"}
             or len(parent) != 1 or parent[0].tag != NS + "components"):
-        raise WorkerError("Native modifier parent must contain components, not an STL mesh.")
+        raise WorkerError("Native region assembly parent must only contain components.")
     components = parent[0]
     expected = [str(i) for i in range(2, len(objs) + 1)]
     if (len(components) != len(expected)
@@ -128,45 +128,63 @@ def validate_modifier_fixture_3mf(data):
             or any(c.tag != NS + "component" or
                    c.attrib != {"objectid": expected[i], "transform": IDENTITY}
                    or len(c) for i, c in enumerate(components))):
-        raise WorkerError("Native modifier child component identity is invalid.")
+        raise WorkerError("Unsafe native region component graph.")
     if build[0].tag != NS + "item" or build[0].attrib != {
         "objectid": "1", "transform": IDENTITY
     } or len(build[0]):
-        raise WorkerError("Modifier mesh must not be a printable build item.")
-    count = sum(_mesh(obj) for obj in objs[1:])
-    if count > 500000:
-        raise WorkerError("Native modifier triangle budget exceeded.")
+        raise WorkerError("Non-printing volumes cannot enter the native build.")
+    triangles = sum(_mesh(obj) for obj in objs[1:])
+    if triangles > 500000:
+        raise WorkerError("Native region triangle budget exceeded.")
     if manifest.tag != "config" or manifest.attrib or len(manifest) != 2:
-        raise WorkerError("Unsafe modifier plate manifest.")
+        raise WorkerError("Unsafe native region settings manifest.")
     native, plate = manifest
     if native.tag != "object" or native.attrib != {"id": "1"}:
-        raise WorkerError("Modifier parts must belong to the built parent.")
+        raise WorkerError("Native region settings must target the built assembly.")
     parts = [n for n in native if n.tag == "part"]
     parent_meta = [n for n in native if n.tag == "metadata"]
     if len(parent_meta) + len(parts) != len(native) or len(parts) != len(expected):
-        raise WorkerError("Invalid native modifier part mapping.")
+        raise WorkerError("Invalid native region part-to-component mapping.")
     _settings(_metadata_list(parent_meta, {"wall_loops", "sparse_infill_density"}))
+    printable_count, regional_count = 0, 0
+    seen_region = False
     for number, part in enumerate(parts):
         expected_id = expected[number]
-        subtype = "normal_part" if number == 0 else "modifier_part"
-        if part.attrib != {"id": expected_id, "subtype": subtype}:
-            raise WorkerError("Native modifier part type or identity mismatch.")
-        settings = _metadata(part, permitted={
+        if set(part.attrib) != {"id", "subtype"} or part.get("id") != expected_id:
+            raise WorkerError("Invalid native region part identity.")
+        subtype = part.get("subtype")
+        if subtype == "normal_part":
+            if seen_region:
+                raise WorkerError("Printable parts may not follow non-printing volumes.")
+            printable_count += 1
+        elif subtype in ("modifier_part", "negative_part"):
+            seen_region = True
+            regional_count += 1
+        else:
+            raise WorkerError("Unapproved native region subtype.")
+        metadata = _metadata(part, permitted={
             "name", "matrix", "wall_loops", "sparse_infill_density"})
-        _settings(settings, allow_names=True)
-        if "name" not in settings or settings.get("matrix") != IDENTITY4:
-            raise WorkerError("Native modifier part identity metadata missing.")
-        if number > 0 and not (set(settings) & {"wall_loops", "sparse_infill_density"}):
-            raise WorkerError("Modifier part has no validated regional settings.")
+        _settings(metadata, allow_names=True)
+        if "name" not in metadata or metadata.get("matrix") != IDENTITY4:
+            raise WorkerError("Native region identity metadata missing.")
+        overrides = set(metadata) & {"wall_loops", "sparse_infill_density"}
+        if subtype == "modifier_part" and not overrides:
+            raise WorkerError("Modifier part requires regional settings.")
+        if subtype == "negative_part" and overrides:
+            raise WorkerError("Negative volumes cannot have process settings.")
+        if subtype == "normal_part" and overrides:
+            raise WorkerError("Unexpected printable-part process override.")
+    if not 1 <= printable_count <= 12 or not 1 <= regional_count <= 48:
+        raise WorkerError("Native region model and modifier counts exceed the limits.")
     if plate.tag != "plate" or plate.attrib or len(plate) != 2:
-        raise WorkerError("Modifier project must contain one native plate mapping.")
+        raise WorkerError("Native region project must contain one plate mapping.")
     marker, instance = plate
     if (marker.tag != "metadata" or marker.attrib != {"key": "plater_id", "value": "1"}
             or instance.tag != "model_instance" or instance.attrib or len(instance) != 3
             or _metadata(instance, permitted={"object_id", "instance_id", "identify_id"}) != {
                 "object_id": "1", "instance_id": "0", "identify_id": "1"
             }):
-        raise WorkerError("Unsafe modifier native plate membership.")
+        raise WorkerError("Unsafe native region plate membership.")
     return True
 
 
