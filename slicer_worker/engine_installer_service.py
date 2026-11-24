@@ -691,7 +691,14 @@ def repair_active_bambu_runtime_permissions():
             or root.is_symlink() or not root.is_dir()
             or binary.is_symlink() or not binary.is_file()
             or _sha256(binary) != BAMBU_RUNTIME_SHA256):
-        raise ValueError("Installed Bambu runtime identity cannot be verified for repair.")
+        # Repair is best-effort maintenance, not an installation admission
+        # gate. An older active manifest may identify a different pinned
+        # launcher, or its runtime may be unavailable. Leave the store
+        # untouched and allow the already-installed other engines to start.
+        # The worker independently verifies active runtime identities.
+        LOGGER.warning(
+            "Skipping Bambu runtime permissions repair: pinned identity is not verified.")
+        return
     make_runtime_worker_readable(
         root, required_executables=("bin/bambu-studio",))
     LOGGER.info("Verified Bambu runtime subtree traversal for the unprivileged worker.")
