@@ -94,3 +94,11 @@ test("stored free modifiers and negative volumes reopen the shared shape and tra
   assert.match(editor, /editingVolume\?\.rotation_xyz_deg/);
   assert.match(editor, /solidDialog\.editVolumeId/);
 });
+
+test("the shared insertion modal shows native world-centred volumes and never doubles rotation", () => {
+  assert.match(editor, /createPrimitiveGeometry\(solidOptions\)/);
+  assert.match(editor, /ghost\.position\.set\(Number\(solidOptions\.x_mm\),Number\(solidOptions\.y_mm\)/);
+  assert.match(editor, /z_mm:pretty\(position\.z\)/);
+  assert.match(editor, /rotation_z:degrees\(ghost\.rotation\.z\)\+\(volume\?0:/);
+  assert.doesNotMatch(editor, /solidDialog\.kind==="negative"\?Number\(old\.height\|\|0\)\/2/);
+});
