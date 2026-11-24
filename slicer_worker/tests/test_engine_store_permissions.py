@@ -54,6 +54,24 @@ class RuntimePermissionTests(unittest.TestCase):
             self.assertEqual(stat.S_IMODE(inner.stat().st_mode), 0o755)
             self.assertEqual(stat.S_IMODE(launcher.stat().st_mode), 0o755)
 
+    def test_bambu_bin_directory_is_traversable_by_unprivileged_worker(self):
+        """Regression: AppRun 0755 / bin 0700 / inner ELF 0755 causes exit 126."""
+        with TemporaryDirectory() as temp:
+            root = Path(temp) / "squashfs-root"
+            inner = root / "bin" / "bambu-studio"
+            inner.parent.mkdir(parents=True)
+            root.chmod(0o755)
+            inner.parent.chmod(0o700)
+            inner.write_bytes(b"reviewed ELF test fixture")
+            inner.chmod(0o755)
+            launcher = root / "AppRun"
+            launcher.write_text("#!/bin/sh\\nexec ./bin/bambu-studio\\n")
+            launcher.chmod(0o755)
+            self.assertEqual(stat.S_IMODE(inner.parent.stat().st_mode), 0o700)
+            make_runtime_worker_readable(root, required_executables=("bin/bambu-studio",))
+            self.assertEqual(stat.S_IMODE(inner.parent.stat().st_mode), 0o755)
+            self.assertEqual(stat.S_IMODE(inner.stat().st_mode), 0o755)
+
     def test_reviewed_inner_executable_must_remain_inside_bundle(self):
         with TemporaryDirectory() as temp:
             parent = Path(temp)
