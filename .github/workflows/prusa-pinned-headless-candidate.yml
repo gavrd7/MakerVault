@@ -80,6 +80,10 @@ jobs:
           /tmp/prusa-candidate/bin/prusa-slicer --version | grep -F '2.9.7'
           /tmp/prusa-candidate/bin/prusa-slicer --help > /tmp/prusa-packaged-help.txt
           grep -F -- '--export-gcode' /tmp/prusa-packaged-help.txt
+          PYTHONPATH="$GITHUB_WORKSPACE" python3 \
+            "$GITHUB_WORKSPACE/scripts/prusa_real_binary_smoke.py" \
+            --binary /tmp/prusa-candidate/bin/prusa-slicer \
+            --vendor "$PWD/resources/profiles/PrusaResearch.ini"
           tar -C /tmp -czf "$GITHUB_WORKSPACE/prusa-2.9.7-headless-linux-amd64.tar.gz" prusa-candidate
           sha256sum "$GITHUB_WORKSPACE/prusa-2.9.7-headless-linux-amd64.tar.gz" >> "$GITHUB_STEP_SUMMARY"
 
