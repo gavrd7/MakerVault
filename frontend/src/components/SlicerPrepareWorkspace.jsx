@@ -100,13 +100,25 @@ export default function SlicerPrepareWorkspace({
   };
   const selectMultiple = (id, additive = false, partOnly = false) => {
     const volumeOwner = objects.find(row => (row.modifier_volumes || []).some(volume => volume.id === id));
-    if (volumeOwner) { selectModifier(volumeOwner.instance_id, id, additive); return; }
+    if (volumeOwner) {
+      const volume=volumeOwner.modifier_volumes.find(row=>row.id===id);
+      if (volume.assembly_id && !partOnly) {
+        const members=allPlateRows.filter(row=>row.assembly_id===volume.assembly_id).map(row=>row.instance_id);
+        setSelectedIds(current=>additive
+          ? members.every(value=>current.includes(value))?current.filter(value=>!members.includes(value))
+            : [...new Set([...current,...members])]
+          : members);
+        setSelectedId(volumeOwner.instance_id);
+        setSelectedModifierId(id);
+      } else selectModifier(volumeOwner.instance_id, id, additive);
+      return;
+    }
     setSelectedModifierId(null);
     const item = objects.find(row => row.instance_id === id);
     if (!item) return;
     if (!additive) {
       const ids = item.assembly_id && !partOnly
-        ? objects.filter(row => row.assembly_id === item.assembly_id).map(row => row.instance_id)
+        ? allPlateRows.filter(row => row.assembly_id === item.assembly_id).map(row => row.instance_id)
         : [id];
       setSelectedIds(ids);
       setSelectedId(id);
@@ -115,7 +127,7 @@ export default function SlicerPrepareWorkspace({
     // The assembly header selects a group; its expanded tree children can
     // be selected independently for per-part positioning and settings.
     const memberIds = item.assembly_id && !partOnly
-      ? objects.filter(row => row.assembly_id === item.assembly_id).map(row => row.instance_id)
+      ? allPlateRows.filter(row => row.assembly_id === item.assembly_id).map(row => row.instance_id)
       : [id];
     setSelectedIds(current => {
       const allSelected = memberIds.every(value => current.includes(value));
@@ -1199,66 +1211,17 @@ export default function SlicerPrepareWorkspace({
             <div style={{display:"flex",gap:8,justifyContent:"space-between",alignItems:"center"}}>
               <strong>Parameter modifiers</strong>
               <button type="button" disabled={!canEdit||busy||!selectedObject||selectedModifiers.length>=12||totalModifierCount>=48}
-                onClick={()=>addModifier()}>Add modifier</button>
+                onClick={()=>setSolidRequest({kind:"modifier",id:Date.now()})}>Add modifier</button>
             </div>
-            <small>Select a modifier in the model tree or viewport to edit its regional settings. {totalModifierCount}/48 regions on this plate.</small>
+            <small>Select a volume in the tree or viewport; printable primitives and volumes share the same shape and transform editor. {totalModifierCount}/48 regions on this plate.</small>
             {selectedModifiers.map((modifier,index) => activeModifier && activeModifier.id !== modifier.id ? null : <fieldset key={modifier.id} style={{display:"grid",gap:6,border:"1px solid #53647a",borderRadius:6,padding:8}}>
-              <legend>Modifier {index+1}</legend>
-              {modifier.coordinate_space === "world" && <button type="button"
-                disabled={!canEdit||busy} aria-pressed={selectedModifierId === modifier.id}
-                onClick={()=>{selectModifier(selectedObject.instance_id, modifier.id);setToolMode("move");setMobilePane("plate");}}>
-                {selectedModifierId===modifier.id?"Editing modifier on plate":"Move / Rotate / Scale on plate"}
-              </button>}
-              <label>Primitive shape
-                <select aria-label={"Modifier "+(index+1)+" shape"} value={modifier.shape}
-                  disabled={!canEdit||busy} onChange={e=>changeModifier(modifier.id,{shape:e.target.value})}>
-                  {["box","cylinder","sphere","cone","disc","torus"].map(shape=>
-                    <option key={shape} value={shape}>{shape[0].toUpperCase()+shape.slice(1)}</option>)}
-                </select>
-              </label>
-              {[
-                ["width_mm","Width X",0.5,500],["depth_mm","Depth Y",0.5,500],
-                ["height_mm","Height Z",0.5,500],["x_mm","Offset X",-10000,10000],
-                ["y_mm","Offset Y",-10000,10000],["z_mm","Offset Z",-10000,10000]
-              ].map(([key,label,min,max])=><label key={key}>{label} (mm)
-                <input type="number" min={min} max={max} step="0.5"
-                  value={modifier[key]} disabled={!canEdit||busy}
-                  onChange={e=>{const value=Number(e.target.value);if(Number.isFinite(value)&&value>=min&&value<=max)
-                    changeModifier(modifier.id,{[key]:value});}} />
-              </label>)}
-              {modifier.coordinate_space === "world" && <>
-                <div style={{fontWeight:600}}>Independent modifier transform</div>
-                <small>Plate-space placement: moving, rotating or scaling the model
-                  will not move this modifier. Assemble is a separate model operation.</small>
-                <div style={{display:"grid",gridTemplateColumns:"repeat(3,minmax(0,1fr))",gap:6}}>
-                  {["X","Y","Z"].map((axis,index)=><label key={"rot"+axis}>
-                    Rotate {axis} (°)
-                    <input type="number" min="-360" max="360" step="5"
-                      disabled={!canEdit||busy}
-                      value={modifier.rotation_xyz_deg?.[index] ?? 0}
-                      onChange={e=>{
-                        const v=Number(e.target.value);
-                        if (!Number.isFinite(v)||v < -360||v > 360) return;
-                        const next=[...(modifier.rotation_xyz_deg || [0,0,0])];
-                        next[index]=v;
-                        changeModifier(modifier.id,{rotation_xyz_deg:next});
-                      }}/>
-                  </label>)}
-                  {["X","Y","Z"].map((axis,index)=><label key={"scale"+axis}>
-                    Scale {axis} (%)
-                    <input type="number" min="5" max="400" step="5"
-                      disabled={!canEdit||busy}
-                      value={modifier.scale_xyz_percent?.[index] ?? 100}
-                      onChange={e=>{
-                        const v=Number(e.target.value);
-                        if (!Number.isFinite(v)||v < 5||v > 400) return;
-                        const next=[...(modifier.scale_xyz_percent || [100,100,100])];
-                        next[index]=v;
-                        changeModifier(modifier.id,{scale_xyz_percent:next});
-                      }}/>
-                  </label>)}
-                </div>
-              </>}
+              <legend>{modifier.kind==="negative"?"Negative volume":"Modifier"} {index+1}</legend>
+              <button type="button" disabled={!canEdit||busy}
+                onClick={()=>{setSolidRequest({kind:modifier.kind==="negative"?"negative":"modifier",
+                  editVolumeId:modifier.id,shape:modifier.shape,id:Date.now()});setMobilePane("plate");}}>
+                Edit shape / Move / Scale / Rotate
+              </button>
+              {modifier.kind!=="negative" && <>
               <label>Regional infill (%)
                 <input type="number" min="0" max="100" step="1" disabled={!canEdit||busy}
                   value={modifier.settings?.sparse_infill_density ?? 50}
@@ -1283,6 +1246,7 @@ export default function SlicerPrepareWorkspace({
               <button type="button" disabled={!canEdit||busy} onClick={()=>removeModifier(modifier.id)}>
                 Remove modifier
               </button>
+              </>}
             </fieldset>)}
           </div>
         </div>}
@@ -1710,12 +1674,12 @@ export default function SlicerPrepareWorkspace({
             style={{display:"grid",gridTemplateColumns:"repeat(2,minmax(0,1fr))",gap:5,padding:"4px 8px"}}>
             {["box","cylinder","sphere","cone","disc","torus"].map(shape=>
               <button key={shape} type="button" className="slicerAddModelChoice"
-                onClick={()=>{addModifier(shape);setModifierShapeMenuOpen(false);setAddModelMenuOpen(false);setMobilePane("plate");}}>
+                onClick={()=>{setSolidRequest({kind:"modifier",shape,id:Date.now()});setModifierShapeMenuOpen(false);setAddModelMenuOpen(false);setMobilePane("plate");}}>
                 {shape[0].toUpperCase()+shape.slice(1)}
               </button>)}
           </div>}
           <button type="button" className="slicerAddModelChoice" disabled={!objects.length||!canEdit||busy} onClick={() => {
-            addModifier("box","negative");setAddModelMenuOpen(false);setMobilePane("plate");
+            setSolidRequest({kind:"negative",id:Date.now()});setAddModelMenuOpen(false);setMobilePane("plate");
           }}><SlicerUiIcon name="cut" /> Add negative volume</button>
         </div>
   );
@@ -1937,9 +1901,9 @@ export default function SlicerPrepareWorkspace({
           </div>}
           {(!assembly || expanded) && <div className={"slicerPrepareModelEntry"+(assembly?" slicerAssemblyTreePart"+(members.at(-1)?.instance_id===object.instance_id?" slicerAssemblyTreeLast":""):"")}>
           <button type="button"
-            className={!activeModifier && validSelection.includes(object.instance_id) ? "selected" : ""}
+            className={validSelection.includes(object.instance_id) ? "selected" : ""}
             onClick={event => selectMultiple(object.instance_id, event.ctrlKey || event.metaKey || event.shiftKey, !!assembly)}
-            aria-pressed={!activeModifier && validSelection.includes(object.instance_id)}>
+            aria-pressed={validSelection.includes(object.instance_id)}>
             {(() => {
               const mapping = object.material_slot;
               const samePrinter = mapping && String(mapping.printer_id) === String(printerId);
@@ -2286,7 +2250,7 @@ export default function SlicerPrepareWorkspace({
           autoOrientGoal={autoOrientGoal} autoOrientRequest={autoOrientRequest}
           splitRequest={splitRequest} solidRequest={solidRequest}
           selectedInstanceIds={validSelection} selectionClearVersion={selectionClearVersion} onSelectModel={selectMultiple}
-          selectedModifierId={activeModifier?.id || null} onSelectedModifierChange={(id,parentId) => id ? selectModifier(parentId || selectedId, id) : setSelectedModifierId(null)}
+          selectedModifierId={activeModifier?.id || null} onSelectedModifierChange={(id,parentId,additive=false) => id ? selectModifier(parentId || selectedId, id, additive) : setSelectedModifierId(null)}
           onSelectedInstanceChange={selectSingle} measurementVisible={measurementVisible}
           measureMode={measureMode} measureUnit={measureUnit} measureSnapMode={measureSnapMode}
           measureClearVersion={measureClearVersion}
