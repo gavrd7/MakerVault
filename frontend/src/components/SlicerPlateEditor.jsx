@@ -1481,38 +1481,56 @@ export default function SlicerPlateEditor({
 
   function transformGroup(dx = 0, dy = 0, angle = 0, scalePercent = 100) {
     if (!canEdit || selection.length < 2) return;
-    const members = objects.filter(row => selection.includes(row.instance_id));
-    const others = objects.filter(row => !selection.includes(row.instance_id));
-    const centerX = members.reduce((sum, row) => sum + Number(row.x_mm), 0) / members.length;
-    const centerY = members.reduce((sum, row) => sum + Number(row.y_mm), 0) / members.length;
+    const models = objects.filter(row => selection.includes(row.instance_id));
+    const volumes = objects.flatMap(row => (row.modifier_volumes || [])
+      .filter(volume => selection.includes(volume.id)));
+    const members = [...models, ...volumes];
+    if (members.length < 2) return;
+    const centerX = members.reduce((sum, row) => sum + Number(row.x_mm || 0), 0) / members.length;
+    const centerY = members.reduce((sum, row) => sum + Number(row.y_mm || 0), 0) / members.length;
     const theta = THREE.MathUtils.degToRad(angle), cos = Math.cos(theta), sin = Math.sin(theta);
-    const scale = Number(scalePercent)/100;
-    if (!Number.isFinite(scale) || scale<0.05 || scale>4) {
-      setError("Assembly scale must be between 5% and 400%.");return;
+    const scale = Number(scalePercent) / 100;
+    if (!Number.isFinite(scale) || scale < 0.05 || scale > 4) {
+      setError("Assembly scale must be between 5% and 400%."); return;
     }
-    const moved = members.map(row => {
-      const x = row.x_mm - centerX, y = row.y_mm - centerY;
-      return {
-        ...row,
-        x_mm: pretty(centerX + (x * cos - y * sin)*scale + dx),
-        y_mm: pretty(centerY + (x * sin + y * cos)*scale + dy),
+    const movedModels = models.map(row => {
+      const x = Number(row.x_mm) - centerX, y = Number(row.y_mm) - centerY;
+      return {...row,
+        x_mm: pretty(centerX + (x*cos-y*sin)*scale + dx),
+        y_mm: pretty(centerY + (x*sin+y*cos)*scale + dy),
         scale_xyz_percent: (row.scale_xyz_percent || [row.scale_percent,row.scale_percent,row.scale_percent])
           .map(value => pretty(Number(value)*scale)),
-        rotation_deg: pretty(((Number(row.rotation_deg || 0) + angle + 180) % 360 + 360) % 360 - 180),
+        rotation_deg: pretty(((Number(row.rotation_deg||0)+angle+180)%360+360)%360-180),
       };
     });
-    const invalid = moved.some(item => {
+    const movedVolumes = volumes.map(volume => {
+      const x = Number(volume.x_mm)-centerX, y = Number(volume.y_mm)-centerY;
+      const scales = (volume.scale_xyz_percent || [100,100,100]).map(value=>pretty(Number(value)*scale));
+      const angles = [...(volume.rotation_xyz_deg || [0,0,0])];
+      angles[2] = pretty(angles[2] + angle);
+      return {...volume,
+        x_mm:pretty(centerX+(x*cos-y*sin)*scale+dx),
+        y_mm:pretty(centerY+(x*sin+y*cos)*scale+dy),
+        scale_xyz_percent:scales, rotation_xyz_deg:angles,
+      };
+    });
+    if (movedVolumes.some(volume => ![volume.x_mm,volume.y_mm,...volume.scale_xyz_percent]
+      .every(Number.isFinite) || volume.scale_xyz_percent.some(value=>value<5||value>400))) {
+      setError("Group transform exceeds supported volume position or scale.");return;
+    }
+    if (movedModels.some(item => {
       const d = dimensionsRef.current[item.instance_id];
       return !d || plateExtentWarning(item, d, bedX, bedY);
-    });
-    if (invalid) {
-      setError("Group transform would leave the build plate. No changes were applied.");
-      return;
+    })) {
+      setError("Group transform would leave the build plate. No changes were applied.");return;
     }
-    const byId = new Map(moved.map(row => [row.instance_id, row]));
-    onChange(objects.map(row => byId.get(row.instance_id) || row));
-    setGroupDeltaX(0); setGroupDeltaY(0); setGroupRotation(0); setGroupScale(100);
-    setError("");
+    const modelsById = new Map(movedModels.map(row=>[row.instance_id,row]));
+    const volumesById = new Map(movedVolumes.map(volume=>[volume.id,volume]));
+    onChange(objects.map(row => ({
+      ...(modelsById.get(row.instance_id)||row),
+      modifier_volumes:(row.modifier_volumes||[]).map(volume=>volumesById.get(volume.id)||volume),
+    })));
+    setGroupDeltaX(0);setGroupDeltaY(0);setGroupRotation(0);setGroupScale(100);setError("");
   }
 
   groupCommitRef.current = transformGroup;
@@ -3186,7 +3204,8 @@ export default function SlicerPlateEditor({
       state.transform.showZ = true;
       state.transform.attach(activeModifier);
     } else if (groupEditable) {
-      const members=objects.filter(item=>selection.includes(item.instance_id));
+      const members=[...objects.filter(item=>selection.includes(item.instance_id)),
+        ...objects.flatMap(row=>(row.modifier_volumes||[]).filter(modifier=>selection.includes(modifier.id)))];
       const centerX=members.reduce((sum,item)=>sum+Number(item.x_mm||0),0)/members.length;
       const centerY=members.reduce((sum,item)=>sum+Number(item.y_mm||0),0)/members.length;
       const pivot=state.groupProxy;
