@@ -295,8 +295,14 @@ class Handler(BaseHTTPRequestHandler):
                     # A successful native CLI exit is not proof that every
                     # requested region was used in the generated toolpaths.
                     from .modifier_gcode_audit import audit_modifier_positive_e
+                    translation_xy = (0.0, 0.0)
+                    if current["engine"] == "bambustudio":
+                        from .bambu_runner import verified_bambu_modifier_shift
+                        translation_xy = verified_bambu_modifier_shift(
+                            files["model"], workdir / "bambu-sliced.3mf")
                     audit_modifier_positive_e(
-                        data, files["model"], current["engine"])
+                        data, files["model"], current["engine"],
+                        translation_xy=translation_xy)
                 if "filament_profiles" in files:
                     expected = (set(tool - 1 for tool in files["creality_tool_ids"])
                                 if "creality_tool_ids" in files
