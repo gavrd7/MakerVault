@@ -15,7 +15,7 @@ from .runner import WorkerError
 from .three_mf_validation import validate_worker_3mf
 from .modifier_acceptance_probe import _COMMAND, _WORDS
 import zipfile
-from defusedxml import ElementTree as ET
+from xml.etree import ElementTree as ET
 
 
 
@@ -36,7 +36,10 @@ def _native_part_bounds(sliced_3mf):
             if not 0 < info.file_size <= 16 * 1024 * 1024:
                 summary.append({"member": name, "note": "Model member exceeds diagnostic limit"})
                 continue
-            root = ET.fromstring(archive.read(info))
+            payload = archive.read(info)
+            if b"<!DOCTYPE" in payload.upper() or b"<!ENTITY" in payload.upper():
+                raise ValueError("Diagnostic mesh XML may not contain custom entities.")
+            root = ET.fromstring(payload)
             for obj in root.findall("./" + namespace + "resources/" + namespace + "object"):
                 vertices = obj.findall("./" + namespace + "mesh/" + namespace + "vertices/" + namespace + "vertex")
                 parts = obj.findall("./" + namespace + "components/" + namespace + "component")
