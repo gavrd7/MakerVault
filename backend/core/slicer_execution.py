@@ -32,7 +32,8 @@ from .slicer_paint_assets import expand_painted_settings
 from .slicer_process_settings import apply_process_overrides
 from .slicer_profiles import SlicerProfileError
 from .slicer_plate_3mf import build_plate_3mf, build_compound_plate_3mf
-from .slicer_modifier_volumes import validate_native_modifier_execution
+from .slicer_modifier_volumes import (validate_native_modifier_execution,
+                                      assert_native_plate_volume_coverage)
 from .slicer_plate_validation import validate_plate_collisions, PlateCollisionError
 from .slicer_worker_client import SlicerWorkerError, health, run_remote_job
 
@@ -295,7 +296,25 @@ def _validate_plate_execution(job):
         if not active or not active.get("objects"):
             raise SlicerExecutionError(
                 "The active build plate is empty. Choose a populated plate before slicing.")
-        if objects!=active["objects"]:
+        if "volumes" in active:
+            # Canonical project records intentionally separate free regions
+            # from printable objects. Check that the active model-local runtime
+            # adapter represents the same printable sources and local regions;
+            # assert_native_plate_volume_coverage above checks every world
+            # region before any native CLI may run.
+            stripped = []
+            for row in objects or []:
+                parts = [v for v in row.get("modifier_volumes", [])
+                         if v.get("coordinate_space") != "world"]
+                plain = {k: v for k, v in row.items() if k != "modifier_volumes"}
+                if parts:
+                    plain["modifier_volumes"] = parts
+                stripped.append(plain)
+            if (stripped != active["objects"] or
+                    settings.get("plate_volumes") != active["volumes"]):
+                raise SlicerExecutionError(
+                    "The active build plate and independent regions do not match the saved project.")
+        elif objects!=active["objects"]:
             raise SlicerExecutionError(
                 "The active build plate does not match the saved slicing model list.")
     if not objects:
@@ -675,6 +694,12 @@ def process_queued_job(job_id):
         material_result = None
         is_multi_test = (job.settings or {}).get("multi_material_test") is True
         plate = (job.settings or {}).get("plate_objects")
+        stage = "verifying independent modifier and negative-volume coverage"
+        try:
+            assert_native_plate_volume_coverage(plate, job.settings or {})
+        except ValueError as exc:
+            raise SlicerExecutionError(str(exc)) from exc
+        stage = "reading the source STL"
         has_native_modifiers = bool(plate and any(
             item.get("modifier_volumes") for item in plate if isinstance(item, dict)))
         if plate:
