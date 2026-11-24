@@ -49,7 +49,7 @@ class ModifierGcodeCoverageTests(unittest.TestCase):
         outside.extend(("G1 X%d Y%d E0.8" % (20 + i % 4, 20 + i % 4)).encode()
                        for i in range(20))
         result = audit_modifier_positive_e(
-            b"\\n".join(outside), project, "orcaslicer")
+            b"\n".join(outside), project, "orcaslicer")
         self.assertEqual(result["negative_volume_count"], 1)
         self.assertEqual(result["modifier_region_paths"], [0])
 
@@ -58,7 +58,7 @@ class ModifierGcodeCoverageTests(unittest.TestCase):
                       for i in range(20))
         with self.assertRaisesRegex(WorkerError, "deposits material"):
             audit_modifier_positive_e(
-                b"\\n".join(inside), project, "orcaslicer")
+                b"\n".join(inside), project, "orcaslicer")
 
     def test_invalid_project_must_not_be_trusted(self):
         with self.assertRaises(WorkerError):
