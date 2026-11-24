@@ -8,6 +8,7 @@ import os
 import logging
 import io
 import json
+import math
 from xml.etree import ElementTree as ET
 import re
 import signal
@@ -221,6 +222,79 @@ def bambu_command(binary: Path, workdir: Path) -> list[str]:
     # memory in the official pinned 02.09.01.70 executable.
     args += ["--slice", "0", "--export-3mf", str(output), str(model)]
     return args
+
+
+def verified_bambu_modifier_shift(source_project: bytes, sliced_project: Path) -> tuple[float, float]:
+    """Verify a native assembly's Bambu placement before auditing toolpaths.
+
+    Bambu 02.09.01.70 recentres an imported assembly on the native plate.
+    The input 3MF has baked world-space meshes and an identity build transform.
+    The output 3MF records the additional XY translation on its sole build
+    item. Compare the native part roles before accepting that translation.
+    An unknown or non-translation transform always fails closed.
+    """
+    namespace = "{" + CORE_NS + "}"
+    matrices = []
+    roles = []
+    for payload, from_bytes in ((source_project, True), (sliced_project, False)):
+        try:
+            if from_bytes:
+                archive_source = io.BytesIO(payload)
+            else:
+                archive_source = Path(payload)
+                if archive_source.is_symlink() or not archive_source.is_file():
+                    raise WorkerError("Bambu native output project is unavailable.")
+                if not 0 < archive_source.stat().st_size <= 128 * 1024 * 1024:
+                    raise WorkerError("Bambu native output project exceeds limits.")
+            with zipfile.ZipFile(archive_source) as archive:
+                for name in ("3D/3dmodel.model", "Metadata/model_settings.config"):
+                    info = archive.getinfo(name)
+                    if not 0 < info.file_size <= 1024 * 1024:
+                        raise WorkerError("Bambu native placement metadata exceeds limits.")
+                model_data = archive.read("3D/3dmodel.model")
+                settings_data = archive.read("Metadata/model_settings.config")
+            if any(b"<!DOCTYPE" in data.upper() or b"<!ENTITY" in data.upper()
+                   for data in (model_data, settings_data)):
+                raise WorkerError("Unsafe Bambu native placement metadata.")
+            root = ET.fromstring(model_data)
+            manifest = ET.fromstring(settings_data)
+            items = root.findall("./" + namespace + "build/" + namespace + "item")
+            if len(items) != 1:
+                raise WorkerError("Bambu modifier audit requires one assembly build item.")
+            values = [float(value) for value in items[0].attrib["transform"].split()]
+            if (len(values) != 12 or
+                    any(not math.isfinite(value) for value in values) or
+                    any(abs(values[i] - (1.0 if i in (0, 4, 8) else 0.0)) > 0.0001
+                        for i in range(9)) or
+                    abs(values[11]) > 0.0001 or
+                    any(abs(values[i]) > 256 for i in (9, 10))):
+                raise WorkerError("Bambu changed the native assembly orientation.")
+            native_objects = manifest.findall("object")
+            if len(native_objects) != 1:
+                raise WorkerError("Bambu native output changed assembly identity.")
+            part_roles = tuple(part.get("subtype")
+                               for part in native_objects[0].findall("part"))
+            if (len(part_roles) < 2 or len(part_roles) > 60
+                    or any(role not in ("normal_part", "modifier_part", "negative_part")
+                           for role in part_roles)
+                    or not any(role != "normal_part" for role in part_roles)):
+                raise WorkerError("Bambu native output lost modifier part identities.")
+            matrices.append(values)
+            roles.append(part_roles)
+        except WorkerError:
+            raise
+        except (OSError, KeyError, ValueError, TypeError, AttributeError,
+                zipfile.BadZipFile, ET.ParseError):
+            raise WorkerError("Unable to verify Bambu native output placement.") from None
+    if roles[0] != roles[1]:
+        raise WorkerError("Bambu native output changed modifier part identities.")
+    # Input meshes were positioned in world space by the trusted exporter.
+    # Only a verified whole-assembly XY translation may adjust their audit.
+    dx = matrices[1][9] - matrices[0][9]
+    dy = matrices[1][10] - matrices[0][10]
+    if abs(dx) > 256 or abs(dy) > 256:
+        raise WorkerError("Bambu native assembly translation exceeds bounds.")
+    return dx, dy
 
 
 def extract_single_bambu_gcode(sliced_project: Path, workdir: Path) -> Path:
