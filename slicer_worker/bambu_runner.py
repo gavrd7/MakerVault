@@ -268,6 +268,11 @@ def run_bambu(binary: Path, workdir: Path, *, timeout_seconds: int = DEFAULT_TIM
             # An integer process status is safe for diagnostics; stderr and
             # native preset contents remain intentionally discarded.
             logger.warning("Bambu Studio native CLI exited with status %d", proc.returncode)
+            if proc.returncode == 126:
+                # Exit 126 can originate from AppRun or an inner launcher;
+                # identify the runtime execution failure without guessing
+                # which file, mount or dependency was responsible.
+                raise WorkerError("Bambu Studio native runtime exited with status 126.")
             raise WorkerError("Bambu Studio CLI rejected the native profiles or model.")
         output = extract_single_bambu_gcode(workdir / "bambu-sliced.3mf", workdir)
         return {"status": "completed", "gcode_path": str(output),
