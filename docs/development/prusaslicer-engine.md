@@ -9,6 +9,12 @@
 - The five regular CI workflows passed on `465aa7f`: MakerVault CI, worker contract, Prusa contract, combined isolation, Orca real-binary smoke. They must all be rechecked on the final head. Neither source compilation nor actual single-material runtime is approved from these passes alone.
 - Runtime admission remains disabled. No Prusa installer, worker activation, native 3MF, MMU/XL, painting, or modifiers should be advertised as implemented until separately demonstrated; staging/production and all working engines remain untouched.
 
+### Candidate packaging safety (additional commits)
+
+- Added `scripts/prusa_candidate_manifest.py` (`8164a11`): review-only bounded manifest of exact SHA-256 checksums of the Prusa binary, native vendor resources and licence. Includes exact `version_2.9.7` source commit provenance; rejects symlinks, special files, missing profile bundle, invalid ELF and oversized candidate payloads. Its `install_approved` property is deliberately `false`.
+- Updated only the Prusa candidate workflow (`412335e`) to include upstream `LICENSE` and generated `review-manifest.json` inside the separate archive **after** a genuine CLI smoke; no automatic installer, GHCR publication or active-engine entry. Added tests (`780ef43`) and included them in focused Prusa workflow (`d62dbeb`).
+- These are packaging safeguards, **not evidence of completed upstream compilation or installer/runtime acceptance**. Check the ongoing pinned build and re-run from the final PR head after it completes. Existing engines remain unchanged.
+
 ## Implemented on the isolated Prusa branch
 
 - Prusa-only **native INI** parser and flattening of exact named `[printer:...]`, `[filament:...]`, `[print:...]` upstream sections; supports official `;`-delimited **ordered multiple inheritance**, shared ancestor DAGs, and hard-fails on cycles, missing parents, wrong preset kind, excessive depth and size, unsafe directives, or nonempty post-processing commands.
