@@ -251,40 +251,6 @@ export default function SlicerPrepareWorkspace({
         row.id === id ? {...row, ...patch} : row),
     }));
   };
-  const addModifier = (shape = "box", kind = "modifier") => {
-    if (!["box","cylinder","sphere","cone","disc","torus"].includes(shape)) return;
-    const parent = selectedObject || objects[0];
-    if (!parent || (parent.modifier_volumes || []).length >= 12 || totalModifierCount >= 48) return;
-    const fresh = {
-      id: (typeof crypto !== "undefined" && crypto.randomUUID
-        ? crypto.randomUUID()
-        : "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, ch => {
-            const n = Math.floor(Math.random() * 16);
-            return (ch === "x" ? n : (n & 3) | 8).toString(16);
-          })), shape,
-      width_mm: 20, depth_mm: 20, height_mm: 20,
-      // Plate-centred independent pose; selecting a model sets the regional
-      // slicing association, not a welded or inherited geometry transform.
-      x_mm: Number(parent.x_mm || 0), y_mm: Number(parent.y_mm || 0),
-      z_mm: 10, coordinate_space: "world",
-      rotation_xyz_deg: [0, 0, 0], scale_xyz_percent: [100, 100, 100],
-      kind, assembly_id: null,
-      settings: kind === "negative" ? {} : {sparse_infill_density: 50},
-    };
-    updatePlate(latest.current.map(item => item.instance_id !== parent.instance_id ? item : {
-      ...item, modifier_volumes: [...(item.modifier_volumes || []), fresh],
-    }));
-    selectModifier(parent.instance_id, fresh.id);
-    setToolMode("move");
-    setScope("objects");
-  };
-  const removeModifier = id => {
-    if (!selectedObject) return;
-    if (selectedModifierId === id) setSelectedModifierId(null);
-    updatePlate(latest.current.map(item => item.instance_id !== selectedObject.instance_id ? item : {
-      ...item, modifier_volumes: (item.modifier_volumes || []).filter(row => row.id !== id),
-    }));
-  };
   const objectOverrides = selectedObject?.process_overrides || {};
   const editingObject = scope === "objects";
   const editingOverrides = editingObject ? objectOverrides : processOverrides;
@@ -1207,47 +1173,35 @@ export default function SlicerPrepareWorkspace({
             Wall loops and sparse infill density have passed native Orca 2.4.2 slicing tests.
             Other Object settings can be saved in drafts but remain unavailable for slicing until verified.</small>
 
-          <div className="slicerModifierDrafts" aria-label="Native primitive modifiers">
-            <div style={{display:"flex",gap:8,justifyContent:"space-between",alignItems:"center"}}>
-              <strong>Parameter modifiers</strong>
-              <button type="button" disabled={!canEdit||busy||!selectedObject||selectedModifiers.length>=12||totalModifierCount>=48}
-                onClick={()=>setSolidRequest({kind:"modifier",id:Date.now()})}>Add modifier</button>
-            </div>
-            <small>Select a volume in the tree or viewport; printable primitives and volumes share the same shape and transform editor. {totalModifierCount}/48 regions on this plate.</small>
-            {selectedModifiers.map((modifier,index) => activeModifier && activeModifier.id !== modifier.id ? null : <fieldset key={modifier.id} style={{display:"grid",gap:6,border:"1px solid #53647a",borderRadius:6,padding:8}}>
-              <legend>{modifier.kind==="negative"?"Negative volume":"Modifier"} {index+1}</legend>
-              <button type="button" disabled={!canEdit||busy}
-                onClick={()=>{setSolidRequest({kind:modifier.kind==="negative"?"negative":"modifier",
-                  editVolumeId:modifier.id,shape:modifier.shape,id:Date.now()});setMobilePane("plate");}}>
-                Edit shape / Move / Scale / Rotate
-              </button>
-              {modifier.kind!=="negative" && <>
-              <label>Regional infill (%)
-                <input type="number" min="0" max="100" step="1" disabled={!canEdit||busy}
-                  value={modifier.settings?.sparse_infill_density ?? 50}
-                  onChange={e=>{const value=Number(e.target.value);if(Number.isFinite(value)&&value>=0&&value<=100)
-                    changeModifier(modifier.id,{settings:{...modifier.settings,sparse_infill_density:value}});}} />
-              </label>
-              <label>Regional wall loops (blank = inherit)
-                <input type="number" min="0" max="20" step="1" disabled={!canEdit||busy}
-                  value={modifier.settings?.wall_loops ?? ""}
-                  onChange={e=>{
-                    const raw=e.target.value;
-                    const settings={...modifier.settings};
-                    if(raw==="") delete settings.wall_loops;
-                    else {
-                      const value=Number(raw);
-                      if(!Number.isInteger(value)||value<0||value>20) return;
-                      settings.wall_loops=value;
-                    }
-                    changeModifier(modifier.id,{settings});
-                  }} />
-              </label>
-              </>}
-              <button type="button" disabled={!canEdit||busy} onClick={()=>removeModifier(modifier.id)}>
-                Remove {modifier.kind==="negative"?"negative volume":"modifier"}
-              </button>
-            </fieldset>)}
+          <div className="slicerModifierDrafts" aria-label="Regional volume settings">
+            <strong>Regional slicing settings</strong>
+            <small>Use Add model to insert a volume, and Edit volume in the object tree to change its shape, move, scale or rotate. Negative volumes have no regional process overrides. {totalModifierCount}/48 non-printing volumes on this plate.</small>
+            {selectedModifiers.filter(modifier=>modifier.kind!=="negative").map((modifier,index) =>
+              activeModifier && activeModifier.id !== modifier.id ? null :
+              <fieldset key={modifier.id} style={{display:"grid",gap:6,border:"1px solid #53647a",borderRadius:6,padding:8}}>
+                <legend>Parameter modifier {index+1}</legend>
+                <label>Regional infill (%)
+                  <input type="number" min="0" max="100" step="1" disabled={!canEdit||busy}
+                    value={modifier.settings?.sparse_infill_density ?? 50}
+                    onChange={e=>{const value=Number(e.target.value);if(Number.isFinite(value)&&value>=0&&value<=100)
+                      changeModifier(modifier.id,{settings:{...modifier.settings,sparse_infill_density:value}});}} />
+                </label>
+                <label>Regional wall loops (blank = inherit)
+                  <input type="number" min="0" max="20" step="1" disabled={!canEdit||busy}
+                    value={modifier.settings?.wall_loops ?? ""}
+                    onChange={e=>{
+                      const raw=e.target.value;
+                      const settings={...modifier.settings};
+                      if(raw==="") delete settings.wall_loops;
+                      else {
+                        const value=Number(raw);
+                        if(!Number.isInteger(value)||value<0||value>20) return;
+                        settings.wall_loops=value;
+                      }
+                      changeModifier(modifier.id,{settings});
+                    }} />
+                </label>
+              </fieldset>)}
           </div>
         </div>}
         <section aria-label={group + " native process controls"} className="slicerNativeSettingsFields">
