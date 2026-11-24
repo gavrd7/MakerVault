@@ -53,6 +53,14 @@ class ModifierGcodeCoverageTests(unittest.TestCase):
         self.assertEqual(result["negative_volume_count"], 1)
         self.assertEqual(result["modifier_region_paths"], [0])
 
+        # Extrusions on the cavity boundary form legitimate shell contours.
+        boundary = [b"G90", b"M83", b"G0 X0 Y0 Z5"]
+        boundary.extend(("G1 X%d Y0 E0.8" % (i % 4)).encode()
+                        for i in range(20))
+        audited = audit_modifier_positive_e(
+            b"\n".join(boundary), project, "orcaslicer")
+        self.assertEqual(audited["modifier_region_paths"], [0])
+
         inside = [b"G90", b"M83", b"G0 X2 Y2 Z5"]
         inside.extend(("G1 X%d Y%d E0.8" % (2 + i % 4, 2 + i % 4)).encode()
                       for i in range(20))
