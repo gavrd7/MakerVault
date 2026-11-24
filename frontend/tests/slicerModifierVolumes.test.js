@@ -66,7 +66,7 @@ test("world modifier cannot become a model drag and preserves independent pose",
   assert.match(editor, /mesh\.userData\.isWorldModifier/);
   assert.match(editor, /modifierSelectionRef\.current\.onChange/);
   assert.match(editor, /latestOnChangeRef\.current\(current\.map/);
-  assert.match(editor, /coordinate_space==="world"/);
+  assert.match(editor, /modifier\.coordinate_space === "world"/);
 });
 
 test("non-destructive negative volume uses shared insertion and is a selectable tree object", () => {
