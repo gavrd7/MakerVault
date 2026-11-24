@@ -204,8 +204,8 @@ class InstallerTests(unittest.TestCase):
                 "version": BAMBU_VERSION, "binary": str(root / "AppRun"),
                 "binary_sha256": BAMBU_RUNTIME_SHA256,
             }}}
-            with patch.object(installer, "STORE", store), \\
-                 patch.object(installer, "_manifest", return_value=manifest), \\
+            with patch.object(installer, "STORE", store), \
+                 patch.object(installer, "_manifest", return_value=manifest), \
                  patch.object(installer, "_sha256", return_value=BAMBU_RUNTIME_SHA256):
                 installer.repair_active_bambu_runtime_permissions()
             for directory in (root, resources, usr_share):
@@ -230,7 +230,7 @@ class InstallerTests(unittest.TestCase):
                 "version": BAMBU_VERSION, "binary": str(root / "AppRun"),
                 "binary_sha256": BAMBU_RUNTIME_SHA256,
             }}}
-            with patch.object(installer, "STORE", store), \\
+            with patch.object(installer, "STORE", store), \
                  patch.object(installer, "_manifest", return_value=manifest):
                 with self.assertRaisesRegex(ValueError, "identity"):
                     installer.repair_active_bambu_runtime_permissions()
