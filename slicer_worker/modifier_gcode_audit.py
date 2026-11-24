@@ -7,12 +7,15 @@ overlaps deposited model paths; it does not claim independent print fidelity.
 import io
 from functools import lru_cache
 import math
+import logging
 import re
 import zipfile
 from xml.etree import ElementTree as SafeET
 
 from .runner import WorkerError
 from .modifier_3mf_validation import NS
+
+logger = logging.getLogger(__name__)
 
 CMD = re.compile(r"^(G0?[01]|G92|M82|M83|G90|G91)\b", re.I)
 WORDS = re.compile(r"\b([XYZE])([-+]?(?:\d+(?:\.\d*)?|\.\d+))", re.I)
@@ -149,6 +152,10 @@ def audit_modifier_positive_e(gcode, project, engine):
     x = y = z = e = 0.0
     relative_xyz = relative_e = False
     hits = [0] * len(boxes)
+    # Count how much of the rejected deposition lies in the lower, middle or
+    # upper third of each actual negative mesh. This diagnoses whether a
+    # native importer ignored subtraction, without leaking model coordinates.
+    negative_z_bands = [[0, 0, 0] for _ in boxes]
     deposited = 0
     for raw in gcode.decode("utf-8", "replace").splitlines():
         command = raw.partition(";")[0].strip().upper()
@@ -198,6 +205,10 @@ def audit_modifier_positive_e(gcode, project, engine):
                                  for (low, high), value in zip(box, midpoint))
                 if inside:
                     hits[i] += 1
+                    if kinds[i] == "negative_part":
+                        zlow, zhigh = box[2]
+                        band = min(2, max(0, int(3 * (nz - zlow) / (zhigh - zlow))))
+                        negative_z_bands[i][band] += 1
         x, y, z = nx, ny, nz
     if deposited < 10 or any(hits[i] == 0 for i,kind in enumerate(kinds)
                             if kind == "modifier_part"):
@@ -205,8 +216,18 @@ def audit_modifier_positive_e(gcode, project, engine):
     # Successfully subtracting a negative region may remove ALL material there.
     # This requires zero positive-E paths, unlike a modifier. Comparative
     # pinned-binary fixture acceptance remains an independent prerequisite.
-    if any(hits[i] > 0 for i,kind in enumerate(kinds)
-           if kind == "negative_part"):
+    negative_hits = [(i, hits[i]) for i, kind in enumerate(kinds)
+                     if kind == "negative_part" and hits[i] > 0]
+    if negative_hits:
+        # No model positions or individual G-code lines may enter worker logs.
+        if engine == "bambustudio":
+            logger.warning(
+                "Bambu negative subtraction audit rejected G-code: regions=%d "
+                "interior_deposition_paths=%d z_bands=%s",
+                len(negative_hits),
+                sum(count for _, count in negative_hits),
+                tuple(tuple(negative_z_bands[i]) for i, _ in negative_hits),
+            )
         raise WorkerError("Generated G-code deposits material inside a requested negative volume.")
     return {"modifier_count": len(boxes), "positive_e_paths": deposited,
             "modifier_region_paths": hits,
