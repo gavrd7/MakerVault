@@ -155,14 +155,6 @@ def audit_modifier_positive_e(gcode, project, engine, *, translation_xy=(0.0, 0.
             or (engine != "bambustudio" and translation_xy != (0.0, 0.0))):
         raise WorkerError("Unverified modifier audit coordinate translation.")
     boxes, kinds, meshes = modifier_bounds(project, engine, include_meshes=True)
-    if translation_xy != (0.0, 0.0):
-        dx, dy = translation_xy
-        boxes = [((bounds[0][0] + dx, bounds[0][1] + dx),
-                  (bounds[1][0] + dy, bounds[1][1] + dy),
-                  bounds[2]) for bounds in boxes]
-        meshes = [tuple(tuple((point[0] + dx, point[1] + dy, point[2])
-                              for point in triangle)
-                        for triangle in mesh) for mesh in meshes]
 
     @lru_cache(maxsize=64)
     def section(index, layer_z):
@@ -207,7 +199,11 @@ def audit_modifier_positive_e(gcode, project, engine, *, translation_xy=(0.0, 0.
                 e = fields["E"]
         if opcode in ("G1", "G01") and extrusion > 0 and (nx != x or ny != y):
             deposited += 1
-            midpoint = ((nx + x) / 2, (ny + y) / 2, nz)
+            # The native regions stay in the source frame. Convert only
+            # each G-code sample back into that frame; copying entire meshes
+            # would unnecessarily multiply memory for large assemblies.
+            midpoint = ((nx + x) / 2 - translation_xy[0],
+                        (ny + y) / 2 - translation_xy[1], nz)
             for i, box in enumerate(boxes):
                 if kinds[i] == "negative_part":
                     # A generated perimeter exactly on the negative volume's
