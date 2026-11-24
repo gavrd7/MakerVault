@@ -86,7 +86,10 @@ def probe(fixtures,binary,engine,creality_native=False):
             results[name]=runners[engine](Path(binary),root,timeout_seconds=180)
             if results[name].get("status")!="completed":
                 raise WorkerError("Native composite CLI did not complete "+name)
-            results[name]=two_model_region_extrusion((root/"output.gcode").read_bytes())
+            gcode_path=Path(results[name]["gcode_path"])
+            if gcode_path.resolve().parent != root.resolve() or not gcode_path.is_file():
+                raise WorkerError("Native CLI returned unsafe composite G-code output.")
+            results[name]=two_model_region_extrusion(gcode_path.read_bytes())
     for region in ("left","right"):
         base=results["baseline"]["totals"][region]
         added=results["region"]["totals"][region]
