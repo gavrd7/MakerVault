@@ -532,6 +532,25 @@ class Handler(BaseHTTPRequestHandler):
                 reason = candidate if candidate in categories else "engine-exited"
             else:
                 reason = safe_reasons.get(str(exc), "validation-error")
+            # For an otherwise unclassified worker admission error, record
+            # only a bounded, code-owned source location. Never log exception
+            # text, native project data, file paths, profiles or CLI output.
+            if stage == "validating model and profile payloads" and reason == "validation-error":
+                origin = None
+                tb = exc.__traceback__
+                while tb is not None:
+                    code = tb.tb_frame.f_code
+                    candidate = (code.co_filename.rsplit("/", 1)[-1], code.co_name, tb.tb_lineno)
+                    if candidate[0] in {
+                        "creality_modifier_validation.py",
+                        "modifier_3mf_validation.py",
+                        "three_mf_validation.py",
+                    }:
+                        origin = candidate
+                    tb = tb.tb_next
+                if origin is not None:
+                    logger.warning("Native project admission diagnostic: module=%s function=%s line=%d",
+                                   *origin)
             logger.warning("Isolated slicer rejected job at %s (%s, %s)", stage,
                            type(exc).__name__, reason)
             response = {
