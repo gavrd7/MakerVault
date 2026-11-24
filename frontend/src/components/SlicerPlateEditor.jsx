@@ -313,6 +313,7 @@ export default function SlicerPlateEditor({
   variableLayerPreview = null, onVariableLayerHeightPick, onVariableLayerHeightCommit,
   localAssets = [], onLocalAssetsChange, onExitToolMode, onPlateIssuesChange, toolbar = null, paintControls = null,
   primeTower = null, onPrimeTowerChange, primeTowerEnabled = false, primeTowerWidth = 35,
+  validationRefreshKey = 0,
 }) {
   const hostRef = useRef(null);
   const sceneRef = useRef(null);
@@ -510,7 +511,7 @@ export default function SlicerPlateEditor({
   const issueKey = JSON.stringify(plateIssues.map(row => [row.id, row.message]));
   useEffect(() => {
     onPlateIssuesChange?.({ signature: issueSignature, issues: plateIssues });
-  }, [issueSignature, issueKey, onPlateIssuesChange]);
+  }, [issueSignature, issueKey, onPlateIssuesChange, validationRefreshKey]);
 
   function arrangeModels(items = objects, announce = true) {
     if (items.some(item => !dimensionsRef.current[item.instance_id])) {
