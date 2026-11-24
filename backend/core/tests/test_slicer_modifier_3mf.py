@@ -121,14 +121,14 @@ class NativeModifierProjectTests(SimpleTestCase):
         region = base["modifier_volumes"][0]
         region.update({"width_mm": 9, "depth_mm": 9, "height_mm": 8,
                        "coordinate_space": "world",
-                       "x_mm": 110, "y_mm": 110, "z_mm": 5,
+                       "x_mm": 0, "y_mm": 0, "z_mm": 5,
                        "rotation_xyz_deg": [0, 0, 0],
                        "scale_xyz_percent": [100, 100, 100]})
         negatives = []
         for dx in (0, 2):
             negatives.append({
                 **region, "id": str(uuid.uuid4()), "shape": "cone",
-                "x_mm": 110 + dx, "kind": "negative", "settings": {},
+                "x_mm": dx, "kind": "negative", "settings": {},
             })
         base["modifier_volumes"] = [region, *negatives]
         geometry = export_modifier_3mf_fixture(
