@@ -347,6 +347,47 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
       .filter((file, index, all) => all.findIndex(item => String(item.id) === String(file.id)) === index)];
   }, [files, jobs]);
 
+  const [workspaceEpoch, setWorkspaceEpoch] = useState(0);
+  const resetSlicerWorkspace = () => {
+    if (busy || loading || !canPrepare) return;
+    // Reset only the unsaved workspace. Existing jobs, saved profiles, printer
+    // records, STL files and installed engines belong to persistent storage.
+    const hasWork = projectPlates.some(plate =>
+      plate.objects.length || (plate.volumes || []).length) ||
+      Object.keys(processOverrides).length > 0 || flushSettings !== null ||
+      slotFilamentProfiles.length > 0;
+    if (hasWork && !window.confirm(
+      "Start a new empty slicer project? Unsaved models, volumes and settings in this workspace will be discarded. Saved drafts, files and profiles are not deleted.")) return;
+    plateLocalAssets.forEach(asset => {
+      if (asset.url?.startsWith("blob:")) URL.revokeObjectURL(asset.url);
+    });
+    setPlateLocalAssets([]);
+    setProjectPlates([{id:"plate-1",name:"Plate 1",objects:[],volumes:[]}]);
+    setActivePlateId("plate-1");
+    setProjectName("MakerVault project");
+    setForm({...initialForm});
+    setProcessOverrides({});
+    setFlushSettings(null);
+    setSlotFilamentProfiles([]);
+    setCustomBed({enabled:false,x:"220",y:"220"});
+    setPlateValidation(null);
+    setWorkspaceEpoch(epoch => epoch + 1);
+    refreshPlateValidation(epoch => epoch + 1);
+    manuallyColouredModels.current.clear();
+    manuallyChosenProfiles.current.clear();
+    userChosePlateRef.current = false;
+    setProfileSuggestions({});
+    setNativePlate(null);
+    setMaterialProfileMatches(null);
+    setProfileModal("");
+    setShowDrafts(false);
+    setPreviewJobId(null);
+    awaitingSlicePreviewRef.current = null;
+    setError("");
+    setNotice("New empty slicer project. Saved drafts, files and profiles are unchanged.");
+    setEditorOpen(true);
+  };
+
   const update = (name, value) => {
     if (["engine", "engine_version", "process_preset", "process_profile_id"].includes(name))
       setProcessOverrides({});
@@ -1519,6 +1560,8 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
               if(file)importProjectFile(file);
             }}/>
         </div>}
+        <button type="button" disabled={busy||loading||!canPrepare}
+          onClick={resetSlicerWorkspace}>New project / Reset slicer</button>
         <button type="button" onClick={onBack}>← Printing overview</button>
         <button type="button" onClick={() => setShowDrafts(true)}>Saved drafts ({jobs.length})</button>
         {!editorOpen && <button type="button" className="primary slicerHeroInteractive"
@@ -1529,7 +1572,7 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
       </div>
     </section>
 
-    {editorOpen ? <SlicerPrepareWorkspace
+    {editorOpen ? <SlicerPrepareWorkspace key={workspaceEpoch}
       plateLabel={plateLabel} onPlateLabelChange={setPlateLabel}
       plates={projectPlates} activePlateId={activePlateId}
       primeTower={primeTower} onPrimeTowerChange={setPrimeTower}
@@ -1778,7 +1821,7 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
     </div>
 
 
-    <SlicerPlateEditor plateType={form.plate}
+    <SlicerPlateEditor key={workspaceEpoch} plateType={form.plate}
       printerLabel={form.printer_preset || selectedPrinter?.model || selectedPrinter?.name || ""}
       plateLabel={plateLabel} onPlateLabelChange={setPlateLabel}
       files={stlFiles}
