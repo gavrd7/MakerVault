@@ -8,13 +8,24 @@
 import * as THREE from "three";
 import createManifold from "manifold-3d";
 
-// Vite must emit the pinned WASM as a first-party asset, not retrieve it from
-// a CDN. The Node test runner uses the package's normal local WASM resolution.
-const wasmUrl = typeof window === "undefined"
+// Keep the WebAssembly binary inside the Vite-generated JavaScript asset.
+// Deployed MakerVault instances can serve assets behind a URL prefix or a
+// protected route, so asking Emscripten to fetch /assets/manifold.wasm can
+// return an HTML login/fallback page instead of WebAssembly. Explicit inline
+// bundling avoids that second fetch entirely and requires no CDN or cloud.
+// Node's unit tests continue to use the package's ordinary local WASM loader.
+const browserWasm = typeof window === "undefined"
   ? null
-  : (await import("manifold-3d/manifold.wasm?url")).default;
+  : (await import("manifold-3d/manifold.wasm?url&inline")).default;
+if (browserWasm !== null &&
+    !/^data:[^,]*;base64,/.test(browserWasm))
+  throw new Error("The local Manifold WebAssembly asset is not embedded.");
+const wasmBinary = browserWasm === null ? null : Uint8Array.from(
+  atob(browserWasm.slice(browserWasm.indexOf(",") + 1)),
+  byte => byte.charCodeAt(0),
+);
 const wasm = await createManifold(
-  wasmUrl ? { locateFile: () => wasmUrl } : undefined,
+  wasmBinary ? { wasmBinary } : undefined,
 );
 wasm.setup();
 const { Manifold, Mesh } = wasm;
