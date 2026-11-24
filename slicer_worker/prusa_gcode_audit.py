@@ -56,7 +56,9 @@ def audit_prusa_positive_e(data: bytes) -> dict[str, int]:
             if "E" not in params:
                 continue
             amount = params["E"] if relative else params["E"] - previous_e
-            previous_e = params["E"] if not relative else previous_e
+            # Relative moves still advance the extruder's position. Preserve
+            # that reference when a file switches back to absolute E (M82).
+            previous_e = previous_e + params["E"] if relative else params["E"]
             if amount > 0.00001 and ("X" in params or "Y" in params):
                 positive += 1
     if positive < 20:
