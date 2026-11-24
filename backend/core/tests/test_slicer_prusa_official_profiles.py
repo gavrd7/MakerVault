@@ -47,7 +47,7 @@ class PrusaOfficialModelDiscoveryTests(SimpleTestCase):
         raw = fetch_prusa_model("printer", "Prusa CORE One", "PrusaResearch.ini")
         self.assertIn(b"bed_model = core_one_bed.stl", raw)
         self.assertNotIn(b"printer_model:MK4S", raw)
-        self.assertIn("version_2.9.7/resources/profiles/PrusaResearch.ini",
+        self.assertIn("450d70dd81c9b8990bc6bc8e690e31f82ddceb11/resources/profiles/PrusaResearch.ini",
                       get.call_args.args[0])
 
     @patch("core.slicer_prusa_official_profiles.requests.get", return_value=_Response())
