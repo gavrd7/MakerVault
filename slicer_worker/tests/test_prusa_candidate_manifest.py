@@ -31,6 +31,10 @@ class PrusaCandidateManifestTests(unittest.TestCase):
             self.assertEqual({row["path"] for row in result["files"]},
                              {"bin/prusa-slicer", "resources/profiles/PrusaResearch.ini", "LICENSE"})
             self.assertTrue(all(len(row["sha256"]) == 64 for row in result["files"]))
+            # Vendor resource bundles may legitimately include empty optional files.
+            (root / "resources" / "empty-resource").touch()
+            self.assertEqual(manifest(root)["file_count"], 4)
+
 
     def test_missing_licence_and_tampered_binary_are_refused(self):
         with tempfile.TemporaryDirectory() as temp:
