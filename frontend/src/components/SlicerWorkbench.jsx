@@ -1534,7 +1534,7 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
       objects={plateObjects} plateVolumes={activePlate?.volumes || []}
       onRemovePlateVolumes={ids=>setPlateObjects(plateObjects,{removedVolumeIds:ids})}
       onChange={setPlateObjects} files={stlFiles}
-      plateIssues={plateValidation} onPlateIssuesChange={setPlateValidation}
+      plateIssues={plateValidation} onPlateIssuesChange={setPlateValidation} validationRefreshKey={busy || loading}
       localAssets={plateLocalAssets} onLocalAssetsChange={setPlateLocalAssets}
       onPrimaryChange={id => update("input_asset_id", String(id))}
       onFilesUploaded={onFilesUploaded} defaultColor={selectedSpoolHex}
