@@ -6,6 +6,7 @@ import PrinterStartGcodeModal from "./PrinterStartGcodeModal";
 import GcodeViewerModal from "./GcodeViewerModal";
 import SlicerPlateEditor from "./SlicerPlateEditor";
 import SlicerPrepareWorkspace from "./SlicerPrepareWorkspace";
+import {movePrintablesPreservingVolumes} from "./slicerPlateVolumeTransfers.js";
 import SlicerEngineChoices from "./SlicerEngineChoices";
 import SlicerEngineManager from "./SlicerEngineManager";
 import SlicerBedTypePicker from "./SlicerBedTypePicker";
@@ -215,31 +216,24 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
   };
   const moveProjectModels=(instanceIds,destinationId)=>{
     if(destinationId===activePlateId || !projectPlates.some(p=>p.id===destinationId))return;
-    const ids=new Set(instanceIds);
-    const selected=plateObjects.filter(item=>ids.has(item.instance_id));
-    if(!selected.length)return;
     const destination=projectPlates.find(item=>item.id===destinationId);
-    if(destination.objects.length+selected.length>200){
+    let transfer;
+    try {
+      transfer=movePrintablesPreservingVolumes(plateObjects,instanceIds);
+    } catch (err) {
+      setError(err.message||"Could not preserve independent volumes on the original plate.");
+      return;
+    }
+    if(!transfer.moving.length)return;
+    if(destination.objects.length+transfer.moving.length>200){
       setError("Destination plate cannot contain more than 200 objects.");return;
     }
-    // Preserve assembly membership, per-part materials and precise transforms.
-    // The destination plate editor revalidates placement before permitting slicing.
-    const normaliseAssemblies=rows=>{
-      const counts=new Map();
-      rows.forEach(row=>{
-        if(row.assembly_id)counts.set(row.assembly_id,(counts.get(row.assembly_id)||0)+1);
-      });
-      return rows.map(row=>row.assembly_id && counts.get(row.assembly_id)<2
-        ?{...row,assembly_id:null}:row);
-    };
     setProjectPlates(current=>current.map(plate=>plate.id===activePlateId
-      ?{...plate,objects:normaliseAssemblies(
-        plate.objects.filter(item=>!ids.has(item.instance_id)))}
-      :plate.id===destinationId?{...plate,objects:normaliseAssemblies(
-        [...plate.objects,...selected])}:plate));
+      ?{...plate,objects:transfer.remaining}
+      :plate.id===destinationId?{...plate,objects:[...plate.objects,...transfer.moving]}:plate));
     setPlateValidation(null);
-    setNotice("Moved "+selected.length+" model(s) to "+destination.name+
-      ". Review their placement on that plate before slicing.");
+    setNotice("Moved "+transfer.moving.length+" model(s) to "+destination.name+
+      ". Independent modifier and negative volumes remain on their original plate.");
   };
   const importProjectFile=async file=>{
     if(!file||busy||loading||!canPrepare)return;
