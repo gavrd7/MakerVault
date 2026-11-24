@@ -35,14 +35,12 @@ export function hydratePlateObjects(plate) {
   const existing = new Set(models.flatMap(row => row.modifier_volumes.map(v => v.id)));
   for (const volume of separate) {
     if (existing.has(volume.id)) continue;
-    const candidates = models.filter(row => row.modifier_volumes.length < PER_PRINTABLE);
-    candidates.sort((a, b) =>
-      Math.hypot(Number(a.x_mm || 0) - Number(volume.x_mm || 0),
-                 Number(a.y_mm || 0) - Number(volume.y_mm || 0))
-      - Math.hypot(Number(b.x_mm || 0) - Number(volume.x_mm || 0),
-                   Number(b.y_mm || 0) - Number(volume.y_mm || 0)));
-    if (!candidates.length) continue; // Keep excess independent volumes in canonical storage.
-    candidates[0].modifier_volumes.push(volume);
+    // Stable editor adapter: a world-space volume is a plate item, not a
+    // child of the nearest printable. Adding/moving a printable must not
+    // re-parent old volumes or manufacture new modifier entries.
+    const host = models.find(row => row.modifier_volumes.length < PER_PRINTABLE);
+    if (!host) continue; // Keep excess independent volumes in canonical storage.
+    host.modifier_volumes.push(volume);
     existing.add(volume.id);
   }
   return models;
