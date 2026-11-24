@@ -9,11 +9,33 @@ from pathlib import Path
 import stat
 
 
-def make_runtime_worker_readable(root):
+def make_runtime_worker_readable(root, *, required_executables=()):
     """Allow read-only worker access; retain installer ownership and write policy."""
     root = Path(root)
     if root.is_symlink() or not root.is_dir():
         raise ValueError("Invalid extracted engine runtime directory.")
+    # Some official AppImages ship a shell AppRun whose internal binary has
+    # no executable bit after extraction. Only named, reviewed engine
+    # entrypoints may be explicitly granted execute permission. Reject
+    # symlinks and traversal; never make arbitrary downloaded files executable.
+    for relative in required_executables:
+        if not isinstance(relative, str) or not relative or relative.startswith("/"):
+            raise ValueError("Invalid reviewed runtime executable.")
+        components = relative.split("/")
+        if any(part in ("", ".", "..") for part in components):
+            raise ValueError("Unsafe reviewed runtime executable path.")
+        target = root
+        for part in components:
+            target = target / part
+            if target.is_symlink():
+                raise ValueError("Reviewed runtime executable cannot be a symlink.")
+        if not target.is_file():
+            raise ValueError("Reviewed runtime executable is missing.")
+        mode = target.stat(follow_symlinks=False).st_mode
+        if not stat.S_ISREG(mode):
+            raise ValueError("Reviewed runtime executable must be a regular file.")
+        # Retain installer ownership and do not alter user/group write bits.
+        os.chmod(target, stat.S_IMODE(mode) | 0o111, follow_symlinks=False)
     for parent, directories, filenames in os.walk(root, topdown=True, followlinks=False):
         base = Path(parent)
         mode = base.stat(follow_symlinks=False).st_mode
