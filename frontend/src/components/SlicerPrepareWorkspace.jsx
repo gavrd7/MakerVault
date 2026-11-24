@@ -109,7 +109,7 @@ export default function SlicerPrepareWorkspace({
             : [...new Set([...current,...members])]
           : members);
         setSelectedId(volumeOwner.instance_id);
-        setSelectedModifierId(id);
+        setSelectedModifierId(additive && members.every(value => selectedIds.includes(value)) ? null : id);
       } else selectModifier(volumeOwner.instance_id, id, additive);
       return;
     }
