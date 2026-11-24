@@ -74,6 +74,28 @@ class OfficialProfileApiTests(TestCase):
         self.assertEqual(duplicate.status_code, 200, duplicate.content)
         self.assertEqual(duplicate.json()["imported_profiles"], [])
 
+    def test_prusa_process_import_allows_only_empty_post_processing(self):
+        self.client.force_login(self.user)
+        selection = {
+            "engine": "prusaslicer", "engine_version": "2.9.7",
+            "vendor": "PrusaResearch", "kind": "process",
+            "name": "0.20mm NORMAL", "sub_path": "PrusaResearch.ini",
+        }
+        flat = b"layer_height = 0.2\nfill_density = 15%\npost_process = \n"
+        with patch("core.slicer_api.fetch_prusa_profile", return_value=flat):
+            allowed = self.post(selection)
+        self.assertEqual(allowed.status_code, 201, allowed.content)
+        p = SlicerProfile.objects.get(pk=allowed.json()["profile"]["id"])
+        self.assertEqual(p.status, "candidate")
+        self.addCleanup(lambda file=p.file_asset.file: file.delete(save=False))
+        evil = {**selection, "name": "Unsafe 0.20mm"}
+        with patch("core.slicer_api.fetch_prusa_profile",
+                   return_value=flat.replace(b"post_process = ",
+                                             b"post_process = FORBIDDEN_EXECUTION")):
+            rejected = self.post(evil)
+        self.assertEqual(rejected.status_code, 400, rejected.content)
+        self.assertFalse(SlicerProfile.objects.filter(name="Unsafe 0.20mm").exists())
+
     def test_any_pinned_orca_vendor_is_available_without_download(self):
         self.client.force_login(self.user)
         with patch("core.slicer_api.search_official_profiles") as search:
