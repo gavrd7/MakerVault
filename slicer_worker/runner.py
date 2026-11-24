@@ -54,8 +54,11 @@ def prusa_command(binary: Path, workdir: Path) -> list[str]:
     for kind, profile in zip(("printer", "filament", "print"), profiles):
         # Real Prusa vendor bundles contain named sections + inheritance.
         # Only fully resolved, bounded flat settings may reach the native CLI.
+        data = profile.read_bytes()
+        if b"\x00" in data:
+            raise WorkerError("Native profile contains binary data.")
         try:
-            validate_flat_prusa_preset(profile.read_bytes(), kind=kind)
+            validate_flat_prusa_preset(data, kind=kind)
         except PrusaPresetError as exc:
             # Validator messages are fixed literals; never expose profile text.
             raise WorkerError(str(exc)) from None
