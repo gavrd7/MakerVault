@@ -5,7 +5,7 @@ import {readFileSync} from "node:fs";
 const prepare = readFileSync(new URL("../src/components/SlicerPrepareWorkspace.jsx", import.meta.url), "utf8");
 const editor = readFileSync(new URL("../src/components/SlicerPlateEditor.jsx", import.meta.url), "utf8");
 
-test("modifier entry is model-owned and not added as a printable STL", () => {
+test("modifier and negative are non-printing plate-tree rows without STL uploads", () => {
   assert.match(prepare, /Add parameter modifier/);
   assert.match(prepare, /modifier_volumes: \[\.\.\.\(item\.modifier_volumes \|\| \[\]\), fresh\]/);
   assert.match(prepare, /allPlateRows = objects.flatMap/);
@@ -41,12 +41,12 @@ test("object settings exposes regional walls and enforces total plate modifier c
   assert.match(prepare, /if\(raw===""\) delete settings\.wall_loops/);
 });
 
-test("Add model menu offers six parameter modifier shapes with non-printing child ownership", () => {
+test("Add model menu uses shared insertion editor for six non-printing modifier shapes", () => {
   assert.match(prepare, /Add parameter modifier/);
   assert.match(prepare, /Choose parameter modifier primitive/);
   assert.match(prepare, /modifierShapeMenuOpen/);
-  assert.match(prepare, /addModifier\(shape\)/);
-  assert.match(prepare, /onClick=\{\(\)=>addModifier\(\)\}/);
+  assert.match(prepare, /setSolidRequest\(\{kind:"modifier",shape,id:Date\.now\(\)\}\)/);
+  assert.match(prepare, /setSolidRequest\(\{kind:"modifier",id:Date\.now\(\)\}\)/);
   assert.match(prepare, /totalModifierCount>=48/);
   assert.match(prepare, /modifier_volumes: \[\.\.\.\(item\.modifier_volumes \|\| \[\]\), fresh\]/);
 });
@@ -55,8 +55,7 @@ test("new modifier draft is placed independently with XYZ rotation and scale", (
   assert.match(prepare, /coordinate_space: "world"/);
   assert.match(prepare, /rotation_xyz_deg: \[0, 0, 0\]/);
   assert.match(prepare, /scale_xyz_percent: \[100, 100, 100\]/);
-  assert.match(prepare, /Independent modifier transform/);
-  assert.match(prepare, /Move \/ Rotate \/ Scale on plate/);
+  assert.match(prepare, /Edit shape \/ Move \/ Scale \/ Rotate/);
   assert.match(prepare, /selectedModifierId=\{activeModifier\?\.id \|\| null\}/);
   assert.match(editor, /ghost\.userData\.isWorldModifier = modifier\.coordinate_space === "world"/);
   assert.match(editor, /state\.transform\.attach\(activeModifier\)/);
