@@ -59,3 +59,15 @@ test("excess detached volumes are retained rather than dropped when fewer printa
   assert.equal(updated.volumes.length, 14);
   assert.equal(hydratePlateObjects(updated)[0].modifier_volumes.length, 12);
 });
+
+
+test("final printable deletion retains orphan volumes but removes explicitly selected regions", () => {
+  const assembly = "assembly:test-123";
+  const first = {...region("free"), assembly_id: assembly};
+  const second = {...region("cut"), assembly_id: assembly};
+  const plate = canonicalPlate({objects: [model(first, second)]});
+  const retained = updateCanonicalPlate(plate, [], {removedVolumeIds: ["cut"]});
+  assert.deepEqual(retained.objects, []);
+  assert.deepEqual(retained.volumes.map(v => v.id), ["free"]);
+  assert.equal(retained.volumes[0].assembly_id, null);
+});
