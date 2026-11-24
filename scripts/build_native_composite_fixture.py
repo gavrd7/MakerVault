@@ -49,6 +49,13 @@ def build(output_dir):
         (output/(label+".3mf")).write_bytes(
             export_modifier_3mf_fixture([(selected,model),(second,model)],
                                         bed_width=220,bed_depth=220))
+    # Isolate Bambu CLI negative-volume behaviour on a single printable.
+    # This is diagnostic only: it never changes native production approvals.
+    (output/"single-baseline.3mf").write_bytes(build_plate_3mf(
+        [(first, model)],bed_width=220,bed_depth=220))
+    (output/"single-negative.3mf").write_bytes(export_modifier_3mf_fixture(
+        [({**first,"modifier_volumes":[volumes["negative"]]},model)],
+        bed_width=220,bed_depth=220))
     return output
 
 
