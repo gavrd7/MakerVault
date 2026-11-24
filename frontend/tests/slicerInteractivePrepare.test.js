@@ -829,3 +829,20 @@ test("multi-material slicing uses explicit offline admission with profile checks
   assert.match(prepare, /materialRoutingPending/);
   assert.doesNotMatch(prepare, /Material changeover system/);
 });
+
+
+test("mobile add model and independent volume editors flow beneath the plate rather than overlaying it", () => {
+  const editor = read("SlicerPlateEditor.jsx");
+  const css = fs.readFileSync(path.resolve(root, "../styles.css"), "utf8");
+  assert.match(editor, /"primitive","text","svg","modifier","negative"\]\.includes\(solidDialog\.kind\)/);
+  assert.match(editor, /" slicerMobileAddGeometryDock"/);
+  const start = css.lastIndexOf("PR196: Add text, primitive, modifier");
+  assert.ok(start > 0, "mobile add-dock layout rule must exist");
+  const rules = css.slice(start);
+  assert.match(rules, /position:relative!important/);
+  assert.match(rules, /order:2/);
+  assert.match(rules, /\.slicerPlateSectionControl\s*\{\s*order:3/);
+  assert.match(rules, /max-height:none!important/);
+  assert.match(rules, /overflow:visible!important/);
+  assert.match(rules, /slicerSolidInspectorCollapsed/);
+});
