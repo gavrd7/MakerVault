@@ -139,3 +139,20 @@ test("volume counts include canonical detached regions and undisturbed legacy lo
   assert.match(prepare, /totalModifierCount = plateVolumes\.length \+ objects\.reduce/);
   assert.match(prepare, /filter\(v => v\.coordinate_space !== "world"\)\.length/);
 });
+
+
+test("accessible Select models checklist uses exact individual part IDs for assembly on touch and desktop", () => {
+  assert.match(prepare, /assemblySelectionOpen/);
+  assert.match(prepare, /aria-controls="slicer-assembly-selection"/);
+  assert.match(prepare, /Select models/);
+  assert.match(prepare, /Select models and volumes for assembly/);
+  assert.match(prepare, /type="checkbox" checked=\{validSelection\.includes\(row\.instance_id\)\}/);
+  assert.match(prepare, /onChange=\{event => chooseAssemblyPart\(row\.instance_id, event\.target\.checked\)\}/);
+  assert.match(prepare, /const next = checked\s*\? \[\.\.\.new Set\(\[\.\.\.validSelection, id\]\)\]/);
+  assert.match(prepare, /validSelection\.filter\(item => item !== id\)/);
+  assert.match(prepare, /row\.detached \|\| !canEdit \|\| busy/);
+  assert.match(prepare, /disabled=\{!canEdit \|\| busy \|\| !!row\.detached\}/);
+  assert.match(prepare, /setSelectedModifierId\(focus\?\.isPlateVolume \? focus\.id : null\)/);
+  assert.match(prepare, /onClick=\{assembleSelected\}/);
+  assert.match(prepare, /Clear selection/);
+});
