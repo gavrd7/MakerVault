@@ -195,7 +195,7 @@ test("mobile mesh tools dock inside the 3D viewport alongside Measure", () => {
   const plate = fs.readFileSync(path.join(base, "components/SlicerPlateEditor.jsx"), "utf8");
   const viewport = plate.indexOf('<div className="slicerPlateCanvasViewport"');
   const measure = plate.indexOf('aria-label="On-plate measurements"', viewport);
-  const mount = plate.indexOf('className="slicerMobileGeometryDock"', measure);
+  const mount = plate.indexOf('className={"slicerMobileGeometryDock"', measure);
   const options = plate.indexOf('className="slicerPlateDisplayOptions"', mount);
   assert.ok(viewport >= 0 && measure > viewport && mount > measure && options > mount);
   assert.match(plate, /const meshInspectorHost = mobileMeshInspector \? mobileMeshDock : document\.body/);
