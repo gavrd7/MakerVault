@@ -249,6 +249,16 @@ class BambuRunnerContractTests(TestCase):
         self.assertIn("SIGABRT classified: uncaught-exception", messages)
         self.assertNotIn("sensitive-model-location", messages)
 
+    def test_sigabrt_reports_only_safe_exception_type(self):
+        process = MagicMock()
+        process.returncode = -6
+        with patch("slicer_worker.bambu_runner.subprocess.Popen", return_value=process):
+            with self.assertLogs("slicer_worker.bambu_runner", level="WARNING") as logs:
+                with self.assertRaisesRegex(WorkerError, "SIGABRT"):
+                    run_bambu(self.binary, self.root)
+        self.assertTrue(any("SIGABRT classified: unclassified" in row for row in logs.output))
+        self.assertTrue(any("exception type: unknown" in row for row in logs.output))
+
     def test_bambu_runner_uses_standard_worker_admission(self):
         from slicer_worker.engine_registry import SUPPORTED
         from slicer_worker.service import _decode_payload
