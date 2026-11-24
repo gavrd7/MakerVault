@@ -73,6 +73,7 @@ export default function SlicerPrepareWorkspace({
   processProfiles = [], onSelectProcessProfile, onResetProcessSettings,
   printerDetails, nozzleMm, selectedPlateType = "Native / profile default",
   localAssets = [], onLocalAssetsChange, onPlateIssuesChange, plateIssues = null,
+  validationRefreshKey = 0,
 }) {
   const editorRef = useRef(null);
   const [sceneHeight, setSceneHeight] = useState(0);
@@ -2243,7 +2244,7 @@ export default function SlicerPrepareWorkspace({
             })}
           </div>
         </section> : <SlicerPlateEditor key={activePlateId} plateIndex={Math.max(0,plates.findIndex(item=>item.id===activePlateId))} plateCount={plates.length||1} toolbar={modelToolbar} paintControls={variableLayerPanel || paintPanel} files={files} localAssets={localAssets}
-          onLocalAssetsChange={onLocalAssetsChange} onPlateIssuesChange={onPlateIssuesChange} objects={objects} onChange={updatePlate}
+          onLocalAssetsChange={onLocalAssetsChange} onPlateIssuesChange={onPlateIssuesChange} validationRefreshKey={validationRefreshKey} objects={objects} onChange={updatePlate}
           primeTower={primeTower} onPrimeTowerChange={onPrimeTowerChange}
           primeTowerEnabled={["orcaslicer","crealityprint"].includes(activeEngine) &&
             requiredMultiSlots.length>1 &&
