@@ -6,6 +6,7 @@ from unittest.mock import patch
 import os
 
 from slicer_worker.runner import WorkerError, prusa_command, run_prusa
+from scripts.prusa_real_binary_smoke import cube_stl
 
 
 class WorkerContractTests(TestCase):
@@ -16,7 +17,7 @@ class WorkerContractTests(TestCase):
         self.executable = self.root / "prusa-slicer"
         self.executable.write_text("#!/bin/sh\nexit 0\n")
         self.executable.chmod(0o700)
-        (self.root / "input.stl").write_bytes(b"fixture")
+        (self.root / "input.stl").write_bytes(cube_stl())
         (self.root / "printer.ini").write_text(
             "printer_technology = FFF\nnozzle_diameter = 0.4\n"
             "bed_shape = 0x0,200x0,200x200,0x200\n")
@@ -93,6 +94,11 @@ class WorkerContractTests(TestCase):
             b"; a literal \\x00 sequence\nprinter_technology = FFF\n"
             b"nozzle_diameter = 0.4\nbed_shape = 0x0,200x0,200x200,0x200\n")
         self.assertIn("--export-gcode", prusa_command(self.executable, self.root))
+
+    def test_malformed_stl_is_rejected_before_engine_launch(self):
+        (self.root / "input.stl").write_bytes(b"not an STL")
+        with self.assertRaisesRegex(WorkerError, "STL"):
+            prusa_command(self.executable, self.root)
 
     def test_invalid_timeout_and_oversize_models_fail_without_execution(self):
         with self.assertRaises(WorkerError):
