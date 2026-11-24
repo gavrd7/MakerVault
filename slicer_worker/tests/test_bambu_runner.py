@@ -32,6 +32,78 @@ class BambuRunnerContractTests(TestCase):
             (self.root / (part + ".json")).write_text(
                 json.dumps({"type": part, "name": "Fixture " + part}))
 
+    def test_single_nozzle_dual_variant_is_resolved_only_with_explicit_type(self):
+        from slicer_worker.bambu_runner import _select_single_nozzle_cli_variant
+        for volume, expected in (
+            ("Standard", "Direct Drive Standard"),
+            (["High Flow"], "Direct Drive High Flow"),
+        ):
+            with self.subTest(volume=volume):
+                machine = self.root / "printer.json"
+                machine.write_text(json.dumps({
+                    "type": "machine", "name": "BBL single-nozzle fixture",
+                    "nozzle_diameter": ["0.4"],
+                    "nozzle_volume_type": volume,
+                    "extruder_variant_list":
+                        ["Direct Drive Standard,Direct Drive High Flow"],
+                    "printer_extruder_variant":
+                        ["Direct Drive Standard,Direct Drive High Flow"],
+                    "machine_start_gcode": "G28",
+                }))
+                self.assertTrue(_select_single_nozzle_cli_variant(machine))
+                updated = json.loads(machine.read_text())
+                self.assertEqual(updated["extruder_variant_list"], [expected])
+                self.assertEqual(updated["printer_extruder_variant"], [expected])
+                self.assertEqual(updated["nozzle_diameter"], ["0.4"])
+                self.assertEqual(updated["machine_start_gcode"], "G28")
+
+    def test_ambiguous_or_multi_nozzle_variant_is_never_changed(self):
+        from slicer_worker.bambu_runner import _select_single_nozzle_cli_variant
+        base = {
+            "type": "machine", "name": "BBL fixture",
+            "nozzle_diameter": ["0.4"],
+            "extruder_variant_list": [
+                "Direct Drive Standard,Direct Drive High Flow"],
+            "printer_extruder_variant": [
+                "Direct Drive Standard,Direct Drive High Flow"],
+        }
+        for changes in (
+            {},
+            {"nozzle_volume_type": "Other"},
+            {"nozzle_diameter": ["0.4", "0.4"], "nozzle_volume_type": "Standard"},
+            {"extruder_variant_list": ["Unknown,Atypical"], "nozzle_volume_type": "Standard"},
+            {"printer_extruder_variant": ["Unknown"], "nozzle_volume_type": "Standard"},
+        ):
+            with self.subTest(changes=changes):
+                machine = self.root / "printer.json"
+                profile = {**base, **changes}
+                original = json.dumps(profile)
+                machine.write_text(original)
+                if not changes:
+                    with self.assertLogs("slicer_worker.bambu_runner", level="WARNING"):
+                        self.assertFalse(_select_single_nozzle_cli_variant(machine))
+                else:
+                    self.assertFalse(_select_single_nozzle_cli_variant(machine))
+                self.assertEqual(machine.read_text(), original)
+
+    def test_bambu_command_normalises_scratch_only_without_changing_other_profiles(self):
+        machine = self.root / "printer.json"
+        machine.write_text(json.dumps({
+            "type": "machine", "name": "BBL single-nozzle fixture",
+            "nozzle_diameter": ["0.4"], "nozzle_volume_type": "Standard",
+            "extruder_variant_list": ["Direct Drive Standard,Direct Drive High Flow"],
+            "printer_extruder_variant": ["Direct Drive Standard,Direct Drive High Flow"],
+        }))
+        original_filament = (self.root / "filament.json").read_bytes()
+        original_process = (self.root / "process.json").read_bytes()
+        args = bambu_command(self.binary, self.root)
+        self.assertIn("--load-settings", args)
+        self.assertEqual(
+            json.loads(machine.read_text())["printer_extruder_variant"],
+            ["Direct Drive Standard"])
+        self.assertEqual((self.root / "filament.json").read_bytes(), original_filament)
+        self.assertEqual((self.root / "process.json").read_bytes(), original_process)
+
     def test_documented_flags_are_fixed_and_paths_are_sandbox_local(self):
         argv = bambu_command(self.binary, self.root)
         self.assertIn("--load-settings", argv)
