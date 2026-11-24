@@ -57,7 +57,7 @@ from .slicer_snapmaker_official_profiles import (
     REF as OFFICIAL_SNAP_REF,
 )
 from .slicer_prusa_official_profiles import (
-    search_prusa_profiles, fetch_prusa_model, available_prusa_vendors,
+    search_prusa_profiles, fetch_prusa_model, fetch_prusa_profile, available_prusa_vendors,
     official_catalogue_models as prusa_catalogue_models,
     ENGINE_VERSION as OFFICIAL_PRUSA_VERSION, SOURCE as OFFICIAL_PRUSA_SOURCE,
     REF as OFFICIAL_PRUSA_REF,
@@ -1458,7 +1458,7 @@ def official_profiles(request):
             args = (
                 request.GET.get("q", ""),
                 request.GET.get("kind", "printer"),
-                request.GET.get("vendor", "Creality"),
+                request.GET.get("vendor", "PrusaResearch" if selected == "prusaslicer" else "Creality"),
             )
             slot_discovery = request.GET.get("slot_discovery") == "1"
             if slot_discovery and (selected != "orcaslicer" or not printer_id):
@@ -1489,7 +1489,7 @@ def official_profiles(request):
             "orcaslicer": (OFFICIAL_ORCA_VERSION, OFFICIAL_ORCA_SOURCE, OFFICIAL_ORCA_REF, fetch_official_profile),
             "crealityprint": (OFFICIAL_CRE_VERSION, OFFICIAL_CRE_SOURCE, OFFICIAL_CRE_REF, fetch_creality_profile),
             "bambustudio": (OFFICIAL_BAMBU_VERSION, OFFICIAL_BAMBU_SOURCE, OFFICIAL_BAMBU_REF, fetch_bambu_model),
-            "prusaslicer": (OFFICIAL_PRUSA_VERSION, OFFICIAL_PRUSA_SOURCE, OFFICIAL_PRUSA_REF, fetch_prusa_model),
+            "prusaslicer": (OFFICIAL_PRUSA_VERSION, OFFICIAL_PRUSA_SOURCE, OFFICIAL_PRUSA_REF, fetch_prusa_profile),
             "snapmakerorca": (OFFICIAL_SNAP_VERSION, OFFICIAL_SNAP_SOURCE, OFFICIAL_SNAP_REF, fetch_snapmaker_profile),
         }
         if engine not in providers:
@@ -1503,7 +1503,7 @@ def official_profiles(request):
             raise ValueError("Official provider configuration differs from the reviewed release.")
         version, source, ref = release.version, release.source, release.ref
         kind = selection.get("kind")
-        vendor = selection.get("vendor", "Creality")
+        vendor = selection.get("vendor", "PrusaResearch" if engine == "prusaslicer" else "Creality")
         name = selection.get("name")
         subpath = selection.get("sub_path")
         if not isinstance(name, str) or len(name) > 200:
@@ -1515,7 +1515,7 @@ def official_profiles(request):
         # mutating the database. Never install a partial official preset.
         chain = (fetch_bambu_native_chain(kind, name, subpath, vendor, version=version)
                  if engine == "bambustudio" else
-                 [(name, subpath, fetch_prusa_model(kind, name, subpath, vendor))]
+                 [(name, subpath, fetch_prusa_profile(kind, name, subpath, vendor))]
                  if engine == "prusaslicer" else
                  official_profile_chain(engine, kind, name, subpath, vendor, version=version))
         # Official source identity is pinned to an engine repository/tag and
