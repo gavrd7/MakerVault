@@ -728,12 +728,19 @@ export default function SlicerPrepareWorkspace({
     // Logical groups preserve original STL sources and object settings.
     const id = "assembly:" + (typeof crypto !== "undefined" && crypto.randomUUID
       ? crypto.randomUUID() : Math.random().toString(36).slice(2));
-    updatePlate(objects.map(row => ({
+    const grouped = objects.map(row => ({
       ...row,
       assembly_id: validSelection.includes(row.instance_id) ? id : row.assembly_id,
       modifier_volumes: (row.modifier_volumes || []).map(volume => validSelection.includes(volume.id)
         ? {...volume, assembly_id: id} : volume),
-    })));
+    }));
+    const counts = new Map();
+    grouped.flatMap(row => [row, ...row.modifier_volumes]).forEach(row => {
+      if (row.assembly_id) counts.set(row.assembly_id, (counts.get(row.assembly_id) || 0) + 1);
+    });
+    const normalize = row => row.assembly_id && counts.get(row.assembly_id) < 2
+      ? {...row, assembly_id: null} : row;
+    updatePlate(grouped.map(row => ({...normalize(row), modifier_volumes: row.modifier_volumes.map(normalize)})));
     setExpandedAssemblies(current => [...current.filter(value=>value!==id),id]);
   }
   function disassembleSelected() {
