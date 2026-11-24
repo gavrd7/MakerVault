@@ -372,7 +372,8 @@ def export_modifier_3mf_fixture(objects_with_stl, *, bed_width, bed_depth):
                 "objectid": str(modifier_id), "transform": identity,
             })
             part = ET.SubElement(settings, "part", {
-                "id": str(modifier_id), "subtype": "modifier_part",
+                "id": str(modifier_id),
+                "subtype": "negative_part" if modifier["kind"] == "negative" else "modifier_part",
             })
             for key, value in (("name", f"{modifier['shape'].title()} modifier {number}"),
                                ("matrix", identity4)):
