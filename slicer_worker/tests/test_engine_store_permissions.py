@@ -47,7 +47,7 @@ class RuntimePermissionTests(unittest.TestCase):
             inner.write_bytes(b"reviewed ELF test fixture")
             inner.chmod(0o600)
             launcher = root / "AppRun"
-            launcher.write_text("#!/bin/sh\\nexec \\"$(dirname \\"$0\\")/bin/bambu-studio\\"\\n")
+            launcher.write_text("#!/bin/sh\nexec ./bin/bambu-studio\n")
             launcher.chmod(0o700)
             make_runtime_worker_readable(
                 root, required_executables=("bin/bambu-studio",))
