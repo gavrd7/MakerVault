@@ -47,7 +47,7 @@ def _checked_setting(key: str, value: str) -> None:
     if not KEY.fullmatch(key) or len(value) > 16384:
         raise PrusaPresetError("Prusa vendor bundle has an invalid setting.")
     if key.lower() in SCRIPT_KEYS and value.strip():
-        raise PrusaPresetError("Prusa post-processing scripts are not permitted.")
+        raise PrusaPresetError("Post-processing scripts are forbidden.")
     # Externally loaded configurations and scripts are not part of a self-
     # contained preset; treat references as inert only when explicitly known.
     if key.lower() in {"config_include", "include", "include_file", "script"}:
