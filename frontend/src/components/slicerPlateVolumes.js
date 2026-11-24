@@ -56,12 +56,14 @@ export function canonicalPlate(plate) {
     volumes: !hasWorldInline && models.length ? [...(plate.volumes || [])] : volumes};
 }
 
-export function updateCanonicalPlate(plate, nextObjects) {
+export function updateCanonicalPlate(plate, nextObjects, options = {}) {
   const visibleIds = new Set(hydratePlateObjects(plate)
     .flatMap(row => row.modifier_volumes.map(volume => volume.id)));
   const pending = (plate.volumes || []).filter(volume => !visibleIds.has(volume.id));
   const {models, volumes} = splitPlateVolumes(nextObjects, nextObjects.length ? [] : plate.volumes || []);
-  const updated = [...volumes, ...pending.filter(volume => !volumes.some(v => v.id === volume.id))];
+  const removed = new Set(options.removedVolumeIds || []);
+  const updated = [...volumes, ...pending.filter(volume => !volumes.some(v => v.id === volume.id))]
+    .filter(volume => !removed.has(volume.id));
   if (updated.length > MAX_PLATE_VOLUMES) throw new Error("Too many independent volumes on this plate.");
   return {...plate, objects: models, volumes: updated};
 }
