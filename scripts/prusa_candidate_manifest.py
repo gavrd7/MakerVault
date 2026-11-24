@@ -41,7 +41,7 @@ def manifest(root):
         if not stat.S_ISREG(mode):
             raise ValueError("Prusa candidate contains a special file")
         size = path.stat().st_size
-        if size < 1 or size > MAX_TOTAL:
+        if size > MAX_TOTAL or (size == 0 and relative in required):
             raise ValueError("Prusa candidate contains an invalid file")
         total += size
         if total > MAX_TOTAL or len(files) >= MAX_FILES:
