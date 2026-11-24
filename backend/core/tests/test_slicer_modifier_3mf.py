@@ -113,6 +113,45 @@ class NativeModifierProjectTests(SimpleTestCase):
         for actual, expected in zip(ranges, (7, 14, 3.5)):
             self.assertAlmostEqual(actual, expected, places=3)
 
+    def test_single_printable_with_cylinder_modifier_and_two_cone_cutters(self):
+        """Real-world PR196 geometry combination: all roles remain separate."""
+        from core.slicer_creality_modifier_project import build_creality_modifier_native_project
+        import json
+        base = item(shape="cylinder", x=0, y=0, z=5)
+        region = base["modifier_volumes"][0]
+        region.update({"width_mm": 9, "depth_mm": 9, "height_mm": 8,
+                       "coordinate_space": "world",
+                       "x_mm": 110, "y_mm": 110, "z_mm": 5,
+                       "rotation_xyz_deg": [0, 0, 0],
+                       "scale_xyz_percent": [100, 100, 100]})
+        negatives = []
+        for dx in (0, 2):
+            negatives.append({
+                **region, "id": str(uuid.uuid4()), "shape": "cone",
+                "x_mm": 110 + dx, "kind": "negative", "settings": {},
+            })
+        base["modifier_volumes"] = [region, *negatives]
+        geometry = export_modifier_3mf_fixture(
+            [(base, fixture_stl())], bed_width=220, bed_depth=220)
+        with zipfile.ZipFile(io.BytesIO(geometry)) as package:
+            manifest = ET.fromstring(package.read("Metadata/model_settings.config"))
+        self.assertEqual([part.get("subtype") for part in manifest.findall("./object/part")],
+                         ["normal_part", "modifier_part", "negative_part", "negative_part"])
+
+        printer = json.dumps({"type": "machine", "name": "Creality K1",
+                              "nozzle_diameter": ["0.4"]}).encode()
+        process = json.dumps({"type": "process", "name": "0.20mm",
+                              "enable_prime_tower": "0"}).encode()
+        filament = json.dumps({"type": "filament", "name": "Generic PLA",
+                               "filament_type": ["PLA"],
+                               "filament_diameter": ["1.75"]}).encode()
+        native = build_creality_modifier_native_project(
+            geometry, printer=printer, process=process,
+            filament=filament, version="7.3.1", bed_width=220,
+            bed_depth=220, label=uuid.uuid4())
+        from slicer_worker.creality_modifier_validation import validate_creality_modifier_project
+        self.assertTrue(validate_creality_modifier_project(native))
+
     def test_non_intersecting_modifier_fails_closed(self):
         with self.assertRaisesRegex(SlicerProfileError, "does not intersect"):
             export_modifier_3mf_fixture(
