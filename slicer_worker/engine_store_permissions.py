@@ -36,9 +36,23 @@ def make_runtime_worker_readable(root, *, required_executables=()):
             raise ValueError("Reviewed runtime executable must be a regular file.")
         # Retain installer ownership and do not alter user/group write bits.
         os.chmod(target, stat.S_IMODE(mode) | 0o111, follow_symlinks=False)
-    for parent, directories, filenames in os.walk(root, topdown=True, followlinks=False):
+    # os.walk without onerror silently skips inaccessible or malformed
+    # branches. A partially readable AppImage can pass the CLI --help probe
+    # as installer UID 10002 yet abort under worker UID 10001 when it tries
+    # to read resources/usr/share. Fail installation rather than publish an
+    # untraversable runtime, including nested directories.
+    visited = 0
+
+    def traversal_error(exc):
+        raise ValueError("Extracted engine runtime cannot be traversed.") from exc
+
+    for parent, directories, filenames in os.walk(
+            root, topdown=True, followlinks=False, onerror=traversal_error):
+        visited += 1
         base = Path(parent)
         mode = base.stat(follow_symlinks=False).st_mode
+        if not stat.S_ISDIR(mode):
+            raise ValueError("Unexpected runtime directory type.")
         os.chmod(base, stat.S_IMODE(mode) | 0o055, follow_symlinks=False)
         for name in directories + filenames:
             entry = base / name
@@ -46,11 +60,13 @@ def make_runtime_worker_readable(root, *, required_executables=()):
             if stat.S_ISLNK(mode):
                 continue
             if stat.S_ISDIR(mode):
-                # os.walk will visit and fix it itself.
+                # Traverse and publish at the next walk iteration.
                 continue
             if not stat.S_ISREG(mode):
                 raise ValueError("Unexpected non-file engine runtime entry.")
-            # Preserve existing executable bits, never manufacture a new
-            # executable, and never grant group/other write permissions.
+            # Preserve original owner/group write policy and executable bits;
+            # worker 10001 receives only read/execute, never write access.
             additional = 0o044 | (0o011 if mode & 0o111 else 0)
             os.chmod(entry, stat.S_IMODE(mode) | additional, follow_symlinks=False)
+    if not visited:
+        raise ValueError("Extracted engine runtime is empty.")
