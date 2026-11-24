@@ -192,6 +192,47 @@ class SliceJobApiTests(TestCase):
         self.assertEqual(len(saved["plates"][0]["volumes"]), 13)
         self.assertEqual(len(saved["plate_objects"][0]["modifier_volumes"]), 12)
 
+    def test_canonical_plate_rejects_conflicting_local_volume_ids_and_limits(self):
+        from core.slicer_api import _draft_plate_settings
+        model = {
+            "instance_id": str(uuid.uuid4()), "asset_id": str(self.input_asset.pk),
+            "x_mm": 0, "y_mm": 0, "rotation_deg": 0,
+            "scale_percent": 100, "color": "#abcdef",
+        }
+        region_id = str(uuid.uuid4())
+        native = {
+            "id": region_id, "shape": "box",
+            "width_mm": 10, "depth_mm": 10, "height_mm": 10,
+            "x_mm": 0, "y_mm": 0, "z_mm": 5, "coordinate_space": "world",
+            "rotation_xyz_deg": [0, 0, 0],
+            "scale_xyz_percent": [100, 100, 100],
+            "kind": "negative", "assembly_id": None, "settings": {},
+        }
+        legacy = {
+            "id": region_id, "shape": "box",
+            "width_mm": 10, "depth_mm": 10, "height_mm": 10,
+            "x_mm": 0, "y_mm": 0, "z_mm": 5,
+            "kind": "modifier", "assembly_id": None,
+            "settings": {"sparse_infill_density": 50},
+        }
+        saved_plate = {"id": "plate-1", "name": "Volumes",
+                       "objects": [{**model, "modifier_volumes": [legacy]}],
+                       "volumes": [native]}
+        with self.assertRaisesRegex(ValueError, "unique"):
+            _draft_plate_settings(self.owner, self.input_asset, {
+                "plate_objects": saved_plate["objects"],
+                "plate_volumes": saved_plate["volumes"],
+                "plates": [saved_plate], "active_plate_id": "plate-1",
+            })
+        too_many = [{**native, "id": str(uuid.uuid4())} for _ in range(48)]
+        with self.assertRaisesRegex(ValueError, "Too many"):
+            _draft_plate_settings(self.owner, self.input_asset, {
+                "plate_objects": saved_plate["objects"],
+                "plate_volumes": too_many,
+                "plates": [{**saved_plate, "volumes": too_many}],
+                "active_plate_id": "plate-1",
+            })
+
     def test_empty_plate_can_preserve_independent_volumes_with_another_printable_plate(self):
         from core.slicer_api import _draft_plate_settings
 
