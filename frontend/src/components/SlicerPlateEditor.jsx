@@ -878,7 +878,7 @@ export default function SlicerPlateEditor({
     setSolidError("");
     setSolidPreview(null);
     setInsertionMode("translate");
-    if (!mesh && !["primitive","text","svg"].includes(solidRequest.kind)) {
+    if (!mesh && !["primitive","modifier","negative","text","svg"].includes(solidRequest.kind)) {
       setSolidError("Select a loaded STL model to edit.");
       return;
     }
@@ -897,7 +897,7 @@ export default function SlicerPlateEditor({
       keep: "both", booleanMode: "union",
       secondId: objects.find(row => row.instance_id!==item?.instance_id)?.instance_id || "",
       booleanIds: selectedInstanceIds.filter(id=>id!==item?.instance_id),
-      primitiveType:"box",
+      primitiveType:solidRequest.shape||"box",
       width:editingText ? item.text_model.width : 20,
       depth:editingText ? item.text_model.depth : 20,
       height:editingText ? item.text_model.height : 20,
@@ -912,7 +912,8 @@ export default function SlicerPlateEditor({
       cavity_rotation_x:0,cavity_rotation_y:0,cavity_rotation_z:0,
     });
     setSolidDialog({kind:solidRequest.kind,id:item?.instance_id || null,
-      editTargetId:editingText?item.instance_id:null,anchorRect:solidRequest.anchorRect||null,name:
+      editTargetId:editingText?item.instance_id:null,
+      editVolumeId:solidRequest.editVolumeId||null,anchorRect:solidRequest.anchorRect||null,name:
       ["primitive","text","svg"].includes(solidRequest.kind) ? solidRequest.kind[0].toUpperCase()+solidRequest.kind.slice(1) :
       sourceFiles.find(file => String(file.id)===String(item?.asset_id))?.name || "Model"});
   }, [solidRequest?.id]);
@@ -980,7 +981,7 @@ export default function SlicerPlateEditor({
   // Display the negative volume itself, not just the subtraction result.
   // Keep it interactive while the chosen model remains visible.
   useEffect(() => {
-    if(solidDialog?.kind!=="negative")return undefined;
+    if(!["negative","modifier"].includes(solidDialog?.kind))return undefined;
     const state=sceneRef.current;
     if(!state)return undefined;
     let ghost;
@@ -991,7 +992,7 @@ export default function SlicerPlateEditor({
       ]);
       ghost.material.dispose();
       ghost.material=new THREE.MeshBasicMaterial({
-        color:"#ed658d",transparent:true,opacity:0.28,
+        color:solidDialog.kind==="negative"?"#fb7185":"#22d3ee",transparent:true,opacity:0.28,
         depthWrite:false,side:THREE.DoubleSide,
         clippingPlanes:[state.sectionPlane],
       });
@@ -1060,7 +1061,7 @@ export default function SlicerPlateEditor({
   // Drag the real-time primitive or negative-volume ghost without dismissing
   // its settings panel. The committed STL remains untouched until Apply.
   useEffect(() => {
-    if(!["primitive","negative","text","svg"].includes(solidDialog?.kind))
+    if(!["primitive","negative","modifier","text","svg"].includes(solidDialog?.kind))
       return undefined;
     const state=sceneRef.current, canvas=hostRef.current?.querySelector("canvas");
     if(!state||!canvas)return undefined;
@@ -1077,7 +1078,7 @@ export default function SlicerPlateEditor({
     const down=event=>{
       if(insertionGizmoRef.current) return;
       if(event.button!==0)return;
-      const ghost=solidDialog.kind==="negative"?negativeGhostRef.current:liveGhostRef.current;
+      const ghost=["negative","modifier"].includes(solidDialog.kind)?negativeGhostRef.current:liveGhostRef.current;
       if(!ghost)return;
       ray(event);
       if(!caster.intersectObject(ghost,false).length)return;
@@ -1114,7 +1115,7 @@ export default function SlicerPlateEditor({
     const wheel=event=>{
       if(insertionGizmoRef.current) return;
       if(!event.shiftKey)return;
-      const ghost=solidDialog.kind==="negative"?negativeGhostRef.current:liveGhostRef.current;
+      const ghost=["negative","modifier"].includes(solidDialog.kind)?negativeGhostRef.current:liveGhostRef.current;
       if(!ghost)return;
       ray(event);
       if(!caster.intersectObject(ghost,false).length)return;
@@ -1140,11 +1141,11 @@ export default function SlicerPlateEditor({
   // Independent insertion gizmo. Never attach the normal model control
   // to preview geometry: original objects and their transforms stay intact.
   useEffect(() => {
-    if(!["primitive","negative","text","svg","drill","cut","hollow"].includes(solidDialog?.kind))return undefined;
+    if(!["primitive","negative","modifier","text","svg","drill","cut","hollow"].includes(solidDialog?.kind))return undefined;
     const state=sceneRef.current;
     const canvas=hostRef.current?.querySelector("canvas");
     const ghost=["drill","cut","hollow"].includes(solidDialog.kind)?operationGhostRef.current:
-      solidDialog.kind==="negative"?negativeGhostRef.current:liveGhostRef.current;
+      ["negative","modifier"].includes(solidDialog.kind)?negativeGhostRef.current:liveGhostRef.current;
     if(!state||!canvas||!ghost)return undefined;
     const cavityTarget=solidDialog.kind==="hollow"?state.meshes.get(solidDialog.id):null;
     const cavityCentre=cavityTarget?new THREE.Box3().setFromObject(cavityTarget)
@@ -1229,13 +1230,13 @@ export default function SlicerPlateEditor({
       const booleanIds=solidDialog.kind==="boolean" ?
         [...new Set(solidOptions.booleanIds || [])].filter(id=>id!==solidDialog.id) : [];
       const second=solidDialog.kind==="boolean" ? state?.meshes.get(booleanIds[0]) : null;
-      if (!target && !["primitive","text","svg"].includes(solidDialog.kind))
+      if (!target && !["primitive","modifier","negative","text","svg"].includes(solidDialog.kind))
         throw new Error("Selected model is not loaded.");
       if (solidDialog.kind==="boolean" && (!booleanIds.length ||
         booleanIds.some(id=>!state?.meshes.get(id))))
         throw new Error("Select at least one additional model to combine with the primary model.");
       let parts;
-      if (solidDialog.kind==="primitive") {
+      if (["primitive","modifier","negative"].includes(solidDialog.kind)) {
         parts=[createPrimitiveStl(solidOptions)];
       } else if (solidDialog.kind==="text") {
         parts=[createTextStl(solidOptions)];
@@ -1288,6 +1289,37 @@ export default function SlicerPlateEditor({
   async function applySolid() {
     if (!solidDialog || !solidPreview || solidBusy || solidPreview.parts.some(part=>part.validationWarning)) return;
     const selectedObject=objects.find(row=>row.instance_id===solidDialog.id);
+    if (["modifier","negative"].includes(solidDialog.kind)) {
+      if (!selectedObject) {setSolidError("Select a printable model to associate with this volume.");return;}
+      const current = selectedObject.modifier_volumes || [];
+      if (!solidDialog.editVolumeId && (current.length>=12 ||
+          objects.reduce((total,row)=>total+(row.modifier_volumes||[]).length,0)>=48)) {
+        setSolidError("Native volume limit reached on this plate.");return;
+      }
+      const numbers=[solidOptions.width,solidOptions.depth,solidOptions.height,
+        solidOptions.x_mm,solidOptions.y_mm,solidOptions.z_mm,
+        solidOptions.rotation_x,solidOptions.rotation_y,solidOptions.rotation_z].map(Number);
+      if (numbers.some(n=>!Number.isFinite(n)) || numbers.slice(0,3).some(n=>n<0.5||n>500)) {
+        setSolidError("Volume dimensions must be finite and 0.5–500 mm.");return;
+      }
+      const previous=current.find(v=>v.id===solidDialog.editVolumeId);
+      const volume = {
+        id:previous?.id || plateUuid(), shape:solidOptions.primitiveType,
+        width_mm:pretty(numbers[0]),depth_mm:pretty(numbers[1]),height_mm:pretty(numbers[2]),
+        x_mm:pretty(numbers[3]),y_mm:pretty(numbers[4]),z_mm:pretty(numbers[5]),
+        coordinate_space:"world",rotation_xyz_deg:numbers.slice(6,9).map(pretty),
+        scale_xyz_percent:previous?.scale_xyz_percent || [100,100,100],
+        kind:solidDialog.kind,assembly_id:previous?.assembly_id||null,
+        settings:solidDialog.kind==="negative"?{}:(previous?.settings||{sparse_infill_density:50}),
+      };
+      onChange(objects.map(row=>row.instance_id!==selectedObject.instance_id?row:{
+        ...row,modifier_volumes:solidDialog.editVolumeId
+          ? current.map(v=>v.id===solidDialog.editVolumeId?volume:v)
+          : [...current,volume],
+      }));
+      onSelectedModifierChange?.(volume.id,selectedObject.instance_id,false);
+      setSolidPreview(null);setSolidDialog(null);setError("");return;
+    }
     if (!selectedObject && !["primitive","text","svg"].includes(solidDialog.kind)) {
       setSolidError("Selection changed. Reopen the mesh operation.");return;
     }
@@ -4054,7 +4086,9 @@ export default function SlicerPlateEditor({
           role="dialog" aria-modal="false" style={solidInspectorCollapsed?{...solidPanelStyle,maxHeight:60}:solidPanelStyle} aria-label={solidDialog.kind+" model geometry"}>
           <header className="slicerAutoOrientModalHeader">
             <div><h3>{solidDialog.kind==="boolean"?"Mesh Boolean":
-              solidDialog.kind[0].toUpperCase()+solidDialog.kind.slice(1)} model</h3>
+              ["modifier","negative"].includes(solidDialog.kind)
+                 ? (solidDialog.kind==="modifier"?"Parameter modifier":"Negative volume")
+                 : solidDialog.kind[0].toUpperCase()+solidDialog.kind.slice(1)+" model"}</h3>
               </div>
             <button type="button" className="slicerSolidCollapseButton"
               onClick={()=>setSolidInspectorCollapsed(value=>!value)}
@@ -4064,8 +4098,8 @@ export default function SlicerPlateEditor({
             <button type="button" disabled={solidBusy} aria-label="Close mesh editor"
               onClick={()=>{setSolidPreview(null);setSolidDialog(null);}}>✕</button>
           </header>
-          {["primitive","negative","text","svg"].includes(solidDialog.kind) && <>
-            {["primitive","negative"].includes(solidDialog.kind) && <fieldset className="slicerPrimitivePicker">
+          {["primitive","negative","modifier","text","svg"].includes(solidDialog.kind) && <>
+            {["primitive","negative","modifier"].includes(solidDialog.kind) && <fieldset className="slicerPrimitivePicker">
               <legend>Shape</legend>
               <div className="slicerPrimitiveShapeGrid">
                 {PRIMITIVE_TYPES.map(type=><button key={type} type="button"
@@ -4110,14 +4144,14 @@ export default function SlicerPlateEditor({
                   value={solidOptions[field]} onChange={event=>
                     setSolidOptions(v=>({...v,[field]:event.target.value}))}/></label>)}
             </div>
-            {["primitive","negative","text","svg"].includes(solidDialog.kind) && <div className="slicerSolidGrid">
+            {["primitive","negative","modifier","text","svg"].includes(solidDialog.kind) && <div className="slicerSolidGrid">
               {["rotation_x","rotation_y","rotation_z"].map((field,index)=><label key={field}>
                 {["Rotate X","Rotate Y","Rotate Z"][index]} (°)
                 <input type="number" min="-360" max="360" step="1"
                   value={solidOptions[field]} onChange={event=>
                     setSolidOptions(v=>({...v,[field]:event.target.value}))}/></label>)}
             </div>}
-            {["primitive","text","svg"].includes(solidDialog.kind) && <div className="slicerSolidGrid">
+            {["primitive","modifier","text","svg"].includes(solidDialog.kind) && <div className="slicerSolidGrid">
               {["x_mm","y_mm","z_mm"].map((field,index)=><label key={field}>
                 {["Centre X","Centre Y","Base Z"][index]} (mm)
                 <input type="number" step="0.5" value={solidOptions[field]}
@@ -4244,7 +4278,7 @@ export default function SlicerPlateEditor({
               {solidBusy?"Updating preview…":solidPreview?"Preview up to date":"Preview updates automatically"}
             </span>
             <button type="button" disabled={!solidPreview||solidBusy||solidPreview.parts.some(part=>part.validationWarning)} onClick={applySolid}>
-              {solidBusy?"Saving…":"Apply mesh edit"}</button>
+              {solidBusy?"Saving…":["modifier","negative"].includes(solidDialog.kind)?"Add "+(solidDialog.kind==="negative"?"negative volume":"modifier"):"Apply mesh edit"}</button>
           </footer>
         </section>
       </div>,meshInspectorHost
