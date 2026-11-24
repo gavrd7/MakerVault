@@ -85,6 +85,27 @@ test("zero-area CSG fragments are stripped before binary STL validation",()=>{
   geometry.dispose();cube.geometry.dispose();
 });
 
+test("exact CSG duplicate triangles are removed without hiding opposite-facing overlap",()=>{
+  const cube=solid();
+  const source=cube.geometry.getAttribute("position").array;
+  const withFace=new Float32Array(source.length+9);
+  withFace.set(source);
+  withFace.set(source.slice(0,9),source.length);
+  const geometry=new THREE.BufferGeometry();
+  geometry.setAttribute("position",new THREE.BufferAttribute(withFace,3));
+  const result=resultToStl(new THREE.Mesh(geometry,new THREE.MeshBasicMaterial()));
+  assert.equal(result.triangles,12);
+  assert.equal(result.removedZeroAreaFaces,1);
+  const reverse=new Float32Array(withFace);
+  reverse.set(source.slice(3,6),source.length);
+  reverse.set(source.slice(0,3),source.length+3);
+  reverse.set(source.slice(6,9),source.length+6);
+  geometry.setAttribute("position",new THREE.BufferAttribute(reverse,3));
+  assert.throws(()=>resultToStl(new THREE.Mesh(geometry,new THREE.MeshBasicMaterial())),
+    /opposite orientation/i);
+  geometry.dispose();cube.geometry.dispose();
+});
+
 test("hollow cavity can be adjusted without altering the source STL",()=>{
   const mesh=solid();
   const before=Array.from(mesh.geometry.getAttribute("position").array);
