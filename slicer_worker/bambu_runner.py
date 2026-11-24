@@ -5,6 +5,7 @@ identical native 3MF output, profile/resource resolution or firmware mapping.
 The approved isolated worker must provide a reviewed Bambu executable.
 """
 import os
+import logging
 import io
 import json
 from xml.etree import ElementTree as ET
@@ -21,6 +22,8 @@ from .orca_runner import _native_json
 from .headless_env import slicing_environment
 from .stl_validation import StlValidationError, validate_stl
 from .three_mf_validation import validate_worker_3mf, BAMBU_VARIANT_OPTIONS, CORE_NS
+
+logger = logging.getLogger(__name__)
 
 
 def _native_project_matches_palette(model: bytes, palette: list[Path]):
@@ -262,6 +265,9 @@ def run_bambu(binary: Path, workdir: Path, *, timeout_seconds: int = DEFAULT_TIM
             proc.communicate()
             raise WorkerError("Bambu Studio slicing timed out.") from None
         if proc.returncode != 0:
+            # An integer process status is safe for diagnostics; stderr and
+            # native preset contents remain intentionally discarded.
+            logger.warning("Bambu Studio native CLI exited with status %d", proc.returncode)
             raise WorkerError("Bambu Studio CLI rejected the native profiles or model.")
         output = extract_single_bambu_gcode(workdir / "bambu-sliced.3mf", workdir)
         return {"status": "completed", "gcode_path": str(output),
