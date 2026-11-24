@@ -36,9 +36,14 @@ def build(output_dir):
                      "rotation_xyz_deg":[0,0,0],"scale_xyz_percent":[100,100,100],
                      "kind":"negative","assembly_id":None,"settings":{}},
     }
-    (output/"baseline.3mf").write_bytes(
-        build_plate_3mf([(first,model),(second,model)],
-                        bed_width=220,bed_depth=220))
+    # The baseline is itself a native two-printable assembly; a neutral 15%
+    # region keeps a single real 3MF build object across all three engines,
+    # including the Creality external-object loader.
+    neutral={**volumes["region"],"id":str(uuid.uuid4()),
+             "settings":{"sparse_infill_density":15}}
+    (output/"baseline.3mf").write_bytes(export_modifier_3mf_fixture(
+        [({**first,"modifier_volumes":[neutral]},model),(second,model)],
+        bed_width=220,bed_depth=220))
     for label,volume in volumes.items():
         selected={**first,"modifier_volumes":[volume]}
         (output/(label+".3mf")).write_bytes(
