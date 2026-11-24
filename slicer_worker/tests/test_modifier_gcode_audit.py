@@ -83,8 +83,8 @@ class ModifierGcodeCoverageTests(unittest.TestCase):
         with self.assertLogs("slicer_worker.modifier_gcode_audit", level="WARNING") as log:
             with self.assertRaisesRegex(WorkerError, "deposits material"):
                 audit_modifier_positive_e(
-                    b"\\n".join(interior), project, "bambustudio")
-        message = "\\n".join(log.output)
+                    b"\n".join(interior), project, "bambustudio")
+        message = "\n".join(log.output)
         self.assertIn("Bambu negative subtraction audit rejected G-code", message)
         self.assertIn("z_bands=", message)
         self.assertNotIn("X1", message)
@@ -98,7 +98,7 @@ class ModifierGcodeCoverageTests(unittest.TestCase):
             ("G1 X%d Y%d E0.8" % (38 + i % 4, 38 + i % 4)).encode()
             for i in range(20))
         result = audit_modifier_positive_e(
-            b"\\n".join(outside), project, "bambustudio",
+            b"\n".join(outside), project, "bambustudio",
             translation_xy=(18.0, 18.0))
         self.assertEqual(result["modifier_region_paths"], [0])
         interior = [b"G90", b"M83", b"G0 X19 Y19 Z5"]
@@ -107,11 +107,11 @@ class ModifierGcodeCoverageTests(unittest.TestCase):
             for i in range(20))
         with self.assertRaisesRegex(WorkerError, "deposits material"):
             audit_modifier_positive_e(
-                b"\\n".join(interior), project, "bambustudio",
+                b"\n".join(interior), project, "bambustudio",
                 translation_xy=(18.0, 18.0))
         with self.assertRaisesRegex(WorkerError, "Unverified"):
             audit_modifier_positive_e(
-                b"\\n".join(outside), project, "orcaslicer",
+                b"\n".join(outside), project, "orcaslicer",
                 translation_xy=(18.0, 18.0))
 
     def test_conical_negative_does_not_reject_material_outside_actual_cut(self):
