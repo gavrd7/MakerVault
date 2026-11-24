@@ -8,7 +8,8 @@ const editor = readFileSync(new URL("../src/components/SlicerPlateEditor.jsx", i
 test("modifier entry is model-owned and not added as a printable STL", () => {
   assert.match(prepare, /Add parameter modifier/);
   assert.match(prepare, /modifier_volumes: \[\.\.\.\(item\.modifier_volumes \|\| \[\]\), fresh\]/);
-  assert.match(prepare, /Native regional slicing remains blocked/);
+  assert.match(prepare, /allPlateRows = objects.flatMap/);
+  assert.match(prepare, /isPlateVolume: true/);
   assert.doesNotMatch(prepare, /newPlateInstance\(id,objects\.length\+index\).*modifier/s);
 });
 
@@ -23,9 +24,9 @@ test("all six primitive modifier shapes have edit and preview paths", () => {
   assert.match(editor, /syncModifierOverlays\(mesh, item, state\.sectionPlane\)/);
 });
 
-test("duplicate keeps modifier children independent from the original parent", () => {
-  assert.match(editor, /copy\.modifier_volumes = chosen\.modifier_volumes\.map\(modifier =>/);
-  assert.match(editor, /id: plateUuid\(\), settings: \{\.\.\.modifier\.settings\}/);
+test("printable duplicates do not duplicate independently placed volumes", () => {
+  assert.match(editor, /copy\.modifier_volumes = \[\]/);
+  assert.match(editor, /Free volumes belong to the plate/);
 });
 
 test("torus preview uses the exact backend major and minor radii", () => {
@@ -56,7 +57,7 @@ test("new modifier draft is placed independently with XYZ rotation and scale", (
   assert.match(prepare, /scale_xyz_percent: \[100, 100, 100\]/);
   assert.match(prepare, /Independent modifier transform/);
   assert.match(prepare, /Move \/ Rotate \/ Scale on plate/);
-  assert.match(prepare, /selectedModifierId=\{selectedModifierId\}/);
+  assert.match(prepare, /selectedModifierId=\{activeModifier\?\.id \|\| null\}/);
   assert.match(editor, /ghost\.userData\.isWorldModifier = modifier\.coordinate_space === "world"/);
   assert.match(editor, /state\.transform\.attach\(activeModifier\)/);
   assert.match(editor, /Independent modifier transform controls/);
@@ -67,4 +68,22 @@ test("world modifier cannot become a model drag and preserves independent pose",
   assert.match(editor, /modifierSelectionRef\.current\.onChange/);
   assert.match(editor, /latestOnChangeRef\.current\(current\.map/);
   assert.match(editor, /coordinate_space==="world"/);
+});
+
+test("non-destructive negative volume uses shared insertion and is a selectable tree object", () => {
+  assert.match(prepare, /kind:"negative",id:Date\.now\(\)/);
+  assert.match(editor, /\["modifier","negative"\]\.includes\(solidDialog\.kind\)/);
+  assert.match(editor, /settings:solidDialog\.kind==="negative"\?\{\}/);
+  assert.match(prepare, /object\.kind==="negative"\?"negative volume":"parameter modifier"/);
+  assert.match(prepare, /selectedRows\.length < 2/);
+  assert.match(editor, /modifierSelectionRef\.current\.onChange\?\.\(candidate\.object\.userData\.modifierId/);
+  assert.match(editor, /volumesById = new Map/);
+});
+
+test("modifier and negative volumes share primitive shape and transform modal", () => {
+  assert.match(prepare, /kind:"modifier",shape,id:Date\.now\(\)/);
+  assert.match(prepare, /Edit shape \/ Move \/ Scale \/ Rotate/);
+  assert.match(editor, /"modifier","negative"\]\.includes\(solidDialog\.kind\)/);
+  assert.match(editor, /solidRequest\.editVolumeId/);
+  assert.match(editor, /editingVolume\?\.rotation_xyz_deg/);
 });
