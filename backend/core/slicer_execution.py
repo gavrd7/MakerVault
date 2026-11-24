@@ -232,7 +232,7 @@ def _check_profile_integrity(profile, job, kind):
         inspection = inspect_native_profile(profile.file_asset, profile.engine)
         if inspection["sha256"] != profile.content_sha256:
             raise SlicerExecutionError("Native profile contents changed after import.")
-        if profile.engine in {"orcaslicer", "crealityprint", "bambustudio"}:
+        if profile.engine in {"orcaslicer", "crealityprint", "bambustudio", "prusaslicer"}:
             resolved_native_profile(profile)
     except (SlicerProfileError, ValueError, OSError) as exc:
         raise SlicerExecutionError("Native profile is invalid or its parent presets are incomplete: " +
@@ -772,7 +772,7 @@ def process_queued_job(job_id):
             if hashlib.sha256(data).hexdigest() != profile.content_sha256:
                 raise SlicerExecutionError("Native profile contents changed since verification.")
             profiles.append(resolved_native_profile(profile)
-                            if job.engine in {"orcaslicer", "crealityprint", "bambustudio"} else data)
+                            if job.engine in {"orcaslicer", "crealityprint", "bambustudio", "prusaslicer"} else data)
         if job.engine == "orcaslicer":
             stage = "checking native printer/process compatibility"
             profiles[0] = _execution_printer_profile(
