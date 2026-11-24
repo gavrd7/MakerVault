@@ -60,7 +60,7 @@ const GROUPS = [["Quality", "quality"], ["Strength", "strength"], ["Speed", "spe
   ["Supports", "supports"], ["Multifilament", "multifilament"], ["Others", "others"]];
 
 export default function SlicerPrepareWorkspace({
-  objects, onChange, files, plate, plateType = "default", plateLabel = "Plate 1",
+  objects, onChange, plateVolumes = [], onRemovePlateVolumes, files, plate, plateType = "default", plateLabel = "Plate 1",
   plates = [], activePlateId = "plate-1", onChoosePlate, onAddPlate, onRemovePlate, onMoveModelsToPlate,
   primeTower = null, onPrimeTowerChange,
   onPlateLabelChange, onPrimaryChange, onFilesUploaded,
@@ -654,13 +654,13 @@ export default function SlicerPrepareWorkspace({
   },[activePlateId]);
   latest.current = objects;
 
-  const updatePlate = useCallback(next => {
+  const updatePlate = useCallback((next, options = {}) => {
     const old = latest.current;
     if (JSON.stringify(next) === JSON.stringify(old)) return;
     undoRef.current = [...undoRef.current.slice(-49), old.map(row => ({ ...row }))];
     redoRef.current = [];
     latest.current = next;
-    onChange(next);
+    onChange(next, options);
     if (next[0]?.asset_id !== old[0]?.asset_id) onPrimaryChange?.(next[0]?.asset_id || "");
     setHistoryVersion(value => value + 1);
   }, [onChange, onPrimaryChange]);
@@ -703,10 +703,13 @@ export default function SlicerPrepareWorkspace({
     return () => window.removeEventListener("keydown", listener);
   }, [undo, redo]);
 
-  const allPlateRows = objects.flatMap(row => [row, ...(row.modifier_volumes || []).map(volume => ({
+  const visibleVolumeIds = new Set(objects.flatMap(row => (row.modifier_volumes || []).map(v => v.id)));
+  const detachedVolumes = plateVolumes.filter(v => !visibleVolumeIds.has(v.id));
+  const allPlateRows = [...objects.flatMap(row => [row, ...(row.modifier_volumes || []).map(volume => ({
     ...volume, instance_id: volume.id, owner_instance_id: row.instance_id,
     isPlateVolume: true,
-  }))]);
+  }))]), ...detachedVolumes.map(volume => ({...volume, instance_id: volume.id,
+    owner_instance_id: null, isPlateVolume: true, detached: true}))];
   const validSelection = selectedIds.filter(id => allPlateRows.some(row => row.instance_id === id));
   const selectedModels = objects.filter(row => validSelection.includes(row.instance_id));
   const selectedRows = allPlateRows.filter(row => validSelection.includes(row.instance_id));
@@ -1797,7 +1800,7 @@ export default function SlicerPrepareWorkspace({
         </section>
         <aside className="slicerPrepareTree" aria-label="Build plate object tree">
         <h4>{plateLabel || "Plate 1"} · Objects ({allPlateRows.length})</h4>
-        {objects.length === 0 && <p>Add an STL to start editing.</p>}
+        {objects.length === 0 && <p>Add an STL to start editing. Any saved independent volumes remain on this plate.</p>}
         {allPlateRows.length > 0 && <div className="slicerAssemblyActions">
           <div>
             <button type="button" disabled={!canEdit || busy || selectedRows.length < 2}
@@ -1828,6 +1831,12 @@ export default function SlicerPrepareWorkspace({
           const members = assembly ? modelTreeRows.filter(row=>row.assembly_id===assembly) : [];
           const firstMember = assembly && members[0]?.instance_id===object.instance_id;
           const expanded = assembly && expandedAssemblies.includes(assembly);
+          if (object.detached) return <div key={object.instance_id} className="slicerPrepareModelEntry">
+            <span className="slicerPrepareModelName">{object.shape} {object.kind==="negative"?"negative volume":"parameter modifier"} · saved independently</span>
+            <button type="button" disabled={!canEdit || busy}
+              onClick={()=>onRemovePlateVolumes?.([object.id])}>Remove volume</button>
+            <small>Add a printable model to this plate to edit its volume.</small>
+          </div>;
           if (object.isPlateVolume) return <React.Fragment key={object.instance_id}>
             {firstMember && <div className="slicerAssemblyTreeHeader">
               <button type="button" className={members.every(row=>validSelection.includes(row.instance_id))?"selected":""}
