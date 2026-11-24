@@ -246,7 +246,10 @@ export default function SlicerPrepareWorkspace({
   useEffect(() => {
     if (selectedModifierId && !activeModifier) setSelectedModifierId(null);
   }, [selectedModifierId, activeModifier]);
-  const totalModifierCount = objects.reduce((sum, item) => sum + (item.modifier_volumes || []).length, 0);
+  // Count canonical free volumes, including those temporarily detached from a
+  // printable editor host, plus unchanged legacy model-local regions.
+  const totalModifierCount = plateVolumes.length + objects.reduce((sum, item) =>
+    sum + (item.modifier_volumes || []).filter(v => v.coordinate_space !== "world").length, 0);
   const changeModifier = (id, patch) => {
     if (!selectedObject) return;
     updatePlate(latest.current.map(item => item.instance_id !== selectedObject.instance_id ? item : {
