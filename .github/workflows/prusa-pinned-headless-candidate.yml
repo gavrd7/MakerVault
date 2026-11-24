@@ -4,9 +4,6 @@ name: PrusaSlicer pinned Linux headless runtime candidate
 # This does NOT install, publish, or enable a new MakerVault slicing engine.
 on:
   workflow_dispatch:
-  pull_request:
-    paths:
-      - ".github/workflows/prusa-pinned-headless-candidate.yml"
 
 permissions:
   contents: read
