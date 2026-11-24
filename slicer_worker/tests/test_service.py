@@ -78,6 +78,13 @@ class SlicerWorkerProtocolTests(TestCase):
                 with self.assertRaises(WorkerError):
                     _decode_payload({**payload, **change})
 
+    def test_prusa_unverified_native_3mf_is_rejected_before_validation(self):
+        payload = {**self.payload(), "model_format": "3mf"}
+        with patch("slicer_worker.service.validate_worker_3mf") as native:
+            with self.assertRaisesRegex(WorkerError, "Prusa native 3MF"):
+                _decode_payload(payload)
+            native.assert_not_called()
+
     def test_creality_multi_stl_contract_uses_distinct_one_based_tools(self):
         import struct
         stl = (b"fixture".ljust(80, b" ") + struct.pack(
