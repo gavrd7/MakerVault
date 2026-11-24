@@ -101,9 +101,14 @@ def probe(fixtures,binary,engine,creality_native=False):
                 results["region"]["counts"][region] < 5):
             raise WorkerError("Insufficient printable baseline or modifier paths in "+region)
         if base<=0 or added<=base*1.08:
-            raise WorkerError("Independent modifier has no proven regional effect in "+region)
+            raise WorkerError(
+                "Independent modifier has no proven regional effect in %s "
+                "(baseline=%.3f changed=%.3f)" % (region,base,added))
         if cut>=base*.9:
-            raise WorkerError("Negative volume did not remove material in "+region)
+            raise WorkerError(
+                "Native negative volume did not remove material in %s "
+                "(baseline=%.3f with_negative=%.3f, threshold=%.3f)" %
+                (region,base,cut,base*.9))
     return {"status":"passed","engine":engine,"evidence":results}
 
 
