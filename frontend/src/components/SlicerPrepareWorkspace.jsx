@@ -235,7 +235,10 @@ export default function SlicerPrepareWorkspace({
     setSelectedIds(current => additive
       ? (current.includes(modifierId) ? current.filter(id => id !== modifierId) : [...current, modifierId])
       : [modifierId]);
-    setSelectedModifierId(modifierId);
+    // Ctrl-clicking an already-selected free volume must deselect its active
+    // transform target too; otherwise the ghost gizmo remains attached to a
+    // row no longer present in the selection.
+    setSelectedModifierId(additive && selectedIds.includes(modifierId) ? null : modifierId);
     setScope("objects");
     setMeasurementVisible(false);
     setToolMode(current => ["move","rotate","scale"].includes(current) ? current : "move");
