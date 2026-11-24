@@ -44,6 +44,19 @@ class CompositeNativeEvidenceTests(unittest.TestCase):
         self.assertEqual(evidence["counts"], {"left": 0, "right": 1})
         self.assertAlmostEqual(evidence["totals"]["right"], 1.0)
 
+    def test_negative_cut_boundary_walls_do_not_count_as_filled_cavity(self):
+        # The 3MF negative spans Y=100..120, so new walls on those faces
+        # are legitimate even though the strict cavity interior must be empty.
+        code = b"\\n".join([
+            b"G90", b"M83", b"G0 X85 Y100 Z15",
+            b"; FEATURE: Inner wall",
+            b"G1 X95 Y100 E3",
+            b"G0 X85 Y120",
+            b"G1 X95 Y120 E3",
+        ])
+        result = two_model_region_extrusion(code)
+        self.assertEqual(result["counts"], {"left": 0, "right": 0})
+
     def test_absolute_extrusion_reset_only_counts_positive_e(self):
         code = b"\n".join([
             b"G90", b"M82", b"G92 E0",
