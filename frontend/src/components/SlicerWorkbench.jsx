@@ -300,6 +300,9 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
   }, []);
   const [editorOpen, setEditorOpen] = useState(false);
   const [plateValidation, setPlateValidation] = useState(null);
+  // A reopened failed/draft job can reuse the mounted editor and identical
+  // geometry. Explicitly request fresh validation after clearing its snapshot.
+  const [plateValidationEpoch, refreshPlateValidation] = useState(0);
   const unresolvedPlateIssues = !plateValidation ||
     plateValidation.signature !== JSON.stringify(plateObjects) ||
     plateValidation.issues.length > 0;
@@ -634,6 +637,7 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
     setActivePlateId(restored.some(p=>p.id===job.settings?.active_plate_id)
       ?job.settings.active_plate_id:restored[0].id);
     setPlateValidation(null);
+    refreshPlateValidation(value => value + 1);
     setProcessOverrides(job.settings?.process_overrides || {});
     setFlushSettings(job.settings?.flush_settings || null);
     setSlotFilamentProfiles(job.settings?.slot_filament_profiles || []);
@@ -1534,7 +1538,7 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
       objects={plateObjects} plateVolumes={activePlate?.volumes || []}
       onRemovePlateVolumes={ids=>setPlateObjects(plateObjects,{removedVolumeIds:ids})}
       onChange={setPlateObjects} files={stlFiles}
-      plateIssues={plateValidation} onPlateIssuesChange={setPlateValidation} validationRefreshKey={busy || loading}
+      plateIssues={plateValidation} onPlateIssuesChange={setPlateValidation} validationRefreshKey={`${plateValidationEpoch}:${busy || loading}`}
       localAssets={plateLocalAssets} onLocalAssetsChange={setPlateLocalAssets}
       onPrimaryChange={id => update("input_asset_id", String(id))}
       onFilesUploaded={onFilesUploaded} defaultColor={selectedSpoolHex}
