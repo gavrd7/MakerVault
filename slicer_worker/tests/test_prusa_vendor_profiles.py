@@ -63,7 +63,7 @@ class PrusaVendorPresetsTests(TestCase):
             flatten_prusa_vendor_preset(
                 BUNDLE, kind="print", name="*common*",
                 expected_sha256=digest),
-            b"fill_density = 15%\\nlayer_height = 0.2\\npost_process = \\n")
+            b"fill_density = 15%\nlayer_height = 0.2\npost_process = \n")
         with self.assertRaisesRegex(PrusaPresetError, "checksum"):
             flatten_prusa_vendor_preset(
                 BUNDLE, kind="print", name="*common*",
@@ -73,9 +73,9 @@ class PrusaVendorPresetsTests(TestCase):
         for kind, name, raw in (
             ("printer", "Generic PLA", BUNDLE),
             ("print", "Missing", BUNDLE),
-            ("print", "A", b"[print:A]\\ninherits = B\\n[print:B]\\ninherits = A\\n"),
-            ("print", "A", b"[print:A]\\nlayer_height=0.2\\n[print:A]\\nfill_density=10%\\n"),
-            ("print", "A", b"[print:A]\\nlayer_height=0.2\\nlayer_height=0.1\\n"),
+            ("print", "A", b"[print:A]\ninherits = B\n[print:B]\ninherits = A\n"),
+            ("print", "A", b"[print:A]\nlayer_height=0.2\n[print:A]\nfill_density=10%\n"),
+            ("print", "A", b"[print:A]\nlayer_height=0.2\nlayer_height=0.1\n"),
         ):
             with self.subTest(kind=kind, name=name):
                 with self.assertRaises(PrusaPresetError):
@@ -84,16 +84,16 @@ class PrusaVendorPresetsTests(TestCase):
     def test_reject_nonempty_scripts_and_controls(self):
         for raw in (
             BUNDLE.replace(b"post_process =", b"post_process = /tmp/evil.sh"),
-            BUNDLE + b"\\x00",
-            BUNDLE.replace(b"layer_height = 0.2", b"layer_height = \\xff"),
-            BUNDLE + b"[print:evil]\\ninclude = ../evil.ini\\n",
+            BUNDLE + b"\x00",
+            BUNDLE.replace(b"layer_height = 0.2", b"layer_height = \xff"),
+            BUNDLE + b"[print:evil]\ninclude = ../evil.ini\n",
         ):
             with self.subTest(raw=repr(raw[-25:])):
                 with self.assertRaises(PrusaPresetError):
                     parse_prusa_vendor_bundle(raw)
 
     def test_reject_sla_printers_and_keep_literal_percent(self):
-        raw = BUNDLE + b"[printer:SLA]\\nprinter_technology = SLA\\n"
+        raw = BUNDLE + b"[printer:SLA]\nprinter_technology = SLA\n"
         with self.assertRaisesRegex(PrusaPresetError, "FFF"):
             flatten_prusa_vendor_preset(raw, kind="printer", name="SLA")
         settings = flatten_prusa_vendor_preset(BUNDLE, kind="print", name="*common*")
