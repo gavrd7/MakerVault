@@ -9,7 +9,7 @@ class PrusaGcodeAuditTests(TestCase):
     def gcode(self, *, relative=False):
         start = "; PrusaSlicer generated native G-code\n" + ("M83\n" if relative else "M82\n")
         start += "G92 E0\n"
-        start += "; setup\n" * 140
+        start += "; setup\n" * 300
         moves = ["G1 Z0.2 F600"]
         for i in range(32):
             value = 0.6 if relative else (i + 1) * 0.6
