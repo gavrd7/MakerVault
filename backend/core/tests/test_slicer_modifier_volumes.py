@@ -5,6 +5,7 @@ from django.test import SimpleTestCase
 from core.slicer_modifier_volumes import (
     MAX_MODIFIERS_PER_MODEL, validate_modifier_volumes,
     refuse_unverified_native_modifiers, validate_native_modifier_execution,
+    assert_native_plate_volume_coverage,
 )
 
 
@@ -139,6 +140,32 @@ class ModifierDraftContractTests(SimpleTestCase):
                 [{"modifier_volumes": [volume]},
                  {"modifier_volumes": [volume]}],
                 engine="orcaslicer", version="2.5.0", settings={})
+
+    def test_canonical_plate_must_match_every_native_slicing_volume(self):
+        shapes = [box(coordinate_space="world",
+                      rotation_xyz_deg=[0, 0, 0],
+                      scale_xyz_percent=[100, 100, 100]) for _ in range(13)]
+        settings = {"plate_volumes": shapes}
+        # A 13th unattached region is legal in saved drafts but can never be
+        # omitted when producing G-code from the 12-volume model adapter.
+        with self.assertRaisesRegex(ValueError, "missing regions"):
+            validate_native_modifier_execution(
+                [{"modifier_volumes": shapes[:12]}],
+                engine="orcaslicer", version="2.5.0", settings=settings)
+        with self.assertRaisesRegex(ValueError, "missing regions"):
+            assert_native_plate_volume_coverage(
+                [{"modifier_volumes": []}], settings)
+        assert_native_plate_volume_coverage(
+            [{"modifier_volumes": shapes[:12]},
+             {"modifier_volumes": shapes[12:]}], settings)
+        with self.assertRaisesRegex(ValueError, "missing regions"):
+            assert_native_plate_volume_coverage(
+                [{"modifier_volumes": [shapes[0]]}],
+                {"plate_volumes": []})
+        # A legacy project has no canonical plate list and retains its
+        # verified model-local modifier behaviour.
+        assert_native_plate_volume_coverage(
+            [{"modifier_volumes": [shapes[0]]}], {})
 
     def test_missing_modifier_field_does_not_change_existing_drafts(self):
         self.assertEqual(validate_modifier_volumes(None), [])
