@@ -213,7 +213,7 @@ def audit_modifier_positive_e(gcode, project, engine, *, translation_xy=(0.0, 0.
                     # near-boundary paths gives false negative-deposition
                     # alarms. Still require ZERO extrusion in the *interior*
                     # and never relax Orca/Creality's existing 0.15 mm check.
-                    inset = 2.0 if engine == "bambustudio" else 0.15
+                    inset = (min(2.0, min(high - low for low, high in box) / 4)\n                             if engine == "bambustudio" else 0.15)
                     inside = (all(low + inset < value < high - inset
                                   for (low, high), value in zip(box, midpoint))
                               and _inside_section(midpoint[0], midpoint[1],
