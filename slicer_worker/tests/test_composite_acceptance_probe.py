@@ -5,7 +5,11 @@ diagnostic accounts for real positive-E moves and records feature attribution.
 """
 import unittest
 
-from slicer_worker.composite_acceptance_probe import two_model_region_extrusion
+from slicer_worker.composite_acceptance_probe import two_model_region_extrusion, bambu_output_placement_shift
+import io
+import zipfile
+from pathlib import Path
+from tempfile import TemporaryDirectory
 from slicer_worker.single_negative_diagnostic import _cavity_y_bands
 
 
@@ -73,6 +77,38 @@ class CompositeNativeEvidenceTests(unittest.TestCase):
         self.assertEqual(result["108"]["features"], {"Sparse infill": 1.25})
         self.assertEqual(result["098"]["features"], {"Inner wall": 2.5})
         self.assertEqual(result["120"]["features"], {"Inner wall": 0.75})
+
+    def test_bambu_region_sampling_follows_slicer_recentered_placement(self):
+        gcode = b"\\n".join([
+            b"G90", b"M83", b"G0 X103 Y123 Z15",
+            b"; FEATURE: Sparse infill", b"G1 X113 Y123 E1.25",
+            b"G0 X143 Y123", b"G1 X153 Y123 E0.75",
+        ])
+        # A Bambu export can shift the composite by +18mm from the 220mm
+        # fixture to its 256mm native plate; the old fixed sample misses it.
+        raw = two_model_region_extrusion(gcode)
+        self.assertEqual(raw["counts"], {"left": 0, "right": 0})
+        shifted = two_model_region_extrusion(gcode, shift_x=18, shift_y=18)
+        self.assertEqual(shifted["counts"], {"left": 1, "right": 1})
+        self.assertAlmostEqual(shifted["totals"]["left"], 1.25)
+        self.assertAlmostEqual(shifted["totals"]["right"], 0.75)
+
+    def test_bambu_output_shift_reads_its_native_3mf_placement_not_assumptions(self):
+        ns = "http://schemas.microsoft.com/3dmanufacturing/core/2015/02"
+        template = ('<model xmlns="' + ns + '" unit="millimeter">'
+                    '<resources/><build><item objectid="3" transform="'
+                    '1 0 0 0 1 0 0 0 1 18 18 0"/></build></model>')
+        with TemporaryDirectory() as folder:
+            filename = Path(folder) / "native-output.3mf"
+            with zipfile.ZipFile(filename, "w") as package:
+                package.writestr("3D/3dmodel.model", template)
+            self.assertEqual(bambu_output_placement_shift(filename), (18, 18))
+            with zipfile.ZipFile(filename, "w") as package:
+                package.writestr("3D/3dmodel.model",
+                                 template.replace("1 0 0 0 1", "0 1 0 0 1"))
+            from slicer_worker.runner import WorkerError
+            with self.assertRaisesRegex(WorkerError, "unexpected native geometry"):
+                bambu_output_placement_shift(filename)
 
     def test_absolute_extrusion_reset_only_counts_positive_e(self):
         code = b"\n".join([
