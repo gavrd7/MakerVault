@@ -8,7 +8,7 @@ const editor = readFileSync(new URL("../src/components/SlicerPlateEditor.jsx", i
 test("modifier and negative are non-printing plate-tree rows without STL uploads", () => {
   assert.match(prepare, /Add parameter modifier/);
   assert.match(editor, /modifier_volumes:solidDialog\.editVolumeId/);
-  assert.match(prepare, /allPlateRows = objects.flatMap/);
+  assert.match(prepare, /const allPlateRows = \[\.\.\.objects\.flatMap/);
   assert.match(prepare, /isPlateVolume: true/);
   assert.doesNotMatch(prepare, /newPlateInstance\(id,objects\.length\+index\).*modifier/s);
 });
