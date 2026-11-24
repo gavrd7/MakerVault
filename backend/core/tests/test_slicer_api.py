@@ -365,6 +365,63 @@ class SliceJobApiTests(TestCase):
         self.assertEqual(self.client.post("/api/printing/slicer/projects/import/",
             {"file":SimpleUploadedFile("saved.3mf",package)}).status_code,403)
 
+    def test_import_project_restores_independent_volumes_not_as_stl_parts(self):
+        from django.core.files.uploadedfile import SimpleUploadedFile
+        from core.slicer_plate_3mf import build_makervault_project_3mf
+        from core.slicer_approval import fixture_stl
+
+        source_id = str(uuid.uuid4())
+        model = {
+            "instance_id": str(uuid.uuid4()), "asset_id": source_id,
+            "x_mm": 0, "y_mm": 0, "z_mm": 0, "rotation_deg": 0,
+            "scale_percent": 100, "color": "#abcdef",
+        }
+        cut = {
+            "id": str(uuid.uuid4()), "shape": "box",
+            "width_mm": 20, "depth_mm": 12, "height_mm": 10,
+            "x_mm": 0, "y_mm": 0, "z_mm": 8,
+            "coordinate_space": "world", "rotation_xyz_deg": [0, 0, 45],
+            "scale_xyz_percent": [110, 100, 100],
+            "kind": "negative", "assembly_id": None, "settings": {},
+        }
+        plates = [
+            {"id": "plate-1", "name": "Source", "objects": [model], "volumes": [cut]},
+            {"id": "plate-2", "name": "Unattached", "objects": [], "volumes": [
+                {**cut, "id": str(uuid.uuid4()), "x_mm": 32}]},
+        ]
+        archive = build_makervault_project_3mf(
+            [("Source", [(model, fixture_stl())]), ("Unattached", [])],
+            bed_width=220, bed_depth=220,
+            metadata={"format": "makervault-project-v1", "plates": plates,
+                      "active_plate_id": "plate-1"},
+        )
+        self.client.force_login(self.owner)
+        response = self.client.post("/api/printing/slicer/projects/import/", {
+            "file": SimpleUploadedFile("volumes.3mf", archive,
+                                       content_type="model/3mf"),
+        })
+        self.assertEqual(response.status_code, 201, response.content)
+        imported = response.json()["plates"]
+        self.assertEqual(imported[0]["volumes"][0]["id"], cut["id"])
+        self.assertEqual(imported[0]["volumes"][0]["rotation_xyz_deg"], [0.0, 0.0, 45.0])
+        self.assertEqual(imported[1]["objects"], [])
+        self.assertEqual(len(imported[1]["volumes"]), 1)
+        self.assertNotIn("modifier_volumes", imported[0]["objects"][0])
+
+        # Do not accept a second copy of a cutter disguised as a printable ID.
+        altered = [{**plates[0], "volumes": [{**cut, "id": model["instance_id"]}]}]
+        invalid_archive = build_makervault_project_3mf(
+            [("Source", [(model, fixture_stl())])], bed_width=220,
+            bed_depth=220,
+            metadata={"format": "makervault-project-v1", "plates": altered,
+                      "active_plate_id": "plate-1"},
+        )
+        invalid = self.client.post("/api/printing/slicer/projects/import/", {
+            "file": SimpleUploadedFile("invalid.3mf", invalid_archive,
+                                       content_type="model/3mf"),
+        })
+        self.assertEqual(invalid.status_code, 422, invalid.content)
+
     def test_import_project_restores_v2_painted_regions_from_3mf_sidecar(self):
         from django.core.files.uploadedfile import SimpleUploadedFile
         from core.slicer_plate_3mf import build_makervault_project_3mf
