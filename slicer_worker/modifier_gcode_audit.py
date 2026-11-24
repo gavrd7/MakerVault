@@ -32,10 +32,39 @@ def modifier_bounds(project, engine):
                 raise WorkerError("Unsafe modifier geometry XML declaration.")
             root = SafeET.fromstring(source)
         objects = root.findall(NS + "resources/" + NS + "object")
-        if not 2 <= len(objects) - start + 1 <= 13:
-            raise WorkerError("Missing bounded modifier part coordinates.")
+        # Derive non-printing part identities from native settings instead
+        # of assuming that every mesh after the first belongs to a modifier.
+        # Compound plates can contain several normal printable mesh parts.
+        with zipfile.ZipFile(io.BytesIO(project)) as archive:
+            settings_source = archive.read("Metadata/model_settings.config")
+        if b"<!DOCTYPE" in settings_source.upper() or b"<!ENTITY" in settings_source.upper():
+            raise WorkerError("Unsafe native modifier metadata declaration.")
+        manifest = SafeET.fromstring(settings_source)
+        native_objects = manifest.findall("object")
+        if len(native_objects) != 1:
+            raise WorkerError("Unexpected native region metadata records.")
+        parts = native_objects[0].findall("part")
+        expected_count = len(objects) - start
+        if not 2 <= len(parts) == expected_count <= 60:
+            raise WorkerError("Missing bounded native region part coordinates.")
         bounds = []
-        for obj in objects[start:]:
+        negative_count = 0
+        for part in parts:
+            subtype = part.get("subtype")
+            if subtype == "normal_part":
+                continue
+            if subtype not in ("modifier_part", "negative_part"):
+                raise WorkerError("Unknown native non-printing subtype.")
+            if subtype == "negative_part":
+                negative_count += 1
+            identifier = part.get("id")
+            try:
+                object_index = int(identifier) - start
+            except (TypeError, ValueError):
+                raise WorkerError("Invalid native region object identity.") from None
+            if not 0 <= object_index < expected_count:
+                raise WorkerError("Invalid native region mesh mapping.")
+            obj = objects[start + object_index]
             vertices = obj.findall(NS + "mesh/" + NS + "vertices/" + NS + "vertex")
             if not 4 <= len(vertices) <= 500000:
                 raise WorkerError("Invalid modifier mesh bounds.")
@@ -47,6 +76,10 @@ def modifier_bounds(project, engine):
                 points.append(coords)
             bounds.append(tuple((min(v[i] for v in points), max(v[i] for v in points))
                                 for i in range(3)))
+        if negative_count:
+            raise WorkerError(
+                "Negative volume G-code requires pinned subtraction-effect acceptance; "
+                "do not treat missing deposition as positive modifier coverage.")
         if not bounds:
             raise WorkerError("No modifier regions available for G-code audit.")
         return bounds
