@@ -141,6 +141,21 @@ def probe(fixtures,binary,engine,creality_native=False):
             shift = (0.0, 0.0)
             if engine == "bambustudio":
                 shift = bambu_output_placement_shift(root / "bambu-sliced.3mf")
+            if engine == "bambustudio":
+                # Exercise the exact production geometry audit against the
+                # pinned binary's real G-code and native output placement.
+                # A passing comparative regional check must not mask
+                # interior extrusion inside a negative-part mesh.
+                from .bambu_runner import verified_bambu_modifier_shift
+                from .modifier_gcode_audit import audit_modifier_positive_e
+                verified_shift = verified_bambu_modifier_shift(
+                    project, root / "bambu-sliced.3mf")
+                if any(abs(a - b) > 0.0001
+                       for a, b in zip(shift, verified_shift)):
+                    raise WorkerError("Bambu native fixture placement is inconsistent.")
+                audit_modifier_positive_e(
+                    gcode_path.read_bytes(), project, engine,
+                    translation_xy=verified_shift)
             results[name]=two_model_region_extrusion(
                 gcode_path.read_bytes(), shift_x=shift[0], shift_y=shift[1])
             if engine == "bambustudio":
