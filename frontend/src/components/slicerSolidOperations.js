@@ -8,6 +8,7 @@
  * constant-distance normal offset. Caller must explain the limitation.
  */
 import * as THREE from "three";
+import { mergeVertices } from "three/addons/utils/BufferGeometryUtils.js";
 import { Brush, Evaluator, ADDITION, SUBTRACTION, INTERSECTION } from "three-bvh-csg";
 
 // Match native plate validation; complexity remains constrained by the STL byte cap.
@@ -31,12 +32,17 @@ function triangles(geometry) {
 }
 function normalizedGeometry(input) {
   const geometry = input.clone();
-  for (const key of Object.keys(geometry.attributes)) if (!["position", "normal"].includes(key))
+  // Normal splits at hard edges make an otherwise closed cube look like
+  // disconnected faces to the Boolean engine. CSG cares about topology,
+  // not shading: weld identical positions before computing normals.
+  for (const key of Object.keys(geometry.attributes)) if (key !== "position")
     geometry.deleteAttribute(key);
-  if (!geometry.getAttribute("normal")) geometry.computeVertexNormals();
-  geometry.clearGroups();
-  geometry.setDrawRange(0, Infinity);
-  return geometry;
+  const welded = mergeVertices(geometry, 1e-5);
+  geometry.dispose();
+  welded.computeVertexNormals();
+  welded.clearGroups();
+  welded.setDrawRange(0, Infinity);
+  return welded;
 }
 function brushFor(mesh, maxTriangles = CSG_MAX_INPUT_TRIANGLES) {
   mesh.updateMatrixWorld(true);
