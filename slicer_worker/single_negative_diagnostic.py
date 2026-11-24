@@ -20,7 +20,10 @@ def diagnose(fixtures, binary):
     output = {}
     for name in ("single-baseline", "single-negative"):
         model = (fixtures / (name + ".3mf")).read_bytes()
-        validate_worker_3mf(model, allow_native_modifier_fixture=True)
+        # An ordinary baseline 3MF has no nested non-printing parts and
+        # must pass the normal worker validator; only the negative fixture
+        # is eligible for the strictly bounded composite-fixture validator.
+        validate_worker_3mf(model, allow_native_modifier_fixture=(name == "single-negative"))
         with TemporaryDirectory(prefix="single-negative-proof-") as temp:
             root = Path(temp)
             for profile in ("printer.json", "process.json", "filament.json"):
