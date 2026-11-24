@@ -1,5 +1,9 @@
 """Require real XY positive-E deposition within modifier volumes, not comments."""
 import unittest
+import math
+import io
+import zipfile
+from xml.etree import ElementTree as ET
 
 from slicer_worker.modifier_gcode_audit import (
     audit_modifier_positive_e, modifier_bounds,
@@ -67,6 +71,46 @@ class ModifierGcodeCoverageTests(unittest.TestCase):
         with self.assertRaisesRegex(WorkerError, "deposits material"):
             audit_modifier_positive_e(
                 b"\n".join(inside), project, "orcaslicer")
+
+    def test_conical_negative_does_not_reject_material_outside_actual_cut(self):
+        from slicer_worker.tests.test_modifier_3mf_validation import NS
+        ns = "{" + NS + "}"
+        with zipfile.ZipFile(io.BytesIO(composite_fixture(negative=True))) as archive:
+            entries = {name: archive.read(name) for name in archive.namelist()}
+        root = ET.fromstring(entries["3D/3dmodel.model"])
+        mesh = root.find(ns + "resources/" + ns + "object[@id='4']/" + ns + "mesh")
+        mesh.clear()
+        vertices = ET.SubElement(mesh, ns + "vertices")
+        faces = ET.SubElement(mesh, ns + "triangles")
+        points = [(10 + 8 * math.cos(i * math.tau / 24),
+                   10 + 8 * math.sin(i * math.tau / 24), 0)
+                  for i in range(24)] + [(10, 10, 0), (10, 10, 20)]
+        for x, y, z in points:
+            ET.SubElement(vertices, ns + "vertex",
+                          {"x": str(x), "y": str(y), "z": str(z)})
+        for i in range(24):
+            j = (i + 1) % 24
+            for a, b, c in ((24, j, i), (i, j, 25)):
+                ET.SubElement(faces, ns + "triangle",
+                              {"v1": str(a), "v2": str(b), "v3": str(c)})
+        entries["3D/3dmodel.model"] = ET.tostring(root)
+        with io.BytesIO() as stream:
+            with zipfile.ZipFile(stream, "w") as archive:
+                for name, data in entries.items():
+                    archive.writestr(name, data)
+            project = stream.getvalue()
+
+        # At Z=15 the cone radius is only 2 mm, despite its global
+        # bounding box extending 8 mm. These paths are valid model walls.
+        def program(y):
+            return ("G90\nM83\nG0 X9 Y%s Z15\n" % y +
+                    "".join("G1 X%s Y%s E0.5\n" % (11 if i % 2 == 0 else 9, y)
+                            for i in range(20))).encode()
+        self.assertEqual(audit_modifier_positive_e(
+            program(15), project, "orcaslicer")["modifier_region_paths"], [0])
+        # Actual interior deposition still fails, with the same mesh.
+        with self.assertRaisesRegex(WorkerError, "deposits material"):
+            audit_modifier_positive_e(program(10), project, "orcaslicer")
 
     def test_invalid_project_must_not_be_trusted(self):
         with self.assertRaises(WorkerError):
