@@ -1409,7 +1409,8 @@ def official_profiles(request):
                 models = (orca_catalogue_models(request.GET.get("vendor", "Creality"))
                           if selected == "orcaslicer" and version == OFFICIAL_ORCA_VERSION else
                           orca_catalogue_models(request.GET.get("vendor", "Creality"), version)
-                          if selected == "orcaslicer" else provider(request.GET.get("vendor", "Creality")))
+                          if selected == "orcaslicer" else provider(request.GET.get(
+                               "vendor", "PrusaResearch" if selected == "prusaslicer" else "Creality")))
             except OfficialProfileError as exc:
                 return _error(str(exc), 400)
             return JsonResponse({"engine": selected, "models": models})
@@ -1451,7 +1452,8 @@ def official_profiles(request):
                                     if selected == "orcaslicer" and version == OFFICIAL_ORCA_VERSION else
                                     orca_catalogue_models(request.GET.get("vendor", "Creality"), version)
                                     if selected == "orcaslicer" else
-                                    model_catalogues[selected](request.GET.get("vendor", "Creality")))
+                                    model_catalogues[selected](request.GET.get(
+                                         "vendor", "PrusaResearch" if selected == "prusaslicer" else "Creality")))
                 if chosen_model not in catalogue_models:
                     return _error("Choose a printer model listed in the official catalogue.")
                 printer_model = chosen_model
