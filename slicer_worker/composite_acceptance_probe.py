@@ -71,26 +71,19 @@ def probe(fixtures,binary,engine,creality_native=False):
     results={}
     for name in ("baseline","region","negative"):
         source=(fixtures/(name+".3mf")).read_bytes()
-        validate_worker_3mf(source,allow_native_modifier_fixture=name!="baseline")
+        validate_worker_3mf(source,allow_native_modifier_fixture=True)
         with tempfile.TemporaryDirectory(prefix="composite-native-proof-") as temp:
             root=Path(temp)
             for profile in ("printer.json","filament.json","process.json"):
                 shutil.copyfile(fixtures/profile,root/profile)
             if creality_native:
                 project=(fixtures/("native-"+name+".3mf")).read_bytes()
-                if name!="baseline":
-                    validate_creality_modifier_project(project)
+                validate_creality_modifier_project(project)
             else:
                 project=source
             (root/"input.3mf").write_bytes(project)
-            if name!="baseline":
-                (root/"native-modifier-project.marker").write_text("v1")
-            with ExitStack() as stack:
-                if name=="baseline" and creality_native:
-                    stack.enter_context(patch(
-                        "slicer_worker.creality_runner.validate_creality_project",
-                        return_value=True))
-                results[name]=runners[engine](Path(binary),root,timeout_seconds=180)
+            (root/"native-modifier-project.marker").write_text("v1")
+            results[name]=runners[engine](Path(binary),root,timeout_seconds=180)
             if results[name].get("status")!="completed":
                 raise WorkerError("Native composite CLI did not complete "+name)
             results[name]=two_model_region_extrusion((root/"output.gcode").read_bytes())
