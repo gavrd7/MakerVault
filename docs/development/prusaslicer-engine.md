@@ -47,3 +47,5 @@ The first branch hardens native INI binary NUL rejection, adds security regressi
 ## Safety invariants
 
 No uploaded binary executes from a request; no unapproved version/digest, untrusted script or network target is allowed. The worker must not silently drop features or modifier volumes. No server or printer deployment occurs from this planning branch. No `main` changes or release publication until the gates above are demonstrably green.
+
+> Source-build CI control: the pinned headless runtime workflow may also run from an explicitly marked branch push (`[prusa-build]`). Ordinary PR commits do not rebuild upstream dependencies, and the release/installer paths remain disabled.
