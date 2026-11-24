@@ -32,6 +32,20 @@ jobs:
           test "$actual" = "450d70dd81c9b8990bc6bc8e690e31f82ddceb11"
           echo "Pinned PrusaSlicer version_2.9.7 source: $actual" >> "$GITHUB_STEP_SUMMARY"
 
+      - name: Use official GNU mirror for vanished upstream GMP URL
+        working-directory: upstream-prusa
+        run: |
+          set -euo pipefail
+          file='deps/+GMP/GMP.cmake'
+          # Only change the download host for this exact upstream dependency.
+          # The original upstream SHA-256 remains unchanged and CMake checks
+          # it before extracting/compiling anything from the replacement URL.
+          grep -Fq 'URL https://gmplib.org/download/gmp/gmp-6.2.1.tar.bz2' "$file"
+          grep -Fq 'URL_HASH SHA256=eae9326beb4158c386e39a356818031bd28f3124cf915f8c5b1dc4c7a36b4d7c' "$file"
+          sed -i 's@https://gmplib.org/download/gmp/gmp-6.2.1.tar.bz2@https://ftp.gnu.org/gnu/gmp/gmp-6.2.1.tar.bz2@' "$file"
+          grep -Fq 'URL https://ftp.gnu.org/gnu/gmp/gmp-6.2.1.tar.bz2' "$file"
+          echo "GMP mirror changed to GNU FTP; original pinned SHA-256 is unchanged." >> "$GITHUB_STEP_SUMMARY"
+
       - name: Build pinned upstream dependencies
         working-directory: upstream-prusa
         run: |
