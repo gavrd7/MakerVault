@@ -4195,21 +4195,13 @@ export default function SlicerPlateEditor({
                   value={solidOptions[field]} onChange={event=>
                     setSolidOptions(v=>({...v,[field]:event.target.value}))}/></label>)}
             </div>}
-            {["primitive","modifier","text","svg"].includes(solidDialog.kind) && <div className="slicerSolidGrid">
+            {["primitive","modifier","negative","text","svg"].includes(solidDialog.kind) && <div className="slicerSolidGrid">
               {["x_mm","y_mm","z_mm"].map((field,index)=><label key={field}>
-                {["Centre X","Centre Y","Base Z"][index]} (mm)
+                {["Centre X","Centre Y","Centre Z"][index]} (mm)
                 <input type="number" step="0.5" value={solidOptions[field]}
                   onChange={event=>setSolidOptions(v=>({...v,[field]:event.target.value}))}/></label>)}
             </div>}
-            {solidDialog.kind==="negative" && <>
-              <div className="slicerSolidGrid">
-                {["x_mm","y_mm","z_mm"].map((field,index)=><label key={field}>
-                  {["X centre","Y centre","Z centre"][index]} (mm)
-                  <input type="number" step="0.5" value={solidOptions[field]}
-                    onChange={event=>setSolidOptions(v=>({...v,[field]:event.target.value}))}/></label>)}
-              </div>
 
-            </>}
           </>}
           {solidDialog.kind==="hollow" && <>
             <div className="slicerInsertionMode" role="group" aria-label="Hollow cavity handles">
