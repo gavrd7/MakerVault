@@ -140,11 +140,29 @@ def _inside_section(x, y, edges, tolerance=0.15):
     return inside
 
 
-def audit_modifier_positive_e(gcode, project, engine):
-    """Require modifier coverage and safe negative-volume subtraction instead of model deposition inside each non-printing modifier's 3D bbox."""
+def audit_modifier_positive_e(gcode, project, engine, *, translation_xy=(0.0, 0.0)):
+    """Require native modifier coverage and strictly empty negative-volume interiors.
+
+    Bambu's output project can prove a whole-assembly XY translation. Only
+    the verified translation of every native region is used in this audit;
+    other engines retain their original input coordinate frame.
+    """
     if not isinstance(gcode, bytes) or not 0 < len(gcode) <= 64 * 1024 * 1024:
         raise WorkerError("Invalid modifier G-code output.")
+    if (not isinstance(translation_xy, tuple) or len(translation_xy) != 2
+            or any(type(value) not in (int, float) or not math.isfinite(value)
+                   or abs(value) > 256 for value in translation_xy)
+            or (engine != "bambustudio" and translation_xy != (0.0, 0.0))):
+        raise WorkerError("Unverified modifier audit coordinate translation.")
     boxes, kinds, meshes = modifier_bounds(project, engine, include_meshes=True)
+    if translation_xy != (0.0, 0.0):
+        dx, dy = translation_xy
+        boxes = [((bounds[0][0] + dx, bounds[0][1] + dx),
+                  (bounds[1][0] + dy, bounds[1][1] + dy),
+                  bounds[2]) for bounds in boxes]
+        meshes = [tuple(tuple((point[0] + dx, point[1] + dy, point[2])
+                              for point in triangle)
+                        for triangle in mesh) for mesh in meshes]
 
     @lru_cache(maxsize=64)
     def section(index, layer_z):
