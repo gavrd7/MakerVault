@@ -295,6 +295,9 @@ class Handler(BaseHTTPRequestHandler):
                 data = (workdir / "output.gcode").read_bytes()
                 if not data or len(data) > MAX_OUTPUT_BYTES:
                     raise WorkerError("Generated G-code exceeded the output size limit.")
+                if current["engine"] == "prusaslicer":
+                    from .prusa_gcode_audit import audit_prusa_positive_e
+                    audit_prusa_positive_e(data)
                 if files.get("native_modifier_project"):
                     # A successful native CLI exit is not proof that every
                     # requested region was used in the generated toolpaths.
