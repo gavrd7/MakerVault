@@ -153,8 +153,17 @@ class SliceJobApiTests(TestCase):
         self.assertEqual(result["plate_volumes"][0]["id"], region["id"])
         self.assertEqual(result["plate_objects"][0]["modifier_volumes"][0]["id"], region["id"])
 
-        for tampered in (
+        # Drafts may retain an independently saved cutter even when the
+        # temporary per-model editor adapter does not carry it. The native
+        # execution gate will refuse slicing until every cutter is represented.
+        detached = _draft_plate_settings(
+            self.owner, self.input_asset,
             {**settings, "plate_objects": [model]},
+        )
+        self.assertEqual(detached["plate_volumes"][0]["id"], region["id"])
+        self.assertNotIn("modifier_volumes", detached["plate_objects"][0])
+
+        for tampered in (
             {**settings, "plate_volumes": []},
             {**settings, "plates": [{**settings["plates"][0], "volumes": []}]},
         ):
