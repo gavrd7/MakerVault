@@ -53,7 +53,7 @@ test("Add model menu uses shared insertion editor for six non-printing modifier 
 test("new modifier draft is placed independently with XYZ rotation and scale", () => {
   assert.match(editor, /coordinate_space:"world"/);
   assert.match(editor, /rotation_xyz_deg:numbers\.slice\(6,9\)/);
-  assert.match(editor, /scale_xyz_percent:previous\?\.scale_xyz_percent \|\| \[100,100,100\]/);
+  assert.match(editor, /scale_xyz_percent:\(solidOptions\.volume_scale_xyz_percent/);
   assert.match(prepare, /Edit volume/);
   assert.match(prepare, /selectedModifierId=\{activeModifier\?\.id \|\| null\}/);
   assert.match(editor, /ghost\.userData\.isWorldModifier = modifier\.coordinate_space === "world"/);
