@@ -131,3 +131,13 @@ test("3mf project export uses owner-scoped server endpoint",()=>{
   assert.match(source,/export-project\//);
   assert.match(source,/link\.download=mode==="native-material"\?/);
 });
+
+test("retrying a slice revalidates its current plate without leaving interactive slicer", () => {
+  const prepare = fs.readFileSync(path.join(root, "src/components/SlicerPrepareWorkspace.jsx"), "utf8");
+  const editor = fs.readFileSync(path.join(root, "src/components/SlicerPlateEditor.jsx"), "utf8");
+  assert.match(source, /validationRefreshKey=\{busy \|\| loading\}/);
+  assert.match(prepare, /validationRefreshKey=\{validationRefreshKey\}/);
+  assert.match(editor, /\[issueSignature, issueKey, onPlateIssuesChange, validationRefreshKey\]/);
+  assert.match(editor, /onPlateIssuesChange\?\.\(\{ signature: issueSignature, issues: plateIssues \}\)/);
+  assert.match(prepare, /plateIssues\.signature !== JSON\.stringify\(objects\)/);
+});
