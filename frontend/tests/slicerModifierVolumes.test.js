@@ -26,7 +26,7 @@ test("all six primitive modifier shapes have edit and preview paths", () => {
 
 test("printable duplicates do not duplicate independently placed volumes", () => {
   assert.match(editor, /copy\.modifier_volumes = \[\]/);
-  assert.match(editor, /Free volumes belong to the plate/);
+  assert.match(editor, /A free volume is a separate plate item/);
 });
 
 test("torus preview uses the exact backend major and minor radii", () => {
