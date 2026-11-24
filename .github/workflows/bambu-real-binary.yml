@@ -10,6 +10,8 @@ on:
       - 'slicer_worker/modifier_acceptance_probe.py'
       - 'slicer_worker/modifier_3mf_validation.py'
       - 'scripts/build_native_modifier_fixture.py'
+      - 'scripts/build_native_composite_fixture.py'
+      - 'slicer_worker/composite_acceptance_probe.py'
       - 'backend/core/slicer_modifier_3mf.py'
       - 'slicer_worker/stage_engines.py'
       - 'slicer_worker/probe.py'
