@@ -82,7 +82,7 @@ def fuzzy_name_match(name, query):
     # immediately by "mm" (e.g. "0.20mm Standard"). Tokenise the unit
     # separately so searches for "0.20", "0.20mm" and "0.20 mm" agree.
     # Keep whole-token model matching unchanged (K1 must not match K10).
-    separate_units = lambda text: re.sub(r"(?<=\\d)mm\\b", " mm", str(text or ""), flags=re.I)
+    separate_units = lambda text: re.sub(r"(?<=\d)mm\b", " mm", str(text or ""), flags=re.I)
     terms = _words(separate_units(query))
     words = _words(separate_units(name))
     if not terms:
