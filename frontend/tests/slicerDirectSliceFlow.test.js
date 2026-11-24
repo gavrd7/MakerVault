@@ -143,3 +143,15 @@ test("retrying a slice revalidates its current plate without leaving interactive
   assert.match(editor, /onPlateIssuesChange\?\.\(\{ signature: issueSignature, issues: plateIssues \}\)/);
   assert.match(prepare, /plateIssues\.signature !== JSON\.stringify\(objects\)/);
 });
+
+test("fresh slicer project resets session-only models, volumes, profiles and tool state", () => {
+  assert.match(source, /New project \/ Reset slicer/);
+  assert.match(source, /setProjectPlates\(\[\{id:"plate-1",name:"Plate 1",objects:\[\],volumes:\[\]\}\]\)/);
+  assert.match(source, /setForm\(\{\.\.\.initialForm\}\)/);
+  assert.match(source, /setProcessOverrides\(\{\}\)/);
+  assert.match(source, /setFlushSettings\(null\)/);
+  assert.match(source, /setSlotFilamentProfiles\(\[\]\)/);
+  assert.match(source, /setWorkspaceEpoch\(epoch => epoch \+ 1\)/);
+  assert.match(source, /SlicerPrepareWorkspace key=\{workspaceEpoch\}/);
+  assert.match(source, /Saved drafts, files and profiles are not deleted/);
+});
