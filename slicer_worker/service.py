@@ -311,6 +311,9 @@ class Handler(BaseHTTPRequestHandler):
             # Only report a bounded diagnostic category, never command output,
             # profile JSON, private paths, bearer tokens or source filenames.
             safe_reasons = {
+                "Generated G-code deposits material inside a requested negative volume.": "native-negative-deposition",
+                "Requested native modifier has no model deposition in the generated G-code.": "native-modifier-no-deposition",
+                "Unable to audit native modifier geometry.": "native-region-geometry-invalid",
                 "Invalid Creality Print JSON profile.": "creality-profile-json-invalid",
                 "Creality Print profile requires a self-contained, verified native preset.": "creality-profile-parent-unresolved",
                 "Creality Print profile nesting exceeds the limit.": "creality-profile-structure-invalid",
