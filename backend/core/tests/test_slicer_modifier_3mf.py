@@ -118,6 +118,51 @@ class NativeModifierProjectTests(SimpleTestCase):
             export_modifier_3mf_fixture(
                 [(item(x=500), fixture_stl())], bed_width=220, bed_depth=220)
 
+    def test_composite_printable_models_and_one_global_negative_volume(self):
+        first = item(x=0, y=0, z=5)
+        second = item(x=0, y=0, z=5)
+        second["x_mm"] = 12
+        first["modifier_volumes"][0].update({
+            "kind": "negative", "settings": {},
+            "coordinate_space": "world", "rotation_xyz_deg": [0, 0, 0],
+            "scale_xyz_percent": [100, 100, 100],
+            "width_mm": 38, "depth_mm": 18, "height_mm": 8,
+        })
+        second["modifier_volumes"] = []
+        output = export_modifier_3mf_fixture(
+            [(first, fixture_stl()), (second, fixture_stl())],
+            bed_width=220, bed_depth=220)
+        with zipfile.ZipFile(io.BytesIO(output)) as archive:
+            root = ET.fromstring(archive.read("3D/3dmodel.model"))
+            manifest = ET.fromstring(archive.read("Metadata/model_settings.config"))
+        ns = "{" + NS + "}"
+        self.assertEqual(len(root.findall(f"./{ns}build/{ns}item")), 1)
+        self.assertEqual([part.attrib["subtype"] for part in
+                          manifest.findall("./object/part")],
+                         ["normal_part", "normal_part", "negative_part"])
+        self.assertEqual(len(root.findall(f"./{ns}resources/{ns}object")), 4)
+        self.assertEqual(len(root.findall(
+            f"./{ns}resources/{ns}object[@id='1']/{ns}components/{ns}component")), 3)
+
+    def test_composite_modifier_is_not_duplicated_per_printable_model(self):
+        first = item(x=0, y=0, z=5)
+        first["modifier_volumes"][0].update({
+            "coordinate_space": "world", "rotation_xyz_deg": [0, 0, 0],
+            "scale_xyz_percent": [100, 100, 100],
+            "width_mm": 40,
+        })
+        second = item()
+        second["x_mm"] = 10
+        second["modifier_volumes"] = []
+        output = export_modifier_3mf_fixture(
+            [(first, fixture_stl()), (second, fixture_stl())],
+            bed_width=220, bed_depth=220)
+        with zipfile.ZipFile(io.BytesIO(output)) as archive:
+            manifest = ET.fromstring(archive.read("Metadata/model_settings.config"))
+        self.assertEqual(
+            [part.get("subtype") for part in manifest.findall("./object/part")],
+            ["normal_part", "normal_part", "modifier_part"])
+
     def test_unverified_modifier_is_never_silently_dropped_by_standard_export(self):
         from core.slicer_plate_3mf import build_plate_3mf
         with self.assertRaisesRegex(SlicerProfileError, "cannot discard"):
