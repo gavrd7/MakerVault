@@ -1884,6 +1884,15 @@ export default function SlicerPrepareWorkspace({
                 </span>
                 <span className="slicerPrepareModelName">{object.shape[0].toUpperCase()+object.shape.slice(1)} {object.kind==="negative"?"negative volume":"parameter modifier"}</span>
               </button>
+              <button type="button" className="slicerModelEditText"
+                disabled={!canEdit || busy} aria-label={"Edit "+object.shape+" "+(object.kind==="negative"?"negative volume":"parameter modifier")}
+                onClick={()=>{
+                  selectModifier(object.owner_instance_id, object.id);
+                  setMobilePane("plate");
+                  setSolidRequest({kind:object.kind==="negative"?"negative":"modifier",
+                    editTargetId:object.owner_instance_id,editVolumeId:object.id,
+                    id:Date.now()+Math.random()});
+                }}>Edit volume</button>
             </div>}
           </React.Fragment>;
           return <React.Fragment key={object.instance_id}>
