@@ -103,12 +103,48 @@ VERIFIED_NATIVE_NEGATIVE_VERSIONS = {}
 MAX_NATIVE_COMPOSITE_MODELS = 12
 
 
+def assert_native_plate_volume_coverage(plate, settings):
+    """Never silently slice only the first twelve of a free-volume draft.
+
+    Plate-level storage supports up to 48 independent non-printing volumes;
+    the temporary editor/slicer adapter still supports only twelve per mesh.
+    Drafts may retain unattached regions, but slicing must prove exact,
+    complete adapter coverage before calling any engine.
+    """
+    if not isinstance(settings, dict) or "plate_volumes" not in settings:
+        return
+    raw = settings["plate_volumes"]
+    if not isinstance(raw, list) or len(raw) > MAX_TOTAL_MODIFIERS:
+        raise ValueError("Independent plate volume list is invalid.")
+    canonical = []
+    for offset in range(0, len(raw), MAX_MODIFIERS_PER_MODEL):
+        canonical.extend(validate_modifier_volumes(
+            raw[offset:offset + MAX_MODIFIERS_PER_MODEL]))
+    if (any(volume.get("coordinate_space") != "world" for volume in canonical)
+            or len({v["id"] for v in canonical}) != len(canonical)):
+        raise ValueError("Independent plate volume identities or coordinates are invalid.")
+    if not isinstance(plate, list):
+        raise ValueError("An independent volume plate requires a printable model for slicing.")
+    inline = [
+        volume for model in plate if isinstance(model, dict)
+        for volume in validate_modifier_volumes(model.get("modifier_volumes"))
+        if volume.get("coordinate_space") == "world"
+    ]
+    if sorted(inline, key=lambda row: row["id"]) != sorted(
+            canonical, key=lambda row: row["id"]):
+        raise ValueError(
+            "Some independently saved modifier or negative volumes cannot be represented "
+            "in the native slicer input. Save the draft; do not slice with missing regions."
+        )
+
+
 def validate_native_modifier_execution(plate, *, engine, version, settings):
     """Strict exact-version native region admission. No unverified combinations."""
     if not isinstance(plate, list):
         return False
     if any(not isinstance(row, dict) for row in plate):
         raise ValueError("Native modifier plate entries must be objects.")
+    assert_native_plate_volume_coverage(plate, settings)
     count = sum(len(row.get("modifier_volumes") or []) for row in plate)
     if not count:
         return False
