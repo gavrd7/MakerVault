@@ -155,3 +155,14 @@ test("fresh slicer project resets session-only models, volumes, profiles and too
   assert.match(source, /SlicerPrepareWorkspace key=\{workspaceEpoch\}/);
   assert.match(source, /Saved drafts, files and profiles are not deleted/);
 });
+
+test("six slicer workspace actions render as a flat grid with no nested project-action columns", () => {
+  const styles = fs.readFileSync(path.join(root, "src/styles.css"), "utf8");
+  assert.match(source, /className="printingHeroActions slicerHeroActions"/);
+  assert.doesNotMatch(source, /className="slicerHeroProjectNavigation"/);
+  assert.doesNotMatch(source, /className="slicerHeroProjectFileActions"/);
+  assert.match(source, /Save project \(\.3mf\)/);
+  assert.match(source, /Open project \(\.3mf\)/);
+  assert.match(source, /New project \/ Reset slicer/);
+  assert.match(styles, /\.slicerWorkbenchRoot\.slicerEditorOpen \.slicerHeroActions > button/);
+});
