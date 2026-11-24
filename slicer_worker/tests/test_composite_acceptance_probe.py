@@ -6,6 +6,7 @@ diagnostic accounts for real positive-E moves and records feature attribution.
 import unittest
 
 from slicer_worker.composite_acceptance_probe import two_model_region_extrusion
+from slicer_worker.single_negative_diagnostic import _cavity_y_bands
 
 
 class CompositeNativeEvidenceTests(unittest.TestCase):
@@ -56,6 +57,22 @@ class CompositeNativeEvidenceTests(unittest.TestCase):
         ])
         result = two_model_region_extrusion(code)
         self.assertEqual(result["counts"], {"left": 0, "right": 0})
+
+    def test_bambu_negative_cavity_diagnostic_distinguishes_inner_and_boundary_paths(self):
+        gcode = b"\\n".join([
+            b"G90", b"M83", b"G0 X123 Y109 Z15",
+            b"; FEATURE: Sparse infill", b"G1 X133 Y109 E1.25",
+            b"G0 X123 Y99", b"; FEATURE: Inner wall",
+            b"G1 X133 Y99 E2.5",
+            b"G0 X123 Y121", b"G1 X133 Y121 E0.75",
+            b"G0 X123 Y109", b"G1 X133 Y109 E-0.5",
+        ])
+        result = _cavity_y_bands(gcode)
+        self.assertEqual(result["108"]["count"], 1)
+        self.assertAlmostEqual(result["108"]["E"], 1.25)
+        self.assertEqual(result["108"]["features"], {"Sparse infill": 1.25})
+        self.assertEqual(result["098"]["features"], {"Inner wall": 2.5})
+        self.assertEqual(result["120"]["features"], {"Inner wall": 0.75})
 
     def test_absolute_extrusion_reset_only_counts_positive_e(self):
         code = b"\n".join([
