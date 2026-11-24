@@ -87,13 +87,14 @@ jobs:
           set -euo pipefail
           test -d resources
           build/src/prusa-slicer --help > /tmp/prusa-help.txt
-          build/src/prusa-slicer --version > /tmp/prusa-version.txt
-          grep -F '2.9.7' /tmp/prusa-version.txt
+          # PrusaSlicer 2.9.7's headless CLI does not support --version.
+          # Source identity is strictly pinned by git rev-parse above; assess
+          # this actual binary by its help and genuine positive-extrusion slice.
           grep -F -- '--export-gcode' /tmp/prusa-help.txt
           sha256sum build/src/prusa-slicer | tee /tmp/prusa-binary-sha.txt
           echo "PrusaSlicer binary built from exact tagged source; NOT production approved." >> "$GITHUB_STEP_SUMMARY"
           cat /tmp/prusa-binary-sha.txt >> "$GITHUB_STEP_SUMMARY"
-          echo "CLI help and version passed; real project G-code acceptance still required." >> "$GITHUB_STEP_SUMMARY"
+          echo "CLI help passed; genuine project G-code acceptance still required." >> "$GITHUB_STEP_SUMMARY"
 
       - name: Archive isolated runtime candidate for review
         working-directory: upstream-prusa
@@ -104,7 +105,6 @@ jobs:
           cp -a resources /tmp/prusa-candidate/resources
           cp LICENSE /tmp/prusa-candidate/LICENSE
           # Validate the relocatable layout rather than only the build-tree CLI.
-          /tmp/prusa-candidate/bin/prusa-slicer --version | grep -F '2.9.7'
           /tmp/prusa-candidate/bin/prusa-slicer --help > /tmp/prusa-packaged-help.txt
           grep -F -- '--export-gcode' /tmp/prusa-packaged-help.txt
           PYTHONPATH="$GITHUB_WORKSPACE" python3 \
