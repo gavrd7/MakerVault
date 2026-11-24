@@ -6,6 +6,8 @@ import PrinterStartGcodeModal from "./PrinterStartGcodeModal";
 import GcodeViewerModal from "./GcodeViewerModal";
 import SlicerPlateEditor from "./SlicerPlateEditor";
 import SlicerPrepareWorkspace from "./SlicerPrepareWorkspace";
+import {movePrintablesPreservingVolumes} from "./slicerPlateVolumeTransfers.js";
+import {canonicalPlate, hydratePlateObjects, updateCanonicalPlate} from "./slicerPlateVolumes.js";
 import SlicerEngineChoices from "./SlicerEngineChoices";
 import SlicerEngineManager from "./SlicerEngineManager";
 import SlicerBedTypePicker from "./SlicerBedTypePicker";
@@ -171,19 +173,19 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
     return (safe||"MakerVault project")+".3mf";
   };
   // Multi-plate project; existing code reads only the active plate.
-  const [projectPlates,setProjectPlates] = useState([{id:"plate-1",name:"Plate 1",objects:[]}]);
+  const [projectPlates,setProjectPlates] = useState([{id:"plate-1",name:"Plate 1",objects:[],volumes:[]}]);
   const [activePlateId,setActivePlateId] = useState("plate-1");
   const activePlate=projectPlates.find(item=>item.id===activePlateId)||projectPlates[0];
-  const plateObjects=activePlate?.objects||[];
+  const plateObjects=useMemo(()=>hydratePlateObjects(activePlate),[activePlate]);
   const plateLabel=activePlate?.name??"Plate 1";
   const primeTower=activePlate?.prime_tower||null;
   const setPrimeTower=useCallback(position=>{
     setProjectPlates(current=>current.map(plate=>plate.id===activePlateId
       ?{...plate,...(position?{prime_tower:position}:{prime_tower:undefined})}:plate));
   },[activePlateId]);
-  const setPlateObjects=useCallback(updater=>{
+  const setPlateObjects=useCallback((updater, options = {})=>{
     setProjectPlates(current=>current.map(item=>item.id===activePlateId
-      ?{...item,objects:typeof updater==="function"?updater(item.objects):updater}:item));
+      ?updateCanonicalPlate(item,typeof updater==="function"?updater(hydratePlateObjects(item)):updater,options):item));
   },[activePlateId]);
   const setPlateLabel=useCallback(value=>{
     setProjectPlates(current=>current.map(item=>item.id===activePlateId
@@ -196,14 +198,14 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
     const used=new Set(projectPlates.map(item=>item.name));
     let number=projectPlates.length+1;
     while(used.has("Plate "+number))number++;
-    setProjectPlates(current=>[...current,{id,name:"Plate "+number,objects:[]}]);
+    setProjectPlates(current=>[...current,{id,name:"Plate "+number,objects:[],volumes:[]}]);
     setActivePlateId(id);setPlateValidation(null);
   };
   const removeProjectPlate=id=>{
     if(projectPlates.length<=1)return;
     const target=projectPlates.find(item=>item.id===id);
-    if(target?.objects.length&&!window.confirm("Remove "+target.name+" and its "+
-      target.objects.length+" model(s) from this project?"))return;
+    if((target?.objects.length||target?.volumes?.length)&&!window.confirm("Remove "+target.name+" and its "+
+      target.objects.length+" model(s) and "+(target.volumes?.length||0)+" volume(s) from this project?"))return;
     const remaining=projectPlates.filter(item=>item.id!==id);
     setProjectPlates(remaining);
     if(activePlateId===id)setActivePlateId(remaining[0].id);
@@ -215,31 +217,24 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
   };
   const moveProjectModels=(instanceIds,destinationId)=>{
     if(destinationId===activePlateId || !projectPlates.some(p=>p.id===destinationId))return;
-    const ids=new Set(instanceIds);
-    const selected=plateObjects.filter(item=>ids.has(item.instance_id));
-    if(!selected.length)return;
     const destination=projectPlates.find(item=>item.id===destinationId);
-    if(destination.objects.length+selected.length>200){
+    let transfer;
+    try {
+      transfer=movePrintablesPreservingVolumes(plateObjects,instanceIds);
+    } catch (err) {
+      setError(err.message||"Could not preserve independent volumes on the original plate.");
+      return;
+    }
+    if(!transfer.moving.length)return;
+    if(destination.objects.length+transfer.moving.length>200){
       setError("Destination plate cannot contain more than 200 objects.");return;
     }
-    // Preserve assembly membership, per-part materials and precise transforms.
-    // The destination plate editor revalidates placement before permitting slicing.
-    const normaliseAssemblies=rows=>{
-      const counts=new Map();
-      rows.forEach(row=>{
-        if(row.assembly_id)counts.set(row.assembly_id,(counts.get(row.assembly_id)||0)+1);
-      });
-      return rows.map(row=>row.assembly_id && counts.get(row.assembly_id)<2
-        ?{...row,assembly_id:null}:row);
-    };
     setProjectPlates(current=>current.map(plate=>plate.id===activePlateId
-      ?{...plate,objects:normaliseAssemblies(
-        plate.objects.filter(item=>!ids.has(item.instance_id)))}
-      :plate.id===destinationId?{...plate,objects:normaliseAssemblies(
-        [...plate.objects,...selected])}:plate));
+      ?canonicalPlate({...plate,objects:transfer.remaining})
+      :plate.id===destinationId?canonicalPlate({...plate,objects:[...hydratePlateObjects(plate),...transfer.moving]}):plate));
     setPlateValidation(null);
-    setNotice("Moved "+selected.length+" model(s) to "+destination.name+
-      ". Review their placement on that plate before slicing.");
+    setNotice("Moved "+transfer.moving.length+" model(s) to "+destination.name+
+      ". Independent modifier and negative volumes remain on their original plate.");
   };
   const importProjectFile=async file=>{
     if(!file||busy||loading||!canPrepare)return;
@@ -251,7 +246,9 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
       const result=await apiFetch("/api/printing/slicer/projects/import/",{
         method:"POST",body:data,
       });
-      setProjectPlates(result.plates);
+      // Imported project volumes are canonical plate-level records, not STL
+      // children. Migrate legacy inline world regions without losing them.
+      setProjectPlates(result.plates.map(canonicalPlate));
       setActivePlateId(result.active_plate_id);
       setPlateValidation(null);
       setPlateLocalAssets(current=>[...current,...result.files]);
@@ -303,6 +300,9 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
   }, []);
   const [editorOpen, setEditorOpen] = useState(false);
   const [plateValidation, setPlateValidation] = useState(null);
+  // A reopened failed/draft job can reuse the mounted editor and identical
+  // geometry. Explicitly request fresh validation after clearing its snapshot.
+  const [plateValidationEpoch, refreshPlateValidation] = useState(0);
   const unresolvedPlateIssues = !plateValidation ||
     plateValidation.signature !== JSON.stringify(plateObjects) ||
     plateValidation.issues.length > 0;
@@ -346,6 +346,47 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
     return [...visible, ...hidden.filter(file => !visible.some(item => String(item.id) === String(file.id)))
       .filter((file, index, all) => all.findIndex(item => String(item.id) === String(file.id)) === index)];
   }, [files, jobs]);
+
+  const [workspaceEpoch, setWorkspaceEpoch] = useState(0);
+  const resetSlicerWorkspace = () => {
+    if (busy || loading || !canPrepare) return;
+    // Reset only the unsaved workspace. Existing jobs, saved profiles, printer
+    // records, STL files and installed engines belong to persistent storage.
+    const hasWork = projectPlates.some(plate =>
+      plate.objects.length || (plate.volumes || []).length) ||
+      Object.keys(processOverrides).length > 0 || flushSettings !== null ||
+      slotFilamentProfiles.length > 0;
+    if (hasWork && !window.confirm(
+      "Start a new empty slicer project? Unsaved models, volumes and settings in this workspace will be discarded. Saved drafts, files and profiles are not deleted.")) return;
+    plateLocalAssets.forEach(asset => {
+      if (asset.url?.startsWith("blob:")) URL.revokeObjectURL(asset.url);
+    });
+    setPlateLocalAssets([]);
+    setProjectPlates([{id:"plate-1",name:"Plate 1",objects:[],volumes:[]}]);
+    setActivePlateId("plate-1");
+    setProjectName("MakerVault project");
+    setForm({...initialForm});
+    setProcessOverrides({});
+    setFlushSettings(null);
+    setSlotFilamentProfiles([]);
+    setCustomBed({enabled:false,x:"220",y:"220"});
+    setPlateValidation(null);
+    setWorkspaceEpoch(epoch => epoch + 1);
+    refreshPlateValidation(epoch => epoch + 1);
+    manuallyColouredModels.current.clear();
+    manuallyChosenProfiles.current.clear();
+    userChosePlateRef.current = false;
+    setProfileSuggestions({});
+    setNativePlate(null);
+    setMaterialProfileMatches(null);
+    setProfileModal("");
+    setShowDrafts(false);
+    setPreviewJobId(null);
+    awaitingSlicePreviewRef.current = null;
+    setError("");
+    setNotice("New empty slicer project. Saved drafts, files and profiles are unchanged.");
+    setEditorOpen(true);
+  };
 
   const update = (name, value) => {
     if (["engine", "engine_version", "process_preset", "process_profile_id"].includes(name))
@@ -621,8 +662,8 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
     const savedObjects = job.settings?.plate_objects || [];
     const savedPlates=job.settings?.plates;
     let restored=Array.isArray(savedPlates)&&savedPlates.length
-      ?savedPlates.map(item=>({id:item.id,name:item.name,objects:item.objects||[],...(item.prime_tower?{prime_tower:item.prime_tower}:{})}))
-      :[{id:"plate-1",name:job.settings?.plate_label||"Plate 1",objects:savedObjects}];
+      ?savedPlates.map(item=>canonicalPlate({id:item.id,name:item.name,objects:item.objects||[],volumes:item.volumes||[],...(item.prime_tower?{prime_tower:item.prime_tower}:{})}))
+      :[{id:"plate-1",name:job.settings?.plate_label||"Plate 1",objects:savedObjects,volumes:job.settings?.plate_volumes||[]}].map(canonicalPlate);
     try {
       restored=await restorePaintedPlates(restored);
     } catch (err) {
@@ -637,6 +678,7 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
     setActivePlateId(restored.some(p=>p.id===job.settings?.active_plate_id)
       ?job.settings.active_plate_id:restored[0].id);
     setPlateValidation(null);
+    refreshPlateValidation(value => value + 1);
     setProcessOverrides(job.settings?.process_overrides || {});
     setFlushSettings(job.settings?.flush_settings || null);
     setSlotFilamentProfiles(job.settings?.slot_filament_profiles || []);
@@ -946,7 +988,7 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
     setBusy(true);
     let compactPlates;
     try {
-      compactPlates=await separatePaintedPlates(projectPlates);
+      compactPlates=await separatePaintedPlates(projectPlates.map(plate=>({...plate,objects:hydratePlateObjects(plate)})));
     } catch (err) {
       setBusy(false);
       setError("Could not store private model painting: "+(err.message||"Unknown error"));
@@ -963,9 +1005,11 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
             ...form,input_asset_id:target.objects[0].asset_id,
             spool_id:form.spool_id||null,
             settings:{
-              plate_objects:target.objects,plate_label:target.name.trim()||"Untitled plate",
+              plate_objects:target.objects,plate_volumes:canonicalPlate(target).volumes,
+              plate_label:target.name.trim()||"Untitled plate",
               plates:compactPlates.map(plate=>({
-                id:plate.id,name:plate.name.trim()||"Untitled plate",objects:plate.objects,
+                id:plate.id,name:plate.name.trim()||"Untitled plate",
+                objects:canonicalPlate(plate).objects,volumes:canonicalPlate(plate).volumes,
                 ...(plate.prime_tower?{prime_tower:plate.prime_tower}:{}),
               })),
               ...(target.prime_tower?{prime_tower:target.prime_tower}:{}),
@@ -1009,10 +1053,12 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
             compactPlates.find(item=>item.objects.length)?.objects[0]?.asset_id,
           spool_id: form.spool_id || null,
           settings: { ...(compactObjects.length ? { plate_objects: compactObjects } : {}),
+            plate_volumes:canonicalPlate(compactPlates.find(plate=>plate.id===activePlateId)).volumes,
             plate_label: plateLabel.trim() || "Plate 1",
             ...(namedProject?{project_name:namedProject}:{}),
             plates:compactPlates.map(plate=>({
-              id:plate.id,name:plate.name.trim()||"Untitled plate",objects:plate.objects,
+              id:plate.id,name:plate.name.trim()||"Untitled plate",
+              objects:canonicalPlate(plate).objects,volumes:canonicalPlate(plate).volumes,
               ...(plate.prime_tower?{prime_tower:plate.prime_tower}:{}),
             })),active_plate_id:activePlateId,
             ...(primeTower?{prime_tower:primeTower}:{}),
@@ -1500,20 +1546,20 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
         <p>Choose a model, printer and filament, then configure the native slicing profiles. Prepare the build plate, save drafts, and slice when the selected engine is available.</p>
       </div>
       <div className="printingHeroActions slicerHeroActions">
-        {editorOpen && <div className="slicerHeroProjectNavigation">
-          <button type="button" className="slicerHeroBack" onClick={() => setEditorOpen(false)}>← Slicer setup</button>
-          <div className="slicerHeroProjectFileActions">
-            <button type="button" disabled={busy||loading||!canPrepare||!projectPlates.some(plate=>plate.objects.length)}
-              onClick={()=>openProjectNameDialog("project")}>Save project (.3mf)</button>
-            <button type="button" disabled={busy||loading||!canPrepare}
-              onClick={()=>projectFileRef.current?.click()}>Open project (.3mf)</button>
-          </div>
-          <input ref={projectFileRef} className="slicerProjectHiddenInput" type="file" accept=".3mf"
-            aria-label="Choose MakerVault project 3MF" onChange={event=>{
-              const file=event.target.files?.[0];event.target.value="";
-              if(file)importProjectFile(file);
-            }}/>
-        </div>}
+        {editorOpen && <button type="button" className="slicerHeroBack"
+          onClick={() => setEditorOpen(false)}>← Slicer setup</button>}
+        {editorOpen && <button type="button"
+          disabled={busy||loading||!canPrepare||!projectPlates.some(plate=>plate.objects.length)}
+          onClick={()=>openProjectNameDialog("project")}>Save project (.3mf)</button>}
+        {editorOpen && <button type="button" disabled={busy||loading||!canPrepare}
+          onClick={()=>projectFileRef.current?.click()}>Open project (.3mf)</button>}
+        {editorOpen && <input ref={projectFileRef} className="slicerProjectHiddenInput" type="file" accept=".3mf"
+          aria-label="Choose MakerVault project 3MF" onChange={event=>{
+            const file=event.target.files?.[0];event.target.value="";
+            if(file)importProjectFile(file);
+          }}/>}
+        <button type="button" disabled={busy||loading||!canPrepare}
+          onClick={resetSlicerWorkspace}>New project / Reset slicer</button>
         <button type="button" onClick={onBack}>← Printing overview</button>
         <button type="button" onClick={() => setShowDrafts(true)}>Saved drafts ({jobs.length})</button>
         {!editorOpen && <button type="button" className="primary slicerHeroInteractive"
@@ -1524,14 +1570,16 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
       </div>
     </section>
 
-    {editorOpen ? <SlicerPrepareWorkspace
+    {editorOpen ? <SlicerPrepareWorkspace key={workspaceEpoch}
       plateLabel={plateLabel} onPlateLabelChange={setPlateLabel}
       plates={projectPlates} activePlateId={activePlateId}
       primeTower={primeTower} onPrimeTowerChange={setPrimeTower}
       onChoosePlate={chooseProjectPlate} onAddPlate={addProjectPlate} onRemovePlate={removeProjectPlate}
        onMoveModelsToPlate={moveProjectModels}
-      objects={plateObjects} onChange={setPlateObjects} files={stlFiles}
-      plateIssues={plateValidation} onPlateIssuesChange={setPlateValidation}
+      objects={plateObjects} plateVolumes={activePlate?.volumes || []}
+      onRemovePlateVolumes={ids=>setPlateObjects(plateObjects,{removedVolumeIds:ids})}
+      onChange={setPlateObjects} files={stlFiles}
+      plateIssues={plateValidation} onPlateIssuesChange={setPlateValidation} validationRefreshKey={`${plateValidationEpoch}:${busy || loading}`}
       localAssets={plateLocalAssets} onLocalAssetsChange={setPlateLocalAssets}
       onPrimaryChange={id => update("input_asset_id", String(id))}
       onFilesUploaded={onFilesUploaded} defaultColor={selectedSpoolHex}
@@ -1771,7 +1819,7 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
     </div>
 
 
-    <SlicerPlateEditor plateType={form.plate}
+    <SlicerPlateEditor key={workspaceEpoch} plateType={form.plate}
       printerLabel={form.printer_preset || selectedPrinter?.model || selectedPrinter?.name || ""}
       plateLabel={plateLabel} onPlateLabelChange={setPlateLabel}
       files={stlFiles}

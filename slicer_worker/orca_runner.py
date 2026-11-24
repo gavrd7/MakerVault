@@ -245,8 +245,12 @@ def orca_command(binary: Path, workdir: Path, *,
         model_bytes = model.read_bytes()
         # Validate the archive once, against the actual request topology.
         # Without a palette, extruder metadata must remain forbidden.
+        native_modifiers = (workdir / "native-modifier-project.marker").exists()
+        if native_modifiers and palette:
+            raise WorkerError("Modifier jobs cannot include an unverified multi-tool palette.")
         validate_worker_3mf(model_bytes,
-                            native_tool_count=len(palette) if palette else None)
+                            native_tool_count=len(palette) if palette else None,
+                            allow_native_modifier_fixture=native_modifiers)
         # Inspect the manifest only after all archive bounds have been checked.
         with zipfile.ZipFile(io.BytesIO(model_bytes)) as archive:
             if "Metadata/model_settings.config" in archive.namelist():

@@ -5,7 +5,7 @@
 <h1 align="center">MakerVault</h1>
 <p align="center"><strong>Your workshop, organised.</strong></p>
 <p align="center">A self-hosted workspace for electronics, making and 3D printing — from the parts you own to the things you build.</p>
-<p align="center"><strong>Application version: v1.7.0</strong></p>
+<p align="center"><strong>Application version: v1.7.2</strong></p>
 <p align="center">
   <a href="https://gavrd7.github.io/MakerVault-docs/">User guide</a> ·
   <a href="https://gavrd7.github.io/MakerVault-docs/slicer/">Slicer guide</a> ·

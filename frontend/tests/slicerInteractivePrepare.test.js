@@ -95,7 +95,8 @@ test("active 3D model has a temporary outline and preserves preview filament col
   assert.match(scene, /selectMultiple\(object.instance_id, event.ctrlKey/);
   assert.match(editor, /const helper = new THREE.BoxHelper\(mesh, 0x39d9ff\)/);
   assert.match(editor, /selectionOutlines\.forEach\(helper=>helper\.update\(\)\)/);
-  assert.match(editor, /state\.setSelectionOutlines\(\["paint_colour","paint_support","paint_seam","paint_fuzzy","variable_layers"\]\.includes\(toolMode\) \? \[\] : selection\.map\(id=>state\.meshes\.get\(id\)\)/);
+  assert.match(editor, /state\.setSelectionOutlines\(\["paint_colour","paint_support","paint_seam","paint_fuzzy","variable_layers"\]\.includes\(toolMode\) \? \[\] : \[/);
+  assert.match(editor, /selection\.map\(id=>state\.meshes\.get\(id\)\)/);
   assert.match(editor, /paintPreview\(mesh, \{\.\.\.item,colour_paint:item\.colour_paint\}, PALETTE\[0\]\)/);
   assert.match(editor, /selection.includes\(item.instance_id\) \? "#168ab4" : "#000000"/);
   assert.match(editor, /setSelectionOutlines\(\[\]\)/);
@@ -534,7 +535,8 @@ test("multi-select assembles without merging STL assets and provides guarded gro
   assert.match(scene, /assembly_id: null/);
   assert.match(editor, /function transformGroup\(/);
   assert.match(editor, /Group transform would leave the build plate/);
-  assert.match(editor, /onChange\(objects\.map\(row => byId\.get\(row\.instance_id\) \|\| row\)\)/);
+  assert.match(editor, /modelsById\.get\(row\.instance_id\)\|\|row/);
+  assert.match(editor, /volumesById\.get\(volume\.id\)\|\|volume/);
   assert.match(editor, /aria-label="Multi-model assembly controls"/);
 });
 test("Move and Rotate have matching on-plate controls and all three rotate gizmo axes", () => {
@@ -724,15 +726,19 @@ test("assembly toolbar gizmos use a shared pivot and keep meshes independent",()
   assert.match(scene,/state\.transform\.attach\(pivot\)/);
   assert.match(scene,/groupCommitRef\.current\?\.\(dx,dy,rotation,scale\)/);
   assert.match(scene,/groupEditable = canEdit && !solidDialog && selection\.length > 1/);
-  assert.match(scene,/state\.setSelectionOutlines\(\["paint_colour","paint_support","paint_seam","paint_fuzzy","variable_layers"\]\.includes\(toolMode\) \? \[\] : selection\.map/);
+  assert.match(scene,/state\.setSelectionOutlines\(\["paint_colour","paint_support","paint_seam","paint_fuzzy","variable_layers"\]\.includes\(toolMode\) \? \[\] : \[/);
+  assert.match(scene,/selection\.includes\(ghost\.userData\.modifierId\)/);
   assert.match(scene,/transformGroup\(groupDeltaX, groupDeltaY, groupRotation, groupScale\)/);
   assert.match(workspace,/const memberIds = item\.assembly_id/);
   assert.match(workspace,/memberIds\.every\(value => current\.includes\(value\)\)/);
 });
-test("negative volume warns if the subtraction shape misses the model",()=>{
+test("native negative volume insertion stays non-destructive and preserves editable pose",()=>{
   const editor=read("SlicerPlateEditor.jsx");
-  assert.match(editor,/if \(!targetBounds\.intersectsBox\(toolBounds\)\)/);
-  assert.match(editor,/Negative shape does not intersect the selected model/);
+  assert.match(editor,/\["primitive","modifier","negative"\]\.includes\(solidDialog\.kind\)/);
+  assert.match(editor,/settings:solidDialog\.kind==="negative"\?\{\}/);
+  assert.match(editor,/modifier_volumes:solidDialog\.editVolumeId/);
+  assert.doesNotMatch(editor,/Negative shape does not intersect the selected model/);
+  assert.doesNotMatch(editor,/executeSolidOperation\("boolean",target,\{booleanMode:"difference"/);
 });
 
 test("project plates can be added and switched without sharing selection history",()=>{
@@ -822,4 +828,21 @@ test("multi-material slicing uses explicit offline admission with profile checks
   assert.match(prepare, /requiredMultiSlots\.every\(compatibleSlotProfile\)/);
   assert.match(prepare, /materialRoutingPending/);
   assert.doesNotMatch(prepare, /Material changeover system/);
+});
+
+
+test("mobile add model and independent volume editors flow beneath the plate rather than overlaying it", () => {
+  const editor = read("SlicerPlateEditor.jsx");
+  const css = fs.readFileSync(path.resolve(root, "../styles.css"), "utf8");
+  assert.match(editor, /"primitive","text","svg","modifier","negative"\]\.includes\(solidDialog\.kind\)/);
+  assert.match(editor, /" slicerMobileAddGeometryDock"/);
+  const start = css.lastIndexOf("PR196: Add text, primitive, modifier");
+  assert.ok(start > 0, "mobile add-dock layout rule must exist");
+  const rules = css.slice(start);
+  assert.match(rules, /position:relative!important/);
+  assert.match(rules, /order:2/);
+  assert.match(rules, /\.slicerPlateSectionControl\s*\{\s*order:3/);
+  assert.match(rules, /max-height:none!important/);
+  assert.match(rules, /overflow:visible!important/);
+  assert.match(rules, /slicerSolidInspectorCollapsed/);
 });

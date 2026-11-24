@@ -202,6 +202,30 @@ class CrealityPositionedPlateTests(SimpleTestCase):
         ]
         self.assertEqual(tools, [["1"], ["2"]])
 
+    def test_host_connection_metadata_is_not_exported_to_creality_project(self):
+        from core.slicer_creality_project import build_creality_project_candidate
+        plate = build_creality_positioned_plate(
+            self._objects(), bed_width=260, bed_depth=260, tool_ids=[0, 1])
+        machine = json.dumps({
+            "type": "machine", "name": "K1",
+            "printhost_authorization_type": "apikey",
+            "printhost_password": "private-secret",
+            "printer_agent": "local-host",
+        }).encode()
+        process = json.dumps({"type": "process", "name": "Standard"}).encode()
+        filament = json.dumps({"type": "filament", "name": "PLA"}).encode()
+        output = build_creality_project_candidate(
+            plate, printer=machine, process=process,
+            filaments=[filament, filament], bed_width=260, bed_depth=260,
+            prime_tower={"x": 45, "y": 84})
+        with zipfile.ZipFile(io.BytesIO(output)) as archive:
+            project = json.loads(archive.read("Metadata/project_settings.config"))
+        self.assertNotIn("printhost_authorization_type", project)
+        self.assertNotIn("printhost_password", project)
+        self.assertNotIn("printer_agent", project)
+        self.assertEqual(project["printer_settings_id"], "K1")
+        self.assertEqual(project["print_settings_id"], "Standard")
+
     def test_creality_self_contained_project_embeds_profiles_and_bounded_tower(self):
         import json
         from core.slicer_creality_project import build_creality_project_candidate

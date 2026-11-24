@@ -60,10 +60,12 @@ export function createPrimitiveGeometry(options={}) {
       geometry.scale(w/2,d/2,h/2);
       break;
     case "torus": {
-      const radius=Math.min(w,d)/2-h/2;
-      if(radius<=0.2)throw new Error("Torus ring width and depth must exceed its tube thickness.");
-      geometry=new THREE.TorusGeometry(radius,h/2,20,64);
-      geometry.scale(w/Math.min(w,d),d/Math.min(w,d),1);
+      // Keep the editor's printable torus identical to the non-printing
+      // region exporter: major radius 0.30, tube radius 0.20, then scale
+      // to the requested X/Y/Z envelope. Height is independent of the hole
+      // size, so a 20 x 20 x 20 mm torus is valid in both paths.
+      geometry=new THREE.TorusGeometry(.30,.20,16,32);
+      geometry.scale(w,d,h/.4);
       break;
     }
     default:throw new Error("Unsupported primitive.");

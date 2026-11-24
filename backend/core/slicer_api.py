@@ -29,6 +29,7 @@ from .slicer_native_resolution import resolved_native_profile
 from .slicer_native_overrides import ORCA_PLATES
 from .slicer_plate_types import inspect_engine_plates
 from .slicer_process_settings import process_schema, validate_process_overrides, apply_process_overrides
+from .slicer_modifier_volumes import validate_modifier_volumes, MAX_TOTAL_MODIFIERS
 from .slicer_flush_settings import validate_flush_settings
 from .slicer_colour_painting import validate_colour_paint
 from .slicer_support_painting import validate_support_paint
@@ -230,11 +231,28 @@ def _validate_prime_tower_position(value):
     return result
 
 
+def _validate_independent_plate_volumes(raw, printable_ids=()):
+    """Validate canonical non-printing plate objects, without an STL owner."""
+    if not isinstance(raw, list) or len(raw) > MAX_TOTAL_MODIFIERS:
+        raise ValueError("Independent plate volumes must be a bounded list.")
+    volumes = []
+    # The existing validator deliberately limits each storage batch to 12;
+    # a plate can hold up to 48 independent regions across all models.
+    for offset in range(0, len(raw), 12):
+        volumes.extend(validate_modifier_volumes(raw[offset:offset + 12]))
+    ids = [row["id"] for row in volumes]
+    if len(set(ids)) != len(ids) or set(ids).intersection(printable_ids):
+        raise ValueError("Independent plate volume IDs must be unique.")
+    if any(row.get("coordinate_space") != "world" for row in volumes):
+        raise ValueError("Independent plate volumes require world-space coordinates.")
+    return volumes
+
+
 def _draft_plate_settings(user, input_asset, settings):
     """Persist preview-only plate geometry; never compile it into slicer flags."""
     if settings is None:
         settings = {}
-    if not isinstance(settings, dict) or set(settings) - {"plate_objects", "plate_label", "plates", "active_plate_id", "save_gcode_to_library", "workflow", "process_overrides", "flush_settings", "slot_filament_profiles", "material_tool_bindings", "material_topology", "multi_material_test", "creality_auto_arrange_offline", "prime_tower", "project_name"}:
+    if not isinstance(settings, dict) or set(settings) - {"plate_objects", "plate_label", "plates", "active_plate_id", "save_gcode_to_library", "workflow", "process_overrides", "flush_settings", "slot_filament_profiles", "material_tool_bindings", "material_topology", "multi_material_test", "creality_auto_arrange_offline", "prime_tower", "project_name", "plate_volumes"}:
         raise ValueError("Unsupported slicer plate settings.")
     project_name = settings.get("project_name")
     name_field = {"project_name": _validate_project_name(project_name)} if project_name is not None else {}
@@ -319,7 +337,8 @@ def _draft_plate_settings(user, input_asset, settings):
         ids, validated, total = set(), [], 0
         raw_by_id = {}
         for plate in project:
-            if not isinstance(plate, dict) or set(plate) not in ({"id", "name", "objects"}, {"id", "name", "objects", "prime_tower"}):
+            if (not isinstance(plate, dict) or not {"id", "name", "objects"}.issubset(plate)
+                    or set(plate) - {"id", "name", "objects", "prime_tower", "volumes"}):
                 raise ValueError("Invalid build plate entry.")
             plate_id, name, instances = plate["id"], plate["name"], plate["objects"]
             if (not isinstance(plate_id, str) or
@@ -335,6 +354,18 @@ def _draft_plate_settings(user, input_asset, settings):
             if total > 200:
                 raise ValueError("A multi-plate draft supports at most 200 models in total.")
             raw_by_id[plate_id] = instances
+            canonical = "volumes" in plate
+            if canonical and any(isinstance(row, dict) and any(
+                    volume.get("coordinate_space") == "world"
+                    for volume in row.get("modifier_volumes", [])
+                    if isinstance(volume, dict)) for row in instances):
+                raise ValueError("World-space volumes must be stored independently of printable records.")
+            checked_volumes = _validate_independent_plate_volumes(
+                plate["volumes"],
+                {str(_uuid(row["instance_id"])) for row in instances}
+                if canonical and all(isinstance(row, dict) and "instance_id" in row
+                                     for row in instances) else (),
+            ) if canonical else []
             if instances:
                 primary = FileAsset.objects.filter(
                     pk=_uuid(instances[0].get("asset_id")), owner=user, category="mesh"
@@ -345,20 +376,74 @@ def _draft_plate_settings(user, input_asset, settings):
                     "plate_objects": instances, "plate_label": name.strip()
                 })
                 instances = checked["plate_objects"]
+            if canonical:
+                local_volumes = [volume for model in instances
+                                 for volume in model.get("modifier_volumes", [])]
+                if len(checked_volumes) + len(local_volumes) > MAX_TOTAL_MODIFIERS:
+                    raise ValueError("Too many printable-local and independent volumes on a build plate.")
+                if set(volume["id"] for volume in checked_volumes).intersection(
+                        volume["id"] for volume in local_volumes):
+                    raise ValueError("Independent and model-local volume IDs must be unique.")
             position = _validate_prime_tower_position(plate.get("prime_tower"))
             validated.append({"id": plate_id, "name": name.strip(), "objects": instances,
+                              **({"volumes": checked_volumes} if canonical else {}),
                               **({"prime_tower": position} if position is not None else {})})
         active_id = settings.get("active_plate_id")
         if active_id not in ids:
             raise ValueError("Choose an active build plate.")
-        if raw_by_id[active_id] != settings.get("plate_objects", []):
+        active = next(plate for plate in validated if plate["id"] == active_id)
+        submitted = settings.get("plate_objects", [])
+        canonical = "volumes" in active
+        # The current native slicer still consumes a temporary model-local
+        # adapter. Its source meshes and exact volumes must match the canonical
+        # independent plate data; never slice a silently omitted cutter.
+        if canonical:
+            if not isinstance(submitted, list):
+                raise ValueError("Invalid active model list.")
+            stripped = []
+            inline = []
+            for row in submitted:
+                if not isinstance(row, dict):
+                    continue
+                world = [volume for volume in row.get("modifier_volumes", [])
+                         if isinstance(volume, dict) and volume.get("coordinate_space") == "world"]
+                local = [volume for volume in row.get("modifier_volumes", [])
+                         if not isinstance(volume, dict) or volume.get("coordinate_space") != "world"]
+                inline.extend(world)
+                model = {key: value for key, value in row.items() if key != "modifier_volumes"}
+                if local:
+                    model["modifier_volumes"] = local
+                stripped.append(model)
+            if len(stripped) != len(submitted) or raw_by_id[active_id] != stripped:
+                raise ValueError("The active plate must match its submitted printable models.")
+            canonical_volumes = active["volumes"]
+            submitted_volumes = _validate_independent_plate_volumes(
+                settings.get("plate_volumes", []),
+                {str(_uuid(row["instance_id"])) for row in submitted},
+            )
+            if sorted(canonical_volumes, key=lambda row: row["id"]) != sorted(
+                    submitted_volumes, key=lambda row: row["id"]):
+                raise ValueError("Active independent volumes must match saved plate volumes.")
+            # Draft saving must not depend on the temporary editor adapter's
+            # 12-volume-per-printable capacity. A plate can contain 48
+            # independent volumes, including unattached ones. The *slicing*
+            # admission gate separately requires full canonical coverage.
+            canonical_by_id = {volume["id"]: volume for volume in canonical_volumes}
+            if (len({volume.get("id") for volume in inline}) != len(inline) or
+                    any(canonical_by_id.get(volume.get("id")) != volume
+                        for volume in inline)):
+                raise ValueError("Inline region adapter differs from independent plate volume records.")
+        elif raw_by_id[active_id] != submitted:
             raise ValueError("The active plate must match its submitted model list.")
+        elif "plate_volumes" in settings:
+            raise ValueError("A legacy active plate cannot silently omit separate volumes.")
         active_position = next((p.get("prime_tower") for p in validated if p["id"] == active_id), None)
         if active_position != prime_tower:
             raise ValueError("The active prime tower position must match its build plate.")
-        project_fields = {"plates": validated, "active_plate_id": active_id}
-    elif "active_plate_id" in settings:
-        raise ValueError("An active plate requires a multi-plate project.")
+        project_fields = {"plates": validated, "active_plate_id": active_id,
+                          **({"plate_volumes": active["volumes"]} if canonical else {})}
+    elif "active_plate_id" in settings or "plate_volumes" in settings:
+        raise ValueError("Independent plate volumes require a multi-plate project.")
     if "plate_objects" not in settings:
         return {"plate_label": label, "save_gcode_to_library": save_to_library,
                 "workflow": workflow, "process_overrides": process_overrides,
@@ -375,7 +460,7 @@ def _draft_plate_settings(user, input_asset, settings):
         required = {"instance_id", "asset_id", "x_mm", "y_mm", "rotation_deg",
                     "scale_percent", "color"}
         if (not isinstance(item, dict) or not required.issubset(item)
-                or set(item) - required - {"scale_xyz_percent", "process_overrides", "rotation_xyz_deg", "assembly_id", "z_mm", "text_model", "material_slot", "colour_paint", "support_paint", "seam_paint", "fuzzy_skin_paint", "variable_layer_profile", "paint_asset_id"}):
+                or set(item) - required - {"scale_xyz_percent", "process_overrides", "rotation_xyz_deg", "assembly_id", "z_mm", "text_model", "material_slot", "colour_paint", "support_paint", "seam_paint", "fuzzy_skin_paint", "variable_layer_profile", "paint_asset_id", "modifier_volumes"}):
             raise ValueError("Invalid plate model instance.")
         instance_id = str(_uuid(item["instance_id"]))
         asset_id = _uuid(item["asset_id"])
@@ -438,6 +523,7 @@ def _draft_plate_settings(user, input_asset, settings):
                 "slot_index": slot_index,
             }}
         instance_overrides = validate_process_overrides(item.get("process_overrides"))
+        native_modifiers = validate_modifier_volumes(item.get("modifier_volumes"))
         assembly_id = item.get("assembly_id")
         if assembly_id is not None and (not isinstance(assembly_id, str) or
                 not re.fullmatch(r"assembly:[a-zA-Z0-9-]{8,64}", assembly_id)):
@@ -486,7 +572,17 @@ def _draft_plate_settings(user, input_asset, settings):
         saved.append({"instance_id": instance_id, "asset_id": str(asset_id),
                       **({"assembly_id": assembly_id} if assembly_id is not None else {}),
                       **values, "color": color.lower(), **text_fields, **material_fields, **paint_fields,
-                      **({"process_overrides": instance_overrides} if instance_overrides else {})})
+                      **({"process_overrides": instance_overrides} if instance_overrides else {}),
+                      **({"modifier_volumes": native_modifiers} if native_modifiers else {})})
+    if sum(len(row.get("modifier_volumes", ())) for row in saved) > MAX_TOTAL_MODIFIERS:
+        raise ValueError("Too many native modifiers on the build plate.")
+    # The editor uses a single selection namespace for printable instances and
+    # independent volumes. Reject collisions across storage owners as well as
+    # collisions with printable IDs before saving or slicing a plate.
+    volume_ids = [volume["id"] for row in saved
+                  for volume in row.get("modifier_volumes", ())]
+    if len(set(volume_ids)) != len(volume_ids) or seen.intersection(volume_ids):
+        raise ValueError("Plate model and volume instance IDs must be unique.")
     if saved[0]["asset_id"] != str(input_asset.pk):
         raise ValueError("The first plate model must match the selected primary STL.")
     return {"plate_objects": saved, "plate_label": label, "save_gcode_to_library": save_to_library,
@@ -799,7 +895,9 @@ def import_project_3mf(request):
             active_id = metadata.get("active_plate_id")
             ids, source_names, total = set(), set(), 0
             for plate in plates:
-                if not isinstance(plate, dict) or set(plate) not in ({"id", "name", "objects"}, {"id", "name", "objects", "prime_tower"}):
+                if (not isinstance(plate, dict) or
+                        not {"id", "name", "objects"}.issubset(plate) or
+                        set(plate) - {"id", "name", "objects", "prime_tower", "volumes"}):
                     raise ValueError("Invalid project plate.")
                 _validate_prime_tower_position(plate.get("prime_tower"))
                 pid, name, objects = plate["id"], plate["name"], plate["objects"]
@@ -815,11 +913,21 @@ def import_project_3mf(request):
                 total += len(objects)
                 if total > 200:
                     raise ValueError("Project contains too many models.")
+                printable_ids = set()
                 for row in objects:
                     if not isinstance(row, dict):
                         raise ValueError("Invalid project model.")
+                    printable_ids.add(str(_uuid(row.get("instance_id"))))
                     asset_id = str(_uuid(row.get("asset_id")))
                     source_names.add(asset_id)
+                if "volumes" in plate:
+                    plate["volumes"] = _validate_independent_plate_volumes(
+                        plate["volumes"], printable_ids)
+                    if any(isinstance(volume, dict) and
+                           volume.get("coordinate_space") == "world"
+                           for row in objects for volume in row.get("modifier_volumes", [])
+                           if isinstance(row, dict)):
+                        raise ValueError("Independent world-space volumes must not also be embedded in project model records.")
             if active_id not in ids or not source_names:
                 raise ValueError("Project has no usable active plate or models.")
             original = {}
@@ -864,6 +972,7 @@ def import_project_3mf(request):
                     })
                     rows=checked["plate_objects"]
                 restored.append({"id":plate["id"],"name":plate["name"],"objects":rows,
+                                 **({"volumes": plate["volumes"]} if "volumes" in plate else {}),
                                  **({"prime_tower":plate["prime_tower"]} if plate.get("prime_tower") is not None else {})})
         except Exception:
             for asset in created:

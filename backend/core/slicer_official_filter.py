@@ -78,8 +78,13 @@ def models_from_machines(entries):
 
 def fuzzy_name_match(name, query):
     """All search tokens may appear anywhere, irrespective of their order."""
-    terms = _words(query)
-    words = _words(name)
+    # A decimal layer height in official preset names is commonly followed
+    # immediately by "mm" (e.g. "0.20mm Standard"). Tokenise the unit
+    # separately so searches for "0.20", "0.20mm" and "0.20 mm" agree.
+    # Keep whole-token model matching unchanged (K1 must not match K10).
+    separate_units = lambda text: re.sub(r"(?<=\d)mm\b", " mm", str(text or ""), flags=re.I)
+    terms = _words(separate_units(query))
+    words = _words(separate_units(name))
     if not terms:
         return False
     # Exact token matching avoids treating K1 as K10 or K1 Max as K1.

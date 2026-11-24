@@ -182,9 +182,44 @@ REASONS = {
         "multi-material tool routing before printer submission."
     ),
     "validation-error": "The worker rejected an input or generated result. Check model and profile integrity.",
+    "bambu-cli-aborted": (
+        "Bambu Studio launched but aborted with SIGABRT during native slicing. "
+        "The project, profile compatibility and slicer runtime require further verification; "
+        "this is not an executable-permissions failure."
+    ),
+    "bambu-runtime-exit-126": (
+        "Bambu Studio could not execute a required runtime command (exit 126). "
+        "Check executable permissions, mount options and bundled runtime dependencies "
+        "inside the isolated slicer worker. This does not establish a model or preset error."
+    ),
+    "bambu-cli-exited": (
+        "Bambu Studio exited without producing a completed slice. "
+        "The worker confirmed a CLI failure, but has not established whether "
+        "the native project, selected profiles or engine runtime caused it."
+    ),
+    "creality-region-archive-invalid": (
+        "Creality Print's generated native modifier archive failed worker admission "
+        "before the slicer was launched. Check the Creality 3MF packaging adapter."
+    ),
+    "creality-region-graph-invalid": (
+        "The generated Creality native 3MF has a component or external mesh mapping "
+        "that the worker could not validate. The slicer binary was not launched."
+    ),
+    "creality-region-parts-invalid": (
+        "The generated Creality 3MF's printable/modifier/negative part mapping "
+        "failed strict validation. Inspect the native region adapter."
+    ),
+    "creality-region-metadata-invalid": (
+        "The generated Creality 3MF's native part or plate metadata was rejected "
+        "before the slicer binary could run."
+    ),
+    "creality-region-profiles-invalid": (
+        "The Creality native modifier project contains an invalid embedded profile "
+        "vector or project settings structure. Inspect MakerVault's wrapper."
+    ),
     "engine-exited": (
-        "OrcaSlicer exited without a recognised diagnostic. "
-        "Review the isolated worker logs and confirm the selected printer, filament and process presets."
+        "The selected slicer exited without a recognised diagnostic. "
+        "Review the isolated worker logs and native printer, filament and process compatibility."
     ),
 }
 
