@@ -110,3 +110,9 @@ test("saved native volume XYZ scale appears in the shared editor and is preserve
   assert.match(editor, /"Scale "\+\["X","Y","Z"\]\[index\]/);
   assert.match(editor, /volumeScale\.some\(value=>!Number\.isFinite/);
 });
+
+
+test("Ctrl-click deselection detaches active free-volume transform, including assemblies", () => {
+  assert.match(prepare, /setSelectedModifierId\(additive && selectedIds\.includes\(modifierId\) \? null : modifierId\)/);
+  assert.match(prepare, /setSelectedModifierId\(additive && members\.every\(value => selectedIds\.includes\(value\)\) \? null : id\)/);
+});
