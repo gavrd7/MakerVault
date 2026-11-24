@@ -85,6 +85,7 @@ export default function SlicerPrepareWorkspace({
   const [selectedIds, setSelectedIds] = useState([]);
   const [selectionClearVersion, setSelectionClearVersion] = useState(0);
   const [expandedAssemblies, setExpandedAssemblies] = useState([]);
+  const [assemblySelectionOpen, setAssemblySelectionOpen] = useState(false);
   const [movePlateTarget,setMovePlateTarget]=useState("");
   const [sliceMenuOpen,setSliceMenuOpen]=useState(false);
   const [showAllPlates,setShowAllPlates]=useState(false);
@@ -714,6 +715,24 @@ export default function SlicerPrepareWorkspace({
   }))]), ...detachedVolumes.map(volume => ({...volume, instance_id: volume.id,
     owner_instance_id: null, isPlateVolume: true, detached: true}))];
   const validSelection = selectedIds.filter(id => allPlateRows.some(row => row.instance_id === id));
+  // Touch/keyboard-accessible alternative to Ctrl-click. Select exact
+  // plate parts (even members of an already assembled group) without
+  // toggling the entire assembly through the scene's group selection logic.
+  // Detached canonical volumes cannot be assembled until a model can host
+  // their editor representation; retain them in the list but disable them.
+  const chooseAssemblyPart = (id, checked) => {
+    const row = allPlateRows.find(item => item.instance_id === id);
+    if (!row || row.detached || !canEdit || busy) return;
+    const next = checked
+      ? [...new Set([...validSelection, id])]
+      : validSelection.filter(item => item !== id);
+    setSelectedIds(next);
+    const focus = allPlateRows.find(item => item.instance_id === next.at(-1));
+    setSelectedId(focus?.isPlateVolume ? focus.owner_instance_id || "" : focus?.instance_id || "");
+    setSelectedModifierId(focus?.isPlateVolume ? focus.id : null);
+    setScope("objects");
+    setMeasurementVisible(false);
+  };
   const selectedModels = objects.filter(row => validSelection.includes(row.instance_id));
   const selectedRows = allPlateRows.filter(row => validSelection.includes(row.instance_id));
   // Assemblies display as contiguous logical groups regardless of the
@@ -1813,6 +1832,37 @@ export default function SlicerPrepareWorkspace({
             <button type="button" disabled={!canEdit||busy||!removableAssemblyMembers.length}
               onClick={removeSelectedFromAssembly}>Remove selected from assembly</button>
           </div>
+          <button type="button" className="slicerAssemblySelectionToggle"
+            aria-expanded={assemblySelectionOpen} aria-controls="slicer-assembly-selection"
+            onClick={() => setAssemblySelectionOpen(current => !current)}>
+            {assemblySelectionOpen ? "Hide model selection" : "Select models"}
+            {validSelection.length > 0 ? " (" + validSelection.length + " selected)" : ""}
+          </button>
+          {assemblySelectionOpen && <div id="slicer-assembly-selection"
+            className="slicerAssemblySelectionList" role="group"
+            aria-label="Select models and volumes for assembly">
+            <p>Tick the models and volumes to assemble. Ctrl-click also works on desktop.</p>
+            {modelTreeRows.map((row, index) =>
+              <label key={row.instance_id} className={"slicerAssemblySelectionRow"+(row.detached?" unavailable":"")}>
+                <input type="checkbox" checked={validSelection.includes(row.instance_id)}
+                  disabled={!canEdit || busy || !!row.detached}
+                  onChange={event => chooseAssemblyPart(row.instance_id, event.target.checked)} />
+                <span>{row.isPlateVolume
+                  ? (row.shape?.[0]?.toUpperCase() || "") + (row.shape?.slice(1) || "") + " " +
+                    (row.kind === "negative" ? "negative volume" : "parameter modifier")
+                  : (objects.findIndex(item => item.instance_id === row.instance_id) + 1) + ". " + itemName(row)}
+                  {row.assembly_id && <small>Assembly member</small>}
+                  {row.detached && <small>Add a printable model before assembling this volume.</small>}
+                </span>
+              </label>)}
+            <div className="slicerAssemblySelectionFooter">
+              <span role="status">{validSelection.length} selected</span>
+              <button type="button" disabled={!validSelection.length}
+                onClick={() => {setSelectedIds([]);setSelectedId("");setSelectedModifierId(null);}}>
+                Clear selection
+              </button>
+            </div>
+          </div>}
         </div>}
         {selectedModels.length>0 && plates.length>1 && <div className="slicerMoveToPlate">
           <label>Move {selectedModels.length} selected to plate
