@@ -35,3 +35,10 @@ test("Disc and rotation produce distinct real STL geometry",()=>{
   const rotated=createPrimitiveStl({primitiveType:"box",width:24,depth:12,height:8,rotation_z:45});
   assert.ok(rotated.width>24 && rotated.depth>12);
 });
+
+test("torus uses the native region radius convention at the default 20 mm dimensions",()=>{
+  const stl=createPrimitiveStl({primitiveType:"torus",width:20,depth:20,height:20});
+  assert.ok(stl.triangles>=512);
+  for(const axis of ["width","depth","height"])
+    assert.ok(Math.abs(stl[axis]-20)<0.3,axis+" must match its editor size");
+});
