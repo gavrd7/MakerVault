@@ -15,7 +15,9 @@ ENGINE = "prusaslicer"
 ENGINE_VERSION = "2.9.7"
 SOURCE = "prusa3d/PrusaSlicer"
 REF = "version_2.9.7"
-BASE = f"https://raw.githubusercontent.com/{SOURCE}/{REF}/resources/profiles"
+# Immutable commit backing the reviewed 2.9.7 annotated release tag.
+SOURCE_COMMIT = "450d70dd81c9b8990bc6bc8e690e31f82ddceb11"
+BASE = f"https://raw.githubusercontent.com/{SOURCE}/{SOURCE_COMMIT}/resources/profiles"
 VENDORS = ("PrusaResearch",)
 MAX_INI = 3 * 1024 * 1024
 
