@@ -283,6 +283,59 @@ def extract_single_bambu_gcode(sliced_project: Path, workdir: Path) -> Path:
     return output
 
 
+def _bambu_headless_environment(workdir: Path) -> dict[str, str]:
+    """Provide Bambu writable XDG directories entirely inside job scratch.
+
+    Its AppImage can start without a desktop while still creating settings,
+    caches and runtime files. Do not let it fall back to an installer-owned
+    executable tree, persistent host home or shared /tmp directory.
+    """
+    root = Path(workdir).resolve(strict=True)
+    env = slicing_environment(root)
+    for name, key in (
+        ("xdg-config", "XDG_CONFIG_HOME"),
+        ("xdg-cache", "XDG_CACHE_HOME"),
+        ("xdg-data", "XDG_DATA_HOME"),
+        ("xdg-runtime", "XDG_RUNTIME_DIR"),
+    ):
+        directory = root / name
+        if directory.is_symlink():
+            raise WorkerError("Unsafe Bambu scratch runtime directory.")
+        directory.mkdir(mode=0o700, exist_ok=True)
+        if not directory.is_dir() or directory.resolve() != directory:
+            raise WorkerError("Invalid Bambu scratch runtime directory.")
+        directory.chmod(0o700)
+        env[key] = str(directory)
+    return env
+
+
+def _filesystem_error_details(tail: bytes) -> tuple[str, str]:
+    """Only derive fixed diagnostic categories; never relay exception paths."""
+    if b"permission denied" in tail or b"operation not permitted" in tail:
+        reason = "permission"
+    elif b"no such file or directory" in tail:
+        reason = "missing-path"
+    elif b"read-only file system" in tail:
+        reason = "read-only"
+    elif b"file exists" in tail:
+        reason = "already-exists"
+    elif b"not a directory" in tail:
+        reason = "not-directory"
+    elif b"no space left on device" in tail:
+        reason = "no-space"
+    else:
+        reason = "unknown"
+    if b"/opt/engine-store/" in tail:
+        area = "engine-store"
+    elif b"makervault-slice-" in tail:
+        area = "worker-scratch"
+    elif b"/tmp/" in tail:
+        area = "temporary"
+    else:
+        area = "unknown"
+    return reason, area
+
+
 def run_bambu(binary: Path, workdir: Path, *, timeout_seconds: int = DEFAULT_TIMEOUT_SECONDS) -> dict:
     """Execute exact approved Bambu Studio in the isolated worker.
 
@@ -302,7 +355,7 @@ def run_bambu(binary: Path, workdir: Path, *, timeout_seconds: int = DEFAULT_TIM
         with tempfile.TemporaryFile(mode="w+b") as diagnostics:
             proc = subprocess.Popen(
                 command, cwd=str(workdir),
-                env={**slicing_environment(workdir),
+                env={**_bambu_headless_environment(workdir),
                      # Bambu 2.9.x can dereference a missing SSL_CERT_FILE even
                      # in headless/offline CLI startup.
                      "SSL_CERT_FILE": "/etc/ssl/certs/ca-certificates.crt"},
@@ -352,6 +405,10 @@ def run_bambu(binary: Path, workdir: Path, *, timeout_seconds: int = DEFAULT_TIM
                         subtype = next((name for marker, name in known_types
                                         if marker in tail), "unknown")
                         logger.warning("Bambu Studio SIGABRT exception type: %s", subtype)
+                    if b"filesystem_error" in tail:
+                        reason, area = _filesystem_error_details(tail)
+                        logger.warning("Bambu Studio filesystem exception: reason=%s area=%s",
+                                       reason, area)
                     logger.warning("Bambu Studio SIGABRT classified: %s", cause)
                     # Report only recognised C++ exception types. Never log
                     # the 'what()' message: it can contain native profile data.
