@@ -65,8 +65,11 @@ class ModifierGcodeCoverageTests(unittest.TestCase):
             b"\n".join(boundary), project, "orcaslicer")
         self.assertEqual(audited["modifier_region_paths"], [0])
 
-        inside = [b"G90", b"M83", b"G0 X2 Y2 Z5"]
-        inside.extend(("G1 X%d Y%d E0.8" % (2 + i % 4, 2 + i % 4)).encode()
+        # The fixture region is a tetrahedron: at Z=5 its true section
+        # satisfies X>0, Y>0, X+Y<5. The old 2..5 path was in the AABB,
+        # but outside that mesh, so it correctly did not trigger rejection.
+        inside = [b"G90", b"M83", b"G0 X1 Y1 Z5"]
+        inside.extend(("G1 X%d Y%d E0.8" % (1 + i % 2, 1 + i % 2)).encode()
                       for i in range(20))
         with self.assertRaisesRegex(WorkerError, "deposits material"):
             audit_modifier_positive_e(
