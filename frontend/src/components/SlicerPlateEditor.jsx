@@ -1321,7 +1321,7 @@ export default function SlicerPlateEditor({
         (creating && !solidDialog.editTargetId) ||
         (row.instance_id!==solidDialog.id && !solidPreview.secondIds?.includes(row.instance_id)));
       const additions=created.map(({id,part},index)=>({
-        ...selectedObject,
+        ...(creating && !solidDialog.editTargetId ? {} : selectedObject),
         ...newPlateInstance(id,objects.length+index),
         ...(solidDialog.editTargetId ? {
           instance_id:solidDialog.editTargetId,color:selectedObject.color,
@@ -1434,6 +1434,7 @@ export default function SlicerPlateEditor({
     const remaining = objects.filter(item => item.instance_id !== splitPreview.id);
     const drafts = splitPreview.parts.map((part, i) => ({
       ...selectedObject, ...newPlateInstance("pending:" + i, objects.length + i),
+      modifier_volumes: i === 0 ? (selectedObject.modifier_volumes || []) : [],
       x_mm: pretty(part.x_mm), y_mm: pretty(part.y_mm),
       color: PALETTE[i % PALETTE.length],
     }));
