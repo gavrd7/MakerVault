@@ -183,9 +183,9 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
     setProjectPlates(current=>current.map(plate=>plate.id===activePlateId
       ?{...plate,...(position?{prime_tower:position}:{prime_tower:undefined})}:plate));
   },[activePlateId]);
-  const setPlateObjects=useCallback(updater=>{
+  const setPlateObjects=useCallback((updater, options = {})=>{
     setProjectPlates(current=>current.map(item=>item.id===activePlateId
-      ?updateCanonicalPlate(item,typeof updater==="function"?updater(hydratePlateObjects(item)):updater):item));
+      ?updateCanonicalPlate(item,typeof updater==="function"?updater(hydratePlateObjects(item)):updater,options):item));
   },[activePlateId]);
   const setPlateLabel=useCallback(value=>{
     setProjectPlates(current=>current.map(item=>item.id===activePlateId
@@ -1529,7 +1529,9 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
       primeTower={primeTower} onPrimeTowerChange={setPrimeTower}
       onChoosePlate={chooseProjectPlate} onAddPlate={addProjectPlate} onRemovePlate={removeProjectPlate}
        onMoveModelsToPlate={moveProjectModels}
-      objects={plateObjects} onChange={setPlateObjects} files={stlFiles}
+      objects={plateObjects} plateVolumes={activePlate?.volumes || []}
+      onRemovePlateVolumes={ids=>setPlateObjects(plateObjects,{removedVolumeIds:ids})}
+      onChange={setPlateObjects} files={stlFiles}
       plateIssues={plateValidation} onPlateIssuesChange={setPlateValidation}
       localAssets={plateLocalAssets} onLocalAssetsChange={setPlateLocalAssets}
       onPrimaryChange={id => update("input_asset_id", String(id))}
