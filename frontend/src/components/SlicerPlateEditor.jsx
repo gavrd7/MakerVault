@@ -676,6 +676,14 @@ export default function SlicerPlateEditor({
         candidates[0].modifier_volumes.push(volume);
       }
     }
+    // Removing a selected part must not leave a singleton assembly in the tree.
+    const assemblyCounts = new Map();
+    for (const member of remaining.flatMap(model => [model, ...model.modifier_volumes])) {
+      if (member.assembly_id) assemblyCounts.set(member.assembly_id, (assemblyCounts.get(member.assembly_id) || 0) + 1);
+    }
+    const clearSingleton = member => member.assembly_id && assemblyCounts.get(member.assembly_id) < 2
+      ? {...member, assembly_id: null} : member;
+    remaining = remaining.map(model => ({...clearSingleton(model), modifier_volumes: model.modifier_volumes.map(clearSingleton)}));
     onChange(remaining);
     onPrimaryChange?.(remaining.find(model =>
       !String(model.asset_id).startsWith("local:"))?.asset_id || "");
