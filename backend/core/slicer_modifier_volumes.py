@@ -95,11 +95,23 @@ VERIFIED_NATIVE_MODIFIER_VERSIONS = {
     "bambustudio": "02.09.01.70",
 }
 
-# Composite and subtraction approvals must be populated ONLY after each
-# exact pinned binary demonstrates actual two-model modifier/subtraction
-# G-code changes, never on archive-shape or settings metadata alone.
-VERIFIED_NATIVE_COMPOSITE_VERSIONS = {}
-VERIFIED_NATIVE_NEGATIVE_VERSIONS = {}
+# Exact pinned real-binary two-model acceptance passed for all three
+# engines on PR #196. Each acceptance sliced identical baseline, infill
+# modifier and negative-cutter 3MF fixtures, and asserted regional G-code
+# extrusion changed in the intended directions on BOTH printable objects.
+# Orca: native-modifier-orca.yml; Creality: native-modifier-creality.yml;
+# Bambu: bambu-real-binary.yml (placement-aware native output sampling).
+# Keep this allowlist exact-version only: no blanket engine/version approval.
+VERIFIED_NATIVE_COMPOSITE_VERSIONS = {
+    "orcaslicer": "2.5.0",
+    "crealityprint": "7.3.1",
+    "bambustudio": "02.09.01.70",
+}
+VERIFIED_NATIVE_NEGATIVE_VERSIONS = {
+    "orcaslicer": "2.5.0",
+    "crealityprint": "7.3.1",
+    "bambustudio": "02.09.01.70",
+}
 MAX_NATIVE_COMPOSITE_MODELS = 12
 
 
