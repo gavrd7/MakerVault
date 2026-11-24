@@ -1311,7 +1311,7 @@ export default function SlicerPlateEditor({
         const temporary=[];
         try {
           for(const id of booleanIds) {
-            parts=executeSolidOperation("boolean",working,{...solidOptions,allowOpenPreview:id===booleanIds.at(-1)},state.meshes.get(id));
+            parts=await executeSolidOperation("boolean",working,{...solidOptions,allowOpenPreview:id===booleanIds.at(-1)},state.meshes.get(id));
             const next=parts[0];
             const geometry=new STLLoader().parse(next.buffer);
             const mesh=new THREE.Mesh(geometry,new THREE.MeshBasicMaterial());
@@ -1323,7 +1323,7 @@ export default function SlicerPlateEditor({
           temporary.forEach(mesh=>{mesh.geometry.dispose();mesh.material.dispose();});
         }
       } else {
-        parts=executeSolidOperation(solidDialog.kind,target,{...solidOptions,allowOpenPreview:true},second);
+        parts=await executeSolidOperation(solidDialog.kind,target,{...solidOptions,allowOpenPreview:true},second);
       }
       if (["primitive","text","svg"].includes(solidDialog.kind))
         parts=parts.map(part=>({...part,
