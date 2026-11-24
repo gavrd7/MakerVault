@@ -335,7 +335,7 @@ class OfficialProfileApiTests(TestCase):
             "orcaslicer": ("2.4.2", "v2.4.2"),
             "crealityprint": ("7.3.1", "v7.3.1"),
             "bambustudio": ("02.09.01.70", "v02.09.01.70"),
-            "prusaslicer": ("2.9.6", "version_2.9.6"),
+            "prusaslicer": ("2.9.7", "version_2.9.7"),
             "snapmakerorca": ("2.4.1", "v2.4.1"),
         }
         for engine, (version, ref) in supported.items():
