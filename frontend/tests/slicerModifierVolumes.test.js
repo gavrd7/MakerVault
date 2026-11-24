@@ -133,3 +133,9 @@ test("canonical independent plate volumes remain visible after the final printab
   assert.match(editor, /onChange\(remaining,\{removedVolumeIds\}\)/);
   assert.doesNotMatch(editor, /This model has independent volumes\. Remove those volumes explicitly before deleting the last printable model/);
 });
+
+
+test("volume counts include canonical detached regions and undisturbed legacy locals", () => {
+  assert.match(prepare, /totalModifierCount = plateVolumes\.length \+ objects\.reduce/);
+  assert.match(prepare, /filter\(v => v\.coordinate_space !== "world"\)\.length/);
+});
