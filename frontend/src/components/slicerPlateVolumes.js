@@ -50,10 +50,14 @@ export function hydratePlateObjects(plate) {
 
 export function canonicalPlate(plate) {
   const original = plate.objects || [];
-  const hasWorldInline = original.some(row => (row.modifier_volumes || []).some(v => v.coordinate_space === "world"));
   const {models, volumes} = splitPlateVolumes(original, plate.volumes || []);
-  return {...plate, objects: models,
-    volumes: !hasWorldInline && models.length ? [...(plate.volumes || [])] : volumes};
+  const ids = new Set(volumes.map(v => v.id));
+  const retained = (plate.volumes || []).filter(v => !ids.has(v.id));
+  // Canonical conversion is for migration/export, not an edit operation.
+  // Retain any volumes that cannot currently be hosted by the editor adapter.
+  const all = [...volumes, ...retained];
+  if (all.length > MAX_PLATE_VOLUMES) throw new Error("Too many independent volumes on this plate.");
+  return {...plate, objects: models, volumes: all};
 }
 
 export function updateCanonicalPlate(plate, nextObjects, options = {}) {
