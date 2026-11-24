@@ -86,7 +86,7 @@ def _split_native_mesh_components(project, label):
         source_objects = [deepcopy(lookup[i]) for i in ids]
         parent.remove(existing)
         components = ET.SubElement(parent, prefix + "components")
-    if not 1 <= len(source_objects) <= 13:
+    if not 1 <= len(source_objects) <= 60:
         raise ValueError("Invalid Creality native child mesh count.")
     for node in models[1:]:
         resources.remove(node)
@@ -132,9 +132,8 @@ def _split_native_mesh_components(project, label):
         raise ValueError("Native part-to-geometry mapping is incomplete.")
     for index, part in enumerate(parts, start=1):
         part.set("id", str(index))
-        subtype = "normal_part" if index == 1 else "modifier_part"
-        if part.get("subtype") != subtype:
-            raise ValueError("Unsafe native modifier part subtype.")
+        if part.get("subtype") not in ("normal_part", "modifier_part", "negative_part"):
+            raise ValueError("Unsafe native region part subtype.")
     instances = config.findall("./plate/model_instance")
     if len(instances) != 1:
         raise ValueError("Unexpected multi-instance native Creality fixture.")
