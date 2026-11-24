@@ -8696,3 +8696,67 @@ a:focus-visible,
     flex:1 1 160px;min-width:0;width:auto;overflow-wrap:anywhere
   }
 }
+
+
+/* PR196: Add text, primitive, modifier and negative-volume editing uses the
+   same inline-on-plate mobile position as Move/Scale/Rotate, but its larger
+   form grows DOWN the page. The old absolute dock sat on top of the model and
+   section slider, and its 320px scroll cap obscured most shape controls.
+   Keep other mesh-operation inspectors at their previously verified size. */
+@media (max-width:740px) {
+  .slicerPlateCanvasColumn .slicerPlateCanvasViewport > .slicerMobileGeometryDock.slicerMobileAddGeometryDock {
+    position:relative!important;
+    inset:auto!important;
+    top:auto!important;left:auto!important;right:auto!important;bottom:auto!important;
+    order:2;
+    display:block;
+    flex:0 0 auto;
+    box-sizing:border-box;
+    width:100%!important;
+    max-width:100%!important;
+    min-width:0;
+    margin:8px 0 0;
+    padding:0;
+    pointer-events:auto;
+    z-index:auto;
+  }
+  .slicerPlateCanvasViewport:has(> .slicerMobileAddGeometryDock)
+    > .slicerPlateSectionControl {
+    order:3;
+  }
+  .slicerMobileAddGeometryDock > .slicerAutoOrientModalBackdrop:has(.slicerViewportAnchoredModal) {
+    display:block!important;
+    position:relative!important;
+    inset:auto!important;
+    width:100%!important;
+    padding:0!important;
+    pointer-events:auto!important;
+  }
+  .slicerMobileAddGeometryDock > .slicerAutoOrientModalBackdrop
+    > .slicerSolidModal.slicerViewportAnchoredModal {
+    position:relative!important;
+    inset:auto!important;
+    top:auto!important;left:auto!important;right:auto!important;bottom:auto!important;
+    width:100%!important;
+    max-width:100%!important;
+    height:auto!important;
+    max-height:none!important;
+    min-height:0!important;
+    overflow:visible!important;
+    margin:0!important;
+    padding:12px!important;
+    touch-action:auto;
+    overscroll-behavior:auto;
+    box-sizing:border-box;
+  }
+  .slicerMobileAddGeometryDock > .slicerAutoOrientModalBackdrop
+    > .slicerSolidModal.slicerSolidInspectorCollapsed {
+    max-height:56px!important;
+    overflow:hidden!important;
+  }
+  .slicerMobileAddGeometryDock .slicerAutoOrientModalActions {
+    position:static!important;
+    bottom:auto!important;
+    flex-wrap:wrap;
+  }
+}
