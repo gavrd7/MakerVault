@@ -376,6 +376,14 @@ def _draft_plate_settings(user, input_asset, settings):
                     "plate_objects": instances, "plate_label": name.strip()
                 })
                 instances = checked["plate_objects"]
+            if canonical:
+                local_volumes = [volume for model in instances
+                                 for volume in model.get("modifier_volumes", [])]
+                if len(checked_volumes) + len(local_volumes) > MAX_TOTAL_MODIFIERS:
+                    raise ValueError("Too many printable-local and independent volumes on a build plate.")
+                if set(volume["id"] for volume in checked_volumes).intersection(
+                        volume["id"] for volume in local_volumes):
+                    raise ValueError("Independent and model-local volume IDs must be unique.")
             position = _validate_prime_tower_position(plate.get("prime_tower"))
             validated.append({"id": plate_id, "name": name.strip(), "objects": instances,
                               **({"volumes": checked_volumes} if canonical else {}),
