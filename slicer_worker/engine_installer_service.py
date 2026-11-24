@@ -669,6 +669,34 @@ def bootstrap_existing_orca():
     activate(STORE, engine="orcaslicer", version=version, sha256=digest)
 
 
+def repair_active_bambu_runtime_permissions():
+    """Repair legacy Bambu AppImage directories as installer UID, not worker.
+
+    Previously published extracted trees could retain 0700 directories and
+    appear healthy despite failing native slicing for worker UID 10001.
+    Reapply the read-only publication policy only to an exact, pinned active
+    Bambu installation. No reinstallation or engine manifest rewrite.
+    """
+    active = STORE / "active.json"
+    if active.is_symlink() or not active.is_file():
+        return
+    manifest = _manifest(STORE)
+    record = manifest.get("engines", {}).get("bambustudio")
+    if not isinstance(record, dict) or record.get("version") != BAMBU_VERSION:
+        return
+    root = STORE / "versions" / "bambustudio" / BAMBU_VERSION / "squashfs-root"
+    binary = root / "bin" / "bambu-studio"
+    if (record.get("binary") != str(root / "AppRun")
+            or record.get("binary_sha256") != BAMBU_RUNTIME_SHA256
+            or root.is_symlink() or not root.is_dir()
+            or binary.is_symlink() or not binary.is_file()
+            or _sha256(binary) != BAMBU_RUNTIME_SHA256):
+        raise ValueError("Installed Bambu runtime identity cannot be verified for repair.")
+    make_runtime_worker_readable(
+        root, required_executables=("bin/bambu-studio",))
+    LOGGER.info("Verified Bambu runtime subtree traversal for the unprivileged worker.")
+
+
 def main():
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
     if len(TOKEN) < 32 or STORE.is_symlink() or not STORE.is_dir():
@@ -680,6 +708,7 @@ def main():
     # accidentally hide Orca. Bootstrap once from the pinned bundle.
     if not (STORE / "active.json").exists():
         bootstrap_existing_orca()
+    repair_active_bambu_runtime_permissions()
     _restore_operations()
     server = ThreadingHTTPServer(("0.0.0.0", 8091), Handler)
     server.serve_forever()
