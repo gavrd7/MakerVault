@@ -94,8 +94,12 @@ def probe(fixtures,binary,engine,creality_native=False):
         base=results["baseline"]["totals"][region]
         added=results["region"]["totals"][region]
         cut=results["negative"]["totals"][region]
-        if min(results[name]["counts"][region] for name in results)<5:
-            raise WorkerError("Insufficient model deposition in "+region)
+        # A successful negative volume may remove EVERY path in the region.
+        # Requiring deposition in the negative case would reject the strongest
+        # possible subtraction evidence (zero positive-E paths).
+        if (results["baseline"]["counts"][region] < 5 or
+                results["region"]["counts"][region] < 5):
+            raise WorkerError("Insufficient printable baseline or modifier paths in "+region)
         if base<=0 or added<=base*1.08:
             raise WorkerError("Independent modifier has no proven regional effect in "+region)
         if cut>=base*.9:
