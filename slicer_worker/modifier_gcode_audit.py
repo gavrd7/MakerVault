@@ -44,7 +44,7 @@ def modifier_bounds(project, engine):
         if len(native_objects) != 1:
             raise WorkerError("Unexpected native region metadata records.")
         parts = native_objects[0].findall("part")
-        expected_count = len(objects) - start
+        expected_count = len(objects) - (0 if engine == "crealityprint" else 1)
         if not 2 <= len(parts) == expected_count <= 60:
             raise WorkerError("Missing bounded native region part coordinates.")
         bounds = []
@@ -59,12 +59,12 @@ def modifier_bounds(project, engine):
                 negative_count += 1
             identifier = part.get("id")
             try:
-                object_index = int(identifier) - start
+                object_index = int(identifier) - 1
             except (TypeError, ValueError):
                 raise WorkerError("Invalid native region object identity.") from None
-            if not 0 <= object_index < expected_count:
+            if not (0 if engine == "crealityprint" else 1) <= object_index < len(objects):
                 raise WorkerError("Invalid native region mesh mapping.")
-            obj = objects[start + object_index]
+            obj = objects[object_index]
             vertices = obj.findall(NS + "mesh/" + NS + "vertices/" + NS + "vertex")
             if not 4 <= len(vertices) <= 500000:
                 raise WorkerError("Invalid modifier mesh bounds.")
