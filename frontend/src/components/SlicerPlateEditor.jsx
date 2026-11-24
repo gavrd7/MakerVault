@@ -625,11 +625,8 @@ export default function SlicerPlateEditor({
     // Assign a new instance identity, then arrange after its mesh is measured.
     const copy = { ...chosen, instance_id: plateUuid() };
     // A copied parent owns new modifier identities and independent settings.
-    if (Array.isArray(chosen.modifier_volumes)) {
-      copy.modifier_volumes = chosen.modifier_volumes.map(modifier => ({
-        ...modifier, id: plateUuid(), settings: {...modifier.settings},
-      }));
-    }
+    // A free volume is a separate plate item, not part of a printable copy.
+    copy.modifier_volumes = [];
     if (Array.isArray(chosen.scale_xyz_percent))
       copy.scale_xyz_percent = [...chosen.scale_xyz_percent];
     const known={...dimensionsRef.current,
@@ -642,14 +639,6 @@ export default function SlicerPlateEditor({
     // Duplicating the *model plus its modifier drafts* places copies at the
     // same relative bed offsets initially. They remain independent after the
     // duplication; changing either model's pose never implicitly moves them.
-    if (Array.isArray(placed.modifier_volumes)) {
-      const dx=Number(placed.x_mm||0)-Number(chosen.x_mm||0);
-      const dy=Number(placed.y_mm||0)-Number(chosen.y_mm||0);
-      placed.modifier_volumes=placed.modifier_volumes.map(modifier=>
-        modifier.coordinate_space==="world"
-          ? {...modifier,x_mm:pretty(modifier.x_mm+dx),y_mm:pretty(modifier.y_mm+dy)}
-          : modifier);
-    }
     onChange([...objects,placed]);
     setSelected(copy.instance_id);
     setError("");
@@ -720,6 +709,7 @@ export default function SlicerPlateEditor({
           if(model.assembly_id&&!assemblyMap.has(model.assembly_id))
             assemblyMap.set(model.assembly_id,"assembly:"+plateUuid());
           return {...model,instance_id:plateUuid(),
+            modifier_volumes: [],
             assembly_id:model.assembly_id?assemblyMap.get(model.assembly_id):null,
             scale_xyz_percent:Array.isArray(model.scale_xyz_percent)
               ?[...model.scale_xyz_percent]:model.scale_xyz_percent};
@@ -2330,7 +2320,7 @@ export default function SlicerPlateEditor({
           (mesh.userData.modifierGhosts || []).filter(ghost => ghost.userData.isWorldModifier));
         const candidate = raycaster.intersectObjects(modifierGhosts, false)[0];
         if (candidate) {
-          modifierSelectionRef.current.onChange?.(candidate.object.userData.modifierId, candidate.object.userData.modifierParentId);
+          modifierSelectionRef.current.onChange?.(candidate.object.userData.modifierId, candidate.object.userData.modifierParentId, event.ctrlKey || event.metaKey || event.shiftKey);
           event.preventDefault();
           return;
         }
@@ -3022,7 +3012,7 @@ export default function SlicerPlateEditor({
         default: continue;
       }
       const ghost = new THREE.Mesh(geometry, new THREE.MeshBasicMaterial({
-        color: "#22d3ee", transparent: true, opacity: .28,
+        color: modifier.kind === "negative" ? "#fb7185" : "#22d3ee", transparent: true, opacity: .28,
         depthTest: false, depthWrite: false, side: THREE.FrontSide,
         clippingPlanes: [plane],
       }));
@@ -3047,7 +3037,7 @@ export default function SlicerPlateEditor({
       }
       ghost.renderOrder = 18;
       if (modifier.id === modifierSelectionRef.current.id) {
-        ghost.material.color.set("#67e8f9");
+        ghost.material.color.set(modifier.kind === "negative" ? "#fda4af" : "#67e8f9");
         ghost.material.opacity = .42;
       }
       ghost.userData.isModifierVolume = true;
@@ -3175,11 +3165,15 @@ export default function SlicerPlateEditor({
     const selectedMesh = state.meshes.get(selected);
     const activeModifier = selectedMesh?.userData.modifierGhosts?.find(ghost =>
       ghost.userData.isWorldModifier && ghost.userData.modifierId === selectedModifierId);
-    state.setSelectionOutlines(["paint_colour","paint_support","paint_seam","paint_fuzzy","variable_layers"].includes(toolMode) ? [] : activeModifier ? [activeModifier] : selection.map(id=>state.meshes.get(id)).filter(Boolean));
+    state.setSelectionOutlines(["paint_colour","paint_support","paint_seam","paint_fuzzy","variable_layers"].includes(toolMode) ? [] : [
+      ...selection.map(id=>state.meshes.get(id)).filter(Boolean),
+      ...[...state.meshes.values()].flatMap(mesh=>(mesh.userData.modifierGhosts||[]).filter(ghost=>
+        selection.includes(ghost.userData.modifierId))),
+    ]);
     const singleEditable = canEdit && toolMode !== "paint_colour" && !solidDialog && selectedMesh && selection.length < 2;
     const groupEditable = canEdit && !solidDialog && selection.length > 1 &&
       ["move","rotate","scale"].includes(toolMode);
-    if (activeModifier && canEdit && !solidDialog &&
+    if (activeModifier && selection.length === 1 && canEdit && !solidDialog &&
         ["move", "rotate", "scale"].includes(toolMode)) {
       // Only the selected modifier is attached to the existing on-plate gizmo.
       // Its owning printable model does not move or rotate.
@@ -3640,11 +3634,11 @@ export default function SlicerPlateEditor({
         className="slicerViewportMeasurement slicerViewportTransform slicerViewportToolDock"
         aria-label="Independent modifier transform controls">
         <div className="slicerViewportMeasurementHeader">
-          <strong>Modifier · {toolMode === "move" ? "Move" : toolMode === "rotate" ? "Rotate" : "Scale"}</strong>
+          <strong>{chosenModifier.kind === "negative" ? "Negative volume" : "Parameter modifier"} · {toolMode === "move" ? "Move" : toolMode === "rotate" ? "Rotate" : "Scale"}</strong>
           <button type="button" onClick={()=>onSelectedModifierChange?.(null)}>Select model</button>
         </div>
         <div className="slicerViewportMeasurementModel">
-          {chosenModifier.shape[0].toUpperCase()+chosenModifier.shape.slice(1)} parameter modifier
+          {chosenModifier.shape[0].toUpperCase()+chosenModifier.shape.slice(1)} {chosenModifier.kind === "negative" ? "negative volume" : "parameter modifier"}
         </div>
         <div className="slicerViewportTransformGrid">
           {["X","Y","Z"].map((axis,index)=><label key={axis}>{axis} {toolMode === "move"?"(mm)":toolMode === "rotate"?"(°)":"(%)"}
