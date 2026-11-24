@@ -286,6 +286,24 @@ def run_bambu(binary: Path, workdir: Path, *, timeout_seconds: int = DEFAULT_TIM
                         cause = "uncaught-exception"
                     else:
                         cause = "unclassified"
+                    # Only constant, reviewed C++ exception types can appear
+                    # in logs. The exception what() text can contain paths,
+                    # user data and native profile values, so never emit it.
+                    if cause == "uncaught-exception":
+                        known_types = (
+                            (b"filesystem_error", "filesystem-error"),
+                            (b"bad_alloc", "bad-allocation"),
+                            (b"out_of_range", "out-of-range"),
+                            (b"invalid_argument", "invalid-argument"),
+                            (b"length_error", "length-error"),
+                            (b"domain_error", "domain-error"),
+                            (b"range_error", "range-error"),
+                            (b"logic_error", "logic-error"),
+                            (b"runtime_error", "runtime-error"),
+                        )
+                        subtype = next((name for marker, name in known_types
+                                        if marker in tail), "unknown")
+                        logger.warning("Bambu Studio SIGABRT exception type: %s", subtype)
                     logger.warning("Bambu Studio SIGABRT classified: %s", cause)
                     raise WorkerError("Bambu Studio native CLI aborted with SIGABRT.")
                 raise WorkerError("Bambu Studio CLI rejected the native profiles or model.")
