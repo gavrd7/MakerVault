@@ -305,6 +305,21 @@ def run_bambu(binary: Path, workdir: Path, *, timeout_seconds: int = DEFAULT_TIM
                                         if marker in tail), "unknown")
                         logger.warning("Bambu Studio SIGABRT exception type: %s", subtype)
                     logger.warning("Bambu Studio SIGABRT classified: %s", cause)
+                    # Report only recognised C++ exception types. Never log
+                    # the 'what()' message: it can contain native profile data.
+                    known_exceptions = (
+                        (b"std::bad_alloc", "bad-alloc"),
+                        (b"std::filesystem::filesystem_error", "filesystem-error"),
+                        (b"std::invalid_argument", "invalid-argument"),
+                        (b"std::out_of_range", "out-of-range"),
+                        (b"std::length_error", "length-error"),
+                        (b"std::runtime_error", "runtime-error"),
+                        (b"std::logic_error", "logic-error"),
+                        (b"std::bad_optional_access", "bad-optional-access"),
+                    )
+                    exception_type = next((label for marker, label in known_exceptions
+                                           if marker in tail), "unknown")
+                    logger.warning("Bambu Studio exception type: %s", exception_type)
                     raise WorkerError("Bambu Studio native CLI aborted with SIGABRT.")
                 raise WorkerError("Bambu Studio CLI rejected the native profiles or model.")
         output = extract_single_bambu_gcode(workdir / "bambu-sliced.3mf", workdir)
