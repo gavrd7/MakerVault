@@ -52,7 +52,7 @@ class CompositeNativeEvidenceTests(unittest.TestCase):
     def test_negative_cut_boundary_walls_do_not_count_as_filled_cavity(self):
         # The 3MF negative spans Y=100..120, so new walls on those faces
         # are legitimate even though the strict cavity interior must be empty.
-        code = b"\\n".join([
+        code = b"\n".join([
             b"G90", b"M83", b"G0 X85 Y100 Z15",
             b"; FEATURE: Inner wall",
             b"G1 X95 Y100 E3",
@@ -63,7 +63,7 @@ class CompositeNativeEvidenceTests(unittest.TestCase):
         self.assertEqual(result["counts"], {"left": 0, "right": 0})
 
     def test_bambu_negative_cavity_diagnostic_distinguishes_inner_and_boundary_paths(self):
-        gcode = b"\\n".join([
+        gcode = b"\n".join([
             b"G90", b"M83", b"G0 X123 Y109 Z15",
             b"; FEATURE: Sparse infill", b"G1 X133 Y109 E1.25",
             b"G0 X123 Y99", b"; FEATURE: Inner wall",
@@ -79,7 +79,7 @@ class CompositeNativeEvidenceTests(unittest.TestCase):
         self.assertEqual(result["120"]["features"], {"Inner wall": 0.75})
 
     def test_bambu_region_sampling_follows_slicer_recentered_placement(self):
-        gcode = b"\\n".join([
+        gcode = b"\n".join([
             b"G90", b"M83", b"G0 X103 Y123 Z15",
             b"; FEATURE: Sparse infill", b"G1 X113 Y123 E1.25",
             b"G0 X143 Y123", b"G1 X153 Y123 E0.75",
