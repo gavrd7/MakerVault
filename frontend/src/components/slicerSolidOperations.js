@@ -153,6 +153,10 @@ export function resultToStl(mesh, {allowOpenPreview=false,allowTrustedFontSeams=
   const position=new THREE.Vector3(),a=new THREE.Vector3(),b=new THREE.Vector3(),c=new THREE.Vector3();
   const ab=new THREE.Vector3(),ac=new THREE.Vector3();
   const clean=[];
+  // CSG may return repeated, identically wound coplanar triangles.
+  // Remove only exact duplicate faces (within the mesh weld precision).
+  // Never drop reversed faces, stitch open borders or waive manifold checks.
+  const seenFaces=new Map();
   const get=(at,out)=>out.fromBufferAttribute(attr,idx?idx.getX(at):at);
   // CSG clipping commonly emits triangles with identical vertices or
   // near-zero area at coplanar seams. They carry no physical surface and
@@ -164,6 +168,20 @@ export function resultToStl(mesh, {allowOpenPreview=false,allowTrustedFontSeams=
       throw new Error("CSG produced non-finite coordinates.");
     ab.subVectors(b,a);ac.subVectors(c,a);
     if(ab.cross(ac).lengthSq()<1e-14) { discarded++; continue; }
+    const keys=[a,b,c].map(v=>[v.x,v.y,v.z]
+      .map(n=>Math.round(n/WELD)).join(","));
+    const canonical=[...keys].sort().join("|");
+    const winding=[keys[0]+"|"+keys[1]+"|"+keys[2],
+      keys[1]+"|"+keys[2]+"|"+keys[0],
+      keys[2]+"|"+keys[0]+"|"+keys[1]].sort()[0];
+    const seen=seenFaces.get(canonical);
+    if(seen){
+      if(seen!==winding)
+        throw new Error("CSG produced overlapping faces with opposite orientation.");
+      discarded++;
+      continue;
+    }
+    seenFaces.set(canonical,winding);
     clean.push(a.x,a.y,a.z,b.x,b.y,b.z,c.x,c.y,c.z);
     if(clean.length/9>CSG_MAX_OUTPUT_TRIANGLES ||
       84+clean.length/9*50>STL_MAX_BYTES)
