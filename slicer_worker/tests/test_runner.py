@@ -16,8 +16,14 @@ class WorkerContractTests(TestCase):
         self.executable = self.root / "prusa-slicer"
         self.executable.write_text("#!/bin/sh\nexit 0\n")
         self.executable.chmod(0o700)
-        for name in ("input.stl", "printer.ini", "filament.ini", "process.ini"):
-            (self.root / name).write_bytes(b"fixture")
+        (self.root / "input.stl").write_bytes(b"fixture")
+        (self.root / "printer.ini").write_text(
+            "printer_technology = FFF\nnozzle_diameter = 0.4\n"
+            "bed_shape = 0x0,200x0,200x200,0x200\n")
+        (self.root / "filament.ini").write_text(
+            "filament_diameter = 1.75\ntemperature = 210\n")
+        (self.root / "process.ini").write_text(
+            "layer_height = 0.2\nfill_density = 15%\n")
         self.output = self.root / "output.gcode"
 
     def test_fixed_command_never_takes_user_command_parameters(self):
@@ -33,7 +39,9 @@ class WorkerContractTests(TestCase):
         with self.assertRaises(WorkerError):
             prusa_command(self.executable, self.root)
         (self.root / "printer.ini").unlink()
-        (self.root / "printer.ini").write_text("fixture")
+        (self.root / "printer.ini").write_text(
+            "printer_technology = FFF\nnozzle_diameter = 0.4\n"
+            "bed_shape = 0x0,200x0,200x200,0x200\n")
         self.output.write_text("old output")
         with self.assertRaises(WorkerError):
             prusa_command(self.executable, self.root)
@@ -81,7 +89,9 @@ class WorkerContractTests(TestCase):
             prusa_command(self.executable, self.root)
 
     def test_plain_escaped_text_is_not_a_binary_nul(self):
-        (self.root / "printer.ini").write_bytes(b"; a literal \\x00 sequence\nlayer_height = 0.2\n")
+        (self.root / "printer.ini").write_bytes(
+            b"; a literal \\x00 sequence\nprinter_technology = FFF\n"
+            b"nozzle_diameter = 0.4\nbed_shape = 0x0,200x0,200x200,0x200\n")
         self.assertIn("--export-gcode", prusa_command(self.executable, self.root))
 
     def test_invalid_timeout_and_oversize_models_fail_without_execution(self):
