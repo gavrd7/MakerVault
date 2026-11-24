@@ -732,10 +732,13 @@ test("assembly toolbar gizmos use a shared pivot and keep meshes independent",()
   assert.match(workspace,/const memberIds = item\.assembly_id/);
   assert.match(workspace,/memberIds\.every\(value => current\.includes\(value\)\)/);
 });
-test("negative volume warns if the subtraction shape misses the model",()=>{
+test("native negative volume insertion stays non-destructive and preserves editable pose",()=>{
   const editor=read("SlicerPlateEditor.jsx");
-  assert.match(editor,/if \(!targetBounds\.intersectsBox\(toolBounds\)\)/);
-  assert.match(editor,/Negative shape does not intersect the selected model/);
+  assert.match(editor,/\["primitive","modifier","negative"\]\.includes\(solidDialog\.kind\)/);
+  assert.match(editor,/settings:solidDialog\.kind==="negative"\?\{\}/);
+  assert.match(editor,/modifier_volumes:solidDialog\.editVolumeId/);
+  assert.doesNotMatch(editor,/Negative shape does not intersect the selected model/);
+  assert.doesNotMatch(editor,/executeSolidOperation\("boolean",target,\{booleanMode:"difference"/);
 });
 
 test("project plates can be added and switched without sharing selection history",()=>{
