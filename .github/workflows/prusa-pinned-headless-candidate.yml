@@ -56,7 +56,9 @@ jobs:
         working-directory: upstream-prusa
         run: |
           set -euo pipefail
-          cmake -S deps -B deps/build -DDEP_WX_GTK3=OFF
+          # Ubuntu 24.04 supplies GTK3 headers, not the GTK2 headers selected by OFF.
+          # Keep this upstream dependency option scoped to the isolated Prusa build.
+          cmake -S deps -B deps/build -DDEP_WX_GTK3=ON
           cmake --build deps/build --parallel 2
 
       - name: Compile headless PrusaSlicer CLI
