@@ -5,6 +5,7 @@ executable printer preset and cannot be used to approve a slicing worker.
 """
 from configparser import ConfigParser, Error as ConfigError
 from functools import lru_cache
+import re
 
 import requests
 
@@ -78,7 +79,7 @@ def _sections(vendor="PrusaResearch"):
 
 
 _PRUSA_KINDS = {"printer": "printer", "filament": "filament", "process": "print"}
-_NATIVE_KEY = __import__("re").compile(r"[A-Za-z_][A-Za-z0-9_]*\Z")
+_NATIVE_KEY = re.compile(r"[A-Za-z_][A-Za-z0-9_]*\Z")
 _MAX_NATIVE_SETTINGS = 400
 
 
@@ -151,21 +152,39 @@ def official_catalogue_models(vendor="PrusaResearch"):
 
 
 def search_prusa_profiles(query, kind, vendor="PrusaResearch", printer_model=None):
-    if kind != "printer":
-        raise OfficialProfileError("Prusa artwork discovery currently supports printer-model metadata only.")
+    """Discover *native* Prusa printer, filament and process candidates."""
+    prefix = _PRUSA_KINDS.get(kind)
+    if not prefix:
+        raise OfficialProfileError("Choose a Prusa printer, filament or process preset.")
     if not isinstance(query, str) or len(query.strip()) > 80:
         raise OfficialProfileError("Search terms must be 80 characters or fewer.")
+    if printer_model is not None and (
+            not isinstance(printer_model, str) or len(printer_model) > 200):
+        raise OfficialProfileError("Invalid Prusa native printer-model filter.")
     needle = query.strip().casefold()
-    models = _sections(vendor)
-    matches = [name for name in models if needle in name.casefold()]
-    if printer_model:
-        matches = [name for name in matches if name == printer_model]
+    sections = _native_sections(vendor)
+    matches = []
+    for section in sections:
+        if not section.startswith(prefix + ":"):
+            continue
+        name = section[len(prefix) + 1:]
+        # Internal symbolic defaults are resolved through inheritance, never
+        # presented to users as complete ready-to-select profiles.
+        if not 1 <= len(name) <= 200 or name.startswith("*"):
+            continue
+        if needle not in name.casefold():
+            continue
+        if printer_model and kind == "printer" and printer_model.casefold() not in name.casefold():
+            continue
+        matches.append(name)
+    matches.sort(key=str.casefold)
     return {
         "engine": ENGINE, "engine_version": ENGINE_VERSION,
         "vendor": vendor, "kind": kind, "source": SOURCE, "ref": REF,
         "profiles": [{"name": name, "sub_path": vendor + ".ini"} for name in matches[:40]],
         "total_matches": len(matches), "import_status": "candidate_only",
-        "model_artwork_only": True,
+        "model_artwork_only": False,
+        "compatibility_not_verified": True,
     }
 
 
