@@ -13,48 +13,48 @@ function solid(x=0,y=0,z=0) {
   mesh.updateMatrixWorld(true);
   return mesh;
 }
-test("drilling does not mutate the source geometry", () => {
+test("drilling does not mutate the source geometry", async () => {
   const mesh=solid();
   const before=Array.from(mesh.geometry.getAttribute("position").array);
-  const out=executeSolidOperation("drill",mesh,{radius:3,x_mm:0,y_mm:0});
+  const out=await executeSolidOperation("drill",mesh,{radius:3,x_mm:0,y_mm:0});
   assert.equal(out.length,1);
   assert.ok(out[0].triangles>0);
   assert.equal(new DataView(out[0].buffer).getUint32(80,true),out[0].triangles);
   assert.deepEqual(Array.from(mesh.geometry.getAttribute("position").array),before);
 });
-test("Cut may keep two, top or bottom independently", () => {
+test("Cut may keep two, top or bottom independently", async () => {
   const mesh=solid();
-  assert.equal(executeSolidOperation("cut",mesh,{cutHeight:10,keep:"both"}).length,2);
-  assert.equal(executeSolidOperation("cut",mesh,{cutHeight:10,keep:"top"}).length,1);
-  assert.equal(executeSolidOperation("cut",mesh,{cutHeight:10,keep:"bottom"}).length,1);
+  assert.equal((await executeSolidOperation("cut",mesh,{cutHeight:10,keep:"both"})).length,2);
+  assert.equal((await executeSolidOperation("cut",mesh,{cutHeight:10,keep:"top"})).length,1);
+  assert.equal((await executeSolidOperation("cut",mesh,{cutHeight:10,keep:"bottom"})).length,1);
 });
-test("Boolean union difference intersection on overlapping manifold cubes", () => {
+test("Boolean union difference intersection on overlapping manifold cubes", async () => {
   const a=solid(), b=solid(10,0,0);
   for (const booleanMode of ["union","difference","intersection"]) {
-    const out=executeSolidOperation("boolean",a,{booleanMode},b);
+    const out=await executeSolidOperation("boolean",a,{booleanMode},b);
     assert.equal(out.length,1);
     assert.ok(out[0].triangles>0);
   }
 });
-test("Hollow produces a closed internal shell on a simple manifold cube", () => {
+test("Hollow produces a closed internal shell on a simple manifold cube", async () => {
   const mesh=solid();
-  const out=executeSolidOperation("hollow",mesh,{wall:2});
+  const out=await executeSolidOperation("hollow",mesh,{wall:2});
   assert.equal(out.length,1);
   assert.ok(out[0].triangles>=12);
   assert.ok(out[0].buffer.byteLength===84+out[0].triangles*50);
 });
-test("Cut also accepts X and Y oriented planes", () => {
+test("Cut also accepts X and Y oriented planes", async () => {
   const mesh=solid();
-  assert.equal(executeSolidOperation("cut",mesh,{cutAxis:"x",cutHeight:0,keep:"both"}).length,2);
-  assert.equal(executeSolidOperation("cut",mesh,{cutAxis:"y",cutHeight:0,keep:"both"}).length,2);
+  assert.equal((await executeSolidOperation("cut",mesh,{cutAxis:"x",cutHeight:0,keep:"both"})).length,2);
+  assert.equal((await executeSolidOperation("cut",mesh,{cutAxis:"y",cutHeight:0,keep:"both"})).length,2);
 });
-test("Hollow refuses a wall larger than available solid", () => {
+test("Hollow refuses a wall larger than available solid", async () => {
   const mesh=solid();
-  assert.throws(()=>executeSolidOperation("hollow",mesh,{wall:12}),/wall|thin/i);
+  await assert.rejects(executeSolidOperation("hollow",mesh,{wall:12}),/wall|thin/i);
 });
-test("Csg errors do not modify source meshes", () => {
+test("Csg errors do not modify source meshes", async () => {
   const mesh=solid();
-  assert.throws(()=>executeSolidOperation("boolean",mesh,{booleanMode:"union"},null),/second/i);
+  await assert.rejects(executeSolidOperation("boolean",mesh,{booleanMode:"union"},null),/second/i);
   assert.equal(CSG_MAX_INPUT_TRIANGLES,500000);
 });
 
@@ -85,10 +85,10 @@ test("zero-area CSG fragments are stripped before binary STL validation",()=>{
   geometry.dispose();cube.geometry.dispose();
 });
 
-test("hollow cavity can be adjusted without altering the source STL",()=>{
+test("hollow cavity can be adjusted without altering the source STL",async ()=>{
   const mesh=solid();
   const before=Array.from(mesh.geometry.getAttribute("position").array);
-  const out=executeSolidOperation("hollow",mesh,{
+  const out=await executeSolidOperation("hollow",mesh,{
     wall:2,cavity_x_mm:0.5,cavity_y_mm:0,cavity_z_mm:0,
     cavity_scale_x:101,cavity_scale_y:100,cavity_scale_z:100,
     cavity_rotation_x:0,cavity_rotation_y:0,cavity_rotation_z:0,
