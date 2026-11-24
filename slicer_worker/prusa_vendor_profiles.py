@@ -15,7 +15,7 @@ import re
 
 MAX_BUNDLE_BYTES = 4 * 1024 * 1024
 MAX_FLAT_BYTES = 1024 * 1024
-MAX_SECTIONS = 4000
+MAX_SECTIONS = 10000
 MAX_KEYS = 400
 MAX_DEPTH = 16
 KINDS = frozenset({"print", "filament", "printer"})
