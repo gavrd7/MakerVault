@@ -10,6 +10,8 @@ import os
 import signal
 import subprocess
 
+from .prusa_vendor_profiles import PrusaPresetError, validate_flat_prusa_preset
+
 
 MAX_GCODE_BYTES = 64 * 1024 * 1024
 MAX_MODEL_BYTES = 32 * 1024 * 1024
@@ -49,16 +51,14 @@ def prusa_command(binary: Path, workdir: Path) -> list[str]:
         _regular_file(workdir, name, MAX_PROFILE_BYTES)
         for name in ("printer.ini", "filament.ini", "process.ini")
     ]
-    for profile in profiles:
-        # Native profiles can include arbitrary post-processing scripts.
-        # Reject execution hooks before launching any slicer.
-        data = profile.read_bytes()
-        if b"\x00" in data:
-            raise WorkerError("Native profile contains binary data.")
-        for line in data.decode("utf-8", "replace").splitlines():
-            key = line.partition("=")[0].strip().lower()
-            if key in {"post_process", "post_process_scripts"}:
-                raise WorkerError("Post-processing scripts are forbidden.")
+    for kind, profile in zip(("printer", "filament", "print"), profiles):
+        # Real Prusa vendor bundles contain named sections + inheritance.
+        # Only fully resolved, bounded flat settings may reach the native CLI.
+        try:
+            validate_flat_prusa_preset(profile.read_bytes(), kind=kind)
+        except PrusaPresetError as exc:
+            # Validator messages are fixed literals; never expose profile text.
+            raise WorkerError(str(exc)) from None
     output = _output_path(workdir)
     return [
         str(binary), "--load", str(profiles[0]), "--load", str(profiles[1]),
