@@ -2555,7 +2555,8 @@ export default function SlicerPlateEditor({
       if (selectionRef.current.length > 1) {
         if (!selectionRef.current.includes(id) ||
           !["select","move"].includes(latestToolModeRef.current)) return;
-        const members=latestObjectsRef.current.filter(row=>selectionRef.current.includes(row.instance_id));
+        const members=[...latestObjectsRef.current.filter(row=>selectionRef.current.includes(row.instance_id)),
+          ...latestObjectsRef.current.flatMap(row=>(row.modifier_volumes||[]).filter(volume=>selectionRef.current.includes(volume.id)))];
         dragging={
           groupIds:selectionRef.current.slice(),
           pointerId:event.pointerId,
@@ -2660,11 +2661,15 @@ export default function SlicerPlateEditor({
           ...row,x_mm:pretty(Number(row.x_mm)+dx),
           y_mm:pretty(Number(row.y_mm)+dy),
         }));
-        if (moved.some(row=>plateExtentWarning(row,
+        if(moved.some(row=>Math.abs(row.x_mm)>10000||Math.abs(row.y_mm)>10000))return;
+        if(moved.some(row=>row.instance_id && plateExtentWarning(row,
           dimensionsRef.current[row.instance_id],bedX,bedY))) return;
-        const byId=new Map(moved.map(row=>[row.instance_id,row]));
-        latestOnChangeRef.current(latestObjectsRef.current.map(row=>
-          byId.get(row.instance_id)||row));
+        const byId=new Map(moved.filter(row=>row.instance_id).map(row=>[row.instance_id,row]));
+        const byVolumeId=new Map(moved.filter(row=>row.id&&!row.instance_id).map(row=>[row.id,row]));
+        latestOnChangeRef.current(latestObjectsRef.current.map(row=>({
+          ...(byId.get(row.instance_id)||row),
+          modifier_volumes:(row.modifier_volumes||[]).map(volume=>byVolumeId.get(volume.id)||volume),
+        })));
         event.preventDefault();
         return;
       }
