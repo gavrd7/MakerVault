@@ -9,6 +9,7 @@ its model imports successfully.
 from copy import deepcopy
 import io
 import json
+import logging
 import re
 import uuid
 import zipfile
@@ -26,6 +27,8 @@ EXTRA = frozenset({
     "3D/Objects/object_1.model", "3D/_rels/3dmodel.model.rels",
     "Metadata/project_settings.config", "Metadata/creality.config",
 })
+logger = logging.getLogger(__name__)
+
 BLOCKED = frozenset({
     "post_process", "post_process_script", "post_process_scripts",
     "post_processing", "post_processing_script", "post_processing_scripts",
@@ -61,7 +64,15 @@ def _safe_project_settings(node, depth=0):
         if len(node) > 4096:
             raise WorkerError("Oversized native modifier project settings.")
         for key, value in node.items():
-            if not isinstance(key, str) or len(key) > 128 or key.lower() in BLOCKED:
+            if not isinstance(key, str):
+                logger.warning("Creality project settings key rejected: invalid-type")
+                raise WorkerError("Unsafe native modifier project setting.")
+            if len(key) > 128:
+                logger.warning("Creality project settings key rejected: overlong")
+                raise WorkerError("Unsafe native modifier project setting.")
+            if key.lower() in BLOCKED:
+                # Log only names from the fixed code-owned denylist.
+                logger.warning("Creality project settings key rejected: blocked=%s", key.lower())
                 raise WorkerError("Unsafe native modifier project setting.")
             _safe_project_settings(value, depth + 1)
     elif isinstance(node, list):
