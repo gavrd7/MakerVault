@@ -609,6 +609,17 @@ export default function SlicerPlateEditor({
   }
 
   function duplicateSelected() {
+    if (chosenModifier && canEdit) {
+      const total = objects.reduce((sum,row) => sum + (row.modifier_volumes || []).length, 0);
+      if (chosen.modifier_volumes.length >= 12 || total >= 48) { setError("Modifier count limit reached."); return; }
+      const copy = {...chosenModifier,id:plateUuid(),settings:{...chosenModifier.settings},
+        rotation_xyz_deg:[...(chosenModifier.rotation_xyz_deg || [0,0,0])],
+        scale_xyz_percent:[...(chosenModifier.scale_xyz_percent || [100,100,100])],
+        x_mm:pretty(Math.min(10000,chosenModifier.x_mm + 5))};
+      onChange(objects.map(row => row.instance_id === chosen.instance_id ? {...row, modifier_volumes:[...row.modifier_volumes,copy]} : row));
+      onSelectedModifierChange?.(copy.id,chosen.instance_id);
+      setError("");return;
+    }
     if (!chosen || objects.length >= MAX_OBJECTS) return;
     // A duplicate must retain orientation, colour and individual XYZ scale.
     // Assign a new instance identity, then arrange after its mesh is measured.
@@ -645,6 +656,10 @@ export default function SlicerPlateEditor({
   }
 
   function removeSelected() {
+    if (chosenModifier && canEdit) {
+      onChange(objects.map(row => row.instance_id === chosen.instance_id ? {...row,modifier_volumes:row.modifier_volumes.filter(modifier => modifier.id !== chosenModifier.id)} : row));
+      onSelectedModifierChange?.(null);return;
+    }
     if (!chosen) return;
     const remaining = objects.filter(item => item.instance_id !== chosen.instance_id);
     onChange(remaining);
@@ -663,6 +678,11 @@ export default function SlicerPlateEditor({
       if (document.getSelection()?.toString()) return;
       const mod=event.ctrlKey||event.metaKey;
       const key=event.key.toLowerCase();
+      if (chosenModifier) {
+        if (!mod && !event.altKey && (key==="delete"||key==="backspace")) {event.preventDefault();removeSelected();}
+        else if (mod && !event.altKey && ["c","x","v"].includes(key)) {event.preventDefault();if(key==="v") duplicateSelected();}
+        return;
+      }
       const selectedRows=objects.filter(item=>selection.includes(item.instance_id));
       const removeRows=()=>{
         const ids=new Set(selectedRows.map(item=>item.instance_id));
@@ -753,7 +773,7 @@ export default function SlicerPlateEditor({
     window.addEventListener("keydown",keydown);
     return ()=>window.removeEventListener("keydown",keydown);
   }, [canEdit,uploadBusy,solidDialog,splitPreview,selection,objects,onChange,
-      onPrimaryChange,bedX,bedY]);
+      onPrimaryChange,bedX,bedY,chosenModifier,onSelectedModifierChange]);
 
   function patch(field, value) {
     if (!chosen) return;
@@ -2309,8 +2329,7 @@ export default function SlicerPlateEditor({
           (mesh.userData.modifierGhosts || []).filter(ghost => ghost.userData.isWorldModifier));
         const candidate = raycaster.intersectObjects(modifierGhosts, false)[0];
         if (candidate && (!hits[0] || candidate.distance <= hits[0].distance + 0.01)) {
-          setSelected(candidate.object.userData.modifierParentId);
-          modifierSelectionRef.current.onChange?.(candidate.object.userData.modifierId);
+          modifierSelectionRef.current.onChange?.(candidate.object.userData.modifierId, candidate.object.userData.modifierParentId);
           event.preventDefault();
           return;
         }
@@ -2966,9 +2985,8 @@ export default function SlicerPlateEditor({
   }, [bedX, bedY, plate?.polygon_mm, plate?.bounds_mm, plateType, printerLabel,
     showNativeArtwork, showOrientationLabels, showMachineLabel, showDimensionsLabel, showAxisLabels, plate?.bed_model_url, plate?.artwork_url]);
 
-  // Read-only translucent modifier ghosts. They are children of the selected
-  // model's mesh and inherit all its transforms, but never participate in STL
-  // export, collision detection, raycasting or the printable-object list.
+  // Modifier meshes are non-printing, independently selectable region overlays.
+  // World-space modifiers are scene siblings, never printable STL meshes.
   function syncModifierOverlays(parent, item, plane) {
     const previous = parent.userData.modifierGhosts || [];
     for (const ghost of previous) {
@@ -3021,12 +3039,16 @@ export default function SlicerPlateEditor({
         const scales = modifier.scale_xyz_percent || [100, 100, 100];
         ghost.rotation.set(...angles.map(v => THREE.MathUtils.degToRad(Number(v))), "XYZ");
         ghost.scale.set(...scales.map(v => Number(v) / 100));
-        (parent.parent || parent).add(ghost);
+        (parent.parent || sceneRef.current?.scene || parent).add(ghost);
       } else {
         // Existing drafts are interpreted in parent-local coordinates.
         parent.add(ghost);
       }
       ghost.renderOrder = 18;
+      if (modifier.id === modifierSelectionRef.current.id) {
+        ghost.material.color.set("#40c8ff");
+        ghost.material.opacity = .42;
+      }
       ghost.userData.isModifierVolume = true;
       ghost.userData.modifierId = modifier.id;
       ghost.userData.modifierParentId = item.instance_id;
@@ -3098,11 +3120,11 @@ export default function SlicerPlateEditor({
           positionOrientedMesh(mesh, latest);
           try {paintPreview(mesh, {...latest,colour_paint:latest.colour_paint}, PALETTE[0]);supportPaintPreview(mesh,latestToolModeRef.current==="paint_support"?latest.support_paint:null);semanticPaintPreview(mesh,latestToolModeRef.current==="paint_seam"?latest.seam_paint:null,"seam");semanticPaintPreview(mesh,latestToolModeRef.current==="paint_fuzzy"?latest.fuzzy_skin_paint:null,"fuzzy");}
           catch (error) {latestPaintErrorRef.current?.(error.message || "Invalid saved colour painting.");}
-          syncModifierOverlays(mesh, latest, state.sectionPlane);
           state.meshes.set(item.instance_id, mesh);
           state.scene.add(mesh);
+          syncModifierOverlays(mesh, latest, state.sectionPlane);
           if (latestToolModeRef.current === "variable_layers") state.showVariableHeightGuide?.();
-          if (latestToolModeRef.current !== "select" && item.instance_id === selectedInstanceId &&
+          if (!modifierSelectionRef.current.id && latestToolModeRef.current !== "select" && item.instance_id === selectedInstanceId &&
               ["move", "scale"].includes(latestToolModeRef.current)) {
             state.transform.setMode(latestToolModeRef.current === "move" ? "translate" : "scale");
             state.transform.attach(mesh);
@@ -3139,19 +3161,20 @@ export default function SlicerPlateEditor({
       const mesh = state.meshes.get(item.instance_id);
       if (!mesh) continue;
       positionOrientedMesh(mesh, item);
+      if (state.transform.object?.userData?.isWorldModifier && mesh.userData.modifierGhosts?.includes(state.transform.object)) state.transform.detach();
       syncModifierOverlays(mesh, item, state.sectionPlane);
       // Position-only changes must never alter the displayed filament colour.
       try {paintPreview(mesh, {...item,colour_paint:item.colour_paint}, PALETTE[0]);supportPaintPreview(mesh,toolMode==="paint_support"?item.support_paint:null);semanticPaintPreview(mesh,toolMode==="paint_seam"?item.seam_paint:null,"seam");semanticPaintPreview(mesh,toolMode==="paint_fuzzy"?item.fuzzy_skin_paint:null,"fuzzy");}
       catch (error) {latestPaintErrorRef.current?.(error.message || "Invalid saved colour painting.");}
       mesh.material.emissive.set(["paint_colour","paint_support","paint_seam","paint_fuzzy","variable_layers"].includes(toolMode) ? "#000000" : conflictIds.has(item.instance_id) ? "#e84a53" :
-        selection.includes(item.instance_id) ? "#168ab4" : "#000000");
+        !selectedModifierId && selection.includes(item.instance_id) ? "#168ab4" : "#000000");
       mesh.material.emissiveIntensity = ["paint_colour","paint_support","paint_seam","paint_fuzzy","variable_layers"].includes(toolMode) ? 0 : conflictIds.has(item.instance_id) ? 0.72 :
-        selection.includes(item.instance_id) ? 0.32 : 0;
+        !selectedModifierId && selection.includes(item.instance_id) ? 0.32 : 0;
     }
     const selectedMesh = state.meshes.get(selected);
     const activeModifier = selectedMesh?.userData.modifierGhosts?.find(ghost =>
       ghost.userData.isWorldModifier && ghost.userData.modifierId === selectedModifierId);
-    state.setSelectionOutlines(["paint_colour","paint_support","paint_seam","paint_fuzzy","variable_layers"].includes(toolMode) ? [] : selection.map(id=>state.meshes.get(id)).filter(Boolean));
+    state.setSelectionOutlines(["paint_colour","paint_support","paint_seam","paint_fuzzy","variable_layers"].includes(toolMode) ? [] : activeModifier ? [activeModifier] : selection.map(id=>state.meshes.get(id)).filter(Boolean));
     const singleEditable = canEdit && toolMode !== "paint_colour" && !solidDialog && selectedMesh && selection.length < 2;
     const groupEditable = canEdit && !solidDialog && selection.length > 1 &&
       ["move","rotate","scale"].includes(toolMode);
@@ -3414,7 +3437,8 @@ export default function SlicerPlateEditor({
     const focus = new THREE.Vector3(0, 0, 0);
     let span = Math.max(80, Math.hypot(bedX, bedY) * 1.35);
     if (view === "selection") {
-      const target = meshes.get(selected || chosen?.instance_id);
+      const parent = meshes.get(selected || chosen?.instance_id);
+      const target = parent?.userData.modifierGhosts?.find(ghost=>ghost.userData.modifierId===selectedModifierId) || parent;
       if (target) {
         const box = new THREE.Box3().setFromObject(target);
         if (!box.isEmpty()) {
@@ -3675,7 +3699,7 @@ export default function SlicerPlateEditor({
                 }} /></label>)}
           </div>
           <button type="button" className="slicerTransformQuickAction" disabled={!canEdit}
-            onClick={() => applySelectedTransform({ x_mm: 0, y_mm: 0 },
+            onClick={() => chosenModifier ? patchChosenModifier({x_mm:0,y_mm:0}) : applySelectedTransform({ x_mm: 0, y_mm: 0 },
               "The model cannot be centred without leaving the bed or overlapping another model.")}>
             <SlicerUiIcon name="center" /> <span>Centre model</span>
           </button>
@@ -3972,7 +3996,7 @@ export default function SlicerPlateEditor({
         </select>
       </label>
       <button data-slicer-action="remove" type="button" disabled={!canEdit || !chosen} onClick={removeSelected}>Remove selected model</button>
-      <button data-slicer-action="duplicate" type="button" disabled={!canEdit || !chosen || objects.length >= MAX_OBJECTS} onClick={duplicateSelected}>Duplicate selected</button>
+      <button data-slicer-action="duplicate" type="button" disabled={!canEdit || !chosen || (!chosenModifier && objects.length >= MAX_OBJECTS)} onClick={duplicateSelected}>Duplicate selected</button>
     </div>}
 
     {measurementVisible && chosen && <section className="slicerPlateMeasurement" role="region"
