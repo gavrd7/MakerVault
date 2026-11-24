@@ -40,7 +40,7 @@ export function hydratePlateObjects(plate) {
                  Number(a.y_mm || 0) - Number(volume.y_mm || 0))
       - Math.hypot(Number(b.x_mm || 0) - Number(volume.x_mm || 0),
                    Number(b.y_mm || 0) - Number(volume.y_mm || 0)));
-    if (!candidates.length) throw new Error("Not enough printable models to edit all volumes on this plate.");
+    if (!candidates.length) continue; // Keep excess independent volumes in canonical storage.
     candidates[0].modifier_volumes.push(volume);
     existing.add(volume.id);
   }
@@ -53,4 +53,14 @@ export function canonicalPlate(plate) {
   const {models, volumes} = splitPlateVolumes(original, plate.volumes || []);
   return {...plate, objects: models,
     volumes: !inline && models.length ? [...(plate.volumes || [])] : volumes};
+}
+
+export function updateCanonicalPlate(plate, nextObjects) {
+  const visibleIds = new Set(hydratePlateObjects(plate)
+    .flatMap(row => row.modifier_volumes.map(volume => volume.id)));
+  const pending = (plate.volumes || []).filter(volume => !visibleIds.has(volume.id));
+  const {models, volumes} = splitPlateVolumes(nextObjects, nextObjects.length ? [] : plate.volumes || []);
+  const updated = [...volumes, ...pending.filter(volume => !volumes.some(v => v.id === volume.id))];
+  if (updated.length > MAX_PLATE_VOLUMES) throw new Error("Too many independent volumes on this plate.");
+  return {...plate, objects: models, volumes: updated};
 }
