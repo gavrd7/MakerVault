@@ -355,9 +355,11 @@ def _draft_plate_settings(user, input_asset, settings):
                 raise ValueError("A multi-plate draft supports at most 200 models in total.")
             raw_by_id[plate_id] = instances
             canonical = "volumes" in plate
-            if canonical and any(isinstance(row, dict) and row.get("modifier_volumes")
-                                 for row in instances):
-                raise ValueError("Independent plate volumes cannot be duplicated inside printable records.")
+            if canonical and any(isinstance(row, dict) and any(
+                    volume.get("coordinate_space") == "world"
+                    for volume in row.get("modifier_volumes", [])
+                    if isinstance(volume, dict)) for row in instances):
+                raise ValueError("World-space volumes must be stored independently of printable records.")
             checked_volumes = _validate_independent_plate_volumes(
                 plate["volumes"],
                 {str(_uuid(row["instance_id"])) for row in instances}
@@ -390,11 +392,20 @@ def _draft_plate_settings(user, input_asset, settings):
         if canonical:
             if not isinstance(submitted, list):
                 raise ValueError("Invalid active model list.")
-            stripped = [{key: value for key, value in row.items()
-                         if key != "modifier_volumes"} for row in submitted
-                        if isinstance(row, dict)]
-            inline = [volume for row in submitted if isinstance(row, dict)
-                      for volume in row.get("modifier_volumes", [])]
+            stripped = []
+            inline = []
+            for row in submitted:
+                if not isinstance(row, dict):
+                    continue
+                world = [volume for volume in row.get("modifier_volumes", [])
+                         if isinstance(volume, dict) and volume.get("coordinate_space") == "world"]
+                local = [volume for volume in row.get("modifier_volumes", [])
+                         if not isinstance(volume, dict) or volume.get("coordinate_space") != "world"]
+                inline.extend(world)
+                model = {key: value for key, value in row.items() if key != "modifier_volumes"}
+                if local:
+                    model["modifier_volumes"] = local
+                stripped.append(model)
             if len(stripped) != len(submitted) or raw_by_id[active_id] != stripped:
                 raise ValueError("The active plate must match its submitted printable models.")
             canonical_volumes = active["volumes"]
