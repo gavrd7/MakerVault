@@ -9,6 +9,8 @@ import json
 from pathlib import Path
 import shutil
 import tempfile
+import zipfile
+from xml.etree import ElementTree as ET
 from unittest.mock import patch
 
 from .modifier_acceptance_probe import _COMMAND, _WORDS
@@ -25,7 +27,12 @@ def two_model_region_extrusion(gcode):
     relative_xyz = relative_e = False
     totals = {"left":0.0,"right":0.0}
     counts = {"left":0,"right":0}
+    features = {"left": {}, "right": {}}
+    feature = "unlabelled"
     for raw in gcode.decode("utf-8", "replace").splitlines():
+        comment = raw.strip()
+        if comment.startswith(("; FEATURE:", ";TYPE:", "; TYPE:")):
+            feature = comment.split(":", 1)[1].strip()[:100]
         cmd = _COMMAND.match(raw.partition(";")[0].strip().upper())
         if not cmd:
             continue
@@ -57,8 +64,9 @@ def two_model_region_extrusion(gcode):
                 if label:
                     totals[label]+=ex
                     counts[label]+=1
+                    features[label][feature] = features[label].get(feature, 0.0) + ex
         x,y,z=nx,ny,nz
-    return {"totals":totals,"counts":counts}
+    return {"totals":totals,"counts":counts,"features":features}
 
 
 def probe(fixtures,binary,engine,creality_native=False):
@@ -90,6 +98,18 @@ def probe(fixtures,binary,engine,creality_native=False):
             if gcode_path.resolve().parent != root.resolve() or not gcode_path.is_file():
                 raise WorkerError("Native CLI returned unsafe composite G-code output.")
             results[name]=two_model_region_extrusion(gcode_path.read_bytes())
+            # Inspect only part roles from the disposable native output, not
+            # arbitrary archive contents. This separates importer loss from
+            # subsequent slicing or measurement errors.
+            if engine == "bambustudio":
+                with zipfile.ZipFile(root / "bambu-sliced.3mf") as archive:
+                    member = "Metadata/model_settings.config"
+                    if member in archive.namelist() and archive.getinfo(member).file_size <= 1024 * 1024:
+                        payload = archive.read(member)
+                        if b"<!DOCTYPE" not in payload.upper() and b"<!ENTITY" not in payload.upper():
+                            config = ET.fromstring(payload)
+                            results[name]["output_part_roles"] = [p.get("subtype") for p in config.findall("./object/part")]
+            print("Native composite evidence:", name, json.dumps(results[name], sort_keys=True), flush=True)
     for region in ("left","right"):
         base=results["baseline"]["totals"][region]
         added=results["region"]["totals"][region]
