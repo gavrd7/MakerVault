@@ -5,6 +5,7 @@ real G-code. This per-job safety check ensures every requested modifier actually
 overlaps deposited model paths; it does not claim independent print fidelity.
 """
 import io
+from functools import lru_cache
 import math
 import re
 import zipfile
@@ -17,7 +18,7 @@ CMD = re.compile(r"^(G0?[01]|G92|M82|M83|G90|G91)\b", re.I)
 WORDS = re.compile(r"\b([XYZE])([-+]?(?:\d+(?:\.\d*)?|\.\d+))", re.I)
 
 
-def modifier_bounds(project, engine, *, include_kinds=False):
+def modifier_bounds(project, engine, *, include_kinds=False, include_meshes=False):
     if not isinstance(project, bytes) or len(project) > 32 * 1024 * 1024:
         raise WorkerError("Invalid modifier geometry for G-code audit.")
     try:
@@ -49,6 +50,7 @@ def modifier_bounds(project, engine, *, include_kinds=False):
             raise WorkerError("Missing bounded native region part coordinates.")
         bounds = []
         kinds = []
+        meshes = []
         for part in parts:
             subtype = part.get("subtype")
             if subtype == "normal_part":
@@ -75,8 +77,21 @@ def modifier_bounds(project, engine, *, include_kinds=False):
             bounds.append(tuple((min(v[i] for v in points), max(v[i] for v in points))
                                 for i in range(3)))
             kinds.append(subtype)
+            if include_meshes:
+                faces = obj.findall(NS + "mesh/" + NS + "triangles/" + NS + "triangle")
+                if not 4 <= len(faces) <= 500000:
+                    raise WorkerError("Invalid native region triangle count.")
+                triangles = []
+                for face in faces:
+                    indices = tuple(int(face.attrib[key]) for key in ("v1", "v2", "v3"))
+                    if any(index < 0 or index >= len(points) for index in indices):
+                        raise WorkerError("Invalid native region triangle index.")
+                    triangles.append(tuple(points[index] for index in indices))
+                meshes.append(tuple(triangles))
         if not bounds:
             raise WorkerError("No modifier regions available for G-code audit.")
+        if include_meshes:
+            return bounds, kinds, meshes
         return (bounds, kinds) if include_kinds else bounds
     except WorkerError:
         raise
@@ -85,11 +100,52 @@ def modifier_bounds(project, engine, *, include_kinds=False):
         raise WorkerError("Unable to audit native modifier geometry.") from None
 
 
+def _section_edges(triangles, z):
+    """Intersect the actual triangulated volume with a horizontal plane.
+
+    Half-open edge crossings avoid counting shared triangle vertices twice.
+    The tiny upward perturbation resolves planes coincident with mesh faces.
+    A torus may yield multiple loops: the even/odd test preserves its hole.
+    """
+    z += 1e-7
+    edges = []
+    for triangle in triangles:
+        points = []
+        for a, b in zip(triangle, triangle[1:] + triangle[:1]):
+            if (a[2] <= z < b[2]) or (b[2] <= z < a[2]):
+                t = (z - a[2]) / (b[2] - a[2])
+                points.append((a[0] + t * (b[0] - a[0]),
+                               a[1] + t * (b[1] - a[1])))
+        if len(points) == 2 and points[0] != points[1]:
+            edges.append(tuple(points))
+    return tuple(edges)
+
+
+def _inside_section(x, y, edges, tolerance=0.15):
+    """True only for a point in the section, away from its real contour."""
+    inside = False
+    for (ax, ay), (bx, by) in edges:
+        dx, dy = bx - ax, by - ay
+        length_sq = dx * dx + dy * dy
+        if length_sq:
+            t = max(0., min(1., ((x - ax) * dx + (y - ay) * dy) / length_sq))
+            if (x - ax - t * dx) ** 2 + (y - ay - t * dy) ** 2 <= tolerance ** 2:
+                return False
+        if (ay > y) != (by > y):
+            if x < ax + (y - ay) * dx / dy:
+                inside = not inside
+    return inside
+
+
 def audit_modifier_positive_e(gcode, project, engine):
     """Require modifier coverage and safe negative-volume subtraction instead of model deposition inside each non-printing modifier's 3D bbox."""
     if not isinstance(gcode, bytes) or not 0 < len(gcode) <= 64 * 1024 * 1024:
         raise WorkerError("Invalid modifier G-code output.")
-    boxes, kinds = modifier_bounds(project, engine, include_kinds=True)
+    boxes, kinds, meshes = modifier_bounds(project, engine, include_meshes=True)
+
+    @lru_cache(maxsize=64)
+    def section(index, layer_z):
+        return _section_edges(meshes[index], layer_z)
     x = y = z = e = 0.0
     relative_xyz = relative_e = False
     hits = [0] * len(boxes)
@@ -133,8 +189,10 @@ def audit_modifier_positive_e(gcode, project, engine):
                     # boundary is not a filled cavity. Require strict interior
                     # deposition, with a small geometric tolerance, rather
                     # than rejecting legitimate surface contours.
-                    inside = all(low + 0.15 < value < high - 0.15
-                                 for (low, high), value in zip(box, midpoint))
+                    inside = (all(low + 0.15 < value < high - 0.15
+                                  for (low, high), value in zip(box, midpoint))
+                              and _inside_section(midpoint[0], midpoint[1],
+                                                  section(i, nz)))
                 else:
                     inside = all(low - 0.05 <= value <= high + 0.05
                                  for (low, high), value in zip(box, midpoint))
