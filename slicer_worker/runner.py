@@ -11,6 +11,7 @@ import signal
 import subprocess
 
 from .prusa_vendor_profiles import PrusaPresetError, validate_flat_prusa_preset
+from .stl_validation import StlValidationError, validate_stl
 
 
 MAX_GCODE_BYTES = 64 * 1024 * 1024
@@ -47,6 +48,10 @@ def prusa_command(binary: Path, workdir: Path) -> list[str]:
     if binary.is_symlink() or not binary.is_file() or not os.access(binary, os.X_OK):
         raise WorkerError("Pinned PrusaSlicer executable is unavailable.")
     model = _regular_file(workdir, "input.stl", MAX_MODEL_BYTES)
+    try:
+        validate_stl(model.read_bytes())
+    except StlValidationError:
+        raise WorkerError("Prusa STL model is invalid.") from None
     profiles = [
         _regular_file(workdir, name, MAX_PROFILE_BYTES)
         for name in ("printer.ini", "filament.ini", "process.ini")
