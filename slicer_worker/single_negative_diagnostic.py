@@ -20,22 +20,40 @@ from defusedxml import ElementTree as ET
 
 
 def _native_part_bounds(sliced_3mf):
-    """Inspect the saved native mesh coordinates, not just its part subtype."""
+    """Inspect Bambu's external object meshes and component transforms.
+
+    Bambu's sliced 3MF can store actual geometry in 3D/Objects/*.model,
+    leaving 3D/3dmodel.model with only references. Inspect all bounded native
+    model members rather than mistakenly reporting that no meshes exist.
+    """
     namespace = "{http://schemas.microsoft.com/3dmanufacturing/core/2015/02}"
+    summary = []
     with zipfile.ZipFile(sliced_3mf) as archive:
-        info = archive.getinfo("3D/3dmodel.model")
-        if info.file_size > 16 * 1024 * 1024:
-            return {"note": "Native model XML exceeds diagnostic limit"}
-        root = ET.fromstring(archive.read(info))
-    result = []
-    for obj in root.findall("./" + namespace + "resources/" + namespace + "object"):
-        vertices = obj.findall("./" + namespace + "mesh/" + namespace + "vertices/" + namespace + "vertex")
-        if vertices:
-            points = [[float(v.get(key)) for key in ("x", "y", "z")] for v in vertices]
-            result.append({"id": obj.get("id"), "bounds": [
-                [round(min(v[axis] for v in points), 3),
-                 round(max(v[axis] for v in points), 3)] for axis in range(3)]})
-    return result[:15]
+        names = [name for name in archive.namelist()
+                 if name.startswith("3D/") and name.endswith(".model")]
+        for name in names[:24]:
+            info = archive.getinfo(name)
+            if not 0 < info.file_size <= 16 * 1024 * 1024:
+                summary.append({"member": name, "note": "Model member exceeds diagnostic limit"})
+                continue
+            root = ET.fromstring(archive.read(info))
+            for obj in root.findall("./" + namespace + "resources/" + namespace + "object"):
+                vertices = obj.findall("./" + namespace + "mesh/" + namespace + "vertices/" + namespace + "vertex")
+                parts = obj.findall("./" + namespace + "components/" + namespace + "component")
+                desc = {"member": name, "id": obj.get("id")}
+                if vertices:
+                    points = [[float(v.get(key)) for key in ("x", "y", "z")] for v in vertices]
+                    desc["mesh_bounds"] = [
+                        [round(min(v[axis] for v in points), 3),
+                         round(max(v[axis] for v in points), 3)] for axis in range(3)]
+                if parts:
+                    desc["components"] = [dict(part.attrib) for part in parts[:16]]
+                summary.append(desc)
+            if name == "3D/3dmodel.model":
+                summary.append({"member": name, "build": [
+                    dict(item.attrib) for item in root.findall(
+                        "./" + namespace + "build/" + namespace + "item")[:16]]})
+    return summary[:40]
 
 
 def _cavity_y_bands(gcode):
