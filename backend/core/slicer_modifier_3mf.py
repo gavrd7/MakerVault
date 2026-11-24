@@ -261,6 +261,21 @@ def _export_composite_volume_plate(objects_with_stl, *, bed_width, bed_depth):
             next_id += 1
             _add_child_mesh(resources, identifier, volume, envelope,
                             None, None, bed_width, bed_depth)
+            region_mesh=resources[-1].find(f"{{{NS}}}mesh")
+            if region_mesh is None:
+                raise SlicerProfileError("Missing non-printing composite mesh.")
+            region_points=[tuple(float(node.attrib[axis]) for axis in ("x","y","z"))
+                           for node in region_mesh.findall(f"{{{NS}}}vertices/{{{NS}}}vertex")]
+            if not region_points:
+                raise SlicerProfileError("Empty non-printing composite volume.")
+            region_box=tuple((min(point[axis] for point in region_points),
+                              max(point[axis] for point in region_points))
+                             for axis in range(3))
+            if not any(all(region_box[axis][0] < box[axis][1] and
+                           box[axis][0] < region_box[axis][1]
+                           for axis in range(3)) for box in bounds):
+                raise SlicerProfileError(
+                    "A non-printing volume does not intersect any printable model.")
             ET.SubElement(components, f"{{{NS}}}component",
                           {"objectid": str(identifier), "transform": identity})
             subtype = ("negative_part" if volume["kind"] == "negative"
