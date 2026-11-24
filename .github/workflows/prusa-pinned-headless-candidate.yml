@@ -19,6 +19,13 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 120
     steps:
+      # The real-binary smoke script is part of this reviewed MakerVault commit,
+      # not Prusa's upstream source tree. Without checkout it is absent.
+      - name: Check out MakerVault acceptance harness
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
       - name: Install tagged Prusa source build prerequisites
         run: |
           sudo apt-get update
