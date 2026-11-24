@@ -104,6 +104,31 @@ class BambuRunnerContractTests(TestCase):
         self.assertEqual((self.root / "filament.json").read_bytes(), original_filament)
         self.assertEqual((self.root / "process.json").read_bytes(), original_process)
 
+    def test_bambu_runtime_xdg_directories_are_private_and_scratch_only(self):
+        from slicer_worker.bambu_runner import _bambu_headless_environment
+        env = _bambu_headless_environment(self.root)
+        for key in ("XDG_CONFIG_HOME", "XDG_CACHE_HOME", "XDG_DATA_HOME", "XDG_RUNTIME_DIR"):
+            directory = Path(env[key])
+            self.assertEqual(directory.parent, self.root)
+            self.assertTrue(directory.is_dir())
+            self.assertEqual(directory.stat().st_mode & 0o777, 0o700)
+        self.assertEqual(env["HOME"], str(self.root))
+        self.assertEqual(env["TMPDIR"], str(self.root))
+        self.assertNotIn("HTTP_PROXY", env)
+
+    def test_bambu_filesystem_abort_diagnostics_never_relay_paths(self):
+        from slicer_worker.bambu_runner import _filesystem_error_details
+        self.assertEqual(_filesystem_error_details(
+            b"boost::filesystem::filesystem_error: Permission denied: "
+            b"/opt/engine-store/versions/bambustudio/private-data"),
+            ("permission", "engine-store"))
+        self.assertEqual(_filesystem_error_details(
+            b"filesystem_error: No such file or directory: "
+            b"/tmp/makervault-slice-private-secret/file"),
+            ("missing-path", "worker-scratch"))
+        self.assertEqual(_filesystem_error_details(b"filesystem_error"),
+                         ("unknown", "unknown"))
+
     def test_documented_flags_are_fixed_and_paths_are_sandbox_local(self):
         argv = bambu_command(self.binary, self.root)
         self.assertIn("--load-settings", argv)
