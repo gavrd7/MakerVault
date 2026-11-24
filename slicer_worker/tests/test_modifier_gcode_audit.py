@@ -5,7 +5,7 @@ from slicer_worker.modifier_gcode_audit import (
     audit_modifier_positive_e, modifier_bounds,
 )
 from slicer_worker.runner import WorkerError
-from slicer_worker.tests.test_modifier_3mf_validation import fixture
+from slicer_worker.tests.test_modifier_3mf_validation import fixture, composite_fixture
 
 
 class ModifierGcodeCoverageTests(unittest.TestCase):
@@ -40,6 +40,25 @@ class ModifierGcodeCoverageTests(unittest.TestCase):
         ])
         result = audit_modifier_positive_e(code, self.project, "orcaslicer")
         self.assertEqual(result["modifier_region_paths"], [15])
+
+    def test_native_negative_requires_empty_deposition_inside_subtraction_bounds(self):
+        project = composite_fixture(negative=True)
+        # Real subtraction can remove every extrusion path inside the
+        # negative mesh; the remaining printable model still deposits outside.
+        outside = [b"G90", b"M83", b"G0 X20 Y20 Z5"]
+        outside.extend(("G1 X%d Y%d E0.8" % (20 + i % 4, 20 + i % 4)).encode()
+                       for i in range(20))
+        result = audit_modifier_positive_e(
+            b"\\n".join(outside), project, "orcaslicer")
+        self.assertEqual(result["negative_volume_count"], 1)
+        self.assertEqual(result["modifier_region_paths"], [0])
+
+        inside = [b"G90", b"M83", b"G0 X2 Y2 Z5"]
+        inside.extend(("G1 X%d Y%d E0.8" % (2 + i % 4, 2 + i % 4)).encode()
+                      for i in range(20))
+        with self.assertRaisesRegex(WorkerError, "deposits material"):
+            audit_modifier_positive_e(
+                b"\\n".join(inside), project, "orcaslicer")
 
     def test_invalid_project_must_not_be_trusted(self):
         with self.assertRaises(WorkerError):
