@@ -23,8 +23,7 @@ def build(fixtures):
             filament=profiles[2],version="7.3.1",
             bed_width=220,bed_depth=220,
             label=uuid.uuid5(uuid.NAMESPACE_URL,"composite-"+name))
-        if name!="baseline":
-            validate_creality_modifier_project(result)
+        validate_creality_modifier_project(result)
         destination.write_bytes(result)
 
 
