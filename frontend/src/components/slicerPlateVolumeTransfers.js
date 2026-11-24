@@ -8,7 +8,8 @@ export function movePrintablesPreservingVolumes(objects, selectedIds, perModelLi
   if (!moving.length) return {remaining: objects, moving: []};
   const remaining = objects.filter(row => !ids.has(row.instance_id))
     .map(row => ({...row, modifier_volumes: [...(row.modifier_volumes || [])]}));
-  const detached = moving.flatMap(row => row.modifier_volumes || []);
+  const detached = moving.flatMap(row => (row.modifier_volumes || [])
+    .filter(volume => volume.coordinate_space === "world"));
   if (detached.length && !remaining.length) {
     throw new Error("Independent volumes must remain on their plate. Add a printable model there or remove the volumes before moving the last model.");
   }
@@ -35,6 +36,7 @@ export function movePrintablesPreservingVolumes(objects, selectedIds, perModelLi
   };
   return {
     remaining: normalize(remaining),
-    moving: normalize(moving.map(row => ({...row, modifier_volumes: []}))),
+    moving: normalize(moving.map(row => ({...row,
+      modifier_volumes: (row.modifier_volumes || []).filter(volume => volume.coordinate_space !== "world")}))),
   };
 }
