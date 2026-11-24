@@ -644,16 +644,55 @@ export default function SlicerPlateEditor({
     setError("");
   }
 
-  function removeSelected() {
-    if (chosenModifier && canEdit) {
-      onChange(objects.map(row => row.instance_id === chosen.instance_id ? {...row,modifier_volumes:row.modifier_volumes.filter(modifier => modifier.id !== chosenModifier.id)} : row));
-      onSelectedModifierChange?.(null);return;
+  function removePlateItems(ids) {
+    const targets = new Set(ids);
+    if (!targets.size) return;
+    // Free volumes remain on the plate when their storage model is deleted.
+    const orphanVolumes = objects.filter(model => targets.has(model.instance_id))
+      .flatMap(model => model.modifier_volumes || [])
+      .filter(volume => !targets.has(volume.id));
+    let remaining = objects.filter(model => !targets.has(model.instance_id))
+      .map(model => ({
+        ...model,
+        modifier_volumes: (model.modifier_volumes || []).filter(volume => !targets.has(volume.id)),
+      }));
+    if (orphanVolumes.length && !remaining.length) {
+      setError("This model has independent volumes. Remove those volumes explicitly before deleting the last printable model.");
+      return;
     }
-    if (!chosen) return;
-    const remaining = objects.filter(item => item.instance_id !== chosen.instance_id);
+    if (orphanVolumes.length) {
+      remaining = remaining.map(model => ({
+        ...model, modifier_volumes: [...model.modifier_volumes],
+      }));
+      for (const volume of orphanVolumes) {
+        const candidates=remaining.filter(model => model.modifier_volumes.length < 12);
+        candidates.sort((a,b) => Math.hypot(
+          Number(a.x_mm)-volume.x_mm,Number(a.y_mm)-volume.y_mm) -
+          Math.hypot(Number(b.x_mm)-volume.x_mm,Number(b.y_mm)-volume.y_mm));
+        if (!candidates.length) {
+          setError("Could not preserve free volumes: each remaining model already stores twelve. Move or remove volumes first.");
+          return;
+        }
+        candidates[0].modifier_volumes.push(volume);
+      }
+    }
     onChange(remaining);
-    onPrimaryChange?.(remaining.find(item => !String(item.asset_id).startsWith("local:"))?.asset_id || "");
+    onPrimaryChange?.(remaining.find(model =>
+      !String(model.asset_id).startsWith("local:"))?.asset_id || "");
+    onSelectedModifierChange?.(null);
     setSelected(remaining[0]?.instance_id || "");
+    setError("");
+  }
+
+  function removeSelected() {
+    if (!canEdit) return;
+    if (selection.length > 1) {
+      removePlateItems(selection);
+    } else if (chosenModifier) {
+      removePlateItems([chosenModifier.id]);
+    } else if (chosen) {
+      removePlateItems([chosen.instance_id]);
+    }
   }
 
   // Model shortcuts use an internal clipboard. Keep the OS text clipboard
@@ -673,13 +712,7 @@ export default function SlicerPlateEditor({
         return;
       }
       const selectedRows=objects.filter(item=>selection.includes(item.instance_id));
-      const removeRows=()=>{
-        const ids=new Set(selectedRows.map(item=>item.instance_id));
-        const remaining=objects.filter(item=>!ids.has(item.instance_id));
-        onChange(remaining);
-        onPrimaryChange?.(remaining.find(item=>!String(item.asset_id).startsWith("local:"))?.asset_id||"");
-        setSelected(remaining[0]?.instance_id||"");
-      };
+      const removeRows=()=>removePlateItems(selection);
       if (!mod && !event.altKey && (key==="delete"||key==="backspace") &&
           selectedRows.length) {
         event.preventDefault();removeRows();return;
