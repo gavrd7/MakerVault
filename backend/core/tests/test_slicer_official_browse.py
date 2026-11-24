@@ -41,8 +41,8 @@ class OfficialCatalogueBrowseTests(SimpleTestCase):
         self.assertEqual(result["total_matches"], 1)
 
     def test_prusa_browse_without_query(self):
-        with patch("core.slicer_prusa_official_profiles._sections", return_value={
-            "Original Prusa MK4": ("printer_model:MK4", {})
+        with patch("core.slicer_prusa_official_profiles._native_sections", return_value={
+            "printer:Original Prusa MK4": {"nozzle_diameter": "0.4"}
         }):
             result = search_prusa_profiles("", "printer", "PrusaResearch")
         self.assertEqual(result["total_matches"], 1)
