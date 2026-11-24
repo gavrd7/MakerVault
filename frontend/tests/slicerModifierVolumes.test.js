@@ -102,3 +102,11 @@ test("the shared insertion modal shows native world-centred volumes and never do
   assert.match(editor, /rotation_z:degrees\(ghost\.rotation\.z\)\+\(volume\?0:/);
   assert.doesNotMatch(editor, /solidDialog\.kind==="negative"\?Number\(old\.height\|\|0\)\/2/);
 });
+
+test("saved native volume XYZ scale appears in the shared editor and is preserved on save", () => {
+  assert.match(editor, /volume_scale_xyz_percent:\[\.\.\.\(editingVolume\?\.scale_xyz_percent/);
+  assert.match(editor, /ghost\.scale\.set\(\.\.\.\(solidOptions\.volume_scale_xyz_percent/);
+  assert.match(editor, /scale_xyz_percent:\(solidOptions\.volume_scale_xyz_percent/);
+  assert.match(editor, /"Scale "\+\["X","Y","Z"\]\[index\]/);
+  assert.match(editor, /volumeScale\.some\(value=>!Number\.isFinite/);
+});
