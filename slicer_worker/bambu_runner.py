@@ -13,6 +13,7 @@ import re
 import signal
 import stat
 import subprocess
+import tempfile
 import zipfile
 from pathlib import Path
 
@@ -248,32 +249,46 @@ def run_bambu(binary: Path, workdir: Path, *, timeout_seconds: int = DEFAULT_TIM
         raise WorkerError("Worker scratch directory is invalid.")
     command = bambu_command(binary, workdir)
     try:
-        proc = subprocess.Popen(
-            command, cwd=str(workdir),
-            env={**slicing_environment(workdir),
-                 # Bambu 2.9.x can dereference a missing SSL_CERT_FILE even
-                 # in headless/offline CLI startup. This is a fixed public
-                 # system CA path, not a network or credential setting.
-                 "SSL_CERT_FILE": "/etc/ssl/certs/ca-certificates.crt"},
-            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
-            start_new_session=True,
-        )
-        try:
-            proc.communicate(timeout=timeout_seconds)
-        except subprocess.TimeoutExpired:
-            os.killpg(proc.pid, signal.SIGKILL)
-            proc.communicate()
-            raise WorkerError("Bambu Studio slicing timed out.") from None
-        if proc.returncode != 0:
-            # An integer process status is safe for diagnostics; stderr and
-            # native preset contents remain intentionally discarded.
-            logger.warning("Bambu Studio native CLI exited with status %d", proc.returncode)
-            if proc.returncode == 126:
-                # Exit 126 can originate from AppRun or an inner launcher;
-                # identify the runtime execution failure without guessing
-                # which file, mount or dependency was responsible.
-                raise WorkerError("Bambu Studio native runtime exited with status 126.")
-            raise WorkerError("Bambu Studio CLI rejected the native profiles or model.")
+        # Bounded, ephemeral diagnostics stay in an anonymous temporary file.
+        # Never persist or relay native CLI output, file paths or profile data.
+        with tempfile.TemporaryFile(mode="w+b") as diagnostics:
+            proc = subprocess.Popen(
+                command, cwd=str(workdir),
+                env={**slicing_environment(workdir),
+                     # Bambu 2.9.x can dereference a missing SSL_CERT_FILE even
+                     # in headless/offline CLI startup.
+                     "SSL_CERT_FILE": "/etc/ssl/certs/ca-certificates.crt"},
+                stdout=diagnostics, stderr=subprocess.STDOUT,
+                start_new_session=True,
+            )
+            try:
+                proc.communicate(timeout=timeout_seconds)
+            except subprocess.TimeoutExpired:
+                os.killpg(proc.pid, signal.SIGKILL)
+                proc.communicate()
+                raise WorkerError("Bambu Studio slicing timed out.") from None
+            if proc.returncode != 0:
+                logger.warning("Bambu Studio native CLI exited with status %d", proc.returncode)
+                if proc.returncode == 126:
+                    raise WorkerError("Bambu Studio native runtime exited with status 126.")
+                if proc.returncode == -signal.SIGABRT:
+                    diagnostics.seek(0, os.SEEK_END)
+                    total = diagnostics.tell()
+                    diagnostics.seek(max(0, total - 8192), os.SEEK_SET)
+                    tail = diagnostics.read(8192).lower()
+                    # Classify only fixed public libc/loader markers. Never
+                    # log the raw bytes; they may contain user profile data.
+                    if b"double free" in tail or b"corruption" in tail:
+                        cause = "allocator"
+                    elif b"assertion" in tail or b"assert failed" in tail:
+                        cause = "assertion"
+                    elif b"terminate called" in tail or b"uncaught exception" in tail:
+                        cause = "uncaught-exception"
+                    else:
+                        cause = "unclassified"
+                    logger.warning("Bambu Studio SIGABRT classified: %s", cause)
+                    raise WorkerError("Bambu Studio native CLI aborted with SIGABRT.")
+                raise WorkerError("Bambu Studio CLI rejected the native profiles or model.")
         output = extract_single_bambu_gcode(workdir / "bambu-sliced.3mf", workdir)
         return {"status": "completed", "gcode_path": str(output),
                 "bytes": output.stat().st_size}
