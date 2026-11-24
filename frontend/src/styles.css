@@ -8760,3 +8760,96 @@ a:focus-visible,
     flex-wrap:wrap;
   }
 }
+
+
+/* PR196 accessible multi-object assembly selection.
+   Shared desktop/mobile checklist rather than requiring Ctrl-click.
+   Individual assembly members remain independent selectable rows. */
+.slicerPrepareTree .slicerAssemblySelectionToggle{
+  display:block;
+  width:100%;
+  min-height:40px;
+  margin-top:9px;
+  padding:8px 12px;
+  font-size:.86rem;
+  font-weight:600;
+  text-align:center;
+  border:1px solid #536e86;
+  border-radius:8px;
+  background:#1a2b3c;
+  color:#e4edf7;
+}
+.slicerPrepareTree .slicerAssemblySelectionToggle[aria-expanded="true"]{
+  border-color:#a78bfa;
+  background:#273453;
+}
+.slicerPrepareTree .slicerAssemblySelectionList{
+  display:grid;
+  gap:5px;
+  min-width:0;
+  margin-top:9px;
+  padding:10px;
+  border:1px solid #405970;
+  border-radius:9px;
+  background:#111f2e;
+}
+.slicerPrepareTree .slicerAssemblySelectionList>p{
+  margin:0 0 5px;
+  color:#bfd0df;
+  font-size:.8rem;
+  line-height:1.4;
+}
+.slicerPrepareTree .slicerAssemblySelectionRow{
+  display:flex;
+  align-items:flex-start;
+  gap:10px;
+  min-width:0;
+  min-height:43px;
+  padding:9px 8px;
+  border:1px solid #3b5066;
+  border-radius:7px;
+  cursor:pointer;
+  overflow-wrap:anywhere;
+}
+.slicerPrepareTree .slicerAssemblySelectionRow:has(input:checked){
+  border-color:#a78bfa;
+  background:rgba(167,139,250,.12);
+}
+.slicerPrepareTree .slicerAssemblySelectionRow:focus-within{
+  outline:2px solid #a78bfa;
+  outline-offset:1px;
+}
+.slicerPrepareTree .slicerAssemblySelectionRow input[type="checkbox"]{
+  width:20px;
+  height:20px;
+  min-width:20px;
+  margin:0;
+  accent-color:#a78bfa;
+  cursor:pointer;
+}
+.slicerPrepareTree .slicerAssemblySelectionRow>span{
+  min-width:0;
+  line-height:1.4;
+}
+.slicerPrepareTree .slicerAssemblySelectionRow small{
+  display:block;
+  margin:2px 0 0;
+  font-size:.73rem;
+}
+.slicerPrepareTree .slicerAssemblySelectionRow.unavailable{
+  opacity:.6;
+  cursor:not-allowed;
+}
+.slicerPrepareTree .slicerAssemblySelectionFooter{
+  display:flex;
+  flex-wrap:wrap;
+  justify-content:space-between;
+  align-items:center;
+  gap:8px;
+  padding-top:6px;
+  font-size:.8rem;
+}
+.slicerPrepareTree .slicerAssemblySelectionFooter button{
+  min-height:34px;
+  padding:6px 11px;
+}
