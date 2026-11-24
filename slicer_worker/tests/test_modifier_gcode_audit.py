@@ -75,11 +75,30 @@ class ModifierGcodeCoverageTests(unittest.TestCase):
             audit_modifier_positive_e(
                 b"\n".join(inside), project, "orcaslicer")
 
-    def test_bambu_negative_deposition_logs_only_aggregate_bands(self):
+    @staticmethod
+    def _large_bambu_negative_fixture():
+        """Scale the tetrahedron so its 2-mm inset has a true core."""
         project = composite_fixture(negative=True)
-        interior = [b"G90", b"M83", b"G0 X2.8 Y3 Z1"]
-        interior.extend((b"G1 X3 Y2.8 E0.5" if i % 2 == 0 else
-                         b"G1 X2.8 Y3 E0.5") for i in range(20))
+        with zipfile.ZipFile(io.BytesIO(project)) as archive:
+            files = {name: archive.read(name) for name in archive.namelist()}
+        ns = "{http://schemas.microsoft.com/3dmanufacturing/core/2015/02}"
+        root = ET.fromstring(files["3D/3dmodel.model"])
+        negative = root.find(ns + "resources/" + ns + "object[@id='4']")
+        for vertex in negative.findall(ns + "mesh/" + ns + "vertices/" + ns + "vertex"):
+            for axis in ("x", "y", "z"):
+                vertex.set(axis, str(float(vertex.get(axis)) * 3))
+        files["3D/3dmodel.model"] = ET.tostring(root)
+        with io.BytesIO() as target:
+            with zipfile.ZipFile(target, "w") as archive:
+                for name, payload in files.items():
+                    archive.writestr(name, payload)
+            return target.getvalue()
+
+    def test_bambu_negative_deposition_logs_only_aggregate_bands(self):
+        project = self._large_bambu_negative_fixture()
+        interior = [b"G90", b"M83", b"G0 X8 Y8.2 Z10"]
+        interior.extend((b"G1 X8.2 Y8 E0.5" if i % 2 == 0 else
+                         b"G1 X8 Y8.2 E0.5") for i in range(20))
         with self.assertLogs("slicer_worker.modifier_gcode_audit", level="WARNING") as log:
             with self.assertRaisesRegex(WorkerError, "deposits material"):
                 audit_modifier_positive_e(
@@ -92,7 +111,7 @@ class ModifierGcodeCoverageTests(unittest.TestCase):
         self.assertNotIn("G1", message)
 
     def test_bambu_translated_negative_still_rejects_real_interiors(self):
-        project = composite_fixture(negative=True)
+        project = self._large_bambu_negative_fixture()
         outside = [b"G90", b"M83", b"G0 X38 Y38 Z5"]
         outside.extend(
             ("G1 X%d Y%d E0.8" % (38 + i % 4, 38 + i % 4)).encode()
@@ -101,9 +120,9 @@ class ModifierGcodeCoverageTests(unittest.TestCase):
             b"\n".join(outside), project, "bambustudio",
             translation_xy=(18.0, 18.0))
         self.assertEqual(result["modifier_region_paths"], [0])
-        interior = [b"G90", b"M83", b"G0 X20.8 Y21 Z1"]
+        interior = [b"G90", b"M83", b"G0 X26 Y26.2 Z10"]
         interior.extend(
-            (b"G1 X21 Y20.8 E0.5" if i % 2 == 0 else b"G1 X20.8 Y21 E0.5")
+            (b"G1 X26.2 Y26 E0.5" if i % 2 == 0 else b"G1 X26 Y26.2 E0.5")
             for i in range(20))
         with self.assertRaisesRegex(WorkerError, "deposits material"):
             audit_modifier_positive_e(
