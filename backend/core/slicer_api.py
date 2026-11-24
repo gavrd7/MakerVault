@@ -416,9 +416,15 @@ def _draft_plate_settings(user, input_asset, settings):
             if sorted(canonical_volumes, key=lambda row: row["id"]) != sorted(
                     submitted_volumes, key=lambda row: row["id"]):
                 raise ValueError("Active independent volumes must match saved plate volumes.")
-            if submitted and sorted(inline, key=lambda row: row["id"]) != sorted(
-                    canonical_volumes, key=lambda row: row["id"]):
-                raise ValueError("Native volume slicing cannot silently omit independent regions.")
+            # Draft saving must not depend on the temporary editor adapter's
+            # 12-volume-per-printable capacity. A plate can contain 48
+            # independent volumes, including unattached ones. The *slicing*
+            # admission gate separately requires full canonical coverage.
+            canonical_by_id = {volume["id"]: volume for volume in canonical_volumes}
+            if (len({volume.get("id") for volume in inline}) != len(inline) or
+                    any(canonical_by_id.get(volume.get("id")) != volume
+                        for volume in inline)):
+                raise ValueError("Inline region adapter differs from independent plate volume records.")
         elif raw_by_id[active_id] != submitted:
             raise ValueError("The active plate must match its submitted model list.")
         elif "plate_volumes" in settings:
