@@ -8,7 +8,8 @@
  * constant-distance normal offset. Caller must explain the limitation.
  */
 import * as THREE from "three";
-import { Brush, Evaluator, ADDITION, SUBTRACTION, INTERSECTION } from "three-bvh-csg";
+import { Brush, ADDITION, SUBTRACTION, INTERSECTION } from "three-bvh-csg";
+import { runWatertightBoolean } from "./slicerSolidManifold.js";
 
 // Match native plate validation; complexity remains constrained by the STL byte cap.
 export const CSG_MAX_INPUT_TRIANGLES = 500000;
@@ -58,17 +59,12 @@ function primitiveGeometry(geometry, at = [0,0,0]) {
   material.dispose();
   return brush;
 }
-function evaluator() {
-  const e = new Evaluator();
-  e.attributes = ["position", "normal"];
-  e.useGroups = false;
-  // Constrained triangulation reduces T-junction artefacts around round holes.
-  e.useCDTClipping = true;
-  return e;
-}
 function run(a, b, operation) {
-  const engine = evaluator();
-  const result = engine.evaluate(a, b, operation);
+  const action = operation === ADDITION ? "add" :
+    operation === SUBTRACTION ? "subtract" :
+    operation === INTERSECTION ? "intersect" : null;
+  if (!action) throw new Error("Unsupported mesh operation.");
+  const result = runWatertightBoolean(a, b, action);
   if (!result?.geometry || !triangles(result.geometry))
     throw new Error("This operation produced an empty solid. The source has not changed.");
   return result;
