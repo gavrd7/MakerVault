@@ -89,18 +89,26 @@ def _flatten_native_profile(kind, name, vendor):
     if not prefix or not isinstance(name, str) or not 1 <= len(name) <= 200:
         raise OfficialProfileError("Unsupported Prusa native preset selection.")
     sections = _native_sections(vendor)
-    visited = set()
+    resolved = {}
 
-    def resolve(selected, depth=0):
+    def resolve(selected, depth=0, active=frozenset()):
         section = prefix + ":" + selected
-        if depth >= 16 or section in visited:
+        if depth >= 16 or section in active:
             raise OfficialProfileError("Prusa native preset inheritance is circular or too deep.")
+        if section in resolved:
+            return dict(resolved[section])
         fields = sections.get(section)
         if not isinstance(fields, dict):
             raise OfficialProfileError("Prusa native preset parent is missing.")
-        visited.add(section)
-        parent = fields.get("inherits", "").strip()
-        inherited = resolve(parent, depth + 1) if parent else {}
+        inherited = {}
+        parents = fields.get("inherits", "").strip()
+        if parents:
+            names = [parent.strip() for parent in parents.split(";")]
+            if (len(names) > 12 or any(not 1 <= len(parent) <= 200
+                                       or "[" in parent or "]" in parent for parent in names)):
+                raise OfficialProfileError("Invalid Prusa native preset inheritance.")
+            for parent in names:
+                inherited.update(resolve(parent, depth + 1, active | {section}))
         for key, value in fields.items():
             if key == "inherits":
                 continue
@@ -115,6 +123,7 @@ def _flatten_native_profile(kind, name, vendor):
             inherited[key] = value
         if len(inherited) > _MAX_NATIVE_SETTINGS:
             raise OfficialProfileError("Prusa native preset exceeds its complexity limit.")
+        resolved[section] = dict(inherited)
         return inherited
 
     settings = resolve(name)
