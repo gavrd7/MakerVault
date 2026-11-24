@@ -59,7 +59,12 @@ def two_model_region_extrusion(gcode):
         if op in ("G1","G01") and ex>0 and (nx!=x or ny!=y):
             cx=(nx+x)/2
             cy=(ny+y)/2
-            if 12<=nz<=18 and 100<=cy<=120:
+            # The negative fixture cuts Y=100..120. Real native slicing
+            # legitimately deposits new perimeter walls at Y=100 and Y=120;
+            # those are cavity boundaries, NOT unremoved material. Measure
+            # a conservative 2 mm inset so only filled cavity interiors count.
+            # Keep this same interior sample for baseline and changed fixtures.
+            if 12<=nz<=18 and 102<cy<118:
                 label="left" if 78<=cx<=102 else "right" if 118<=cx<=142 else None
                 if label:
                     totals[label]+=ex
