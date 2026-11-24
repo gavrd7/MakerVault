@@ -161,6 +161,37 @@ class SliceJobApiTests(TestCase):
             with self.subTest(tampered=tampered), self.assertRaises(ValueError):
                 _draft_plate_settings(self.owner, self.input_asset, tampered)
 
+    def test_independent_plate_persists_more_than_twelve_regions_with_one_model(self):
+        from core.slicer_api import _draft_plate_settings
+        model = {
+            "instance_id": str(uuid.uuid4()), "asset_id": str(self.input_asset.pk),
+            "x_mm": 0, "y_mm": 0, "rotation_deg": 0,
+            "scale_percent": 100, "color": "#abcdef",
+        }
+        volumes = [
+            {
+                "id": str(uuid.uuid4()), "shape": "box",
+                "width_mm": 8, "depth_mm": 8, "height_mm": 8,
+                "x_mm": index, "y_mm": 0, "z_mm": 4,
+                "coordinate_space": "world",
+                "rotation_xyz_deg": [0, 0, 0],
+                "scale_xyz_percent": [100, 100, 100],
+                "kind": "negative", "assembly_id": None, "settings": {},
+            }
+            for index in range(13)
+        ]
+        supplied = {
+            "plate_objects": [{**model, "modifier_volumes": volumes[:12]}],
+            "plate_volumes": volumes, "plate_label": "Thirteen free cutters",
+            "plates": [{"id": "plate-1", "name": "Thirteen free cutters",
+                        "objects": [model], "volumes": volumes}],
+            "active_plate_id": "plate-1",
+        }
+        saved = _draft_plate_settings(self.owner, self.input_asset, supplied)
+        self.assertEqual(len(saved["plate_volumes"]), 13)
+        self.assertEqual(len(saved["plates"][0]["volumes"]), 13)
+        self.assertEqual(len(saved["plate_objects"][0]["modifier_volumes"]), 12)
+
     def test_empty_plate_can_preserve_independent_volumes_with_another_printable_plate(self):
         from core.slicer_api import _draft_plate_settings
 
