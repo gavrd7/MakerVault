@@ -102,6 +102,7 @@ jobs:
           mkdir -p /tmp/prusa-candidate/bin
           cp build/src/prusa-slicer /tmp/prusa-candidate/bin/prusa-slicer
           cp -a resources /tmp/prusa-candidate/resources
+          cp LICENSE /tmp/prusa-candidate/LICENSE
           # Validate the relocatable layout rather than only the build-tree CLI.
           /tmp/prusa-candidate/bin/prusa-slicer --version | grep -F '2.9.7'
           /tmp/prusa-candidate/bin/prusa-slicer --help > /tmp/prusa-packaged-help.txt
@@ -110,6 +111,11 @@ jobs:
             "$GITHUB_WORKSPACE/scripts/prusa_real_binary_smoke.py" \
             --binary /tmp/prusa-candidate/bin/prusa-slicer \
             --vendor "$PWD/resources/profiles/PrusaResearch.ini"
+          # Record source identity, exact file hashes and licensing evidence.
+          # This deliberately does NOT mark the candidate install-approved.
+          python3 "$GITHUB_WORKSPACE/scripts/prusa_candidate_manifest.py" \
+            --root /tmp/prusa-candidate \
+            --output /tmp/prusa-candidate/review-manifest.json
           tar -C /tmp -czf "$GITHUB_WORKSPACE/prusa-2.9.7-headless-linux-amd64.tar.gz" prusa-candidate
           sha256sum "$GITHUB_WORKSPACE/prusa-2.9.7-headless-linux-amd64.tar.gz" >> "$GITHUB_STEP_SUMMARY"
 
