@@ -93,6 +93,20 @@ class PrusaOfficialModelDiscoveryTests(SimpleTestCase):
         with self.assertRaises(OfficialProfileError):
             fetch_prusa_profile("filament", "Original Prusa MK4S", "PrusaResearch.ini")
 
+    def test_real_prusa_multi_parent_resolution_order(self):
+        sections = {
+            "print:Base": {"layer_height": "0.2", "fill_density": "10%"},
+            "print:A": {"inherits": "Base", "fill_density": "20%"},
+            "print:B": {"inherits": "Base", "fill_density": "30%"},
+            "print:Derived": {"inherits": "A; B", "perimeters": "3"},
+        }
+        with patch("core.slicer_prusa_official_profiles._native_sections",
+                   return_value=sections):
+            raw = fetch_prusa_profile("process", "Derived", "PrusaResearch.ini")
+        self.assertIn(b"fill_density = 30%", raw)
+        self.assertIn(b"layer_height = 0.2", raw)
+        self.assertNotIn(b"inherits", raw)
+
     def test_rejects_unresolved_parent_script_and_nonfff(self):
         for sections, kind, name in (
             ({"printer:Unsafe": {"inherits": "Unknown", "nozzle_diameter": "0.4",
