@@ -124,3 +124,12 @@ test("removing and regrouping plate parts do not strand singleton assemblies", (
   assert.match(prepare, /grouped\.flatMap\(row => \[row, \.\.\.row\.modifier_volumes\]\)/);
   assert.match(prepare, /counts\.get\(row\.assembly_id\) < 2/);
 });
+
+
+test("canonical independent plate volumes remain visible after the final printable is removed", () => {
+  assert.match(prepare, /const detachedVolumes = plateVolumes\.filter/);
+  assert.match(prepare, /object\.detached/);
+  assert.match(prepare, /onRemovePlateVolumes\?\.\(\[object\.id\]\)/);
+  assert.match(editor, /onChange\(remaining,\{removedVolumeIds\}\)/);
+  assert.doesNotMatch(editor, /This model has independent volumes\. Remove those volumes explicitly before deleting the last printable model/);
+});
