@@ -13,6 +13,84 @@ from .bambu_runner import run_bambu
 from .composite_acceptance_probe import two_model_region_extrusion
 from .runner import WorkerError
 from .three_mf_validation import validate_worker_3mf
+from .modifier_acceptance_probe import _COMMAND, _WORDS
+import zipfile
+from defusedxml import ElementTree as ET
+
+
+
+def _native_part_bounds(sliced_3mf):
+    """Inspect the saved native mesh coordinates, not just its part subtype."""
+    namespace = "{http://schemas.microsoft.com/3dmanufacturing/core/2015/02}"
+    with zipfile.ZipFile(sliced_3mf) as archive:
+        info = archive.getinfo("3D/3dmodel.model")
+        if info.file_size > 16 * 1024 * 1024:
+            return {"note": "Native model XML exceeds diagnostic limit"}
+        root = ET.fromstring(archive.read(info))
+    result = []
+    for obj in root.findall("./" + namespace + "resources/" + namespace + "object"):
+        vertices = obj.findall("./" + namespace + "mesh/" + namespace + "vertices/" + namespace + "vertex")
+        if vertices:
+            points = [[float(v.get(key)) for key in ("x", "y", "z")] for v in vertices]
+            result.append({"id": obj.get("id"), "bounds": [
+                [round(min(v[axis] for v in points), 3),
+                 round(max(v[axis] for v in points), 3)] for axis in range(3)]})
+    return result[:15]
+
+
+def _cavity_y_bands(gcode):
+    """Diagnostic extrusion histogram through the middle of the true cut.
+
+    Tracks valid positive-E moves with X midpoints 122..138 and Z 12..18;
+    2-mm Y bands distinguish cavity walls from actual interior deposition.
+    Does NOT grant native execution approval.
+    """
+    x = y = z = e = 0.
+    relative_xyz = relative_e = False
+    results = {}
+    feature = "unknown"
+    for raw in gcode.decode("utf-8", "replace").splitlines():
+        text = raw.strip()
+        if text.startswith(("; FEATURE:", ";TYPE:", "; TYPE:")):
+            feature = text.split(":", 1)[1].strip()[:40]
+        line = raw.partition(";")[0].strip().upper()
+        command = _COMMAND.match(line)
+        if not command:
+            continue
+        op = command.group(1)
+        if op in ("M82", "M83"):
+            relative_e = op == "M83"
+            continue
+        if op in ("G90", "G91"):
+            relative_xyz = op == "G91"
+            continue
+        words = {axis: float(value) for axis, value in _WORDS.findall(line)}
+        if op == "G92":
+            x, y, z, e = (words.get("X", x), words.get("Y", y),
+                          words.get("Z", z), words.get("E", e))
+            continue
+        nx = x + words["X"] if relative_xyz and "X" in words else words.get("X", x)
+        ny = y + words["Y"] if relative_xyz and "Y" in words else words.get("Y", y)
+        nz = z + words["Z"] if relative_xyz and "Z" in words else words.get("Z", z)
+        deposited = 0.
+        if "E" in words:
+            deposited = words["E"] if relative_e else words["E"] - e
+            if not relative_e:
+                e = words["E"]
+        if (op in ("G1", "G01") and deposited > 0 and
+                122 < (x + nx) / 2 < 138 and 12 <= nz <= 18):
+            cy = (y + ny) / 2
+            if 94 <= cy < 126:
+                band = "%03d" % (94 + 2 * int((cy - 94) // 2))
+                item = results.setdefault(band, {"E": 0., "count": 0, "features": {}})
+                item["E"] += deposited
+                item["count"] += 1
+                item["features"][feature] = item["features"].get(feature, 0.) + deposited
+        x, y, z = nx, ny, nz
+    return {key: {"E": round(value["E"], 3),
+                  "count": value["count"],
+                  "features": {name: round(v, 3) for name, v in value["features"].items()}}
+            for key, value in sorted(results.items())}
 
 
 def diagnose(fixtures, binary):
@@ -34,13 +112,23 @@ def diagnose(fixtures, binary):
             result = run_bambu(Path(binary), root, timeout_seconds=180)
             if result.get("status") != "completed":
                 raise WorkerError("Bambu single negative diagnostic failed to complete.")
-            output[name] = two_model_region_extrusion(Path(result["gcode_path"]).read_bytes())
+            gcode = Path(result["gcode_path"]).read_bytes()
+            output[name] = two_model_region_extrusion(gcode)
             print("Single model native negative diagnostic:", name,
                   json.dumps(output[name], sort_keys=True), flush=True)
-    base = output["single-baseline"]["totals"]["left"]
-    cut = output["single-negative"]["totals"]["left"]
-    result = {"engine": "bambustudio", "baseline_left_e_mm": round(base, 4),
-              "negative_left_e_mm": round(cut, 4),
+            print("Single model Bambu native mesh bounds:", name,
+                  json.dumps(_native_part_bounds(root / "bambu-sliced.3mf")), flush=True)
+            print("Single model cavity Y-band deposition:", name,
+                  json.dumps(_cavity_y_bands(gcode), sort_keys=True), flush=True)
+    # The pinned Bambu CLI repositions a single imported model into the
+    # right-hand sample. Choose the populated region rather than wrongly
+    # reporting the zero-extrusion left-hand sample as the test result.
+    region = max(("left", "right"),
+                 key=lambda side: output["single-baseline"]["totals"][side])
+    base = output["single-baseline"]["totals"][region]
+    cut = output["single-negative"]["totals"][region]
+    result = {"engine": "bambustudio", "sample_region": region, "baseline_e_mm": round(base, 4),
+              "negative_e_mm": round(cut, 4),
               "subtraction_indicated": base > 0 and cut < base * 0.9,
               "note": "Diagnostic only; production gate remains closed."}
     print(json.dumps(result, indent=2))
