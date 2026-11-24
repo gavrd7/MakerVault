@@ -421,6 +421,8 @@ def _draft_plate_settings(user, input_asset, settings):
                 raise ValueError("Native volume slicing cannot silently omit independent regions.")
         elif raw_by_id[active_id] != submitted:
             raise ValueError("The active plate must match its submitted model list.")
+        elif "plate_volumes" in settings:
+            raise ValueError("A legacy active plate cannot silently omit separate volumes.")
         active_position = next((p.get("prime_tower") for p in validated if p["id"] == active_id), None)
         if active_position != prime_tower:
             raise ValueError("The active prime tower position must match its build plate.")
@@ -879,7 +881,9 @@ def import_project_3mf(request):
             active_id = metadata.get("active_plate_id")
             ids, source_names, total = set(), set(), 0
             for plate in plates:
-                if not isinstance(plate, dict) or set(plate) not in ({"id", "name", "objects"}, {"id", "name", "objects", "prime_tower"}):
+                if (not isinstance(plate, dict) or
+                        not {"id", "name", "objects"}.issubset(plate) or
+                        set(plate) - {"id", "name", "objects", "prime_tower", "volumes"}):
                     raise ValueError("Invalid project plate.")
                 _validate_prime_tower_position(plate.get("prime_tower"))
                 pid, name, objects = plate["id"], plate["name"], plate["objects"]
@@ -895,11 +899,21 @@ def import_project_3mf(request):
                 total += len(objects)
                 if total > 200:
                     raise ValueError("Project contains too many models.")
+                printable_ids = set()
                 for row in objects:
                     if not isinstance(row, dict):
                         raise ValueError("Invalid project model.")
+                    printable_ids.add(str(_uuid(row.get("instance_id"))))
                     asset_id = str(_uuid(row.get("asset_id")))
                     source_names.add(asset_id)
+                if "volumes" in plate:
+                    plate["volumes"] = _validate_independent_plate_volumes(
+                        plate["volumes"], printable_ids)
+                    if any(isinstance(volume, dict) and
+                           volume.get("coordinate_space") == "world"
+                           for row in objects for volume in row.get("modifier_volumes", [])
+                           if isinstance(row, dict)):
+                        raise ValueError("Independent world-space volumes must not also be embedded in project model records.")
             if active_id not in ids or not source_names:
                 raise ValueError("Project has no usable active plate or models.")
             original = {}
@@ -944,6 +958,7 @@ def import_project_3mf(request):
                     })
                     rows=checked["plate_objects"]
                 restored.append({"id":plate["id"],"name":plate["name"],"objects":rows,
+                                 **({"volumes": plate["volumes"]} if "volumes" in plate else {}),
                                  **({"prime_tower":plate["prime_tower"]} if plate.get("prime_tower") is not None else {})})
         except Exception:
             for asset in created:
