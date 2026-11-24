@@ -246,7 +246,9 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
       const result=await apiFetch("/api/printing/slicer/projects/import/",{
         method:"POST",body:data,
       });
-      setProjectPlates(result.plates);
+      // Imported project volumes are canonical plate-level records, not STL
+      // children. Migrate legacy inline world regions without losing them.
+      setProjectPlates(result.plates.map(canonicalPlate));
       setActivePlateId(result.active_plate_id);
       setPlateValidation(null);
       setPlateLocalAssets(current=>[...current,...result.files]);
