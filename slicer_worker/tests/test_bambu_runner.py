@@ -354,7 +354,7 @@ class BambuRunnerContractTests(TestCase):
                 with self.assertRaisesRegex(WorkerError, "SIGABRT"):
                     run_bambu(self.binary, self.root)
         self.assertTrue(any("SIGABRT classified: unclassified" in row for row in logs.output))
-        self.assertTrue(any("exception type: unknown" in row for row in logs.output))
+        self.assertFalse(any("exception type: unknown" in row for row in logs.output))
 
     def test_bambu_runner_uses_standard_worker_admission(self):
         from slicer_worker.engine_registry import SUPPORTED
