@@ -62,8 +62,10 @@ function evaluator() {
   const e = new Evaluator();
   e.attributes = ["position", "normal"];
   e.useGroups = false;
-  // Constrained triangulation reduces T-junction artefacts around round holes.
-  e.useCDTClipping = true;
+  // Use the library's non-experimental clipping path. In v0.0.18,
+  // CDT clipping can emit unmatched seams even for ordinary box cuts
+  // and drilled cylinders; our strict watertight STL gate must remain on.
+  e.useCDTClipping = false;
   return e;
 }
 function run(a, b, operation) {
