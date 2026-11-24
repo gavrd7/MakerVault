@@ -116,3 +116,11 @@ test("Ctrl-click deselection detaches active free-volume transform, including as
   assert.match(prepare, /setSelectedModifierId\(additive && selectedIds\.includes\(modifierId\) \? null : modifierId\)/);
   assert.match(prepare, /setSelectedModifierId\(additive && members\.every\(value => selectedIds\.includes\(value\)\) \? null : id\)/);
 });
+
+
+test("removing and regrouping plate parts do not strand singleton assemblies", () => {
+  assert.match(editor, /const assemblyCounts = new Map\(\)/);
+  assert.match(editor, /assemblyCounts\.get\(member\.assembly_id\) < 2/);
+  assert.match(prepare, /grouped\.flatMap\(row => \[row, \.\.\.row\.modifier_volumes\]\)/);
+  assert.match(prepare, /counts\.get\(row\.assembly_id\) < 2/);
+});
