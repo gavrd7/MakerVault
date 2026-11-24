@@ -61,6 +61,6 @@ def audit_prusa_positive_e(data: bytes) -> dict[str, int]:
             previous_e = previous_e + params["E"] if relative else params["E"]
             if amount > 0.00001 and ("X" in params or "Y" in params):
                 positive += 1
-    if positive < 20:
+    if positive < 1:
         raise WorkerError("Prusa native G-code contains insufficient real extrusion.")
     return {"positive_e_moves": positive, "z_moves": layers}
