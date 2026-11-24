@@ -112,6 +112,34 @@ class ModifierDraftContractTests(SimpleTestCase):
             [{"modifier_volumes": []}], engine="orcaslicer",
             version="2.5.0", settings={}))
 
+    def test_free_negative_volume_and_assembly_identity_survive_sanitization(self):
+        volume = box(kind="negative", settings={},
+                     coordinate_space="world",
+                     rotation_xyz_deg=[0, 0, 37],
+                     scale_xyz_percent=[120, 80, 100],
+                     assembly_id="assembly:" + str(uuid.uuid4()))
+        result = validate_modifier_volumes([volume])[0]
+        self.assertEqual(result["kind"], "negative")
+        self.assertEqual(result["settings"], {})
+        self.assertEqual(result["assembly_id"], volume["assembly_id"])
+        self.assertEqual(result["rotation_xyz_deg"], [0, 0, 37])
+        with self.assertRaisesRegex(ValueError, "subtraction evidence"):
+            validate_native_modifier_execution(
+                [{"modifier_volumes": [volume]}],
+                engine="orcaslicer", version="2.5.0", settings={})
+        with self.assertRaisesRegex(ValueError, "Negative volumes cannot"):
+            validate_modifier_volumes([box(kind="negative")])
+
+    def test_duplicate_global_region_id_is_rejected_for_composite_plates(self):
+        volume = box(coordinate_space="world",
+                     rotation_xyz_deg=[0, 0, 0],
+                     scale_xyz_percent=[100, 100, 100])
+        with self.assertRaises(ValueError):
+            validate_native_modifier_execution(
+                [{"modifier_volumes": [volume]},
+                 {"modifier_volumes": [volume]}],
+                engine="orcaslicer", version="2.5.0", settings={})
+
     def test_missing_modifier_field_does_not_change_existing_drafts(self):
         self.assertEqual(validate_modifier_volumes(None), [])
         refuse_unverified_native_modifiers([{"process_overrides": {"wall_loops": 3}}], "orcaslicer")
