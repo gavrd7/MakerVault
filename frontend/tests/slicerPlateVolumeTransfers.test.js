@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import {movePrintablesPreservingVolumes} from "../src/components/slicerPlateVolumeTransfers.js";
 
 const volume = (id, assembly_id = null) =>
-  ({id, x_mm: 80, y_mm: 100, assembly_id, kind: "negative"});
+  ({id, x_mm: 80, y_mm: 100, assembly_id, kind: "negative", coordinate_space: "world"});
 const model = (instance_id, x_mm, volumes = [], assembly_id = null) =>
   ({instance_id, x_mm, y_mm: 100, modifier_volumes: volumes, assembly_id});
 
@@ -41,4 +41,13 @@ test("transferred assembly membership cannot leave singleton groups", () => {
   const {remaining, moving} = movePrintablesPreservingVolumes(source, ["one"]);
   assert.equal(moving[0].assembly_id, null);
   assert.equal(remaining[0].modifier_volumes[0].assembly_id, null);
+});
+
+
+test("legacy parent-local modifiers travel with their printable instead of becoming free regions", () => {
+  const local = {...volume("legacy"), coordinate_space: undefined};
+  const source = [model("one", 0, [local]), model("two", 80, [])];
+  const {remaining, moving} = movePrintablesPreservingVolumes(source, ["one"]);
+  assert.equal(moving[0].modifier_volumes[0].id, "legacy");
+  assert.deepEqual(remaining[0].modifier_volumes, []);
 });
