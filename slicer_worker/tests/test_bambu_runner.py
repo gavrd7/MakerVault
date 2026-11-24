@@ -209,8 +209,8 @@ class BambuRunnerContractTests(TestCase):
             result = run_bambu(self.binary, self.root)
         self.assertEqual(result["status"], "completed")
         self.assertEqual(result["bytes"], len(b"; test\\nG28\\n"))
-        self.assertEqual(popen.call_args.kwargs["stdout"], __import__("subprocess").DEVNULL)
-        self.assertEqual(popen.call_args.kwargs["stderr"], __import__("subprocess").DEVNULL)
+        self.assertTrue(hasattr(popen.call_args.kwargs["stdout"], "fileno"))
+        self.assertEqual(popen.call_args.kwargs["stderr"], __import__("subprocess").STDOUT)
         self.assertTrue(popen.call_args.kwargs["start_new_session"])
         env = popen.call_args.kwargs["env"]
         self.assertEqual(env["QT_QPA_PLATFORM"], "offscreen")
