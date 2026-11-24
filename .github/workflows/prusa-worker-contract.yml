@@ -23,3 +23,33 @@ jobs:
         run: |
           set -euo pipefail
           python3 -m unittest -v slicer_worker.tests.test_runner slicer_worker.tests.test_prusa_vendor_profiles
+
+      - name: Verify actual upstream PrusaResearch 2.9.7 inheritance
+        run: |
+          set -euo pipefail
+          # GitHub source is addressed by the reviewed 2.9.7 commit, never by
+          # a moving branch, catalogue URL or user-supplied preset name.
+          curl -fsSL --retry 2 --max-time 60 \
+            https://raw.githubusercontent.com/prusa3d/PrusaSlicer/450d70dd81c9b8990bc6bc8e690e31f82ddceb11/resources/profiles/PrusaResearch.ini \
+            -o /tmp/PrusaResearch-2.9.7.ini
+          python3 - <<'PY'
+          from pathlib import Path
+          import hashlib
+          from slicer_worker.prusa_vendor_profiles import (
+              parse_prusa_vendor_bundle, flatten_prusa_vendor_preset,
+              validate_flat_prusa_preset)
+          raw = Path('/tmp/PrusaResearch-2.9.7.ini').read_bytes()
+          sections = parse_prusa_vendor_bundle(raw)
+          assert len(sections) >= 6000, "Unexpectedly incomplete vendor bundle"
+          for kind, name in (
+              ('printer', 'Original Prusa i3 MK2S'),
+              ('filament', 'Generic PLA'),
+              ('print', '0.20mm NORMAL'),
+          ):
+              flat = flatten_prusa_vendor_preset(
+                  raw, kind=kind, name=name,
+                  expected_sha256=hashlib.sha256(raw).hexdigest())
+              options = validate_flat_prusa_preset(flat, kind=kind)
+              assert len(options) >= 5, f'Incomplete native {kind} preset'
+              print(f'Official Prusa 2.9.7 {kind} native profile: {len(options)} settings')
+          PY
