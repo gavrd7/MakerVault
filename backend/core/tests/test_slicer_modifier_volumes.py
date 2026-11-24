@@ -160,10 +160,11 @@ class ModifierDraftContractTests(SimpleTestCase):
         self.assertEqual(result["settings"], {})
         self.assertEqual(result["assembly_id"], volume["assembly_id"])
         self.assertEqual(result["rotation_xyz_deg"], [0, 0, 37])
-        with self.assertRaisesRegex(ValueError, "subtraction evidence"):
-            validate_native_modifier_execution(
-                [{"modifier_volumes": [volume]}],
-                engine="orcaslicer", version="2.5.0", settings={})
+        # Exact-version pinned native subtraction is now verified by actual
+        # G-code, including the multi-model and one-model negative fixtures.
+        self.assertTrue(validate_native_modifier_execution(
+            [{"modifier_volumes": [volume]}],
+            engine="orcaslicer", version="2.5.0", settings={}))
         with self.assertRaisesRegex(ValueError, "Negative volumes cannot"):
             validate_modifier_volumes([box(kind="negative")])
 
