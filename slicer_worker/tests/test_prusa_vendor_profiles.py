@@ -3,7 +3,8 @@ import hashlib
 from unittest import TestCase
 
 from slicer_worker.prusa_vendor_profiles import (
-    PrusaPresetError, parse_prusa_vendor_bundle, flatten_prusa_vendor_preset
+    PrusaPresetError, parse_prusa_vendor_bundle, flatten_prusa_vendor_preset,
+    validate_flat_prusa_preset
 )
 
 # Structure and named parents follow the upstream PrusaResearch.ini format.
@@ -105,3 +106,48 @@ class PrusaVendorPresetsTests(TestCase):
         self.assertTrue(parsed["vendor"]["config_update_url"].startswith("https:"))
         flat = flatten_prusa_vendor_preset(BUNDLE, kind="printer", name="MK4S 0.4 nozzle")
         self.assertNotIn(b"config_update_url", flat)
+
+    def test_cli_flat_presets_accept_bounded_native_settings(self):
+        for kind, name in (
+            ("printer", "MK4S 0.4 nozzle"),
+            ("filament", "Generic PLA"),
+            ("print", "0.20mm QUALITY @MK4S"),
+        ):
+            flat = flatten_prusa_vendor_preset(BUNDLE, kind=kind, name=name)
+            with self.subTest(kind=kind):
+                settings = validate_flat_prusa_preset(flat, kind=kind)
+                self.assertTrue(settings)
+
+    def test_cli_blocks_unresolved_vendor_sections_and_inheritance(self):
+        for raw in (
+            b"[printer:MK4S]\nnozzle_diameter = 0.4\n",
+            b"nozzle_diameter = 0.4\nbed_shape = 0x0,200x0,200x200,0x200\ninherits = parent\n",
+            b"nozzle_diameter = 0.4\nbed_shape = 0x0,200x0,200x200,0x200\n"
+            b"binary_gcode = 1\n",
+        ):
+            with self.subTest(raw=raw[:25]):
+                with self.assertRaises(PrusaPresetError):
+                    validate_flat_prusa_preset(raw, kind="printer")
+
+    def test_cli_refuses_missing_native_requirements(self):
+        for kind, raw in (
+            ("printer", b"nozzle_diameter = 0.4\n"),
+            ("filament", b"temperature = 215\n"),
+            ("print", b"fill_density = 15%\n"),
+        ):
+            with self.subTest(kind=kind):
+                with self.assertRaisesRegex(PrusaPresetError, "required"):
+                    validate_flat_prusa_preset(raw, kind=kind)
+
+    def test_cli_rejects_script_sections_and_duplicate_keys(self):
+        good = b"nozzle_diameter = 0.4\nbed_shape = 0x0,200x0,200x200,0x200\n"
+        for extra in (
+            b"post_process = /tmp/run.sh\n",
+            b"layer_height = 0.2\nlayer_height = 0.1\n",
+            b"nozzle_diameter = 0.6\n",
+            b"binary_gcode = 1\n",
+            b"\x00",
+        ):
+            with self.subTest(extra=extra[:20]):
+                with self.assertRaises(PrusaPresetError):
+                    validate_flat_prusa_preset(good + extra, kind="printer")
