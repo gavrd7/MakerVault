@@ -48,6 +48,9 @@ export function hydratePlateObjects(plate) {
 }
 
 export function canonicalPlate(plate) {
-  const {models, volumes} = splitPlateVolumes(plate.objects || [], plate.volumes || []);
-  return {...plate, objects: models, volumes};
+  const original = plate.objects || [];
+  const inline = original.some(row => Object.hasOwn(row, "modifier_volumes"));
+  const {models, volumes} = splitPlateVolumes(original, plate.volumes || []);
+  return {...plate, objects: models,
+    volumes: !inline && models.length ? [...(plate.volumes || [])] : volumes};
 }
