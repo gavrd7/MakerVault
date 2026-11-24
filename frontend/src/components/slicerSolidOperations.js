@@ -136,18 +136,8 @@ function checkManifold(geometry, maxTriangles) {
       const at=(points[i]+points[i+1])/2;
       const coverage=group.reduce((sum,v)=>sum+
         (v.start<at&&v.end>at?v.count:0),0);
-      if(coverage!==2) {
-        // Bounded numeric evidence for the synthetic CI mesh fixtures.
-        // Never print vertices, model coordinates, filenames or STL bytes.
-        if(typeof process!=="undefined" && process.env?.NODE_TEST_CONTEXT) {
-          console.error("CSG watertightness diagnostic",{
-            faces, unmatchedEdges:unmatched.length,
-            collinearSegments:group.length, coverage,
-            segmentCounts:group.slice(0,12).map(edge=>edge.count),
-          });
-        }
+      if(coverage!==2)
         throw new Error("Result is not a closed watertight solid. Try a simpler mesh or operation.");
-      }
     }
   }
 }
