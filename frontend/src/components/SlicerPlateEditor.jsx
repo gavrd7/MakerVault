@@ -1276,18 +1276,6 @@ export default function SlicerPlateEditor({
         parts=[createTextStl(solidOptions)];
       } else if (solidDialog.kind==="svg") {
         parts=[createSvgStl(solidOptions)];
-      } else if (solidDialog.kind==="negative") {
-        const tool=createPrimitiveMesh(solidOptions,[
-          Number(solidOptions.x_mm),Number(solidOptions.y_mm),
-          Number(solidOptions.z_mm)-Number(solidOptions.height)/2,
-        ]);
-        try {
-          const targetBounds=new THREE.Box3().setFromObject(target);
-          const toolBounds=new THREE.Box3().setFromObject(tool);
-          if (!targetBounds.intersectsBox(toolBounds))
-            throw new Error("Negative shape does not intersect the selected model. Drag the pink shape onto the model or adjust its X/Y/Z position.");
-          parts=executeSolidOperation("boolean",target,{booleanMode:"difference",allowOpenPreview:true},tool);
-        } finally {tool.geometry.dispose();tool.material.dispose();}
       } else if (solidDialog.kind==="boolean") {
         let working=target;
         const temporary=[];
