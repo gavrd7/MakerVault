@@ -113,7 +113,7 @@ class PrusaOfficialModelDiscoveryTests(SimpleTestCase):
                                  "bed_shape": "0x0,200x0,200x200,0x200"}},
              "printer", "Unsafe"),
             ({"print:Unsafe": {"layer_height": "0.2",
-                               "post_process": "/tmp/untrusted"}},
+                               "post_process": "UNTRUSTED_COMMAND_MUST_NOT_RUN"}},
              "process", "Unsafe"),
             ({"printer:SLA": {"printer_technology": "SLA",
                               "nozzle_diameter": "0.4", "bed_shape": "0x0,20x0"}},
