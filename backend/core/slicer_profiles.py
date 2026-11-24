@@ -99,8 +99,13 @@ def inspect_native_profile(asset, engine_key):
             stripped = line.lstrip()
             if not stripped or stripped.startswith(("#", ";")):
                 continue
-            if "=" in stripped and stripped.partition("=")[0].strip().lower() in SCRIPT_KEYS:
-                raise SlicerProfileError("Post-processing commands are unsupported.")
+            if "=" in stripped:
+                key, _, value = stripped.partition("=")
+                # Official Prusa 2.9.7 presets include harmless empty
+                # "post_process =" declarations. Only nonempty scripts
+                # are executable and must be rejected.
+                if key.strip().lower() in SCRIPT_KEYS and value.strip():
+                    raise SlicerProfileError("Post-processing commands are unsupported.")
     else:
         _check_orca_json(decoded)
     inherits = ""
