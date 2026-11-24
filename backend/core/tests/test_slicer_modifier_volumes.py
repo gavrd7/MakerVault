@@ -113,6 +113,42 @@ class ModifierDraftContractTests(SimpleTestCase):
             [{"modifier_volumes": []}], engine="orcaslicer",
             version="2.5.0", settings={}))
 
+    def test_pinned_real_binary_composite_and_negative_acceptance(self):
+        from core.slicer_modifier_volumes import (
+            VERIFIED_NATIVE_COMPOSITE_VERSIONS,
+            VERIFIED_NATIVE_NEGATIVE_VERSIONS,
+        )
+        versions = {
+            "orcaslicer": "2.5.0",
+            "crealityprint": "7.3.1",
+            "bambustudio": "02.09.01.70",
+        }
+        self.assertEqual(VERIFIED_NATIVE_COMPOSITE_VERSIONS, versions)
+        self.assertEqual(VERIFIED_NATIVE_NEGATIVE_VERSIONS, versions)
+        for engine, version in versions.items():
+            negative = box(kind="negative", settings={}, coordinate_space="world",
+                           rotation_xyz_deg=[0, 0, 0],
+                           scale_xyz_percent=[100, 100, 100])
+            region = box(coordinate_space="world",
+                         rotation_xyz_deg=[0, 0, 0],
+                         scale_xyz_percent=[100, 100, 100])
+            plate = [{"modifier_volumes": [negative, region]},
+                     {"modifier_volumes": []}]
+            with self.subTest(engine=engine):
+                self.assertTrue(validate_native_modifier_execution(
+                    plate, engine=engine, version=version, settings={}))
+                with self.assertRaisesRegex(ValueError, "version"):
+                    validate_native_modifier_execution(
+                        plate, engine=engine, version=version + ".1", settings={})
+                with self.assertRaisesRegex(ValueError, "multi-material"):
+                    validate_native_modifier_execution(
+                        plate, engine=engine, version=version,
+                        settings={"multi_material_test": True})
+                with self.assertRaisesRegex(ValueError, "world-space"):
+                    validate_native_modifier_execution(
+                        [{"modifier_volumes": [box()]}, {"modifier_volumes": []}],
+                        engine=engine, version=version, settings={})
+
     def test_free_negative_volume_and_assembly_identity_survive_sanitization(self):
         volume = box(kind="negative", settings={},
                      coordinate_space="world",
