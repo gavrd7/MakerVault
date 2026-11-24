@@ -1886,7 +1886,7 @@ export default function SlicerPrepareWorkspace({
                   style={{ background: object.color, color: materialTextColor(object.color) }}
                   title={liveSlot ? (rawMaterial || "Unknown material") : "Model preview colour"}
                   aria-hidden="true">{material}</span>
-                <span className="slicerPrepareModelName">{index + 1}. {itemName(object)}</span>
+                <span className="slicerPrepareModelName">{objects.findIndex(row=>row.instance_id===object.instance_id) + 1}. {itemName(object)}</span>
                 {mapping && <span className={"slicerPrepareSlotBadge"+(samePrinter && liveSlot ? "" : " stale")}
                   title={status} aria-hidden="true">{slotNumber ?? "?"}</span>}
                 <span className="sr-only">{status}</span>
