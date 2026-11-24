@@ -107,6 +107,21 @@ class PrusaVendorPresetsTests(TestCase):
         flat = flatten_prusa_vendor_preset(BUNDLE, kind="printer", name="MK4S 0.4 nozzle")
         self.assertNotIn(b"config_update_url", flat)
 
+
+    def test_multiple_parents_preserve_later_override_and_shared_ancestors(self):
+        bundle = (b"[print:Base]\nlayer_height = 0.2\nfill_density = 10%\n"
+                  b"[print:A]\ninherits = Base\nfill_density = 20%\n"
+                  b"[print:B]\ninherits = Base\nfill_density = 30%\n"
+                  b"[print:Derived]\ninherits = A; B\nperimeters = 3\n")
+        flat = flatten_prusa_vendor_preset(bundle, kind="print", name="Derived")
+        self.assertIn(b"layer_height = 0.2", flat)
+        self.assertIn(b"fill_density = 30%", flat)
+        self.assertIn(b"perimeters = 3", flat)
+        self.assertNotIn(b"inherits", flat)
+        bad = bundle + b"[print:Cycle]\ninherits = Derived; Cycle\n"
+        with self.assertRaisesRegex(PrusaPresetError, "cyclic"):
+            flatten_prusa_vendor_preset(bad, kind="print", name="Cycle")
+
     def test_cli_flat_presets_accept_bounded_native_settings(self):
         for kind, name in (
             ("printer", "MK4S 0.4 nozzle"),
