@@ -116,6 +116,42 @@ class BambuRunnerContractTests(TestCase):
         self.assertEqual(env["TMPDIR"], str(self.root))
         self.assertNotIn("HTTP_PROXY", env)
 
+    def test_verified_modifier_shift_requires_same_native_part_roles(self):
+        from xml.etree import ElementTree as ET
+        from slicer_worker.bambu_runner import verified_bambu_modifier_shift
+        from slicer_worker.tests.test_modifier_3mf_validation import composite_fixture
+
+        original = composite_fixture(negative=True)
+        with zipfile.ZipFile(io.BytesIO(original)) as archive:
+            members = {name: archive.read(name) for name in archive.namelist()}
+
+        def output(*, transform="1 0 0 0 1 0 0 0 1 18 18 0", subtype=None):
+            packed = dict(members)
+            ns = "{http://schemas.microsoft.com/3dmanufacturing/core/2015/02}"
+            root = ET.fromstring(packed["3D/3dmodel.model"])
+            root.find(ns + "build/" + ns + "item").set("transform", transform)
+            packed["3D/3dmodel.model"] = ET.tostring(root)
+            if subtype:
+                settings = ET.fromstring(packed["Metadata/model_settings.config"])
+                settings.find("./object/part[@subtype='negative_part']").set("subtype", subtype)
+                packed["Metadata/model_settings.config"] = ET.tostring(settings)
+            target = self.root / "bambu-sliced.3mf"
+            with zipfile.ZipFile(target, "w") as archive:
+                for name, data in packed.items():
+                    archive.writestr(name, data)
+            return target
+
+        self.assertEqual(
+            verified_bambu_modifier_shift(original, output()), (18.0, 18.0))
+        with self.assertRaisesRegex(WorkerError, "changed modifier part identities"):
+            verified_bambu_modifier_shift(original, output(subtype="modifier_part"))
+        with self.assertRaisesRegex(WorkerError, "orientation"):
+            verified_bambu_modifier_shift(
+                original, output(transform="0 -1 0 1 0 0 0 0 1 18 18 0"))
+        with self.assertRaisesRegex(WorkerError, "orientation"):
+            verified_bambu_modifier_shift(
+                original, output(transform="1 0 0 0 1 0 0 0 1 18 18 2"))
+
     def test_bambu_filesystem_abort_diagnostics_never_relay_paths(self):
         from slicer_worker.bambu_runner import _filesystem_error_details
         self.assertEqual(_filesystem_error_details(
