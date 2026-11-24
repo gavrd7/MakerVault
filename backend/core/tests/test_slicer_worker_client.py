@@ -299,3 +299,23 @@ class SlicerWorkerClientTests(SimpleTestCase):
         self.assertIn("rejected the job", str(caught.exception))
         self.assertNotIn("password", str(caught.exception))
         self.assertNotIn("secret/private", str(caught.exception))
+
+
+    def test_bambu_engine_failure_explains_bambu_not_orca(self):
+        from core.slicer_failure_messages import explain_worker_failure
+        text = explain_worker_failure("bambu-cli-exited", 422)
+        self.assertIn("Bambu Studio", text)
+        self.assertNotIn("OrcaSlicer", text)
+        self.assertIn("selected slicer", explain_worker_failure("engine-exited", 422))
+
+    def test_creality_region_rejection_has_bounded_help_categories(self):
+        from core.slicer_failure_messages import explain_worker_failure
+        for reason in ("creality-region-archive-invalid",
+                       "creality-region-graph-invalid",
+                       "creality-region-parts-invalid",
+                       "creality-region-metadata-invalid",
+                       "creality-region-profiles-invalid"):
+            with self.subTest(reason=reason):
+                explanation = explain_worker_failure(reason, 422)
+                self.assertIn("Creality", explanation)
+                self.assertNotIn("OrcaSlicer", explanation)
