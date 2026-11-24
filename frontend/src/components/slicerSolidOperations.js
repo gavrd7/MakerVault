@@ -287,7 +287,7 @@ export async function executeSolidOperation(kind, target, options={}, second=nul
       scaled.translate(mid.x+offsets[0],mid.y+offsets[1],mid.z+offsets[2]);
       secondary=new Brush(scaled);
       secondary.updateMatrixWorld();
-      outputs.push(run(first,secondary,SUBTRACTION));
+      outputs.push(await run(first,secondary,SUBTRACTION));
     }
     return outputs.map(result=>resultToStl(result,{allowOpenPreview:!!options.allowOpenPreview}));
   } finally {
