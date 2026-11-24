@@ -656,11 +656,11 @@ export default function SlicerPlateEditor({
         ...model,
         modifier_volumes: (model.modifier_volumes || []).filter(volume => !targets.has(volume.id)),
       }));
-    if (orphanVolumes.length && !remaining.length) {
-      setError("This model has independent volumes. Remove those volumes explicitly before deleting the last printable model.");
+    if (orphanVolumes.length && !remaining.length && orphanVolumes.some(v=>v.coordinate_space!=="world")) {
+      setError("Legacy model-local regions cannot survive without their printable parent. Remove those regions explicitly first.");
       return;
     }
-    if (orphanVolumes.length) {
+    if (orphanVolumes.length && remaining.length) {
       remaining = remaining.map(model => ({
         ...model, modifier_volumes: [...model.modifier_volumes],
       }));
@@ -684,7 +684,11 @@ export default function SlicerPlateEditor({
     const clearSingleton = member => member.assembly_id && assemblyCounts.get(member.assembly_id) < 2
       ? {...member, assembly_id: null} : member;
     remaining = remaining.map(model => ({...clearSingleton(model), modifier_volumes: model.modifier_volumes.map(clearSingleton)}));
-    onChange(remaining);
+    // Explicitly selected non-printing rows may be deleted alongside their
+    // last printable. All other free volumes remain persisted at plate level.
+    const removedVolumeIds = objects.flatMap(model => model.modifier_volumes || [])
+      .filter(volume => targets.has(volume.id)).map(volume => volume.id);
+    onChange(remaining,{removedVolumeIds});
     onPrimaryChange?.(remaining.find(model =>
       !String(model.asset_id).startsWith("local:"))?.asset_id || "");
     onSelectedModifierChange?.(null);
