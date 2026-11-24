@@ -37,6 +37,41 @@ class RuntimePermissionTests(unittest.TestCase):
                 self.assertTrue((root / "AppRun").is_symlink())
                 self.assertEqual((root / "AppRun").resolve(), target)
 
+
+    def test_exact_bambu_inner_binary_without_execute_bit_can_be_published(self):
+        """A shell AppRun may exec a non-executable inner ELF in the AppImage."""
+        with TemporaryDirectory() as temp:
+            root = Path(temp) / "squashfs-root"
+            inner = root / "bin" / "bambu-studio"
+            inner.parent.mkdir(parents=True)
+            inner.write_bytes(b"reviewed ELF test fixture")
+            inner.chmod(0o600)
+            launcher = root / "AppRun"
+            launcher.write_text("#!/bin/sh\nexec ./bin/bambu-studio\n")
+            launcher.chmod(0o700)
+            make_runtime_worker_readable(
+                root, required_executables=("bin/bambu-studio",))
+            self.assertEqual(stat.S_IMODE(inner.stat().st_mode), 0o755)
+            self.assertEqual(stat.S_IMODE(launcher.stat().st_mode), 0o755)
+
+    def test_reviewed_inner_executable_must_remain_inside_bundle(self):
+        with TemporaryDirectory() as temp:
+            parent = Path(temp)
+            root = parent / "squashfs-root"
+            (root / "bin").mkdir(parents=True)
+            external = parent / "external"
+            external.write_bytes(b"outside reviewed bundle")
+            external.chmod(0o600)
+            (root / "bin" / "bambu-studio").symlink_to(external)
+            with self.assertRaisesRegex(ValueError, "symlink"):
+                make_runtime_worker_readable(
+                    root, required_executables=("bin/bambu-studio",))
+            self.assertEqual(stat.S_IMODE(external.stat().st_mode), 0o600)
+            for path in ("/tmp/evil", "../outside", "bin/../secret", ""):
+                with self.subTest(path=path), self.assertRaises(ValueError):
+                    make_runtime_worker_readable(
+                        root, required_executables=(path,))
+
     def test_rejects_root_symlink(self):
         with TemporaryDirectory() as temp:
             base = Path(temp)
