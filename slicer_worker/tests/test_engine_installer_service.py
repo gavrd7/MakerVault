@@ -232,8 +232,13 @@ class InstallerTests(unittest.TestCase):
             }}}
             with patch.object(installer, "STORE", store), \
                  patch.object(installer, "_manifest", return_value=manifest):
-                with self.assertRaisesRegex(ValueError, "identity"):
+                with self.assertLogs(installer.LOGGER, level="WARNING") as captured:
                     installer.repair_active_bambu_runtime_permissions()
+                self.assertIn("Skipping Bambu runtime permissions repair",
+                              "\\n".join(captured.output))
+                # Never grant access or change the active manifest if its
+                # runtime has not passed the pinned binary identity check.
+                self.assertEqual((store / "active.json").read_text(), "{}")
 
     def test_published_version_directory_is_worker_traversable(self):
         # mkdtemp starts at 0700; worker UID 10001 must be able to
