@@ -27,7 +27,7 @@ import {supportPaintPreview,clearSupportPaintPreview} from "./slicerSupportPaint
 import {createSemanticPaint,applySemanticPaint} from "./slicerSemanticPainting.js";
 import {semanticPaintPreview,clearSemanticPaintPreview} from "./slicerSemanticPaintPreview.js";
 import { executeSolidOperation } from "./slicerSolidOperations";
-import { PRIMITIVE_TYPES, TEXT_FONTS, createPrimitiveMesh, createPrimitiveStl, createTextStl, createSvgStl } from "./slicerPrimitives";
+import { PRIMITIVE_TYPES, TEXT_FONTS, createPrimitiveGeometry, createPrimitiveMesh, createPrimitiveStl, createTextStl, createSvgStl } from "./slicerPrimitives";
 import { validateStackPlacement } from "./slicerStacking";
 import { buildSectionCapGeometry } from "./slicerSectionCaps";
 import { meshesProjectivelyOverlapXY } from "./slicerMeshFootprints";
@@ -1020,16 +1020,20 @@ export default function SlicerPlateEditor({
     if(!state)return undefined;
     let ghost;
     try {
-      ghost=createPrimitiveMesh(solidOptions,[
-        Number(solidOptions.x_mm),Number(solidOptions.y_mm),
-        Number(solidOptions.z_mm)-Number(solidOptions.height)/2,
-      ]);
-      ghost.material.dispose();
-      ghost.material=new THREE.MeshBasicMaterial({
+      // Volume geometry is centred at local (0,0,0); XYZ rotations are mesh
+      // transforms, not baked bottom-aligned STL rotations. This matches the
+      // worker's native plate-space volumes and the saved editor coordinates.
+      const geometry=createPrimitiveGeometry(solidOptions);
+      const material=new THREE.MeshBasicMaterial({
         color:solidDialog.kind==="negative"?"#fb7185":"#22d3ee",transparent:true,opacity:0.28,
         depthTest:false,depthWrite:false,side:THREE.DoubleSide,
         clippingPlanes:[state.sectionPlane],
       });
+      ghost=new THREE.Mesh(geometry,material);
+      ghost.position.set(Number(solidOptions.x_mm),Number(solidOptions.y_mm),
+        Number(solidOptions.z_mm));
+      ghost.rotation.set(...["rotation_x","rotation_y","rotation_z"].map(key=>
+        THREE.MathUtils.degToRad(Number(solidOptions[key]||0))),"XYZ");
       ghost.renderOrder=101;
       state.scene.add(ghost);negativeGhostRef.current=ghost;
     }catch { return undefined; }
@@ -1226,7 +1230,7 @@ export default function SlicerPlateEditor({
         } else setSolidOptions(old=>({...old,x_mm:pretty(position.x),y_mm:pretty(position.y)}));
       } else if(insertionMode==="translate") {
         setSolidOptions(old=>({...old,x_mm:pretty(position.x),y_mm:pretty(position.y),
-          z_mm:pretty(position.z+(solidDialog.kind==="negative"?Number(old.height||0)/2:0))}));
+          z_mm:pretty(position.z)}));
       } else if(insertionMode==="scale") {
         const toSize=(old,scale)=>Math.max(0.5,Math.min(500,
           Math.round(Number(old||20)*Math.max(0.025,Math.abs(scale))*100)/100));
@@ -1234,10 +1238,11 @@ export default function SlicerPlateEditor({
           depth:toSize(old.depth,ghost.scale.y),height:toSize(old.height,ghost.scale.z)}));
       } else if(insertionMode==="rotate") {
         const degrees=axis=>Math.round(THREE.MathUtils.radToDeg(axis)*10)/10;
+        const volume=["negative","modifier"].includes(solidDialog.kind);
         setSolidOptions(old=>({...old,
-          rotation_x:degrees(ghost.rotation.x)+Number(old.rotation_x||0),
-          rotation_y:degrees(ghost.rotation.y)+Number(old.rotation_y||0),
-          rotation_z:degrees(ghost.rotation.z)+Number(old.rotation_z||0)}));
+          rotation_x:degrees(ghost.rotation.x)+(volume?0:Number(old.rotation_x||0)),
+          rotation_y:degrees(ghost.rotation.y)+(volume?0:Number(old.rotation_y||0)),
+          rotation_z:degrees(ghost.rotation.z)+(volume?0:Number(old.rotation_z||0))}));
       }
     };
     gizmo.addEventListener("dragging-changed",draggingChanged);
