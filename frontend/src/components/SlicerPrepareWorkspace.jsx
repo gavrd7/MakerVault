@@ -768,7 +768,7 @@ export default function SlicerPrepareWorkspace({
       modifier_volumes: (row.modifier_volumes || []).map(volume => validSelection.includes(volume.id)
         ? {...volume, assembly_id: id} : volume),
     })));
-    setExpandedAssemblies(current => current.filter(value => value !== id));
+    setExpandedAssemblies(current => [...current.filter(value=>value!==id),id]);
   }
   function disassembleSelected() {
     if (!canEdit || busy || !activeAssembly) return;
@@ -1243,10 +1243,10 @@ export default function SlicerPrepareWorkspace({
                     changeModifier(modifier.id,{settings});
                   }} />
               </label>
-              <button type="button" disabled={!canEdit||busy} onClick={()=>removeModifier(modifier.id)}>
-                Remove modifier
-              </button>
               </>}
+              <button type="button" disabled={!canEdit||busy} onClick={()=>removeModifier(modifier.id)}>
+                Remove {modifier.kind==="negative"?"negative volume":"modifier"}
+              </button>
             </fieldset>)}
           </div>
         </div>}
