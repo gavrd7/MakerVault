@@ -4,12 +4,18 @@ name: PrusaSlicer pinned Linux headless runtime candidate
 # This does NOT install, publish, or enable a new MakerVault slicing engine.
 on:
   workflow_dispatch:
+  # Allow a single explicitly tagged branch commit to start real upstream
+  # compilation. Ordinary PR commits never launch expensive source builds.
+  push:
+    branches:
+      - feature/slicer-prusa-engine
 
 permissions:
   contents: read
 
 jobs:
   verify-prusa-source-and-cli:
+    if: ${{ github.event_name == 'workflow_dispatch' || contains(github.event.head_commit.message, '[prusa-build]') }}
     runs-on: ubuntu-24.04
     timeout-minutes: 120
     steps:
