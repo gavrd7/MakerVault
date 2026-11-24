@@ -59,6 +59,8 @@ def main() -> None:
         receipt = run_prusa(args.binary.resolve(strict=True), folder, timeout_seconds=300)
         data = Path(receipt["gcode_path"]).read_bytes()
         result = audit_prusa_positive_e(data)
+        if result["positive_e_moves"] < 20:
+            raise ValueError("Pinned Prusa cube did not produce enough real toolpaths.")
         print(
             f"Prusa 2.9.7 genuine FFF cube slice passed: {len(data)} G-code bytes, "
             f"{result['positive_e_moves']} positive-E moves, "
