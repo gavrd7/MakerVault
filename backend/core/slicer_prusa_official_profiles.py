@@ -11,9 +11,9 @@ import requests
 from .slicer_official_profiles import OfficialProfileError
 
 ENGINE = "prusaslicer"
-ENGINE_VERSION = "2.9.6"
+ENGINE_VERSION = "2.9.7"
 SOURCE = "prusa3d/PrusaSlicer"
-REF = "version_2.9.6"
+REF = "version_2.9.7"
 BASE = f"https://raw.githubusercontent.com/{SOURCE}/{REF}/resources/profiles"
 VENDORS = ("PrusaResearch",)
 MAX_INI = 3 * 1024 * 1024
