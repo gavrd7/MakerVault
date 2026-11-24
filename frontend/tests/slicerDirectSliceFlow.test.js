@@ -131,3 +131,38 @@ test("3mf project export uses owner-scoped server endpoint",()=>{
   assert.match(source,/export-project\//);
   assert.match(source,/link\.download=mode==="native-material"\?/);
 });
+
+test("retrying a slice revalidates its current plate without leaving interactive slicer", () => {
+  const prepare = fs.readFileSync(path.join(root, "src/components/SlicerPrepareWorkspace.jsx"), "utf8");
+  const editor = fs.readFileSync(path.join(root, "src/components/SlicerPlateEditor.jsx"), "utf8");
+  assert.match(source, /const \[plateValidationEpoch, refreshPlateValidation\] = useState\(0\)/);
+  assert.match(source, /setPlateValidation\(null\);\s*refreshPlateValidation\(value => value \+ 1\)/);
+  assert.match(source, /validationRefreshKey=\{`\$\{plateValidationEpoch\}:\$\{busy \|\| loading\}`\}/);
+  assert.match(prepare, /validationRefreshKey=\{validationRefreshKey\}/);
+  assert.match(editor, /\[issueSignature, issueKey, onPlateIssuesChange, validationRefreshKey\]/);
+  assert.match(editor, /onPlateIssuesChange\?\.\(\{ signature: issueSignature, issues: plateIssues \}\)/);
+  assert.match(prepare, /plateIssues\.signature !== JSON\.stringify\(objects\)/);
+});
+
+test("fresh slicer project resets session-only models, volumes, profiles and tool state", () => {
+  assert.match(source, /New project \/ Reset slicer/);
+  assert.match(source, /setProjectPlates\(\[\{id:"plate-1",name:"Plate 1",objects:\[\],volumes:\[\]\}\]\)/);
+  assert.match(source, /setForm\(\{\.\.\.initialForm\}\)/);
+  assert.match(source, /setProcessOverrides\(\{\}\)/);
+  assert.match(source, /setFlushSettings\(null\)/);
+  assert.match(source, /setSlotFilamentProfiles\(\[\]\)/);
+  assert.match(source, /setWorkspaceEpoch\(epoch => epoch \+ 1\)/);
+  assert.match(source, /SlicerPrepareWorkspace key=\{workspaceEpoch\}/);
+  assert.match(source, /Saved drafts, files and profiles are not deleted/);
+});
+
+test("six slicer workspace actions render as a flat grid with no nested project-action columns", () => {
+  const styles = fs.readFileSync(path.join(root, "src/styles.css"), "utf8");
+  assert.match(source, /className="printingHeroActions slicerHeroActions"/);
+  assert.doesNotMatch(source, /className="slicerHeroProjectNavigation"/);
+  assert.doesNotMatch(source, /className="slicerHeroProjectFileActions"/);
+  assert.match(source, /Save project \(\.3mf\)/);
+  assert.match(source, /Open project \(\.3mf\)/);
+  assert.match(source, /New project \/ Reset slicer/);
+  assert.match(styles, /\.slicerWorkbenchRoot\.slicerEditorOpen \.slicerHeroActions > button/);
+});

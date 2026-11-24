@@ -92,6 +92,185 @@ class SliceJobApiTests(TestCase):
         self.assertIs(job.settings.get("multi_material_test"), True)
         self.assertEqual(len(job.settings["plate_objects"]), 1)
 
+    def test_native_volume_ids_cannot_collide_with_models_or_other_volumes(self):
+        from core.slicer_api import _draft_plate_settings
+        first_id, second_id = str(uuid.uuid4()), str(uuid.uuid4())
+        volume_id = str(uuid.uuid4())
+        def model(identity, volumes):
+            return {
+                "instance_id": identity, "asset_id": str(self.input_asset.pk),
+                "x_mm": 0, "y_mm": 0, "rotation_deg": 0,
+                "scale_percent": 100, "color": "#abcdef",
+                "modifier_volumes": volumes,
+            }
+        def region(identity):
+            return {
+                "id": identity, "shape": "box",
+                "width_mm": 15, "depth_mm": 15, "height_mm": 15,
+                "x_mm": 0, "y_mm": 0, "z_mm": 8,
+                "coordinate_space": "world",
+                "rotation_xyz_deg": [0, 0, 0],
+                "scale_xyz_percent": [100, 100, 100],
+                "kind": "modifier", "assembly_id": None,
+                "settings": {"sparse_infill_density": 50},
+            }
+        for models in (
+            [model(first_id, [region(second_id)]), model(second_id, [])],
+            [model(first_id, [region(volume_id)]), model(second_id, [region(volume_id)])],
+        ):
+            with self.subTest(models=models), self.assertRaisesRegex(ValueError, "unique"):
+                _draft_plate_settings(self.owner, self.input_asset, {
+                    "plate_objects": models, "plate_label": "Unique IDs",
+                })
+
+    def test_independent_plate_volume_storage_roundtrips_and_prevents_omission(self):
+        from core.slicer_api import _draft_plate_settings
+
+        model = {
+            "instance_id": str(uuid.uuid4()), "asset_id": str(self.input_asset.pk),
+            "x_mm": 0, "y_mm": 0, "rotation_deg": 0,
+            "scale_percent": 100, "color": "#abcdef",
+        }
+        region = {
+            "id": str(uuid.uuid4()), "shape": "box",
+            "width_mm": 15, "depth_mm": 15, "height_mm": 15,
+            "x_mm": 0, "y_mm": 0, "z_mm": 8,
+            "coordinate_space": "world",
+            "rotation_xyz_deg": [0, 0, 0],
+            "scale_xyz_percent": [100, 100, 100],
+            "kind": "negative", "assembly_id": None, "settings": {},
+        }
+        settings = {
+            "plate_objects": [{**model, "modifier_volumes": [region]}],
+            "plate_volumes": [region], "plate_label": "Independent regions",
+            "plates": [{"id": "plate-1", "name": "Independent regions",
+                        "objects": [model], "volumes": [region]}],
+            "active_plate_id": "plate-1",
+        }
+        result = _draft_plate_settings(self.owner, self.input_asset, settings)
+        self.assertNotIn("modifier_volumes", result["plates"][0]["objects"][0])
+        self.assertEqual(result["plates"][0]["volumes"][0]["id"], region["id"])
+        self.assertEqual(result["plate_volumes"][0]["id"], region["id"])
+        self.assertEqual(result["plate_objects"][0]["modifier_volumes"][0]["id"], region["id"])
+
+        # Drafts may retain an independently saved cutter even when the
+        # temporary per-model editor adapter does not carry it. The native
+        # execution gate will refuse slicing until every cutter is represented.
+        detached = _draft_plate_settings(
+            self.owner, self.input_asset,
+            {**settings, "plate_objects": [model]},
+        )
+        self.assertEqual(detached["plate_volumes"][0]["id"], region["id"])
+        self.assertNotIn("modifier_volumes", detached["plate_objects"][0])
+
+        for tampered in (
+            {**settings, "plate_volumes": []},
+            {**settings, "plates": [{**settings["plates"][0], "volumes": []}]},
+        ):
+            with self.subTest(tampered=tampered), self.assertRaises(ValueError):
+                _draft_plate_settings(self.owner, self.input_asset, tampered)
+
+    def test_independent_plate_persists_more_than_twelve_regions_with_one_model(self):
+        from core.slicer_api import _draft_plate_settings
+        model = {
+            "instance_id": str(uuid.uuid4()), "asset_id": str(self.input_asset.pk),
+            "x_mm": 0, "y_mm": 0, "rotation_deg": 0,
+            "scale_percent": 100, "color": "#abcdef",
+        }
+        volumes = [
+            {
+                "id": str(uuid.uuid4()), "shape": "box",
+                "width_mm": 8, "depth_mm": 8, "height_mm": 8,
+                "x_mm": index, "y_mm": 0, "z_mm": 4,
+                "coordinate_space": "world",
+                "rotation_xyz_deg": [0, 0, 0],
+                "scale_xyz_percent": [100, 100, 100],
+                "kind": "negative", "assembly_id": None, "settings": {},
+            }
+            for index in range(13)
+        ]
+        supplied = {
+            "plate_objects": [{**model, "modifier_volumes": volumes[:12]}],
+            "plate_volumes": volumes, "plate_label": "Thirteen free cutters",
+            "plates": [{"id": "plate-1", "name": "Thirteen free cutters",
+                        "objects": [model], "volumes": volumes}],
+            "active_plate_id": "plate-1",
+        }
+        saved = _draft_plate_settings(self.owner, self.input_asset, supplied)
+        self.assertEqual(len(saved["plate_volumes"]), 13)
+        self.assertEqual(len(saved["plates"][0]["volumes"]), 13)
+        self.assertEqual(len(saved["plate_objects"][0]["modifier_volumes"]), 12)
+
+    def test_canonical_plate_rejects_conflicting_local_volume_ids_and_limits(self):
+        from core.slicer_api import _draft_plate_settings
+        model = {
+            "instance_id": str(uuid.uuid4()), "asset_id": str(self.input_asset.pk),
+            "x_mm": 0, "y_mm": 0, "rotation_deg": 0,
+            "scale_percent": 100, "color": "#abcdef",
+        }
+        region_id = str(uuid.uuid4())
+        native = {
+            "id": region_id, "shape": "box",
+            "width_mm": 10, "depth_mm": 10, "height_mm": 10,
+            "x_mm": 0, "y_mm": 0, "z_mm": 5, "coordinate_space": "world",
+            "rotation_xyz_deg": [0, 0, 0],
+            "scale_xyz_percent": [100, 100, 100],
+            "kind": "negative", "assembly_id": None, "settings": {},
+        }
+        legacy = {
+            "id": region_id, "shape": "box",
+            "width_mm": 10, "depth_mm": 10, "height_mm": 10,
+            "x_mm": 0, "y_mm": 0, "z_mm": 5,
+            "kind": "modifier", "assembly_id": None,
+            "settings": {"sparse_infill_density": 50},
+        }
+        saved_plate = {"id": "plate-1", "name": "Volumes",
+                       "objects": [{**model, "modifier_volumes": [legacy]}],
+                       "volumes": [native]}
+        with self.assertRaisesRegex(ValueError, "unique"):
+            _draft_plate_settings(self.owner, self.input_asset, {
+                "plate_objects": saved_plate["objects"],
+                "plate_volumes": saved_plate["volumes"],
+                "plates": [saved_plate], "active_plate_id": "plate-1",
+            })
+        too_many = [{**native, "id": str(uuid.uuid4())} for _ in range(48)]
+        with self.assertRaisesRegex(ValueError, "Too many"):
+            _draft_plate_settings(self.owner, self.input_asset, {
+                "plate_objects": saved_plate["objects"],
+                "plate_volumes": too_many,
+                "plates": [{**saved_plate, "volumes": too_many}],
+                "active_plate_id": "plate-1",
+            })
+
+    def test_empty_plate_can_preserve_independent_volumes_with_another_printable_plate(self):
+        from core.slicer_api import _draft_plate_settings
+
+        model = {
+            "instance_id": str(uuid.uuid4()), "asset_id": str(self.input_asset.pk),
+            "x_mm": 0, "y_mm": 0, "rotation_deg": 0,
+            "scale_percent": 100, "color": "#abcdef",
+        }
+        region = {
+            "id": str(uuid.uuid4()), "shape": "box",
+            "width_mm": 10, "depth_mm": 10, "height_mm": 10,
+            "x_mm": 0, "y_mm": 0, "z_mm": 5,
+            "coordinate_space": "world",
+            "rotation_xyz_deg": [0, 0, 0],
+            "scale_xyz_percent": [100, 100, 100],
+            "kind": "negative", "assembly_id": None, "settings": {},
+        }
+        submitted = {
+            "plate_label": "Empty", "plate_volumes": [region],
+            "plates": [
+                {"id": "plate-1", "name": "Empty", "objects": [], "volumes": [region]},
+                {"id": "plate-2", "name": "Printable", "objects": [model], "volumes": []},
+            ],
+            "active_plate_id": "plate-1",
+        }
+        saved = _draft_plate_settings(self.owner, self.input_asset, submitted)
+        self.assertNotIn("plate_objects", saved)
+        self.assertEqual(saved["plates"][0]["volumes"][0]["id"], region["id"])
+
     def test_prime_tower_per_plate_roundtrip_and_validation(self):
         from core.slicer_api import _draft_plate_settings
         model = {
@@ -266,6 +445,63 @@ class SliceJobApiTests(TestCase):
         self.client.force_login(self.other)
         self.assertEqual(self.client.post("/api/printing/slicer/projects/import/",
             {"file":SimpleUploadedFile("saved.3mf",package)}).status_code,403)
+
+    def test_import_project_restores_independent_volumes_not_as_stl_parts(self):
+        from django.core.files.uploadedfile import SimpleUploadedFile
+        from core.slicer_plate_3mf import build_makervault_project_3mf
+        from core.slicer_approval import fixture_stl
+
+        source_id = str(uuid.uuid4())
+        model = {
+            "instance_id": str(uuid.uuid4()), "asset_id": source_id,
+            "x_mm": 0, "y_mm": 0, "z_mm": 0, "rotation_deg": 0,
+            "scale_percent": 100, "color": "#abcdef",
+        }
+        cut = {
+            "id": str(uuid.uuid4()), "shape": "box",
+            "width_mm": 20, "depth_mm": 12, "height_mm": 10,
+            "x_mm": 0, "y_mm": 0, "z_mm": 8,
+            "coordinate_space": "world", "rotation_xyz_deg": [0, 0, 45],
+            "scale_xyz_percent": [110, 100, 100],
+            "kind": "negative", "assembly_id": None, "settings": {},
+        }
+        plates = [
+            {"id": "plate-1", "name": "Source", "objects": [model], "volumes": [cut]},
+            {"id": "plate-2", "name": "Unattached", "objects": [], "volumes": [
+                {**cut, "id": str(uuid.uuid4()), "x_mm": 32}]},
+        ]
+        archive = build_makervault_project_3mf(
+            [("Source", [(model, fixture_stl())]), ("Unattached", [])],
+            bed_width=220, bed_depth=220,
+            metadata={"format": "makervault-project-v1", "plates": plates,
+                      "active_plate_id": "plate-1"},
+        )
+        self.client.force_login(self.owner)
+        response = self.client.post("/api/printing/slicer/projects/import/", {
+            "file": SimpleUploadedFile("volumes.3mf", archive,
+                                       content_type="model/3mf"),
+        })
+        self.assertEqual(response.status_code, 201, response.content)
+        imported = response.json()["plates"]
+        self.assertEqual(imported[0]["volumes"][0]["id"], cut["id"])
+        self.assertEqual(imported[0]["volumes"][0]["rotation_xyz_deg"], [0.0, 0.0, 45.0])
+        self.assertEqual(imported[1]["objects"], [])
+        self.assertEqual(len(imported[1]["volumes"]), 1)
+        self.assertNotIn("modifier_volumes", imported[0]["objects"][0])
+
+        # Do not accept a second copy of a cutter disguised as a printable ID.
+        altered = [{**plates[0], "volumes": [{**cut, "id": model["instance_id"]}]}]
+        invalid_archive = build_makervault_project_3mf(
+            [("Source", [(model, fixture_stl())])], bed_width=220,
+            bed_depth=220,
+            metadata={"format": "makervault-project-v1", "plates": altered,
+                      "active_plate_id": "plate-1"},
+        )
+        invalid = self.client.post("/api/printing/slicer/projects/import/", {
+            "file": SimpleUploadedFile("invalid.3mf", invalid_archive,
+                                       content_type="model/3mf"),
+        })
+        self.assertEqual(invalid.status_code, 422, invalid.content)
 
     def test_import_project_restores_v2_painted_regions_from_3mf_sidecar(self):
         from django.core.files.uploadedfile import SimpleUploadedFile

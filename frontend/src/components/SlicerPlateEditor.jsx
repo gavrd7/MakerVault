@@ -27,7 +27,7 @@ import {supportPaintPreview,clearSupportPaintPreview} from "./slicerSupportPaint
 import {createSemanticPaint,applySemanticPaint} from "./slicerSemanticPainting.js";
 import {semanticPaintPreview,clearSemanticPaintPreview} from "./slicerSemanticPaintPreview.js";
 import { executeSolidOperation } from "./slicerSolidOperations";
-import { PRIMITIVE_TYPES, TEXT_FONTS, createPrimitiveMesh, createPrimitiveStl, createTextStl, createSvgStl } from "./slicerPrimitives";
+import { PRIMITIVE_TYPES, TEXT_FONTS, createPrimitiveGeometry, createPrimitiveMesh, createPrimitiveStl, createTextStl, createSvgStl } from "./slicerPrimitives";
 import { validateStackPlacement } from "./slicerStacking";
 import { buildSectionCapGeometry } from "./slicerSectionCaps";
 import { meshesProjectivelyOverlapXY } from "./slicerMeshFootprints";
@@ -305,6 +305,7 @@ export default function SlicerPlateEditor({
   plateLabel = "Plate 1", onPlateLabelChange, plateIndex = 0, plateCount = 1, printerLabel = "",
   canEdit = false, onFilesUploaded, defaultColor = null, onManualColorChange, footer = null,
   selectedInstanceId = null, onSelectedInstanceChange, selectedInstanceIds = [], selectionClearVersion = 0, onSelectModel, toolMode = "select",
+  selectedModifierId = null, onSelectedModifierChange,
   autoOrientGoal = "balanced", autoOrientRequest = 0, splitRequest = 0, solidRequest = null,
   measurementVisible = false, measureMode = "distance", measureUnit = "mm", measureSnapMode = "auto", measureClearVersion = 0,
   onMeasurePinPlaced, onMeasureModeChange, onMeasureSnapModeChange, onMeasureUnitChange,
@@ -312,6 +313,7 @@ export default function SlicerPlateEditor({
   variableLayerPreview = null, onVariableLayerHeightPick, onVariableLayerHeightCommit,
   localAssets = [], onLocalAssetsChange, onExitToolMode, onPlateIssuesChange, toolbar = null, paintControls = null,
   primeTower = null, onPrimeTowerChange, primeTowerEnabled = false, primeTowerWidth = 35,
+  validationRefreshKey = 0,
 }) {
   const hostRef = useRef(null);
   const sceneRef = useRef(null);
@@ -320,6 +322,8 @@ export default function SlicerPlateEditor({
   latestPrimeTowerRef.current={position:primeTower,change:onPrimeTowerChange,enabled:primeTowerEnabled,width:primeTowerWidth};
   const latestOnChangeRef = useRef(onChange);
   const latestToolModeRef = useRef(toolMode);
+  const modifierSelectionRef = useRef({id:selectedModifierId,onChange:onSelectedModifierChange});
+  modifierSelectionRef.current = {id:selectedModifierId,onChange:onSelectedModifierChange};
   const measurePinPlacedRef = useRef(onMeasurePinPlaced);
   measurePinPlacedRef.current = onMeasurePinPlaced;
   const exitToolModeRef = useRef(onExitToolMode);
@@ -411,7 +415,7 @@ export default function SlicerPlateEditor({
     const handle = setTimeout(() => {
       lastPreviewKeyRef.current = key;
       previewSolid();
-    }, ["primitive","text","svg"].includes(solidDialog.kind)?350:900);
+    }, ["primitive","modifier","negative","text","svg"].includes(solidDialog.kind)?350:900);
     return () => clearTimeout(handle);
   }, [solidDialog, solidOptions, solidBusy]);
   const [measureOverlayExpanded, setMeasureOverlayExpanded] = useState(false);
@@ -448,6 +452,15 @@ export default function SlicerPlateEditor({
   // The controls show the first model by default; only an explicitly selected
   // mesh should receive a visual highlight.
   const chosen = objects.find(item => item.instance_id === selected) || objects[0] || null;
+  const chosenModifier = chosen?.modifier_volumes?.find(row =>
+    row.id === selectedModifierId && row.coordinate_space === "world") || null;
+  const patchChosenModifier = patch => {
+    if (!chosen || !chosenModifier || !canEdit) return;
+    onChange(objects.map(item => item.instance_id !== chosen.instance_id ? item : {
+      ...item, modifier_volumes: (item.modifier_volumes || []).map(modifier =>
+        modifier.id === chosenModifier.id ? {...modifier, ...patch} : modifier),
+    }));
+  };
   const selectedMeasurement = chosen ? plateModelMeasurement(chosen, dimensions[chosen.instance_id]) : null;
   const pinDistance = measurePoints.length === 2 && measureMode === "distance"
     ? measurementDistance(measurePoints[0].point, measurePoints[1].point) : null;
@@ -498,7 +511,7 @@ export default function SlicerPlateEditor({
   const issueKey = JSON.stringify(plateIssues.map(row => [row.id, row.message]));
   useEffect(() => {
     onPlateIssuesChange?.({ signature: issueSignature, issues: plateIssues });
-  }, [issueSignature, issueKey, onPlateIssuesChange]);
+  }, [issueSignature, issueKey, onPlateIssuesChange, validationRefreshKey]);
 
   function arrangeModels(items = objects, announce = true) {
     if (items.some(item => !dimensionsRef.current[item.instance_id])) {
@@ -597,10 +610,24 @@ export default function SlicerPlateEditor({
   }
 
   function duplicateSelected() {
+    if (chosenModifier && canEdit) {
+      const total = objects.reduce((sum,row) => sum + (row.modifier_volumes || []).length, 0);
+      if (chosen.modifier_volumes.length >= 12 || total >= 48) { setError("Modifier count limit reached."); return; }
+      const copy = {...chosenModifier,id:plateUuid(),settings:{...chosenModifier.settings},
+        rotation_xyz_deg:[...(chosenModifier.rotation_xyz_deg || [0,0,0])],
+        scale_xyz_percent:[...(chosenModifier.scale_xyz_percent || [100,100,100])],
+        x_mm:pretty(Math.min(10000,chosenModifier.x_mm + 5))};
+      onChange(objects.map(row => row.instance_id === chosen.instance_id ? {...row, modifier_volumes:[...row.modifier_volumes,copy]} : row));
+      onSelectedModifierChange?.(copy.id,chosen.instance_id);
+      setError("");return;
+    }
     if (!chosen || objects.length >= MAX_OBJECTS) return;
     // A duplicate must retain orientation, colour and individual XYZ scale.
     // Assign a new instance identity, then arrange after its mesh is measured.
     const copy = { ...chosen, instance_id: plateUuid() };
+    // A copied parent owns new modifier identities and independent settings.
+    // A free volume is a separate plate item, not part of a printable copy.
+    copy.modifier_volumes = [];
     if (Array.isArray(chosen.scale_xyz_percent))
       copy.scale_xyz_percent = [...chosen.scale_xyz_percent];
     const known={...dimensionsRef.current,
@@ -610,17 +637,75 @@ export default function SlicerPlateEditor({
       setError("No available non-overlapping position for a duplicate on the plate.");
       return;
     }
+    // Duplicating the *model plus its modifier drafts* places copies at the
+    // same relative bed offsets initially. They remain independent after the
+    // duplication; changing either model's pose never implicitly moves them.
     onChange([...objects,placed]);
     setSelected(copy.instance_id);
     setError("");
   }
 
-  function removeSelected() {
-    if (!chosen) return;
-    const remaining = objects.filter(item => item.instance_id !== chosen.instance_id);
-    onChange(remaining);
-    onPrimaryChange?.(remaining.find(item => !String(item.asset_id).startsWith("local:"))?.asset_id || "");
+  function removePlateItems(ids) {
+    const targets = new Set(ids);
+    if (!targets.size) return;
+    // Free volumes remain on the plate when their storage model is deleted.
+    const orphanVolumes = objects.filter(model => targets.has(model.instance_id))
+      .flatMap(model => model.modifier_volumes || [])
+      .filter(volume => !targets.has(volume.id));
+    let remaining = objects.filter(model => !targets.has(model.instance_id))
+      .map(model => ({
+        ...model,
+        modifier_volumes: (model.modifier_volumes || []).filter(volume => !targets.has(volume.id)),
+      }));
+    if (orphanVolumes.length && !remaining.length && orphanVolumes.some(v=>v.coordinate_space!=="world")) {
+      setError("Legacy model-local regions cannot survive without their printable parent. Remove those regions explicitly first.");
+      return;
+    }
+    if (orphanVolumes.length && remaining.length) {
+      remaining = remaining.map(model => ({
+        ...model, modifier_volumes: [...model.modifier_volumes],
+      }));
+      for (const volume of orphanVolumes) {
+        const candidates=remaining.filter(model => model.modifier_volumes.length < 12);
+        candidates.sort((a,b) => Math.hypot(
+          Number(a.x_mm)-volume.x_mm,Number(a.y_mm)-volume.y_mm) -
+          Math.hypot(Number(b.x_mm)-volume.x_mm,Number(b.y_mm)-volume.y_mm));
+        if (!candidates.length) {
+          setError("Could not preserve free volumes: each remaining model already stores twelve. Move or remove volumes first.");
+          return;
+        }
+        candidates[0].modifier_volumes.push(volume);
+      }
+    }
+    // Removing a selected part must not leave a singleton assembly in the tree.
+    const assemblyCounts = new Map();
+    for (const member of remaining.flatMap(model => [model, ...model.modifier_volumes])) {
+      if (member.assembly_id) assemblyCounts.set(member.assembly_id, (assemblyCounts.get(member.assembly_id) || 0) + 1);
+    }
+    const clearSingleton = member => member.assembly_id && assemblyCounts.get(member.assembly_id) < 2
+      ? {...member, assembly_id: null} : member;
+    remaining = remaining.map(model => ({...clearSingleton(model), modifier_volumes: model.modifier_volumes.map(clearSingleton)}));
+    // Explicitly selected non-printing rows may be deleted alongside their
+    // last printable. All other free volumes remain persisted at plate level.
+    const removedVolumeIds = objects.flatMap(model => model.modifier_volumes || [])
+      .filter(volume => targets.has(volume.id)).map(volume => volume.id);
+    onChange(remaining,{removedVolumeIds});
+    onPrimaryChange?.(remaining.find(model =>
+      !String(model.asset_id).startsWith("local:"))?.asset_id || "");
+    onSelectedModifierChange?.(null);
     setSelected(remaining[0]?.instance_id || "");
+    setError("");
+  }
+
+  function removeSelected() {
+    if (!canEdit) return;
+    if (selection.length > 1) {
+      removePlateItems(selection);
+    } else if (chosenModifier) {
+      removePlateItems([chosenModifier.id]);
+    } else if (chosen) {
+      removePlateItems([chosen.instance_id]);
+    }
   }
 
   // Model shortcuts use an internal clipboard. Keep the OS text clipboard
@@ -634,14 +719,13 @@ export default function SlicerPlateEditor({
       if (document.getSelection()?.toString()) return;
       const mod=event.ctrlKey||event.metaKey;
       const key=event.key.toLowerCase();
+      if (chosenModifier) {
+        if (!mod && !event.altKey && (key==="delete"||key==="backspace")) {event.preventDefault();removeSelected();}
+        else if (mod && !event.altKey && ["c","x","v"].includes(key)) {event.preventDefault();if(key==="v") duplicateSelected();}
+        return;
+      }
       const selectedRows=objects.filter(item=>selection.includes(item.instance_id));
-      const removeRows=()=>{
-        const ids=new Set(selectedRows.map(item=>item.instance_id));
-        const remaining=objects.filter(item=>!ids.has(item.instance_id));
-        onChange(remaining);
-        onPrimaryChange?.(remaining.find(item=>!String(item.asset_id).startsWith("local:"))?.asset_id||"");
-        setSelected(remaining[0]?.instance_id||"");
-      };
+      const removeRows=()=>removePlateItems(selection);
       if (!mod && !event.altKey && (key==="delete"||key==="backspace") &&
           selectedRows.length) {
         event.preventDefault();removeRows();return;
@@ -671,6 +755,7 @@ export default function SlicerPlateEditor({
           if(model.assembly_id&&!assemblyMap.has(model.assembly_id))
             assemblyMap.set(model.assembly_id,"assembly:"+plateUuid());
           return {...model,instance_id:plateUuid(),
+            modifier_volumes: [],
             assembly_id:model.assembly_id?assemblyMap.get(model.assembly_id):null,
             scale_xyz_percent:Array.isArray(model.scale_xyz_percent)
               ?[...model.scale_xyz_percent]:model.scale_xyz_percent};
@@ -724,7 +809,7 @@ export default function SlicerPlateEditor({
     window.addEventListener("keydown",keydown);
     return ()=>window.removeEventListener("keydown",keydown);
   }, [canEdit,uploadBusy,solidDialog,splitPreview,selection,objects,onChange,
-      onPrimaryChange,bedX,bedY]);
+      onPrimaryChange,bedX,bedY,chosenModifier,onSelectedModifierChange]);
 
   function patch(field, value) {
     if (!chosen) return;
@@ -831,6 +916,7 @@ export default function SlicerPlateEditor({
     if (!solidRequest?.id || !canEdit) return;
     const item = objects.find(row => row.instance_id === (solidRequest.editTargetId||selected)) || objects[0];
     const editingText = solidRequest.kind==="text" && !!solidRequest.editTargetId;
+    const editingVolume = item?.modifier_volumes?.find(volume=>volume.id===solidRequest.editVolumeId);
     if(editingText && !item?.text_model) {
       setSolidError("This object was not created with the editable text tool.");
       return;
@@ -839,7 +925,7 @@ export default function SlicerPlateEditor({
     setSolidError("");
     setSolidPreview(null);
     setInsertionMode("translate");
-    if (!mesh && !["primitive","text","svg"].includes(solidRequest.kind)) {
+    if (!mesh && !["primitive","modifier","negative","text","svg"].includes(solidRequest.kind)) {
       setSolidError("Select a loaded STL model to edit.");
       return;
     }
@@ -852,20 +938,21 @@ export default function SlicerPlateEditor({
     setSolidOptions({
       wall: pretty(Math.max(0.4, Math.min(size.x,size.y,size.z)*0.08)),
       radius: pretty(Math.max(0.5,Math.min(size.x,size.y)/10)),
-      x_mm: ["primitive","text","svg"].includes(solidRequest.kind)&&!editingText?0:pretty(center.x),
-      y_mm: ["primitive","text","svg"].includes(solidRequest.kind)&&!editingText?0:pretty(center.y),
+      x_mm: editingVolume?.x_mm ?? (["primitive","text","svg"].includes(solidRequest.kind)&&!editingText?0:pretty(center.x)),
+      y_mm: editingVolume?.y_mm ?? (["primitive","text","svg"].includes(solidRequest.kind)&&!editingText?0:pretty(center.y)),
       cutHeight: pretty((box.min.z+box.max.z)/2), cutAxis: "z",
       keep: "both", booleanMode: "union",
       secondId: objects.find(row => row.instance_id!==item?.instance_id)?.instance_id || "",
       booleanIds: selectedInstanceIds.filter(id=>id!==item?.instance_id),
-      primitiveType:"box",
-      width:editingText ? item.text_model.width : 20,
-      depth:editingText ? item.text_model.depth : 20,
-      height:editingText ? item.text_model.height : 20,
-      z_mm:solidRequest.kind==="negative"?pretty(center.z):editingText?Number(item.z_mm||0):0,
-      rotation_x:editingText?Number(item.text_model.rotation_x||0):0,
-      rotation_y:editingText?Number(item.text_model.rotation_y||0):0,
-      rotation_z:editingText?Number(item.text_model.rotation_z||0):0,
+      primitiveType:editingVolume?.shape || solidRequest.shape || "box",
+      volume_scale_xyz_percent:[...(editingVolume?.scale_xyz_percent || [100,100,100])],
+      width:editingVolume?.width_mm ?? (editingText ? item.text_model.width : 20),
+      depth:editingVolume?.depth_mm ?? (editingText ? item.text_model.depth : 20),
+      height:editingVolume?.height_mm ?? (editingText ? item.text_model.height : 20),
+      z_mm:editingVolume?.z_mm ?? (["negative","modifier"].includes(solidRequest.kind)?pretty(center.z):editingText?Number(item.z_mm||0):0),
+      rotation_x:editingVolume?.rotation_xyz_deg?.[0] ?? (editingText?Number(item.text_model.rotation_x||0):0),
+      rotation_y:editingVolume?.rotation_xyz_deg?.[1] ?? (editingText?Number(item.text_model.rotation_y||0):0),
+      rotation_z:editingVolume?.rotation_xyz_deg?.[2] ?? (editingText?Number(item.text_model.rotation_z||0):0),
       text:editingText?item.text_model.text:"MakerVault",
       font:editingText?item.text_model.font||"block":"block",svgData:"",
       cavity_x_mm:0,cavity_y_mm:0,cavity_z_mm:0,
@@ -873,7 +960,8 @@ export default function SlicerPlateEditor({
       cavity_rotation_x:0,cavity_rotation_y:0,cavity_rotation_z:0,
     });
     setSolidDialog({kind:solidRequest.kind,id:item?.instance_id || null,
-      editTargetId:editingText?item.instance_id:null,anchorRect:solidRequest.anchorRect||null,name:
+      editTargetId:editingText?item.instance_id:null,
+      editVolumeId:solidRequest.editVolumeId||null,anchorRect:solidRequest.anchorRect||null,name:
       ["primitive","text","svg"].includes(solidRequest.kind) ? solidRequest.kind[0].toUpperCase()+solidRequest.kind.slice(1) :
       sourceFiles.find(file => String(file.id)===String(item?.asset_id))?.name || "Model"});
   }, [solidRequest?.id]);
@@ -941,21 +1029,27 @@ export default function SlicerPlateEditor({
   // Display the negative volume itself, not just the subtraction result.
   // Keep it interactive while the chosen model remains visible.
   useEffect(() => {
-    if(solidDialog?.kind!=="negative")return undefined;
+    if(!["negative","modifier"].includes(solidDialog?.kind))return undefined;
     const state=sceneRef.current;
     if(!state)return undefined;
     let ghost;
     try {
-      ghost=createPrimitiveMesh(solidOptions,[
-        Number(solidOptions.x_mm),Number(solidOptions.y_mm),
-        Number(solidOptions.z_mm)-Number(solidOptions.height)/2,
-      ]);
-      ghost.material.dispose();
-      ghost.material=new THREE.MeshBasicMaterial({
-        color:"#ed658d",transparent:true,opacity:0.28,
-        depthWrite:false,side:THREE.DoubleSide,
+      // Volume geometry is centred at local (0,0,0); XYZ rotations are mesh
+      // transforms, not baked bottom-aligned STL rotations. This matches the
+      // worker's native plate-space volumes and the saved editor coordinates.
+      const geometry=createPrimitiveGeometry(solidOptions);
+      const material=new THREE.MeshBasicMaterial({
+        color:solidDialog.kind==="negative"?"#fb7185":"#22d3ee",transparent:true,opacity:0.28,
+        depthTest:false,depthWrite:false,side:THREE.DoubleSide,
         clippingPlanes:[state.sectionPlane],
       });
+      ghost=new THREE.Mesh(geometry,material);
+      ghost.position.set(Number(solidOptions.x_mm),Number(solidOptions.y_mm),
+        Number(solidOptions.z_mm));
+      ghost.rotation.set(...["rotation_x","rotation_y","rotation_z"].map(key=>
+        THREE.MathUtils.degToRad(Number(solidOptions[key]||0))),"XYZ");
+      ghost.scale.set(...(solidOptions.volume_scale_xyz_percent || [100,100,100])
+        .map(value=>Number(value)/100));
       ghost.renderOrder=101;
       state.scene.add(ghost);negativeGhostRef.current=ghost;
     }catch { return undefined; }
@@ -1021,7 +1115,7 @@ export default function SlicerPlateEditor({
   // Drag the real-time primitive or negative-volume ghost without dismissing
   // its settings panel. The committed STL remains untouched until Apply.
   useEffect(() => {
-    if(!["primitive","negative","text","svg"].includes(solidDialog?.kind))
+    if(!["primitive","negative","modifier","text","svg"].includes(solidDialog?.kind))
       return undefined;
     const state=sceneRef.current, canvas=hostRef.current?.querySelector("canvas");
     if(!state||!canvas)return undefined;
@@ -1038,7 +1132,7 @@ export default function SlicerPlateEditor({
     const down=event=>{
       if(insertionGizmoRef.current) return;
       if(event.button!==0)return;
-      const ghost=solidDialog.kind==="negative"?negativeGhostRef.current:liveGhostRef.current;
+      const ghost=["negative","modifier"].includes(solidDialog.kind)?negativeGhostRef.current:liveGhostRef.current;
       if(!ghost)return;
       ray(event);
       if(!caster.intersectObject(ghost,false).length)return;
@@ -1075,7 +1169,7 @@ export default function SlicerPlateEditor({
     const wheel=event=>{
       if(insertionGizmoRef.current) return;
       if(!event.shiftKey)return;
-      const ghost=solidDialog.kind==="negative"?negativeGhostRef.current:liveGhostRef.current;
+      const ghost=["negative","modifier"].includes(solidDialog.kind)?negativeGhostRef.current:liveGhostRef.current;
       if(!ghost)return;
       ray(event);
       if(!caster.intersectObject(ghost,false).length)return;
@@ -1101,11 +1195,11 @@ export default function SlicerPlateEditor({
   // Independent insertion gizmo. Never attach the normal model control
   // to preview geometry: original objects and their transforms stay intact.
   useEffect(() => {
-    if(!["primitive","negative","text","svg","drill","cut","hollow"].includes(solidDialog?.kind))return undefined;
+    if(!["primitive","negative","modifier","text","svg","drill","cut","hollow"].includes(solidDialog?.kind))return undefined;
     const state=sceneRef.current;
     const canvas=hostRef.current?.querySelector("canvas");
     const ghost=["drill","cut","hollow"].includes(solidDialog.kind)?operationGhostRef.current:
-      solidDialog.kind==="negative"?negativeGhostRef.current:liveGhostRef.current;
+      ["negative","modifier"].includes(solidDialog.kind)?negativeGhostRef.current:liveGhostRef.current;
     if(!state||!canvas||!ghost)return undefined;
     const cavityTarget=solidDialog.kind==="hollow"?state.meshes.get(solidDialog.id):null;
     const cavityCentre=cavityTarget?new THREE.Box3().setFromObject(cavityTarget)
@@ -1152,18 +1246,28 @@ export default function SlicerPlateEditor({
         } else setSolidOptions(old=>({...old,x_mm:pretty(position.x),y_mm:pretty(position.y)}));
       } else if(insertionMode==="translate") {
         setSolidOptions(old=>({...old,x_mm:pretty(position.x),y_mm:pretty(position.y),
-          z_mm:pretty(position.z+(solidDialog.kind==="negative"?Number(old.height||0)/2:0))}));
+          z_mm:pretty(position.z)}));
       } else if(insertionMode==="scale") {
-        const toSize=(old,scale)=>Math.max(0.5,Math.min(500,
-          Math.round(Number(old||20)*Math.max(0.025,Math.abs(scale))*100)/100));
-        setSolidOptions(old=>({...old,width:toSize(old.width,ghost.scale.x),
-          depth:toSize(old.depth,ghost.scale.y),height:toSize(old.height,ghost.scale.z)}));
+        if (["modifier","negative"].includes(solidDialog.kind)) {
+          // Native regions have independent XYZ scale, distinct from their
+          // nominal width/depth/height. Store the absolute gizmo values to
+          // avoid multiplying a previously scaled region a second time.
+          setSolidOptions(old=>({...old,volume_scale_xyz_percent:
+            [ghost.scale.x,ghost.scale.y,ghost.scale.z]
+              .map(value=>pretty(Math.max(5,Math.min(400,Math.abs(value)*100))))}));
+        } else {
+          const toSize=(old,scale)=>Math.max(0.5,Math.min(500,
+            Math.round(Number(old||20)*Math.max(0.025,Math.abs(scale))*100)/100));
+          setSolidOptions(old=>({...old,width:toSize(old.width,ghost.scale.x),
+            depth:toSize(old.depth,ghost.scale.y),height:toSize(old.height,ghost.scale.z)}));
+        }
       } else if(insertionMode==="rotate") {
         const degrees=axis=>Math.round(THREE.MathUtils.radToDeg(axis)*10)/10;
+        const volume=["negative","modifier"].includes(solidDialog.kind);
         setSolidOptions(old=>({...old,
-          rotation_x:degrees(ghost.rotation.x)+Number(old.rotation_x||0),
-          rotation_y:degrees(ghost.rotation.y)+Number(old.rotation_y||0),
-          rotation_z:degrees(ghost.rotation.z)+Number(old.rotation_z||0)}));
+          rotation_x:degrees(ghost.rotation.x)+(volume?0:Number(old.rotation_x||0)),
+          rotation_y:degrees(ghost.rotation.y)+(volume?0:Number(old.rotation_y||0)),
+          rotation_z:degrees(ghost.rotation.z)+(volume?0:Number(old.rotation_z||0))}));
       }
     };
     gizmo.addEventListener("dragging-changed",draggingChanged);
@@ -1190,36 +1294,24 @@ export default function SlicerPlateEditor({
       const booleanIds=solidDialog.kind==="boolean" ?
         [...new Set(solidOptions.booleanIds || [])].filter(id=>id!==solidDialog.id) : [];
       const second=solidDialog.kind==="boolean" ? state?.meshes.get(booleanIds[0]) : null;
-      if (!target && !["primitive","text","svg"].includes(solidDialog.kind))
+      if (!target && !["primitive","modifier","negative","text","svg"].includes(solidDialog.kind))
         throw new Error("Selected model is not loaded.");
       if (solidDialog.kind==="boolean" && (!booleanIds.length ||
         booleanIds.some(id=>!state?.meshes.get(id))))
         throw new Error("Select at least one additional model to combine with the primary model.");
       let parts;
-      if (solidDialog.kind==="primitive") {
+      if (["primitive","modifier","negative"].includes(solidDialog.kind)) {
         parts=[createPrimitiveStl(solidOptions)];
       } else if (solidDialog.kind==="text") {
         parts=[createTextStl(solidOptions)];
       } else if (solidDialog.kind==="svg") {
         parts=[createSvgStl(solidOptions)];
-      } else if (solidDialog.kind==="negative") {
-        const tool=createPrimitiveMesh(solidOptions,[
-          Number(solidOptions.x_mm),Number(solidOptions.y_mm),
-          Number(solidOptions.z_mm)-Number(solidOptions.height)/2,
-        ]);
-        try {
-          const targetBounds=new THREE.Box3().setFromObject(target);
-          const toolBounds=new THREE.Box3().setFromObject(tool);
-          if (!targetBounds.intersectsBox(toolBounds))
-            throw new Error("Negative shape does not intersect the selected model. Drag the pink shape onto the model or adjust its X/Y/Z position.");
-          parts=executeSolidOperation("boolean",target,{booleanMode:"difference",allowOpenPreview:true},tool);
-        } finally {tool.geometry.dispose();tool.material.dispose();}
       } else if (solidDialog.kind==="boolean") {
         let working=target;
         const temporary=[];
         try {
           for(const id of booleanIds) {
-            parts=executeSolidOperation("boolean",working,{...solidOptions,allowOpenPreview:id===booleanIds.at(-1)},state.meshes.get(id));
+            parts=await executeSolidOperation("boolean",working,{...solidOptions,allowOpenPreview:id===booleanIds.at(-1)},state.meshes.get(id));
             const next=parts[0];
             const geometry=new STLLoader().parse(next.buffer);
             const mesh=new THREE.Mesh(geometry,new THREE.MeshBasicMaterial());
@@ -1231,7 +1323,7 @@ export default function SlicerPlateEditor({
           temporary.forEach(mesh=>{mesh.geometry.dispose();mesh.material.dispose();});
         }
       } else {
-        parts=executeSolidOperation(solidDialog.kind,target,{...solidOptions,allowOpenPreview:true},second);
+        parts=await executeSolidOperation(solidDialog.kind,target,{...solidOptions,allowOpenPreview:true},second);
       }
       if (["primitive","text","svg"].includes(solidDialog.kind))
         parts=parts.map(part=>({...part,
@@ -1249,6 +1341,46 @@ export default function SlicerPlateEditor({
   async function applySolid() {
     if (!solidDialog || !solidPreview || solidBusy || solidPreview.parts.some(part=>part.validationWarning)) return;
     const selectedObject=objects.find(row=>row.instance_id===solidDialog.id);
+    if (["modifier","negative"].includes(solidDialog.kind)) {
+      if (!selectedObject) {setSolidError("Select a printable model to associate with this volume.");return;}
+      const current = selectedObject.modifier_volumes || [];
+      if (!solidDialog.editVolumeId && (current.length>=12 ||
+          objects.reduce((total,row)=>total+(row.modifier_volumes||[]).length,0)>=48)) {
+        setSolidError("Native volume limit reached on this plate.");return;
+      }
+      const numbers=[solidOptions.width,solidOptions.depth,solidOptions.height,
+        solidOptions.x_mm,solidOptions.y_mm,solidOptions.z_mm,
+        solidOptions.rotation_x,solidOptions.rotation_y,solidOptions.rotation_z].map(Number);
+      const volumeScale=solidOptions.volume_scale_xyz_percent || [100,100,100];
+      if (!Array.isArray(volumeScale) || volumeScale.length!==3 ||
+          volumeScale.some(value=>!Number.isFinite(Number(value))||Number(value)<5||Number(value)>400) ||
+          numbers.some(n=>!Number.isFinite(n)) || numbers.slice(0,3).some(n=>n<0.5||n>500)
+          || numbers.slice(3,6).some(n=>Math.abs(n)>10000)
+          || numbers.slice(6,9).some(n=>Math.abs(n)>360)) {
+        setSolidError("Volume dimensions must be finite and 0.5–500 mm.");return;
+      }
+      const previous=current.find(v=>v.id===solidDialog.editVolumeId);
+      if (solidDialog.editVolumeId && !previous) {
+        setSolidError("Selected volume changed. Reopen its editor.");return;
+      }
+      const volume = {
+        id:previous?.id || plateUuid(), shape:solidOptions.primitiveType,
+        width_mm:pretty(numbers[0]),depth_mm:pretty(numbers[1]),height_mm:pretty(numbers[2]),
+        x_mm:pretty(numbers[3]),y_mm:pretty(numbers[4]),z_mm:pretty(numbers[5]),
+        coordinate_space:"world",rotation_xyz_deg:numbers.slice(6,9).map(pretty),
+        scale_xyz_percent:(solidOptions.volume_scale_xyz_percent || [100,100,100])
+          .map(value=>pretty(Number(value))),
+        kind:solidDialog.kind,assembly_id:previous?.assembly_id||null,
+        settings:solidDialog.kind==="negative"?{}:(previous?.settings||{sparse_infill_density:50}),
+      };
+      onChange(objects.map(row=>row.instance_id!==selectedObject.instance_id?row:{
+        ...row,modifier_volumes:solidDialog.editVolumeId
+          ? current.map(v=>v.id===solidDialog.editVolumeId?volume:v)
+          : [...current,volume],
+      }));
+      onSelectedModifierChange?.(volume.id,selectedObject.instance_id,false);
+      setSolidPreview(null);setSolidDialog(null);setError("");return;
+    }
     if (!selectedObject && !["primitive","text","svg"].includes(solidDialog.kind)) {
       setSolidError("Selection changed. Reopen the mesh operation.");return;
     }
@@ -1272,7 +1404,7 @@ export default function SlicerPlateEditor({
         (creating && !solidDialog.editTargetId) ||
         (row.instance_id!==solidDialog.id && !solidPreview.secondIds?.includes(row.instance_id)));
       const additions=created.map(({id,part},index)=>({
-        ...selectedObject,
+        ...(creating && !solidDialog.editTargetId ? {} : selectedObject),
         ...newPlateInstance(id,objects.length+index),
         ...(solidDialog.editTargetId ? {
           instance_id:solidDialog.editTargetId,color:selectedObject.color,
@@ -1385,6 +1517,7 @@ export default function SlicerPlateEditor({
     const remaining = objects.filter(item => item.instance_id !== splitPreview.id);
     const drafts = splitPreview.parts.map((part, i) => ({
       ...selectedObject, ...newPlateInstance("pending:" + i, objects.length + i),
+      modifier_volumes: i === 0 ? (selectedObject.modifier_volumes || []) : [],
       x_mm: pretty(part.x_mm), y_mm: pretty(part.y_mm),
       color: PALETTE[i % PALETTE.length],
     }));
@@ -1441,38 +1574,56 @@ export default function SlicerPlateEditor({
 
   function transformGroup(dx = 0, dy = 0, angle = 0, scalePercent = 100) {
     if (!canEdit || selection.length < 2) return;
-    const members = objects.filter(row => selection.includes(row.instance_id));
-    const others = objects.filter(row => !selection.includes(row.instance_id));
-    const centerX = members.reduce((sum, row) => sum + Number(row.x_mm), 0) / members.length;
-    const centerY = members.reduce((sum, row) => sum + Number(row.y_mm), 0) / members.length;
+    const models = objects.filter(row => selection.includes(row.instance_id));
+    const volumes = objects.flatMap(row => (row.modifier_volumes || [])
+      .filter(volume => selection.includes(volume.id)));
+    const members = [...models, ...volumes];
+    if (members.length < 2) return;
+    const centerX = members.reduce((sum, row) => sum + Number(row.x_mm || 0), 0) / members.length;
+    const centerY = members.reduce((sum, row) => sum + Number(row.y_mm || 0), 0) / members.length;
     const theta = THREE.MathUtils.degToRad(angle), cos = Math.cos(theta), sin = Math.sin(theta);
-    const scale = Number(scalePercent)/100;
-    if (!Number.isFinite(scale) || scale<0.05 || scale>4) {
-      setError("Assembly scale must be between 5% and 400%.");return;
+    const scale = Number(scalePercent) / 100;
+    if (!Number.isFinite(scale) || scale < 0.05 || scale > 4) {
+      setError("Assembly scale must be between 5% and 400%."); return;
     }
-    const moved = members.map(row => {
-      const x = row.x_mm - centerX, y = row.y_mm - centerY;
-      return {
-        ...row,
-        x_mm: pretty(centerX + (x * cos - y * sin)*scale + dx),
-        y_mm: pretty(centerY + (x * sin + y * cos)*scale + dy),
+    const movedModels = models.map(row => {
+      const x = Number(row.x_mm) - centerX, y = Number(row.y_mm) - centerY;
+      return {...row,
+        x_mm: pretty(centerX + (x*cos-y*sin)*scale + dx),
+        y_mm: pretty(centerY + (x*sin+y*cos)*scale + dy),
         scale_xyz_percent: (row.scale_xyz_percent || [row.scale_percent,row.scale_percent,row.scale_percent])
           .map(value => pretty(Number(value)*scale)),
-        rotation_deg: pretty(((Number(row.rotation_deg || 0) + angle + 180) % 360 + 360) % 360 - 180),
+        rotation_deg: pretty(((Number(row.rotation_deg||0)+angle+180)%360+360)%360-180),
       };
     });
-    const invalid = moved.some(item => {
+    const movedVolumes = volumes.map(volume => {
+      const x = Number(volume.x_mm)-centerX, y = Number(volume.y_mm)-centerY;
+      const scales = (volume.scale_xyz_percent || [100,100,100]).map(value=>pretty(Number(value)*scale));
+      const angles = [...(volume.rotation_xyz_deg || [0,0,0])];
+      angles[2] = pretty(angles[2] + angle);
+      return {...volume,
+        x_mm:pretty(centerX+(x*cos-y*sin)*scale+dx),
+        y_mm:pretty(centerY+(x*sin+y*cos)*scale+dy),
+        scale_xyz_percent:scales, rotation_xyz_deg:angles,
+      };
+    });
+    if (movedVolumes.some(volume => ![volume.x_mm,volume.y_mm,...volume.scale_xyz_percent]
+      .every(Number.isFinite) || volume.scale_xyz_percent.some(value=>value<5||value>400))) {
+      setError("Group transform exceeds supported volume position or scale.");return;
+    }
+    if (movedModels.some(item => {
       const d = dimensionsRef.current[item.instance_id];
       return !d || plateExtentWarning(item, d, bedX, bedY);
-    });
-    if (invalid) {
-      setError("Group transform would leave the build plate. No changes were applied.");
-      return;
+    })) {
+      setError("Group transform would leave the build plate. No changes were applied.");return;
     }
-    const byId = new Map(moved.map(row => [row.instance_id, row]));
-    onChange(objects.map(row => byId.get(row.instance_id) || row));
-    setGroupDeltaX(0); setGroupDeltaY(0); setGroupRotation(0); setGroupScale(100);
-    setError("");
+    const modelsById = new Map(movedModels.map(row=>[row.instance_id,row]));
+    const volumesById = new Map(movedVolumes.map(volume=>[volume.id,volume]));
+    onChange(objects.map(row => ({
+      ...(modelsById.get(row.instance_id)||row),
+      modifier_volumes:(row.modifier_volumes||[]).map(volume=>volumesById.get(volume.id)||volume),
+    })));
+    setGroupDeltaX(0);setGroupDeltaY(0);setGroupRotation(0);setGroupScale(100);setError("");
   }
 
   groupCommitRef.current = transformGroup;
@@ -2275,6 +2426,16 @@ export default function SlicerPlateEditor({
         }
       }
       const hits = raycaster.intersectObjects([...meshes.values()], false);
+      if (["select","move","rotate","scale"].includes(latestToolModeRef.current)) {
+        const modifierGhosts = [...meshes.values()].flatMap(mesh =>
+          (mesh.userData.modifierGhosts || []).filter(ghost => ghost.userData.isWorldModifier));
+        const candidate = raycaster.intersectObjects(modifierGhosts, false)[0];
+        if (candidate) {
+          modifierSelectionRef.current.onChange?.(candidate.object.userData.modifierId, candidate.object.userData.modifierParentId, event.ctrlKey || event.metaKey || event.shiftKey);
+          event.preventDefault();
+          return;
+        }
+      }
       if(latestToolModeRef.current==="variable_layers"){
         const hit=hits.find(row=>row.object.userData.instanceId===selectionRef.current[0]);
         if(hit){
@@ -2449,7 +2610,8 @@ export default function SlicerPlateEditor({
       if (selectionRef.current.length > 1) {
         if (!selectionRef.current.includes(id) ||
           !["select","move"].includes(latestToolModeRef.current)) return;
-        const members=latestObjectsRef.current.filter(row=>selectionRef.current.includes(row.instance_id));
+        const members=[...latestObjectsRef.current.filter(row=>selectionRef.current.includes(row.instance_id)),
+          ...latestObjectsRef.current.flatMap(row=>(row.modifier_volumes||[]).filter(volume=>selectionRef.current.includes(volume.id)))];
         dragging={
           groupIds:selectionRef.current.slice(),
           pointerId:event.pointerId,
@@ -2554,11 +2716,15 @@ export default function SlicerPlateEditor({
           ...row,x_mm:pretty(Number(row.x_mm)+dx),
           y_mm:pretty(Number(row.y_mm)+dy),
         }));
-        if (moved.some(row=>plateExtentWarning(row,
+        if(moved.some(row=>Math.abs(row.x_mm)>10000||Math.abs(row.y_mm)>10000))return;
+        if(moved.some(row=>row.instance_id && plateExtentWarning(row,
           dimensionsRef.current[row.instance_id],bedX,bedY))) return;
-        const byId=new Map(moved.map(row=>[row.instance_id,row]));
-        latestOnChangeRef.current(latestObjectsRef.current.map(row=>
-          byId.get(row.instance_id)||row));
+        const byId=new Map(moved.filter(row=>row.instance_id).map(row=>[row.instance_id,row]));
+        const byVolumeId=new Map(moved.filter(row=>row.id&&!row.instance_id).map(row=>[row.id,row]));
+        latestOnChangeRef.current(latestObjectsRef.current.map(row=>({
+          ...(byId.get(row.instance_id)||row),
+          modifier_volumes:(row.modifier_volumes||[]).map(volume=>byVolumeId.get(volume.id)||volume),
+        })));
         event.preventDefault();
         return;
       }
@@ -2679,6 +2845,41 @@ export default function SlicerPlateEditor({
       setLiveRotation(null);
       const mesh = transform.object;
       if (!mesh) return;
+      if (mesh.userData.isWorldModifier) {
+        const current = latestObjectsRef.current;
+        const owner = current.find(item =>
+          item.instance_id === mesh.userData.modifierParentId);
+        const original = owner?.modifier_volumes?.find(row =>
+          row.id === mesh.userData.modifierId && row.coordinate_space === "world");
+        if (!original) return;
+        const positions = [mesh.position.x, mesh.position.y, mesh.position.z];
+        const rotations = [mesh.rotation.x, mesh.rotation.y, mesh.rotation.z]
+          .map(v => pretty(THREE.MathUtils.radToDeg(v)));
+        const scales = [mesh.scale.x, mesh.scale.y, mesh.scale.z]
+          .map(v => pretty(v * 100));
+        if (positions.some(v => !Number.isFinite(v) || Math.abs(v) > 10000)
+            || rotations.some(v => !Number.isFinite(v) || Math.abs(v) > 360)
+            || scales.some(v => !Number.isFinite(v) || v < 5 || v > 400)) {
+          setError("Modifier position, rotation or scale exceeds the supported limits.");
+          mesh.position.set(original.x_mm, original.y_mm, original.z_mm);
+          mesh.rotation.set(...original.rotation_xyz_deg.map(v =>
+            THREE.MathUtils.degToRad(v)), "XYZ");
+          mesh.scale.set(...original.scale_xyz_percent.map(v => v / 100));
+          return;
+        }
+        const updated = {
+          ...original, x_mm: pretty(positions[0]), y_mm: pretty(positions[1]),
+          z_mm: pretty(positions[2]), rotation_xyz_deg: rotations,
+          scale_xyz_percent: scales,
+        };
+        setError("");
+        latestOnChangeRef.current(current.map(row =>
+          row.instance_id !== owner.instance_id ? row : {
+            ...row, modifier_volumes: row.modifier_volumes.map(modifier =>
+              modifier.id === original.id ? updated : modifier),
+          }));
+        return;
+      }
       if (mesh===groupProxy) {
         const pivot=groupProxy.userData.pivot || {x:0,y:0,z:0};
         const dx=pretty(groupProxy.position.x-pivot.x);
@@ -2849,6 +3050,7 @@ export default function SlicerPlateEditor({
       }
       scene.remove(measurementOverlay);
       for (const mesh of meshes.values()) {
+        syncModifierOverlays(mesh, {modifier_volumes: []}, sectionPlane);
         clearPaintRegionOverlay(mesh);
           clearSupportPaintPreview(mesh);
           clearSemanticPaintPreview(mesh,"seam");
@@ -2890,6 +3092,83 @@ export default function SlicerPlateEditor({
   }, [bedX, bedY, plate?.polygon_mm, plate?.bounds_mm, plateType, printerLabel,
     showNativeArtwork, showOrientationLabels, showMachineLabel, showDimensionsLabel, showAxisLabels, plate?.bed_model_url, plate?.artwork_url]);
 
+  // Modifier meshes are non-printing, independently selectable region overlays.
+  // World-space modifiers are scene siblings, never printable STL meshes.
+  function syncModifierOverlays(parent, item, plane) {
+    const previous = parent.userData.modifierGhosts || [];
+    for (const ghost of previous) {
+      ghost.parent?.remove(ghost);
+      ghost.geometry.dispose();
+      ghost.material.dispose();
+    }
+    const ghosts = [];
+    for (const modifier of (item.modifier_volumes || []).slice(0, 12)) {
+      const w = Number(modifier.width_mm), d = Number(modifier.depth_mm),
+        h = Number(modifier.height_mm);
+      if (![w,d,h].every(v => Number.isFinite(v) && v >= .5 && v <= 500)) continue;
+      let geometry;
+      switch (modifier.shape) {
+        case "box": geometry = new THREE.BoxGeometry(w, d, h); break;
+        case "cylinder":
+        case "disc":
+          geometry = new THREE.CylinderGeometry(w / 2, w / 2, h, 32);
+          geometry.rotateX(Math.PI / 2);
+          geometry.scale(1, d / w, 1); break;
+        case "cone":
+          geometry = new THREE.ConeGeometry(w / 2, h, 32);
+          geometry.rotateX(Math.PI / 2);
+          geometry.scale(1, d / w, 1); break;
+        case "sphere":
+          geometry = new THREE.SphereGeometry(1, 24, 16);
+          geometry.scale(w / 2, d / 2, h / 2); break;
+        case "torus":
+          // Match the native fixture: major radius .30, minor radius .20.
+          geometry = new THREE.TorusGeometry(.30, .20, 16, 32);
+          geometry.scale(w, d, h / .4); break;
+        default: continue;
+      }
+      const ghost = new THREE.Mesh(geometry, new THREE.MeshBasicMaterial({
+        color: modifier.kind === "negative" ? "#fb7185" : "#22d3ee", transparent: true, opacity: .28,
+        depthTest: false, depthWrite: false, side: THREE.FrontSide,
+        clippingPlanes: [plane],
+      }));
+      const pos = [modifier.x_mm, modifier.y_mm, modifier.z_mm].map(Number);
+      if (!pos.every(Number.isFinite)) {
+        geometry.dispose();
+        ghost.material.dispose();
+        continue;
+      }
+      ghost.position.set(...pos);
+      if (modifier.coordinate_space === "world") {
+        // A free modifier has its own plate-space pose and remains stationary
+        // when the associated printable mesh moves or rotates.
+        const angles = modifier.rotation_xyz_deg || [0, 0, 0];
+        const scales = modifier.scale_xyz_percent || [100, 100, 100];
+        ghost.rotation.set(...angles.map(v => THREE.MathUtils.degToRad(Number(v))), "XYZ");
+        ghost.scale.set(...scales.map(v => Number(v) / 100));
+        (parent.parent || sceneRef.current?.scene || parent).add(ghost);
+      } else {
+        // Existing drafts are interpreted in parent-local coordinates.
+        parent.add(ghost);
+      }
+      ghost.renderOrder = 18;
+      if (modifier.id === modifierSelectionRef.current.id) {
+        ghost.material.color.set(modifier.kind === "negative" ? "#fda4af" : "#67e8f9");
+        ghost.material.opacity = .42;
+      }
+      ghost.userData.isModifierVolume = true;
+      ghost.userData.modifierId = modifier.id;
+      ghost.userData.modifierParentId = item.instance_id;
+      ghost.userData.isWorldModifier = modifier.coordinate_space === "world";
+      // The ordinary model raycast only tests printable meshes; free
+      // modifiers have a separate explicit hit test for selecting their
+      // own controls. Legacy parent-local overlays remain decorative.
+      if (!ghost.userData.isWorldModifier) ghost.raycast = () => {};
+      ghosts.push(ghost);
+    }
+    parent.userData.modifierGhosts = ghosts;
+  }
+
   useEffect(() => {
     const state = sceneRef.current;
     if (!state) return undefined;
@@ -2903,6 +3182,7 @@ export default function SlicerPlateEditor({
           clearSupportPaintPreview(mesh);
           clearSemanticPaintPreview(mesh,"seam");
           clearSemanticPaintPreview(mesh,"fuzzy");
+      syncModifierOverlays(mesh, {modifier_volumes: []}, state.sectionPlane);
       state.scene.remove(mesh);
       mesh.geometry.dispose();
       mesh.material.dispose();
@@ -2949,8 +3229,9 @@ export default function SlicerPlateEditor({
           catch (error) {latestPaintErrorRef.current?.(error.message || "Invalid saved colour painting.");}
           state.meshes.set(item.instance_id, mesh);
           state.scene.add(mesh);
+          syncModifierOverlays(mesh, latest, state.sectionPlane);
           if (latestToolModeRef.current === "variable_layers") state.showVariableHeightGuide?.();
-          if (latestToolModeRef.current !== "select" && item.instance_id === selectedInstanceId &&
+          if (!modifierSelectionRef.current.id && latestToolModeRef.current !== "select" && item.instance_id === selectedInstanceId &&
               ["move", "scale"].includes(latestToolModeRef.current)) {
             state.transform.setMode(latestToolModeRef.current === "move" ? "translate" : "scale");
             state.transform.attach(mesh);
@@ -2987,21 +3268,42 @@ export default function SlicerPlateEditor({
       const mesh = state.meshes.get(item.instance_id);
       if (!mesh) continue;
       positionOrientedMesh(mesh, item);
+      if (state.transform.object?.userData?.isWorldModifier && mesh.userData.modifierGhosts?.includes(state.transform.object)) state.transform.detach();
+      syncModifierOverlays(mesh, item, state.sectionPlane);
       // Position-only changes must never alter the displayed filament colour.
       try {paintPreview(mesh, {...item,colour_paint:item.colour_paint}, PALETTE[0]);supportPaintPreview(mesh,toolMode==="paint_support"?item.support_paint:null);semanticPaintPreview(mesh,toolMode==="paint_seam"?item.seam_paint:null,"seam");semanticPaintPreview(mesh,toolMode==="paint_fuzzy"?item.fuzzy_skin_paint:null,"fuzzy");}
       catch (error) {latestPaintErrorRef.current?.(error.message || "Invalid saved colour painting.");}
       mesh.material.emissive.set(["paint_colour","paint_support","paint_seam","paint_fuzzy","variable_layers"].includes(toolMode) ? "#000000" : conflictIds.has(item.instance_id) ? "#e84a53" :
-        selection.includes(item.instance_id) ? "#168ab4" : "#000000");
+        !selectedModifierId && selection.includes(item.instance_id) ? "#168ab4" : "#000000");
       mesh.material.emissiveIntensity = ["paint_colour","paint_support","paint_seam","paint_fuzzy","variable_layers"].includes(toolMode) ? 0 : conflictIds.has(item.instance_id) ? 0.72 :
-        selection.includes(item.instance_id) ? 0.32 : 0;
+        !selectedModifierId && selection.includes(item.instance_id) ? 0.32 : 0;
     }
     const selectedMesh = state.meshes.get(selected);
-    state.setSelectionOutlines(["paint_colour","paint_support","paint_seam","paint_fuzzy","variable_layers"].includes(toolMode) ? [] : selection.map(id=>state.meshes.get(id)).filter(Boolean));
+    const activeModifier = selectedMesh?.userData.modifierGhosts?.find(ghost =>
+      ghost.userData.isWorldModifier && ghost.userData.modifierId === selectedModifierId);
+    state.setSelectionOutlines(["paint_colour","paint_support","paint_seam","paint_fuzzy","variable_layers"].includes(toolMode) ? [] : [
+      ...selection.map(id=>state.meshes.get(id)).filter(Boolean),
+      ...[...state.meshes.values()].flatMap(mesh=>(mesh.userData.modifierGhosts||[]).filter(ghost=>
+        selection.includes(ghost.userData.modifierId))),
+    ]);
     const singleEditable = canEdit && toolMode !== "paint_colour" && !solidDialog && selectedMesh && selection.length < 2;
     const groupEditable = canEdit && !solidDialog && selection.length > 1 &&
       ["move","rotate","scale"].includes(toolMode);
-    if (groupEditable) {
-      const members=objects.filter(item=>selection.includes(item.instance_id));
+    if (activeModifier && selection.length === 1 && canEdit && !solidDialog &&
+        ["move", "rotate", "scale"].includes(toolMode)) {
+      // Only the selected modifier is attached to the existing on-plate gizmo.
+      // Its owning printable model does not move or rotate.
+      state.rotationGizmo?.update(null);
+      state.transform.setMode(toolMode === "move" ? "translate" :
+        toolMode === "rotate" ? "rotate" : "scale");
+      state.transform.setSpace(toolMode === "rotate" || toolMode === "scale" ? "local" : "world");
+      state.transform.showX = true;
+      state.transform.showY = true;
+      state.transform.showZ = true;
+      state.transform.attach(activeModifier);
+    } else if (groupEditable) {
+      const members=[...objects.filter(item=>selection.includes(item.instance_id)),
+        ...objects.flatMap(row=>(row.modifier_volumes||[]).filter(modifier=>selection.includes(modifier.id)))];
       const centerX=members.reduce((sum,item)=>sum+Number(item.x_mm||0),0)/members.length;
       const centerY=members.reduce((sum,item)=>sum+Number(item.y_mm||0),0)/members.length;
       const pivot=state.groupProxy;
@@ -3033,7 +3335,7 @@ export default function SlicerPlateEditor({
         state.transform.detach();
       }
     }
-  }, [objects, selected, selectedInstanceIds, toolMode, canEdit, dimensions, issueKey, solidDialog]);
+  }, [objects, selected, selectedInstanceIds, selectedModifierId, toolMode, canEdit, dimensions, issueKey, solidDialog]);
 
   // Done on a paint or variable-layer panel must remove the *rendered* selection
   // as well as clearing React selection state. These helpers live in Three.js
@@ -3247,7 +3549,8 @@ export default function SlicerPlateEditor({
     const focus = new THREE.Vector3(0, 0, 0);
     let span = Math.max(80, Math.hypot(bedX, bedY) * 1.35);
     if (view === "selection") {
-      const target = meshes.get(selected || chosen?.instance_id);
+      const parent = meshes.get(selected || chosen?.instance_id);
+      const target = parent?.userData.modifierGhosts?.find(ghost=>ghost.userData.modifierId===selectedModifierId) || parent;
       if (target) {
         const box = new THREE.Box3().setFromObject(target);
         if (!box.isEmpty()) {
@@ -3444,7 +3747,44 @@ export default function SlicerPlateEditor({
         <button type="button" disabled={!canEdit || ![groupDeltaX, groupDeltaY, groupRotation, groupScale].every(Number.isFinite)}
           onClick={() => transformGroup(groupDeltaX, groupDeltaY, groupRotation, groupScale)}>Apply group transform</button>
       </aside>}
-      {selection.length <= 1 && ["move", "rotate", "scale"].includes(toolMode) && chosen && <aside
+      {chosenModifier && ["move","rotate","scale"].includes(toolMode) && <aside
+        className="slicerViewportMeasurement slicerViewportTransform slicerViewportToolDock"
+        aria-label="Independent modifier transform controls">
+        <div className="slicerViewportMeasurementHeader">
+          <strong>{chosenModifier.kind === "negative" ? "Negative volume" : "Parameter modifier"} · {toolMode === "move" ? "Move" : toolMode === "rotate" ? "Rotate" : "Scale"}</strong>
+          <button type="button" onClick={()=>onSelectedModifierChange?.(null)}>Select model</button>
+        </div>
+        <div className="slicerViewportMeasurementModel">
+          {chosenModifier.shape[0].toUpperCase()+chosenModifier.shape.slice(1)} {chosenModifier.kind === "negative" ? "negative volume" : "parameter modifier"}
+        </div>
+        <div className="slicerViewportTransformGrid">
+          {["X","Y","Z"].map((axis,index)=><label key={axis}>{axis} {toolMode === "move"?"(mm)":toolMode === "rotate"?"(°)":"(%)"}
+            <input type="number" step={toolMode === "scale"?5:0.5}
+              min={toolMode === "scale"?5:toolMode === "rotate"?-360:-10000}
+              max={toolMode === "scale"?400:toolMode === "rotate"?360:10000}
+              disabled={!canEdit}
+              value={toolMode === "move" ? chosenModifier[["x_mm","y_mm","z_mm"][index]] :
+                toolMode === "rotate" ? chosenModifier.rotation_xyz_deg[index] :
+                chosenModifier.scale_xyz_percent[index]}
+              onChange={event=>{
+                const value=Number(event.target.value);
+                const low=toolMode==="scale"?5:toolMode==="rotate"?-360:-10000;
+                const high=toolMode==="scale"?400:toolMode==="rotate"?360:10000;
+                if (!Number.isFinite(value)||value<low||value>high) return;
+                if (toolMode==="move")
+                  patchChosenModifier({[["x_mm","y_mm","z_mm"][index]]:value});
+                else {
+                  const key=toolMode==="rotate"?"rotation_xyz_deg":"scale_xyz_percent";
+                  const next=[...chosenModifier[key]];
+                  next[index]=value;
+                  patchChosenModifier({[key]:next});
+                }
+              }}/>
+          </label>)}
+        </div>
+        <small>These controls and the on-plate gizmo move only the modifier, not its associated printable model.</small>
+      </aside>}
+      {selection.length <= 1 && ["move", "rotate", "scale"].includes(toolMode) && chosen && !chosenModifier && <aside
         className="slicerViewportMeasurement slicerViewportTransform slicerViewportToolDock"
         aria-label={toolMode === "move" ? "On-plate position controls" : toolMode === "rotate" ? "On-plate rotation controls" : "On-plate scale controls"}>
         <div className="slicerViewportMeasurementHeader">
@@ -3471,7 +3811,7 @@ export default function SlicerPlateEditor({
                 }} /></label>)}
           </div>
           <button type="button" className="slicerTransformQuickAction" disabled={!canEdit}
-            onClick={() => applySelectedTransform({ x_mm: 0, y_mm: 0 },
+            onClick={() => chosenModifier ? patchChosenModifier({x_mm:0,y_mm:0}) : applySelectedTransform({ x_mm: 0, y_mm: 0 },
               "The model cannot be centred without leaving the bed or overlapping another model.")}>
             <SlicerUiIcon name="center" /> <span>Centre model</span>
           </button>
@@ -3629,7 +3969,9 @@ export default function SlicerPlateEditor({
           </div>
         </div>
       </aside>}
-      <div ref={setMobileMeshDock} className="slicerMobileGeometryDock"
+      <div ref={setMobileMeshDock}
+        className={"slicerMobileGeometryDock"+(solidDialog && ["primitive","text","svg","modifier","negative"].includes(solidDialog.kind)
+          ? " slicerMobileAddGeometryDock" : "")}
         aria-label="On-plate geometry inspector" />
     </div>
 
@@ -3768,7 +4110,7 @@ export default function SlicerPlateEditor({
         </select>
       </label>
       <button data-slicer-action="remove" type="button" disabled={!canEdit || !chosen} onClick={removeSelected}>Remove selected model</button>
-      <button data-slicer-action="duplicate" type="button" disabled={!canEdit || !chosen || objects.length >= MAX_OBJECTS} onClick={duplicateSelected}>Duplicate selected</button>
+      <button data-slicer-action="duplicate" type="button" disabled={!canEdit || !chosen || (!chosenModifier && objects.length >= MAX_OBJECTS)} onClick={duplicateSelected}>Duplicate selected</button>
     </div>}
 
     {measurementVisible && chosen && <section className="slicerPlateMeasurement" role="region"
@@ -3812,7 +4154,9 @@ export default function SlicerPlateEditor({
           role="dialog" aria-modal="false" style={solidInspectorCollapsed?{...solidPanelStyle,maxHeight:60}:solidPanelStyle} aria-label={solidDialog.kind+" model geometry"}>
           <header className="slicerAutoOrientModalHeader">
             <div><h3>{solidDialog.kind==="boolean"?"Mesh Boolean":
-              solidDialog.kind[0].toUpperCase()+solidDialog.kind.slice(1)} model</h3>
+              ["modifier","negative"].includes(solidDialog.kind)
+                 ? (solidDialog.kind==="modifier"?"Parameter modifier":"Negative volume")
+                 : solidDialog.kind[0].toUpperCase()+solidDialog.kind.slice(1)+" model"}</h3>
               </div>
             <button type="button" className="slicerSolidCollapseButton"
               onClick={()=>setSolidInspectorCollapsed(value=>!value)}
@@ -3822,8 +4166,8 @@ export default function SlicerPlateEditor({
             <button type="button" disabled={solidBusy} aria-label="Close mesh editor"
               onClick={()=>{setSolidPreview(null);setSolidDialog(null);}}>✕</button>
           </header>
-          {["primitive","negative","text","svg"].includes(solidDialog.kind) && <>
-            {["primitive","negative"].includes(solidDialog.kind) && <fieldset className="slicerPrimitivePicker">
+          {["primitive","negative","modifier","text","svg"].includes(solidDialog.kind) && <>
+            {["primitive","negative","modifier"].includes(solidDialog.kind) && <fieldset className="slicerPrimitivePicker">
               <legend>Shape</legend>
               <div className="slicerPrimitiveShapeGrid">
                 {PRIMITIVE_TYPES.map(type=><button key={type} type="button"
@@ -3868,28 +4212,32 @@ export default function SlicerPlateEditor({
                   value={solidOptions[field]} onChange={event=>
                     setSolidOptions(v=>({...v,[field]:event.target.value}))}/></label>)}
             </div>
-            {["primitive","negative","text","svg"].includes(solidDialog.kind) && <div className="slicerSolidGrid">
+            {["negative","modifier"].includes(solidDialog.kind) && <div className="slicerSolidGrid">
+              {(solidOptions.volume_scale_xyz_percent || [100,100,100]).map((value,index)=>
+                <label key={"volume-scale-"+index}>
+                  {"Scale "+["X","Y","Z"][index]+" (%)"}
+                  <input type="number" min="5" max="400" step="1" value={value}
+                    onChange={event=>setSolidOptions(old=>{
+                      const axes=[...(old.volume_scale_xyz_percent || [100,100,100])];
+                      axes[index]=event.target.value;
+                      return {...old,volume_scale_xyz_percent:axes};
+                    })}/>
+                </label>)}
+            </div>}
+            {["primitive","negative","modifier","text","svg"].includes(solidDialog.kind) && <div className="slicerSolidGrid">
               {["rotation_x","rotation_y","rotation_z"].map((field,index)=><label key={field}>
                 {["Rotate X","Rotate Y","Rotate Z"][index]} (°)
                 <input type="number" min="-360" max="360" step="1"
                   value={solidOptions[field]} onChange={event=>
                     setSolidOptions(v=>({...v,[field]:event.target.value}))}/></label>)}
             </div>}
-            {["primitive","text","svg"].includes(solidDialog.kind) && <div className="slicerSolidGrid">
+            {["primitive","modifier","negative","text","svg"].includes(solidDialog.kind) && <div className="slicerSolidGrid">
               {["x_mm","y_mm","z_mm"].map((field,index)=><label key={field}>
-                {["Centre X","Centre Y","Base Z"][index]} (mm)
+                {["Centre X","Centre Y","Centre Z"][index]} (mm)
                 <input type="number" step="0.5" value={solidOptions[field]}
                   onChange={event=>setSolidOptions(v=>({...v,[field]:event.target.value}))}/></label>)}
             </div>}
-            {solidDialog.kind==="negative" && <>
-              <div className="slicerSolidGrid">
-                {["x_mm","y_mm","z_mm"].map((field,index)=><label key={field}>
-                  {["X centre","Y centre","Z centre"][index]} (mm)
-                  <input type="number" step="0.5" value={solidOptions[field]}
-                    onChange={event=>setSolidOptions(v=>({...v,[field]:event.target.value}))}/></label>)}
-              </div>
 
-            </>}
           </>}
           {solidDialog.kind==="hollow" && <>
             <div className="slicerInsertionMode" role="group" aria-label="Hollow cavity handles">
@@ -4002,7 +4350,7 @@ export default function SlicerPlateEditor({
               {solidBusy?"Updating preview…":solidPreview?"Preview up to date":"Preview updates automatically"}
             </span>
             <button type="button" disabled={!solidPreview||solidBusy||solidPreview.parts.some(part=>part.validationWarning)} onClick={applySolid}>
-              {solidBusy?"Saving…":"Apply mesh edit"}</button>
+              {solidBusy?"Saving…":["modifier","negative"].includes(solidDialog.kind)?(solidDialog.editVolumeId?"Save ":"Add ")+(solidDialog.kind==="negative"?"negative volume":"modifier"):"Apply mesh edit"}</button>
           </footer>
         </section>
       </div>,meshInspectorHost

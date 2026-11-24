@@ -60,7 +60,7 @@ const GROUPS = [["Quality", "quality"], ["Strength", "strength"], ["Speed", "spe
   ["Supports", "supports"], ["Multifilament", "multifilament"], ["Others", "others"]];
 
 export default function SlicerPrepareWorkspace({
-  objects, onChange, files, plate, plateType = "default", plateLabel = "Plate 1",
+  objects, onChange, plateVolumes = [], onRemovePlateVolumes, files, plate, plateType = "default", plateLabel = "Plate 1",
   plates = [], activePlateId = "plate-1", onChoosePlate, onAddPlate, onRemovePlate, onMoveModelsToPlate,
   primeTower = null, onPrimeTowerChange,
   onPlateLabelChange, onPrimaryChange, onFilesUploaded,
@@ -73,6 +73,7 @@ export default function SlicerPrepareWorkspace({
   processProfiles = [], onSelectProcessProfile, onResetProcessSettings,
   printerDetails, nozzleMm, selectedPlateType = "Native / profile default",
   localAssets = [], onLocalAssetsChange, onPlateIssuesChange, plateIssues = null,
+  validationRefreshKey = 0,
 }) {
   const editorRef = useRef(null);
   const [sceneHeight, setSceneHeight] = useState(0);
@@ -81,13 +82,15 @@ export default function SlicerPrepareWorkspace({
   const redoRef = useRef([]);
   const [, setHistoryVersion] = useState(0);
   const [selectedId, setSelectedId] = useState("");
+  const [selectedModifierId, setSelectedModifierId] = useState(null);
   const [selectedIds, setSelectedIds] = useState([]);
   const [selectionClearVersion, setSelectionClearVersion] = useState(0);
   const [expandedAssemblies, setExpandedAssemblies] = useState([]);
+  const [assemblySelectionOpen, setAssemblySelectionOpen] = useState(false);
   const [movePlateTarget,setMovePlateTarget]=useState("");
   const [sliceMenuOpen,setSliceMenuOpen]=useState(false);
   const [showAllPlates,setShowAllPlates]=useState(false);
-  const selectSingle = id => { setSelectedId(id); setSelectedIds(id ? [id] : []); };
+  const selectSingle = id => { setSelectedId(id); setSelectedIds(id ? [id] : []); setSelectedModifierId(null); };
   const finishPainting = () => {
     setToolMode("select");
     setPaintError("");
@@ -98,11 +101,26 @@ export default function SlicerPrepareWorkspace({
     setSelectionClearVersion(version => version + 1);
   };
   const selectMultiple = (id, additive = false, partOnly = false) => {
+    const volumeOwner = objects.find(row => (row.modifier_volumes || []).some(volume => volume.id === id));
+    if (volumeOwner) {
+      const volume=volumeOwner.modifier_volumes.find(row=>row.id===id);
+      if (volume.assembly_id && !partOnly) {
+        const members=allPlateRows.filter(row=>row.assembly_id===volume.assembly_id).map(row=>row.instance_id);
+        setSelectedIds(current=>additive
+          ? members.every(value=>current.includes(value))?current.filter(value=>!members.includes(value))
+            : [...new Set([...current,...members])]
+          : members);
+        setSelectedId(volumeOwner.instance_id);
+        setSelectedModifierId(additive && members.every(value => selectedIds.includes(value)) ? null : id);
+      } else selectModifier(volumeOwner.instance_id, id, additive);
+      return;
+    }
+    setSelectedModifierId(null);
     const item = objects.find(row => row.instance_id === id);
     if (!item) return;
     if (!additive) {
       const ids = item.assembly_id && !partOnly
-        ? objects.filter(row => row.assembly_id === item.assembly_id).map(row => row.instance_id)
+        ? allPlateRows.filter(row => row.assembly_id === item.assembly_id).map(row => row.instance_id)
         : [id];
       setSelectedIds(ids);
       setSelectedId(id);
@@ -111,7 +129,7 @@ export default function SlicerPrepareWorkspace({
     // The assembly header selects a group; its expanded tree children can
     // be selected independently for per-part positioning and settings.
     const memberIds = item.assembly_id && !partOnly
-      ? objects.filter(row => row.assembly_id === item.assembly_id).map(row => row.instance_id)
+      ? allPlateRows.filter(row => row.assembly_id === item.assembly_id).map(row => row.instance_id)
       : [id];
     setSelectedIds(current => {
       const allSelected = memberIds.every(value => current.includes(value));
@@ -146,6 +164,7 @@ export default function SlicerPrepareWorkspace({
   const [solidRequest, setSolidRequest] = useState(null);
   const [autoOrientMenuOpen, setAutoOrientMenuOpen] = useState(false);
   const [addModelMenuOpen, setAddModelMenuOpen] = useState(false);
+  const [modifierShapeMenuOpen, setModifierShapeMenuOpen] = useState(false);
   const [toolDescriptor, setToolDescriptor] = useState("");
   const [toolPopupStyle, setToolPopupStyle] = useState(null);
   const [autoOrientGoal, setAutoOrientGoal] = useState("balanced");
@@ -206,6 +225,40 @@ export default function SlicerPrepareWorkspace({
     return () => { live = false; };
   }, [engine, selectedProfiles?.process_id]);
   const selectedObject = objects.find(row => row.instance_id === selectedId) || null;
+  // Native modifier region drafts are child metadata, not printable plate objects.
+  // A separate real-binary acceptance gate controls when execution may use them.
+  const selectedModifiers = selectedObject?.modifier_volumes || [];
+  const activeModifier = selectedModifiers.find(row => row.id === selectedModifierId) || null;
+  const selectModifier = (parentId, modifierId, additive = false) => {
+    if (!modifierId) { setSelectedModifierId(null); return; }
+    const parent = latest.current.find(row => row.instance_id === parentId);
+    if (!parent?.modifier_volumes?.some(row => row.id === modifierId)) return;
+    setSelectedId(parentId);
+    setSelectedIds(current => additive
+      ? (current.includes(modifierId) ? current.filter(id => id !== modifierId) : [...current, modifierId])
+      : [modifierId]);
+    // Ctrl-clicking an already-selected free volume must deselect its active
+    // transform target too; otherwise the ghost gizmo remains attached to a
+    // row no longer present in the selection.
+    setSelectedModifierId(additive && selectedIds.includes(modifierId) ? null : modifierId);
+    setScope("objects");
+    setMeasurementVisible(false);
+    setToolMode(current => ["move","rotate","scale"].includes(current) ? current : "move");
+  };
+  useEffect(() => {
+    if (selectedModifierId && !activeModifier) setSelectedModifierId(null);
+  }, [selectedModifierId, activeModifier]);
+  // Count canonical free volumes, including those temporarily detached from a
+  // printable editor host, plus unchanged legacy model-local regions.
+  const totalModifierCount = plateVolumes.length + objects.reduce((sum, item) =>
+    sum + (item.modifier_volumes || []).filter(v => v.coordinate_space !== "world").length, 0);
+  const changeModifier = (id, patch) => {
+    if (!selectedObject) return;
+    updatePlate(latest.current.map(item => item.instance_id !== selectedObject.instance_id ? item : {
+      ...item, modifier_volumes: (item.modifier_volumes || []).map(row =>
+        row.id === id ? {...row, ...patch} : row),
+    }));
+  };
   const objectOverrides = selectedObject?.process_overrides || {};
   const editingObject = scope === "objects";
   const editingOverrides = editingObject ? objectOverrides : processOverrides;
@@ -600,19 +653,19 @@ export default function SlicerPrepareWorkspace({
   }, [refreshPrinterMaterials]);
   useEffect(()=>{
     undoRef.current=[];redoRef.current=[];
-    setSelectedId("");setSelectedIds([]);setSolidRequest(null);setMovePlateTarget("");
+    setSelectedId("");setSelectedIds([]);setSelectedModifierId(null);setSolidRequest(null);setMovePlateTarget("");
     setToolMode("select");setPaintError("");setMeasurementVisible(false);
     setSplitRequest(0);setHistoryVersion(version=>version+1);
   },[activePlateId]);
   latest.current = objects;
 
-  const updatePlate = useCallback(next => {
+  const updatePlate = useCallback((next, options = {}) => {
     const old = latest.current;
     if (JSON.stringify(next) === JSON.stringify(old)) return;
     undoRef.current = [...undoRef.current.slice(-49), old.map(row => ({ ...row }))];
     redoRef.current = [];
     latest.current = next;
-    onChange(next);
+    onChange(next, options);
     if (next[0]?.asset_id !== old[0]?.asset_id) onPrimaryChange?.(next[0]?.asset_id || "");
     setHistoryVersion(value => value + 1);
   }, [onChange, onPrimaryChange]);
@@ -655,50 +708,97 @@ export default function SlicerPrepareWorkspace({
     return () => window.removeEventListener("keydown", listener);
   }, [undo, redo]);
 
-  const validSelection = selectedIds.filter(id => objects.some(row => row.instance_id === id));
+  const visibleVolumeIds = new Set(objects.flatMap(row => (row.modifier_volumes || []).map(v => v.id)));
+  const detachedVolumes = plateVolumes.filter(v => !visibleVolumeIds.has(v.id));
+  const allPlateRows = [...objects.flatMap(row => [row, ...(row.modifier_volumes || []).map(volume => ({
+    ...volume, instance_id: volume.id, owner_instance_id: row.instance_id,
+    isPlateVolume: true,
+  }))]), ...detachedVolumes.map(volume => ({...volume, instance_id: volume.id,
+    owner_instance_id: null, isPlateVolume: true, detached: true}))];
+  const validSelection = selectedIds.filter(id => allPlateRows.some(row => row.instance_id === id));
+  // Touch/keyboard-accessible alternative to Ctrl-click. Select exact
+  // plate parts (even members of an already assembled group) without
+  // toggling the entire assembly through the scene's group selection logic.
+  // Detached canonical volumes cannot be assembled until a model can host
+  // their editor representation; retain them in the list but disable them.
+  const chooseAssemblyPart = (id, checked) => {
+    const row = allPlateRows.find(item => item.instance_id === id);
+    if (!row || row.detached || !canEdit || busy) return;
+    const next = checked
+      ? [...new Set([...validSelection, id])]
+      : validSelection.filter(item => item !== id);
+    setSelectedIds(next);
+    const focus = allPlateRows.find(item => item.instance_id === next.at(-1));
+    setSelectedId(focus?.isPlateVolume ? focus.owner_instance_id || "" : focus?.instance_id || "");
+    setSelectedModifierId(focus?.isPlateVolume ? focus.id : null);
+    setScope("objects");
+    setMeasurementVisible(false);
+  };
   const selectedModels = objects.filter(row => validSelection.includes(row.instance_id));
+  const selectedRows = allPlateRows.filter(row => validSelection.includes(row.instance_id));
   // Assemblies display as contiguous logical groups regardless of the
   // underlying object order. Individual parts retain their instance IDs
   // and remain independently editable inside the expanded group.
   const modelTreeRows=(()=>{
     const visited=new Set(),result=[];
-    for(const row of objects) {
+    for(const row of allPlateRows) {
       if(!row.assembly_id){result.push(row);continue;}
       if(visited.has(row.assembly_id))continue;
       visited.add(row.assembly_id);
-      result.push(...objects.filter(item=>item.assembly_id===row.assembly_id));
+      result.push(...allPlateRows.filter(item=>item.assembly_id===row.assembly_id));
     }
     return result;
   })();
-  const activeAssembly = selectedModels.length > 0 && selectedModels.every(row =>
-    row.assembly_id && row.assembly_id === selectedModels[0].assembly_id)
-    ? selectedModels[0].assembly_id : "";
+  const activeAssembly = selectedRows.length > 0 && selectedRows.every(row =>
+    row.assembly_id && row.assembly_id === selectedRows[0].assembly_id)
+    ? selectedRows[0].assembly_id : "";
   function assembleSelected() {
-    if (!canEdit || busy || selectedModels.length < 2) return;
+    if (!canEdit || busy || selectedRows.length < 2) return;
     // Logical groups preserve original STL sources and object settings.
     const id = "assembly:" + (typeof crypto !== "undefined" && crypto.randomUUID
       ? crypto.randomUUID() : Math.random().toString(36).slice(2));
-    updatePlate(objects.map(row => validSelection.includes(row.instance_id)
-      ? { ...row, assembly_id: id } : row));
-    setExpandedAssemblies(current => current.filter(value => value !== id));
+    const grouped = objects.map(row => ({
+      ...row,
+      assembly_id: validSelection.includes(row.instance_id) ? id : row.assembly_id,
+      modifier_volumes: (row.modifier_volumes || []).map(volume => validSelection.includes(volume.id)
+        ? {...volume, assembly_id: id} : volume),
+    }));
+    const counts = new Map();
+    grouped.flatMap(row => [row, ...row.modifier_volumes]).forEach(row => {
+      if (row.assembly_id) counts.set(row.assembly_id, (counts.get(row.assembly_id) || 0) + 1);
+    });
+    const normalize = row => row.assembly_id && counts.get(row.assembly_id) < 2
+      ? {...row, assembly_id: null} : row;
+    updatePlate(grouped.map(row => ({...normalize(row), modifier_volumes: row.modifier_volumes.map(normalize)})));
+    setExpandedAssemblies(current => [...current.filter(value=>value!==id),id]);
   }
   function disassembleSelected() {
     if (!canEdit || busy || !activeAssembly) return;
-    updatePlate(objects.map(row => row.assembly_id === activeAssembly
-      ? { ...row, assembly_id: null } : row));
+    updatePlate(objects.map(row => ({
+      ...row,
+      assembly_id: row.assembly_id === activeAssembly ? null : row.assembly_id,
+      modifier_volumes: (row.modifier_volumes || []).map(volume => volume.assembly_id === activeAssembly
+        ? {...volume, assembly_id: null} : volume),
+    })));
     setExpandedAssemblies(current=>current.filter(id=>id!==activeAssembly));
   }
-  const removableAssemblyMembers=selectedModels.filter(row=>row.assembly_id);
+  const removableAssemblyMembers=selectedRows.filter(row=>row.assembly_id);
   function removeSelectedFromAssembly(){
     if(!canEdit||busy||!removableAssemblyMembers.length)return;
     const ids=new Set(removableAssemblyMembers.map(row=>row.instance_id));
-    const remaining=objects.map(row=>ids.has(row.instance_id)
-      ?{...row,assembly_id:null}:row);
+    const remaining=objects.map(row=>({
+      ...row, assembly_id: ids.has(row.instance_id) ? null : row.assembly_id,
+      modifier_volumes: (row.modifier_volumes || []).map(volume => ids.has(volume.id)
+        ? {...volume,assembly_id:null} : volume),
+    }));
     const counts=new Map();
-    remaining.forEach(row=>{if(row.assembly_id)
+    remaining.flatMap(row=>[row,...(row.modifier_volumes||[])]).forEach(row=>{if(row.assembly_id)
       counts.set(row.assembly_id,(counts.get(row.assembly_id)||0)+1);});
-    updatePlate(remaining.map(row=>row.assembly_id&&counts.get(row.assembly_id)<2
-      ?{...row,assembly_id:null}:row));
+    updatePlate(remaining.map(row=>({
+      ...row, assembly_id: row.assembly_id && counts.get(row.assembly_id)<2 ? null : row.assembly_id,
+      modifier_volumes: (row.modifier_volumes||[]).map(volume => volume.assembly_id && counts.get(volume.assembly_id)<2
+        ? {...volume,assembly_id:null} : volume),
+    })));
     setExpandedAssemblies(current=>current.filter(id=>counts.get(id)>=2));
     setSelectedIds([]);setSelectedId("");
   }
@@ -713,6 +813,7 @@ export default function SlicerPrepareWorkspace({
     return rect ? {left:rect.left,right:rect.right,top:rect.top,bottom:rect.bottom} : null;
   };
   function selectTool(tool, event) {
+    if (activeModifier && !["import","add_plate","duplicate","remove","center","focus","x_mm","rotation_deg","scale_percent"].includes(tool.target)) return;
     const feature = NATIVE_TOOL_FEATURES[tool.target];
     if (feature && !["draft_only","test_only","verified"].includes(engineCapabilities[feature]?.status)) return;
     // Keep each menu inside the bordered toolbar, even when icons wrap.
@@ -744,9 +845,11 @@ export default function SlicerPrepareWorkspace({
     if (tool.target === "import") {
       setAutoOrientMenuOpen(false);
       setAddModelMenuOpen(open => !open);
+      setModifierShapeMenuOpen(false);
       return;
     }
     setAddModelMenuOpen(false);
+    setModifierShapeMenuOpen(false);
     if (["paint_colour","paint_support","paint_seam","paint_fuzzy"].includes(tool.target)) {
       if (!selectedId && objects[0]?.instance_id) selectSingle(objects[0].instance_id);
       setMeasurementVisible(false);setAutoOrientMenuOpen(false);
@@ -1096,7 +1199,7 @@ export default function SlicerPrepareWorkspace({
         {editingObject && <div className="slicerObjectSettingsInfo">
           <label htmlFor="slicer-object-settings-instance">Selected object</label>
           <select id="slicer-object-settings-instance" value={selectedObject?.instance_id || ""}
-            onChange={event => setSelectedId(event.target.value)}>
+            onChange={event => selectSingle(event.target.value)}>
             {!selectedObject && <option value="">Select a model</option>}
             {objects.map(item => <option key={item.instance_id} value={item.instance_id}>
               {itemName(item)}
@@ -1105,6 +1208,37 @@ export default function SlicerPrepareWorkspace({
           <small>Object overrides inherit Global values unless changed.
             Wall loops and sparse infill density have passed native Orca 2.4.2 slicing tests.
             Other Object settings can be saved in drafts but remain unavailable for slicing until verified.</small>
+
+          <div className="slicerModifierDrafts" aria-label="Regional volume settings">
+            <strong>Regional slicing settings</strong>
+            <small>Use Add model to insert a volume, and Edit volume in the object tree to change its shape, move, scale or rotate. Negative volumes have no regional process overrides. {totalModifierCount}/48 non-printing volumes on this plate.</small>
+            {selectedModifiers.filter(modifier=>modifier.kind!=="negative").map((modifier,index) =>
+              activeModifier && activeModifier.id !== modifier.id ? null :
+              <fieldset key={modifier.id} style={{display:"grid",gap:6,border:"1px solid #53647a",borderRadius:6,padding:8}}>
+                <legend>Parameter modifier {index+1}</legend>
+                <label>Regional infill (%)
+                  <input type="number" min="0" max="100" step="1" disabled={!canEdit||busy}
+                    value={modifier.settings?.sparse_infill_density ?? 50}
+                    onChange={e=>{const value=Number(e.target.value);if(Number.isFinite(value)&&value>=0&&value<=100)
+                      changeModifier(modifier.id,{settings:{...modifier.settings,sparse_infill_density:value}});}} />
+                </label>
+                <label>Regional wall loops (blank = inherit)
+                  <input type="number" min="0" max="20" step="1" disabled={!canEdit||busy}
+                    value={modifier.settings?.wall_loops ?? ""}
+                    onChange={e=>{
+                      const raw=e.target.value;
+                      const settings={...modifier.settings};
+                      if(raw==="") delete settings.wall_loops;
+                      else {
+                        const value=Number(raw);
+                        if(!Number.isInteger(value)||value<0||value>20) return;
+                        settings.wall_loops=value;
+                      }
+                      changeModifier(modifier.id,{settings});
+                    }} />
+                </label>
+              </fieldset>)}
+          </div>
         </div>}
         <section aria-label={group + " native process controls"} className="slicerNativeSettingsFields">
             {nativeProcessLoading && <p role="status">Reading native process settings…</p>}
@@ -1518,9 +1652,24 @@ export default function SlicerPrepareWorkspace({
             setAddModelMenuOpen(false);setMobilePane("plate");
             setSolidRequest({kind:"svg",id:Date.now(),anchorRect:toolbarAnchor(event)});
           }}><SlicerUiIcon name="shape-svg" /> Add SVG</button>
-          <button type="button" className="slicerAddModelChoice" disabled={!objects.length} onClick={event => {
-            setAddModelMenuOpen(false);setMobilePane("plate");
-            setSolidRequest({kind:"negative",id:Date.now(),anchorRect:toolbarAnchor(event)});
+          <button type="button" className="slicerAddModelChoice"
+            aria-expanded={modifierShapeMenuOpen} aria-controls="slicer-add-modifier-shapes"
+            disabled={!objects.length||!canEdit||busy||totalModifierCount>=48||
+              (selectedObject?.modifier_volumes||objects[0]?.modifier_volumes||[]).length>=12}
+            onClick={()=>setModifierShapeMenuOpen(open=>!open)}>
+            <SlicerUiIcon name="models" /> Add parameter modifier
+          </button>
+          {modifierShapeMenuOpen && <div id="slicer-add-modifier-shapes"
+            role="group" aria-label="Choose parameter modifier primitive"
+            style={{display:"grid",gridTemplateColumns:"repeat(2,minmax(0,1fr))",gap:5,padding:"4px 8px"}}>
+            {["box","cylinder","sphere","cone","disc","torus"].map(shape=>
+              <button key={shape} type="button" className="slicerAddModelChoice"
+                onClick={()=>{setSolidRequest({kind:"modifier",shape,id:Date.now()});setModifierShapeMenuOpen(false);setAddModelMenuOpen(false);setMobilePane("plate");}}>
+                {shape[0].toUpperCase()+shape.slice(1)}
+              </button>)}
+          </div>}
+          <button type="button" className="slicerAddModelChoice" disabled={!objects.length||!canEdit||busy} onClick={() => {
+            setSolidRequest({kind:"negative",id:Date.now()});setAddModelMenuOpen(false);setMobilePane("plate");
           }}><SlicerUiIcon name="cut" /> Add negative volume</button>
         </div>
   );
@@ -1574,6 +1723,7 @@ export default function SlicerPrepareWorkspace({
           aria-expanded={tool.target === "import" ? addModelMenuOpen : tool.target === "auto_orient" ? autoOrientMenuOpen : undefined}
           aria-controls={tool.target === "import" ? "slicer-add-model-toolbar-options" : tool.target === "auto_orient" ? "slicer-auto-orient-toolbar-options" : undefined}
           disabled={!!tool.pending || !canEdit || busy ||
+            (activeModifier && !["import","add_plate","duplicate","remove","center","focus","x_mm","rotation_deg","scale_percent"].includes(tool.target)) ||
             (NATIVE_TOOL_FEATURES[tool.target] && !["draft_only","test_only","verified"].includes(
               engineCapabilities[NATIVE_TOOL_FEATURES[tool.target]]?.status)) ||
             (tool.target==="add_plate" && plates.length>=8) ||
@@ -1672,17 +1822,48 @@ export default function SlicerPrepareWorkspace({
           </button>
         </section>
         <aside className="slicerPrepareTree" aria-label="Build plate object tree">
-        <h4>{plateLabel || "Plate 1"} · Models ({objects.length})</h4>
-        {objects.length === 0 && <p>Add an STL to start editing.</p>}
-        {objects.length > 0 && <div className="slicerAssemblyActions">
+        <h4>{plateLabel || "Plate 1"} · Objects ({allPlateRows.length})</h4>
+        {objects.length === 0 && <p>Add an STL to start editing. Any saved independent volumes remain on this plate.</p>}
+        {allPlateRows.length > 0 && <div className="slicerAssemblyActions">
           <div>
-            <button type="button" disabled={!canEdit || busy || selectedModels.length < 2}
+            <button type="button" disabled={!canEdit || busy || selectedRows.length < 2}
               onClick={assembleSelected}>Assemble selection</button>
             <button type="button" disabled={!canEdit || busy || !activeAssembly}
               onClick={disassembleSelected}>Disassemble</button>
             <button type="button" disabled={!canEdit||busy||!removableAssemblyMembers.length}
               onClick={removeSelectedFromAssembly}>Remove selected from assembly</button>
           </div>
+          <button type="button" className="slicerAssemblySelectionToggle"
+            aria-expanded={assemblySelectionOpen} aria-controls="slicer-assembly-selection"
+            onClick={() => setAssemblySelectionOpen(current => !current)}>
+            {assemblySelectionOpen ? "Hide model selection" : "Select models"}
+            {validSelection.length > 0 ? " (" + validSelection.length + " selected)" : ""}
+          </button>
+          {assemblySelectionOpen && <div id="slicer-assembly-selection"
+            className="slicerAssemblySelectionList" role="group"
+            aria-label="Select models and volumes for assembly">
+            <p>Tick the models and volumes to assemble. Ctrl-click also works on desktop.</p>
+            {modelTreeRows.map((row, index) =>
+              <label key={row.instance_id} className={"slicerAssemblySelectionRow"+(row.detached?" unavailable":"")}>
+                <input type="checkbox" checked={validSelection.includes(row.instance_id)}
+                  disabled={!canEdit || busy || !!row.detached}
+                  onChange={event => chooseAssemblyPart(row.instance_id, event.target.checked)} />
+                <span>{row.isPlateVolume
+                  ? (row.shape?.[0]?.toUpperCase() || "") + (row.shape?.slice(1) || "") + " " +
+                    (row.kind === "negative" ? "negative volume" : "parameter modifier")
+                  : (objects.findIndex(item => item.instance_id === row.instance_id) + 1) + ". " + itemName(row)}
+                  {row.assembly_id && <small>Assembly member</small>}
+                  {row.detached && <small>Add a printable model before assembling this volume.</small>}
+                </span>
+              </label>)}
+            <div className="slicerAssemblySelectionFooter">
+              <span role="status">{validSelection.length} selected</span>
+              <button type="button" disabled={!validSelection.length}
+                onClick={() => {setSelectedIds([]);setSelectedId("");setSelectedModifierId(null);}}>
+                Clear selection
+              </button>
+            </div>
+          </div>}
         </div>}
         {selectedModels.length>0 && plates.length>1 && <div className="slicerMoveToPlate">
           <label>Move {selectedModels.length} selected to plate
@@ -1701,9 +1882,46 @@ export default function SlicerPrepareWorkspace({
         </div>}
         {modelTreeRows.map((object, index) => {
           const assembly = object.assembly_id;
-          const members = assembly ? objects.filter(row=>row.assembly_id===assembly) : [];
+          const members = assembly ? modelTreeRows.filter(row=>row.assembly_id===assembly) : [];
           const firstMember = assembly && members[0]?.instance_id===object.instance_id;
           const expanded = assembly && expandedAssemblies.includes(assembly);
+          if (object.detached) return <div key={object.instance_id} className="slicerPrepareModelEntry">
+            <span className="slicerPrepareModelName">{object.shape} {object.kind==="negative"?"negative volume":"parameter modifier"} · saved independently</span>
+            <button type="button" disabled={!canEdit || busy}
+              onClick={()=>onRemovePlateVolumes?.([object.id])}>Remove volume</button>
+            <small>Add a printable model to this plate to edit its volume.</small>
+          </div>;
+          if (object.isPlateVolume) return <React.Fragment key={object.instance_id}>
+            {firstMember && <div className="slicerAssemblyTreeHeader">
+              <button type="button" className={members.every(row=>validSelection.includes(row.instance_id))?"selected":""}
+                onClick={event=>selectMultiple(object.instance_id,event.ctrlKey||event.metaKey||event.shiftKey)}>
+                <SlicerUiIcon name="models"/> Assembly · {members.length} parts
+              </button>
+              <button type="button" aria-expanded={!!expanded}
+                onClick={()=>setExpandedAssemblies(current=>expanded?current.filter(id=>id!==assembly):[...current,assembly])}>
+                {expanded?"−":"+"}
+              </button>
+            </div>}
+            {(!assembly || expanded) && <div className={"slicerPrepareModelEntry"+(assembly?" slicerAssemblyTreePart":"")}>
+              <button type="button" className={validSelection.includes(object.id)?"selected":""}
+                aria-pressed={validSelection.includes(object.id)}
+                onClick={event=>selectModifier(object.owner_instance_id,object.id,event.ctrlKey||event.metaKey||event.shiftKey)}>
+                <span aria-hidden="true" style={{color:object.kind==="negative"?"#fb7185":"#22d3ee"}}>
+                  <SlicerUiIcon name="models" size={20}/>
+                </span>
+                <span className="slicerPrepareModelName">{object.shape[0].toUpperCase()+object.shape.slice(1)} {object.kind==="negative"?"negative volume":"parameter modifier"}</span>
+              </button>
+              <button type="button" className="slicerModelEditText"
+                disabled={!canEdit || busy} aria-label={"Edit "+object.shape+" "+(object.kind==="negative"?"negative volume":"parameter modifier")}
+                onClick={()=>{
+                  selectModifier(object.owner_instance_id, object.id);
+                  setMobilePane("plate");
+                  setSolidRequest({kind:object.kind==="negative"?"negative":"modifier",
+                    editTargetId:object.owner_instance_id,editVolumeId:object.id,
+                    id:Date.now()+Math.random()});
+                }}>Edit volume</button>
+            </div>}
+          </React.Fragment>;
           return <React.Fragment key={object.instance_id}>
           {firstMember && <div className="slicerAssemblyTreeHeader">
             <button type="button" className={members.every(row=>validSelection.includes(row.instance_id))?"selected":""}
@@ -1741,7 +1959,7 @@ export default function SlicerPrepareWorkspace({
                   style={{ background: object.color, color: materialTextColor(object.color) }}
                   title={liveSlot ? (rawMaterial || "Unknown material") : "Model preview colour"}
                   aria-hidden="true">{material}</span>
-                <span className="slicerPrepareModelName">{index + 1}. {itemName(object)}</span>
+                <span className="slicerPrepareModelName">{objects.findIndex(row=>row.instance_id===object.instance_id) + 1}. {itemName(object)}</span>
                 {mapping && <span className={"slicerPrepareSlotBadge"+(samePrinter && liveSlot ? "" : " stale")}
                   title={status} aria-hidden="true">{slotNumber ?? "?"}</span>}
                 <span className="sr-only">{status}</span>
@@ -1759,7 +1977,7 @@ export default function SlicerPrepareWorkspace({
             disabled={!canEdit || busy || (!liveMaterials.length && !object.material_slot)}
             aria-expanded={filamentPickerId === object.instance_id}
             onClick={() => {
-              setSelectedId(object.instance_id);
+              selectSingle(object.instance_id);
               setFilamentPickerId(current => current === object.instance_id ? "" : object.instance_id);
               setFilamentNotice("");
             }}>Change filament</button>
@@ -1777,6 +1995,7 @@ export default function SlicerPrepareWorkspace({
               onClick={() => clearModelFilament(object.instance_id)}>Clear intended slot</button>}
           </div>}
         </div>}
+
         </React.Fragment>})}
         {filamentNotice && <p className="slicerModelFilamentNotice" role="status">{filamentNotice}</p>}
         </aside>
@@ -2025,7 +2244,7 @@ export default function SlicerPrepareWorkspace({
             })}
           </div>
         </section> : <SlicerPlateEditor key={activePlateId} plateIndex={Math.max(0,plates.findIndex(item=>item.id===activePlateId))} plateCount={plates.length||1} toolbar={modelToolbar} paintControls={variableLayerPanel || paintPanel} files={files} localAssets={localAssets}
-          onLocalAssetsChange={onLocalAssetsChange} onPlateIssuesChange={onPlateIssuesChange} objects={objects} onChange={updatePlate}
+          onLocalAssetsChange={onLocalAssetsChange} onPlateIssuesChange={onPlateIssuesChange} validationRefreshKey={validationRefreshKey} objects={objects} onChange={updatePlate}
           primeTower={primeTower} onPrimeTowerChange={onPrimeTowerChange}
           primeTowerEnabled={["orcaslicer","crealityprint"].includes(activeEngine) &&
             requiredMultiSlots.length>1 &&
@@ -2067,6 +2286,7 @@ export default function SlicerPrepareWorkspace({
           autoOrientGoal={autoOrientGoal} autoOrientRequest={autoOrientRequest}
           splitRequest={splitRequest} solidRequest={solidRequest}
           selectedInstanceIds={validSelection} selectionClearVersion={selectionClearVersion} onSelectModel={selectMultiple}
+          selectedModifierId={activeModifier?.id || null} onSelectedModifierChange={(id,parentId,additive=false) => id ? selectModifier(parentId || selectedId, id, additive) : setSelectedModifierId(null)}
           onSelectedInstanceChange={selectSingle} measurementVisible={measurementVisible}
           measureMode={measureMode} measureUnit={measureUnit} measureSnapMode={measureSnapMode}
           measureClearVersion={measureClearVersion}

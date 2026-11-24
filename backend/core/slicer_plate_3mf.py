@@ -171,7 +171,7 @@ def _bake_native_instance_transform(obj, transform):
 
 
 def build_plate_3mf(objects_with_stl, *, bed_width, bed_depth, native_tool_indices=None,
-                    native_colour_tools=None):
+                    native_colour_tools=None, allow_modifier_fixture=False):
     """Render [(validated_plate_item_dict, owned_STL_bytes)] as one core 3MF.
 
     Preview coordinates are centred around the bed. Shift all instances by the
@@ -179,6 +179,12 @@ def build_plate_3mf(objects_with_stl, *, bed_width, bed_depth, native_tool_indic
     """
     if not isinstance(objects_with_stl, list) or not 1 <= len(objects_with_stl) <= 200:
         raise SlicerProfileError("A plate needs one to 200 STL models.")
+    if (not allow_modifier_fixture and any(
+            isinstance(item, dict) and item.get("modifier_volumes")
+            for item, _raw in objects_with_stl)):
+        raise SlicerProfileError(
+            "Native modifier volumes need verified engine-specific export; "
+            "regular 3MF export cannot discard them.")
     # Native tool indices are zero-based at the routing boundary, but Orca's
     # per-object extruder metadata is one-based. Never infer these from slot
     # positions: the caller must supply verified native palette assignments.
@@ -208,6 +214,7 @@ def build_plate_3mf(objects_with_stl, *, bed_width, bed_depth, native_tool_indic
     bake_native_positions = native_tool_indices is not None or any(
         isinstance(entry, tuple) and len(entry) == 2 and
         isinstance(entry[0], dict) and (
+            bool(entry[0].get("modifier_volumes")) or
             bool(entry[0].get("process_overrides")) or
             bool((entry[0].get("variable_layer_profile") or {}).get("bands")) or
             bool((entry[0].get("support_paint") or {}).get("regions")) or

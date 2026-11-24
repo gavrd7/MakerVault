@@ -32,6 +32,139 @@ class BambuRunnerContractTests(TestCase):
             (self.root / (part + ".json")).write_text(
                 json.dumps({"type": part, "name": "Fixture " + part}))
 
+    def test_single_nozzle_dual_variant_is_resolved_only_with_explicit_type(self):
+        from slicer_worker.bambu_runner import _select_single_nozzle_cli_variant
+        for volume, expected in (
+            ("Standard", "Direct Drive Standard"),
+            (["High Flow"], "Direct Drive High Flow"),
+        ):
+            with self.subTest(volume=volume):
+                machine = self.root / "printer.json"
+                machine.write_text(json.dumps({
+                    "type": "machine", "name": "BBL single-nozzle fixture",
+                    "nozzle_diameter": ["0.4"],
+                    "nozzle_volume_type": volume,
+                    "extruder_variant_list":
+                        ["Direct Drive Standard,Direct Drive High Flow"],
+                    "printer_extruder_variant":
+                        ["Direct Drive Standard,Direct Drive High Flow"],
+                    "machine_start_gcode": "G28",
+                }))
+                self.assertTrue(_select_single_nozzle_cli_variant(machine))
+                updated = json.loads(machine.read_text())
+                self.assertEqual(updated["extruder_variant_list"], [expected])
+                self.assertEqual(updated["printer_extruder_variant"], [expected])
+                self.assertEqual(updated["nozzle_diameter"], ["0.4"])
+                self.assertEqual(updated["machine_start_gcode"], "G28")
+
+    def test_ambiguous_or_multi_nozzle_variant_is_never_changed(self):
+        from slicer_worker.bambu_runner import _select_single_nozzle_cli_variant
+        base = {
+            "type": "machine", "name": "BBL fixture",
+            "nozzle_diameter": ["0.4"],
+            "extruder_variant_list": [
+                "Direct Drive Standard,Direct Drive High Flow"],
+            "printer_extruder_variant": [
+                "Direct Drive Standard,Direct Drive High Flow"],
+        }
+        for changes in (
+            {},
+            {"nozzle_volume_type": "Other"},
+            {"nozzle_diameter": ["0.4", "0.4"], "nozzle_volume_type": "Standard"},
+            {"extruder_variant_list": ["Unknown,Atypical"], "nozzle_volume_type": "Standard"},
+            {"printer_extruder_variant": ["Unknown"], "nozzle_volume_type": "Standard"},
+        ):
+            with self.subTest(changes=changes):
+                machine = self.root / "printer.json"
+                profile = {**base, **changes}
+                original = json.dumps(profile)
+                machine.write_text(original)
+                if not changes:
+                    with self.assertLogs("slicer_worker.bambu_runner", level="WARNING"):
+                        self.assertFalse(_select_single_nozzle_cli_variant(machine))
+                else:
+                    self.assertFalse(_select_single_nozzle_cli_variant(machine))
+                self.assertEqual(machine.read_text(), original)
+
+    def test_bambu_command_normalises_scratch_only_without_changing_other_profiles(self):
+        machine = self.root / "printer.json"
+        machine.write_text(json.dumps({
+            "type": "machine", "name": "BBL single-nozzle fixture",
+            "nozzle_diameter": ["0.4"], "nozzle_volume_type": "Standard",
+            "extruder_variant_list": ["Direct Drive Standard,Direct Drive High Flow"],
+            "printer_extruder_variant": ["Direct Drive Standard,Direct Drive High Flow"],
+        }))
+        original_filament = (self.root / "filament.json").read_bytes()
+        original_process = (self.root / "process.json").read_bytes()
+        args = bambu_command(self.binary, self.root)
+        self.assertIn("--load-settings", args)
+        self.assertEqual(
+            json.loads(machine.read_text())["printer_extruder_variant"],
+            ["Direct Drive Standard"])
+        self.assertEqual((self.root / "filament.json").read_bytes(), original_filament)
+        self.assertEqual((self.root / "process.json").read_bytes(), original_process)
+
+    def test_bambu_runtime_xdg_directories_are_private_and_scratch_only(self):
+        from slicer_worker.bambu_runner import _bambu_headless_environment
+        env = _bambu_headless_environment(self.root)
+        for key in ("XDG_CONFIG_HOME", "XDG_CACHE_HOME", "XDG_DATA_HOME", "XDG_RUNTIME_DIR"):
+            directory = Path(env[key])
+            self.assertEqual(directory.parent, self.root)
+            self.assertTrue(directory.is_dir())
+            self.assertEqual(directory.stat().st_mode & 0o777, 0o700)
+        self.assertEqual(env["HOME"], str(self.root))
+        self.assertEqual(env["TMPDIR"], str(self.root))
+        self.assertNotIn("HTTP_PROXY", env)
+
+    def test_verified_modifier_shift_requires_same_native_part_roles(self):
+        from xml.etree import ElementTree as ET
+        from slicer_worker.bambu_runner import verified_bambu_modifier_shift
+        from slicer_worker.tests.test_modifier_3mf_validation import composite_fixture
+
+        original = composite_fixture(negative=True)
+        with zipfile.ZipFile(io.BytesIO(original)) as archive:
+            members = {name: archive.read(name) for name in archive.namelist()}
+
+        def output(*, transform="1 0 0 0 1 0 0 0 1 18 18 0", subtype=None):
+            packed = dict(members)
+            ns = "{http://schemas.microsoft.com/3dmanufacturing/core/2015/02}"
+            root = ET.fromstring(packed["3D/3dmodel.model"])
+            root.find(ns + "build/" + ns + "item").set("transform", transform)
+            packed["3D/3dmodel.model"] = ET.tostring(root)
+            if subtype:
+                settings = ET.fromstring(packed["Metadata/model_settings.config"])
+                settings.find("./object/part[@subtype='negative_part']").set("subtype", subtype)
+                packed["Metadata/model_settings.config"] = ET.tostring(settings)
+            target = self.root / "bambu-sliced.3mf"
+            with zipfile.ZipFile(target, "w") as archive:
+                for name, data in packed.items():
+                    archive.writestr(name, data)
+            return target
+
+        self.assertEqual(
+            verified_bambu_modifier_shift(original, output()), (18.0, 18.0))
+        with self.assertRaisesRegex(WorkerError, "changed modifier part identities"):
+            verified_bambu_modifier_shift(original, output(subtype="modifier_part"))
+        with self.assertRaisesRegex(WorkerError, "orientation"):
+            verified_bambu_modifier_shift(
+                original, output(transform="0 -1 0 1 0 0 0 0 1 18 18 0"))
+        with self.assertRaisesRegex(WorkerError, "orientation"):
+            verified_bambu_modifier_shift(
+                original, output(transform="1 0 0 0 1 0 0 0 1 18 18 2"))
+
+    def test_bambu_filesystem_abort_diagnostics_never_relay_paths(self):
+        from slicer_worker.bambu_runner import _filesystem_error_details
+        self.assertEqual(_filesystem_error_details(
+            b"boost::filesystem::filesystem_error: Permission denied: "
+            b"/opt/engine-store/versions/bambustudio/private-data"),
+            ("permission", "engine-store"))
+        self.assertEqual(_filesystem_error_details(
+            b"filesystem_error: No such file or directory: "
+            b"/tmp/makervault-slice-private-secret/file"),
+            ("missing-path", "worker-scratch"))
+        self.assertEqual(_filesystem_error_details(b"filesystem_error"),
+                         ("unknown", "unknown"))
+
     def test_documented_flags_are_fixed_and_paths_are_sandbox_local(self):
         argv = bambu_command(self.binary, self.root)
         self.assertIn("--load-settings", argv)
@@ -209,8 +342,8 @@ class BambuRunnerContractTests(TestCase):
             result = run_bambu(self.binary, self.root)
         self.assertEqual(result["status"], "completed")
         self.assertEqual(result["bytes"], len(b"; test\\nG28\\n"))
-        self.assertEqual(popen.call_args.kwargs["stdout"], __import__("subprocess").DEVNULL)
-        self.assertEqual(popen.call_args.kwargs["stderr"], __import__("subprocess").DEVNULL)
+        self.assertTrue(hasattr(popen.call_args.kwargs["stdout"], "fileno"))
+        self.assertEqual(popen.call_args.kwargs["stderr"], __import__("subprocess").STDOUT)
         self.assertTrue(popen.call_args.kwargs["start_new_session"])
         env = popen.call_args.kwargs["env"]
         self.assertEqual(env["QT_QPA_PLATFORM"], "offscreen")
@@ -229,6 +362,35 @@ class BambuRunnerContractTests(TestCase):
             with self.subTest(timeout=timeout):
                 with self.assertRaisesRegex(WorkerError, "timeout"):
                     run_bambu(self.binary, self.root, timeout_seconds=timeout)
+
+    def test_sigabrt_reports_only_whitelisted_exception_type(self):
+        process = MagicMock()
+        process.returncode = -6
+        with patch("slicer_worker.bambu_runner.subprocess.Popen",
+                   return_value=process) as popen:
+            def emit(**kwargs):
+                popen.call_args.kwargs["stdout"].write(
+                    b"terminate called after throwing an instance of "
+                    b"'std::filesystem::filesystem_error'\\n"
+                    b"what(): /private/sensitive-model-location\\n")
+            process.communicate.side_effect = emit
+            with self.assertLogs("slicer_worker.bambu_runner", level="WARNING") as logs:
+                with self.assertRaisesRegex(WorkerError, "SIGABRT"):
+                    run_bambu(self.binary, self.root)
+        messages = "\\n".join(logs.output)
+        self.assertIn("exception type: filesystem-error", messages)
+        self.assertIn("SIGABRT classified: uncaught-exception", messages)
+        self.assertNotIn("sensitive-model-location", messages)
+
+    def test_sigabrt_reports_only_safe_exception_type(self):
+        process = MagicMock()
+        process.returncode = -6
+        with patch("slicer_worker.bambu_runner.subprocess.Popen", return_value=process):
+            with self.assertLogs("slicer_worker.bambu_runner", level="WARNING") as logs:
+                with self.assertRaisesRegex(WorkerError, "SIGABRT"):
+                    run_bambu(self.binary, self.root)
+        self.assertTrue(any("SIGABRT classified: unclassified" in row for row in logs.output))
+        self.assertFalse(any("exception type: unknown" in row for row in logs.output))
 
     def test_bambu_runner_uses_standard_worker_admission(self):
         from slicer_worker.engine_registry import SUPPORTED

@@ -32,6 +32,8 @@ from .slicer_paint_assets import expand_painted_settings
 from .slicer_process_settings import apply_process_overrides
 from .slicer_profiles import SlicerProfileError
 from .slicer_plate_3mf import build_plate_3mf, build_compound_plate_3mf
+from .slicer_modifier_volumes import (validate_native_modifier_execution,
+                                      assert_native_plate_volume_coverage)
 from .slicer_plate_validation import validate_plate_collisions, PlateCollisionError
 from .slicer_worker_client import SlicerWorkerError, health, run_remote_job
 
@@ -245,7 +247,7 @@ def _plate_builder(objects_with_stl):
     Admission still rejects per-object jobs until real-binary proof exists.
     """
     return (build_plate_3mf if any(
-        isinstance(item, dict) and (bool(item.get("process_overrides")) or
+        isinstance(item, dict) and (bool(item.get("modifier_volumes")) or bool(item.get("process_overrides")) or
             bool((item.get("variable_layer_profile") or {}).get("bands")) or
             bool((item.get("support_paint") or {}).get("regions")) or
             bool((item.get("seam_paint") or {}).get("regions")) or
@@ -281,6 +283,12 @@ def _validate_plate_execution(job):
             "disabled for offline multi-material test G-code."
         )
     objects=settings.get("plate_objects")
+    try:
+        native_modifier_request = validate_native_modifier_execution(
+            objects, engine=job.engine, version=getattr(job, "engine_version", None),
+            settings=settings)
+    except ValueError as exc:
+        raise SlicerExecutionError(str(exc)) from exc
     project=settings.get("plates")
     if project is not None:
         active=next((plate for plate in project
@@ -288,7 +296,25 @@ def _validate_plate_execution(job):
         if not active or not active.get("objects"):
             raise SlicerExecutionError(
                 "The active build plate is empty. Choose a populated plate before slicing.")
-        if objects!=active["objects"]:
+        if "volumes" in active:
+            # Canonical project records intentionally separate free regions
+            # from printable objects. Check that the active model-local runtime
+            # adapter represents the same printable sources and local regions;
+            # assert_native_plate_volume_coverage above checks every world
+            # region before any native CLI may run.
+            stripped = []
+            for row in objects or []:
+                parts = [v for v in row.get("modifier_volumes", [])
+                         if v.get("coordinate_space") != "world"]
+                plain = {k: v for k, v in row.items() if k != "modifier_volumes"}
+                if parts:
+                    plain["modifier_volumes"] = parts
+                stripped.append(plain)
+            if (stripped != active["objects"] or
+                    settings.get("plate_volumes") != active["volumes"]):
+                raise SlicerExecutionError(
+                    "The active build plate and independent regions do not match the saved project.")
+        elif objects!=active["objects"]:
             raise SlicerExecutionError(
                 "The active build plate does not match the saved slicing model list.")
     if not objects:
@@ -471,7 +497,9 @@ def _validate_plate_execution(job):
     if job.engine == "crealityprint":
         # Creality receives the same validated STL/3MF geometry route, but
         # Orca-only per-object modifiers must not be silently discarded.
-        if any(isinstance(item, dict) and item.get("process_overrides") for item in objects):
+        if (not native_modifier_request and
+                any(isinstance(item, dict) and item.get("process_overrides")
+                    for item in objects)):
             raise SlicerExecutionError(
                 "Per-object process overrides are not yet supported by Creality Print.")
         if settings.get("process_overrides"):
@@ -614,7 +642,7 @@ def _single_unmodified_stl(plate):
     if not isinstance(plate, list) or len(plate) != 1 or not isinstance(plate[0], dict):
         return False
     item = plate[0]
-    if (item.get("process_overrides") or (item.get("variable_layer_profile") or {}).get("bands")
+    if (item.get("modifier_volumes") or item.get("process_overrides") or (item.get("variable_layer_profile") or {}).get("bands")
             or (item.get("support_paint") or {}).get("regions")
             or (item.get("seam_paint") or {}).get("regions")
             or (item.get("fuzzy_skin_paint") or {}).get("regions")):
@@ -666,6 +694,14 @@ def process_queued_job(job_id):
         material_result = None
         is_multi_test = (job.settings or {}).get("multi_material_test") is True
         plate = (job.settings or {}).get("plate_objects")
+        stage = "verifying independent modifier and negative-volume coverage"
+        try:
+            assert_native_plate_volume_coverage(plate, job.settings or {})
+        except ValueError as exc:
+            raise SlicerExecutionError(str(exc)) from exc
+        stage = "reading the source STL"
+        has_native_modifiers = bool(plate and any(
+            item.get("modifier_volumes") for item in plate if isinstance(item, dict)))
         if plate:
             # Every source remains owner-scoped and verified at execution time;
             # arbitrary file paths and external 3MF projects are never accepted.
@@ -680,7 +716,19 @@ def process_queued_job(job_id):
                 if asset.sha256 and hashlib.sha256(raw).hexdigest() != asset.sha256:
                     raise SlicerExecutionError("A plate STL has changed since import.")
                 source_models.append((item, raw))
-            if is_multi_test:
+            if has_native_modifiers:
+                if is_multi_test:
+                    raise SlicerExecutionError(
+                        "Native modifier and multi-material combinations require separate real-binary acceptance.")
+                stage = "assembling non-printing native modifier components"
+                from .slicer_modifier_3mf import export_modifier_3mf_fixture
+                width, depth = trusted_plate_dimensions(job.printer_profile)
+                # Every parent source is already owner-scoped and SHA-checked
+                # above. Do not load an arbitrary 3MF from the browser.
+                model = export_modifier_3mf_fixture(
+                    source_models, bed_width=width, bed_depth=depth)
+                model_format = "3mf"
+            elif is_multi_test:
                 stage = "preparing the native multi-filament test plate"
                 if job.engine == "crealityprint":
                     width, depth = trusted_plate_dimensions(job.printer_profile)
@@ -908,6 +956,18 @@ def process_queued_job(job_id):
             profiles[1] = apply_creality_plate(
                 profiles[2], material_result["filament_profiles"][0],
                 job.plate, job.printer_profile)[1]
+        if has_native_modifiers and job.engine == "crealityprint":
+            # Preserve the proven native 7.3.1 external-component project
+            # structure without ever treating modifier meshes as printables.
+            stage = "wrapping bounded modifier geometry in a Creality project"
+            from .slicer_creality_modifier_project import (
+                build_creality_modifier_native_project,
+            )
+            width, depth = trusted_plate_dimensions(job.printer_profile)
+            model = build_creality_modifier_native_project(
+                model, printer=profiles[0], filament=profiles[1],
+                process=profiles[2], version=job.engine_version,
+                bed_width=width, bed_depth=depth, label=job.pk)
         selected_creality_multicolor = False
         if material_result is not None and job.engine == "crealityprint":
             stage = "building self-contained Creality native 3MF project"
@@ -962,6 +1022,7 @@ def process_queued_job(job_id):
                                if material_result is not None else None),
             creality_native_project=(material_result is not None and
                                      job.engine == "crealityprint"),
+            native_modifier_project=has_native_modifiers,
         )
         if material_result is not None:
             stage = "auditing multi-material tool selections and extrusion"

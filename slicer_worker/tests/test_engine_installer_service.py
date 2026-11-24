@@ -179,6 +179,67 @@ class InstallerTests(unittest.TestCase):
         self.assertIn('shutil.copyfile(REVIEWED_ORCA_SOURCE, image)', source)
         self.assertIn('if bundled_orca:', source)
 
+    def test_existing_verified_bambu_runtime_is_repaired_without_store_write_access(self):
+        import stat
+        from slicer_worker.engine_registry import BAMBU_RUNTIME_SHA256, BAMBU_VERSION
+        with TemporaryDirectory() as temp:
+            store = Path(temp)
+            root = store / "versions" / "bambustudio" / BAMBU_VERSION / "squashfs-root"
+            inner = root / "bin" / "bambu-studio"
+            inner.parent.mkdir(parents=True)
+            inner.write_bytes(b"fixture verified binary")
+            inner.chmod(0o700)
+            (root / "AppRun").write_text("#!/bin/sh\n")
+            resources = root / "resources" / "profiles"
+            resources.mkdir(parents=True)
+            resources.chmod(0o700)
+            resource = resources / "BBL.json"
+            resource.write_text("{}")
+            resource.chmod(0o600)
+            usr_share = root / "usr" / "share"
+            usr_share.mkdir(parents=True)
+            usr_share.chmod(0o700)
+            (store / "active.json").write_text("{}")
+            manifest = {"engines": {"bambustudio": {
+                "version": BAMBU_VERSION, "binary": str(root / "AppRun"),
+                "binary_sha256": BAMBU_RUNTIME_SHA256,
+            }}}
+            with patch.object(installer, "STORE", store), \
+                 patch.object(installer, "_manifest", return_value=manifest), \
+                 patch.object(installer, "_sha256", return_value=BAMBU_RUNTIME_SHA256):
+                installer.repair_active_bambu_runtime_permissions()
+            for directory in (root, resources, usr_share):
+                mode = stat.S_IMODE(directory.stat().st_mode)
+                self.assertEqual(mode & 0o055, 0o055)
+                self.assertEqual(mode & 0o022, 0)
+            self.assertEqual(stat.S_IMODE(resource.stat().st_mode) & 0o044, 0o044)
+            self.assertEqual(stat.S_IMODE(resource.stat().st_mode) & 0o022, 0)
+            self.assertEqual(stat.S_IMODE(inner.stat().st_mode) & 0o111, 0o111)
+
+    def test_bambu_repair_refuses_unverified_runtime(self):
+        from slicer_worker.engine_registry import BAMBU_RUNTIME_SHA256, BAMBU_VERSION
+        with TemporaryDirectory() as temp:
+            store = Path(temp)
+            root = store / "versions" / "bambustudio" / BAMBU_VERSION / "squashfs-root"
+            inner = root / "bin" / "bambu-studio"
+            inner.parent.mkdir(parents=True)
+            inner.write_text("not the pinned runtime")
+            (root / "AppRun").write_text("fixture")
+            (store / "active.json").write_text("{}")
+            manifest = {"engines": {"bambustudio": {
+                "version": BAMBU_VERSION, "binary": str(root / "AppRun"),
+                "binary_sha256": BAMBU_RUNTIME_SHA256,
+            }}}
+            with patch.object(installer, "STORE", store), \
+                 patch.object(installer, "_manifest", return_value=manifest):
+                with self.assertLogs(installer.LOGGER, level="WARNING") as captured:
+                    installer.repair_active_bambu_runtime_permissions()
+                self.assertIn("Skipping Bambu runtime permissions repair",
+                              "\\n".join(captured.output))
+                # Never grant access or change the active manifest if its
+                # runtime has not passed the pinned binary identity check.
+                self.assertEqual((store / "active.json").read_text(), "{}")
+
     def test_published_version_directory_is_worker_traversable(self):
         # mkdtemp starts at 0700; worker UID 10001 must be able to
         # traverse a version published by installer UID 10002.

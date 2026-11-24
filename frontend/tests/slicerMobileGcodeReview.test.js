@@ -108,7 +108,7 @@ test("download uses ordinary buttons and settings labels cannot vertically stret
   assert.match(reader, /className="buttonLink slicerGcodeDownloadAction"/);
   assert.ok(mobileCss.includes(".slicerResultModeRow.slicerPreviewOptionsPanel.mobileOpen > label {"));
   assert.match(mobileCss, /flex:0 0 auto!important/);
-  assert.ok(styles.includes(".slicerHeroProjectNavigation > .slicerHeroBack"));
+  assert.ok(styles.includes(".slicerWorkbenchRoot .slicerHeroActions > .slicerHeroBack"));
   assert.match(styles, /height: 43px/);
 });
 

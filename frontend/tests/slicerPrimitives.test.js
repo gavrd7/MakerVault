@@ -13,11 +13,11 @@ test("all five parametric primitives produce valid binary STLs",()=>{
     assert.ok(output.height>0,primitiveType);
   }
 });
-test("a negative box subtracts geometry without changing the original",()=>{
+test("a negative box subtracts geometry without changing the original",async ()=>{
   const source=createPrimitiveMesh({primitiveType:"box",width:30,depth:30,height:30});
   const tool=createPrimitiveMesh({primitiveType:"box",width:10,depth:10,height:35},[0,0,0]);
   const before=source.geometry.getAttribute("position").array.slice();
-  const result=executeSolidOperation("boolean",source,{booleanMode:"difference"},tool);
+  const result=await executeSolidOperation("boolean",source,{booleanMode:"difference"},tool);
   assert.ok(result.length===1&&result[0].triangles>0);
   assert.deepEqual(Array.from(source.geometry.getAttribute("position").array),Array.from(before));
   source.geometry.dispose();tool.geometry.dispose();
@@ -34,4 +34,11 @@ test("Disc and rotation produce distinct real STL geometry",()=>{
   assert.ok(shape.triangles>12);
   const rotated=createPrimitiveStl({primitiveType:"box",width:24,depth:12,height:8,rotation_z:45});
   assert.ok(rotated.width>24 && rotated.depth>12);
+});
+
+test("torus uses the native region radius convention at the default 20 mm dimensions",()=>{
+  const stl=createPrimitiveStl({primitiveType:"torus",width:20,depth:20,height:20});
+  assert.ok(stl.triangles>=512);
+  for(const axis of ["width","depth","height"])
+    assert.ok(Math.abs(stl[axis]-20)<0.3,axis+" must match its editor size");
 });

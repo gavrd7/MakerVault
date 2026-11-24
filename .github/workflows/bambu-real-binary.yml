@@ -7,6 +7,13 @@ on:
       - 'scripts/prepare_bambu_native_fixtures.py'
       - 'scripts/probe_bambu_multicolour.py'
       - 'slicer_worker/bambu_runner.py'
+      - 'slicer_worker/modifier_acceptance_probe.py'
+      - 'slicer_worker/modifier_3mf_validation.py'
+      - 'scripts/build_native_modifier_fixture.py'
+      - 'scripts/build_native_composite_fixture.py'
+      - 'slicer_worker/composite_acceptance_probe.py'
+      - 'slicer_worker/single_negative_diagnostic.py'
+      - 'backend/core/slicer_modifier_3mf.py'
       - 'slicer_worker/stage_engines.py'
       - 'slicer_worker/probe.py'
       - 'slicer_worker/tests/test_bambu*.py'
@@ -168,6 +175,86 @@ jobs:
             --process /tmp/bambu-verified-profiles/process.json \
             --filament /tmp/bambu-verified-profiles/filament.json \
             --bambu-core-3mf --timeout 180
+
+      - name: Verify native Bambu modifier regional effects (required)
+        id: modifiers
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m pip install --disable-pip-version-check --no-input 'defusedxml>=0.7.1,<0.8'
+          python3 scripts/build_native_modifier_fixture.py --output-dir /tmp/bambu-modifier-fixtures
+          for kind in printer process filament; do
+            cp "/tmp/bambu-verified-profiles/$kind.json" "/tmp/bambu-modifier-fixtures/$kind.json"
+          done
+          # The genuine official binary must parse and slice both source
+          # formats with changed/control-region positive-E proof. No
+          # guessing from 3MF metadata, no printer access or dispatch.
+          timeout 900s python3 -m slicer_worker.modifier_acceptance_probe \
+            --engine bambustudio --production-validator \
+            --fixtures /tmp/bambu-modifier-fixtures \
+            --binary /tmp/bambu-appimage-acceptance/squashfs-root/AppRun
+      - name: Probe five additional native Bambu modifier shapes
+        id: modifier_shapes
+        shell: bash
+        run: |
+          set -euo pipefail
+          for shape in cylinder sphere cone disc torus; do
+            echo "Pinned Bambu regional native shape: $shape"
+            root="/tmp/bambu-modifier-$shape"
+            python3 scripts/build_native_modifier_fixture.py --output-dir "$root" --shape "$shape"
+            for kind in printer process filament; do
+              cp "/tmp/bambu-verified-profiles/$kind.json" "$root/$kind.json"
+            done
+            timeout 180s python3 -m slicer_worker.modifier_acceptance_probe \
+              --engine bambustudio --production-validator \
+              --fixtures "$root" \
+              --binary /tmp/bambu-appimage-acceptance/squashfs-root/AppRun
+          done
+      - name: Require native Bambu independent XYZ modifier transformation
+        shell: bash
+        run: |
+          set -euo pipefail
+          root=/tmp/bambu-modifier-world-pose
+          python3 scripts/build_native_modifier_fixture.py --output-dir "$root" --world-pose
+          for kind in printer process filament; do
+            cp "/tmp/bambu-verified-profiles/$kind.json" "$root/$kind.json"
+          done
+          timeout 240s python3 -m slicer_worker.modifier_acceptance_probe \
+            --engine bambustudio --production-validator --fixtures "$root" \
+            --binary /tmp/bambu-appimage-acceptance/squashfs-root/AppRun
+      - name: Require native Bambu two-model modifier and negative-volume G-code proof
+        shell: bash
+        run: |
+          set -euo pipefail
+          root=/tmp/native-composite-bambu
+          python3 scripts/build_native_composite_fixture.py --output-dir "$root"
+          for kind in printer process filament; do
+            cp "/tmp/bambu-verified-profiles/$kind.json" "$root/$kind.json"
+          done
+          timeout 900s python3 -m slicer_worker.composite_acceptance_probe \
+            --engine bambustudio --fixtures "$root" \
+            --binary /tmp/bambu-appimage-acceptance/squashfs-root/AppRun
+      - name: Diagnose native single-model Bambu subtraction independently of composite proof
+        if: always()
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -euo pipefail
+          root=/tmp/native-composite-bambu
+          binary=/tmp/bambu-appimage-acceptance/squashfs-root/AppRun
+          if [ -f "$root/single-negative.3mf" ] && [ -f "$root/printer.json" ] && [ -e "$binary" ]; then
+            timeout 480s python3 -m slicer_worker.single_negative_diagnostic \
+              --fixtures "$root" --binary "$binary"
+          else
+            echo "Single-model negative diagnostic skipped: native fixture or binary unavailable"
+          fi
+      - name: Record required Bambu modifier evidence without production approval
+        if: always()
+        run: |
+          echo "### Native Bambu primitive modifier probe" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Regional positive-E validation: ${{ steps.modifiers.outcome }}" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Additional five primitive shapes: ${{ steps.modifier_shapes.outcome }}" >> "$GITHUB_STEP_SUMMARY"
+          echo "- REQUIRED real-binary region and shape tests; fixture-only evidence does not enable production modifier slicing." >> "$GITHUB_STEP_SUMMARY"
 
       - name: Compare genuine pinned Bambu Studio 3MF metadata (diagnostic)
         shell: bash

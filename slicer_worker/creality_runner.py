@@ -137,7 +137,13 @@ def creality_command(binary: Path, workdir: Path):
     is_project = (workdir / "input.3mf").exists()
     model = _regular_file(workdir, "input.3mf" if is_project else "input.stl", MAX_MODEL_BYTES)
     native_project = (workdir / "creality-native-project.marker").exists()
-    if is_project and native_project:
+    native_modifiers = (workdir / "native-modifier-project.marker").exists()
+    if native_project and native_modifiers:
+        raise WorkerError("Conflicting Creality native project contracts.")
+    if is_project and native_modifiers:
+        from .creality_modifier_validation import validate_creality_modifier_project
+        validate_creality_modifier_project(model.read_bytes())
+    elif is_project and native_project:
         validate_creality_project(model.read_bytes(), native_tool_count=2)
     elif is_project:
         validate_worker_3mf(model.read_bytes())
@@ -163,7 +169,7 @@ def creality_command(binary: Path, workdir: Path):
         str(binary), "--cli", "--slice", "0", "--outputdir", str(outdir),
         "--need-gcode-file",
     ]
-    if native_project:
+    if native_project or native_modifiers:
         # Upstream Creality's project loader rejects --load-settings and
         # --load-filaments for 3MF. The project carries its own full config
         # and the CLI skips STL auto-arrangement for project inputs.

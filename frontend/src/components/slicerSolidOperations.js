@@ -8,7 +8,19 @@
  * constant-distance normal offset. Caller must explain the limitation.
  */
 import * as THREE from "three";
-import { Brush, Evaluator, ADDITION, SUBTRACTION, INTERSECTION } from "three-bvh-csg";
+import { Brush, ADDITION, SUBTRACTION, INTERSECTION } from "three-bvh-csg";
+// Load WebAssembly only on an explicit solid-edit action. A failure to load
+// the optional Boolean kernel must never prevent the slicer page rendering.
+let manifoldModule;
+async function localManifold() {
+  if (!manifoldModule) {
+    manifoldModule = import("./slicerSolidManifold.js").catch(error => {
+      manifoldModule = null; // allow a deliberate retry after a failed load
+      throw new Error("The local solid-editing engine could not load. Reload MakerVault and retry.", {cause:error});
+    });
+  }
+  return manifoldModule;
+}
 
 // Match native plate validation; complexity remains constrained by the STL byte cap.
 export const CSG_MAX_INPUT_TRIANGLES = 500000;
@@ -58,17 +70,13 @@ function primitiveGeometry(geometry, at = [0,0,0]) {
   material.dispose();
   return brush;
 }
-function evaluator() {
-  const e = new Evaluator();
-  e.attributes = ["position", "normal"];
-  e.useGroups = false;
-  // Constrained triangulation reduces T-junction artefacts around round holes.
-  e.useCDTClipping = true;
-  return e;
-}
-function run(a, b, operation) {
-  const engine = evaluator();
-  const result = engine.evaluate(a, b, operation);
+async function run(a, b, operation) {
+  const action = operation === ADDITION ? "add" :
+    operation === SUBTRACTION ? "subtract" :
+    operation === INTERSECTION ? "intersect" : null;
+  if (!action) throw new Error("Unsupported mesh operation.");
+  const {runWatertightBoolean} = await localManifold();
+  const result = runWatertightBoolean(a, b, action);
   if (!result?.geometry || !triangles(result.geometry))
     throw new Error("This operation produced an empty solid. The source has not changed.");
   return result;
@@ -213,7 +221,7 @@ export function resultToStl(mesh, {allowOpenPreview=false,allowTrustedFontSeams=
       width:size.x,depth:size.y,height:size.z};
   } finally {geometry.dispose();}
 }
-export function executeSolidOperation(kind, target, options={}, second=null) {
+export async function executeSolidOperation(kind, target, options={}, second=null) {
   if (!["hollow","drill","cut","boolean"].includes(kind))
     throw new Error("Unsupported mesh operation.");
   if (!target?.geometry) throw new Error("Select an STL model first.");
@@ -230,7 +238,7 @@ export function executeSolidOperation(kind, target, options={}, second=null) {
       const mode=options.booleanMode||"union";
       if (!["union","difference","intersection"].includes(mode))
         throw new Error("Choose a valid Boolean operation.");
-      outputs.push(run(first,secondary,
+      outputs.push(await run(first,secondary,
         mode==="union"?ADDITION:mode==="difference"?SUBTRACTION:INTERSECTION));
     } else if(kind==="drill") {
       const radius=safeNumber(options.radius,0.2,Math.max(size.x,size.y),"Hole radius");
@@ -241,7 +249,7 @@ export function executeSolidOperation(kind, target, options={}, second=null) {
       // Three.js cylinders are Y-aligned; turn the drill along build-plate Z.
       cylinder.rotateX(Math.PI/2);
       secondary=primitiveGeometry(cylinder,[x,y,mid.z]);
-      outputs.push(run(first,secondary,SUBTRACTION));
+      outputs.push(await run(first,secondary,SUBTRACTION));
     } else if(kind==="cut") {
       const axis=options.cutAxis||"z";
       if (!["x","y","z"].includes(axis)) throw new Error("Choose a valid cut axis.");
@@ -256,8 +264,8 @@ export function executeSolidOperation(kind, target, options={}, second=null) {
       const top=primitiveGeometry(new THREE.BoxGeometry(cover,cover,cover),high);
       secondary=bottom;
       const keep=options.keep||"both";
-      if(["both","bottom"].includes(keep))outputs.push(run(first,bottom,INTERSECTION));
-      if(["both","top"].includes(keep))outputs.push(run(first,top,INTERSECTION));
+      if(["both","bottom"].includes(keep))outputs.push(await run(first,bottom,INTERSECTION));
+      if(["both","top"].includes(keep))outputs.push(await run(first,top,INTERSECTION));
       top.geometry.dispose();
       if(!["both","bottom","top"].includes(keep)) throw new Error("Choose a valid cut result.");
     } else {
@@ -279,7 +287,7 @@ export function executeSolidOperation(kind, target, options={}, second=null) {
       scaled.translate(mid.x+offsets[0],mid.y+offsets[1],mid.z+offsets[2]);
       secondary=new Brush(scaled);
       secondary.updateMatrixWorld();
-      outputs.push(run(first,secondary,SUBTRACTION));
+      outputs.push(await run(first,secondary,SUBTRACTION));
     }
     return outputs.map(result=>resultToStl(result,{allowOpenPreview:!!options.allowOpenPreview}));
   } finally {

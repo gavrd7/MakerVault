@@ -3,6 +3,19 @@ from django.test import SimpleTestCase
 from core.slicer_official_filter import narrow_catalogue, profile_matches_printer, models_from_machines, fuzzy_name_match, slot_filament_catalogue
 
 
+class OfficialPresetDecimalSearchTests(SimpleTestCase):
+    def test_decimal_layer_height_matches_unit_suffixed_bambu_presets(self):
+        preset = "0.20mm Standard @BBL X1C"
+        for query in ("0.20", "0.20mm", "0.20 mm", "Standard 0.20"):
+            with self.subTest(query=query):
+                self.assertTrue(fuzzy_name_match(preset, query))
+        self.assertFalse(fuzzy_name_match(preset, "0.12"))
+
+    def test_exact_model_tokens_remain_distinct(self):
+        self.assertFalse(fuzzy_name_match("0.20mm Standard @K10", "K1"))
+        self.assertTrue(fuzzy_name_match("0.20mm Standard @K1", "K1"))
+
+
 class OfficialModelScopeTests(SimpleTestCase):
     def test_printer_variants_are_not_mixed(self):
         records = [(name, "machine/" + name + ".json") for name in (

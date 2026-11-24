@@ -77,7 +77,7 @@ def _decode_payload(payload):
         "model", "printer_profile", "filament_profile", "process_profile",
     }
     if not isinstance(payload, dict) or not expected.issubset(payload) or (
-            set(payload) - expected - {"model_format", "filament_profiles", "creality_model_stls", "creality_tool_ids", "creality_native_project"}):
+            set(payload) - expected - {"model_format", "filament_profiles", "creality_model_stls", "creality_tool_ids", "creality_native_project", "native_modifier_project"}):
         raise WorkerError("Invalid slicing job payload.")
     try:
         uuid.UUID(str(payload["job_id"]))
@@ -159,6 +159,24 @@ def _decode_payload(payload):
         files["creality_tool_ids"] = tools
     elif "creality_tool_ids" in payload:
         raise WorkerError("Creality tool assignments require native STL models.")
+    if "native_modifier_project" in payload:
+        # This is a distinct single-material contract. Neither a 2+ tool
+        # palette nor an arbitrary uploaded native project can request it.
+        approved = {"orcaslicer": "2.5.0", "bambustudio": "02.09.01.70",
+                    "crealityprint": "7.3.1"}
+        if (payload["native_modifier_project"] is not True
+                or approved.get(payload["engine"]) != payload["engine_version"]
+                or model_format != "3mf"
+                or any(key in payload for key in (
+                    "filament_profiles", "creality_native_project",
+                    "creality_model_stls", "creality_tool_ids"))):
+            raise WorkerError("Unverified modifier project execution contract.")
+        if payload["engine"] == "crealityprint":
+            from .creality_modifier_validation import validate_creality_modifier_project
+            validate_creality_modifier_project(files["model"])
+        else:
+            validate_worker_3mf(files["model"], allow_native_modifier_fixture=True)
+        files["native_modifier_project"] = True
     if "creality_native_project" in payload:
         if (payload["creality_native_project"] is not True or
                 payload["engine"] != "crealityprint" or model_format != "3mf" or
@@ -168,7 +186,7 @@ def _decode_payload(payload):
         from .creality_project_validation import validate_creality_project
         validate_creality_project(files["model"], native_tool_count=2)
         files["creality_native_project"] = True
-    elif model_format == "3mf":
+    elif model_format == "3mf" and not files.get("native_modifier_project"):
         options = {"native_tool_count": len(files["filament_profiles"])
                    if "filament_profiles" in files else None}
         if payload["engine"] == "bambustudio":
@@ -254,6 +272,8 @@ class Handler(BaseHTTPRequestHandler):
                         (workdir / ("filament-" + str(index) + ".json")).write_bytes(native)
                 if files.get("creality_native_project"):
                     (workdir / "creality-native-project.marker").write_text("v1")
+                if files.get("native_modifier_project"):
+                    (workdir / "native-modifier-project.marker").write_text("v1")
                 if "creality_model_stls" in files:
                     for index, raw in enumerate(files["creality_model_stls"]):
                         (workdir / ("input-" + str(index) + ".stl")).write_bytes(raw)
@@ -271,6 +291,18 @@ class Handler(BaseHTTPRequestHandler):
                 data = (workdir / "output.gcode").read_bytes()
                 if not data or len(data) > MAX_OUTPUT_BYTES:
                     raise WorkerError("Generated G-code exceeded the output size limit.")
+                if files.get("native_modifier_project"):
+                    # A successful native CLI exit is not proof that every
+                    # requested region was used in the generated toolpaths.
+                    from .modifier_gcode_audit import audit_modifier_positive_e
+                    translation_xy = (0.0, 0.0)
+                    if current["engine"] == "bambustudio":
+                        from .bambu_runner import verified_bambu_modifier_shift
+                        translation_xy = verified_bambu_modifier_shift(
+                            files["model"], workdir / "bambu-sliced.3mf")
+                    audit_modifier_positive_e(
+                        data, files["model"], current["engine"],
+                        translation_xy=translation_xy)
                 if "filament_profiles" in files:
                     expected = (set(tool - 1 for tool in files["creality_tool_ids"])
                                 if "creality_tool_ids" in files
@@ -285,6 +317,54 @@ class Handler(BaseHTTPRequestHandler):
             # Only report a bounded diagnostic category, never command output,
             # profile JSON, private paths, bearer tokens or source filenames.
             safe_reasons = {
+                "Invalid Creality modifier upload size.": "creality-region-archive-invalid",
+                "Unsafe Creality modifier XML declaration.": "creality-region-archive-invalid",
+                "Malformed native Creality modifier XML.": "creality-region-archive-invalid",
+                "Invalid native Creality modifier object identity.": "creality-region-graph-invalid",
+                "Unsafe Creality modifier relationship.": "creality-region-graph-invalid",
+                "Unsupported external modifier mesh relationship.": "creality-region-graph-invalid",
+                "Invalid Creality native modifier model.": "creality-region-graph-invalid",
+                "Unexpected modifier mesh units.": "creality-region-graph-invalid",
+                "Invalid native Creality model generator.": "creality-region-graph-invalid",
+                "Nonprinting modifier may not enter the build.": "creality-region-graph-invalid",
+                "Invalid Creality modifier project identity.": "creality-region-metadata-invalid",
+                "Unapproved Creality modifier project version.": "creality-region-metadata-invalid",
+                "Unsafe native modifier metadata.": "creality-region-metadata-invalid",
+                "Unexpected Creality modifier material tool.": "creality-region-metadata-invalid",
+                "Unexpected Creality modifier settings entry.": "creality-region-metadata-invalid",
+                "Unsafe Creality modifier plate.": "creality-region-metadata-invalid",
+                "Unapproved Creality modifier plate setting.": "creality-region-metadata-invalid",
+                "Invalid modifier target plate object.": "creality-region-metadata-invalid",
+                "Unsafe Creality modifier plate item.": "creality-region-metadata-invalid",
+                "Creality modifier native settings exceed nesting limit.": "creality-region-profiles-invalid",
+                "Oversized native modifier project settings.": "creality-region-profiles-invalid",
+                "Unsafe native modifier project setting.": "creality-region-profiles-invalid",
+                "Oversized native modifier settings vector.": "creality-region-profiles-invalid",
+                "Invalid native modifier project value.": "creality-region-profiles-invalid",
+                "Oversized native modifier project field.": "creality-region-profiles-invalid",
+                # Fixed worker-authored error strings only: never echo raw
+                # native 3MF/project contents or private preset data.
+                "Unsafe Creality modifier project archive.": "creality-region-archive-invalid",
+                "Invalid Creality native modifier parent.": "creality-region-graph-invalid",
+                "Invalid native external modifier object graph.": "creality-region-graph-invalid",
+                "Unsafe Creality modifier external link.": "creality-region-graph-invalid",
+                "Unsafe external modifier mesh identity.": "creality-region-graph-invalid",
+                "Invalid external modifier mesh count.": "creality-region-graph-invalid",
+                "Creality modifier part count mismatch.": "creality-region-parts-invalid",
+                "Creality native region part type mismatch.": "creality-region-parts-invalid",
+                "Unexpected Creality modifier settings sections.": "creality-region-metadata-invalid",
+                "Creality modifier source object mapping is invalid.": "creality-region-metadata-invalid",
+                "Creality modifier native metadata owner mismatch.": "creality-region-metadata-invalid",
+                "Invalid native modifier profile vector.": "creality-region-profiles-invalid",
+                "Invalid Creality modifier native palette.": "creality-region-profiles-invalid",
+                "Unapproved native modifier process settings.": "creality-region-profiles-invalid",
+                "Malformed Creality native modifier archive.": "creality-region-archive-invalid",
+                "Invalid native region part-to-component mapping.": "creality-region-parts-invalid",
+                "Unsafe native region component graph.": "creality-region-graph-invalid",
+
+                "Generated G-code deposits material inside a requested negative volume.": "native-negative-deposition",
+                "Requested native modifier has no model deposition in the generated G-code.": "native-modifier-no-deposition",
+                "Unable to audit native modifier geometry.": "native-region-geometry-invalid",
                 "Invalid Creality Print JSON profile.": "creality-profile-json-invalid",
                 "Creality Print profile requires a self-contained, verified native preset.": "creality-profile-parent-unresolved",
                 "Creality Print profile nesting exceeds the limit.": "creality-profile-structure-invalid",
@@ -314,7 +394,9 @@ class Handler(BaseHTTPRequestHandler):
                 "Creality Print worker could not launch the approved binary.": "creality-launch-failed",
                 "OrcaSlicer failed. Check the engine-native profiles.": "engine-exited",
                 "Reviewed Bambu Studio executable is unavailable.": "engine-unavailable",
-                "Bambu Studio CLI rejected the native profiles or model.": "engine-exited",
+                "Bambu Studio CLI rejected the native profiles or model.": "bambu-cli-exited",
+                "Bambu Studio native runtime exited with status 126.": "bambu-runtime-exit-126",
+                "Bambu Studio native CLI aborted with SIGABRT.": "bambu-cli-aborted",
                 "Bambu generated unsupported binary or empty G-code.": "invalid-gcode",
                 "Bambu native output must contain exactly one G-code plate.": "unexpected-output-layout",
                 "Bambu native output includes an unexpected G-code plate.": "unexpected-output-layout",
@@ -364,6 +446,7 @@ class Handler(BaseHTTPRequestHandler):
                 "OrcaSlicer produced unsupported binary G-code.": "invalid-gcode",
                 "G-code exceeded size limit.": "output-too-large",
                 "Isolated worker could not run OrcaSlicer.": "engine-launch-failed",
+                "Modifier fixtures cannot activate other native project extensions.": "invalid-3mf",
                 "3MF input exceeds worker limits.": "invalid-3mf",
                 "3MF triangle count exceeds worker limit.": "invalid-3mf",
                 "3MF vertex count exceeds worker limit.": "invalid-3mf",
@@ -456,6 +539,25 @@ class Handler(BaseHTTPRequestHandler):
                 reason = candidate if candidate in categories else "engine-exited"
             else:
                 reason = safe_reasons.get(str(exc), "validation-error")
+            # For an otherwise unclassified worker admission error, record
+            # only a bounded, code-owned source location. Never log exception
+            # text, native project data, file paths, profiles or CLI output.
+            if (stage == "validating model and profile payloads" and reason in {"validation-error", "creality-region-profiles-invalid"}):
+                origin = None
+                tb = exc.__traceback__
+                while tb is not None:
+                    code = tb.tb_frame.f_code
+                    candidate = (code.co_filename.rsplit("/", 1)[-1], code.co_name, tb.tb_lineno)
+                    if candidate[0] in {
+                        "creality_modifier_validation.py",
+                        "modifier_3mf_validation.py",
+                        "three_mf_validation.py",
+                    }:
+                        origin = candidate
+                    tb = tb.tb_next
+                if origin is not None:
+                    logger.warning("Native project admission diagnostic: module=%s function=%s line=%d",
+                                   *origin)
             logger.warning("Isolated slicer rejected job at %s (%s, %s)", stage,
                            type(exc).__name__, reason)
             response = {

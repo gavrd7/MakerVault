@@ -9,14 +9,50 @@ from pathlib import Path
 import stat
 
 
-def make_runtime_worker_readable(root):
+def make_runtime_worker_readable(root, *, required_executables=()):
     """Allow read-only worker access; retain installer ownership and write policy."""
     root = Path(root)
     if root.is_symlink() or not root.is_dir():
         raise ValueError("Invalid extracted engine runtime directory.")
-    for parent, directories, filenames in os.walk(root, topdown=True, followlinks=False):
+    # Some official AppImages ship a shell AppRun whose internal binary has
+    # no executable bit after extraction. Only named, reviewed engine
+    # entrypoints may be explicitly granted execute permission. Reject
+    # symlinks and traversal; never make arbitrary downloaded files executable.
+    for relative in required_executables:
+        if not isinstance(relative, str) or not relative or relative.startswith("/"):
+            raise ValueError("Invalid reviewed runtime executable.")
+        components = relative.split("/")
+        if any(part in ("", ".", "..") for part in components):
+            raise ValueError("Unsafe reviewed runtime executable path.")
+        target = root
+        for part in components:
+            target = target / part
+            if target.is_symlink():
+                raise ValueError("Reviewed runtime executable cannot be a symlink.")
+        if not target.is_file():
+            raise ValueError("Reviewed runtime executable is missing.")
+        mode = target.stat(follow_symlinks=False).st_mode
+        if not stat.S_ISREG(mode):
+            raise ValueError("Reviewed runtime executable must be a regular file.")
+        # Retain installer ownership and do not alter user/group write bits.
+        os.chmod(target, stat.S_IMODE(mode) | 0o111, follow_symlinks=False)
+    # os.walk without onerror silently skips inaccessible or malformed
+    # branches. A partially readable AppImage can pass the CLI --help probe
+    # as installer UID 10002 yet abort under worker UID 10001 when it tries
+    # to read resources/usr/share. Fail installation rather than publish an
+    # untraversable runtime, including nested directories.
+    visited = 0
+
+    def traversal_error(exc):
+        raise ValueError("Extracted engine runtime cannot be traversed.") from exc
+
+    for parent, directories, filenames in os.walk(
+            root, topdown=True, followlinks=False, onerror=traversal_error):
+        visited += 1
         base = Path(parent)
         mode = base.stat(follow_symlinks=False).st_mode
+        if not stat.S_ISDIR(mode):
+            raise ValueError("Unexpected runtime directory type.")
         os.chmod(base, stat.S_IMODE(mode) | 0o055, follow_symlinks=False)
         for name in directories + filenames:
             entry = base / name
@@ -24,11 +60,13 @@ def make_runtime_worker_readable(root):
             if stat.S_ISLNK(mode):
                 continue
             if stat.S_ISDIR(mode):
-                # os.walk will visit and fix it itself.
+                # Traverse and publish at the next walk iteration.
                 continue
             if not stat.S_ISREG(mode):
                 raise ValueError("Unexpected non-file engine runtime entry.")
-            # Preserve existing executable bits, never manufacture a new
-            # executable, and never grant group/other write permissions.
+            # Preserve original owner/group write policy and executable bits;
+            # worker 10001 receives only read/execute, never write access.
             additional = 0o044 | (0o011 if mode & 0o111 else 0)
             os.chmod(entry, stat.S_IMODE(mode) | additional, follow_symlinks=False)
+    if not visited:
+        raise ValueError("Extracted engine runtime is empty.")

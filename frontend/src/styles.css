@@ -5522,44 +5522,28 @@ a:focus-visible,
 .slicerWorkbenchRoot .slicerHeroActions > .slicerHeroBack {
   grid-column: 1 / -1;
 }
-/* Project navigation remains beside Slicer setup, with native button
-   styling rather than the file-input label's separate appearance. */
-.slicerWorkbenchRoot .slicerHeroActions > .slicerHeroProjectNavigation {
-  grid-column: 1 / -1;
-  display: grid;
-  grid-template-columns: minmax(0,1fr) minmax(0,1fr);
-  gap: 9px;
-  align-items: start;
+/* Interactive slicer: six peer actions share one flat, responsive grid.
+   No nested file-action columns or full-width Back button. */
+.slicerWorkbenchRoot.slicerEditorOpen .slicerHeroActions {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-items: stretch;
 }
-.slicerWorkbenchRoot .slicerHeroProjectNavigation > .slicerHeroBack {
-  min-height: 43px;
-  height: 43px;
+.slicerWorkbenchRoot.slicerEditorOpen .slicerHeroActions > button {
+  grid-column: auto;
   width: 100%;
-  align-self: start;
-  grid-row: 1;
+  min-width: 0;
+  min-height: 43px;
+  height: 100%;
   margin: 0;
-}
-.slicerWorkbenchRoot .slicerHeroProjectFileActions {
-  display: grid;
-  grid-template-columns: 1fr;
-  gap: 9px;
-}
-.slicerWorkbenchRoot .slicerHeroProjectFileActions button {
-  width: 100%;
-  min-height: 43px;
-  white-space: normal;
   padding: 9px 12px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  white-space: normal;
+  line-height: 1.35;
 }
 .slicerProjectHiddenInput { display:none; }
-@media (max-width: 480px) {
-  .slicerWorkbenchRoot .slicerHeroProjectNavigation {
-    grid-template-columns: 1fr;
-  }
-  .slicerWorkbenchRoot .slicerHeroProjectFileActions {
-    grid-template-columns: repeat(2,minmax(0,1fr));
-  }
-}
-
 @media (max-width: 900px) {
   .slicerWorkbenchRoot .printingHero { display: grid; }
   .slicerWorkbenchRoot .slicerHeroActions {
@@ -8695,4 +8679,161 @@ a:focus-visible,
   .slicerOfficialProfileRow>.cameraSourceActions button{
     flex:1 1 160px;min-width:0;width:auto;overflow-wrap:anywhere
   }
+}
+
+
+/* PR196: Add text, primitive, modifier and negative-volume editing uses the
+   same inline-on-plate mobile position as Move/Scale/Rotate, but its larger
+   form grows DOWN the page. The old absolute dock sat on top of the model and
+   section slider, and its 320px scroll cap obscured most shape controls.
+   Keep other mesh-operation inspectors at their previously verified size. */
+@media (max-width:740px) {
+  .slicerPlateCanvasColumn .slicerPlateCanvasViewport > .slicerMobileGeometryDock.slicerMobileAddGeometryDock {
+    position:relative!important;
+    inset:auto!important;
+    top:auto!important;left:auto!important;right:auto!important;bottom:auto!important;
+    order:2;
+    display:block;
+    flex:0 0 auto;
+    box-sizing:border-box;
+    width:100%!important;
+    max-width:100%!important;
+    min-width:0;
+    margin:8px 0 0;
+    padding:0;
+    pointer-events:auto;
+    z-index:auto;
+  }
+  .slicerPlateCanvasViewport:has(> .slicerMobileAddGeometryDock)
+    > .slicerPlateSectionControl {
+    order:3;
+  }
+  .slicerMobileAddGeometryDock > .slicerAutoOrientModalBackdrop:has(.slicerViewportAnchoredModal) {
+    display:block!important;
+    position:relative!important;
+    inset:auto!important;
+    width:100%!important;
+    padding:0!important;
+    pointer-events:auto!important;
+  }
+  .slicerMobileAddGeometryDock > .slicerAutoOrientModalBackdrop
+    > .slicerSolidModal.slicerViewportAnchoredModal {
+    position:relative!important;
+    inset:auto!important;
+    top:auto!important;left:auto!important;right:auto!important;bottom:auto!important;
+    width:100%!important;
+    max-width:100%!important;
+    height:auto!important;
+    max-height:none!important;
+    min-height:0!important;
+    overflow:visible!important;
+    margin:0!important;
+    padding:12px!important;
+    touch-action:auto;
+    overscroll-behavior:auto;
+    box-sizing:border-box;
+  }
+  .slicerMobileAddGeometryDock > .slicerAutoOrientModalBackdrop
+    > .slicerSolidModal.slicerSolidInspectorCollapsed {
+    max-height:56px!important;
+    overflow:hidden!important;
+  }
+  .slicerMobileAddGeometryDock .slicerAutoOrientModalActions {
+    position:static!important;
+    bottom:auto!important;
+    flex-wrap:wrap;
+  }
+}
+
+
+/* PR196 accessible multi-object assembly selection.
+   Shared desktop/mobile checklist rather than requiring Ctrl-click.
+   Individual assembly members remain independent selectable rows. */
+.slicerPrepareTree .slicerAssemblySelectionToggle{
+  display:block;
+  width:100%;
+  min-height:40px;
+  margin-top:9px;
+  padding:8px 12px;
+  font-size:.86rem;
+  font-weight:600;
+  text-align:center;
+  border:1px solid #536e86;
+  border-radius:8px;
+  background:#1a2b3c;
+  color:#e4edf7;
+}
+.slicerPrepareTree .slicerAssemblySelectionToggle[aria-expanded="true"]{
+  border-color:#a78bfa;
+  background:#273453;
+}
+.slicerPrepareTree .slicerAssemblySelectionList{
+  display:grid;
+  gap:5px;
+  min-width:0;
+  margin-top:9px;
+  padding:10px;
+  border:1px solid #405970;
+  border-radius:9px;
+  background:#111f2e;
+}
+.slicerPrepareTree .slicerAssemblySelectionList>p{
+  margin:0 0 5px;
+  color:#bfd0df;
+  font-size:.8rem;
+  line-height:1.4;
+}
+.slicerPrepareTree .slicerAssemblySelectionRow{
+  display:flex;
+  align-items:flex-start;
+  gap:10px;
+  min-width:0;
+  min-height:43px;
+  padding:9px 8px;
+  border:1px solid #3b5066;
+  border-radius:7px;
+  cursor:pointer;
+  overflow-wrap:anywhere;
+}
+.slicerPrepareTree .slicerAssemblySelectionRow:has(input:checked){
+  border-color:#a78bfa;
+  background:rgba(167,139,250,.12);
+}
+.slicerPrepareTree .slicerAssemblySelectionRow:focus-within{
+  outline:2px solid #a78bfa;
+  outline-offset:1px;
+}
+.slicerPrepareTree .slicerAssemblySelectionRow input[type="checkbox"]{
+  width:20px;
+  height:20px;
+  min-width:20px;
+  margin:0;
+  accent-color:#a78bfa;
+  cursor:pointer;
+}
+.slicerPrepareTree .slicerAssemblySelectionRow>span{
+  min-width:0;
+  line-height:1.4;
+}
+.slicerPrepareTree .slicerAssemblySelectionRow small{
+  display:block;
+  margin:2px 0 0;
+  font-size:.73rem;
+}
+.slicerPrepareTree .slicerAssemblySelectionRow.unavailable{
+  opacity:.6;
+  cursor:not-allowed;
+}
+.slicerPrepareTree .slicerAssemblySelectionFooter{
+  display:flex;
+  flex-wrap:wrap;
+  justify-content:space-between;
+  align-items:center;
+  gap:8px;
+  padding-top:6px;
+  font-size:.8rem;
+}
+.slicerPrepareTree .slicerAssemblySelectionFooter button{
+  min-height:34px;
+  padding:6px 11px;
 }
