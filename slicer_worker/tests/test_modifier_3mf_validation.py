@@ -70,6 +70,48 @@ def fixture(*, malicious=False, printable_modifier=False):
         return raw.getvalue()
 
 
+def composite_fixture(*, negative=False, bad_metadata=False):
+    """Two normal-part meshes plus one non-printing region, one build item."""
+    with zipfile.ZipFile(io.BytesIO(fixture())) as archive:
+        entries={name:archive.read(name) for name in archive.namelist()}
+    ns="{"+NS+"}"
+    root=ET.fromstring(entries["3D/3dmodel.model"])
+    resources=root.find(ns+"resources")
+    parent=resources.find(ns+"object[@id='1']")
+    components=parent.find(ns+"components")
+    second=resources.find(ns+"object[@id='3']")
+    second.set("id","4")
+    components[-1].set("objectid","4")
+    from copy import deepcopy
+    normal=deepcopy(resources.find(ns+"object[@id='2']"))
+    normal.set("id","3")
+    resources.insert(2,normal)
+    ET.SubElement(components,ns+"component",{
+        "objectid":"3","transform":I3})
+    # 3D model components and resources must agree in a stable order.
+    components[-1],components[-2] = components[-2],components[-1]
+    config=ET.fromstring(entries["Metadata/model_settings.config"])
+    owner=config.find("object")
+    part=owner.findall("part")[-1]
+    part.set("id","4")
+    if negative:
+        part.set("subtype","negative_part")
+        for meta in list(part):
+            if meta.get("key")=="sparse_infill_density" and not bad_metadata:
+                part.remove(meta)
+    normal_part=ET.Element("part",{"id":"3","subtype":"normal_part"})
+    ET.SubElement(normal_part,"metadata",{"key":"name","value":"Second printable"})
+    ET.SubElement(normal_part,"metadata",{"key":"matrix","value":I4})
+    owner.insert(1,normal_part)
+    entries["3D/3dmodel.model"]=ET.tostring(root)
+    entries["Metadata/model_settings.config"]=ET.tostring(config)
+    with io.BytesIO() as raw:
+        with zipfile.ZipFile(raw,"w",compression=zipfile.ZIP_DEFLATED) as out:
+            for name,data in entries.items():
+                out.writestr(name,data)
+        return raw.getvalue()
+
+
 class NativeModifierFixtureValidationTests(unittest.TestCase):
     def test_nested_modifiers_denied_by_default_and_explicitly_admitted(self):
         data = fixture()
@@ -82,6 +124,21 @@ class NativeModifierFixtureValidationTests(unittest.TestCase):
         for data in (fixture(printable_modifier=True), fixture(malicious=True)):
             with self.subTest(data=data[:20]), self.assertRaises(WorkerError):
                 validate_worker_3mf(data, allow_native_modifier_fixture=True)
+
+    def test_two_printable_models_share_a_single_native_region(self):
+        for negative in (False,True):
+            with self.subTest(negative=negative):
+                sample=composite_fixture(negative=negative)
+                self.assertTrue(validate_worker_3mf(
+                    sample,allow_native_modifier_fixture=True))
+                with self.assertRaises(WorkerError):
+                    validate_worker_3mf(sample)
+
+    def test_negative_with_process_settings_is_not_admitted(self):
+        with self.assertRaises(WorkerError):
+            validate_worker_3mf(
+                composite_fixture(negative=True,bad_metadata=True),
+                allow_native_modifier_fixture=True)
 
     def test_modifier_flag_cannot_combine_with_material_palette(self):
         with self.assertRaises(WorkerError):
