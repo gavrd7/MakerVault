@@ -75,5 +75,18 @@ class ProductionModifierProtocolTests(unittest.TestCase):
             _decode_payload(original)
 
 
+    def test_creality_project_key_diagnostics_do_not_expose_unknown_keys(self):
+        from slicer_worker.creality_modifier_validation import _safe_project_settings
+        with self.assertLogs("slicer_worker.creality_modifier_validation", level="WARNING") as logs:
+            with self.assertRaisesRegex(WorkerError, "Unsafe native modifier project setting"):
+                _safe_project_settings({"post_processing_scripts": ["echo bad"]})
+        self.assertIn("blocked=post_processing_scripts", logs.output[0])
+        with self.assertLogs("slicer_worker.creality_modifier_validation", level="WARNING") as logs:
+            with self.assertRaisesRegex(WorkerError, "Unsafe native modifier project setting"):
+                _safe_project_settings({"private-" + "x" * 130: "value"})
+        self.assertIn("overlong", logs.output[0])
+        self.assertNotIn("private-", logs.output[0])
+
+
 if __name__ == "__main__":
     unittest.main()
