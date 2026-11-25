@@ -165,6 +165,18 @@ jobs:
               worker.server_close()
           '
 
+      - name: Verify real native Prusa CLI preserves two placed STL cubes
+        run: |
+          set -euo pipefail
+          docker run --rm --network none --user 10001:10001 \
+            -v "$TEST_VOLUME:/opt/engine-store:ro" \
+            -v "$GITHUB_WORKSPACE/scripts/prusa_real_binary_smoke.py:/tmp/prusa_smoke.py:ro" \
+            -v "$GITHUB_WORKSPACE/scripts/prusa_placed_native_smoke.py:/tmp/prusa_placed.py:ro" \
+            --entrypoint python3 prusa-integration:smoke \
+            /tmp/prusa_placed.py \
+            --binary /opt/engine-store/versions/prusaslicer/2.9.7/bin/prusa-slicer \
+            --vendor /opt/engine-store/versions/prusaslicer/2.9.7/resources/profiles/PrusaResearch.ini
+
       - name: Uninstall and reinstall Prusa without affecting Orca
         shell: bash
         run: |
