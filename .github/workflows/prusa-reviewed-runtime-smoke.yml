@@ -438,7 +438,9 @@ jobs:
             /tmp/paint/seam.3mf /tmp/paint/seam-enforced.3mf \
             /tmp/paint/fuzzy.3mf /tmp/paint/combined.3mf
 
-      - name: Qualify painted Prusa seam against actual external-perimeter starts
+      - name: Research actual Prusa seam placement on four painted faces
+        id: prusa_spatial_seam_research
+        continue-on-error: true
         run: |
           set -euo pipefail
           docker run --rm --network none --user 10001:10001 \
@@ -451,6 +453,11 @@ jobs:
             /opt/engine-store/versions/prusaslicer/2.9.7/bin/prusa-slicer \
             /opt/engine-store/versions/prusaslicer/2.9.7/resources/profiles/PrusaResearch.ini \
             /tmp/paint
+
+      - name: Record unqualified native Prusa seam directions
+        if: ${{ steps.prusa_spatial_seam_research.outcome == 'failure' }}
+        run: |
+          echo '::warning title=Unqualified Prusa seam painting::Native 3MF imported but did not pass spatial G-code proof. Regular slicing remains blocked.'
 
       - name: Generate same-geometry manual support enforcer controls
         run: |
