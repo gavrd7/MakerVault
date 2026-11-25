@@ -123,3 +123,20 @@ class PrusaOfflineMmuPreflightTests(TestCase):
             with self.assertRaises(SlicerProfileError):
                 prepare_prusa_offline_xl_candidate(**xl)
         load.assert_not_called()
+
+    def test_five_explicit_mmu_models_preserve_tool_order(self):
+        values,assets=self.parts()
+        values["rows"]=[
+            (item(x_mm=x),cube()) for x in (-88,-44,0,44,88)]
+        values["tools"]=[5,3,1,2,4]
+        with patch("core.slicer_prusa_material_preflight.resolved_prusa_profile",
+                   side_effect=assets):
+            result=prepare_prusa_offline_mmu_candidate(**values)
+        self.assertEqual(result["expected_tools"],(1,2,3,4,5))
+        with zipfile.ZipFile(io.BytesIO(result["model"])) as archive:
+            from defusedxml import ElementTree as SafeET
+            model=SafeET.fromstring(archive.read("Metadata/Slic3r_PE_model.config"))
+        selected=[
+            meta.get("value") for obj in model.findall("object")
+            for meta in obj.findall("metadata") if meta.get("key")=="extruder"]
+        self.assertEqual(selected,["5","3","1","2","4"])
