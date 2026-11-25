@@ -128,7 +128,7 @@ def official_filament_brands(version=ENGINE_VERSION):
 
 def search_official_profiles(query, kind, vendor="Creality", printer_model=None,
                              version=ENGINE_VERSION, brand="", slot_discovery=False,
-                             material="", manufacturer=""):
+                             material="", manufacturer="", offset=0):
     if not isinstance(query, str) or len(query.strip()) > 80:
         raise OfficialProfileError("Search must be 80 characters or fewer.")
     if not isinstance(vendor, str) or vendor not in VENDORS:
@@ -155,7 +155,7 @@ def search_official_profiles(query, kind, vendor="Creality", printer_model=None,
     return {
         "engine": ENGINE, "engine_version": version, "vendor": vendor,
         "kind": kind, "source": SOURCE, "ref": _ref(version), "brand": brand,
-        "profiles": [{"name": name, "sub_path": path} for name, path in matches[:40]],
+        "profiles": [{"name": name, "sub_path": path} for name, path in matches[offset:offset + 40]],
         "total_matches": len(matches),
         "import_status": "candidate_only",
     }
