@@ -1,5 +1,6 @@
 """Generate isolated PrusaSlicer native painted facet import-acceptance cases."""
 from pathlib import Path
+import json
 import sys
 
 from core.slicer_prusa_3mf import build_prusa_native_3mf
@@ -50,6 +51,8 @@ def main(directory):
         archive = build_prusa_native_3mf([({**base, **edits}, raw)],
                                          bed_width=250, bed_depth=210)
         (root / (name + ".3mf")).write_bytes(archive)
+        if name == "seam-enforced":
+            (root / "seam-enforced.json").write_text(json.dumps({**base, **edits}))
 
 if __name__ == "__main__":
     main(sys.argv[1])
