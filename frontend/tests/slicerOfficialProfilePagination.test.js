@@ -28,3 +28,14 @@ test("Prusa INI rows use the name and subpath as a unique identity",()=>{
   assert.match(workbench,/key=\{candidate\.sub_path \+ "::" \+ candidate\.name\}/);
   assert.match(workbench,/setOfficialImportTarget\(candidate\.sub_path \+ "::" \+ candidate\.name\)/);
 });
+
+test("Prusa official profile browser preserves selected printer, filament and process kind", () => {
+  const start = workbench.indexOf("function openOfficialSearch(");
+  const end = workbench.indexOf("async function removeProfile(", start);
+  assert.ok(start >= 0 && end > start);
+  const open = workbench.slice(start, end);
+  assert.ok(open.includes("setImportKind(kind)"));
+  assert.ok(!open.includes('form.engine === "prusaslicer" ? "printer"'));
+  for (const kind of ["printer", "filament", "process"])
+    assert.ok(workbench.includes('<option value="' + kind + '">'));
+});
