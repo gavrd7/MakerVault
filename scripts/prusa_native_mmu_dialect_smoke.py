@@ -132,6 +132,13 @@ def main(binary, source, directory):
             file = root / (kind + ".ini")
             file.write_bytes(data)
             native.extend(["--load", str(file)])
+        from slicer_worker.prusa_material_validation import validate_prusa_material_candidate
+        material_receipt = validate_prusa_material_candidate(
+            (Path(directory) / "trusted.3mf").read_bytes(),
+            printer_ini=(root / "printer.ini").read_bytes(), tools=[1,2])
+        assert material_receipt["tools"] == (1,2)
+        print("PASS: independent worker-side MMU project structural validation",
+              material_receipt)
         # Deliberately different per-tool temperatures exercise native vector
         # routing rather than merely repeating one filament preset for all tools.
         # Keep this an offline fixture; production owner-scoped routing is separate.
