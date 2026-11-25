@@ -85,6 +85,24 @@ class SlicerWorkerProtocolTests(TestCase):
                 _decode_payload(payload)
             native.assert_not_called()
 
+    def test_prusa_placed_stl_is_opt_in_and_exactly_engine_version_scoped(self):
+        payload = {**self.payload(), "prusa_placed_stl": True}
+        decoded = _decode_payload(payload)
+        self.assertTrue(decoded["prusa_placed_stl"])
+        for change in (
+            {"prusa_placed_stl": False},
+            {"prusa_placed_stl": 1},
+            {"engine": "orcaslicer"},
+            {"engine_version": "2.9.6"},
+            {"model_format": "3mf"},
+            {"filament_profiles": [payload["filament_profile"]] * 2},
+            {"creality_native_project": True},
+            {"native_modifier_project": True},
+        ):
+            with self.subTest(change=change):
+                with self.assertRaises(WorkerError):
+                    _decode_payload({**payload, **change})
+
     def test_creality_multi_stl_contract_uses_distinct_one_based_tools(self):
         import struct
         stl = (b"fixture".ljust(80, b" ") + struct.pack(
