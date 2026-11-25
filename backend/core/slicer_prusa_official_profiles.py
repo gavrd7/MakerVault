@@ -162,7 +162,7 @@ def official_catalogue_models(vendor="PrusaResearch"):
     return sorted(_sections(vendor), key=str.casefold)
 
 
-def search_prusa_profiles(query, kind, vendor="PrusaResearch", printer_model=None):
+def search_prusa_profiles(query, kind, vendor="PrusaResearch", printer_model=None, *, offset=0):
     """Discover *native* Prusa printer, filament and process candidates."""
     prefix = _PRUSA_KINDS.get(kind)
     if not prefix:
@@ -192,7 +192,7 @@ def search_prusa_profiles(query, kind, vendor="PrusaResearch", printer_model=Non
     return {
         "engine": ENGINE, "engine_version": ENGINE_VERSION,
         "vendor": vendor, "kind": kind, "source": SOURCE, "ref": REF,
-        "profiles": [{"name": name, "sub_path": vendor + ".ini"} for name in matches[:40]],
+        "profiles": [{"name": name, "sub_path": vendor + ".ini"} for name in matches[offset:offset + 40]],
         "total_matches": len(matches), "import_status": "candidate_only",
         "model_artwork_only": False,
         "compatibility_not_verified": True,
