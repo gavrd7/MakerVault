@@ -47,11 +47,19 @@ def prusa_command(binary: Path, workdir: Path) -> list[str]:
     """The verified worker image provides the executable, never a browser."""
     if binary.is_symlink() or not binary.is_file() or not os.access(binary, os.X_OK):
         raise WorkerError("Pinned PrusaSlicer executable is unavailable.")
-    model = _regular_file(workdir, "input.stl", MAX_MODEL_BYTES)
-    try:
-        validate_stl(model.read_bytes())
-    except StlValidationError:
-        raise WorkerError("Prusa STL model is invalid.") from None
+    project = workdir / "input.3mf"
+    if project.exists() or project.is_symlink():
+        from .prusa_3mf_validation import validate_prusa_native_3mf
+        model = _regular_file(workdir, "input.3mf", MAX_MODEL_BYTES)
+        validate_prusa_native_3mf(model.read_bytes())
+        if (workdir / "input.stl").exists():
+            raise WorkerError("Ambiguous Prusa input geometry.")
+    else:
+        model = _regular_file(workdir, "input.stl", MAX_MODEL_BYTES)
+        try:
+            validate_stl(model.read_bytes())
+        except StlValidationError:
+            raise WorkerError("Prusa STL model is invalid.") from None
     profiles = [
         _regular_file(workdir, name, MAX_PROFILE_BYTES)
         for name in ("printer.ini", "filament.ini", "process.ini")
@@ -79,7 +87,7 @@ def prusa_command(binary: Path, workdir: Path) -> list[str]:
     return [
         str(binary), "--load", str(profiles[0]), "--load", str(profiles[1]),
         "--load", str(profiles[2]), "--export-gcode", "--output", str(output),
-        *(["--dont-arrange"] if placed.exists() else []), str(model),
+        *(["--dont-arrange"] if placed.exists() or model.suffix == ".3mf" else []), str(model),
     ]
 
 
