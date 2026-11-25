@@ -9,6 +9,7 @@ from .runner import WorkerError
 
 NS = "{http://schemas.microsoft.com/3dmanufacturing/core/2015/02}"
 CONFIG = "Metadata/Slic3r_PE_model.config"
+LAYER_RANGES = "Metadata/Prusa_Slicer_layer_config_ranges.xml"
 PARTS = {"3D/3dmodel.model", CONFIG, "[Content_Types].xml", "_rels/.rels"}
 LIMIT = 500_000
 
@@ -48,14 +49,46 @@ def _settings(nodes, kind, allowed):
     return result
 
 
+
+def _validate_layer_ranges(root, object_count):
+    _require(root.tag == "objects" and not root.attrib and not (root.text or "").strip())
+    _require(1 <= len(root) <= object_count)
+    previous_id = 0
+    total = 0
+    for obj in root:
+        _require(obj.tag == "object" and set(obj.attrib) == {"id"})
+        ident = _integer(obj.get("id"), object_count)
+        _require(previous_id < ident and 1 <= ident <= object_count and 1 <= len(obj) <= 80)
+        previous_id = ident
+        previous_end = -1.
+        for interval in obj:
+            _require(interval.tag == "range" and set(interval.attrib) == {"min_z", "max_z"}
+                     and len(interval) == 1)
+            lo = float(interval.get("min_z"))
+            hi = float(interval.get("max_z"))
+            _require(math.isfinite(lo) and math.isfinite(hi) and
+                     0 <= lo < hi <= 1000 and lo >= previous_end)
+            previous_end = hi
+            option = interval[0]
+            _require(option.tag == "option" and option.attrib == {"opt_key": "layer_height"}
+                     and not len(option))
+            value = float(option.text)
+            _require(math.isfinite(value) and .05 <= value <= .5)
+            total += 1
+            _require(total <= 80)
+    return total
+
+
 def validate_prusa_native_3mf(data):
     _require(isinstance(data, bytes) and 0 < len(data) <= 32 * 1024 * 1024)
     try:
         with zipfile.ZipFile(io.BytesIO(data)) as z:
             infos = z.infolist()
-            _require(len(infos) == 4 and {i.filename for i in infos} == PARTS)
+            names = {i.filename for i in infos}
+            _require(len(infos) == len(names) and names in (PARTS, PARTS | {LAYER_RANGES}))
             _require(all(0 < i.file_size <= (80 * 1024 * 1024 if i.filename == "3D/3dmodel.model"
                                              else 65536) and not i.is_dir() for i in infos))
+            layer_root = _xml(z.read(LAYER_RANGES)) if LAYER_RANGES in names else None
             model = _xml(z.read("3D/3dmodel.model"))
             config = _xml(z.read(CONFIG))
             # These are fixed exporter literals; refuse external relationships,
@@ -128,7 +161,9 @@ def validate_prusa_native_3mf(data):
                          (n > 0 and role == "NegativeVolume" and not values) or
                          (n > 0 and role == "ParameterModifier" and bool(values)))
             _require(next_face == len(faces) and next_vertex == len(verts))
-        return {"objects": len(resources), "triangles": count, "regions": regions}
+        layer_count = _validate_layer_ranges(layer_root, len(resources)) if layer_root is not None else 0
+        return {"objects": len(resources), "triangles": count, "regions": regions,
+                "layer_ranges": layer_count}
     except WorkerError:
         raise
     except (ValueError, TypeError, KeyError, OSError, RuntimeError, zipfile.BadZipFile, ET.ParseError):
