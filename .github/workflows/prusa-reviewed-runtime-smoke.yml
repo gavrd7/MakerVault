@@ -207,6 +207,25 @@ jobs:
             --vendor /opt/engine-store/versions/prusaslicer/2.9.7/resources/profiles/PrusaResearch.ini \
             --input-stl /tmp/makervault-prusa-placed.stl
 
+      - name: Qualify numeric process overrides with actual native G-code
+        run: |
+          set -euo pipefail
+          docker run --rm --network none --user 10001:10001 \
+            -v "$TEST_VOLUME:/opt/engine-store:ro" \
+            -v "$GITHUB_WORKSPACE/scripts/prusa_real_binary_smoke.py:/tmp/prusa_smoke.py:ro" \
+            -v "$GITHUB_WORKSPACE/slicer_worker/tests/test_prusa_process_overrides.py:/tmp/prusa_overrides_test.py:ro" \
+            -v "$GITHUB_WORKSPACE/slicer_worker/prusa_process_overrides.py:/tmp/prusa_process_overrides.py:ro" \
+            --entrypoint python3 prusa-integration:smoke -c '
+          import runpy, sys, types
+          module = types.ModuleType("slicer_worker.prusa_process_overrides")
+          module.__dict__.update(runpy.run_path("/tmp/prusa_process_overrides.py"))
+          sys.modules["slicer_worker.prusa_process_overrides"] = module
+          runpy.run_path("/tmp/prusa_overrides_test.py")["native_smoke"](
+              "/opt/engine-store/versions/prusaslicer/2.9.7/bin/prusa-slicer",
+              "/opt/engine-store/versions/prusaslicer/2.9.7/resources/profiles/PrusaResearch.ini",
+              runpy.run_path("/tmp/prusa_smoke.py")["cube_stl"]())
+          '
+
       - name: Uninstall and reinstall Prusa without affecting Orca
         shell: bash
         run: |
