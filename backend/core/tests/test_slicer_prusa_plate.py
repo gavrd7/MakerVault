@@ -74,3 +74,21 @@ class PrusaPlacedStlTests(TestCase):
             with self.subTest(bad=bad):
                 with self.assertRaises(SlicerProfileError):
                     build_prusa_placed_stl([(bad,cube())],bed_width=220,bed_depth=220)
+
+    def test_flat_prusa_ini_rectangular_bed_sizes(self):
+        from core.slicer_prusa_plate import prusa_native_bed_dimensions
+        self.assertEqual(prusa_native_bed_dimensions(
+            b"printer_technology = FFF\nbed_shape = 0x0,250x0,250x210,0x210\n"),
+            (250.0,210.0))
+        for polygon in (
+            b"10x10,250x10,250x210,10x210",
+            b"0x0,250x0,250x210,5x205",
+            b"0x0,250x0,250x210",
+        ):
+            with self.subTest(polygon=polygon):
+                with self.assertRaises(SlicerProfileError):
+                    prusa_native_bed_dimensions(b"bed_shape = " + polygon)
+        with self.assertRaises(SlicerProfileError):
+            prusa_native_bed_dimensions(
+                b"bed_shape = 0x0,250x0,250x210,0x210\n"
+                b"bed_exclude_area = 0x0,20x0,20x20,0x20\n")
