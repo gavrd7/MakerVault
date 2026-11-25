@@ -176,7 +176,9 @@ def validate_prusa_native_3mf(data):
                 _require(first == next_face and first <= last)
                 next_face = last + 1
                 # A volume must own a disjoint contiguous vertex range.
-                ids = {int(v) for face in faces[first:last+1] for v in face.attrib.values()}
+                # Painted facet state attributes are NOT vertex references.
+                ids = {int(face.get(axis)) for face in faces[first:last+1]
+                       for axis in ("v1", "v2", "v3")}
                 _require(min(ids) == next_vertex and len(ids) == max(ids)-min(ids)+1)
                 next_vertex = max(ids)+1
                 values = _settings(vol, "volume", {"volume_type", "perimeters", "fill_density"})
