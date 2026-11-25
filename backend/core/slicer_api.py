@@ -1414,6 +1414,17 @@ def official_profiles(request):
             except OfficialProfileError as exc:
                 return _error(str(exc), 400)
             return JsonResponse({"engine": selected, "models": models})
+        # Bounded, one-based server-side pagination applies to all official
+        # catalogues and preset kinds, including the large Prusa INI bundle.
+        # An invalid page is rejected rather than scanning an unbounded offset.
+        page_text = request.GET.get("page", "1")
+        if not page_text.isdecimal() or len(page_text) > 6:
+            return _error("Page must be a positive integer.")
+        page = int(page_text)
+        if not 1 <= page <= 10000:
+            return _error("Page must be between 1 and 10000.")
+        page_size = 40
+        offset = (page - 1) * page_size
         searcher = {
             "orcaslicer": search_official_profiles,
             "crealityprint": search_creality_profiles,
@@ -1467,14 +1478,19 @@ def official_profiles(request):
                 return _error("Slot profile discovery requires OrcaSlicer and a selected printer.")
             material_query = request.GET.get("material", "")[:32]
             manufacturer_query = request.GET.get("manufacturer", "")[:80]
+            page_kwargs = {"offset": offset} if offset else {}
             results = (search_official_profiles(*args, printer_model=printer_model, version=version,
                            brand=request.GET.get("brand", ""),
                            slot_discovery=slot_discovery, material=material_query,
-                           manufacturer=manufacturer_query)
+                           manufacturer=manufacturer_query, **page_kwargs)
                        if selected == "orcaslicer" and
                           (slot_discovery or version != OFFICIAL_ORCA_VERSION or request.GET.get("brand")) else
-                       searcher(*args, printer_model=printer_model) if printer_model else searcher(*args))
+                       searcher(*args, printer_model=printer_model, **page_kwargs) if printer_model else
+                       searcher(*args, **page_kwargs))
             results["printer_model_filter"] = printer_model
+            results["page"] = page
+            results["page_size"] = page_size
+            results["total_pages"] = max(1, (results.get("total_matches", 0) + page_size - 1) // page_size)
         except OfficialProfileError as exc:
             return _error(str(exc), 503 if "source" in str(exc).lower() or "contact" in str(exc).lower() else 400)
         return JsonResponse(results)
