@@ -8,6 +8,7 @@ from defusedxml import ElementTree as SafeET
 from core.slicer_prusa_colour_project import build_prusa_colour_candidate
 from core.slicer_prusa_material_project import add_prusa_native_model_tools
 from core.slicer_prusa_3mf import build_prusa_native_3mf
+from core.slicer_prusa_wipe_tower import add_prusa_native_wipe_tower
 from core.tests.test_slicer_prusa_machine_topology import ini
 from core.tests.test_slicer_prusa_plate import item, cube
 from scripts.prusa_generate_mmu_paint import fixture
@@ -68,6 +69,33 @@ class PrusaResearchMaterialValidationTests(TestCase):
         with self.assertRaises(WorkerError):
             validate_prusa_material_candidate(
                 colour,printer_ini=ini("0.4,0.4","0"),colour=True)
+
+    def test_native_mmu_tower_exact_placement_is_a_separate_bounded_contract(self):
+        source=self.models()
+        with_tower=add_prusa_native_wipe_tower(
+            source,x_mm=55,y_mm=150,rotation_deg=0,
+            bed_width=250,bed_depth=210)
+        expected=(55,150,0,250,210)
+        receipt=validate_prusa_material_candidate(
+            with_tower,printer_ini=ini("0.4,0.4","1"),
+            tools=[1,2],tower=expected)
+        self.assertTrue(receipt["wipe_tower"])
+        with self.assertRaises(WorkerError):
+            validate_prusa_material_candidate(
+                with_tower,printer_ini=ini("0.4,0.4","1"),
+                tools=[1,2])
+        with self.assertRaises(WorkerError):
+            validate_prusa_material_candidate(
+                with_tower,printer_ini=ini("0.4,0.4","1"),
+                tools=[1,2],tower=(65,150,0,250,210))
+        def move(root):
+            root.set("position_x","999.000")
+        tampered=mutate(
+            with_tower,"Metadata/Prusa_Slicer_wipe_tower_information.xml",move)
+        with self.assertRaises(WorkerError):
+            validate_prusa_material_candidate(
+                tampered,printer_ini=ini("0.4,0.4","1"),
+                tools=[1,2],tower=expected)
 
     def test_tampered_native_material_annotations_fail(self):
         project=self.models()
