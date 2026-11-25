@@ -81,6 +81,31 @@ class OfficialProfileApiTests(TestCase):
             })
             self.assertEqual(response.status_code, 400, invalid)
 
+    def test_second_page_reaches_each_engine_without_changing_profile_kind(self):
+        self.client.force_login(self.user)
+        engines = (
+            ("orcaslicer", "2.5.0", "Creality", "search_official_profiles"),
+            ("crealityprint", "7.3.1", "Creality", "search_creality_profiles"),
+            ("bambustudio", "02.09.01.70", "BBL", "search_bambu_native_profiles"),
+            ("prusaslicer", "2.9.7", "PrusaResearch", "search_prusa_profiles"),
+            ("snapmakerorca", "2.4.1", "Snapmaker", "search_snapmaker_profiles"),
+        )
+        for engine, version, vendor, searcher in engines:
+            with self.subTest(engine=engine):
+                with patch("core.slicer_api." + searcher, return_value={
+                    "engine": engine, "vendor": vendor, "kind": "process",
+                    "profiles": [{"name": "Second page", "sub_path": "preset.json"}],
+                    "total_matches": 41,
+                }) as mocked:
+                    response = self.client.get(self.url, {
+                        "engine": engine, "version": version, "vendor": vendor,
+                        "kind": "process", "page": "2",
+                    })
+                self.assertEqual(response.status_code, 200, response.content)
+                self.assertEqual(response.json()["page"], 2)
+                self.assertEqual(response.json()["total_pages"], 2)
+                self.assertEqual(mocked.call_args.kwargs["offset"], 40)
+
     def test_prusa_imports_flat_native_ini_only_as_owner_candidate(self):
         self.client.force_login(self.user)
         selection = {
