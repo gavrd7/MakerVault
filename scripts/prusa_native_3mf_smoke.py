@@ -8,7 +8,7 @@ from tempfile import TemporaryDirectory
 import sys
 
 from slicer_worker.prusa_vendor_profiles import flatten_prusa_vendor_preset
-from slicer_worker.prusa_gcode_audit import audit_prusa_positive_e
+from slicer_worker.prusa_gcode_audit import audit_prusa_positive_e, WORD
 
 
 def main(binary, vendor, project):
@@ -26,7 +26,9 @@ def main(binary, vendor, project):
         subprocess.run([binary, *profiles, "--export-gcode", "--output", str(output),
                         "--dont-arrange", project], cwd=folder, check=True, timeout=300)
         data = output.read_bytes()
-        assert audit_prusa_positive_e(data)["positive_e_moves"] >= 40
+        quality = audit_prusa_positive_e(data)
+        assert quality["positive_e_moves"] >= 40
+        print("Native 3MF total audited extrusion moves:", quality)
         # At each deposited path, attribute actual extrusion to the two
         # disjoint model X bands. Exclude skirt and non-infill features.
         positions = [0, 0]
@@ -49,11 +51,11 @@ def main(binary, vendor, project):
             elif cmd[0] == "M83":
                 relative = True
             elif cmd[0] == "G92":
-                for token in cmd[1:]:
-                    if token.startswith("E"):
-                        e = float(token[1:])
+                for key, value in WORD.findall(" ".join(cmd)):
+                    if key.upper() == "E":
+                        e = float(value)
             elif cmd[0] in ("G1", "G0", "G01", "G00"):
-                fields = {token[0]: float(token[1:]) for token in cmd[1:] if re.fullmatch(r"[XYZE]-?\d+(?:\.\d+)?", token)}
+                fields = {key.upper(): float(value) for key, value in WORD.findall(" ".join(cmd))}
                 new_x = fields.get("X", x)
                 new_y = fields.get("Y", y)
                 if "E" in fields:
