@@ -71,7 +71,7 @@ def native_prusa_painted_stl(item, source):
     return bytes(binary), attributes, frozenset(required)
 
 
-_WORD = re.compile(r"([XYZE])([-+]?(?:[0-9]+(?:\\.[0-9]*)?|\\.[0-9]+))", re.I)
+_WORD = re.compile(r"([XYZE])([-+]?(?:[0-9]+(?:\.[0-9]*)?|\.[0-9]+))", re.I)
 
 
 def audit_prusa_support_enforcer_gcode(data):
