@@ -16,6 +16,7 @@ from .prusa_vendor_profiles import validate_flat_prusa_preset
 
 MODEL = "3D/3dmodel.model"
 PAINT = "{http://schemas.slic3r.org/3mf/2017/06}mmu_segmentation"
+TOWER = "Metadata/Prusa_Slicer_wipe_tower_information.xml"
 
 
 def _refuse():
@@ -43,10 +44,19 @@ def _qualified_topology(printer_ini):
     return len(nozzles), same_nozzle
 
 
-def validate_prusa_material_candidate(data, *, printer_ini, tools=None, colour=False):
+def validate_prusa_material_candidate(data, *, printer_ini, tools=None, colour=False, tower=None):
     if not isinstance(data, bytes) or not 0 < len(data) <= 32*1024*1024:
         _refuse()
     logical_count, changer = _qualified_topology(printer_ini)
+    if tower is not None:
+        if (not changer or not isinstance(tower, (tuple, list)) or len(tower) != 5
+                or any(type(v) not in (int, float) or not math.isfinite(v) for v in tower)):
+            _refuse()
+        x, y, rotation, width, depth = tower
+        if (not 70 <= width <= 1000 or not 60 <= depth <= 1000
+                or not 5 <= x <= width - 65 or not 5 <= y <= depth - 45
+                or not -360 <= rotation <= 360):
+            _refuse()
     if colour:
         if tools is not None or not changer or logical_count < 2:
             _refuse()
@@ -57,12 +67,24 @@ def validate_prusa_material_candidate(data, *, printer_ini, tools=None, colour=F
     try:
         with zipfile.ZipFile(io.BytesIO(data)) as z:
             infos=z.infolist()
-            if (len(infos)!=len(PARTS) or {i.filename for i in infos}!=PARTS
+            allowed=PARTS | ({TOWER} if tower is not None else set())
+            if (len(infos)!=len(allowed) or {i.filename for i in infos}!=allowed
                 or any(i.is_dir() or i.file_size < 1 or i.file_size >
                        (80*1024*1024 if i.filename==MODEL else 65536)
                        for i in infos)):
                 _refuse()
             parts={i.filename:z.read(i.filename) for i in infos}
+        if tower is not None:
+            tower_xml=parts.pop(TOWER)
+            if b"<!" in tower_xml or b"\x00" in tower_xml:
+                _refuse()
+            info=ET.fromstring(tower_xml)
+            if info.tag!="wipe_tower_information" or len(info) or set(info.attrib)!={
+                    "bed_idx","position_x","position_y","rotation_deg"} or info.get("bed_idx")!="0":
+                _refuse()
+            if any(info.get(key)!=format(float(value),".3f")
+                   for key,value in zip(("position_x","position_y","rotation_deg"),tower[:3])):
+                _refuse()
         for xml_part in (MODEL,CONFIG):
             if b"<!" in parts[xml_part] or b"\x00" in parts[xml_part]:
                 _refuse()
@@ -119,7 +141,8 @@ def validate_prusa_material_candidate(data, *, printer_ini, tools=None, colour=F
                            receipt["layer_ranges"]):
             _refuse()
         return {"objects":receipt["objects"],"colour_facets":marked if colour else 0,
-                "tools":tuple(tools) if not colour else (1,2)}
+                "tools":tuple(tools) if not colour else (1,2),
+                "wipe_tower":tower is not None}
     except WorkerError:
         raise
     except (TypeError,ValueError,KeyError,AttributeError,ET.ParseError,
