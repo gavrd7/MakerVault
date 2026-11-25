@@ -2010,13 +2010,17 @@ def delete_profile(request, profile_id):
 def profile_process_settings(request, profile_id):
     """Read editable native process settings from the user's resolved preset."""
     profile = SlicerProfile.objects.filter(
-        pk=profile_id, owner=request.user, engine__in=["orcaslicer", "crealityprint", "bambustudio"], kind="process"
+        pk=profile_id, owner=request.user, engine__in=["orcaslicer", "crealityprint", "bambustudio", "prusaslicer"], kind="process"
     ).select_related("file_asset").first()
     if not profile:
         return _error("Owned native slicing process profile not found.", 404)
     try:
         resolved = resolved_native_profile(profile)
-        fields = process_schema(resolved)
+        if profile.engine == "prusaslicer":
+            from .slicer_prusa_process_settings import prusa_process_schema
+            fields = prusa_process_schema(resolved)
+        else:
+            fields = process_schema(resolved)
     except (SlicerProfileError, ValueError, OSError):
         return _error("Native process settings could not be inspected.", 422)
     return JsonResponse({"profile_id": str(profile.pk), "engine": profile.engine,
