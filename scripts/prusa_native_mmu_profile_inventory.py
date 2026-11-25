@@ -72,7 +72,7 @@ def main(path):
                 converted.append("binary_gcode = 0")
             else:
                 converted.append(line)
-        text_profile = ("\\n".join(converted)+"\\n").encode()
+        text_profile = ("\n".join(converted)+"\n").encode()
         try:
             modern = validate_flat_prusa_preset(text_profile, kind="printer")
         except ValueError as exc:
@@ -106,7 +106,7 @@ def main(path):
                 faces = [(0,2,1),(0,3,2),(4,5,6),(4,6,7),
                          (0,1,5),(0,5,4),(1,2,6),(1,6,5),
                          (2,3,7),(2,7,6),(3,0,4),(3,4,7)]
-                stl=bytearray(b"Prusa modern text smoke".ljust(80,b"\\x00"))
+                stl=bytearray(b"Prusa modern text smoke".ljust(80,b"\x00"))
                 stl.extend(struct.pack("<I",len(faces)))
                 for a,b,c in faces:
                     stl.extend(struct.pack("<12fH",0.,0.,0.,*points[a],
