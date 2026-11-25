@@ -1,4 +1,4 @@
-"""Candidate Prusa-only numeric process overrides, awaiting real CLI qualification.
+"""Prusa-only numeric process overrides qualified against native 2.9.7 CLI.
 
 Canonical workbench keys map to native Prusa INI keys. Never mutate a stored
 preset, introduce arbitrary keys, or accept executable/string payloads.
