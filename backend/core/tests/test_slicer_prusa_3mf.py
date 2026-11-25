@@ -128,6 +128,31 @@ class PrusaProjectDialectTests(TestCase):
                 self.assertEqual(receipt["objects"], 2)
                 self.assertEqual(receipt["regions"], 2)
 
+    def test_independent_two_object_paint_channels_validate_without_cross_talk(self):
+        from core.slicer_plate_3mf import _triangles
+        from core.slicer_native_support_paint import _fingerprint
+        raw = cube()
+        faces = list(_triangles(raw))
+        local = [[(v[0]-10, v[1]-10, v[2]) for v in face]
+                 for face in faces]
+        patch = {"version": 2, "signature": _fingerprint(local),
+                 "regions": [{"slot": 0, "patches": [{
+                     "face": 0,
+                     "polygon": [list(p) for p in local[0]],
+                 }]}]}
+        for field in ("support_paint", "fuzzy_skin_paint"):
+            for index in (0, 1):
+                with self.subTest(field=field, index=index):
+                    rows = [(item(x_mm=-35), raw),(item(x_mm=35), raw)]
+                    row = {**rows[index][0], field: patch}
+                    rows[index] = (row, raw)
+                    project = build_prusa_native_3mf(rows,
+                        bed_width=250,bed_depth=210)
+                    receipt = validate_prusa_native_3mf(project)
+                    self.assertEqual(receipt["objects"], 2)
+                    self.assertEqual(len(receipt["paint_channels"]), 1)
+                    self.assertEqual(receipt["regions"], 0)
+
     def test_native_prusa_layer_ranges_roundtrip_and_reject_tampering(self):
         plate = [(item(variable_layer_profile={"version": 1, "bands": [
             {"from_mm": 4, "to_mm": 16, "layer_mm": .12}]}), cube())]
