@@ -12,6 +12,12 @@ CONFIG = "Metadata/Slic3r_PE_model.config"
 LAYER_RANGES = "Metadata/Prusa_Slicer_layer_config_ranges.xml"
 PARTS = {"3D/3dmodel.model", CONFIG, "[Content_Types].xml", "_rels/.rels"}
 LIMIT = 500_000
+PAINT_NS = "{http://schemas.slic3r.org/3mf/2017/06}"
+PAINT_HEADERS = {
+    PAINT_NS + "custom_supports": "slic3rpe:FdmSupportsPaintingVersion",
+    PAINT_NS + "custom_seam": "slic3rpe:SeamPaintingVersion",
+    PAINT_NS + "fuzzy_skin": "slic3rpe:FuzzySkinPaintingVersion",
+}
 
 
 def _require(condition):
@@ -110,14 +116,26 @@ def validate_prusa_native_3mf(data):
                          set(node.attrib) == {"Extension", "ContentType"} and
                          types.pop(node.get("Extension"), None) == node.get("ContentType"))
         _require(model.tag == NS + "model" and model.attrib == {"unit": "millimeter"})
-        _require([n.tag for n in model] == [NS + "metadata", NS + "resources", NS + "build"])
-        meta, resources, build = model
-        _require(meta.attrib == {"name": "slic3rpe:Version3mf"} and meta.text == "1" and not len(meta))
+        entries = list(model)
+        _require(3 <= len(entries) <= 6 and
+                 entries[-2].tag == NS + "resources" and entries[-1].tag == NS + "build")
+        meta, resources, build = entries[0], entries[-2], entries[-1]
+        _require(meta.tag == NS + "metadata" and
+                 meta.attrib == {"name": "slic3rpe:Version3mf"} and
+                 meta.text == "1" and not len(meta))
+        declared_paints = set()
+        for header in entries[1:-2]:
+            _require(header.tag == NS + "metadata" and not len(header) and
+                     set(header.attrib) == {"name"} and (header.text or "").strip() == "2")
+            name = header.get("name")
+            _require(name in PAINT_HEADERS.values() and name not in declared_paints)
+            declared_paints.add(name)
         _require(not resources.attrib and not build.attrib and 1 <= len(resources) <= 12
                  and len(build) == len(resources))
         _require(config.tag == "config" and not config.attrib and len(config) == len(resources))
         count = 0
         regions = 0
+        observed_paints = set()
         for index, (obj, item, cfg) in enumerate(zip(resources, build, config), 1):
             oid = str(index)
             _require(obj.tag == NS + "object" and obj.attrib == {"id": oid, "type": "model"} and len(obj) == 1)
@@ -133,9 +151,15 @@ def validate_prusa_native_3mf(data):
                 _require(vertex.tag == NS + "vertex" and not len(vertex) and set(vertex.attrib) == {"x", "y", "z"})
                 _require(all(math.isfinite(float(v)) and abs(float(v)) <= 20000 for v in vertex.attrib.values()))
             for face in faces:
-                _require(face.tag == NS + "triangle" and not len(face) and set(face.attrib) == {"v1", "v2", "v3"})
-                ids = [_integer(v, len(verts)-1) for v in face.attrib.values()]
+                _require(face.tag == NS + "triangle" and not len(face) and
+                         {"v1", "v2", "v3"}.issubset(face.attrib) and
+                         set(face.attrib) <= {"v1", "v2", "v3", *PAINT_HEADERS})
+                ids = [_integer(face.get(v), len(verts)-1) for v in ("v1", "v2", "v3")]
                 _require(len(set(ids)) == 3)
+                for key, val in face.attrib.items():
+                    if key in PAINT_HEADERS:
+                        _require(val in (("4",) if key.endswith("fuzzy_skin") else ("4", "8")))
+                        observed_paints.add(PAINT_HEADERS[key])
             _require(cfg.tag == "object" and cfg.attrib == {"id": oid, "instances_count": "1"})
             metadata = [n for n in cfg if n.tag == "metadata"]
             volumes = [n for n in cfg if n.tag == "volume"]
@@ -161,9 +185,10 @@ def validate_prusa_native_3mf(data):
                          (n > 0 and role == "NegativeVolume" and not values) or
                          (n > 0 and role == "ParameterModifier" and bool(values)))
             _require(next_face == len(faces) and next_vertex == len(verts))
+        _require(observed_paints == declared_paints)
         layer_count = _validate_layer_ranges(layer_root, len(resources)) if layer_root is not None else 0
         return {"objects": len(resources), "triangles": count, "regions": regions,
-                "layer_ranges": layer_count}
+                "layer_ranges": layer_count, "paint_channels": sorted(observed_paints)}
     except WorkerError:
         raise
     except (ValueError, TypeError, KeyError, OSError, RuntimeError, zipfile.BadZipFile, ET.ParseError):
