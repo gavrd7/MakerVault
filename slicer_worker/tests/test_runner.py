@@ -34,6 +34,22 @@ class WorkerContractTests(TestCase):
         self.assertIn("--export-gcode", args)
         self.assertEqual(args.count("--load"), 3)
 
+    def test_positioned_prusa_stl_uses_fixed_no_arrange_flag(self):
+        base = prusa_command(self.executable, self.root)
+        self.assertNotIn("--dont-arrange", base)
+        (self.root / "prusa-placed-stl.marker").write_text("v1")
+        placed = prusa_command(self.executable, self.root)
+        self.assertIn("--dont-arrange", placed)
+        self.assertEqual(placed.count("--dont-arrange"), 1)
+        self.assertEqual(placed[-1], str(self.root / "input.stl"))
+        (self.root / "prusa-placed-stl.marker").write_text("--delete-all")
+        with self.assertRaisesRegex(WorkerError, "marker"):
+            prusa_command(self.executable, self.root)
+        (self.root / "prusa-placed-stl.marker").unlink()
+        (self.root / "prusa-placed-stl.marker").symlink_to(self.root / "filament.ini")
+        with self.assertRaisesRegex(WorkerError, "marker"):
+            prusa_command(self.executable, self.root)
+
     def test_symlink_input_and_existing_output_are_rejected(self):
         (self.root / "printer.ini").unlink()
         (self.root / "printer.ini").symlink_to(self.root / "filament.ini")
