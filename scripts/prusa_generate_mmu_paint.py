@@ -105,10 +105,11 @@ def main(dest):
          "rotation_deg":0,"scale_percent":100}
     control=build_prusa_native_3mf([(row,base)],bed_width=250,bed_depth=210)
     from core.slicer_prusa_colour_project import build_prusa_colour_candidate
-    from core.tests.test_slicer_prusa_machine_topology import ini
     candidate=build_prusa_colour_candidate(
         {**row,"colour_paint":paint},base,
-        printer_ini=ini("0.4,0.4,0.4,0.4,0.4","1"),
+        printer_ini=(b"bed_shape = 0x0,250x0,250x210,0x210\n"
+                     b"nozzle_diameter = 0.4,0.4,0.4,0.4,0.4\n"
+                     b"single_extruder_multi_material = 1\n"),
         colour_tool_indices={1:1},bed_width=250,bed_depth=210)
     (folder/"baseline.3mf").write_bytes(control)
     (folder/"colour.3mf").write_bytes(candidate)
