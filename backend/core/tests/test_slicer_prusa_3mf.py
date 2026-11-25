@@ -66,6 +66,27 @@ class PrusaProjectDialectTests(TestCase):
                 self.assertEqual(receipt["regions"], 1)
                 self.assertEqual(receipt["objects"], 1)
 
+    def test_native_prusa_layer_ranges_roundtrip_and_reject_tampering(self):
+        plate = [(item(variable_layer_profile={"version": 1, "bands": [
+            {"from_mm": 4, "to_mm": 16, "layer_mm": .12}]}), cube())]
+        raw = build_prusa_native_3mf(plate, bed_width=250, bed_depth=210)
+        self.assertEqual(validate_prusa_native_3mf(raw)["layer_ranges"], 1)
+        part = "Metadata/Prusa_Slicer_layer_config_ranges.xml"
+        def mutate(root):
+            root.find("./object/range/option").set("opt_key", "post_process")
+        with self.assertRaises(WorkerError):
+            validate_prusa_native_3mf(rewrite(raw, part, mutate))
+        def bad_id(root):
+            root.find("./object").set("id", "12")
+        with self.assertRaises(WorkerError):
+            validate_prusa_native_3mf(rewrite(raw, part, bad_id))
+        def overlap(root):
+            element = root.find("./object")
+            interval = ET.SubElement(element, "range", {"min_z": "6", "max_z": "18"})
+            ET.SubElement(interval, "option", {"opt_key": "layer_height"}).text = ".13"
+        with self.assertRaises(WorkerError):
+            validate_prusa_native_3mf(rewrite(raw, part, overlap))
+
     def test_worker_rejects_script_and_unknown_volume_metadata(self):
         raw = build_prusa_native_3mf([
             (item(modifier_volumes=[volume("modifier", {"wall_loops": 6})]), cube())
