@@ -15,6 +15,7 @@ def tower_extrusion_xy(data):
     e=0.
     x=y=None
     sampled=[]
+    extrusion=0.0
     tools={}
     for line in data.decode("utf-8").splitlines():
         command=line.split(";",1)[0].strip()
@@ -41,6 +42,7 @@ def tower_extrusion_xy(data):
                         and 125<=y<=200 and 0<=x<=250
                         and tool in (0,1)):
                     sampled.append((x,y))
+                    extrusion += delta
                     tools[tool]=tools.get(tool,0)+1
     if len(sampled)<30 or len(tools)<2:
         raise AssertionError("Native Prusa wipe tower lacked identifiable multi-tool purge extrusion.")
@@ -51,6 +53,7 @@ def tower_extrusion_xy(data):
     xs.sort()
     ys.sort()
     return {"count":len(sampled),"tools":tools,
+            "positive_e_mm":round(extrusion,3),
             "median_x":round(xs[len(xs)//2],2),
             "median_y":round(ys[len(ys)//2],2)}
 
@@ -84,6 +87,25 @@ def main(binary,vendor,folder):
         assert shift>70,("Prusa ignored native 3MF wipe tower X",results)
         assert abs(results["east"]["median_y"]-results["west"]["median_y"])<15,results
         print("PASS: true native MMU wipe tower extrusion moved across bed by",shift,"mm")
+        from core.slicer_prusa_purge import compile_prusa_purge_matrix
+        process=work/"print.ini"
+        original=process.read_bytes()
+        amounts={}
+        for volume in (80,220):
+            matrix=[[0 if i==j else volume for j in range(5)] for i in range(5)]
+            process.write_bytes(compile_prusa_purge_matrix(
+                (work/"printer.ini").read_bytes(),original,matrix))
+            output=work/("purge-"+str(volume)+".gcode")
+            subprocess.run([binary,*profiles,"--export-gcode","--dont-arrange",
+                            "--output",str(output),str(root/"west.3mf")],
+                           check=True,cwd=work,timeout=300)
+            data=output.read_bytes()
+            assert audit_prusa_positive_e(data)["positive_e_moves"]>=100
+            amounts[volume]=tower_extrusion_xy(data)
+            print("Native Prusa purge matrix",volume,amounts[volume])
+        assert amounts[220]["positive_e_mm"] > amounts[80]["positive_e_mm"]*1.15, amounts
+        print("PASS: larger native purge matrix increases actual tower extrusion")
+
 
 
 if __name__=="__main__":
