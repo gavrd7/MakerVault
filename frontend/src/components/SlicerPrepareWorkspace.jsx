@@ -309,6 +309,10 @@ export default function SlicerPrepareWorkspace({
   };
   const visibleNativeFields = Object.entries(nativeProcessFields)
     .filter(([key, spec]) => {
+      // Prusa 2.9.7 has native G-code evidence for precisely these two
+      // per-object options. Other controls remain available at Global scope.
+      if (editingObject && String(engine || "").split(" ")[0] === "prusaslicer" &&
+          !["wall_loops", "sparse_infill_density"].includes(key)) return false;
       const conditions = spec.enabled_when
         ? (Array.isArray(spec.enabled_when) ? spec.enabled_when : [spec.enabled_when])
         : [];
@@ -1206,8 +1210,9 @@ export default function SlicerPrepareWorkspace({
             </option>)}
           </select>
           <small>Object overrides inherit Global values unless changed.
-            Wall loops and sparse infill density have passed native Orca 2.4.2 slicing tests.
-            Other Object settings can be saved in drafts but remain unavailable for slicing until verified.</small>
+            {String(engine || "").split(" ")[0] === "prusaslicer"
+              ? "PrusaSlicer 2.9.7 supports native per-object wall loops and infill density. Other print settings remain available at Global scope."
+              : "Wall loops and sparse infill density are verified per-object controls. Other Object settings can be saved in drafts but remain unavailable for slicing until verified."}</small>
 
           <div className="slicerModifierDrafts" aria-label="Regional volume settings">
             <strong>Regional slicing settings</strong>
