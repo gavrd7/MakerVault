@@ -332,7 +332,9 @@ def _validate_plate_execution(job):
         )
     objects=settings.get("plate_objects")
     try:
-        if job.engine == "prusaslicer" and objects:
+        if job.engine == "prusaslicer" and objects and any(
+                item.get("modifier_volumes") or item.get("process_overrides")
+                for item in objects if isinstance(item, dict)):
             from .slicer_prusa_3mf import validate_prusa_project_admission
             native_modifier_request = validate_prusa_project_admission(
                 objects, settings, getattr(job, "engine_version", None))
