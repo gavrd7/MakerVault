@@ -132,6 +132,9 @@ class ReviewedReleaseCatalogueTests(unittest.TestCase):
 
     def discover(self, *, digest=None, size=None, url=None, tag=None):
         from slicer_worker import engine_installer_service as installer
+        # Each tampered response is independently fetched, not served from cache.
+        installer.RELEASE_CACHE["items"] = []
+        installer.RELEASE_CACHE["time"] = 0
         asset_url = ("https://github.com/gavrd7/MakerVault/releases/download/"
                      + prusa.RELEASE_TAG + "/" + prusa.ASSET_NAME)
         item = {"name": prusa.ASSET_NAME,
