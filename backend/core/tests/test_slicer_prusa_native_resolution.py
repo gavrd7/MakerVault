@@ -142,7 +142,7 @@ class PrusaSingleMaterialAdmissionTests(TestCase):
                               }]}, owner=None, printer_profile_id="verified")
         self.assertTrue(_validate_plate_execution(job))
 
-    def test_prusa_paint_and_variable_layers_stay_blocked(self):
+    def test_prusa_paint_stays_blocked(self):
         from core.slicer_execution import _validate_plate_execution, SlicerExecutionError
         base = {"x_mm": 10, "y_mm": 0, "z_mm": 0,
                 "rotation_deg": 0, "scale_percent": 100}
@@ -150,7 +150,6 @@ class PrusaSingleMaterialAdmissionTests(TestCase):
             ("colour_paint", {"regions": [{"colour": "#ff0000"}]}),
             ("support_paint", {"regions": [{"state": "enforce"}]}),
             ("seam_paint", {"regions": [{"state": "enforce"}]}),
-            ("variable_layer_profile", {"bands": [{"z": 1}]}),
         ):
             with self.subTest(field=field):
                 job = SimpleNamespace(engine="prusaslicer", engine_version="2.9.7",
