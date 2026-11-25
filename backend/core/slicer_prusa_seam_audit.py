@@ -15,10 +15,12 @@ def audit_prusa_seam_enforcer_gcode(data, item, *, bed_width, bed_depth):
     if len(regions) != 1 or regions[0].get("slot") != 0:
         raise ValueError("Prusa seam audit requires one enforcer region.")
     patches = regions[0].get("patches") or []
-    if len(patches) != 1:
-        raise ValueError("Prusa seam audit requires one bounded patch.")
-    polygon = patches[0].get("polygon")
-    if not isinstance(polygon, list) or not 3 <= len(polygon) <= 16:
+    if not 1 <= len(patches) <= 2:
+        raise ValueError("Prusa seam audit requires one or two bounded patches.")
+    polygons = [patch.get("polygon") for patch in patches if isinstance(patch, dict)]
+    if len(polygons) != len(patches) or any(
+            not isinstance(poly, list) or not 3 <= len(poly) <= 16
+            for poly in polygons):
         raise ValueError("Prusa seam patch is invalid.")
     if (abs(float(item.get("z_mm", 0))) > 1e-6 or
             abs(float(item.get("rotation_deg", 0))) > 1e-6 or
@@ -29,7 +31,7 @@ def audit_prusa_seam_enforcer_gcode(data, item, *, bed_width, bed_depth):
     if not isinstance(data, bytes) or not 0 < len(data) <= 90*1024*1024:
         raise ValueError("Invalid Prusa native seam G-code.")
     try:
-        points = [tuple(float(x) for x in p) for p in polygon]
+        points = [tuple(float(x) for x in p) for polygon in polygons for p in polygon]
         if any(len(p) != 3 or not all(math.isfinite(x) and abs(x) <= 1000 for x in p)
                for p in points):
             raise ValueError()
