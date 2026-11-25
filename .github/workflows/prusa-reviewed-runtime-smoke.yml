@@ -397,7 +397,8 @@ jobs:
             /opt/engine-store/versions/prusaslicer/2.9.7/resources/profiles/PrusaResearch.ini \
             baseline=/tmp/support-models/baseline.3mf \
             geometry-control=/tmp/support-models/geometry-control.3mf \
-            enforced=/tmp/support-models/enforced.3mf
+            enforced=/tmp/support-models/enforced.3mf \
+            blocked=/tmp/support-models/blocked.3mf
 
       - name: Verify authenticated native Prusa 3MF HTTP jobs
         run: |
