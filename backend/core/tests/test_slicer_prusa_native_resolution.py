@@ -65,12 +65,32 @@ class PrusaPrivateNativeProfileTests(TestCase):
 class PrusaSingleMaterialAdmissionTests(TestCase):
     """Never silently ignore workbench controls unsupported by native Prusa."""
 
-    def test_nonempty_global_process_changes_fail_before_worker_dispatch(self):
+    def test_global_process_changes_require_owned_native_profile(self):
         from core.slicer_execution import _validate_plate_execution, SlicerExecutionError
         job = SimpleNamespace(engine="prusaslicer", engine_version="2.9.7",
-                              settings={"process_overrides": {"wall_loops": 5}}, owner=None)
-        with self.assertRaisesRegex(SlicerExecutionError, "process overrides"):
+                              settings={"process_overrides": {"wall_loops": 5}}, owner=None,
+                              process_profile_id=None)
+        with self.assertRaisesRegex(SlicerExecutionError, "native Prusa process profile"):
             _validate_plate_execution(job)
+
+    def test_backend_native_process_mapping_and_schema(self):
+        from core.slicer_prusa_process_settings import apply_prusa_process_overrides, prusa_process_schema
+        from core.slicer_prusa_native_resolution import parse_prusa_profile
+        raw = (b"layer_height = 0.2\nperimeters = 2\ntop_solid_layers = 4\n"
+               b"bottom_solid_layers = 3\nfill_density = 15%\nbrim_width = 0\nskirts = 1\n")
+        values = {"layer_height": .25, "wall_loops": 3, "top_shell_layers": 5,
+                  "bottom_shell_layers": 4, "sparse_infill_density": 30,
+                  "brim_width": 3, "skirt_loops": 2}
+        self.assertEqual(set(prusa_process_schema(raw)), set(values))
+        self.assertEqual(parse_prusa_profile(apply_prusa_process_overrides(raw, values), "process"),
+                         {"layer_height": "0.25", "perimeters": "3",
+                          "top_solid_layers": "5", "bottom_solid_layers": "4",
+                          "fill_density": "30%", "brim_width": "3", "skirts": "2"})
+        self.assertEqual(apply_prusa_process_overrides(raw, {}), raw)
+        for invalid in ({"post_process": "bad"}, {"wall_loops": 2.5},
+                        {"layer_height": float("nan")}, {"brim_width": True}):
+            with self.assertRaises(ValueError):
+                apply_prusa_process_overrides(raw, invalid)
 
     def test_unverified_native_multimaterial_fails_before_worker_dispatch(self):
         from core.slicer_execution import _validate_plate_execution, SlicerExecutionError
