@@ -258,6 +258,50 @@ jobs:
             /opt/engine-store/versions/prusaslicer/2.9.7/resources/profiles/PrusaResearch.ini \
             /tmp/native.3mf
 
+      - name: Generate independent Prusa modifier and negative fixtures
+        if: ${{ !cancelled() && env.PRUSA_NATIVE_PROJECT != '' }}
+        run: |
+          set -euo pipefail
+          export REGION_DIR="$RUNNER_TEMP/prusa-regions"
+          mkdir -p "$REGION_DIR"
+          echo "PRUSA_REGION_DIR=$REGION_DIR" >> "$GITHUB_ENV"
+          PYTHONPATH=backend "$RUNNER_TEMP/prusa-backend-venv/bin/python" - <<'PY'
+          import os
+          from pathlib import Path
+          from core.slicer_prusa_3mf import build_prusa_native_3mf
+          from scripts.prusa_real_binary_smoke import cube_stl
+          folder = Path(os.environ["REGION_DIR"])
+          base = {"asset_id": "verified-cube", "x_mm": 0, "y_mm": 0,
+                  "z_mm": 0, "rotation_deg": 0, "scale_percent": 100}
+          for name, kind, settings in (("baseline", None, {}),
+                                        ("modifier", "modifier", {"sparse_infill_density": 80}),
+                                        ("negative", "negative", {})):
+              item = dict(base)
+              if kind:
+                  item["modifier_volumes"] = [{
+                      "id": "523af5de-f6dd-41c0-b130-cc50b471cde2",
+                      "shape": "box", "kind": kind, "width_mm": 10,
+                      "depth_mm": 10, "height_mm": 22,
+                      "x_mm": 0, "y_mm": 0, "z_mm": 10,
+                      "settings": settings}]
+              data = build_prusa_native_3mf([(item, cube_stl())], bed_width=250, bed_depth=210)
+              (folder / (name + ".3mf")).write_bytes(data)
+          PY
+
+      - name: Qualify Prusa native modifier and negative-volume effects
+        if: ${{ !cancelled() && env.PRUSA_REGION_DIR != '' }}
+        run: |
+          set -euo pipefail
+          docker run --rm --network none --user 10001:10001 \
+            -v "$TEST_VOLUME:/opt/engine-store:ro" \
+            -v "$GITHUB_WORKSPACE/scripts/prusa_native_regions_smoke.py:/tmp/prusa_regions.py:ro" \
+            -v "$PRUSA_REGION_DIR:/tmp/regions:ro" \
+            --entrypoint python3 prusa-integration:smoke \
+            /tmp/prusa_regions.py \
+            /opt/engine-store/versions/prusaslicer/2.9.7/bin/prusa-slicer \
+            /opt/engine-store/versions/prusaslicer/2.9.7/resources/profiles/PrusaResearch.ini \
+            /tmp/regions/baseline.3mf /tmp/regions/modifier.3mf /tmp/regions/negative.3mf
+
       - name: Uninstall and reinstall Prusa without affecting Orca
         shell: bash
         run: |
