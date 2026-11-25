@@ -1,3 +1,12 @@
+## Scope decision — complete Prusa feature parity before PR #199 merge (25 November 2026)
+
+- User explicitly prefers retaining **one draft PR #199** until PrusaSlicer reaches parity with the three installed engines. Do **not** split off an initial single-material release or recommend merging the partial engine.
+- Next sequence: (1) finish CI and native 3MF/worker confidence, (2) independent multi-model volumes and object modifiers, (3) native support/seam/fuzzy painting and variable-layer ranges, (4) native MMU multi-material/tool assignment, filament swaps, prime tower, purge and colour painting, (5) independent toolhead Prusa XL where upstream native profiles permit, (6) UI parity on desktop/mobile, installer, save/reopen drafts, preview/print flow, (7) automated real-binary regression across supported printers and all three existing engines.
+- Each Prusa capability must have real 2.9.7 G-code semantic acceptance, not just 3MF acceptance. No Prusa hardware is owned; mark physical validation as unavailable rather than claiming it. Unsupported features must remain fail-closed until proven.
+- All work remains Prusa-only on `feature/slicer-prusa-engine`; maintain one draft PR and preserve current released engine behaviour. No main merge, deployment or release until comprehensive parity and regression review.
+
+---
+
 ## 25 November 2026 — current PR #199 handover (supersedes earlier dated notes below)
 
 - Branch: `feature/slicer-prusa-engine`, PR [#199](https://github.com/gavrd7/MakerVault/pull/199), **draft/unmerged**. Production and staging are unchanged.
