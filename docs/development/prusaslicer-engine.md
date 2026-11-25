@@ -1,3 +1,14 @@
+## Latest parity pass — native topology, modern official imports and XL offline qualification
+
+- Modern official Prusa MK4/MK4S/CORE One profiles can default to Prusa binary G-code. A hash-pinned **official-only**, owner-saved candidate import now explicitly converts `binary_gcode=1` to `0` while retaining all native printer geometry, settings and upstream source provenance. This is not an arbitrary override of unknown user files; arbitrary binary G-code profiles continue to be rejected by the worker and by owned native profile resolution. New regression tests cover permitted boolean values and unsafe values.
+- Added independent Prusa machine-topology parsing from native `nozzle_diameter` / `single_extruder_multi_material`, and bounded explicit tool assignments. It does not conflate an MMU single-nozzle changer's five logical slots with an XL's two/five independent physical hotends. Neither tool classification nor upstream presets independently authorizes printer submission.
+- Pinned actual Prusa 2.9.7 vendor source enumerated 48 XL candidates, including `Original Prusa XL - 2T 0.4 nozzle` and `Original Prusa XL - 5T 0.4 nozzle`. Source-only inventory and a real CLI two-tool XL acceptance added to the same opt-in pinned binary workflow as the already-qualified MK3S MMU3 T0/T1 spatial deposition. **These new native XL and modern text-profile checks require reviewing the latest workflow log before claiming success.**
+- A previous native run's MK4S fixture was diagnosed and repaired: the research script's synthetic INI and STL padding accidentally contained double-escaped newline/zero bytes, not valid native input. The fixture now uses proper text INI lines and exact 80-byte STL header. A research failure never relaxes the production worker's input checks.
+- Existing verified support/fuzzy, modifiers/negative volumes, per-object Z ranges and owner-scoped native single-filament execution remain preserved. Prusa seam and MMU colour are still gated pending complete *spatial* G-code semantic proof and palette/prime-tower controls. No physical Prusa machine available.
+- User explicitly requests **full feature parity before merge**; PR #199 remains draft, with no staging or production changes.
+
+---
+
 ## 25 November — continuing parity, native multi-tool and modern machine work
 
 - User decision: **do not merge or release** PR #199 until Prusa's intended feature set is substantially completed. Preserve Orca, Creality and Bambu behaviour, no staging/production change without explicit coordination.
