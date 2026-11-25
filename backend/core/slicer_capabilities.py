@@ -35,6 +35,14 @@ def native_capabilities(engine, version):
                   "these annotations. Try the OrcaSlicer editor for draft "
                   "work; native slicing is still pending.")
     result = {key: {"status": state, "reason": reason} for key in FEATURES}
+    if engine == "prusaslicer" and version == "2.9.7":
+        result["variable_layer_profile"] = {
+            "status": "verified",
+            "reason": ("Pinned PrusaSlicer 2.9.7 native per-object 3MF layer ranges "
+                       "passed real-binary Z-step acceptance. Currently one "
+                       "upright, unscaled, non-elevated model without other "
+                       "unverified per-object combinations."),
+        }
     if engine == "crealityprint" and version.startswith("7.3."):
         result["colour_paint"] = {
             "status": "test_only",
