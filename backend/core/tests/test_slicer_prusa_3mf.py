@@ -4,6 +4,7 @@ import uuid
 import zipfile
 from unittest import TestCase
 from xml.etree import ElementTree as ET
+from defusedxml import ElementTree as SafeET
 
 from core.slicer_prusa_3mf import build_prusa_native_3mf
 from core.tests.test_slicer_prusa_plate import cube, item
@@ -32,7 +33,7 @@ def rewrite(archive, path, edit):
         for part in source.namelist():
             data = source.read(part)
             if part == path:
-                root = ET.fromstring(data)
+                root = SafeET.fromstring(data)
                 edit(root)
                 data = ET.tostring(root)
             target.writestr(part, data)
