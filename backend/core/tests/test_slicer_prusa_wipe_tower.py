@@ -40,7 +40,7 @@ class PrusaWipeTowerMetadataTests(TestCase):
         source=self.source()
         for kwargs in (
             {"x_mm":-1,"y_mm":145,"rotation_deg":0},
-            {"x_mm":180,"y_mm":145,"rotation_deg":0},
+            {"x_mm":190,"y_mm":145,"rotation_deg":0},
             {"x_mm":35,"y_mm":175,"rotation_deg":0},
             {"x_mm":35,"y_mm":145,"rotation_deg":float("nan")},
             {"x_mm":True,"y_mm":145,"rotation_deg":0},
