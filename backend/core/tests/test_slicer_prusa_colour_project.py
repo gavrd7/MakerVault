@@ -3,6 +3,7 @@
 Never infer approval for the authenticated worker from a valid research 3MF.
 """
 import io
+import struct
 import zipfile
 from unittest import TestCase
 from defusedxml import ElementTree as SafeET
@@ -65,6 +66,7 @@ class PrusaNativeColourProjectTests(TestCase):
 
     def test_source_fingerprint_must_match(self):
         stl, *_ = fixture()
-        tampered = stl[:84] + bytes([stl[84]^1]) + stl[85:]
+        # Change actual facet vertex geometry, not the unused STL normal.
+        tampered = stl[:96] + struct.pack('<f', 4.0) + stl[100:]
         with self.assertRaises((SlicerProfileError,ValueError)):
             self.candidate(source=tampered)
