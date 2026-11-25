@@ -66,6 +66,20 @@ class PrusaProjectDialectTests(TestCase):
                 self.assertEqual(receipt["regions"], 1)
                 self.assertEqual(receipt["objects"], 1)
 
+    def test_two_independent_objects_each_keep_a_typed_region(self):
+        for kind, overrides in (("modifier", {"sparse_infill_density": 80}),
+                                ("negative", {})):
+            with self.subTest(kind=kind):
+                left = {**volume(kind, overrides), "x_mm": -35}
+                right = {**volume(kind, overrides), "x_mm": 35}
+                project = build_prusa_native_3mf([
+                    (item(x_mm=-35, modifier_volumes=[left]), cube()),
+                    (item(x_mm=35, modifier_volumes=[right]), cube()),
+                ], bed_width=250, bed_depth=210)
+                receipt = validate_prusa_native_3mf(project)
+                self.assertEqual(receipt["objects"], 2)
+                self.assertEqual(receipt["regions"], 2)
+
     def test_native_prusa_layer_ranges_roundtrip_and_reject_tampering(self):
         plate = [(item(variable_layer_profile={"version": 1, "bands": [
             {"from_mm": 4, "to_mm": 16, "layer_mm": .12}]}), cube())]
