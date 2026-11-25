@@ -58,8 +58,9 @@ def build_prusa_native_3mf(rows, *, bed_width, bed_depth):
             if modifier["id"] in seen_modifiers:
                 raise SlicerProfileError("Duplicate Prusa modifier identity.")
             seen_modifiers.add(modifier["id"])
-            if modifier.get("coordinate_space") == "world" and len(rows) != 1:
-                raise SlicerProfileError("Independent Prusa modifiers spanning multiple parents are not yet qualified.")
+            # Each native Prusa resource owns its volume ranges. This allows
+            # standalone two-parent fixtures without propagating an unrelated
+            # modifier onto another model; scheduling remains separately gated.
         baked = build_prusa_placed_stl([(geometry_item, raw)], bed_width=bed_width, bed_depth=bed_depth)
         count = struct.unpack_from("<I", baked, 80)[0]
         total_faces += count
