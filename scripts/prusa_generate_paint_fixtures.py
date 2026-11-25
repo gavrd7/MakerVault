@@ -21,15 +21,19 @@ def main(directory):
               (bounds[1][0]+bounds[1][1])/2, bounds[2][0])
     local = [[tuple(float(v[i])-centre[i] for i in range(3)) for v in tri]
              for tri in triangles]
-    # Use an inward, coplanar patch with source-correct winding.
-    first = local[0]
+    # A sidewall is needed to observe fuzzy and seam toolpath effects.
+    side = next(i for i, tri in enumerate(local)
+                if max(p[2] for p in tri)-min(p[2] for p in tri) > 10
+                and (max(p[0] for p in tri)-min(p[0] for p in tri) < .0001
+                     or max(p[1] for p in tri)-min(p[1] for p in tri) < .0001))
+    first = local[side]
     midpoint = [sum(v[i] for v in first)/3 for i in range(3)]
     patch = [[(v[i]+midpoint[i])/2 for i in range(3)] for v in first]
     signature = _fingerprint(local)
     def painted(slot):
         return {"version": 2, "signature": signature,
                 "regions": [{"slot": slot,
-                             "patches": [{"face": 0, "polygon": patch}]}]}
+                             "patches": [{"face": side, "polygon": patch}]}]}
     base = {"asset_id": "verified-cube", "x_mm": 0, "y_mm": 0,
             "z_mm": 0, "rotation_deg": 0, "scale_percent": 100}
     for name, edits in (
