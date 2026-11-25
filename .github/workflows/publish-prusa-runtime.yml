@@ -87,9 +87,30 @@ jobs:
             /tmp/reviewed-prusa/prusa-2.9.7-headless-linux-amd64.tar.gz \
             --repo "$GITHUB_REPOSITORY" \
             --target "$GITHUB_SHA" \
+            --latest=false \
             --title "Reviewed PrusaSlicer 2.9.7 Linux AMD64 runtime" \
             --notes "Opt-in, standalone MakerVault PrusaSlicer runtime package built from pinned upstream source commit 450d70dd81c9b8990bc6bc8e690e31f82ddceb11. Review-only archive passed exact SHA-256, per-file integrity, ELF and native cube G-code acceptance. Not a MakerVault application release. No server installation or automatic activation occurs."
           # GitHub exposes the release asset's content digest; the isolated
           # installer admits it only when that digest and exact size match.
           gh release view "$tag" --repo "$GITHUB_REPOSITORY" --json url \
             --jq .url >> "$GITHUB_STEP_SUMMARY"
+
+  restore-app-latest:
+    # An out-of-band runtime package must never displace the latest actual
+    # MakerVault app release. This is metadata only, no binaries are changed.
+    if: ${{ github.event_name == 'push' && contains(github.event.head_commit.message, '[prusa-fix-latest]') }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Keep standalone Prusa runtime separate from MakerVault release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          gh release edit prusa-runtime-v2.9.7-450d70d \
+            --repo "$GITHUB_REPOSITORY" --latest=false
+          gh release edit v1.7.2 \
+            --repo "$GITHUB_REPOSITORY" --latest=true
+          gh release view v1.7.2 --repo "$GITHUB_REPOSITORY" \
+            --json tagName --jq .tagName >> "$GITHUB_STEP_SUMMARY"
