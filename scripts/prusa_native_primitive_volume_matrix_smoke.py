@@ -54,9 +54,10 @@ def main(binary,vendor,folder):
                     # deposition, not merely change a metadata/footer hash.
                     success=deviation>1.0 and actual[1]>.1
                 else:
-                    # Subtractions must remove measurable local material
-                    # while preserving surrounding positive deposition.
-                    success=deviation < -1.0 and actual[1]>.1
+                    # Subtraction creates new inner cavity walls, so its total
+                    # E can INCREASE. Require less deposition at the original
+                    # occupied centre while retaining surrounding material.
+                    success=actual[0] < baseline[0]*.85 and actual[1]>.1
                 print("Prusa primitive",label,
                       "regional deviation",round(deviation,3),
                       "qualified",success)
