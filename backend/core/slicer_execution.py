@@ -296,7 +296,6 @@ def _validate_plate_execution(job):
                 raise SlicerExecutionError("PrusaSlicer requires one to twelve single-material STL objects.")
             for item in prusa_objects:
                 if not isinstance(item, dict) or (
-                        item.get("modifier_volumes") or item.get("process_overrides") or
                         (item.get("colour_paint") or {}).get("regions") or
                         (item.get("colour_paint") or {}).get("faces") or
                         (item.get("support_paint") or {}).get("regions") or
@@ -304,7 +303,19 @@ def _validate_plate_execution(job):
                         (item.get("fuzzy_skin_paint") or {}).get("regions") or
                         (item.get("variable_layer_profile") or {}).get("bands")):
                     raise SlicerExecutionError(
-                        "PrusaSlicer modifier, paint and per-object settings are not yet verified.")
+                        "PrusaSlicer painting and variable layers are not yet verified.")
+                from .slicer_prusa_3mf import OBJECT_KEYS
+                from .slicer_prusa_process_settings import apply_prusa_process_overrides
+                from .slicer_prusa_3mf import BASE
+                overrides = item.get("process_overrides") or {}
+                if not isinstance(overrides, dict) or set(overrides) - OBJECT_KEYS:
+                    raise SlicerExecutionError("PrusaSlicer per-object settings are not yet verified for these keys.")
+                try:
+                    apply_prusa_process_overrides(BASE, overrides)
+                except ValueError as exc:
+                    raise SlicerExecutionError(str(exc)) from exc
+                if item.get("modifier_volumes") and len(prusa_objects) != 1:
+                    raise SlicerExecutionError("PrusaSlicer multi-model modifiers are not yet verified.")
                 if float(item.get("z_mm", 0)) != 0:
                     raise SlicerExecutionError(
                         "PrusaSlicer elevated or stacked objects are not yet verified.")
@@ -763,7 +774,13 @@ def process_queued_job(job_id):
                 if asset.sha256 and hashlib.sha256(raw).hexdigest() != asset.sha256:
                     raise SlicerExecutionError("A plate STL has changed since import.")
                 source_models.append((item, raw))
-            if has_native_modifiers:
+            if job.engine == "prusaslicer" and (has_native_modifiers or any(item.get("process_overrides") for item in plate)):
+                stage = "building qualified native Prusa project"
+                from .slicer_prusa_3mf import build_prusa_native_3mf
+                width, depth = trusted_plate_dimensions(job.printer_profile)
+                model = build_prusa_native_3mf(source_models, bed_width=width, bed_depth=depth)
+                model_format = "3mf"
+            elif has_native_modifiers:
                 if is_multi_test:
                     raise SlicerExecutionError(
                         "Native modifier and multi-material combinations require separate real-binary acceptance.")
@@ -1082,7 +1099,7 @@ def process_queued_job(job_id):
                                if material_result is not None else None),
             creality_native_project=(material_result is not None and
                                      job.engine == "crealityprint"),
-            native_modifier_project=has_native_modifiers,
+            native_modifier_project=has_native_modifiers and job.engine != "prusaslicer",
             **({"prusa_placed_stl": True} if prusa_placed_stl else {}),
         )
         if material_result is not None:
