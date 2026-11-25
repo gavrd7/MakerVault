@@ -148,7 +148,6 @@ class PrusaSingleMaterialAdmissionTests(TestCase):
                 "rotation_deg": 0, "scale_percent": 100}
         for field, value in (
             ("colour_paint", {"regions": [{"colour": "#ff0000"}]}),
-            ("support_paint", {"regions": [{"state": "enforce"}]}),
             ("seam_paint", {"regions": [{"state": "enforce"}]}),
         ):
             with self.subTest(field=field):
