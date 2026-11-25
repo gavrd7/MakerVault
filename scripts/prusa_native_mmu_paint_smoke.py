@@ -12,6 +12,7 @@ from tempfile import TemporaryDirectory
 
 from slicer_worker.prusa_vendor_profiles import flatten_prusa_vendor_preset
 from slicer_worker.prusa_gcode_audit import WORD,audit_prusa_positive_e
+from core.slicer_prusa_colour_audit import audit_prusa_painted_wall_tools
 
 
 def counts(data):
@@ -78,6 +79,13 @@ def main(binary,vendor,baseline,painted):
             results[label]=mapping
             print("Prusa MMU source-painted toolpath",label,
                   "toolhead selections",switches,"external walls",mapping)
+        # The application-side independent spatial audit must accept the
+        # genuine painted native output, not just the research counter.
+        with open(root/"painted.gcode","rb") as source_gcode:
+            independent = audit_prusa_painted_wall_tools(
+                source_gcode.read(), painted_wall=(114,136,93,97),
+                unpainted_wall=(114,136,113,117))
+        print("Independent native Prusa wall tool audit", independent)
         mapped=results["painted"]
         assert mapped[1]["front"]>20 and mapped[0]["back"]>20, mapped
         assert mapped[1]["back"]<5, mapped
