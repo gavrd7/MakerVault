@@ -1813,7 +1813,7 @@ def save_process_profile(request, profile_id):
     if not request.user.has_perm("core.add_fileasset"):
         return _error("You do not have permission to save custom profiles.", 403)
     profile = SlicerProfile.objects.filter(
-        pk=profile_id, owner=request.user, engine__in=["orcaslicer", "crealityprint", "bambustudio"], kind="process"
+        pk=profile_id, owner=request.user, engine__in=["orcaslicer", "crealityprint", "bambustudio", "prusaslicer"], kind="process"
     ).select_related("file_asset").first()
     if not profile:
         return _error("An owned native slicing process profile is required.", 404)
@@ -1833,19 +1833,24 @@ def save_process_profile(request, profile_id):
         ).exists():
             return _error("A process profile with this name already exists.", 409)
         source = resolved_native_profile(profile)
-        updated = apply_process_overrides(source, edits)
-        native = json.loads(updated.decode("utf-8-sig"))
-        native["name"] = name
-        updated = json.dumps(native, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
+        extension = ".ini" if profile.engine == "prusaslicer" else ".json"
+        if profile.engine == "prusaslicer":
+            from .slicer_prusa_process_settings import apply_prusa_process_overrides
+            updated = apply_prusa_process_overrides(source, edits)
+        else:
+            updated = apply_process_overrides(source, edits)
+            native = json.loads(updated.decode("utf-8-sig"))
+            native["name"] = name
+            updated = json.dumps(native, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
         if len(updated) > 1024 * 1024:
             raise ValueError("Custom process profile exceeds the file size limit.")
         asset = FileAsset(
-            owner=request.user, name=name + ".json", category="source",
-            metadata={"original_name": name + ".json", "extension": ".json",
+            owner=request.user, name=name + extension, category="source",
+            metadata={"original_name": name + extension, "extension": extension,
                       "slicer_custom_source_profile_id": str(profile.pk),
                       "slicer_profile_internal": True},
         )
-        asset.file = ContentFile(updated, name="custom-native-process-profile.json")
+        asset.file = ContentFile(updated, name="custom-native-process-profile" + extension)
         inspected = inspect_native_profile(asset, profile.engine)
         with transaction.atomic():
             asset.save()
