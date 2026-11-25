@@ -78,12 +78,23 @@ class SlicerWorkerProtocolTests(TestCase):
                 with self.assertRaises(WorkerError):
                     _decode_payload({**payload, **change})
 
-    def test_prusa_unverified_native_3mf_is_rejected_before_validation(self):
+    def test_prusa_native_3mf_requires_its_own_validated_dialect(self):
         payload = {**self.payload(), "model_format": "3mf"}
-        with patch("slicer_worker.service.validate_worker_3mf") as native:
-            with self.assertRaisesRegex(WorkerError, "Prusa native 3MF"):
+        # A caller cannot bypass native archive validation by merely setting
+        # model_format. Legacy Orca/BBS validation must never receive it.
+        with patch("slicer_worker.service.validate_worker_3mf") as legacy:
+            with self.assertRaises(WorkerError):
                 _decode_payload(payload)
-            native.assert_not_called()
+            legacy.assert_not_called()
+        for change in (
+            {"engine_version": "2.9.6"},
+            {"prusa_placed_stl": True},
+            {"native_modifier_project": True},
+            {"creality_native_project": True},
+            {"filament_profiles": [payload["filament_profile"]] * 2},
+        ):
+            with self.subTest(change=change), self.assertRaises(WorkerError):
+                _decode_payload({**payload, **change})
 
     def test_prusa_placed_stl_is_opt_in_and_exactly_engine_version_scoped(self):
         payload = {**self.payload(), "prusa_placed_stl": True}
