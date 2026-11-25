@@ -10,6 +10,8 @@ on:
       - "backend/core/slicer_execution.py"
       - "slicer_worker/runner.py"
       - "slicer_worker/tests/test_runner.py"
+      - "slicer_worker/prusa_process_overrides.py"
+      - "slicer_worker/tests/test_prusa_process_overrides.py"
       - "slicer_worker/prusa_vendor_profiles.py"
       - "slicer_worker/tests/test_prusa_vendor_profiles.py"
       - "slicer_worker/prusa_gcode_audit.py"
@@ -34,7 +36,7 @@ jobs:
       - name: Verify bounded Prusa CLI contract (no slicer download)
         run: |
           set -euo pipefail
-          python3 -m unittest -v slicer_worker.tests.test_runner slicer_worker.tests.test_prusa_vendor_profiles slicer_worker.tests.test_prusa_gcode_audit slicer_worker.tests.test_prusa_candidate_manifest slicer_worker.tests.test_prusa_runtime_install
+          python3 -m unittest -v slicer_worker.tests.test_prusa_process_overrides slicer_worker.tests.test_runner slicer_worker.tests.test_prusa_vendor_profiles slicer_worker.tests.test_prusa_gcode_audit slicer_worker.tests.test_prusa_candidate_manifest slicer_worker.tests.test_prusa_runtime_install
 
       - name: Verify Prusa-specific plate geometry and native INI bed parsing
         run: |
