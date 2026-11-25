@@ -47,7 +47,7 @@ class PrusaResearchMaterialValidationTests(TestCase):
         self.assertEqual(validate_prusa_material_candidate(project,printer_ini=ini("0.4,0.4","1"),tools=[1,2])["tools"],(1,2))
         for expected in ([2,1],[1,3],[1,1],[],[1,True]):
             with self.subTest(expected=expected),self.assertRaises(WorkerError):
-                validate_prusa_material_candidate(project,tools=expected)
+                validate_prusa_material_candidate(project,printer_ini=ini("0.4,0.4","1"),tools=expected)
         with self.assertRaises(WorkerError):
             validate_prusa_native_3mf(project)
 
