@@ -4,6 +4,11 @@ on:
   pull_request:
     paths:
       - "backend/core/slicer_prusa_plate.py"
+      - "backend/core/slicer_prusa_3mf.py"
+      - "backend/core/slicer_prusa_layer_ranges.py"
+      - "backend/core/tests/test_slicer_prusa_3mf.py"
+      - "backend/core/tests/test_slicer_prusa_layer_ranges.py"
+      - "slicer_worker/prusa_3mf_validation.py"
       - "backend/core/slicer_bed_dimensions.py"
       - "backend/core/tests/test_slicer_prusa_plate.py"
       - "backend/core/tests/test_slicer_prusa_native_resolution.py"
@@ -44,7 +49,9 @@ jobs:
           python3 -m venv /tmp/prusa-plate-venv
           /tmp/prusa-plate-venv/bin/pip install --quiet defusedxml==0.7.1
           PYTHONPATH=backend /tmp/prusa-plate-venv/bin/python -m unittest -v \
-            core.tests.test_slicer_prusa_plate
+            core.tests.test_slicer_prusa_plate \
+            core.tests.test_slicer_prusa_3mf \
+            core.tests.test_slicer_prusa_layer_ranges
 
       - name: Verify actual upstream PrusaResearch 2.9.7 inheritance
         run: |
