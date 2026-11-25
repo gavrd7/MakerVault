@@ -41,6 +41,7 @@ def main(directory):
         ("baseline", {}),
         ("support", {"support_paint": painted(0)}),
         ("seam", {"seam_paint": painted(1)}),
+        ("seam-enforced", {"seam_paint": painted(0)}),
         ("fuzzy", {"fuzzy_skin_paint": painted(0)}),
         ("combined", {"support_paint": painted(0),
                       "seam_paint": painted(1),
