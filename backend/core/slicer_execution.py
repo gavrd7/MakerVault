@@ -332,9 +332,14 @@ def _validate_plate_execution(job):
         )
     objects=settings.get("plate_objects")
     try:
-        native_modifier_request = validate_native_modifier_execution(
-            objects, engine=job.engine, version=getattr(job, "engine_version", None),
-            settings=settings)
+        if job.engine == "prusaslicer" and objects:
+            from .slicer_prusa_3mf import validate_prusa_project_admission
+            native_modifier_request = validate_prusa_project_admission(
+                objects, settings, getattr(job, "engine_version", None))
+        else:
+            native_modifier_request = validate_native_modifier_execution(
+                objects, engine=job.engine, version=getattr(job, "engine_version", None),
+                settings=settings)
     except ValueError as exc:
         raise SlicerExecutionError(str(exc)) from exc
     project=settings.get("plates")
