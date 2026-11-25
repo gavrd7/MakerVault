@@ -428,6 +428,20 @@ jobs:
             /tmp/paint/seam.3mf /tmp/paint/seam-enforced.3mf \
             /tmp/paint/fuzzy.3mf /tmp/paint/combined.3mf
 
+      - name: Qualify painted Prusa seam against actual external-perimeter starts
+        run: |
+          set -euo pipefail
+          docker run --rm --network none --user 10001:10001 \
+            -v "$TEST_VOLUME:/opt/engine-store:ro" \
+            -v "$GITHUB_WORKSPACE/scripts/prusa_native_seam_acceptance.py:/tmp/prusa_seam_acceptance.py:ro" \
+            -v "$GITHUB_WORKSPACE/backend/core/slicer_prusa_seam_audit.py:/tmp/prusa_seam_audit.py:ro" \
+            -v "$PRUSA_PAINT_DIR:/tmp/paint:ro" \
+            --entrypoint python3 prusa-integration:smoke \
+            /tmp/prusa_seam_acceptance.py \
+            /opt/engine-store/versions/prusaslicer/2.9.7/bin/prusa-slicer \
+            /opt/engine-store/versions/prusaslicer/2.9.7/resources/profiles/PrusaResearch.ini \
+            /tmp/paint
+
       - name: Generate same-geometry manual support enforcer controls
         run: |
           set -euo pipefail
