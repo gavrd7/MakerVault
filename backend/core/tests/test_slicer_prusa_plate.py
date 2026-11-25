@@ -49,6 +49,18 @@ class PrusaPlacedStlTests(TestCase):
         self.assertAlmostEqual(min(second),135,places=3)
         self.assertAlmostEqual(max(second),155,places=3)
 
+    def test_streamed_stl_output_is_consistent_and_never_mutates_sources(self):
+        source = cube()
+        original = bytes(source)
+        baked = build_prusa_placed_stl([
+            (item(x_mm=-35), source), (item(x_mm=35, rotation_deg=90), source),
+        ], bed_width=250, bed_depth=210)
+        count = struct.unpack_from("<I", baked, 80)[0]
+        self.assertEqual(count, 24)
+        self.assertEqual(len(baked), 84 + 50 * count)
+        self.assertEqual(source, original)
+        self.assertEqual(inspect_stl(baked)["triangles"], count)
+
     def test_scale_rotation_and_z_floor_are_baked(self):
         baked = build_prusa_placed_stl([
             (item(scale_xyz_percent=[200,50,100], rotation_deg=90), cube()),
