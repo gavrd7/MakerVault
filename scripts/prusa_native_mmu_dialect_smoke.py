@@ -188,6 +188,11 @@ def main(binary, source, directory, *options):
             ]
             print("Native Prusa heater command evidence", heater_lines[:18],
                   "total", len(heater_lines), flush=True)
+            commands=[line.split(";",1)[0].strip()
+                      for line in data.decode("utf-8").splitlines()
+                      if line.split(";",1)[0].strip()]
+            print("First native executable G-code commands",
+                  commands[:30], "command_count", len(commands), flush=True)
             if not {205, 220}.issubset(temperatures):
                 print("RESEARCH GAP: distinct native filament temperatures were not proven "
                       "by executable heater commands; leaving production palette disabled.",
