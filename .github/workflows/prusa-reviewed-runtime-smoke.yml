@@ -256,6 +256,12 @@ jobs:
             /opt/engine-store/versions/prusaslicer/2.9.7/resources/profiles/PrusaResearch.ini \
             /tmp/mmu
 
+      - name: Prepare isolated Prusa MMU facet colour candidates
+        run: |
+          set -euo pipefail
+          echo "PRUSA_MMU_PAINT_DIR=$RUNNER_TEMP/prusa-mmu-paint" >> "$GITHUB_ENV"
+          PYTHONPATH=backend:. "$RUNNER_TEMP/prusa-backend-venv/bin/python" scripts/prusa_generate_mmu_paint.py "$RUNNER_TEMP/prusa-mmu-paint"
+
       - name: Generate native Prusa 3MF with distinct per-object settings
         run: |
           set -euo pipefail
