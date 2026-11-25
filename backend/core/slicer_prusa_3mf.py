@@ -192,7 +192,7 @@ def validate_prusa_project_admission(plate, settings, version):
                     for entry in plate) == 1)
             if ((len(plate) != 1 and not two_fuzzy) or overrides or
                     row.get("modifier_volumes") or
-                    (row.get("variable_layer_profile") or {}).get("bands"):
+                    (row.get("variable_layer_profile") or {}).get("bands")):
                 raise ValueError("Prusa painted facets with other object extensions are not yet verified.")
             if two_fuzzy and any(other.get("process_overrides") or
                                  other.get("modifier_volumes") or
