@@ -13,7 +13,8 @@ from tempfile import TemporaryDirectory
 from slicer_worker.prusa_vendor_profiles import flatten_prusa_vendor_preset
 from slicer_worker.runner import run_prusa, prusa_command
 from slicer_worker.prusa_gcode_audit import audit_prusa_positive_e
-from scripts.prusa_real_binary_smoke import cube_stl
+import runpy
+cube_stl = runpy.run_path('/tmp/prusa_smoke.py')['cube_stl']
 
 
 def two_positioned_cubes() -> bytes:
