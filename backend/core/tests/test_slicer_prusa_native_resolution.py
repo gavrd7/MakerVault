@@ -211,6 +211,32 @@ class PrusaSingleMaterialAdmissionTests(TestCase):
                 with self.assertRaises(SlicerExecutionError):
                     _validate_plate_execution(job)
 
+    def test_prusa_two_model_fuzzy_is_independently_admitted_but_support_is_not(self):
+        from core.slicer_execution import _validate_plate_execution, SlicerExecutionError
+        paint = {"version": 2, "signature": "12:deadbeef",
+                 "regions": [{"slot": 0, "patches": [{
+                     "face": 0, "polygon": [[0, 0, 0], [1, 0, 0], [0, 1, 0]]
+                 }]}]}
+        left = {"asset_id": "owned-left", "x_mm": -35, "y_mm": 0, "z_mm": 0,
+                "rotation_deg": 0, "scale_percent": 100,
+                "fuzzy_skin_paint": paint}
+        right = {"asset_id": "owned-right", "x_mm": 35, "y_mm": 0, "z_mm": 0,
+                 "rotation_deg": 0, "scale_percent": 100}
+        job = SimpleNamespace(engine="prusaslicer", engine_version="2.9.7",
+                              settings={"plate_objects": [left, right]},
+                              owner=None, printer_profile_id="verified")
+        self.assertTrue(_validate_plate_execution(job))
+        for edited in (
+            [{**left, "support_paint": paint}, right],
+            [{**left, "fuzzy_skin_paint": paint},
+             {**right, "fuzzy_skin_paint": paint}],
+            [left, {**right, "scale_percent": 150}],
+        ):
+            with self.subTest(edited=edited):
+                job.settings["plate_objects"] = edited
+                with self.assertRaises(SlicerExecutionError):
+                    _validate_plate_execution(job)
+
     def test_prusa_two_object_variable_layers_admitted_with_independent_audit(self):
         from core.slicer_execution import _validate_plate_execution, SlicerExecutionError
         band = {"version": 1, "bands": [
