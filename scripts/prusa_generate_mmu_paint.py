@@ -75,7 +75,11 @@ def append_native_colour(source, attrs):
                 for face,tags in zip(triangles,attrs):
                     value=tags.get("paint_color")
                     if value is not None:
-                        face.set(P+"mmu_segmentation",value)
+                        # Prusa's Expat parser matches the literal slic3rpe prefix.
+                        # Unlike Orca paint_color, Prusa state 1 selects T1,
+                        # with the native leaf nibble encoded as "4".
+                        face.set("slic3rpe:mmu_segmentation",
+                                 "4" if value == "8" else value)
                 raw=ET.tostring(model,encoding="utf-8",xml_declaration=True)
             if name=="Metadata/Slic3r_PE_model.config":
                 root=SafeET.fromstring(raw)
