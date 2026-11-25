@@ -6,6 +6,8 @@ MakerVault's exact, fingerprint-checked geometric patch splitter; never
 allow browser XML or external project archives into this encoder.
 """
 import struct
+import re
+import math
 
 from .slicer_plate_3mf import _triangles
 from .slicer_native_support_paint import (
@@ -67,3 +69,54 @@ def native_prusa_painted_stl(item, source):
             or (name == "paint_fuzzy_skin" and "fuzzy_skin_paint" in channels)):
         raise ValueError("Prusa facet exporter dropped a painted channel.")
     return bytes(binary), attributes, frozenset(required)
+
+
+_WORD = re.compile(r"([XYZE])([-+]?(?:[0-9]+(?:\\.[0-9]*)?|\\.[0-9]+))", re.I)
+
+
+def audit_prusa_support_enforcer_gcode(data):
+    """Require real positive-E XY moves labelled as native Prusa supports.
+
+    A valid 3MF support enforcer which produces zero support extrusion is
+    *not* evidence that the desired support was actually sliced. Refuse
+    persisting such an offline G-code job rather than silently discarding it.
+    """
+    if not isinstance(data, bytes) or not 0 < len(data) <= 90 * 1024 * 1024:
+        raise ValueError("Invalid Prusa support G-code.")
+    try:
+        lines = data.decode("utf-8").splitlines()
+    except UnicodeDecodeError:
+        raise ValueError("Prusa support G-code is not UTF-8.") from None
+    role = ""
+    relative = False
+    e = 0.
+    moves = 0
+    total = 0.
+    for index, line in enumerate(lines):
+        if index > 2_000_000:
+            raise ValueError("Prusa support audit line limit exceeded.")
+        if line.startswith(";TYPE:"):
+            role = line.partition(":")[2].strip().lower()
+        cmd = line.split(";", 1)[0].strip()
+        if not cmd:
+            continue
+        opcode = cmd.split(None, 1)[0].upper()
+        if opcode not in ("M82", "M83", "G92", "G0", "G00", "G1", "G01"):
+            continue
+        words = {key.upper(): float(value) for key, value in _WORD.findall(cmd)}
+        if opcode == "M82":
+            relative = False
+        elif opcode == "M83":
+            relative = True
+        elif opcode == "G92":
+            e = words.get("E", e)
+        elif opcode in ("G1", "G01") and "E" in words:
+            delta = words["E"] if relative else words["E"] - e
+            e = e + words["E"] if relative else words["E"]
+            if (delta > 1e-6 and math.isfinite(delta) and
+                    ("X" in words or "Y" in words) and "support" in role):
+                total += delta
+                moves += 1
+    if moves < 2 or total <= .01:
+        raise ValueError("Prusa painted support enforcers produced no native support paths.")
+    return {"support_extrusion_moves": moves, "support_extrusion_e_mm": round(total, 3)}
