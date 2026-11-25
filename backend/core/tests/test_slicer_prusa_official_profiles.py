@@ -82,6 +82,19 @@ class PrusaOfficialModelDiscoveryTests(SimpleTestCase):
         self.assertEqual(rows["total_matches"], 1)
         self.assertEqual(rows["profiles"][0]["name"], "Original Prusa MK4S")
 
+    def test_native_prusa_catalogue_has_stable_pages_beyond_forty(self):
+        sections = {f"filament:PLA {i:03d}": {"temperature": "210"}
+                    for i in range(95)}
+        with patch("core.slicer_prusa_official_profiles._native_sections",
+                   return_value=sections):
+            pages = [search_prusa_profiles("PLA", "filament", offset=i)
+                     for i in (0, 40, 80)]
+        self.assertEqual([len(p["profiles"]) for p in pages], [40, 40, 15])
+        self.assertTrue(all(p["total_matches"] == 95 for p in pages))
+        self.assertEqual(pages[0]["profiles"][0]["name"], "PLA 000")
+        self.assertEqual(pages[1]["profiles"][0]["name"], "PLA 040")
+        self.assertEqual(pages[2]["profiles"][-1]["name"], "PLA 094")
+
     @patch("core.slicer_prusa_official_profiles.requests.get", return_value=_Response())
     def test_rejects_unapproved_selection_and_nonindexed_artwork(self, get):
         with self.assertRaises(OfficialProfileError):
