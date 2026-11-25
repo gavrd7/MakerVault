@@ -60,3 +60,33 @@ class PrusaPrivateNativeProfileTests(TestCase):
             with self.subTest(raw=raw[:30]):
                 with self.assertRaises(SlicerProfileError):
                     resolved_native_profile(profile(raw))
+
+
+class PrusaSingleMaterialAdmissionTests(TestCase):
+    """Never silently ignore workbench controls unsupported by native Prusa."""
+
+    def test_nonempty_global_process_changes_fail_before_worker_dispatch(self):
+        from core.slicer_execution import _validate_plate_execution, SlicerExecutionError
+        job = SimpleNamespace(engine="prusaslicer", engine_version="2.9.7",
+                              settings={"process_overrides": {"wall_loops": 5}}, owner=None)
+        with self.assertRaisesRegex(SlicerExecutionError, "process overrides"):
+            _validate_plate_execution(job)
+
+    def test_unverified_native_multimaterial_fails_before_worker_dispatch(self):
+        from core.slicer_execution import _validate_plate_execution, SlicerExecutionError
+        job = SimpleNamespace(engine="prusaslicer", engine_version="2.9.7",
+                              settings={"multi_material_test": True}, owner=None)
+        with self.assertRaisesRegex(SlicerExecutionError, "multi-material"):
+            _validate_plate_execution(job)
+
+    def test_transformed_prusa_plate_is_not_silently_flattened_to_stl(self):
+        from core.slicer_execution import _validate_plate_execution, SlicerExecutionError
+        job = SimpleNamespace(engine="prusaslicer", engine_version="2.9.7",
+                              settings={"plate_objects": [{
+                                  "x_mm": 10, "y_mm": 0, "z_mm": 0,
+                                  "rotation_deg": 0, "scale_percent": 100,
+                                  "rotation_xyz_deg": [0, 0],
+                                  "scale_xyz_percent": [100, 100, 100],
+                              }]}, owner=None)
+        with self.assertRaisesRegex(SlicerExecutionError, "unmodified STL"):
+            _validate_plate_execution(job)
