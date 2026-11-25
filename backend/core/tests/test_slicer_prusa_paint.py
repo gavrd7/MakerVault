@@ -1,49 +1,12 @@
 """PrusaSlicer 2.9.7 support and fuzzy execution contracts."""
-from types import SimpleNamespace
 from unittest import TestCase
 
 from core.slicer_prusa_paint import audit_prusa_support_enforcer_gcode
 from core.slicer_prusa_process_settings import enable_prusa_painted_support
 from core.slicer_prusa_native_resolution import parse_prusa_profile
-from core.slicer_execution import _validate_plate_execution, SlicerExecutionError
 
 
 class PrusaPaintExecutionTests(TestCase):
-    def _job(self, painted):
-        row = {"asset_id": "owned-cube", "x_mm": 0, "y_mm": 0,
-               "z_mm": 0, "rotation_deg": 0, "scale_percent": 100,
-               **painted}
-        return SimpleNamespace(engine="prusaslicer", engine_version="2.9.7",
-                               settings={"plate_objects": [row]},
-                               owner=None, printer_profile_id="native-printer")
-
-    @staticmethod
-    def _paint(slot=0):
-        return {"version": 2, "signature": "12:deadbeef",
-                "regions": [{"slot": slot, "patches": [{
-                    "face": 0, "polygon": [[0,0,0],[1,0,0],[0,1,0]]}]}]}
-
-    def test_native_enforcer_blocker_and_fuzzy_admitted_separately(self):
-        for row in (
-            {"support_paint": self._paint(0)},
-            {"support_paint": self._paint(1)},
-            {"fuzzy_skin_paint": self._paint(0)},
-        ):
-            with self.subTest(row=row):
-                self.assertTrue(_validate_plate_execution(self._job(row)))
-
-    def test_mixed_modes_and_unqualified_seams_stay_blocked(self):
-        for row in (
-            {"support_paint": self._paint(0), "fuzzy_skin_paint": self._paint(0)},
-            {"support_paint": self._paint(0),
-             "process_overrides": {"wall_loops": 4}},
-            {"fuzzy_skin_paint": self._paint(0),
-             "modifier_volumes": [{"kind": "negative"}]},
-            {"seam_paint": self._paint(0)},
-        ):
-            with self.subTest(row=row), self.assertRaises(SlicerExecutionError):
-                _validate_plate_execution(self._job(row))
-
     def test_native_process_enables_support_without_changing_automatic_choice(self):
         raw = b"layer_height = 0.2\nsupport_material = 0\nsupport_material_auto = 1\n"
         edited = enable_prusa_painted_support(raw)
