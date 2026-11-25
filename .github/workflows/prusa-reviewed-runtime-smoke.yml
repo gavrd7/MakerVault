@@ -1,0 +1,103 @@
+name: PrusaSlicer reviewed bundle + isolated worker acceptance
+
+# Expensive, artifact-backed acceptance is explicitly opt-in.
+# The pinned 25 Nov source candidate is held for only 7 days; this is not
+# a required PR check after the temporary GitHub Actions artifact expires.
+on:
+  workflow_dispatch:
+  push:
+    branches: [feature/slicer-prusa-engine]
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  native-install-and-slice:
+    if: ${{ github.event_name == 'workflow_dispatch' || contains(github.event.head_commit.message, '[prusa-package-smoke]') }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Download and pin the exact successful real-binary candidate
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/prusa"
+          gh run download 45509961312 --repo "$GITHUB_REPOSITORY" \
+            --name prusa-2.9.7-headless-linux-amd64-candidate \
+            --dir "$RUNNER_TEMP/prusa"
+          archive="$RUNNER_TEMP/prusa/prusa-2.9.7-headless-linux-amd64.tar.gz"
+          echo "963eb81fd972d50c5f8fe54c3adb6dce2eab39c9ab223534b917eae76973d913  $archive" | sha256sum --check
+
+      - name: Build existing combined worker unchanged
+        run: docker build -f slicer_worker/Dockerfile.generic -t prusa-integration:smoke .
+
+      - name: Install Prusa alongside Orca through the verified installer path
+        shell: bash
+        run: |
+          set -euo pipefail
+          volume="prusa-test-$GITHUB_RUN_ID"
+          docker volume create "$volume" >/dev/null
+          echo "TEST_VOLUME=$volume" >> "$GITHUB_ENV"
+          docker run --rm --network none --user 10002:10002 \
+            -v "$volume:/opt/engine-store:rw" \
+            -v "$RUNNER_TEMP/prusa/prusa-2.9.7-headless-linux-amd64.tar.gz:/tmp/prusa.tar.gz:ro" \
+            --entrypoint python3 prusa-integration:smoke -c '
+          import json, shutil
+          from pathlib import Path
+          from unittest.mock import patch
+          from slicer_worker import engine_installer_service as installer
+          from slicer_worker import prusa_runtime_install as prusa
+          from slicer_worker.engine_store_admin import activate, seed_bundled_orca, EXPECTED_ORCA_SHA
+          store = Path("/opt/engine-store")
+          seed_bundled_orca(store)
+          activate(store, engine="orcaslicer", version="2.5.0", sha256=EXPECTED_ORCA_SHA)
+          release = {
+              "engine": "prusaslicer", "version": prusa.VERSION,
+              "bundle_sha256": prusa.ARCHIVE_SHA256,
+              "bundle_url": "https://github.com/gavrd7/MakerVault/releases/download/" + prusa.RELEASE_TAG + "/" + prusa.ASSET_NAME,
+              "asset_size": prusa.ASSET_SIZE, "binary_sha256": prusa.BINARY_SHA256,
+          }
+          def copy_approved_source(_release, destination, _progress):
+              shutil.copyfile("/tmp/prusa.tar.gz", destination)
+          with patch.object(installer, "_download", side_effect=copy_approved_source), \
+               patch.object(installer, "_write_operation"):
+              installer._install_reviewed_prusa("ci-restricted", release)
+          installed = json.loads((store / "active.json").read_text())["engines"]
+          assert set(installed) == {"orcaslicer", "prusaslicer"}, installed
+          assert installed["prusaslicer"]["binary_sha256"] == prusa.BINARY_SHA256
+          assert (store / "versions" / "prusaslicer" / "2.9.7" / "approved-identity.json").is_file()
+          print("PASS: installer activated Prusa and preserved Orca.")
+          '
+
+      - name: Validate actual read-only worker UID and native positive-E G-code
+        run: |
+          set -euo pipefail
+          docker run --rm --network none --user 10001:10001 \
+            -e SLICER_WORKER_TOKEN=0123456789012345678901234567890123456789 \
+            -v "$TEST_VOLUME:/opt/engine-store:ro" \
+            -v "$GITHUB_WORKSPACE/scripts/prusa_real_binary_smoke.py:/tmp/prusa_smoke.py:ro" \
+            --entrypoint python3 prusa-integration:smoke -c '
+          from slicer_worker.engine_registry import configured_engines
+          engines = configured_engines()
+          assert set(engines) == {"orcaslicer", "prusaslicer"}, engines
+          print("PASS: both isolated worker engine identities have matching SHA-256.")
+          '
+          docker run --rm --network none --user 10001:10001 \
+            -v "$TEST_VOLUME:/opt/engine-store:ro" \
+            -v "$GITHUB_WORKSPACE/scripts/prusa_real_binary_smoke.py:/tmp/prusa_smoke.py:ro" \
+            --entrypoint python3 prusa-integration:smoke \
+            /tmp/prusa_smoke.py \
+            --binary /opt/engine-store/versions/prusaslicer/2.9.7/bin/prusa-slicer \
+            --vendor /opt/engine-store/versions/prusaslicer/2.9.7/resources/profiles/PrusaResearch.ini
+
+      - name: Cleanup isolated test volume
+        if: always()
+        run: |
+          if [ -n "${TEST_VOLUME:-}" ]; then
+            docker volume rm "$TEST_VOLUME" >/dev/null || true
+          fi
