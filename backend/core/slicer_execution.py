@@ -313,8 +313,6 @@ def _validate_plate_execution(job):
                     apply_prusa_process_overrides(BASE, overrides)
                 except ValueError as exc:
                     raise SlicerExecutionError(str(exc)) from exc
-                if item.get("modifier_volumes") and len(prusa_objects) != 1:
-                    raise SlicerExecutionError("PrusaSlicer multi-model modifiers are not yet verified.")
                 if float(item.get("z_mm", 0)) != 0:
                     raise SlicerExecutionError(
                         "PrusaSlicer elevated or stacked objects are not yet verified.")
