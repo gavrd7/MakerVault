@@ -62,6 +62,9 @@ def append_native_colour(source, attrs):
             raw=zin.read(name)
             if name == "3D/3dmodel.model":
                 model=SafeET.fromstring(raw)
+                # ElementTree drops unused namespace declarations on parse.
+                # Retain the exact prefix required by Prusa Expat import.
+                model.set("xmlns:slic3rpe", "http://schemas.slic3r.org/3mf/2017/06")
                 before=model.find(M+"resources")
                 if before is None:
                     raise ValueError("Missing Prusa resource table")
