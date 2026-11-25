@@ -342,7 +342,7 @@ jobs:
         run: |
           set -euo pipefail
           echo "PRUSA_MULTI_REGION_DIR=$RUNNER_TEMP/prusa-two-regions" >> "$GITHUB_ENV"
-          PYTHONPATH=backend "$RUNNER_TEMP/prusa-backend-venv/bin/python" scripts/prusa_generate_multi_regions.py "$RUNNER_TEMP/prusa-two-regions"
+          PYTHONPATH=backend:. "$RUNNER_TEMP/prusa-backend-venv/bin/python" scripts/prusa_generate_multi_regions.py "$RUNNER_TEMP/prusa-two-regions"
 
       - name: Audit two independent native modifier and cavity toolpaths
         run: |
