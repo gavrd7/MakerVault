@@ -13,8 +13,10 @@ def count_native_support(data):
     role=""
     tool_e=0.
     relative=False
-    x=y=None
+    x=y=z=None
     regions={"left":0,"right":0,"outside":0}
+    bins={"left":{},"right":{},"outside":{}}
+    examples={"left":[],"right":[],"outside":[]}
     for line in data.decode("utf-8").splitlines():
         if line.startswith(";TYPE:"):
             role=line.partition(":")[2].strip().lower()
@@ -32,6 +34,7 @@ def count_native_support(data):
         elif opcode in ("G0","G00","G1","G01"):
             x=fields.get("X",x)
             y=fields.get("Y",y)
+            z=fields.get("Z",z)
             if "E" in fields:
                 delta=fields["E"] if relative else fields["E"]-tool_e
                 tool_e=tool_e+fields["E"] if relative else fields["E"]
@@ -40,6 +43,12 @@ def count_native_support(data):
                     region=("left" if 56<=x<=94 and 93<=y<=117 else
                             "right" if 156<=x<=194 and 93<=y<=117 else "outside")
                     regions[region]+=1
+                    if z is not None:
+                        layer_band=int(z//5)*5
+                        bins[region][layer_band]=bins[region].get(layer_band,0)+1
+                        if len(examples[region])<3:
+                            examples[region].append((round(x,2),round(y,2),round(z,2)))
+    print("Native support regional Z bands",bins,"examples",examples)
     return regions
 
 
