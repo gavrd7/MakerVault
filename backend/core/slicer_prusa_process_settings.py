@@ -16,6 +16,11 @@ FIELDS = {
     "sparse_infill_density": ("fill_density", 0, 100, False, "%"),
     "brim_width": ("brim_width", 0, 50, False, ""),
     "skirt_loops": ("skirts", 0, 20, True, ""),
+    "outer_wall_speed": ("external_perimeter_speed", 5, 350, False, ""),
+    "inner_wall_speed": ("perimeter_speed", 5, 350, False, ""),
+    "sparse_infill_speed": ("infill_speed", 5, 350, False, ""),
+    "travel_speed": ("travel_speed", 10, 500, False, ""),
+    "top_surface_speed": ("top_solid_infill_speed", 5, 350, False, ""),
 }
 
 
