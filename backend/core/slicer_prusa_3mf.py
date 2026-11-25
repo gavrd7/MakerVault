@@ -57,6 +57,8 @@ def build_prusa_native_3mf(rows, *, bed_width, bed_depth):
         geometry_item = dict(item)
         geometry_item.pop("process_overrides", None)
         geometry_item.pop("variable_layer_profile", None)
+        for channel in PAINT_HEADERS:
+            geometry_item.pop(channel, None)
         modifiers = validate_modifier_volumes(geometry_item.pop("modifier_volumes", None))
         total_modifiers += len(modifiers)
         if total_modifiers > MAX_TOTAL_MODIFIERS:
