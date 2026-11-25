@@ -300,10 +300,9 @@ def _validate_plate_execution(job):
                         (item.get("colour_paint") or {}).get("faces") or
                         (item.get("support_paint") or {}).get("regions") or
                         (item.get("seam_paint") or {}).get("regions") or
-                        (item.get("fuzzy_skin_paint") or {}).get("regions") or
-                        (item.get("variable_layer_profile") or {}).get("bands")):
+                        (item.get("fuzzy_skin_paint") or {}).get("regions")):
                     raise SlicerExecutionError(
-                        "PrusaSlicer painting and variable layers are not yet verified.")
+                        "PrusaSlicer surface painting is not yet verified.")
                 from .slicer_prusa_3mf import OBJECT_KEYS
                 from .slicer_prusa_process_settings import apply_prusa_process_overrides
                 from .slicer_prusa_3mf import BASE
@@ -333,7 +332,8 @@ def _validate_plate_execution(job):
     objects=settings.get("plate_objects")
     try:
         if job.engine == "prusaslicer" and objects and any(
-                item.get("modifier_volumes") or item.get("process_overrides")
+                item.get("modifier_volumes") or item.get("process_overrides") or
+                (item.get("variable_layer_profile") or {}).get("bands")
                 for item in objects if isinstance(item, dict)):
             from .slicer_prusa_3mf import validate_prusa_project_admission
             native_modifier_request = validate_prusa_project_admission(
@@ -781,7 +781,10 @@ def process_queued_job(job_id):
                 if asset.sha256 and hashlib.sha256(raw).hexdigest() != asset.sha256:
                     raise SlicerExecutionError("A plate STL has changed since import.")
                 source_models.append((item, raw))
-            if job.engine == "prusaslicer" and (has_native_modifiers or any(item.get("process_overrides") for item in plate)):
+            if job.engine == "prusaslicer" and (has_native_modifiers or any(
+                    item.get("process_overrides") or
+                    (item.get("variable_layer_profile") or {}).get("bands")
+                    for item in plate)):
                 stage = "building qualified native Prusa project"
                 from .slicer_prusa_3mf import build_prusa_native_3mf
                 width, depth = trusted_plate_dimensions(job.printer_profile)
@@ -1175,10 +1178,14 @@ def process_queued_job(job_id):
             try:
                 if job.engine == "bambustudio":
                     audit_bambu_variable_layers(output.decode("utf-8"), variable_test)
+                elif job.engine == "prusaslicer":
+                    from .slicer_prusa_layer_ranges import audit_prusa_variable_layers
+                    audit_prusa_variable_layers(output.decode("utf-8"), variable_test)
                 else:
                     audit_orca_variable_layers(output.decode("utf-8"), variable_test)
             except (UnicodeDecodeError, ValueError) as exc:
                 engine_name = ("Bambu Studio" if job.engine == "bambustudio"
+                               else "PrusaSlicer" if job.engine == "prusaslicer"
                                else "Orca")
                 raise SlicerExecutionError(
                     engine_name + " did not produce the requested variable layer "
