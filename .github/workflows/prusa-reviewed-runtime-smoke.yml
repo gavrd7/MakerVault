@@ -262,6 +262,19 @@ jobs:
           echo "PRUSA_MMU_PAINT_DIR=$RUNNER_TEMP/prusa-mmu-paint" >> "$GITHUB_ENV"
           PYTHONPATH=backend:. "$RUNNER_TEMP/prusa-backend-venv/bin/python" scripts/prusa_generate_mmu_paint.py "$RUNNER_TEMP/prusa-mmu-paint"
 
+      - name: Verify native Prusa 2.9.7 MMU3 per-facet colour toolpaths
+        run: |
+          set -euo pipefail
+          docker run --rm --network none --user 10001:10001 \
+            -v "$TEST_VOLUME:/opt/engine-store:ro" \
+            -v "$GITHUB_WORKSPACE/scripts/prusa_native_mmu_paint_smoke.py:/tmp/mmu_colour.py:ro" \
+            -v "$PRUSA_MMU_PAINT_DIR:/tmp/mmu-colour:ro" \
+            --entrypoint python3 prusa-integration:smoke \
+            /tmp/mmu_colour.py \
+            /opt/engine-store/versions/prusaslicer/2.9.7/bin/prusa-slicer \
+            /opt/engine-store/versions/prusaslicer/2.9.7/resources/profiles/PrusaResearch.ini \
+            /tmp/mmu-colour/baseline.3mf /tmp/mmu-colour/colour.3mf
+
       - name: Generate native Prusa 3MF with distinct per-object settings
         run: |
           set -euo pipefail
