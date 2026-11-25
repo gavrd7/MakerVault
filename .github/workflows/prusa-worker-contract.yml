@@ -11,6 +11,8 @@ on:
       - "backend/core/tests/test_slicer_prusa_material_gcode_audit.py"
       - "slicer_worker/prusa_material_validation.py"
       - "backend/core/tests/test_slicer_prusa_material_validation.py"
+      - "backend/core/slicer_prusa_material_preflight.py"
+      - "backend/core/tests/test_slicer_prusa_material_preflight.py"
       - "backend/core/slicer_prusa_colour_project.py"
       - "backend/core/tests/test_slicer_prusa_colour_project.py"
       - "scripts/prusa_generate_mmu_paint.py"
@@ -80,7 +82,8 @@ jobs:
             core.tests.test_slicer_prusa_colour_project \
             core.tests.test_slicer_prusa_colour_audit \
             core.tests.test_slicer_prusa_material_validation \
-            core.tests.test_slicer_prusa_material_gcode_audit
+            core.tests.test_slicer_prusa_material_gcode_audit \
+            core.tests.test_slicer_prusa_material_preflight
 
       - name: Verify actual upstream PrusaResearch 2.9.7 inheritance
         run: |
