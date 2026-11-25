@@ -68,10 +68,18 @@ def prusa_command(binary: Path, workdir: Path) -> list[str]:
             # Validator messages are fixed literals; never expose profile text.
             raise WorkerError(str(exc)) from None
     output = _output_path(workdir)
+    # A marker is written only after the authenticated worker validated the
+    # Prusa-only placed-STL request. This is a fixed native flag, never a
+    # user-controlled command argument.
+    placed = workdir / "prusa-placed-stl.marker"
+    if placed.is_symlink():
+        raise WorkerError("Invalid placed-STL marker.")
+    if placed.exists() and (not placed.is_file() or placed.read_bytes() != b"v1"):
+        raise WorkerError("Invalid placed-STL marker.")
     return [
         str(binary), "--load", str(profiles[0]), "--load", str(profiles[1]),
         "--load", str(profiles[2]), "--export-gcode", "--output", str(output),
-        str(model),
+        *(["--dont-arrange"] if placed.exists() else []), str(model),
     ]
 
 
