@@ -5,7 +5,8 @@ from unittest.mock import patch
 import io
 import zipfile
 
-from core.slicer_prusa_material_preflight import prepare_prusa_offline_mmu_candidate
+from core.slicer_prusa_material_preflight import (prepare_prusa_offline_mmu_candidate,
+    prepare_prusa_offline_xl_candidate)
 from core.slicer_profiles import SlicerProfileError
 from core.tests.test_slicer_prusa_machine_topology import ini
 from core.tests.test_slicer_prusa_plate import cube, item
@@ -88,3 +89,37 @@ class PrusaOfflineMmuPreflightTests(TestCase):
                            side_effect=next_assets):
                     with self.assertRaises((SlicerProfileError,ValueError,WorkerError)):
                         prepare_prusa_offline_mmu_candidate(**data)
+
+    def test_independent_xl_uses_no_mmu_purge_or_tower(self):
+        values,assets=self.parts()
+        assets[0]=ini("0.4,0.4,0.4,0.4,0.4","0")
+        xl={k:values[k] for k in (
+            "owner_id","printer_profile","process_profile","filament_profiles",
+            "rows","tools","bed_width","bed_depth")}
+        with patch("core.slicer_prusa_material_preflight.resolved_prusa_profile",
+                   side_effect=assets):
+            result=prepare_prusa_offline_xl_candidate(**xl)
+        self.assertEqual(result["topology"],"independent_tools")
+        self.assertTrue(result["research_only"])
+        self.assertEqual(result["process"],assets[1])
+        self.assertIn(b"temperature = 205,220,210,205,205",result["filament"])
+        with zipfile.ZipFile(io.BytesIO(result["model"])) as archive:
+            self.assertNotIn("Metadata/Prusa_Slicer_wipe_tower_information.xml",
+                             archive.namelist())
+        with self.assertRaises(WorkerError):
+            validate_prusa_native_3mf(result["model"])
+
+    def test_xl_does_not_accept_mmu_or_foreign_filaments(self):
+        values,assets=self.parts()
+        xl={k:values[k] for k in (
+            "owner_id","printer_profile","process_profile","filament_profiles",
+            "rows","tools","bed_width","bed_depth")}
+        with patch("core.slicer_prusa_material_preflight.resolved_prusa_profile",
+                   side_effect=assets):
+            with self.assertRaises(SlicerProfileError):
+                prepare_prusa_offline_xl_candidate(**xl)
+        xl["filament_profiles"][1]=profile("filament",43)
+        with patch("core.slicer_prusa_material_preflight.resolved_prusa_profile") as load:
+            with self.assertRaises(SlicerProfileError):
+                prepare_prusa_offline_xl_candidate(**xl)
+        load.assert_not_called()
