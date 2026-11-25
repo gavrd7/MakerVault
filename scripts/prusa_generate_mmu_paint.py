@@ -24,7 +24,7 @@ M = "{http://schemas.microsoft.com/3dmanufacturing/core/2015/02}"
 P = "{http://schemas.slic3r.org/3mf/2017/06}"
 
 
-def fixture():
+def fixture(*, include_paint=False):
     source = cube_stl()
     triangles = list(_triangles(source))
     lower = [min(p[i] for tri in triangles for p in tri) for i in range(3)]
@@ -51,7 +51,8 @@ def fixture():
         out.extend(struct.pack("<12fH",0,0,0,
                    *(float(n) for vertex in triangle for n in vertex),0))
         attrs.append(tags)
-    return source,bytes(out),attrs
+    result = (source, bytes(out), attrs)
+    return (*result, paint) if include_paint else result
 
 
 def append_native_colour(source, attrs):
@@ -99,13 +100,18 @@ def append_native_colour(source, attrs):
 def main(dest):
     folder=Path(dest)
     folder.mkdir(parents=True,exist_ok=True)
-    base,painted,states=fixture()
+    base,painted,states,paint=fixture(include_paint=True)
     row={"asset_id":"synthetic-mm3-painted","x_mm":0,"y_mm":0,"z_mm":0,
          "rotation_deg":0,"scale_percent":100}
     control=build_prusa_native_3mf([(row,base)],bed_width=250,bed_depth=210)
-    native=build_prusa_native_3mf([(row,painted)],bed_width=250,bed_depth=210)
+    from core.slicer_prusa_colour_project import build_prusa_colour_candidate
+    from core.tests.test_slicer_prusa_machine_topology import ini
+    candidate=build_prusa_colour_candidate(
+        {**row,"colour_paint":paint},base,
+        printer_ini=ini("0.4,0.4,0.4,0.4,0.4","1"),
+        colour_tool_indices={1:1},bed_width=250,bed_depth=210)
     (folder/"baseline.3mf").write_bytes(control)
-    (folder/"colour.3mf").write_bytes(append_native_colour(native,states))
+    (folder/"colour.3mf").write_bytes(candidate)
     print("Generated native Prusa MMU colour mask over",sum(
         "paint_color" in state for state in states),"triangle facets.")
 
