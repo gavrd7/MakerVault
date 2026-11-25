@@ -70,3 +70,50 @@ def prepare_prusa_offline_mmu_candidate(
         "topology": topology["kind"],
         "research_only": True,
     }
+
+
+def prepare_prusa_offline_xl_candidate(
+    *, owner_id, printer_profile, process_profile, filament_profiles,
+    rows, tools, bed_width, bed_depth
+):
+    """Research-only independent-toolhead model assignment, no MMU purge.
+
+    Do not synthesize changer purge/tower settings for an XL; tool pickup,
+    physical offsets and firmware start codes need independent qualification.
+    """
+    if (type(owner_id) is not int or owner_id < 1 or
+            printer_profile.owner_id != owner_id or
+            process_profile.owner_id != owner_id or
+            printer_profile.kind != "printer" or
+            process_profile.kind != "process" or
+            printer_profile.engine != "prusaslicer" or
+            process_profile.engine != "prusaslicer" or
+            not isinstance(filament_profiles, (tuple, list)) or
+            any(p.owner_id != owner_id or p.kind != "filament" or
+                p.engine != "prusaslicer" for p in filament_profiles)):
+        raise SlicerProfileError("Prusa XL candidate requires privately owned native profiles.")
+    if (not isinstance(rows, (tuple, list)) or not isinstance(tools, (tuple, list)) or
+            len(rows) != len(tools) or not 2 <= len(rows) <= 5 or
+            any(type(tool) is not int for tool in tools)):
+        raise SlicerProfileError("Prusa XL model/tool assignment is incomplete.")
+    printer = resolved_prusa_profile(printer_profile)
+    process = resolved_prusa_profile(process_profile)
+    filaments = [resolved_prusa_profile(p) for p in filament_profiles]
+    topology = prusa_machine_topology(printer)
+    if (topology["kind"] != "independent_tools" or
+            len(filaments) != topology["logical_tool_count"]):
+        raise SlicerProfileError("Prusa XL candidate needs one preset per independent toolhead.")
+    palette = compile_prusa_filament_palette(printer, filaments)
+    project, assignment = build_prusa_multitool_candidate(
+        rows, printer_ini=printer, tools=tools,
+        bed_width=bed_width, bed_depth=bed_depth)
+    receipt = validate_prusa_material_candidate(
+        project, printer_ini=printer, tools=tools)
+    if (receipt["objects"] != len(rows) or receipt["wipe_tower"] or
+            assignment["selected_tools"] != tuple(sorted(set(tools)))):
+        raise SlicerProfileError("Prusa XL native candidate verification failed.")
+    return {
+        "model": project, "printer": printer, "filament": palette,
+        "process": process, "expected_tools": assignment["selected_tools"],
+        "topology": topology["kind"], "research_only": True,
+    }
