@@ -5,6 +5,9 @@ on:
     paths:
       - "backend/core/slicer_prusa_plate.py"
       - "backend/core/slicer_prusa_3mf.py"
+      - "backend/core/slicer_prusa_colour_project.py"
+      - "backend/core/tests/test_slicer_prusa_colour_project.py"
+      - "scripts/prusa_generate_mmu_paint.py"
       - "backend/core/slicer_prusa_purge.py"
       - "backend/core/tests/test_slicer_prusa_purge.py"
       - "backend/core/slicer_prusa_filament_palette.py"
@@ -67,7 +70,8 @@ jobs:
             core.tests.test_slicer_prusa_machine_topology \
             core.tests.test_slicer_prusa_multitool_project \
             core.tests.test_slicer_prusa_filament_palette \
-            core.tests.test_slicer_prusa_purge
+            core.tests.test_slicer_prusa_purge \
+            core.tests.test_slicer_prusa_colour_project
 
       - name: Verify actual upstream PrusaResearch 2.9.7 inheritance
         run: |
