@@ -58,7 +58,10 @@ def main(binary,vendor,directory):
             if kind=="print":
                 # Local CLI fixture: manual painted support enforcers on,
                 # auto supports off. Never modify owner-created profiles.
-                content+=b"support_material = 1\nsupport_material_auto = 0\n"
+                content = b"\n".join(line for line in content.splitlines()
+                    if line.split(b"=",1)[0].strip() not in
+                    (b"support_material",b"support_material_auto")) + b"\n"
+                content += b"support_material = 1\nsupport_material_auto = 0\n"
             path=scratch/(kind+".ini")
             path.write_bytes(content)
             flags.extend(["--load",str(path)])
