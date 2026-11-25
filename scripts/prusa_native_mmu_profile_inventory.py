@@ -7,6 +7,9 @@ from pathlib import Path
 import re
 import sys
 import hashlib
+import struct
+import subprocess
+from tempfile import TemporaryDirectory
 
 from slicer_worker.prusa_vendor_profiles import (
     parse_prusa_vendor_bundle, flatten_prusa_vendor_preset,
@@ -55,6 +58,63 @@ def main(path):
         print("XL NATIVE TOOLHEADS", repr(name), len(nozzles),
               "single_nozzle_changer", profile.get("single_extruder_multi_material", "0"),
               "gcode_flavor", profile.get("gcode_flavor", ""))
+    # Real pinned CLI feasibility for a modern BG-code-default machine.
+    # Source and G-code remain offline; production imports independently
+    # enforce text-only profiles and owner-bound source identities.
+    machine = "Original Prusa MK4S MMU3 0.4 nozzle"
+    if "printer:" + machine in sections:
+        flat = flatten_prusa_vendor_preset(
+            raw, kind="printer", name=machine, expected_sha256=sha)
+        lines = flat.decode("utf-8").splitlines()
+        converted = []
+        for line in lines:
+            if line.split("=", 1)[0].strip() == "binary_gcode":
+                converted.append("binary_gcode = 0")
+            else:
+                converted.append(line)
+        text_profile = ("\\n".join(converted)+"\\n").encode()
+        modern = validate_flat_prusa_preset(text_profile, kind="printer")
+        assert modern.get("binary_gcode") == "0"
+        runtime = Path(path).parents[2] / "bin/prusa-slicer"
+        if runtime.is_file():
+            with TemporaryDirectory(prefix="prusa-modern-text-profile-") as scratch:
+                temp = Path(scratch)
+                (temp/"printer.ini").write_bytes(text_profile)
+                for kind, name, output in (
+                    ("filament", "Generic PLA", "filament.ini"),
+                    ("print", "0.20mm NORMAL", "process.ini")):
+                    native = flatten_prusa_vendor_preset(
+                        raw, kind=kind, name=name, expected_sha256=sha)
+                    (temp/output).write_bytes(native)
+                # Fully closed 20mm cube with twelve triangles.
+                points = [(0,0,0),(20,0,0),(20,20,0),(0,20,0),
+                          (0,0,20),(20,0,20),(20,20,20),(0,20,20)]
+                faces = [(0,2,1),(0,3,2),(4,5,6),(4,6,7),
+                         (0,1,5),(0,5,4),(1,2,6),(1,6,5),
+                         (2,3,7),(2,7,6),(3,0,4),(3,4,7)]
+                stl=bytearray(b"Prusa modern text smoke".ljust(80,b"\\x00"))
+                stl.extend(struct.pack("<I",len(faces)))
+                for a,b,c in faces:
+                    stl.extend(struct.pack("<12fH",0.,0.,0.,*points[a],
+                                           *points[b],*points[c],0))
+                (temp/"cube.stl").write_bytes(stl)
+                cmd=[str(runtime),"--load",str(temp/"printer.ini"),
+                     "--load",str(temp/"filament.ini"),
+                     "--load",str(temp/"process.ini"),
+                     "--export-gcode","--output",str(temp/"cube.gcode"),
+                     str(temp/"cube.stl")]
+                completed=subprocess.run(cmd,cwd=temp,timeout=180,
+                                         stdout=subprocess.PIPE,stderr=subprocess.PIPE)
+                result=temp/"cube.gcode"
+                if completed.returncode==0 and result.exists():
+                    generated=result.read_bytes()
+                    assert generated.startswith((b";",b"G",b"M"))
+                    assert b"G1 " in generated and b" E" in generated
+                    print("PASS: modern MK4S MMU3 official printer profile safely "
+                          "converted to genuine text G-code:",len(generated),"bytes")
+                else:
+                    print("MODERN NATIVE CLI FEASIBILITY BLOCKED:",
+                          machine,"exit",completed.returncode)
     if not selected:
         raise ValueError("Official pinned Prusa 2.9.7 source has no MMU/XL candidates.")
     print("PASS: read-only native multi-material/independent-toolhead source inventory.")
