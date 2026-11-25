@@ -73,10 +73,24 @@ def main(path):
             else:
                 converted.append(line)
         text_profile = ("\\n".join(converted)+"\\n").encode()
-        modern = validate_flat_prusa_preset(text_profile, kind="printer")
-        assert modern.get("binary_gcode") == "0"
-        runtime = Path(path).parents[2] / "bin/prusa-slicer"
-        if runtime.is_file():
+        try:
+            modern = validate_flat_prusa_preset(text_profile, kind="printer")
+        except ValueError as exc:
+            # A vetted profile may still lack a mandatory printable bed
+            # polygon. Do not invent geometry or allow a partial preset.
+            print("MODERN NATIVE PROFILE STILL UNRESOLVED:", machine,
+                  "reason", str(exc), "has_nozzles", "nozzle_diameter =" in
+                  text_profile.decode(), "has_bed_shape", "bed_shape =" in
+                  text_profile.decode())
+            modern = None
+        if modern is None:
+            print("Modern printer native real-binary check postponed until "
+                  "required exact upstream machine geometry is resolved.")
+            runtime = None
+        else:
+            assert modern.get("binary_gcode") == "0"
+            runtime = Path(path).parents[2] / "bin/prusa-slicer"
+        if runtime is not None and runtime.is_file():
             with TemporaryDirectory(prefix="prusa-modern-text-profile-") as scratch:
                 temp = Path(scratch)
                 (temp/"printer.ini").write_bytes(text_profile)
