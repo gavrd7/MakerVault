@@ -12,7 +12,7 @@ from .slicer_plate_3mf import _triangles, _transform
 from .slicer_mesh import inspect_stl, MeshInspectionError
 from .slicer_profiles import SlicerProfileError
 
-_BED_POINT = re.compile(r"^([+-]?\\d+(?:\\.\\d+)?)x([+-]?\\d+(?:\\.\\d+)?)$")
+_BED_POINT = re.compile(r"^([+-]?\d+(?:\.\d+)?)x([+-]?\d+(?:\.\d+)?)$")
 
 
 def prusa_native_bed_dimensions(native_ini):
