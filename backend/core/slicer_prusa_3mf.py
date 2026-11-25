@@ -161,8 +161,8 @@ def validate_prusa_project_admission(plate, settings, version):
         if any(
             (row.get(key) or {}).get("regions") or (row.get(key) or {}).get("faces")
             for key in ("colour_paint", "support_paint", "seam_paint", "fuzzy_skin_paint")
-        ) or (row.get("variable_layer_profile") or {}).get("bands"):
-            raise ValueError("Native Prusa painting and variable layers are not qualified.")
+        ):
+            raise ValueError("Native Prusa surface painting has not yet passed binary acceptance.")
         if row.get("negative_volumes"):
             raise ValueError("Legacy negative volumes need explicit native volume representation.")
         volumes = validate_modifier_volumes(row.get("modifier_volumes"))
@@ -177,4 +177,7 @@ def validate_prusa_project_admission(plate, settings, version):
             seen.add(volume["id"])
             if volume["kind"] == "negative" and volume.get("coordinate_space") != "world":
                 raise ValueError("Prusa negative volumes require independent plate coordinates.")
+    # Bounded native layer config ranges are a separate, upstream Prusa XML
+    # feature, already checked against actual Prusa 2.9.7 Z steps.
+    prusa_layer_config_ranges([(row, b"") for row in plate])
     return total > 0
