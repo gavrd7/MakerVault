@@ -6,11 +6,13 @@ The authenticated worker does not call this module until material selection,
 purge and output audits are independently integrated and approved.
 """
 import io
+import math
 import zipfile
 from xml.etree import ElementTree as ET
 
 from .prusa_3mf_validation import validate_prusa_native_3mf, CONFIG, PARTS, NS
 from .runner import WorkerError
+from .prusa_vendor_profiles import validate_flat_prusa_preset
 
 MODEL = "3D/3dmodel.model"
 PAINT = "{http://schemas.slic3r.org/3mf/2017/06}mmu_segmentation"
@@ -20,15 +22,34 @@ def _refuse():
     raise WorkerError("Unsupported native Prusa multi-material candidate.")
 
 
-def validate_prusa_material_candidate(data, *, tools=None, colour=False):
+def _qualified_topology(printer_ini):
+    settings = validate_flat_prusa_preset(printer_ini, kind="printer")
+    try:
+        nozzles = [float(part.strip()) for part in settings["nozzle_diameter"].split(",")]
+    except (TypeError, ValueError):
+        _refuse()
+    if (not 1 <= len(nozzles) <= 5 or
+            any(not math.isfinite(d) or not .1 <= d <= 1.2 for d in nozzles)):
+        _refuse()
+    changer = settings.get("single_extruder_multi_material", "0").strip().lower()
+    if changer not in ("0", "1", "false", "true"):
+        _refuse()
+    same_nozzle = changer in ("1", "true")
+    if same_nozzle and len(nozzles) < 2:
+        _refuse()
+    return len(nozzles), same_nozzle
+
+
+def validate_prusa_material_candidate(data, *, printer_ini, tools=None, colour=False):
     if not isinstance(data, bytes) or not 0 < len(data) <= 32*1024*1024:
         _refuse()
+    logical_count, changer = _qualified_topology(printer_ini)
     if colour:
-        if tools is not None:
+        if tools is not None or not changer or logical_count < 2:
             _refuse()
     elif (not isinstance(tools,(tuple,list)) or not 2 <= len(tools) <= 5
           or len(set(tools)) < 2 or any(type(t) is not int or
-                                        not 1 <= t <= 5 for t in tools)):
+                                        not 1 <= t <= logical_count for t in tools)):
         _refuse()
     try:
         with zipfile.ZipFile(io.BytesIO(data)) as z:
