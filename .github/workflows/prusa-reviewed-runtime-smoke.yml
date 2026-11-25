@@ -165,6 +165,34 @@ jobs:
               worker.server_close()
           '
 
+      - name: Bake actual MakerVault model transforms for native CLI acceptance
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m venv "$RUNNER_TEMP/prusa-backend-venv"
+          "$RUNNER_TEMP/prusa-backend-venv/bin/pip" install --quiet defusedxml==0.7.1
+          export PRUSA_PLATE_PATH="$RUNNER_TEMP/makervault-prusa-placed.stl"
+          echo "PRUSA_PLATE_PATH=$PRUSA_PLATE_PATH" >> "$GITHUB_ENV"
+          PYTHONPATH=backend "$RUNNER_TEMP/prusa-backend-venv/bin/python" - <<'PY'
+          import os, struct
+          from pathlib import Path
+          from core.slicer_prusa_plate import build_prusa_placed_stl
+          from scripts.prusa_real_binary_smoke import cube_stl
+          source = cube_stl()
+          def item(x, rotate):
+              return {"asset_id": "verified-cube",
+                      "x_mm": x, "y_mm": 0, "z_mm": 0,
+                      "rotation_deg": rotate, "rotation_xyz_deg": [0,0],
+                      "scale_percent": 100,
+                      "scale_xyz_percent": [100,100,100]}
+          baked = build_prusa_placed_stl([
+              (item(-35, 0), source), (item(35, 90), source),
+          ], bed_width=250, bed_depth=210)
+          assert struct.unpack_from("<I", baked, 80)[0] == 24
+          Path(os.environ["PRUSA_PLATE_PATH"]).write_bytes(baked)
+          print("PASS: real backend preview transforms baked into 24-triangle STL.")
+          PY
+
       - name: Verify real native Prusa CLI preserves two placed STL cubes
         run: |
           set -euo pipefail
@@ -172,10 +200,12 @@ jobs:
             -v "$TEST_VOLUME:/opt/engine-store:ro" \
             -v "$GITHUB_WORKSPACE/scripts/prusa_real_binary_smoke.py:/tmp/prusa_smoke.py:ro" \
             -v "$GITHUB_WORKSPACE/scripts/prusa_placed_native_smoke.py:/tmp/prusa_placed.py:ro" \
+            -v "$PRUSA_PLATE_PATH:/tmp/makervault-prusa-placed.stl:ro" \
             --entrypoint python3 prusa-integration:smoke \
             /tmp/prusa_placed.py \
             --binary /opt/engine-store/versions/prusaslicer/2.9.7/bin/prusa-slicer \
-            --vendor /opt/engine-store/versions/prusaslicer/2.9.7/resources/profiles/PrusaResearch.ini
+            --vendor /opt/engine-store/versions/prusaslicer/2.9.7/resources/profiles/PrusaResearch.ini \
+            --input-stl /tmp/makervault-prusa-placed.stl
 
       - name: Uninstall and reinstall Prusa without affecting Orca
         shell: bash
