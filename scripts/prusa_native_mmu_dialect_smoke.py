@@ -133,7 +133,7 @@ def main(binary, source, directory):
             file.write_bytes(data)
             native.extend(["--load", str(file)])
         winners = []
-        for dialect in ("object", "volume", "both"):
+        for dialect in ("object", "volume", "both", "trusted"):
             model = str(Path(directory) / (dialect + ".3mf"))
             dest = root / (dialect + ".gcode")
             command = [binary, *native, "--export-gcode", "--dont-arrange",
