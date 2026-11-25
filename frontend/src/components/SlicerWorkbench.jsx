@@ -1302,7 +1302,7 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
   }
 
   async function saveInteractiveProcessProfile(name) {
-    if (!canPrepare || busy || loading || !["orcaslicer", "crealityprint", "bambustudio"].includes(form.engine) ||
+    if (!canPrepare || busy || loading || !["orcaslicer", "crealityprint", "bambustudio", "prusaslicer"].includes(form.engine) ||
         !form.process_profile_id || !Object.keys(processOverrides).length) {
       throw new Error("Choose an installed engine process profile and change a supported setting first.");
     }
