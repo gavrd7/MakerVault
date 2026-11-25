@@ -37,6 +37,13 @@ def resolved_prusa_profile(profile) -> bytes:
         raise SlicerProfileError("Prusa native profile content is unavailable.") from None
     if not 0 < len(raw) <= MAX_BYTES or hashlib.sha256(raw).hexdigest() != profile.content_sha256:
         raise SlicerProfileError("Prusa native profile changed since import.")
+    parse_prusa_profile(raw, profile.kind)
+    return raw
+
+
+def parse_prusa_profile(raw, kind):
+    if kind not in REQUIRED or not isinstance(raw, bytes) or not 0 < len(raw) <= MAX_BYTES:
+        raise SlicerProfileError("Invalid Prusa native profile.")
     try:
         text = raw.decode("utf-8-sig")
     except UnicodeDecodeError:
@@ -63,8 +70,8 @@ def resolved_prusa_profile(profile) -> bytes:
         if key == "binary_gcode" and val.lower() not in {"", "0", "false", "no"}:
             raise SlicerProfileError("Only plain-text Prusa G-code is supported.")
         settings[key] = val
-    if not REQUIRED[profile.kind].issubset(settings):
+    if not REQUIRED[kind].issubset(settings):
         raise SlicerProfileError("Prusa native profile is missing required settings.")
-    if profile.kind == "printer" and settings.get("printer_technology", "FFF") != "FFF":
+    if kind == "printer" and settings.get("printer_technology", "FFF") != "FFF":
         raise SlicerProfileError("Only Prusa FFF printer profiles are supported.")
-    return raw
+    return settings
