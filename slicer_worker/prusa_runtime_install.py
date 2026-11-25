@@ -37,6 +37,9 @@ def _checked_members(archive):
     for member in archive:
         name = member.name
         path = PurePosixPath(name)
+        # GNU tar includes the root directory itself before its children.
+        if name in {"prusa-candidate", "prusa-candidate/"} and member.isdir():
+            continue
         if (not name.startswith("prusa-candidate/") or path.is_absolute()
                 or any(part in {"..", "."} for part in name.split("/"))
                 or "\\" in name or len(name) > 400
