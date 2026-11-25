@@ -23,7 +23,10 @@ def _refuse():
 
 
 def _qualified_topology(printer_ini):
-    settings = validate_flat_prusa_preset(printer_ini, kind="printer")
+    try:
+        settings = validate_flat_prusa_preset(printer_ini, kind="printer")
+    except (TypeError, ValueError):
+        _refuse()
     try:
         nozzles = [float(part.strip()) for part in settings["nozzle_diameter"].split(",")]
     except (TypeError, ValueError):
