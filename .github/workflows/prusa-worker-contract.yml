@@ -11,6 +11,9 @@ on:
       - "slicer_worker/tests/test_prusa_gcode_audit.py"
       - "scripts/prusa_candidate_manifest.py"
       - "slicer_worker/tests/test_prusa_candidate_manifest.py"
+      - "slicer_worker/prusa_runtime_install.py"
+      - "slicer_worker/engine_installer_service.py"
+      - "slicer_worker/tests/test_prusa_runtime_install.py"
       - ".github/workflows/prusa-worker-contract.yml"
   workflow_dispatch:
 
@@ -26,7 +29,7 @@ jobs:
       - name: Verify bounded Prusa CLI contract (no slicer download)
         run: |
           set -euo pipefail
-          python3 -m unittest -v slicer_worker.tests.test_runner slicer_worker.tests.test_prusa_vendor_profiles slicer_worker.tests.test_prusa_gcode_audit slicer_worker.tests.test_prusa_candidate_manifest
+          python3 -m unittest -v slicer_worker.tests.test_runner slicer_worker.tests.test_prusa_vendor_profiles slicer_worker.tests.test_prusa_gcode_audit slicer_worker.tests.test_prusa_candidate_manifest slicer_worker.tests.test_prusa_runtime_install
 
       - name: Verify actual upstream PrusaResearch 2.9.7 inheritance
         run: |
