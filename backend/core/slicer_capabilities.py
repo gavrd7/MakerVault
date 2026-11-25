@@ -36,6 +36,21 @@ def native_capabilities(engine, version):
                   "work; native slicing is still pending.")
     result = {key: {"status": state, "reason": reason} for key in FEATURES}
     if engine == "prusaslicer" and version == "2.9.7":
+        result["support_paint"] = {
+            "status": "verified",
+            "reason": ("Native Prusa 2.9.7 support enforcer and blocker masks "
+                       "passed genuine, same-geometry CLI support-path comparisons. "
+                       "Limited to one upright, unscaled, single-material model "
+                       "without mixed native extensions; manual enforcer slices "
+                       "must generate real support extrusion."),
+        }
+        result["fuzzy_skin_paint"] = {
+            "status": "verified",
+            "reason": ("Native Prusa 2.9.7 selectively altered external wall "
+                       "toolpaths at the painted surface, leaving the opposite "
+                       "wall unchanged. Limited to one upright, unscaled, "
+                       "single-material model without mixed native extensions."),
+        }
         result["variable_layer_profile"] = {
             "status": "verified",
             "reason": ("Pinned PrusaSlicer 2.9.7 native per-object 3MF layer ranges "
