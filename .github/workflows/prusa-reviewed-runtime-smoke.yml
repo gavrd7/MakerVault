@@ -307,6 +307,8 @@ jobs:
           docker run --rm --network none --user 10001:10001 \
             -v "$TEST_VOLUME:/opt/engine-store:ro" \
             -v "$GITHUB_WORKSPACE/scripts/prusa_native_mmu_paint_smoke.py:/tmp/mmu_colour.py:ro" \
+            -v "$GITHUB_WORKSPACE/backend:/tmp/mv-backend:ro" \
+            -e PYTHONPATH=/tmp/mv-backend:/app \
             -v "$PRUSA_MMU_PAINT_DIR:/tmp/mmu-colour:ro" \
             --entrypoint python3 prusa-integration:smoke \
             /tmp/mmu_colour.py \
