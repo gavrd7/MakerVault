@@ -226,6 +226,14 @@ def main(binary, source, directory, *options):
                   "gcode_bytes", len(data))
             spatial = _spatial_tool_audit(data)
             print("MMU native spatial tool deposition", dialect, spatial)
+            if dialect == "trusted":
+                from slicer_worker.prusa_material_gcode_audit import audit_prusa_material_model_gcode
+                tool_receipt = audit_prusa_material_model_gcode(
+                    data, (Path(directory)/"trusted.3mf").read_bytes(),
+                    printer_ini=(root/"printer.ini").read_bytes(), tools=[1,2])
+                print("PASS: independent native MMU model-local toolpath audit",
+                      tool_receipt)
+
             correct = (
                 spatial["by_tool"][0]["left"] > 100 and
                 spatial["by_tool"][1]["right"] > 100 and
