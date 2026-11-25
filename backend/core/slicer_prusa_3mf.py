@@ -187,14 +187,18 @@ def validate_prusa_project_admission(plate, settings, version):
         total += len(volumes)
         if total > MAX_TOTAL_MODIFIERS:
             raise ValueError("Prusa native modifier count exceeds the limit.")
-        if len(plate) > 1 and volumes:
-            raise ValueError("Prusa native modifiers currently require a single parent model.")
+        if len(plate) > 1 and volumes and any(model.get("process_overrides")
+                                                for model in plate):
+            raise ValueError("Multi-object native modifiers combined with object settings are unverified.")
         for volume in volumes:
             if volume["id"] in seen:
                 raise ValueError("Duplicate Prusa native volume identity.")
             seen.add(volume["id"])
             if volume["kind"] == "negative" and volume.get("coordinate_space") != "world":
                 raise ValueError("Prusa negative volumes require independent plate coordinates.")
+    if total and any((row.get("variable_layer_profile") or {}).get("bands")
+                     for row in plate):
+        raise ValueError("Native Prusa modifier and variable-layer combinations need separate G-code proof.")
     # Bounded native layer config ranges are a separate, upstream Prusa XML
     # feature, already checked against actual Prusa 2.9.7 Z steps.
     prusa_layer_config_ranges([(row, b"") for row in plate])
