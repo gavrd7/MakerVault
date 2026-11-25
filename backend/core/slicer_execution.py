@@ -1187,8 +1187,17 @@ def process_queued_job(job_id):
                 if job.engine == "bambustudio":
                     audit_bambu_variable_layers(output.decode("utf-8"), variable_test)
                 elif job.engine == "prusaslicer":
-                    from .slicer_prusa_layer_ranges import audit_prusa_variable_layers
-                    audit_prusa_variable_layers(output.decode("utf-8"), variable_test)
+                    if len(source_models) > 1:
+                        from .slicer_prusa_spatial_layers import audit_prusa_multi_object_layer_ranges
+                        from .slicer_prusa_native_resolution import parse_prusa_profile
+                        process = parse_prusa_profile(profiles[2], "process")
+                        width, depth = trusted_plate_dimensions(job.printer_profile)
+                        audit_prusa_multi_object_layer_ranges(
+                            output, source_models, bed_width=width, bed_depth=depth,
+                            base_layer_mm=float(process["layer_height"]))
+                    else:
+                        from .slicer_prusa_layer_ranges import audit_prusa_variable_layers
+                        audit_prusa_variable_layers(output.decode("utf-8"), variable_test)
                 else:
                     audit_orca_variable_layers(output.decode("utf-8"), variable_test)
             except (UnicodeDecodeError, ValueError) as exc:
