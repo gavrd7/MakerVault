@@ -58,11 +58,13 @@ def main(binary, vendor, *projects):
     with TemporaryDirectory(prefix="prusa-support-overhang-") as tmp:
         folder = Path(tmp)
         args = []
+        original_process = None
         for kind,name in (("printer","Original Prusa i3 MK2S"),
                           ("filament","Generic PLA"),("print","0.20mm NORMAL")):
             data = flatten_prusa_vendor_preset(upstream,kind=kind,name=name,
                                                expected_sha256=checksum)
             if kind=="print":
+                original_process = data
                 # Explicitly enable *manual-only* support enforcers for a
                 # CLI qualification fixture, never change saved user presets.
                 data = _set_keys(data,{"support_material":"1","support_material_auto":"0"})
@@ -87,6 +89,22 @@ def main(binary, vendor, *projects):
         # a painted archive loads. A release gate needs spatial support E.
         print("Candidate support comparison (enforced vs geometry control):",
               results["enforced"]!=results["geometry-control"])
+        if "blocked" in results:
+            (folder/"print.ini").write_bytes(_set_keys(original_process, {
+                "support_material":"1", "support_material_auto":"1"}))
+            auto_results = {}
+            for label,path in (entry.split("=",1) for entry in projects if
+                               entry.startswith(("geometry-control=", "blocked="))):
+                output = folder / ("auto-" + label + ".gcode")
+                subprocess.run([binary,*args,"--export-gcode","--dont-arrange",
+                                "--output",str(output),path],cwd=folder,
+                               check=True,timeout=300)
+                raw = output.read_bytes()
+                audit_prusa_positive_e(raw)
+                auto_results[label] = _support_audit(raw)
+                print("Native Prusa automatic support/blocker",label,auto_results[label])
+            print("Candidate blocker comparison with automatic supports:",
+                  auto_results.get("geometry-control") != auto_results.get("blocked"))
 
 
 if __name__=="__main__":
