@@ -1237,6 +1237,20 @@ def process_queued_job(job_id):
                     raise SlicerExecutionError(
                         "Prusa native painted support enforcers produced no verified support paths."
                     ) from exc
+        if (job.engine == "prusaslicer" and plate and len(plate) == 2 and
+                any((row.get("fuzzy_skin_paint") or {}).get("regions")
+                    for row in plate)):
+            stage = "auditing independent native Prusa fuzzy skin toolpaths"
+            from .slicer_prusa_fuzzy_audit import audit_prusa_two_object_fuzzy
+            width, depth = trusted_plate_dimensions(job.printer_profile)
+            try:
+                audit_prusa_two_object_fuzzy(
+                    output, source_models, bed_width=width, bed_depth=depth)
+            except ValueError as exc:
+                raise SlicerExecutionError(
+                    "Prusa two-object fuzzy skin G-code did not preserve "
+                    "the selected painted model and smooth neighbour."
+                ) from exc
         stage = "validating and storing generated G-code"
         asset = store_generated_gcode(job.pk, output)
         # Prepare GPU-friendly overviews outside the HTTP request and outside
