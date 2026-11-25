@@ -175,6 +175,12 @@ def main(binary, source, directory):
                     match = re.search(r"(?:^|\\s)S(\\d+)(?:\\s|$)", command)
                     if match:
                         temperatures.add(int(match.group(1)))
+            heater_lines = [
+                line.strip() for line in data.decode("utf-8").splitlines()
+                if re.match(r"^\\s*M(?:10[49]|109|140|190|116|104|105|900)\\b", line)
+            ]
+            print("Native Prusa heater command evidence", heater_lines[:18],
+                  "total", len(heater_lines), flush=True)
             assert {205, 220}.issubset(temperatures), temperatures
             print("PASS: native MMU distinct filament temperature vector",
                   sorted(temperatures), spatial)
