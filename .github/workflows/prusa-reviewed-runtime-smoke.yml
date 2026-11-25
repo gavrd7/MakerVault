@@ -338,6 +338,26 @@ jobs:
             /opt/engine-store/versions/prusaslicer/2.9.7/resources/profiles/PrusaResearch.ini \
             /tmp/prusa-layers/baseline.3mf /tmp/prusa-layers/layer.3mf
 
+      - name: Generate Prusa two-object native regional projects
+        run: |
+          set -euo pipefail
+          echo "PRUSA_MULTI_REGION_DIR=$RUNNER_TEMP/prusa-two-regions" >> "$GITHUB_ENV"
+          PYTHONPATH=backend "$RUNNER_TEMP/prusa-backend-venv/bin/python" scripts/prusa_generate_multi_regions.py "$RUNNER_TEMP/prusa-two-regions"
+
+      - name: Audit two independent native modifier and cavity toolpaths
+        run: |
+          set -euo pipefail
+          docker run --rm --network none --user 10001:10001 \
+            -v "$TEST_VOLUME:/opt/engine-store:ro" \
+            -v "$GITHUB_WORKSPACE/scripts/prusa_native_multi_regions_smoke.py:/tmp/multi.py:ro" \
+            -v "$GITHUB_WORKSPACE/scripts/prusa_native_regions_smoke.py:/tmp/prusa_regions.py:ro" \
+            -v "$PRUSA_MULTI_REGION_DIR:/tmp/fixtures:ro" \
+            --entrypoint python3 prusa-integration:smoke \
+            /tmp/multi.py \
+            /opt/engine-store/versions/prusaslicer/2.9.7/bin/prusa-slicer \
+            /opt/engine-store/versions/prusaslicer/2.9.7/resources/profiles/PrusaResearch.ini \
+            /tmp/fixtures/baseline.3mf /tmp/fixtures/modifier.3mf /tmp/fixtures/negative.3mf
+
       - name: Verify authenticated native Prusa 3MF HTTP jobs
         run: |
           set -euo pipefail
