@@ -8,8 +8,50 @@ import sys
 from tempfile import TemporaryDirectory
 
 from slicer_worker.prusa_vendor_profiles import flatten_prusa_vendor_preset
+from slicer_worker.prusa_gcode_audit import WORD
 
 audit = runpy.run_path("/tmp/prusa_seam_audit.py")["audit_prusa_seam_enforcer_gcode"]
+
+
+def first_external_wall_starts(data):
+    """Research only: inspect real first external perimeters, not an XML flag."""
+    role = ""
+    relative = False
+    e = 0.
+    pos = {"X": None, "Y": None, "Z": None}
+    captured = False
+    starts = []
+    for line in data.decode("utf-8").splitlines():
+        stripped = line.strip()
+        if stripped == ";LAYER_CHANGE":
+            captured = False
+        if stripped.startswith(";TYPE:"):
+            role = stripped.partition(":")[2].strip().lower()
+        cmd = stripped.split(";", 1)[0].strip()
+        if not cmd:
+            continue
+        op = cmd.split(None, 1)[0].upper()
+        if op not in ("G0", "G00", "G1", "G01", "G92", "M82", "M83"):
+            continue
+        words = {key.upper(): float(value) for key, value in WORD.findall(cmd)}
+        if op == "M82":
+            relative = False
+        elif op == "M83":
+            relative = True
+        elif op == "G92":
+            e = words.get("E", e)
+        else:
+            pos.update({k: value for k, value in words.items() if k in pos})
+            if "E" in words:
+                extrusion = words["E"] if relative else words["E"]-e
+                e = e+words["E"] if relative else words["E"]
+                if (not captured and extrusion > 1e-6 and
+                        "external perimeter" in role and
+                        all(v is not None for v in pos.values()) and
+                        3 < pos["Z"] < 17):
+                    starts.append((round(pos["X"],2),round(pos["Y"],2)))
+                    captured = True
+    return {"layers": len(starts), "unique_starts": sorted(set(starts))[:8]}
 
 
 def main(binary, vendor, directory):
@@ -36,6 +78,8 @@ def main(binary, vendor, directory):
         baseline = (root / "baseline.gcode").read_bytes()
         for name in names:
             item = json.loads((model / (name + ".json")).read_text())
+            print("Native seam directional G-code", name,
+                  first_external_wall_starts((root / (name + ".gcode")).read_bytes()))
             try:
                 observed = audit((root / (name + ".gcode")).read_bytes(),
                                  item, bed_width=250, bed_depth=210)
