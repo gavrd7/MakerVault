@@ -93,7 +93,7 @@ def native_smoke(binary, vendor, cube):
             layers = sum(line.strip() == ";LAYER_CHANGE" for line in lines)
             assert layers > 0
             from hashlib import sha256
-            motions = "\\n".join(line.partition(";")[0] for line in lines
+            motions = "\n".join(line.partition(";")[0] for line in lines
                                 if line.lstrip().startswith(("G0 ", "G1 ")))
             results.append({"layers": layers, "motion": sha256(
                 motions.encode("utf-8")).hexdigest()})
