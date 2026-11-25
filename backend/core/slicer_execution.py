@@ -298,9 +298,7 @@ def _validate_plate_execution(job):
                 if not isinstance(item, dict) or (
                         (item.get("colour_paint") or {}).get("regions") or
                         (item.get("colour_paint") or {}).get("faces") or
-                        (item.get("support_paint") or {}).get("regions") or
-                        (item.get("seam_paint") or {}).get("regions") or
-                        (item.get("fuzzy_skin_paint") or {}).get("regions")):
+                        (item.get("seam_paint") or {}).get("regions")):
                     raise SlicerExecutionError(
                         "PrusaSlicer surface painting is not yet verified.")
                 from .slicer_prusa_3mf import OBJECT_KEYS
@@ -331,7 +329,9 @@ def _validate_plate_execution(job):
     try:
         if job.engine == "prusaslicer" and objects and any(
                 item.get("modifier_volumes") or item.get("process_overrides") or
-                (item.get("variable_layer_profile") or {}).get("bands")
+                (item.get("variable_layer_profile") or {}).get("bands") or
+                (item.get("support_paint") or {}).get("regions") or
+                (item.get("fuzzy_skin_paint") or {}).get("regions")
                 for item in objects if isinstance(item, dict)):
             from .slicer_prusa_3mf import validate_prusa_project_admission
             native_modifier_request = validate_prusa_project_admission(
@@ -392,7 +392,8 @@ def _validate_plate_execution(job):
            and item["support_paint"].get("regions") for item in objects):
         # Native geometry splitting and paint_supports attributes are
         # experimental until compared with real Orca-generated toolpaths.
-        if not ((job.engine == "orcaslicer" and job.engine_version == "2.5.0") or
+        if not ((job.engine == "prusaslicer" and job.engine_version == "2.9.7") or
+                (job.engine == "orcaslicer" and job.engine_version == "2.5.0") or
                 (job.engine == "bambustudio" and job.engine_version == "02.09.01.70") or
                 (job.engine == "crealityprint" and job.engine_version.startswith("7.3.") and
                  settings.get("multi_material_test") is True)):
@@ -440,7 +441,8 @@ def _validate_plate_execution(job):
         # Orca 2.5 saves painted fuzzy regions in paint_fuzzy_skin and uses
         # fuzzy_skin=none ("Painted only") to activate them. The distinct
         # disabled_fuzzy value turns the effect off entirely.
-        if not ((job.engine == "orcaslicer" and job.engine_version == "2.5.0") or
+        if not ((job.engine == "prusaslicer" and job.engine_version == "2.9.7") or
+                (job.engine == "orcaslicer" and job.engine_version == "2.5.0") or
                 (job.engine == "bambustudio" and job.engine_version == "02.09.01.70") or
                 (job.engine == "crealityprint" and job.engine_version.startswith("7.3.") and
                  settings.get("multi_material_test") is True)):
@@ -782,7 +784,9 @@ def process_queued_job(job_id):
                 source_models.append((item, raw))
             if job.engine == "prusaslicer" and (has_native_modifiers or any(
                     item.get("process_overrides") or
-                    (item.get("variable_layer_profile") or {}).get("bands")
+                    (item.get("variable_layer_profile") or {}).get("bands") or
+                    (item.get("support_paint") or {}).get("regions") or
+                    (item.get("fuzzy_skin_paint") or {}).get("regions")
                     for item in plate)):
                 stage = "building qualified native Prusa project"
                 from .slicer_prusa_3mf import build_prusa_native_3mf
@@ -859,6 +863,11 @@ def process_queued_job(job_id):
             stage = "applying verified native Prusa process settings"
             profiles[2] = apply_prusa_process_overrides(
                 profiles[2], (job.settings or {}).get("process_overrides") or {})
+            if any((item.get("support_paint") or {}).get("regions")
+                   for item in (job.settings or {}).get("plate_objects", [])
+                   if isinstance(item, dict)):
+                from .slicer_prusa_process_settings import enable_prusa_painted_support
+                profiles[2] = enable_prusa_painted_support(profiles[2])
         if job.engine == "orcaslicer":
             stage = "checking native printer/process compatibility"
             profiles[0] = _execution_printer_profile(
@@ -1190,6 +1199,21 @@ def process_queued_job(job_id):
                     engine_name + " did not produce the requested variable layer "
                     "heights. The generated G-code has not been approved or stored."
                 ) from exc
+        if job.engine == "prusaslicer":
+            painted_enforcers = any(
+                any(region.get("slot") == 0 for region in
+                    (item.get("support_paint") or {}).get("regions", []))
+                for item in (job.settings or {}).get("plate_objects", [])
+                if isinstance(item, dict))
+            if painted_enforcers:
+                stage = "auditing native Prusa painted support toolpaths"
+                from .slicer_prusa_paint import audit_prusa_support_enforcer_gcode
+                try:
+                    audit_prusa_support_enforcer_gcode(output)
+                except ValueError as exc:
+                    raise SlicerExecutionError(
+                        "Prusa native painted support enforcers produced no verified support paths."
+                    ) from exc
         stage = "validating and storing generated G-code"
         asset = store_generated_gcode(job.pk, output)
         # Prepare GPU-friendly overviews outside the HTTP request and outside
