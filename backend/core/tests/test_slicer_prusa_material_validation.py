@@ -3,6 +3,7 @@ import io
 import zipfile
 from unittest import TestCase
 from xml.etree import ElementTree as ET
+from defusedxml import ElementTree as SafeET
 
 from core.slicer_prusa_colour_project import build_prusa_colour_candidate
 from core.slicer_prusa_material_project import add_prusa_native_model_tools
@@ -22,7 +23,7 @@ def mutate(project, part, edit):
         for name in src.namelist():
             content=src.read(name)
             if name==part:
-                root=ET.fromstring(content)
+                root=SafeET.fromstring(content)
                 edit(root)
                 content=ET.tostring(root)
             out.writestr(name,content)
