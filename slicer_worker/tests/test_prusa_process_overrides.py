@@ -69,7 +69,12 @@ def native_smoke(binary, vendor, cube):
         for kind in ("printer", "filament"):
             (folder / (kind + ".ini")).write_bytes(profiles[kind])
         results = []
-        for overrides in ({}, VALUES):
+        speed_values = {
+            "outer_wall_speed": 22, "inner_wall_speed": 38,
+            "sparse_infill_speed": 60, "travel_speed": 150,
+            "top_surface_speed": 25,
+        }
+        for overrides in ({}, VALUES, speed_values):
             (folder / "process.ini").write_bytes(apply_prusa_process_overrides(profiles["print"], overrides))
             receipt = run_prusa(Path(binary), folder, timeout_seconds=300)
             data = Path(receipt["gcode_path"]).read_bytes()
@@ -87,7 +92,15 @@ def native_smoke(binary, vendor, cube):
                     assert actual.endswith(suffix) and math.isclose(float(actual.rstrip("%")), value), (native, actual)
             layers = sum(line.strip() == ";LAYER_CHANGE" for line in lines)
             assert layers > 0
-            results.append(layers)
+            from hashlib import sha256
+            motions = "\\n".join(line.partition(";")[0] for line in lines
+                                if line.lstrip().startswith(("G0 ", "G1 ")))
+            results.append({"layers": layers, "motion": sha256(
+                motions.encode("utf-8")).hexdigest()})
             Path(receipt["gcode_path"]).unlink()
-        assert results[1] < results[0], results
-        print("PASS: seven native process overrides echoed in genuine G-code; layer count", results)
+        assert results[1]["layers"] < results[0]["layers"], results
+        assert results[2]["layers"] == results[0]["layers"], results
+        assert results[2]["motion"] != results[0]["motion"], (
+            "Native Prusa speed controls did not affect real G-code movement.")
+        print("PASS: five Prusa native speed overrides changed genuine toolpaths.")
+        print("PASS: seven original native overrides and five speed controls echoed in genuine G-code", results)
