@@ -11,6 +11,7 @@ from defusedxml import ElementTree as SafeET
 from xml.etree import ElementTree as ET
 
 from core.slicer_prusa_3mf import build_prusa_native_3mf
+from core.slicer_prusa_material_project import add_prusa_native_model_tools
 from scripts.prusa_real_binary_smoke import cube_stl
 
 
@@ -46,6 +47,16 @@ def main(destination):
                 "z_mm": 0, "rotation_deg": 0, "scale_percent": 100}
     pristine = build_prusa_native_3mf([
         (item(-35), source), (item(35), source)], bed_width=250, bed_depth=210)
+    # Use the identical bounded Prusa-only serializer intended for future
+    # owner-scoped MMU/XL routes rather than relying on manual XML edits.
+    printer_ini = (b"printer_technology = FFF\n"
+                   b"bed_shape = 0x0,250x0,250x210,0x210\n"
+                   b"nozzle_diameter = 0.4,0.4,0.4,0.4,0.4\n"
+                   b"single_extruder_multi_material = 1\n"
+                   b"binary_gcode = 0\n")
+    trusted = add_prusa_native_model_tools(
+        pristine, printer_ini, [1, 2])
+    (root / "trusted.3mf").write_bytes(trusted["project"])
     for dialect in ("object", "volume", "both"):
         (root / (dialect + ".3mf")).write_bytes(make_variant(pristine, dialect))
 
