@@ -36,12 +36,15 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--binary", required=True, type=Path)
     parser.add_argument("--vendor", required=True, type=Path)
+    parser.add_argument("--input-stl", type=Path, default=None,
+                        help="Bounded STL baked by actual MakerVault backend.")
     args = parser.parse_args()
     vendor = args.vendor.read_bytes()
     digest = hashlib.sha256(vendor).hexdigest()
     with TemporaryDirectory(prefix="prusa-placed-") as tmp:
         workdir = Path(tmp)
-        (workdir / "input.stl").write_bytes(two_positioned_cubes())
+        (workdir / "input.stl").write_bytes(
+            args.input_stl.read_bytes() if args.input_stl else two_positioned_cubes())
         (workdir / "prusa-placed-stl.marker").write_text("v1")
         for kind, name, dest in (
             ("printer", "Original Prusa i3 MK2S", "printer.ini"),
