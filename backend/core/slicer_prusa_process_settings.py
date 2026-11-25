@@ -58,3 +58,20 @@ def prusa_process_schema(raw):
                        "current": current, "level": "basic" if key in BASIC_FIELDS else "advanced",
                        "section": SECTION_FOR.get(key, "Advanced")}
     return result
+
+
+def enable_prusa_painted_support(raw):
+    """Enable upstream support generation only for a painted enforcer request.
+
+    Keep the user's explicit automatic/manual support choice when present.
+    The original private profile stays immutable. No arbitrary process keys,
+    executable hooks or material mappings are accepted from the browser.
+    """
+    options = parse_prusa_profile(raw, "process")
+    options["support_material"] = "1"
+    # A sparse user preset without this key defaults to manual-only supports;
+    # never silently enable automatic supports in response to painted enforcers.
+    options.setdefault("support_material_auto", "0")
+    output = "".join(f"{key} = {value}\n" for key, value in sorted(options.items())).encode("utf-8")
+    parse_prusa_profile(output, "process")
+    return output
