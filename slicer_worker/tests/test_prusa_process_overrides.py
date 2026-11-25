@@ -26,6 +26,25 @@ class OverrideTests(unittest.TestCase):
             "fill_density": "30%", "brim_width": "3", "skirts": "2"})
         self.assertEqual(apply_prusa_process_overrides(BASE, {}), BASE)
 
+    def test_native_speed_controls_are_bounded_and_never_execute_user_strings(self):
+        raw = (BASE + b"external_perimeter_speed = 30\nperimeter_speed = 40\n"
+               b"infill_speed = 70\ntravel_speed = 130\n"
+               b"top_solid_infill_speed = 35\n")
+        speeds = {"outer_wall_speed": 22, "inner_wall_speed": 38,
+                  "sparse_infill_speed": 60, "travel_speed": 150,
+                  "top_surface_speed": 25}
+        result = validate_flat_prusa_preset(
+            apply_prusa_process_overrides(raw, speeds), kind="print")
+        for key, requested in speeds.items():
+            self.assertEqual(float(result[FIELDS[key][0]]), requested)
+        for invalid in (
+            {"outer_wall_speed": 1}, {"travel_speed": 900},
+            {"top_surface_speed": float("nan")},
+            {"inner_wall_speed": "G28\npost_process=evil"},
+            {"sparse_infill_speed": True}):
+            with self.subTest(invalid=invalid), self.assertRaises(ValueError):
+                apply_prusa_process_overrides(raw, invalid)
+
     def test_invalid(self):
         for override in ({"post_process": "evil"}, {"wall_loops": 2.5},
                          {"layer_height": float("nan")}, {"brim_width": True},
