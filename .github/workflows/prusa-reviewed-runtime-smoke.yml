@@ -250,7 +250,7 @@ jobs:
             -v "$TEST_VOLUME:/opt/engine-store:ro" \
             -v "$GITHUB_WORKSPACE/scripts/prusa_native_mmu_dialect_smoke.py:/tmp/mmu.py:ro" \
             -v "$GITHUB_WORKSPACE/backend:/tmp/mv-backend:ro" \
-            -e PYTHONPATH=/tmp/mv-backend:/app \
+            -e PYTHONPATH=/tmp/mv-backend:/opt/makervault-slicer \
             -v "$PRUSA_MMU_DIR:/tmp/mmu:ro" \
             --entrypoint python3 prusa-integration:smoke \
             /tmp/mmu.py \
@@ -277,7 +277,7 @@ jobs:
             -v "$TEST_VOLUME:/opt/engine-store:ro" \
             -v "$GITHUB_WORKSPACE/scripts/prusa_native_wipe_tower_smoke.py:/tmp/prusa_wipe.py:ro" \
             -v "$GITHUB_WORKSPACE/backend:/tmp/mv-backend:ro" \
-            -e PYTHONPATH=/tmp/mv-backend:/app \
+            -e PYTHONPATH=/tmp/mv-backend:/opt/makervault-slicer \
             -v "$PRUSA_WIPE_DIR:/tmp/prusa-wipe:ro" \
             --entrypoint python3 prusa-integration:smoke \
             /tmp/prusa_wipe.py \
@@ -308,7 +308,7 @@ jobs:
             -v "$TEST_VOLUME:/opt/engine-store:ro" \
             -v "$GITHUB_WORKSPACE/scripts/prusa_native_mmu_paint_smoke.py:/tmp/mmu_colour.py:ro" \
             -v "$GITHUB_WORKSPACE/backend:/tmp/mv-backend:ro" \
-            -e PYTHONPATH=/tmp/mv-backend:/app \
+            -e PYTHONPATH=/tmp/mv-backend:/opt/makervault-slicer \
             -v "$PRUSA_MMU_PAINT_DIR:/tmp/mmu-colour:ro" \
             --entrypoint python3 prusa-integration:smoke \
             /tmp/mmu_colour.py \
