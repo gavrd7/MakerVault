@@ -66,6 +66,40 @@ class PrusaProjectDialectTests(TestCase):
                 self.assertEqual(receipt["regions"], 1)
                 self.assertEqual(receipt["objects"], 1)
 
+    def test_native_prusa_support_seam_and_fuzzy_annotations_roundtrip(self):
+        from core.slicer_plate_3mf import _triangles
+        from core.slicer_native_support_paint import _fingerprint
+        raw = cube()
+        faces = list(_triangles(raw))
+        local = [[(v[0]-10, v[1]-10, v[2]) for v in face] for face in faces]
+        face = local[0]
+        centre = [sum(point[i] for point in face)/3 for i in range(3)]
+        patch = [[(point[i]+centre[i])/2 for i in range(3)] for point in face]
+        def paint(slot):
+            return {"version": 2, "signature": _fingerprint(local),
+                    "regions": [{"slot": slot,
+                                 "patches": [{"face": 0, "polygon": patch}]}]}
+        model = item(support_paint=paint(0), seam_paint=paint(1),
+                     fuzzy_skin_paint=paint(0))
+        archive = build_prusa_native_3mf([(model, raw)], bed_width=250, bed_depth=210)
+        audit = validate_prusa_native_3mf(archive)
+        self.assertEqual(len(audit["paint_channels"]), 3)
+        with zipfile.ZipFile(io.BytesIO(archive)) as package:
+            source = SafeET.fromstring(package.read("3D/3dmodel.model"))
+        faces = source.findall(f"./{NS}resources/{NS}object/{NS}mesh/{NS}triangles/{NS}triangle")
+        prusa = "{http://schemas.slic3r.org/3mf/2017/06}"
+        self.assertTrue(any(f.get(prusa+"custom_supports") == "4" and
+                            f.get(prusa+"custom_seam") == "8" and
+                            f.get(prusa+"fuzzy_skin") == "4" for f in faces))
+        self.assertGreater(len(faces), 12)
+        def tamper(root):
+            face = next(node for node in root.findall(
+                f"./{NS}resources/{NS}object/{NS}mesh/{NS}triangles/{NS}triangle")
+                if prusa+"custom_supports" in node.attrib)
+            face.set(prusa+"custom_supports", "FFFF")
+        with self.assertRaises(WorkerError):
+            validate_prusa_native_3mf(rewrite(archive, "3D/3dmodel.model", tamper))
+
     def test_two_independent_objects_each_keep_a_typed_region(self):
         for kind, overrides in (("modifier", {"sparse_infill_density": 80}),
                                 ("negative", {})):
