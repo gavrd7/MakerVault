@@ -38,6 +38,21 @@ def main(vendor_path, project_paths):
                 "engine_version": "2.9.7", "model_format": "3mf",
                 "model": base64.b64encode(project).decode("ascii"), **profiles,
             }
+            if label in ("support-enforced", "support-blocked"):
+                # Fixture only: the application adds this through the exact
+                # Prusa process adapter; never alter the stored upstream preset.
+                native = base64.b64decode(payload["process_profile"])
+                opts = {key: val for key, val in (
+                    line.split("=", 1) for line in native.decode().splitlines()
+                    if "=" in line and not line.lstrip().startswith(("#", ";"))
+                )}
+                opts = {key.strip(): val.strip() for key, val in opts.items()}
+                opts["support_material"] = "1"
+                opts["support_material_auto"] = (
+                    "0" if label == "support-enforced" else "1")
+                safe = "".join("%s = %s\n" % entry for entry in sorted(opts.items()))
+                payload["process_profile"] = base64.b64encode(
+                    safe.encode("utf-8")).decode("ascii")
             data = json.dumps(payload, separators=(",", ":")).encode()
             unauthenticated = Request(base + "/v1/slice", data=data, headers={
                 "Content-Type": "application/json"})
@@ -56,6 +71,10 @@ def main(vendor_path, project_paths):
             assert result["sha256"] == hashlib.sha256(gcode).hexdigest()
             audited = audit_prusa_positive_e(gcode)
             assert audited["positive_e_moves"] >= 40, (label, audited)
+            if label == "support-enforced":
+                # Authentic HTTP G-code must demonstrate more than successful
+                # XML loading. Manual support enforcers generate support paths.
+                assert b";TYPE:Support material" in gcode, label
             print("PASS: authenticated Prusa native 3MF", label, audited)
     finally:
         worker.shutdown()
