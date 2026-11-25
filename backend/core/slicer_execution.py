@@ -508,6 +508,17 @@ def _validate_plate_execution(job):
         )
     except MaterialRoutingError as exc:
         raise SlicerExecutionError(str(exc)) from exc
+    if job.engine == "prusaslicer":
+        # The one untouched STL passed the Prusa-specific fail-closed checks
+        # above. The worker already accepts this direct native STL path; do
+        # not accidentally route it through the other engines' 3MF allowlist.
+        # Transforms, multi-object plates and modifiers remain rejected.
+        if _single_unmodified_stl(objects):
+            if not job.printer_profile_id:
+                raise SlicerExecutionError("Select a native printer profile for slicing.")
+            return True
+        raise SlicerExecutionError(
+            "PrusaSlicer currently supports one unmodified STL per plate.")
     if job.engine not in {"orcaslicer", "crealityprint", "bambustudio"}:
         raise SlicerExecutionError("This engine does not yet support native build-plate slicing.")
     # Bambu and Orca both import 3MF per-object extruder settings and native
