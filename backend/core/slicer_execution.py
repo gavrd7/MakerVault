@@ -448,23 +448,31 @@ def _validate_plate_execution(job):
                  settings.get("multi_material_test") is True)):
             raise SlicerExecutionError(
                 "Native fuzzy skin painting test requires OrcaSlicer 2.5.0 or Creality Print 7.3.x CFS test mode.")
-        if len(objects) != 1 or (settings.get("multi_material_test") and job.engine not in {"crealityprint", "bambustudio"}):
+        prusa_two_fuzzy = (job.engine == "prusaslicer" and
+                           job.engine_version == "2.9.7" and len(objects) == 2)
+        if ((len(objects) != 1 and not prusa_two_fuzzy) or
+                (settings.get("multi_material_test") and
+                 job.engine not in {"crealityprint", "bambustudio"})):
             raise SlicerExecutionError(
-                "Selective fuzzy skin test requires one model (Creality: one two-colour CFS model).")
-        item = objects[0]
-        if item.get("process_overrides"):
+                "Selective fuzzy skin requires one model (Prusa 2.9.7 allows two independently audited models).")
+        if prusa_two_fuzzy and sum(bool((row.get("fuzzy_skin_paint") or {}).get("regions"))
+                                for row in objects) != 1:
             raise SlicerExecutionError(
-                "Fuzzy skin painting with per-object overrides is not verified.")
-        if (any(abs(float(value)) > 0.000001 for value in
-                item.get("rotation_xyz_deg", [0, 0]))
-                or abs(float(item.get("z_mm", 0))) > 0.000001):
-            raise SlicerExecutionError(
-                "Fuzzy skin painting test requires an upright, non-elevated model.")
-        if (abs(float(item.get("scale_percent", 100)) - 100) > 0.000001 or
-               any(abs(float(value) - 100) > 0.000001 for value in
-                   item.get("scale_xyz_percent", [item.get("scale_percent", 100)] * 3))):
-            raise SlicerExecutionError(
-                "Fuzzy skin painting test requires an unscaled model.")
+                "Prusa 2.9.7 two-model fuzzy skin requires exactly one painted model.")
+        for item in (objects if prusa_two_fuzzy else objects[:1]):
+            if item.get("process_overrides"):
+                raise SlicerExecutionError(
+                    "Fuzzy skin painting with per-object overrides is not verified.")
+            if (any(abs(float(value)) > 0.000001 for value in
+                    item.get("rotation_xyz_deg", [0, 0]))
+                    or abs(float(item.get("z_mm", 0))) > 0.000001):
+                raise SlicerExecutionError(
+                    "Fuzzy skin painting requires upright, non-elevated models.")
+            if (abs(float(item.get("scale_percent", 100)) - 100) > 0.000001 or
+                   any(abs(float(value) - 100) > 0.000001 for value in
+                       item.get("scale_xyz_percent", [item.get("scale_percent", 100)] * 3))):
+                raise SlicerExecutionError(
+                    "Fuzzy skin painting requires unscaled models.")
     if any(isinstance(item, dict) and isinstance(item.get("variable_layer_profile"), dict)
            and item["variable_layer_profile"].get("bands") for item in objects):
         # Native Orca layer_config_ranges.xml export is available for an
