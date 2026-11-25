@@ -92,6 +92,29 @@ class PrusaSingleMaterialAdmissionTests(TestCase):
             with self.assertRaises(ValueError):
                 apply_prusa_process_overrides(raw, invalid)
 
+    def test_extended_prusa_global_speeds_preserve_native_keys(self):
+        from core.slicer_prusa_process_settings import (
+            apply_prusa_process_overrides, prusa_process_schema, FIELDS)
+        raw = (b"layer_height = 0.2\n"
+               b"external_perimeter_speed = 30\nperimeter_speed = 40\n"
+               b"infill_speed = 70\ntravel_speed = 130\n"
+               b"top_solid_infill_speed = 35\n")
+        edits = {"outer_wall_speed": 22, "inner_wall_speed": 38,
+                 "sparse_infill_speed": 60, "travel_speed": 150,
+                 "top_surface_speed": 25}
+        fields = prusa_process_schema(raw)
+        self.assertTrue(set(edits).issubset(fields))
+        from core.slicer_prusa_native_resolution import parse_prusa_profile
+        native = parse_prusa_profile(
+            apply_prusa_process_overrides(raw, edits), "process")
+        for key, value in edits.items():
+            self.assertEqual(float(native[FIELDS[key][0]]), value)
+        for unsafe in (
+            {"outer_wall_speed": False}, {"inner_wall_speed": "G28"},
+            {"travel_speed": float("inf")}, {"sparse_infill_speed": 900}):
+            with self.subTest(unsafe=unsafe), self.assertRaises(ValueError):
+                apply_prusa_process_overrides(raw, unsafe)
+
     def test_unverified_native_multimaterial_fails_before_worker_dispatch(self):
         from core.slicer_execution import _validate_plate_execution, SlicerExecutionError
         job = SimpleNamespace(engine="prusaslicer", engine_version="2.9.7",
