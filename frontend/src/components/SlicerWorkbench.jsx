@@ -1018,7 +1018,7 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
               save_gcode_to_library:false,
               ...(flushSettings ? {flush_settings:flushSettings} : {}),
               ...(slotFilamentProfiles.length ? {slot_filament_profiles:slotFilamentProfiles} : {}),
-              ...(form.engine==="orcaslicer"?{process_overrides:processOverrides}:{}),
+              ...(["orcaslicer","prusaslicer"].includes(form.engine)?{process_overrides:processOverrides}:{}),
             },
           };
           // Each plate is independently checked and admitted by the server.
@@ -1067,7 +1067,7 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
             ...(offlineMultiMaterial ? {multi_material_test:true} : {}),
             ...(flushSettings ? { flush_settings: flushSettings } : {}),
             ...(slotFilamentProfiles.length ? {slot_filament_profiles:slotFilamentProfiles} : {}),
-            ...(form.engine === "orcaslicer" ? { process_overrides: processOverrides } : {}) },
+            ...(["orcaslicer", "prusaslicer"].includes(form.engine) ? { process_overrides: processOverrides } : {}) },
         },
       });
       savedJob = job;
