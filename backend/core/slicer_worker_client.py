@@ -94,7 +94,7 @@ def _encode(raw, limit):
 
 def run_remote_job(job_id, engine, version, model, printer_profile, filament_profile, process_profile, *, timeout_seconds=900, model_format="stl", filament_profiles=None,
                    creality_model_stls=None, creality_tool_ids=None,
-                   creality_native_project=False, native_modifier_project=False):
+                   creality_native_project=False, native_modifier_project=False, prusa_placed_stl=False):
     if model_format not in {"stl", "3mf"}:
         raise SlicerWorkerError("Unsupported slicer input format.")
     if not isinstance(timeout_seconds, int) or not 1 <= timeout_seconds <= 900:
@@ -119,6 +119,14 @@ def run_remote_job(job_id, engine, version, model, printer_profile, filament_pro
     }
     if model_format == "3mf":
         payload["model_format"] = "3mf"
+    if prusa_placed_stl:
+        if (prusa_placed_stl is not True or engine != "prusaslicer"
+                or version != "2.9.7" or model_format != "stl"
+                or filament_profiles is not None or native_modifier_project
+                or creality_native_project or creality_model_stls is not None
+                or creality_tool_ids is not None):
+            raise SlicerWorkerError("Unverified Prusa placed-STL execution contract.")
+        payload["prusa_placed_stl"] = True
     if native_modifier_project:
         approved = {"orcaslicer": "2.5.0",
                     "bambustudio": "02.09.01.70",
