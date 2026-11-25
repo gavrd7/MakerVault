@@ -324,6 +324,7 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
   const [officialVendors, setOfficialVendors] = useState([]);
   const [officialSourceInfo, setOfficialSourceInfo] = useState(null);
   const [officialResults, setOfficialResults] = useState(null);
+  const [officialSearchParams, setOfficialSearchParams] = useState("");
   const [materialProfileMatches, setMaterialProfileMatches] = useState(null);
   const [officialBusy, setOfficialBusy] = useState(false);
   const [officialError, setOfficialError] = useState("");
@@ -1186,8 +1187,28 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
       if (!officialManualModel.trim() && officialModel) params.set("model", officialModel);
       const result = await apiFetch("/api/printing/slicer/official-profiles/?" + params.toString());
       setOfficialResults(result);
+      setOfficialSearchParams(params.toString());
     } catch (err) {
       setOfficialError(err.message || "Official profile search is unavailable. You can still import a local file.");
+    } finally {
+      setOfficialBusy(false);
+    }
+  }
+
+  async function navigateOfficialProfiles(page) {
+    if (!officialResults || !officialSearchParams || officialBusy ||
+        page < 1 || page > officialResults.total_pages || page === officialResults.page) return;
+    setOfficialBusy(true);
+    setOfficialError("");
+    try {
+      // Keep every search filter exactly as submitted, regardless of changes
+      // to the form since the last search. Only the server-side page changes.
+      const params = new URLSearchParams(officialSearchParams);
+      params.set("page", String(page));
+      const result = await apiFetch("/api/printing/slicer/official-profiles/?" + params.toString());
+      setOfficialResults(result);
+    } catch (err) {
+      setOfficialError(err.message || "Could not load that page of official presets.");
     } finally {
       setOfficialBusy(false);
     }
@@ -2074,7 +2095,18 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
           <p className="slicerPlateHint">Native filament manufacturer presets are imported
             from the selected OrcaSlicer release. Preset dependencies are checked automatically.</p>}
         {officialResults && <div className="printingStack" role="region" aria-label="Official profile search results">
-          <p>{officialResults.total_matches} matching official presets in {officialResults.vendor} · showing up to {officialResults.profiles.length} · original upstream release {officialResults.ref}{officialResults.printer_model_filter ? " · filtered for " + officialResults.printer_model_filter + " (name-based, not verified compatibility)" : ""}</p>
+          <p>{officialResults.total_matches} matching official presets in {officialResults.vendor} · showing {officialResults.profiles.length ? (officialResults.page - 1) * officialResults.page_size + 1 : 0}–{(officialResults.page - 1) * officialResults.page_size + officialResults.profiles.length} · original upstream release {officialResults.ref}{officialResults.printer_model_filter ? " · filtered for " + officialResults.printer_model_filter + " (name-based, not verified compatibility)" : ""}</p>
+          {officialResults.total_pages > 1 && <nav className="slicerProfileNavigation" aria-label="Official profile pages">
+            <button type="button" onClick={() => navigateOfficialProfiles(1)}
+              disabled={officialBusy || officialResults.page <= 1} aria-label="First page">« First</button>
+            <button type="button" onClick={() => navigateOfficialProfiles(officialResults.page - 1)}
+              disabled={officialBusy || officialResults.page <= 1} aria-label="Previous page">‹ Previous</button>
+            <span aria-live="polite">Page {officialResults.page} of {officialResults.total_pages}</span>
+            <button type="button" onClick={() => navigateOfficialProfiles(officialResults.page + 1)}
+              disabled={officialBusy || officialResults.page >= officialResults.total_pages} aria-label="Next page">Next ›</button>
+            <button type="button" onClick={() => navigateOfficialProfiles(officialResults.total_pages)}
+              disabled={officialBusy || officialResults.page >= officialResults.total_pages} aria-label="Last page">Last »</button>
+          </nav>}
           {officialResults.profiles.map(candidate => <div className="cameraSourceRow slicerOfficialProfileRow" key={candidate.sub_path}>
             <div className="cameraSourceIdentity">
               <strong>{candidate.name}</strong>
@@ -2093,6 +2125,17 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
             {officialImportTarget === candidate.sub_path && !officialError && officialImportNotice &&
               <p role="status" className="slicerProfileImportNotice">{officialImportNotice}</p>}
           </div>)}
+          {officialResults.total_pages > 1 && <nav className="slicerProfileNavigation" aria-label="Official profile pages">
+            <button type="button" onClick={() => navigateOfficialProfiles(1)}
+              disabled={officialBusy || officialResults.page <= 1} aria-label="First page">« First</button>
+            <button type="button" onClick={() => navigateOfficialProfiles(officialResults.page - 1)}
+              disabled={officialBusy || officialResults.page <= 1} aria-label="Previous page">‹ Previous</button>
+            <span aria-live="polite">Page {officialResults.page} of {officialResults.total_pages}</span>
+            <button type="button" onClick={() => navigateOfficialProfiles(officialResults.page + 1)}
+              disabled={officialBusy || officialResults.page >= officialResults.total_pages} aria-label="Next page">Next ›</button>
+            <button type="button" onClick={() => navigateOfficialProfiles(officialResults.total_pages)}
+              disabled={officialBusy || officialResults.page >= officialResults.total_pages} aria-label="Last page">Last »</button>
+          </nav>}
           {!officialResults.profiles.length && <p>No matching presets. Try fewer manual search terms or select All models to browse the complete manufacturer catalogue.</p>}
         </div>}
       </div>
