@@ -11,6 +11,8 @@ from xml.etree import ElementTree as ET
 
 from .slicer_plate_3mf import NS, MAX_PROJECT_BYTES, MAX_TRIANGLES, MAX_SOURCE_TOTAL
 from .slicer_prusa_plate import build_prusa_placed_stl
+from .slicer_modifier_volumes import validate_modifier_volumes, MAX_TOTAL_MODIFIERS
+from .slicer_modifier_3mf import _modifier_parent_transform, _add_child_mesh
 from .slicer_prusa_process_settings import apply_prusa_process_overrides, FIELDS
 from .slicer_prusa_native_resolution import parse_prusa_profile
 from .slicer_profiles import SlicerProfileError
@@ -29,7 +31,8 @@ def build_prusa_native_3mf(rows, *, bed_width, bed_depth):
     resources = ET.SubElement(model, f"{{{NS}}}resources")
     build = ET.SubElement(model, f"{{{NS}}}build")
     config = ET.Element("config")
-    total_bytes = total_faces = 0
+    total_bytes = total_faces = total_modifiers = 0
+    seen_modifiers = set()
     for index, pair in enumerate(rows, 1):
         if not isinstance(pair, tuple) or len(pair) != 2 or not isinstance(pair[0], dict) or not isinstance(pair[1], bytes):
             raise SlicerProfileError("Invalid Prusa native project object.")
@@ -43,6 +46,16 @@ def build_prusa_native_3mf(rows, *, bed_width, bed_depth):
         native = parse_prusa_profile(apply_prusa_process_overrides(BASE, overrides), "process")
         geometry_item = dict(item)
         geometry_item.pop("process_overrides", None)
+        modifiers = validate_modifier_volumes(geometry_item.pop("modifier_volumes", None))
+        total_modifiers += len(modifiers)
+        if total_modifiers > MAX_TOTAL_MODIFIERS:
+            raise SlicerProfileError("Prusa native volume limit exceeded.")
+        for modifier in modifiers:
+            if modifier["id"] in seen_modifiers:
+                raise SlicerProfileError("Duplicate Prusa modifier identity.")
+            seen_modifiers.add(modifier["id"])
+            if modifier.get("coordinate_space") == "world" and len(rows) != 1:
+                raise SlicerProfileError("Independent Prusa modifiers spanning multiple parents are not yet qualified.")
         baked = build_prusa_placed_stl([(geometry_item, raw)], bed_width=bed_width, bed_depth=bed_depth)
         count = struct.unpack_from("<I", baked, 80)[0]
         total_faces += count
@@ -67,7 +80,36 @@ def build_prusa_native_3mf(rows, *, bed_width, bed_depth):
         for key in sorted(overrides):
             native_key = FIELDS[key][0]
             ET.SubElement(settings, "metadata", {"type": "object", "key": native_key, "value": native[native_key]})
-        ET.SubElement(settings, "volume", {"firstid": "0", "lastid": str(count - 1)})
+        printable = ET.SubElement(settings, "volume", {"firstid": "0", "lastid": str(count - 1)})
+        ET.SubElement(printable, "metadata", {"type": "volume", "key": "volume_type", "value": "ModelPart"})
+        if modifiers:
+            matrix, bed_z = _modifier_parent_transform(item, raw, bed_width, bed_depth)
+            parent_bounds = [(min(p[i] for p in indexed), max(p[i] for p in indexed)) for i in range(3)]
+            for modifier in modifiers:
+                scratch = ET.Element(f"{{{NS}}}resources")
+                child = _add_child_mesh(scratch, 1, modifier, parent_bounds, matrix, bed_z, bed_width, bed_depth)
+                child_vertices = child.find(f"./{{{NS}}}mesh/{{{NS}}}vertices")
+                child_triangles = child.find(f"./{{{NS}}}mesh/{{{NS}}}triangles")
+                start_vertex, start_face = len(vertices), len(triangles)
+                total_faces += len(child_triangles)
+                if total_faces > MAX_TRIANGLES:
+                    raise SlicerProfileError("Prusa native volume triangle limit exceeded.")
+                # Prusa imports a contiguous face and vertex range per volume.
+                # Never weld vertices across independently typed volumes.
+                for vertex in child_vertices:
+                    vertices.append(vertex)
+                for face in child_triangles:
+                    ET.SubElement(triangles, f"{{{NS}}}triangle", {
+                        k: str(int(face.get(k)) + start_vertex) for k in ("v1", "v2", "v3")})
+                volume = ET.SubElement(settings, "volume", {
+                    "firstid": str(start_face), "lastid": str(len(triangles) - 1)})
+                role = "NegativeVolume" if modifier["kind"] == "negative" else "ParameterModifier"
+                ET.SubElement(volume, "metadata", {"type": "volume", "key": "volume_type", "value": role})
+                overrides = modifier["settings"]
+                native = parse_prusa_profile(apply_prusa_process_overrides(BASE, overrides), "process")
+                for key in sorted(overrides):
+                    native_key = FIELDS[key][0]
+                    ET.SubElement(volume, "metadata", {"type": "volume", "key": native_key, "value": native[native_key]})
     model_xml = ET.tostring(model, encoding="utf-8", xml_declaration=True)
     if len(model_xml) > 96 * 1024 * 1024:
         raise SlicerProfileError("Prusa native project XML exceeds limit.")
