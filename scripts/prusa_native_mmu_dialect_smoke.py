@@ -132,6 +132,43 @@ def main(binary, source, directory):
             file = root / (kind + ".ini")
             file.write_bytes(data)
             native.extend(["--load", str(file)])
+        # Deliberately different per-tool temperatures exercise native vector
+        # routing rather than merely repeating one filament preset for all tools.
+        # Keep this an offline fixture; production owner-scoped routing is separate.
+        filament = root / "filament.ini"
+        original = filament.read_bytes()
+        settings = validate_flat_prusa_preset(original, kind="filament")
+        for key in ("temperature", "first_layer_temperature"):
+            assert key in settings, "Pinned Generic PLA missing " + key
+        lines = []
+        for line in original.decode("utf-8").splitlines():
+            key = line.partition("=")[0].strip()
+            if key in ("temperature", "first_layer_temperature"):
+                line = key + " = 205,220,205,205,205"
+            lines.append(line)
+        filament.write_text("\n".join(lines) + "\n", encoding="utf-8")
+        try:
+            output = root / "distinct-material-temperatures.gcode"
+            subprocess.run([binary, *native, "--export-gcode", "--dont-arrange",
+                            "--output", str(output), str(Path(directory)/"trusted.3mf")],
+                           cwd=root, check=True, timeout=300)
+            data = output.read_bytes()
+            assert audit_prusa_positive_e(data)["positive_e_moves"] > 100
+            spatial = _spatial_tool_audit(data)["by_tool"]
+            assert spatial[0]["left"] > 100 and spatial[1]["right"] > 100, spatial
+            # Require actual executable heater commands, not a config footer.
+            temperatures = set()
+            for line in data.decode("utf-8").splitlines():
+                command = line.split(";", 1)[0].strip()
+                if re.match(r"^M10[49](?:\\s|$)", command):
+                    match = re.search(r"(?:^|\\s)S(\\d+)(?:\\s|$)", command)
+                    if match:
+                        temperatures.add(int(match.group(1)))
+            assert {205, 220}.issubset(temperatures), temperatures
+            print("PASS: native MMU distinct filament temperature vector",
+                  sorted(temperatures), spatial)
+        finally:
+            filament.write_bytes(original)
         winners = []
         for dialect in ("object", "volume", "both", "trusted"):
             model = str(Path(directory) / (dialect + ".3mf"))
