@@ -178,13 +178,13 @@ def main(binary, source, directory, *options):
             temperatures = set()
             for line in data.decode("utf-8").splitlines():
                 command = line.split(";", 1)[0].strip()
-                if re.match(r"^M10[49](?:\\s|$)", command):
-                    match = re.search(r"(?:^|\\s)S(\\d+)(?:\\s|$)", command)
+                if re.match(r"^M10[49](?:\s|$)", command):
+                    match = re.search(r"(?:^|\s)S(\d+)(?:\s|$)", command)
                     if match:
                         temperatures.add(int(match.group(1)))
             heater_lines = [
                 line.strip() for line in data.decode("utf-8").splitlines()
-                if re.match(r"^\\s*M(?:10[49]|109|140|190|116|104|105|900)\\b", line)
+                if re.match(r"^\s*M(?:10[49]|109|140|190|116|104|105|900)\b", line)
             ]
             print("Native Prusa heater command evidence", heater_lines[:18],
                   "total", len(heater_lines), flush=True)
