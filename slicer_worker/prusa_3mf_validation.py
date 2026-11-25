@@ -142,7 +142,7 @@ def validate_prusa_native_3mf(data):
             _require(len(metadata) + len(volumes) == len(cfg) and 1 <= len(volumes) <= 13)
             _settings(metadata, "object", {"perimeters", "fill_density"})
             regions += len(volumes) - 1
-            _require(regions <= 48 and (len(volumes) == 1 or len(resources) == 1))
+            _require(regions <= 48)
             next_face = 0
             next_vertex = 0
             for n, vol in enumerate(volumes):
