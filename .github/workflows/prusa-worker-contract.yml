@@ -5,6 +5,8 @@ on:
     paths:
       - "backend/core/slicer_prusa_plate.py"
       - "backend/core/slicer_prusa_3mf.py"
+      - "backend/core/slicer_prusa_filament_palette.py"
+      - "backend/core/tests/test_slicer_prusa_filament_palette.py"
       - "backend/core/slicer_prusa_machine_topology.py"
       - "backend/core/slicer_prusa_multitool_project.py"
       - "backend/core/tests/test_slicer_prusa_multitool_project.py"
@@ -61,7 +63,8 @@ jobs:
             core.tests.test_slicer_prusa_layer_ranges \
             core.tests.test_slicer_prusa_paint \
             core.tests.test_slicer_prusa_machine_topology \
-            core.tests.test_slicer_prusa_multitool_project
+            core.tests.test_slicer_prusa_multitool_project \
+            core.tests.test_slicer_prusa_filament_palette
 
       - name: Verify actual upstream PrusaResearch 2.9.7 inheritance
         run: |
