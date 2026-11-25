@@ -1439,7 +1439,9 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
   }
 
   function openOfficialSearch(kind = materialHint ? "filament" : form.printer_id ? "printer" : "process") {
-    setImportKind(form.engine === "prusaslicer" ? "printer" : kind);
+    // All Prusa native printer, filament and process presets are discoverable.
+    // Preserve the requested type instead of silently reopening printer search.
+    setImportKind(kind);
     setOfficialVendor("");
     // The catalogue must always follow the exact selected slicer release.
     // Never replace an unsupported installed version with a nearby preset.
