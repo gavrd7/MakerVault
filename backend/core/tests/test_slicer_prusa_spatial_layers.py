@@ -41,7 +41,8 @@ class PrusaSpatialLayerTests(TestCase):
                 base_layer_mm=.2)
 
     def test_malformed_or_unrelated_output_rejected(self):
-        for data in (b"none",b"G1 X500 Y500 E1",b"\xff"):
+        for data in (b"none",b"G1 X500 Y500 E1",b"\xff",
+                     gcode().replace(b"E0.0300", b"E1e309")):
             with self.subTest(data=data),self.assertRaises(ValueError):
                 audit_prusa_multi_object_layer_ranges(
                     data,plate(),bed_width=250,bed_depth=210,base_layer_mm=.2)
