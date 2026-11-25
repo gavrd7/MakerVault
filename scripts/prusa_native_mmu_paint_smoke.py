@@ -65,6 +65,14 @@ def main(binary,vendor,baseline,painted):
             file.write_bytes(flatten_prusa_vendor_preset(
                 source,kind=kind,name=name,expected_sha256=sha))
             args.extend(["--load",str(file)])
+        from slicer_worker.prusa_material_validation import validate_prusa_material_candidate
+        candidate_receipt = validate_prusa_material_candidate(
+            Path(painted).read_bytes(),
+            printer_ini=(root/"printer.ini").read_bytes(),
+            colour=True)
+        assert candidate_receipt["colour_facets"] > 0
+        print("PASS: isolated Prusa MMU painted project structural decoder",
+              candidate_receipt)
         results={}
         for label,project in (("baseline",baseline),("painted",painted)):
             output=root/(label+".gcode")
