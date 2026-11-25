@@ -1234,7 +1234,7 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
 
   async function importOfficialProfile(candidate, asDefault = false) {
     setOfficialError(""); setOfficialBusy(true);
-    setOfficialImportTarget(candidate.sub_path);
+    setOfficialImportTarget(candidate.sub_path + "::" + candidate.name);
     try {
       if (!form.engine_version || officialProfileVersion !== form.engine_version)
         throw new Error("Selected slicer release changed; reopen official search before importing a native profile.");
@@ -2107,7 +2107,7 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
             <button type="button" onClick={() => navigateOfficialProfiles(officialResults.total_pages)}
               disabled={officialBusy || officialResults.page >= officialResults.total_pages} aria-label="Last page">Last »</button>
           </nav>}
-          {officialResults.profiles.map(candidate => <div className="cameraSourceRow slicerOfficialProfileRow" key={candidate.sub_path}>
+          {officialResults.profiles.map(candidate => <div className="cameraSourceRow slicerOfficialProfileRow" key={candidate.sub_path + "::" + candidate.name}>
             <div className="cameraSourceIdentity">
               <strong>{candidate.name}</strong>
               <small>{candidate.sub_path}</small>
@@ -2120,9 +2120,9 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
                 Import &amp; set default
               </button>
             </div>
-            {officialImportTarget === candidate.sub_path && officialError &&
+            {officialImportTarget === candidate.sub_path + "::" + candidate.name && officialError &&
               <p className="integrationError" role="alert">{officialError}</p>}
-            {officialImportTarget === candidate.sub_path && !officialError && officialImportNotice &&
+            {officialImportTarget === candidate.sub_path + "::" + candidate.name && !officialError && officialImportNotice &&
               <p role="status" className="slicerProfileImportNotice">{officialImportNotice}</p>}
           </div>)}
           {officialResults.total_pages > 1 && <nav className="slicerProfileNavigation" aria-label="Official profile pages">
