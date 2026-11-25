@@ -38,7 +38,7 @@ class PrusaSeamAuditTests(unittest.TestCase):
                 self.assertEqual(result["matching_layers"], 12)
 
     def test_unpainted_opposite_wall_and_non_extruding_comments_rejected(self):
-        for raw in (gcode(right=False), gcode().replace(b"G1 X134.78", b"G0 X134.78"),
+        for raw in (gcode(right=False), gcode().replace(b"Y114.78 E", b"Y114.78 F"),
                     b";TYPE:External perimeter\n;LAYER_CHANGE\n"*10):
             with self.subTest(length=len(raw)), self.assertRaises(ValueError):
                 audit_prusa_seam_enforcer_gcode(raw, project(), bed_width=250, bed_depth=210)
