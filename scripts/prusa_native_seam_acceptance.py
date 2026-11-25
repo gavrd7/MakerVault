@@ -16,7 +16,7 @@ def main(binary, vendor, directory):
     raw = Path(vendor).read_bytes()
     digest = hashlib.sha256(raw).hexdigest()
     model = Path(directory)
-    item = json.loads((model / "seam-enforced.json").read_text())
+    names = ("seam-front", "seam-back", "seam-left", "seam-right")
     with TemporaryDirectory(prefix="prusa-seam-acceptance-") as temp:
         root = Path(temp)
         options = []
@@ -27,21 +27,32 @@ def main(binary, vendor, directory):
             ini.write_bytes(flatten_prusa_vendor_preset(
                 raw, kind=kind, name=preset, expected_sha256=digest))
             options.extend(["--load", str(ini)])
-        for name in ("baseline", "seam-enforced"):
+        verified = []
+        for name in ("baseline", *names):
             output = root / (name + ".gcode")
             subprocess.run([binary, *options, "--export-gcode", "--dont-arrange",
                             "--output", str(output), str(model / (name + ".3mf"))],
                            cwd=root, check=True, timeout=300)
-        accepted = audit((root / "seam-enforced.gcode").read_bytes(), item,
-                         bed_width=250, bed_depth=210)
-        try:
-            audit((root / "baseline.gcode").read_bytes(), item,
-                  bed_width=250, bed_depth=210)
-        except ValueError:
-            pass
-        else:
-            raise AssertionError("Native unpainted seam was mistaken for enforcer")
-        print("PASS: exact Prusa painted seam follows annotated face:", accepted)
+        baseline = (root / "baseline.gcode").read_bytes()
+        for name in names:
+            item = json.loads((model / (name + ".json")).read_text())
+            try:
+                observed = audit((root / (name + ".gcode")).read_bytes(),
+                                 item, bed_width=250, bed_depth=210)
+            except ValueError as exc:
+                print("UNQUALIFIED native seam direction", name, str(exc))
+                continue
+            try:
+                audit(baseline, item, bed_width=250, bed_depth=210)
+            except ValueError:
+                print("QUALIFIED native seam direction", name, observed)
+                verified.append(name)
+            else:
+                print("UNQUALIFIED native seam direction", name,
+                      "baseline also satisfies the painted patch")
+        if len(verified) < 2:
+            raise AssertionError("No independent pair of painted Prusa seam directions has real spatial proof.")
+        print("PASS: native Prusa seam painting directed independently:", verified)
 
 
 if __name__ == "__main__":
