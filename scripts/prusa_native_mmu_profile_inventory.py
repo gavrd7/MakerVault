@@ -36,6 +36,25 @@ def main(path):
                 "bed_shape", "gcode_flavor", "toolchange_gcode",
             ) if key in parsed and key != "toolchange_gcode"
         })
+    # Look for literal XL profiles separately: upstream names do not
+    # consistently use shorthand 2T/5T, so never infer a toolhead count
+    # from a product label without reading its native nozzle vector.
+    xl = [label.split(":", 1)[1] for label in sections
+          if label.startswith("printer:") and "xl" in label.lower()
+          and not label.split(":", 1)[1].startswith("*")]
+    print("PINNED XL MODEL PRESETS:", len(xl))
+    for name in xl:
+        try:
+            profile = validate_flat_prusa_preset(flatten_prusa_vendor_preset(
+                raw, kind="printer", name=name, expected_sha256=sha),
+                kind="printer")
+        except ValueError as exc:
+            print("UNRESOLVED XL", repr(name), str(exc))
+            continue
+        nozzles = profile["nozzle_diameter"].split(",")
+        print("XL NATIVE TOOLHEADS", repr(name), len(nozzles),
+              "single_nozzle_changer", profile.get("single_extruder_multi_material", "0"),
+              "gcode_flavor", profile.get("gcode_flavor", ""))
     if not selected:
         raise ValueError("Official pinned Prusa 2.9.7 source has no MMU/XL candidates.")
     print("PASS: read-only native multi-material/independent-toolhead source inventory.")
