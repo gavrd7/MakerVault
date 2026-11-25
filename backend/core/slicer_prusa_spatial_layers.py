@@ -73,8 +73,8 @@ def audit_prusa_multi_object_layer_ranges(gcode, sources, *, bed_width,
         if op not in ("M82","M83","G92","G0","G00","G1","G01"):
             continue
         words={k.upper():float(v) for k,v in _WORD.findall(command)}
-        if any(not math.isfinite(v) or abs(v)>20000 for k,v in words.items()
-               if k in ("X","Y","Z")):
+        if any(not math.isfinite(v) or abs(v) > (1e9 if k == "E" else 20000)
+               for k,v in words.items()):
             raise ValueError("Native Prusa coordinates are invalid.")
         if op=="M82":
             relative=False
