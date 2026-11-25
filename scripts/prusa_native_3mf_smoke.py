@@ -1,5 +1,6 @@
 """Native Prusa project acceptance; test only, never an HTTP worker route."""
 import hashlib
+from collections import Counter
 from pathlib import Path
 import re
 import subprocess
@@ -31,6 +32,9 @@ def main(binary, vendor, project):
         positions = [0, 0]
         infill = [0, 0]
         feature = ""
+        histogram = Counter()
+        features = Counter()
+        y = None
         x = None
         e = 0.
         relative = False
@@ -48,19 +52,24 @@ def main(binary, vendor, project):
                 for token in cmd[1:]:
                     if token.startswith("E"):
                         e = float(token[1:])
-            elif cmd[0] in ("G1", "G0"):
+            elif cmd[0] in ("G1", "G0", "G01", "G00"):
                 fields = {token[0]: float(token[1:]) for token in cmd[1:] if re.fullmatch(r"[XYZE]-?\d+(?:\.\d+)?", token)}
                 new_x = fields.get("X", x)
+                new_y = fields.get("Y", y)
                 if "E" in fields:
                     delta = fields["E"] if relative else fields["E"] - e
                     e = e + delta if relative else fields["E"]
                     if delta > 0 and x is not None and new_x is not None and ("X" in fields or "Y" in fields):
+                        if feature not in ("", "skirt/brim", "skirt", "brim"):
+                            histogram[int(new_x // 10) * 10] += 1
+                            features[feature] += 1
                         for i, (lo, hi) in enumerate(((79, 101), (149, 171))):
                             if lo <= x <= hi and lo <= new_x <= hi:
                                 positions[i] += 1
                                 if feature == "internal infill":
                                     infill[i] += delta
-                x = new_x
+                x, y = new_x, new_y
+        print("Native 3MF diagnostic: X bands", sorted(histogram.items()), "features", dict(features), "expected-band counts", positions, "infill", infill)
         assert min(positions) > 20, positions
         assert infill[0] > 0 and infill[1] > infill[0] * 1.5, infill
         print("PASS: native 3MF preserved both model positions and distinct object infill:", positions, infill)
