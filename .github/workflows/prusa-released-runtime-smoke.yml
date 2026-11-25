@@ -52,7 +52,7 @@ jobs:
                   return network_request(url, **kwargs)
               if "/CrealityOfficial/" in url:
                   return io.BytesIO(b"[]")
-              return io.BytesIO(b"{\\"draft\\":false,\\"prerelease\\":false,\\"assets\\":[]}")
+              return io.BytesIO(json.dumps({"draft": False, "prerelease": False, "assets": []}).encode("utf-8"))
           class InlineThread:
               def __init__(self, *, target, args=(), daemon=True):
                   self.target, self.args = target, args
