@@ -1,0 +1,135 @@
+"""Strict Prusa 2.9.7 generated-project dialect. No arbitrary project input."""
+import io
+import math
+import re
+import zipfile
+from xml.etree import ElementTree as ET
+
+from .runner import WorkerError
+
+NS = "{http://schemas.microsoft.com/3dmanufacturing/core/2015/02}"
+CONFIG = "Metadata/Slic3r_PE_model.config"
+PARTS = {"3D/3dmodel.model", CONFIG, "[Content_Types].xml", "_rels/.rels"}
+LIMIT = 500_000
+
+
+def _require(condition):
+    if not condition:
+        raise WorkerError("Invalid or unsupported native Prusa 3MF project.")
+
+
+def _xml(raw):
+    _require(b"<!" not in raw and b"\x00" not in raw)
+    return ET.fromstring(raw)
+
+
+def _integer(value, maximum):
+    _require(isinstance(value, str) and re.fullmatch(r"[0-9]{1,7}", value) is not None)
+    number = int(value)
+    _require(0 <= number <= maximum)
+    return number
+
+
+def _settings(nodes, kind, allowed):
+    result = {}
+    for node in nodes:
+        _require(node.tag == "metadata" and not len(node) and
+                 set(node.attrib) == {"type", "key", "value"} and node.get("type") == kind)
+        key, val = node.get("key"), node.get("value")
+        _require(key in allowed and key not in result)
+        if key == "volume_type":
+            _require(val in {"ModelPart", "ParameterModifier", "NegativeVolume"})
+        elif key == "perimeters":
+            _require(1 <= _integer(val, 12) <= 12)
+        elif key == "fill_density":
+            _require(re.fullmatch(r"[0-9]{1,3}(?:\.[0-9]{1,4})?%", val) is not None
+                     and 0 <= float(val[:-1]) <= 100)
+        result[key] = val
+    return result
+
+
+def validate_prusa_native_3mf(data):
+    _require(isinstance(data, bytes) and 0 < len(data) <= 32 * 1024 * 1024)
+    try:
+        with zipfile.ZipFile(io.BytesIO(data)) as z:
+            infos = z.infolist()
+            _require(len(infos) == 4 and {i.filename for i in infos} == PARTS)
+            _require(all(0 < i.file_size <= (80 * 1024 * 1024 if i.filename == "3D/3dmodel.model"
+                                             else 65536) and not i.is_dir() for i in infos))
+            model = _xml(z.read("3D/3dmodel.model"))
+            config = _xml(z.read(CONFIG))
+            # These are fixed exporter literals; refuse external relationships,
+            # extra content types, and duplicate or alternate model references.
+            rel = _xml(z.read("_rels/.rels"))
+            ct = _xml(z.read("[Content_Types].xml"))
+            rel_ns = "{http://schemas.openxmlformats.org/package/2006/relationships}"
+            ct_ns = "{http://schemas.openxmlformats.org/package/2006/content-types}"
+            _require(rel.tag == rel_ns + "Relationships" and not rel.attrib and len(rel) == 1)
+            _require(rel[0].tag == rel_ns + "Relationship" and not len(rel[0]) and
+                     rel[0].attrib == {"Target": "/3D/3dmodel.model", "Id": "rel0",
+                         "Type": "http://schemas.microsoft.com/3dmanufacturing/2013/01/3dmodel"})
+            _require(ct.tag == ct_ns + "Types" and not ct.attrib and len(ct) == 3)
+            types = {"rels": "application/vnd.openxmlformats-package.relationships+xml",
+                     "model": "application/vnd.ms-package.3dmanufacturing-3dmodel+xml",
+                     "config": "application/xml"}
+            for node in ct:
+                _require(node.tag == ct_ns + "Default" and not len(node) and
+                         set(node.attrib) == {"Extension", "ContentType"} and
+                         types.pop(node.get("Extension"), None) == node.get("ContentType"))
+        _require(model.tag == NS + "model" and model.attrib == {"unit": "millimeter"})
+        _require([n.tag for n in model] == [NS + "metadata", NS + "resources", NS + "build"])
+        meta, resources, build = model
+        _require(meta.attrib == {"name": "slic3rpe:Version3mf"} and meta.text == "1" and not len(meta))
+        _require(not resources.attrib and not build.attrib and 1 <= len(resources) <= 12
+                 and len(build) == len(resources))
+        _require(config.tag == "config" and not config.attrib and len(config) == len(resources))
+        count = 0
+        regions = 0
+        for index, (obj, item, cfg) in enumerate(zip(resources, build, config), 1):
+            oid = str(index)
+            _require(obj.tag == NS + "object" and obj.attrib == {"id": oid, "type": "model"} and len(obj) == 1)
+            _require(item.tag == NS + "item" and item.attrib == {"objectid": oid} and not len(item))
+            mesh = obj[0]
+            _require(mesh.tag == NS + "mesh" and not mesh.attrib and
+                     [n.tag for n in mesh] == [NS + "vertices", NS + "triangles"])
+            verts, faces = mesh
+            _require(not verts.attrib and not faces.attrib and 3 <= len(verts) <= 3*LIMIT and len(faces) > 0)
+            count += len(faces)
+            _require(count <= LIMIT)
+            for vertex in verts:
+                _require(vertex.tag == NS + "vertex" and not len(vertex) and set(vertex.attrib) == {"x", "y", "z"})
+                _require(all(math.isfinite(float(v)) and abs(float(v)) <= 20000 for v in vertex.attrib.values()))
+            for face in faces:
+                _require(face.tag == NS + "triangle" and not len(face) and set(face.attrib) == {"v1", "v2", "v3"})
+                ids = [_integer(v, len(verts)-1) for v in face.attrib.values()]
+                _require(len(set(ids)) == 3)
+            _require(cfg.tag == "object" and cfg.attrib == {"id": oid, "instances_count": "1"})
+            metadata = [n for n in cfg if n.tag == "metadata"]
+            volumes = [n for n in cfg if n.tag == "volume"]
+            _require(len(metadata) + len(volumes) == len(cfg) and 1 <= len(volumes) <= 13)
+            _settings(metadata, "object", {"perimeters", "fill_density"})
+            regions += len(volumes) - 1
+            _require(regions <= 48 and (len(volumes) == 1 or len(resources) == 1))
+            next_face = 0
+            next_vertex = 0
+            for n, vol in enumerate(volumes):
+                _require(set(vol.attrib) == {"firstid", "lastid"})
+                first = _integer(vol.get("firstid"), len(faces)-1)
+                last = _integer(vol.get("lastid"), len(faces)-1)
+                _require(first == next_face and first <= last)
+                next_face = last + 1
+                # A volume must own a disjoint contiguous vertex range.
+                ids = {int(v) for face in faces[first:last+1] for v in face.attrib.values()}
+                _require(min(ids) == next_vertex and len(ids) == max(ids)-min(ids)+1)
+                next_vertex = max(ids)+1
+                values = _settings(vol, "volume", {"volume_type", "perimeters", "fill_density"})
+                role = values.pop("volume_type", None)
+                _require((n == 0 and role == "ModelPart" and not values) or
+                         (n > 0 and role == "NegativeVolume" and not values) or
+                         (n > 0 and role == "ParameterModifier" and bool(values)))
+            _require(next_face == len(faces) and next_vertex == len(verts))
+        return {"objects": len(resources), "triangles": count, "regions": regions}
+    except WorkerError:
+        raise
+    except (ValueError, TypeError, KeyError, OSError, RuntimeError, zipfile.BadZipFile, ET.ParseError):
+        raise WorkerError("Invalid native Prusa 3MF archive.") from None
