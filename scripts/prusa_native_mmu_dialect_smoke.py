@@ -72,7 +72,7 @@ def _research_xl_two_tool(binary, vendor, source_digest, directory, work):
         for line in raw.decode("utf-8").splitlines():
             converted.append("binary_gcode = 0" if line.split("=", 1)[0].strip()
                              == "binary_gcode" else line)
-        native = ("\\n".join(converted) + "\\n").encode()
+        native = ("\n".join(converted) + "\n").encode()
         identity = validate_flat_prusa_preset(native, kind="printer")
         tools = identity["nozzle_diameter"].split(",")
         assert len(tools) == 2 and identity.get(
