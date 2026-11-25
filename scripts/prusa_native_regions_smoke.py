@@ -10,7 +10,7 @@ from slicer_worker.prusa_vendor_profiles import flatten_prusa_vendor_preset
 from slicer_worker.prusa_gcode_audit import audit_prusa_positive_e, WORD
 
 
-def regional_extrusion(data):
+def regional_extrusion(data, *, center_x=125, center_y=105):
     """Measure positive-E paths inside a fixed, deep 6x6mm central test region.
 
     Ignore purge/start/end movements and the top/bottom skin. Sample entire
@@ -51,9 +51,9 @@ def regional_extrusion(data):
                         for i in range(samples):
                             t = (i + .5) / samples
                             x, y = (pos[a] + t * (new[a] - pos[a]) for a in (0, 1))
-                            if 122 <= x <= 128 and 102 <= y <= 108:
+                            if center_x-3 <= x <= center_x+3 and center_y-3 <= y <= center_y+3:
                                 inside += delta / samples
-                            elif 116 <= x <= 134 and 96 <= y <= 114:
+                            elif center_x-9 <= x <= center_x+9 and center_y-9 <= y <= center_y+9:
                                 outside += delta / samples
             pos = new
     return inside, outside
