@@ -142,14 +142,14 @@ class PrusaSingleMaterialAdmissionTests(TestCase):
                               }]}, owner=None, printer_profile_id="verified")
         self.assertTrue(_validate_plate_execution(job))
 
-    def test_prusa_painted_or_modified_plate_still_fails_closed(self):
+    def test_prusa_paint_and_variable_layers_stay_blocked(self):
         from core.slicer_execution import _validate_plate_execution, SlicerExecutionError
         base = {"x_mm": 10, "y_mm": 0, "z_mm": 0,
                 "rotation_deg": 0, "scale_percent": 100}
         for field, value in (
-            ("modifier_volumes", [{"kind": "negative"}]),
-            ("process_overrides", {"wall_loops": 4}),
             ("colour_paint", {"regions": [{"colour": "#ff0000"}]}),
+            ("support_paint", {"regions": [{"state": "enforce"}]}),
+            ("seam_paint", {"regions": [{"state": "enforce"}]}),
             ("variable_layer_profile", {"bands": [{"z": 1}]}),
         ):
             with self.subTest(field=field):
@@ -158,3 +158,38 @@ class PrusaSingleMaterialAdmissionTests(TestCase):
                                       owner=None, printer_profile_id="verified")
                 with self.assertRaisesRegex(SlicerExecutionError, "not yet verified"):
                     _validate_plate_execution(job)
+
+    def test_prusa_valid_object_overrides_admitted_without_modifiers(self):
+        from core.slicer_execution import _validate_plate_execution
+        job = SimpleNamespace(engine="prusaslicer", engine_version="2.9.7",
+                              settings={"plate_objects": [{
+                                  "asset_id": "owned", "x_mm": 0, "y_mm": 0, "z_mm": 0,
+                                  "rotation_deg": 0, "scale_percent": 100,
+                                  "process_overrides": {"wall_loops": 4,
+                                                        "sparse_infill_density": 35},
+                              }]}, owner=None, printer_profile_id="verified")
+        self.assertTrue(_validate_plate_execution(job))
+
+    def test_prusa_valid_negative_and_modifier_admitted_but_multimodel_guarded(self):
+        import uuid
+        from core.slicer_execution import _validate_plate_execution, SlicerExecutionError
+        volume = {
+            "id": str(uuid.uuid4()), "shape": "box", "kind": "negative",
+            "width_mm": 10, "depth_mm": 10, "height_mm": 15,
+            "x_mm": 0, "y_mm": 0, "z_mm": 8, "settings": {},
+            "coordinate_space": "world", "rotation_xyz_deg": [0, 0, 0],
+            "scale_xyz_percent": [100, 100, 100],
+        }
+        base = {"asset_id": "owned", "x_mm": 0, "y_mm": 0, "z_mm": 0,
+                "rotation_deg": 0, "scale_percent": 100}
+        job = SimpleNamespace(engine="prusaslicer", engine_version="2.9.7",
+                              settings={"plate_objects": [{**base, "modifier_volumes": [volume]}]},
+                              owner=None, printer_profile_id="verified")
+        self.assertTrue(_validate_plate_execution(job))
+        job.settings["plate_objects"].append(dict(base))
+        with self.assertRaisesRegex(SlicerExecutionError, "multi-model modifiers"):
+            _validate_plate_execution(job)
+        job.settings["plate_objects"] = [{**base, "modifier_volumes": [
+            {**volume, "coordinate_space": "bad"}]}]
+        with self.assertRaises(SlicerExecutionError):
+            _validate_plate_execution(job)
