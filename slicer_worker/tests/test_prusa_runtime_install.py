@@ -123,5 +123,51 @@ class PrusaBundleTests(unittest.TestCase):
             self.assertEqual(list((root / "stage").iterdir()), [])
 
 
+class ReviewedReleaseCatalogueTests(unittest.TestCase):
+    def setUp(self):
+        from slicer_worker import engine_installer_service as installer
+        self.installer = installer
+        installer.RELEASE_CACHE["items"] = []
+        installer.RELEASE_CACHE["time"] = 0
+
+    def discover(self, *, digest=None, size=None, url=None, tag=None):
+        from slicer_worker import engine_installer_service as installer
+        asset_url = ("https://github.com/gavrd7/MakerVault/releases/download/"
+                     + prusa.RELEASE_TAG + "/" + prusa.ASSET_NAME)
+        item = {"name": prusa.ASSET_NAME,
+                "digest": digest if digest is not None else "sha256:" + prusa.ARCHIVE_SHA256,
+                "size": size if size is not None else prusa.ASSET_SIZE,
+                "browser_download_url": url if url is not None else asset_url}
+        response = {"tag_name": tag if tag is not None else prusa.RELEASE_TAG,
+                    "draft": False, "prerelease": False,
+                    "assets": [item]}
+        def request(query, **kwargs):
+            if "/gavrd7/MakerVault/releases/tags/" in query:
+                return io.BytesIO(json.dumps(response).encode())
+            if "/CrealityOfficial/" in query:
+                return io.BytesIO(b"[]")
+            return io.BytesIO(b'{"draft":false,"prerelease":false,"assets":[]}')
+        with patch.object(installer.platform, "machine", return_value="x86_64"), \
+             patch.object(installer, "_request", side_effect=request):
+            return [row for row in installer.release_catalogue()
+                    if row["engine"] == "prusaslicer"]
+
+    def test_published_exact_archive_is_discoverable_only_by_pinned_identity(self):
+        choices = self.discover()
+        self.assertEqual(len(choices), 1)
+        self.assertEqual(choices[0]["version"], "2.9.7")
+        self.assertEqual(choices[0]["bundle_sha256"], prusa.ARCHIVE_SHA256)
+        self.assertEqual(choices[0]["binary_sha256"], prusa.BINARY_SHA256)
+
+    def test_wrong_digest_size_tag_or_url_cannot_enter_catalogue(self):
+        for override in (
+                {"digest": "sha256:" + "0" * 64},
+                {"size": prusa.ASSET_SIZE + 1},
+                {"tag": "prusa-runtime-v2.9.8-unknown"},
+                {"url": "https://example.com/redirect.tar.gz"}):
+            with self.subTest(override=override):
+                self.assertEqual(self.discover(**override), [])
+
+
 if __name__ == "__main__":
     unittest.main()
