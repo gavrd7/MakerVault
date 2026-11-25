@@ -271,6 +271,25 @@ def _validate_plate_execution(job):
         settings=expand_painted_settings(getattr(job, "owner", None), job.settings or {})
     except (ValueError, OSError) as exc:
         raise SlicerExecutionError("A referenced private painting asset is missing or invalid.") from exc
+    # The pinned Prusa 2.9.7 runtime is independently approved for one
+    # unmodified FFF STL with native printer/filament/print presets. Do not
+    # silently discard Orca/Creality/Bambu-style global overrides, or route
+    # transformed/multi-object Prusa plates into an unverified 3MF dialect.
+    # This conditional does not change those three working engines.
+    if job.engine == "prusaslicer":
+        if settings.get("process_overrides"):
+            raise SlicerExecutionError(
+                "PrusaSlicer process overrides are not yet verified; select "
+                "a native Prusa print preset instead.")
+        if settings.get("multi_material_test") is True:
+            raise SlicerExecutionError(
+                "PrusaSlicer multi-material slicing is not yet verified.")
+        prusa_objects = settings.get("plate_objects")
+        if prusa_objects and not _single_unmodified_stl(prusa_objects):
+            raise SlicerExecutionError(
+                "PrusaSlicer currently supports one unmodified STL per plate; "
+                "native multi-object, transformed and modifier plates require "
+                "separate real-binary acceptance.")
     # Do not silently discard native flush / prime-tower preferences when
     # admitting an otherwise single-filament job. They require the future
     # exact-printer, multi-tool worker route and verified CFS bindings.
