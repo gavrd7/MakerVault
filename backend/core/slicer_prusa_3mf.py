@@ -18,6 +18,7 @@ from .slicer_prusa_process_settings import apply_prusa_process_overrides, FIELDS
 from .slicer_prusa_native_resolution import parse_prusa_profile
 from .slicer_profiles import SlicerProfileError
 from .slicer_prusa_layer_ranges import prusa_layer_config_ranges, PATH as LAYER_RANGES_PATH
+from .slicer_prusa_paint import native_prusa_painted_stl, HEADERS as PAINT_HEADERS
 
 OBJECT_KEYS = frozenset({"wall_loops", "sparse_infill_density"})
 CONFIG_PATH = "Metadata/Slic3r_PE_model.config"
@@ -30,6 +31,12 @@ def build_prusa_native_3mf(rows, *, bed_width, bed_depth):
     ET.register_namespace("", NS)
     model = ET.Element(f"{{{NS}}}model", {"unit": "millimeter", "xmlns:slic3rpe": "http://schemas.slic3r.org/3mf/2017/06"})
     ET.SubElement(model, f"{{{NS}}}metadata", {"name": "slic3rpe:Version3mf"}).text = "1"
+    # Native Prusa 2.9.7 requires versioned painting metadata before resources.
+    headers = {name for pair in rows if isinstance(pair, tuple) and isinstance(pair[0], dict)
+               for key, name in PAINT_HEADERS.items()
+               if isinstance(pair[0].get(key), dict) and pair[0][key].get("regions")}
+    for name in sorted(headers):
+        ET.SubElement(model, f"{{{NS}}}metadata", {"name": name}).text = "2"
     resources = ET.SubElement(model, f"{{{NS}}}resources")
     build = ET.SubElement(model, f"{{{NS}}}build")
     config = ET.Element("config")
@@ -61,7 +68,10 @@ def build_prusa_native_3mf(rows, *, bed_width, bed_depth):
             # Each native Prusa resource owns its volume ranges. This allows
             # standalone two-parent fixtures without propagating an unrelated
             # modifier onto another model; scheduling remains separately gated.
-        baked = build_prusa_placed_stl([(geometry_item, raw)], bed_width=bed_width, bed_depth=bed_depth)
+        painted_raw, facet_tags, required_headers = native_prusa_painted_stl(item, raw)
+        if not required_headers.issubset(headers):
+            raise SlicerProfileError("Prusa painted metadata is incomplete.")
+        baked = build_prusa_placed_stl([(geometry_item, painted_raw)], bed_width=bed_width, bed_depth=bed_depth)
         count = struct.unpack_from("<I", baked, 80)[0]
         total_faces += count
         if total_faces > MAX_TRIANGLES:
@@ -71,7 +81,9 @@ def build_prusa_native_3mf(rows, *, bed_width, bed_depth):
         vertices = ET.SubElement(mesh, f"{{{NS}}}vertices")
         triangles = ET.SubElement(mesh, f"{{{NS}}}triangles")
         indexed = {}
-        for tri in struct.iter_unpack("<12fH", baked[84:]):
+        if facet_tags is not None and len(facet_tags) != count:
+            raise SlicerProfileError("Prusa native painted facet count changed during placement.")
+        for face_index, tri in enumerate(struct.iter_unpack("<12fH", baked[84:])):
             ids = []
             for offset in (3, 6, 9):
                 point = tuple(tri[offset:offset+3])
@@ -79,7 +91,10 @@ def build_prusa_native_3mf(rows, *, bed_width, bed_depth):
                     indexed[point] = len(indexed)
                     ET.SubElement(vertices, f"{{{NS}}}vertex", dict(zip(("x", "y", "z"), map(str, point))))
                 ids.append(indexed[point])
-            ET.SubElement(triangles, f"{{{NS}}}triangle", dict(zip(("v1", "v2", "v3"), map(str, ids))))
+            attrs = dict(zip(("v1", "v2", "v3"), map(str, ids)))
+            if facet_tags is not None:
+                attrs.update(facet_tags[face_index])
+            ET.SubElement(triangles, f"{{{NS}}}triangle", attrs)
         ET.SubElement(build, f"{{{NS}}}item", {"objectid": str(index)})
         settings = ET.SubElement(config, "object", {"id": str(index), "instances_count": "1"})
         for key in sorted(overrides):
