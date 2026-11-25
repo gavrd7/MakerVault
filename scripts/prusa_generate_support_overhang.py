@@ -33,7 +33,7 @@ def cantilever():
     return bytes(out)
 
 
-def support_mask(raw):
+def support_mask(raw, slot=0):
     tris = list(_triangles(raw))
     mins = [min(p[i] for t in tris for p in t) for i in range(3)]
     maxs = [max(p[i] for t in tris for p in t) for i in range(3)]
@@ -57,7 +57,7 @@ def support_mask(raw):
     if len(patches) != 2:
         raise ValueError("Support fixture must paint two downward facets.")
     return {"version": 2, "signature": _fingerprint(local),
-            "regions": [{"slot": 0, "patches": patches}]}
+            "regions": [{"slot": slot, "patches": patches}]}
 
 
 def unpainted_geometry_control(raw):
@@ -91,6 +91,9 @@ def main(folder):
     (output/"baseline.3mf").write_bytes(plain)
     (output/"geometry-control.3mf").write_bytes(unpainted_geometry_control(painted))
     (output/"enforced.3mf").write_bytes(painted)
+    blocked = build_prusa_native_3mf([({**item, "support_paint": support_mask(source, 1)}, source)],
+                                     bed_width=250, bed_depth=210)
+    (output/"blocked.3mf").write_bytes(blocked)
 
 
 if __name__=="__main__":
