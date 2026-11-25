@@ -188,6 +188,30 @@ class PrusaSingleMaterialAdmissionTests(TestCase):
                 with self.assertRaises(SlicerExecutionError):
                     _validate_plate_execution(job)
 
+    def test_prusa_two_object_variable_layers_admitted_with_independent_audit(self):
+        from core.slicer_execution import _validate_plate_execution, SlicerExecutionError
+        band = {"version": 1, "bands": [
+            {"from_mm": 5, "to_mm": 15, "layer_mm": .12}]}
+        base = {"asset_id": "owned-cube", "z_mm": 0,
+                "rotation_deg": 0, "rotation_xyz_deg": [0, 0],
+                "scale_percent": 100, "scale_xyz_percent": [100, 100, 100]}
+        left = {**base, "x_mm": -35, "y_mm": 0,
+                "variable_layer_profile": band}
+        right = {**base, "x_mm": 35, "y_mm": 0}
+        job = SimpleNamespace(engine="prusaslicer", engine_version="2.9.7",
+                              settings={"plate_objects": [left, right]},
+                              owner=None, printer_profile_id="verified")
+        self.assertTrue(_validate_plate_execution(job))
+        for invalid in (
+            [{**left, "scale_percent": 150},right],
+            [left,{**right, "rotation_xyz_deg": [90, 0]}],
+            [left,right,{**right, "x_mm": 90}],
+        ):
+            with self.subTest(invalid=invalid):
+                job.settings["plate_objects"] = invalid
+                with self.assertRaises(SlicerExecutionError):
+                    _validate_plate_execution(job)
+
     def test_prusa_valid_object_overrides_admitted_without_modifiers(self):
         from core.slicer_execution import _validate_plate_execution
         job = SimpleNamespace(engine="prusaslicer", engine_version="2.9.7",
