@@ -1,8 +1,8 @@
 name: PrusaSlicer reviewed bundle + isolated worker acceptance
 
-# Expensive, artifact-backed acceptance is explicitly opt-in.
-# The pinned 25 Nov source candidate is held for only 7 days; this is not
-# a required PR check after the temporary GitHub Actions artifact expires.
+# Expensive genuine native acceptance is opt-in, using the exact
+# independently verified permanent public Prusa 2.9.7 runtime archive.
+# Its content SHA is pinned independently of release metadata.
 on:
   workflow_dispatch:
   push:
@@ -21,14 +21,15 @@ jobs:
       - uses: actions/checkout@v4
         with:
           persist-credentials: false
-      - name: Download and pin the exact successful real-binary candidate
+      - name: Fetch and hash-pin the permanent reviewed Prusa 2.9.7 runtime
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
           mkdir -p "$RUNNER_TEMP/prusa"
-          gh run download 45509961312 --repo "$GITHUB_REPOSITORY" \
-            --name prusa-2.9.7-headless-linux-amd64-candidate \
+          gh release download prusa-runtime-v2.9.7-450d70d \
+            --repo "$GITHUB_REPOSITORY" \
+            --pattern prusa-2.9.7-headless-linux-amd64.tar.gz \
             --dir "$RUNNER_TEMP/prusa"
           archive="$RUNNER_TEMP/prusa/prusa-2.9.7-headless-linux-amd64.tar.gz"
           echo "963eb81fd972d50c5f8fe54c3adb6dce2eab39c9ab223534b917eae76973d913  $archive" | sha256sum --check
