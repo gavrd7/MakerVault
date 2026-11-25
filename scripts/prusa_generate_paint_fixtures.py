@@ -54,5 +54,29 @@ def main(directory):
         if name == "seam-enforced":
             (root / "seam-enforced.json").write_text(json.dumps({**base, **edits}))
 
+    # Independent seam direction research. Each native project uses the same
+    # original triangles, positions and profiles; only the painted side flips.
+    # A G-code hash change cannot qualify seam placement without a true
+    # first-extrusion spatial audit against the chosen patch.
+    for label, axis, coordinate in (
+        ("seam-right", 0, 10),
+        ("seam-left", 0, -10),
+        ("seam-front", 1, -10),
+        ("seam-back", 1, 10),
+    ):
+        faces = [i for i, face in enumerate(local)
+                 if all(abs(vertex[axis] - coordinate) < .00001
+                        for vertex in face)]
+        if len(faces) != 2:
+            raise ValueError("Prusa directional seam fixture needs two sidewall triangles.")
+        directional = {"version": 2, "signature": signature,
+                       "regions": [{"slot": 0, "patches": [
+                           {"face": i, "polygon": [list(vertex) for vertex in local[i]]}
+                           for i in faces]}]}
+        edits = {**base, "seam_paint": directional}
+        (root / (label + ".3mf")).write_bytes(
+            build_prusa_native_3mf([(edits, raw)],bed_width=250,bed_depth=210))
+        (root / (label + ".json")).write_text(json.dumps(edits))
+
 if __name__ == "__main__":
     main(sys.argv[1])
