@@ -472,10 +472,11 @@ def _validate_plate_execution(job):
         # G-code and firmware checks are still needed for print approval.
         if not ((job.engine == "orcaslicer" and job.engine_version == "2.5.0") or
                 (job.engine == "bambustudio" and job.engine_version == "02.09.01.70") or
+                (job.engine == "prusaslicer" and job.engine_version == "2.9.7") or
                 (job.engine == "crealityprint" and job.engine_version.startswith("7.3.") and
                  settings.get("multi_material_test") is True)):
             raise SlicerExecutionError(
-                "Variable layer slicing requires OrcaSlicer 2.5.0 or Creality Print 7.3.x CFS test mode.")
+                "Variable layer slicing requires a verified native engine and profile.")
         if len(objects) != 1 or (settings.get("multi_material_test") and job.engine not in {"crealityprint", "bambustudio"}):
             raise SlicerExecutionError(
                 "Variable layer test slicing requires one model (Creality: one two-colour CFS model).")
