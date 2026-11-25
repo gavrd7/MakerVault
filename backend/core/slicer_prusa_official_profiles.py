@@ -138,8 +138,15 @@ def _flatten_native_profile(kind, name, vendor):
         raise OfficialProfileError("Official Prusa native preset is incomplete.")
     if kind == "printer" and settings.get("printer_technology", "FFF") != "FFF":
         raise OfficialProfileError("Only Prusa FFF printer presets are supported.")
-    if settings.get("binary_gcode", "0").lower() not in {"", "0", "false", "no"}:
-        raise OfficialProfileError("Only text Prusa G-code is supported.")
+    # Official MK4, MK4S and CORE One FFF presets often default to BG-code.
+    # MakerVault's bounded G-code preview/auditor needs text G-code instead.
+    # This import-only conversion follows validated, immutable upstream
+    # inheritance. Do not alter stored originals or arbitrary user INI.
+    binary_gcode = settings.get("binary_gcode", "0").strip().lower()
+    if binary_gcode in {"1", "true", "yes"}:
+        settings["binary_gcode"] = "0"
+    elif binary_gcode not in {"", "0", "false", "no"}:
+        raise OfficialProfileError("Unsupported Prusa binary G-code preference.")
     flattened = "".join(f"{key} = {value}\n" for key, value in sorted(settings.items()))
     raw = flattened.encode("utf-8")
     if not 0 < len(raw) <= 1024 * 1024:
