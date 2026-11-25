@@ -106,6 +106,27 @@ class PrusaOfficialModelDiscoveryTests(SimpleTestCase):
         with self.assertRaises(OfficialProfileError):
             fetch_prusa_profile("filament", "Original Prusa MK4S", "PrusaResearch.ini")
 
+    def test_exact_official_binary_gcode_preference_is_safely_converted_to_text(self):
+        from core.slicer_prusa_native_resolution import parse_prusa_profile
+        base = {"nozzle_diameter": "0.4,0.4,0.4,0.4,0.4",
+                "bed_shape": "0x0,250x0,250x210,0x210",
+                "printer_technology": "FFF",
+                "single_extruder_multi_material": "1"}
+        for enabled in ("1", "true", "yes"):
+            with self.subTest(binary_gcode=enabled):
+                with patch("core.slicer_prusa_official_profiles._native_sections",
+                           return_value={"printer:ModernMMU": {
+                               **base, "binary_gcode": enabled}}):
+                    raw = fetch_prusa_profile("printer", "ModernMMU", "PrusaResearch.ini")
+                self.assertIn(b"binary_gcode = 0", raw)
+                self.assertEqual(parse_prusa_profile(raw, "printer")["binary_gcode"], "0")
+        for bad in ("5", "../firmware", "0\\npost_process = do_thing"):
+            with self.subTest(bad=bad):
+                with patch("core.slicer_prusa_official_profiles._native_sections",
+                           return_value={"printer:Unsafe": {**base, "binary_gcode": bad}}):
+                    with self.assertRaises(OfficialProfileError):
+                        fetch_prusa_profile("printer", "Unsafe", "PrusaResearch.ini")
+
     def test_real_prusa_multi_parent_resolution_order(self):
         sections = {
             "print:Base": {"layer_height": "0.2", "fill_density": "10%"},
