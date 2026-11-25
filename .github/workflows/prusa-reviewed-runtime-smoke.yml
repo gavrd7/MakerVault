@@ -95,6 +95,41 @@ jobs:
             --binary /opt/engine-store/versions/prusaslicer/2.9.7/bin/prusa-slicer \
             --vendor /opt/engine-store/versions/prusaslicer/2.9.7/resources/profiles/PrusaResearch.ini
 
+      - name: Uninstall and reinstall Prusa without affecting Orca
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker run --rm --network none --user 10002:10002 \
+            -v "$TEST_VOLUME:/opt/engine-store:rw" \
+            -v "$RUNNER_TEMP/prusa/prusa-2.9.7-headless-linux-amd64.tar.gz:/tmp/prusa.tar.gz:ro" \
+            --entrypoint python3 prusa-integration:smoke -c '
+          import json, shutil
+          from pathlib import Path
+          from unittest.mock import patch
+          from slicer_worker import engine_installer_service as installer
+          from slicer_worker import prusa_runtime_install as prusa
+          from slicer_worker.engine_store_lifecycle import uninstall_engine, installed_versions
+          store = Path("/opt/engine-store")
+          uninstall_engine(store, "prusaslicer")
+          current = json.loads((store / "active.json").read_text())["engines"]
+          assert set(current) == {"orcaslicer"}, current
+          assert not (store / "versions" / "prusaslicer").exists()
+          release = {
+              "engine": "prusaslicer", "version": prusa.VERSION,
+              "bundle_sha256": prusa.ARCHIVE_SHA256,
+              "bundle_url": "https://github.com/gavrd7/MakerVault/releases/download/" + prusa.RELEASE_TAG + "/" + prusa.ASSET_NAME,
+              "asset_size": prusa.ASSET_SIZE, "binary_sha256": prusa.BINARY_SHA256,
+          }
+          with patch.object(installer, "_download", side_effect=lambda _r, dest, _p: shutil.copyfile("/tmp/prusa.tar.gz", dest)), \
+               patch.object(installer, "_write_operation"):
+              installer._install_reviewed_prusa("ci-reinstall", release)
+          current = json.loads((store / "active.json").read_text())["engines"]
+          assert set(current) == {"orcaslicer", "prusaslicer"}, current
+          assert current["prusaslicer"]["binary_sha256"] == prusa.BINARY_SHA256
+          assert installed_versions(store)["prusaslicer"][0]["active"]
+          print("PASS: Prusa uninstall/reinstall preserves Orca and active identities.")
+          '
+
       - name: Cleanup isolated test volume
         if: always()
         run: |
