@@ -376,7 +376,8 @@ jobs:
             /opt/engine-store/versions/prusaslicer/2.9.7/bin/prusa-slicer \
             /opt/engine-store/versions/prusaslicer/2.9.7/resources/profiles/PrusaResearch.ini \
             /tmp/paint/baseline.3mf /tmp/paint/support.3mf \
-            /tmp/paint/seam.3mf /tmp/paint/fuzzy.3mf /tmp/paint/combined.3mf
+            /tmp/paint/seam.3mf /tmp/paint/seam-enforced.3mf \
+            /tmp/paint/fuzzy.3mf /tmp/paint/combined.3mf
 
       - name: Generate same-geometry manual support enforcer controls
         run: |
