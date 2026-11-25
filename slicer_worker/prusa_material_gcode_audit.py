@@ -9,6 +9,7 @@ import math
 import re
 import zipfile
 from xml.etree import ElementTree as ET
+from defusedxml import ElementTree as SafeET
 
 from .prusa_material_validation import validate_prusa_material_candidate
 from .runner import WorkerError
@@ -20,7 +21,7 @@ WORD=re.compile(r"(?:^|\s)([XYZE])\s*([-+]?(?:\d+(?:\.\d*)?|\.\d+)(?:[Ee][-+]?\d
 def _bounds(project, expected):
     with zipfile.ZipFile(io.BytesIO(project)) as z:
         content=z.read("3D/3dmodel.model")
-    root=ET.fromstring(content)
+    root=SafeET.fromstring(content)
     objects=root.findall("./"+NS+"resources/"+NS+"object")
     if len(objects)!=expected:
         raise WorkerError("Prusa material model footprint mismatch.")
