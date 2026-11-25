@@ -19,7 +19,7 @@ def main(path):
     sections = parse_prusa_vendor_bundle(raw)
     selected = [key for key in sections
                 if key.startswith("printer:") and
-                any(term in key.lower() for term in ("mmu3", "mmu2s", "xl 5t", "xl 2t"))]
+                any(term in key.lower() for term in ("mmu3", "mmu2s", "xl 5t", "xl 2t", "xl 5", "xl 2"))]
     print("Pinned Prusa native MMU/XL printer source candidates:", len(selected))
     for section in selected[:45]:
         name = section[len("printer:"):]
@@ -27,7 +27,7 @@ def main(path):
             parsed = validate_flat_prusa_preset(flatten_prusa_vendor_preset(
                 raw, kind="printer", name=name, expected_sha256=sha), kind="printer")
         except ValueError as exc:
-            print("UNRESOLVED", name, type(exc).__name__)
+            print("UNRESOLVED", name, type(exc).__name__, str(exc))
             continue
         print("CANDIDATE", repr(name), {
             key:parsed.get(key) for key in (
