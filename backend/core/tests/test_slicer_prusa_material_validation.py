@@ -44,7 +44,7 @@ class PrusaResearchMaterialValidationTests(TestCase):
 
     def test_models_have_strict_tool_assignments(self):
         project=self.models()
-        self.assertEqual(validate_prusa_material_candidate(project,tools=[1,2])["tools"],(1,2))
+        self.assertEqual(validate_prusa_material_candidate(project,printer_ini=ini("0.4,0.4","1"),tools=[1,2])["tools"],(1,2))
         for expected in ([2,1],[1,3],[1,1],[],[1,True]):
             with self.subTest(expected=expected),self.assertRaises(WorkerError):
                 validate_prusa_material_candidate(project,tools=expected)
@@ -53,10 +53,20 @@ class PrusaResearchMaterialValidationTests(TestCase):
 
     def test_painted_candidate_has_qualified_state_and_is_not_live_worker_accepted(self):
         project=self.painted()
-        receipt=validate_prusa_material_candidate(project,colour=True)
+        receipt=validate_prusa_material_candidate(project,printer_ini=ini("0.4,0.4,0.4,0.4,0.4","1"),colour=True)
         self.assertGreater(receipt["colour_facets"],0)
         with self.assertRaises(WorkerError):
             validate_prusa_native_3mf(project)
+
+    def test_wrong_native_topology_is_rejected(self):
+        project=self.models()
+        for machine in (ini("0.4"), ini("0.4,0.4","0",binary_gcode="1")):
+            with self.subTest(machine=machine),self.assertRaises(WorkerError):
+                validate_prusa_material_candidate(project,printer_ini=machine,tools=[1,2])
+        colour=self.painted()
+        with self.assertRaises(WorkerError):
+            validate_prusa_material_candidate(
+                colour,printer_ini=ini("0.4,0.4","0"),colour=True)
 
     def test_tampered_native_material_annotations_fail(self):
         project=self.models()
@@ -65,7 +75,7 @@ class PrusaResearchMaterialValidationTests(TestCase):
                           {"type":"object","key":"post_process","value":"bad"})
         bad=mutate(project,"Metadata/Slic3r_PE_model.config",inject)
         with self.assertRaises(WorkerError):
-            validate_prusa_material_candidate(bad,tools=[1,2])
+            validate_prusa_material_candidate(bad,printer_ini=ini("0.4,0.4","1"),tools=[1,2])
         colour=self.painted()
         ns="{http://schemas.microsoft.com/3dmanufacturing/core/2015/02}"
         mmu="{http://schemas.slic3r.org/3mf/2017/06}mmu_segmentation"
@@ -76,6 +86,7 @@ class PrusaResearchMaterialValidationTests(TestCase):
             face.set(mmu,"FFFF")
         with self.assertRaises(WorkerError):
             validate_prusa_material_candidate(
-                mutate(colour,"3D/3dmodel.model",corrupt),colour=True)
+                mutate(colour,"3D/3dmodel.model",corrupt),
+                printer_ini=ini("0.4,0.4,0.4,0.4,0.4","1"),colour=True)
         with self.assertRaises(WorkerError):
-            validate_prusa_material_candidate(colour,tools=[1,2])
+            validate_prusa_material_candidate(colour,printer_ini=ini("0.4,0.4","1"),tools=[1,2])
