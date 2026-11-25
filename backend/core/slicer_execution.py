@@ -285,11 +285,23 @@ def _validate_plate_execution(job):
             raise SlicerExecutionError(
                 "PrusaSlicer multi-material slicing is not yet verified.")
         prusa_objects = settings.get("plate_objects")
-        if prusa_objects and not _single_unmodified_stl(prusa_objects):
-            raise SlicerExecutionError(
-                "PrusaSlicer currently supports one unmodified STL per plate; "
-                "native multi-object, transformed and modifier plates require "
-                "separate real-binary acceptance.")
+        if prusa_objects:
+            if not isinstance(prusa_objects, list) or not 1 <= len(prusa_objects) <= 12:
+                raise SlicerExecutionError("PrusaSlicer requires one to twelve single-material STL objects.")
+            for item in prusa_objects:
+                if not isinstance(item, dict) or (
+                        item.get("modifier_volumes") or item.get("process_overrides") or
+                        (item.get("colour_paint") or {}).get("regions") or
+                        (item.get("colour_paint") or {}).get("faces") or
+                        (item.get("support_paint") or {}).get("regions") or
+                        (item.get("seam_paint") or {}).get("regions") or
+                        (item.get("fuzzy_skin_paint") or {}).get("regions") or
+                        (item.get("variable_layer_profile") or {}).get("bands")):
+                    raise SlicerExecutionError(
+                        "PrusaSlicer modifier, paint and per-object settings are not yet verified.")
+                if float(item.get("z_mm", 0)) != 0:
+                    raise SlicerExecutionError(
+                        "PrusaSlicer elevated or stacked objects are not yet verified.")
     # Do not silently discard native flush / prime-tower preferences when
     # admitting an otherwise single-filament job. They require the future
     # exact-printer, multi-tool worker route and verified CFS bindings.
@@ -509,16 +521,14 @@ def _validate_plate_execution(job):
     except MaterialRoutingError as exc:
         raise SlicerExecutionError(str(exc)) from exc
     if job.engine == "prusaslicer":
-        # The one untouched STL passed the Prusa-specific fail-closed checks
-        # above. The worker already accepts this direct native STL path; do
-        # not accidentally route it through the other engines' 3MF allowlist.
-        # Transforms, multi-object plates and modifiers remain rejected.
-        if _single_unmodified_stl(objects):
-            if not job.printer_profile_id:
-                raise SlicerExecutionError("Select a native printer profile for slicing.")
-            return True
-        raise SlicerExecutionError(
-            "PrusaSlicer currently supports one unmodified STL per plate.")
+        # Only strictly single-material STL geometry is admitted. The plate
+        # adapter bakes translations, rotations and scales into native STL
+        # vertices; a dedicated worker flag preserves this exact placement.
+        if not job.printer_profile_id:
+            raise SlicerExecutionError("Select a native printer profile for slicing.")
+        if objects and not 1 <= len(objects) <= 12:
+            raise SlicerExecutionError("Prusa plate model count is invalid.")
+        return True
     if job.engine not in {"orcaslicer", "crealityprint", "bambustudio"}:
         raise SlicerExecutionError("This engine does not yet support native build-plate slicing.")
     # Bambu and Orca both import 3MF per-object extruder settings and native
@@ -722,6 +732,7 @@ def process_queued_job(job_id):
         model = _read_owned_file(job.input_asset, job.owner_id, MAX_INPUT, "Model")
         model_format = "stl"
         material_result = None
+        prusa_placed_stl = False
         is_multi_test = (job.settings or {}).get("multi_material_test") is True
         plate = (job.settings or {}).get("plate_objects")
         stage = "verifying independent modifier and negative-volume coverage"
@@ -780,6 +791,14 @@ def process_queued_job(job_id):
                 model = source_models[0][1]
                 model_format = "stl"
                 logger.info("Slicing job %s: using direct validated STL path", job.pk)
+            elif job.engine == "prusaslicer":
+                stage = "baking verified native Prusa single-material plate geometry"
+                from .slicer_prusa_plate import build_prusa_placed_stl
+                width, depth = trusted_plate_dimensions(job.printer_profile)
+                model = build_prusa_placed_stl(
+                    source_models, bed_width=width, bed_depth=depth)
+                model_format = "stl"
+                prusa_placed_stl = True
             else:
                 stage = "resolving native printer bed dimensions"
                 width, depth = trusted_plate_dimensions(job.printer_profile)
@@ -1041,7 +1060,7 @@ def process_queued_job(job_id):
                 raise SlicerExecutionError(
                     "Bambu multi-material project settings could not be validated: "
                     + str(exc)) from exc
-        if model_format == "stl" and job.input_asset.sha256 and hashlib.sha256(model).hexdigest() != job.input_asset.sha256:
+        if model_format == "stl" and not prusa_placed_stl and job.input_asset.sha256 and hashlib.sha256(model).hexdigest() != job.input_asset.sha256:
             raise SlicerExecutionError("Model contents changed since the job was prepared.")
         stage = "executing the isolated slicer worker"
         output = run_remote_job(
@@ -1053,6 +1072,7 @@ def process_queued_job(job_id):
             creality_native_project=(material_result is not None and
                                      job.engine == "crealityprint"),
             native_modifier_project=has_native_modifiers,
+            prusa_placed_stl=prusa_placed_stl,
         )
         if material_result is not None:
             stage = "auditing multi-material tool selections and extrusion"
