@@ -391,6 +391,36 @@ jobs:
             /opt/engine-store/versions/prusaslicer/2.9.7/resources/profiles/PrusaResearch.ini \
             /tmp/regions/baseline.3mf /tmp/regions/modifier.3mf /tmp/regions/negative.3mf
 
+      - name: Generate six native Prusa primitive modifier and cavity variants
+        run: |
+          set -euo pipefail
+          export PRUSA_PRIMITIVE_DIR="$RUNNER_TEMP/prusa-primitive-matrix"
+          mkdir -p "$PRUSA_PRIMITIVE_DIR"
+          echo "PRUSA_PRIMITIVE_DIR=$PRUSA_PRIMITIVE_DIR" >> "$GITHUB_ENV"
+          PYTHONPATH=backend:. "$RUNNER_TEMP/prusa-backend-venv/bin/python" \
+            scripts/prusa_generate_primitive_volume_matrix.py "$PRUSA_PRIMITIVE_DIR"
+
+      - name: Research genuine local extrusion effects for six native Prusa primitive shapes
+        id: prusa_primitive_matrix_research
+        continue-on-error: true
+        run: |
+          set -euo pipefail
+          docker run --rm --network none --user 10001:10001 \
+            -v "$TEST_VOLUME:/opt/engine-store:ro" \
+            -v "$GITHUB_WORKSPACE/scripts/prusa_native_primitive_volume_matrix_smoke.py:/tmp/prusa_primitives.py:ro" \
+            -v "$GITHUB_WORKSPACE/scripts/prusa_native_regions_smoke.py:/tmp/prusa_region_math.py:ro" \
+            -v "$PRUSA_PRIMITIVE_DIR:/tmp/primitive-matrix:ro" \
+            --entrypoint python3 prusa-integration:smoke \
+            /tmp/prusa_primitives.py \
+            /opt/engine-store/versions/prusaslicer/2.9.7/bin/prusa-slicer \
+            /opt/engine-store/versions/prusaslicer/2.9.7/resources/profiles/PrusaResearch.ini \
+            /tmp/primitive-matrix
+
+      - name: Record native Prusa primitive shapes without measured effects
+        if: ${{ steps.prusa_primitive_matrix_research.outcome == 'failure' }}
+        run: |
+          echo "::warning title=Prusa primitive coverage::One or more generated modifiers/negative shapes lacked native regional toolpath proof. Restrict unsupported shapes before merge."
+
       - name: Generate native Prusa variable layer acceptance fixtures
         run: |
           set -euo pipefail
