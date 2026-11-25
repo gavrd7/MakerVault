@@ -1072,7 +1072,7 @@ def process_queued_job(job_id):
             creality_native_project=(material_result is not None and
                                      job.engine == "crealityprint"),
             native_modifier_project=has_native_modifiers,
-            prusa_placed_stl=prusa_placed_stl,
+            **({"prusa_placed_stl": True} if prusa_placed_stl else {}),
         )
         if material_result is not None:
             stage = "auditing multi-material tool selections and extrusion"
