@@ -57,6 +57,58 @@ def _spatial_tool_audit(gcode):
     return {"by_tool": counts, "tower_comment_lines": tower_labels}
 
 
+
+def _research_xl_two_tool(binary, vendor, source_digest, directory, work):
+    """Independently investigate XL *physical* T0/T1, not MMU changer slots.
+
+    Research only: we never permit an actual printer upload or guess an XL
+    machine's tool offsets/start G-code from its name.
+    """
+    label = "Original Prusa XL - 2T 0.4 nozzle"
+    try:
+        raw = flatten_prusa_vendor_preset(vendor, kind="printer", name=label,
+                                          expected_sha256=source_digest)
+        converted = []
+        for line in raw.decode("utf-8").splitlines():
+            converted.append("binary_gcode = 0" if line.split("=", 1)[0].strip()
+                             == "binary_gcode" else line)
+        native = ("\\n".join(converted) + "\\n").encode()
+        identity = validate_flat_prusa_preset(native, kind="printer")
+        tools = identity["nozzle_diameter"].split(",")
+        assert len(tools) == 2 and identity.get(
+            "single_extruder_multi_material", "0") in ("", "0", "false")
+    except (ValueError, AssertionError) as error:
+        print("XL native dual-head source profile unavailable:", str(error))
+        return
+    machine = work / "xl-printer.ini"
+    machine.write_bytes(native)
+    flags = ["--load", str(machine),
+             "--load", str(work / "filament.ini"),
+             "--load", str(work / "print.ini")]
+    model = str(Path(directory)/"object.3mf")
+    output = work / "xl-object.gcode"
+    result = subprocess.run([binary, *flags, "--export-gcode", "--dont-arrange",
+                             "--output", str(output), model],
+                            cwd=work, stdout=subprocess.PIPE,
+                            stderr=subprocess.PIPE, timeout=300)
+    if result.returncode or not output.is_file():
+        print("XL native physical T0/T1 feasibility blocked, exit", result.returncode)
+        return
+    payload = output.read_bytes()
+    audited = audit_prusa_positive_e(payload)
+    spatial = _spatial_tool_audit(payload)["by_tool"]
+    correct = (
+        spatial[0]["left"] > 100 and spatial[1]["right"] > 100 and
+        spatial[0]["right"] < 5 and spatial[1]["left"] < 5)
+    print("XL REAL CLI physical two-head model deposition",
+          "positive_e_moves", audited["positive_e_moves"], spatial,
+          "correct_tools", correct)
+    if correct:
+        print("PASS: pinned Prusa 2.9.7 native XL 2-head T0/T1 toolpath "
+              "assignment. This is not physical tool-change or upload approval.")
+
+
+
 def main(binary, source, directory):
     raw = Path(source).read_bytes()
     digest = hashlib.sha256(raw).hexdigest()
@@ -113,6 +165,7 @@ def main(binary, source, directory):
             raise RuntimeError("No native Prusa MMU3 project variant proved distinct correct tool deposition.")
         print("PASS: native upstream Prusa 2.9.7 MMU3 selected and deposited the correct tools in distinct model regions for", winners)
         print("NOTE: dual tool selection is NOT sufficient to approve purge, hardware, colours or worker admission.")
+        _research_xl_two_tool(binary, raw, digest, directory, root)
 
 
 if __name__ == "__main__":
