@@ -276,6 +276,8 @@ jobs:
           docker run --rm --network none --user 10001:10001 \
             -v "$TEST_VOLUME:/opt/engine-store:ro" \
             -v "$GITHUB_WORKSPACE/scripts/prusa_native_wipe_tower_smoke.py:/tmp/prusa_wipe.py:ro" \
+            -v "$GITHUB_WORKSPACE/backend:/tmp/mv-backend:ro" \
+            -e PYTHONPATH=/tmp/mv-backend:/app \
             -v "$PRUSA_WIPE_DIR:/tmp/prusa-wipe:ro" \
             --entrypoint python3 prusa-integration:smoke \
             /tmp/prusa_wipe.py \
