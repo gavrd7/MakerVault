@@ -278,9 +278,15 @@ def _validate_plate_execution(job):
     # This conditional does not change those three working engines.
     if job.engine == "prusaslicer":
         if settings.get("process_overrides"):
-            raise SlicerExecutionError(
-                "PrusaSlicer process overrides are not yet verified; select "
-                "a native Prusa print preset instead.")
+            from .slicer_prusa_process_settings import apply_prusa_process_overrides
+            if not job.process_profile_id:
+                raise SlicerExecutionError("Select a native Prusa process profile.")
+            try:
+                apply_prusa_process_overrides(
+                    resolved_native_profile(job.process_profile),
+                    settings["process_overrides"])
+            except (ValueError, OSError) as exc:
+                raise SlicerExecutionError(str(exc)) from exc
         if settings.get("multi_material_test") is True:
             raise SlicerExecutionError(
                 "PrusaSlicer multi-material slicing is not yet verified.")
@@ -822,6 +828,11 @@ def process_queued_job(job_id):
                 raise SlicerExecutionError("Native profile contents changed since verification.")
             profiles.append(resolved_native_profile(profile)
                             if job.engine in {"orcaslicer", "crealityprint", "bambustudio", "prusaslicer"} else data)
+        if job.engine == "prusaslicer":
+            from .slicer_prusa_process_settings import apply_prusa_process_overrides
+            stage = "applying verified native Prusa process settings"
+            profiles[2] = apply_prusa_process_overrides(
+                profiles[2], (job.settings or {}).get("process_overrides") or {})
         if job.engine == "orcaslicer":
             stage = "checking native printer/process compatibility"
             profiles[0] = _execution_printer_profile(
