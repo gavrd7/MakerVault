@@ -484,7 +484,7 @@ def _validate_plate_execution(job):
                 (job.engine == "crealityprint" and job.engine_version.startswith("7.3.") and
                  settings.get("multi_material_test") is True)):
             raise SlicerExecutionError(
-                "Variable layer slicing requires a verified native engine and profile.")
+                "Variable layer slicing requires OrcaSlicer 2.5.0, PrusaSlicer 2.9.7, or another verified native engine and profile.")
         prusa_native = job.engine == "prusaslicer" and job.engine_version == "2.9.7"
         if (len(objects) != 1 and (not prusa_native or len(objects) != 2)) or (
                 settings.get("multi_material_test") and
