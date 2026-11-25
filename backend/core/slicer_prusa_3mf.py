@@ -17,6 +17,7 @@ from .slicer_modifier_3mf import _modifier_parent_transform, _add_child_mesh
 from .slicer_prusa_process_settings import apply_prusa_process_overrides, FIELDS
 from .slicer_prusa_native_resolution import parse_prusa_profile
 from .slicer_profiles import SlicerProfileError
+from .slicer_prusa_layer_ranges import prusa_layer_config_ranges, PATH as LAYER_RANGES_PATH
 
 OBJECT_KEYS = frozenset({"wall_loops", "sparse_infill_density"})
 CONFIG_PATH = "Metadata/Slic3r_PE_model.config"
@@ -34,6 +35,7 @@ def build_prusa_native_3mf(rows, *, bed_width, bed_depth):
     config = ET.Element("config")
     total_bytes = total_faces = total_modifiers = 0
     seen_modifiers = set()
+    layer_ranges = prusa_layer_config_ranges(rows)
     for index, pair in enumerate(rows, 1):
         if not isinstance(pair, tuple) or len(pair) != 2 or not isinstance(pair[0], dict) or not isinstance(pair[1], bytes):
             raise SlicerProfileError("Invalid Prusa native project object.")
@@ -47,6 +49,7 @@ def build_prusa_native_3mf(rows, *, bed_width, bed_depth):
         native = parse_prusa_profile(apply_prusa_process_overrides(BASE, overrides), "process")
         geometry_item = dict(item)
         geometry_item.pop("process_overrides", None)
+        geometry_item.pop("variable_layer_profile", None)
         modifiers = validate_modifier_volumes(geometry_item.pop("modifier_volumes", None))
         total_modifiers += len(modifiers)
         if total_modifiers > MAX_TOTAL_MODIFIERS:
@@ -118,6 +121,8 @@ def build_prusa_native_3mf(rows, *, bed_width, bed_depth):
     with zipfile.ZipFile(output, "w", compression=zipfile.ZIP_DEFLATED, allowZip64=False) as package:
         package.writestr("3D/3dmodel.model", model_xml)
         package.writestr(CONFIG_PATH, ET.tostring(config, encoding="utf-8", xml_declaration=True))
+        if layer_ranges is not None:
+            package.writestr(LAYER_RANGES_PATH, layer_ranges)
         package.writestr("[Content_Types].xml", '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="model" ContentType="application/vnd.ms-package.3dmanufacturing-3dmodel+xml"/><Default Extension="config" ContentType="application/xml"/></Types>')
         package.writestr("_rels/.rels", '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Target="/3D/3dmodel.model" Id="rel0" Type="http://schemas.microsoft.com/3dmanufacturing/2013/01/3dmodel"/></Relationships>')
     data = output.getvalue()
