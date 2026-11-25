@@ -865,7 +865,7 @@ class SliceJobApiTests(TestCase):
         response = self.post({**self.payload, "settings": {"plate_objects": [obj]}})
         self.assertEqual(response.status_code, 400, response.content)
 
-    def test_visual_multi_stl_plate_is_saved_but_never_slicable(self):
+    def test_visual_multi_stl_plate_requires_native_profiles_before_slicing(self):
         from core.slicer_execution import SlicerExecutionError, validate_scheduling
         self.client.force_login(self.owner)
         second = FileAsset.objects.create(
@@ -886,7 +886,7 @@ class SliceJobApiTests(TestCase):
         self.assertEqual(len(row.settings["plate_objects"]), 2)
         self.assertEqual(row.settings["plate_objects"][1]["rotation_deg"], 90.0)
         self.assertFalse(result.json()["job"]["can_slice"])
-        with self.assertRaisesRegex(SlicerExecutionError, "PrusaSlicer currently supports one unmodified STL per plate"):
+        with self.assertRaisesRegex(SlicerExecutionError, "native printer profile"):
             validate_scheduling(row, {"prusaslicer": {"enabled": True, "verified": True}})
         self.assertEqual(self.client.post(f"{self.url}{row.pk}/start/").status_code, 409)
 
