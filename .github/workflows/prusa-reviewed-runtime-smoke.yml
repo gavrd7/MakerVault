@@ -256,6 +256,36 @@ jobs:
             /opt/engine-store/versions/prusaslicer/2.9.7/resources/profiles/PrusaResearch.ini \
             /tmp/mmu
 
+      - name: Build upstream Prusa 2.9.7 per-bed wipe tower position candidates
+        run: |
+          set -euo pipefail
+          export PRUSA_WIPE_DIR="$RUNNER_TEMP/prusa-native-wipe-tower"
+          mkdir -p "$PRUSA_WIPE_DIR"
+          echo "PRUSA_WIPE_DIR=$PRUSA_WIPE_DIR" >> "$GITHUB_ENV"
+          PYTHONPATH=backend:. "$RUNNER_TEMP/prusa-backend-venv/bin/python" \
+            scripts/prusa_generate_wipe_tower_research.py \
+            "$PRUSA_MMU_DIR/object.3mf" "$PRUSA_WIPE_DIR"
+
+      - name: Research real MMU purge extrusion relocation under native tower metadata
+        id: prusa_native_wipe_tower_research
+        continue-on-error: true
+        run: |
+          set -euo pipefail
+          docker run --rm --network none --user 10001:10001 \
+            -v "$TEST_VOLUME:/opt/engine-store:ro" \
+            -v "$GITHUB_WORKSPACE/scripts/prusa_native_wipe_tower_smoke.py:/tmp/prusa_wipe.py:ro" \
+            -v "$PRUSA_WIPE_DIR:/tmp/prusa-wipe:ro" \
+            --entrypoint python3 prusa-integration:smoke \
+            /tmp/prusa_wipe.py \
+            /opt/engine-store/versions/prusaslicer/2.9.7/bin/prusa-slicer \
+            /opt/engine-store/versions/prusaslicer/2.9.7/resources/profiles/PrusaResearch.ini \
+            /tmp/prusa-wipe
+
+      - name: Record unqualified Prusa native tower relocation
+        if: ${{ steps.prusa_native_wipe_tower_research.outcome == 'failure' }}
+        run: |
+          echo "::warning title=Unqualified Prusa wipe tower placement::Native per-bed 3MF placement did not prove relocated purge deposition; worker controls remain disabled."
+
       - name: Prepare isolated Prusa MMU facet colour candidates
         run: |
           set -euo pipefail
