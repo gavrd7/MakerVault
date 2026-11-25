@@ -88,10 +88,11 @@ def _decode_payload(payload):
     model_format = payload.get("model_format", "stl")
     if model_format not in {"stl", "3mf"}:
         raise WorkerError("Unsupported model input format.")
-    # Prusa's 3MF project dialect has not passed independent native acceptance.
-    # Other three engine contracts are deliberately unchanged.
-    if payload["engine"] == "prusaslicer" and model_format != "stl":
-        raise WorkerError("Prusa native 3MF input is not yet verified.")
+    if payload["engine"] == "prusaslicer" and model_format == "3mf" and (
+            payload["engine_version"] != "2.9.7" or any(key in payload for key in (
+                "filament_profiles", "creality_model_stls", "creality_tool_ids",
+                "creality_native_project", "native_modifier_project", "prusa_placed_stl"))):
+        raise WorkerError("Invalid native Prusa project execution contract.")
     if "prusa_placed_stl" in payload and (
             payload["prusa_placed_stl"] is not True or
             payload["engine"] != "prusaslicer" or
@@ -200,6 +201,9 @@ def _decode_payload(payload):
         from .creality_project_validation import validate_creality_project
         validate_creality_project(files["model"], native_tool_count=2)
         files["creality_native_project"] = True
+    elif model_format == "3mf" and payload["engine"] == "prusaslicer":
+        from .prusa_3mf_validation import validate_prusa_native_3mf
+        validate_prusa_native_3mf(files["model"])
     elif model_format == "3mf" and not files.get("native_modifier_project"):
         options = {"native_tool_count": len(files["filament_profiles"])
                    if "filament_profiles" in files else None}
