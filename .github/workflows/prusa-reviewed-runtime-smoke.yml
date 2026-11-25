@@ -95,6 +95,76 @@ jobs:
             --binary /opt/engine-store/versions/prusaslicer/2.9.7/bin/prusa-slicer \
             --vendor /opt/engine-store/versions/prusaslicer/2.9.7/resources/profiles/PrusaResearch.ini
 
+      - name: Exercise authenticated real Prusa HTTP worker end-to-end
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker run --rm --network none --user 10001:10001 \
+            -e SLICER_WORKER_TOKEN=0123456789012345678901234567890123456789 \
+            -v "$TEST_VOLUME:/opt/engine-store:ro" \
+            -v "$GITHUB_WORKSPACE/scripts/prusa_real_binary_smoke.py:/tmp/prusa_smoke.py:ro" \
+            --entrypoint python3 prusa-integration:smoke -c '
+          import base64, hashlib, json, runpy, threading, uuid
+          from pathlib import Path
+          from urllib.request import Request, urlopen
+          from urllib.error import HTTPError
+          from slicer_worker import service
+          from slicer_worker.prusa_vendor_profiles import flatten_prusa_vendor_preset
+          from slicer_worker.prusa_gcode_audit import audit_prusa_positive_e
+          from slicer_worker.prusa_runtime_install import BINARY_SHA256
+          vendor = Path("/opt/engine-store/versions/prusaslicer/2.9.7/resources/profiles/PrusaResearch.ini").read_bytes()
+          vendor_sha = hashlib.sha256(vendor).hexdigest()
+          cube = runpy.run_path("/tmp/prusa_smoke.py")["cube_stl"]()
+          native = {}
+          for kind, name, field in (
+              ("printer", "Original Prusa i3 MK2S", "printer_profile"),
+              ("filament", "Generic PLA", "filament_profile"),
+              ("print", "0.20mm NORMAL", "process_profile")):
+              native[field] = base64.b64encode(flatten_prusa_vendor_preset(
+                  vendor, kind=kind, name=name,
+                  expected_sha256=vendor_sha)).decode("ascii")
+          worker = service.BoundedWorkerHTTPServer(("127.0.0.1", 0), service.Handler)
+          thread = threading.Thread(target=worker.serve_forever, daemon=True)
+          thread.start()
+          base = "http://127.0.0.1:" + str(worker.server_address[1])
+          try:
+              with urlopen(base + "/health", timeout=10) as reply:
+                  health = json.load(reply)
+              assert health["engines"]["prusaslicer"]["binary_sha256"] == BINARY_SHA256
+              assert "orcaslicer" in health["engines"]
+              payload = {
+                  "job_id": str(uuid.uuid4()),
+                  "engine": "prusaslicer", "engine_version": "2.9.7",
+                  "model_format": "stl", "model": base64.b64encode(cube).decode(),
+                  **native,
+              }
+              data = json.dumps(payload).encode("utf-8")
+              unauthorised = Request(base + "/v1/slice", data=data,
+                                     headers={"Content-Type": "application/json"})
+              try:
+                  urlopen(unauthorised, timeout=10)
+                  raise AssertionError("Worker accepted an unauthenticated job")
+              except HTTPError as error:
+                  assert error.code == 403
+              request = Request(base + "/v1/slice", data=data, headers={
+                  "Content-Type": "application/json",
+                  "Authorization": "Bearer 0123456789012345678901234567890123456789",
+              })
+              with urlopen(request, timeout=120) as response:
+                  assert response.status == 200
+                  result = json.load(response)
+              gcode = base64.b64decode(result["gcode"], validate=True)
+              assert result["bytes"] == len(gcode)
+              assert result["sha256"] == hashlib.sha256(gcode).hexdigest()
+              quality = audit_prusa_positive_e(gcode)
+              assert quality["positive_e_moves"] >= 20, quality
+              print("PASS: real authenticated native Prusa HTTP STL slice, "
+                    + str(quality["positive_e_moves"]) + " positive-E moves.")
+          finally:
+              worker.shutdown()
+              worker.server_close()
+          '
+
       - name: Uninstall and reinstall Prusa without affecting Orca
         shell: bash
         run: |
