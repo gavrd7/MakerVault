@@ -186,8 +186,9 @@ class PrusaSingleMaterialAdmissionTests(TestCase):
                               owner=None, printer_profile_id="verified")
         self.assertTrue(_validate_plate_execution(job))
         job.settings["plate_objects"].append(dict(base))
-        with self.assertRaisesRegex(SlicerExecutionError, "multi-model modifiers"):
-            _validate_plate_execution(job)
+        # Native 2.9.7 G-code now demonstrates per-object modifier and
+        # subtraction effects on two independent printable resources.
+        self.assertTrue(_validate_plate_execution(job))
         job.settings["plate_objects"] = [{**base, "modifier_volumes": [
             {**volume, "coordinate_space": "bad"}]}]
         with self.assertRaises(SlicerExecutionError):
