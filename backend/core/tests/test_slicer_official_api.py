@@ -44,6 +44,43 @@ class OfficialProfileApiTests(TestCase):
         self.assertEqual(response.json()["engine_version"], "2.4.2")
         self.assertEqual(fetch.call_args.args, ("K2", "printer", "Creality"))
 
+    def test_search_pages_preserve_all_filters_and_reject_invalid_page(self):
+        self.client.force_login(self.user)
+        matches = [{"name": f"Preset {i}", "sub_path": f"filament/preset-{i}.json"}
+                   for i in range(95)]
+
+        def fake_search(query, kind, vendor, *, printer_model=None, offset=0):
+            self.assertEqual((query, kind, vendor), ("PLA", "filament", "Creality"))
+            self.assertEqual(printer_model, None)
+            return {
+                "engine": "crealityprint", "vendor": vendor,
+                "profiles": matches[offset:offset + 40], "total_matches": len(matches),
+            }
+
+        with patch("core.slicer_api.search_creality_profiles", side_effect=fake_search) as search:
+            for page, expected, length in ((1, "Preset 0", 40),
+                                           (2, "Preset 40", 40),
+                                           (3, "Preset 80", 15)):
+                response = self.client.get(self.url, {
+                    "engine": "crealityprint", "version": "7.3.1",
+                    "vendor": "Creality", "kind": "filament", "q": "PLA", "page": page,
+                })
+                self.assertEqual(response.status_code, 200, response.content)
+                payload = response.json()
+                self.assertEqual(payload["page"], page)
+                self.assertEqual(payload["page_size"], 40)
+                self.assertEqual(payload["total_pages"], 3)
+                self.assertEqual(payload["total_matches"], 95)
+                self.assertEqual(len(payload["profiles"]), length)
+                self.assertEqual(payload["profiles"][0]["name"], expected)
+            self.assertEqual(search.call_count, 3)
+
+        for invalid in ("0", "-1", "1.5", "abcd", "10001", "999999999"):
+            response = self.client.get(self.url, {
+                "engine": "crealityprint", "version": "7.3.1", "page": invalid,
+            })
+            self.assertEqual(response.status_code, 400, invalid)
+
     def test_prusa_imports_flat_native_ini_only_as_owner_candidate(self):
         self.client.force_login(self.user)
         selection = {
