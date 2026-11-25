@@ -27,8 +27,9 @@ def main(directory):
                 and (max(p[0] for p in tri)-min(p[0] for p in tri) < .0001
                      or max(p[1] for p in tri)-min(p[1] for p in tri) < .0001))
     first = local[side]
-    midpoint = [sum(v[i] for v in first)/3 for i in range(3)]
-    patch = [[(v[i]+midpoint[i])/2 for i in range(3)] for v in first]
+    # Paint exactly one full source facet: baseline and painted project keep
+    # identical geometry, so any changed G-code is caused by paint semantics.
+    patch = [list(point) for point in first]
     signature = _fingerprint(local)
     def painted(slot):
         return {"version": 2, "signature": signature,
