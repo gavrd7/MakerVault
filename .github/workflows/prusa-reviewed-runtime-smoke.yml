@@ -411,6 +411,8 @@ jobs:
             -v "$PRUSA_REGION_DIR:/tmp/regions:ro" \
             -v "$PRUSA_LAYER_DIR:/tmp/layers:ro" \
             -v "$PRUSA_MULTI_REGION_DIR:/tmp/two-regions:ro" \
+            -v "$PRUSA_PAINT_DIR:/tmp/paint:ro" \
+            -v "$PRUSA_SUPPORT_DIR:/tmp/support:ro" \
             --entrypoint python3 prusa-integration:smoke \
             /tmp/prusa_native_http_3mf_smoke.py \
             /opt/engine-store/versions/prusaslicer/2.9.7/resources/profiles/PrusaResearch.ini \
@@ -419,7 +421,10 @@ jobs:
             negative=/tmp/regions/negative.3mf \
             variable=/tmp/layers/layer.3mf \
             two-modifier=/tmp/two-regions/modifier.3mf \
-            two-negative=/tmp/two-regions/negative.3mf
+            two-negative=/tmp/two-regions/negative.3mf \
+            fuzzy=/tmp/paint/fuzzy.3mf \
+            support-enforced=/tmp/support/enforced.3mf \
+            support-blocked=/tmp/support/blocked.3mf
 
       - name: Uninstall and reinstall Prusa without affecting Orca
         shell: bash
