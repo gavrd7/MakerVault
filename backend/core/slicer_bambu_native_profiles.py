@@ -51,7 +51,7 @@ def _entries(kind, vendor="BBL"):
     return result
 
 
-def search_bambu_native_profiles(query, kind, vendor="BBL", printer_model=None):
+def search_bambu_native_profiles(query, kind, vendor="BBL", printer_model=None, *, offset=0):
     if not isinstance(query, str) or len(query.strip()) > 80:
         raise OfficialProfileError("Search terms must be 80 characters or fewer.")
     entries = _entries(kind, vendor)
@@ -67,7 +67,7 @@ def search_bambu_native_profiles(query, kind, vendor="BBL", printer_model=None):
     return {
         "engine": ENGINE, "engine_version": ENGINE_VERSION, "vendor": vendor,
         "kind": kind, "source": SOURCE, "ref": REF,
-        "profiles": [{"name": name, "sub_path": path} for name, path in matches[:40]],
+        "profiles": [{"name": name, "sub_path": path} for name, path in matches[offset:offset + 40]],
         "total_matches": len(matches), "import_status": "candidate_only",
         "model_artwork_only": False,
     }
