@@ -78,11 +78,12 @@ def append_native_colour(source, attrs):
                 for face,tags in zip(triangles,attrs):
                     value=tags.get("paint_color")
                     if value is not None:
-                        # Prusa's Expat parser matches the literal slic3rpe prefix.
-                        # Unlike Orca paint_color, Prusa state 1 selects T1,
-                        # with the native leaf nibble encoded as "4".
-                        face.set("slic3rpe:mmu_segmentation",
-                                 "4" if value == "8" else value)
+                        # Prusa 2.9.7 TriangleStateType::Extruder2 = 2,
+                        # with the unsplit leaf nibble 2 << 2 = 0x8.
+                        # ModelVolume::get_extruders_from_multi_material_painting
+                        # maps state index 2 to zero-based tool T1, not T0.
+                        # Keep the literal slic3rpe prefix for Prusa's importer.
+                        face.set("slic3rpe:mmu_segmentation", value)
                 raw=ET.tostring(model,encoding="utf-8",xml_declaration=True)
             if name=="Metadata/Slic3r_PE_model.config":
                 root=SafeET.fromstring(raw)
