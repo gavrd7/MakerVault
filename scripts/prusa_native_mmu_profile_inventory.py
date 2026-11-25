@@ -48,9 +48,13 @@ def main(path):
     print("PINNED XL MODEL PRESETS:", len(xl))
     for name in xl:
         try:
-            profile = validate_flat_prusa_preset(flatten_prusa_vendor_preset(
-                raw, kind="printer", name=name, expected_sha256=sha),
-                kind="printer")
+            flattened = flatten_prusa_vendor_preset(
+                raw, kind="printer", name=name, expected_sha256=sha)
+            # Trusted catalogue-only text-mode conversion mirrors the
+            # private application importer. Do not change arbitrary INI.
+            flattened = bytes(flattened).replace(
+                b"binary_gcode = 1", b"binary_gcode = 0")
+            profile = validate_flat_prusa_preset(flattened, kind="printer")
         except ValueError as exc:
             print("UNRESOLVED XL", repr(name), str(exc))
             continue
