@@ -79,6 +79,38 @@ class PrusaSingleMaterialAdmissionTests(TestCase):
         with self.assertRaisesRegex(SlicerExecutionError, "multi-material"):
             _validate_plate_execution(job)
 
+    def test_unmodified_visual_stl_with_native_printer_profile_is_slicable(self):
+        from core.slicer_execution import _validate_plate_execution
+        cube = {
+            "asset_id": "original-cube",
+            "x_mm": 0, "y_mm": 0, "z_mm": 0,
+            "rotation_deg": 0, "scale_percent": 100,
+            "rotation_xyz_deg": [0, 0],
+            "scale_xyz_percent": [100, 100, 100],
+        }
+        job = SimpleNamespace(
+            engine="prusaslicer", engine_version="2.9.7",
+            settings={"plate_objects": [cube]}, owner=None,
+            printer_profile_id="official-prusa-printer",
+            printer_id=None, filament_profile_id=None,
+        )
+        self.assertTrue(_validate_plate_execution(job))
+
+    def test_unmodified_visual_stl_without_printer_profile_stays_blocked(self):
+        from core.slicer_execution import _validate_plate_execution, SlicerExecutionError
+        job = SimpleNamespace(
+            engine="prusaslicer", engine_version="2.9.7",
+            settings={"plate_objects": [{
+                "x_mm": 0, "y_mm": 0, "z_mm": 0,
+                "rotation_deg": 0, "scale_percent": 100,
+                "rotation_xyz_deg": [0, 0],
+                "scale_xyz_percent": [100, 100, 100],
+            }]}, owner=None,
+            printer_profile_id=None, printer_id=None, filament_profile_id=None,
+        )
+        with self.assertRaisesRegex(SlicerExecutionError, "native printer profile"):
+            _validate_plate_execution(job)
+
     def test_transformed_prusa_plate_is_not_silently_flattened_to_stl(self):
         from core.slicer_execution import _validate_plate_execution, SlicerExecutionError
         job = SimpleNamespace(engine="prusaslicer", engine_version="2.9.7",
