@@ -34,11 +34,13 @@ class SlicerCapabilityTests(SimpleTestCase):
                 item["status"] == "unverified"
                 for item in native_capabilities(engine, "2.5.0").values()))
 
-    def test_pinned_prusa_variable_layers_verified_without_claiming_paint_parity(self):
+    def test_pinned_prusa_verified_layers_support_fuzzy_without_claiming_seam_colour(self):
         caps = native_capabilities("prusaslicer", "2.9.7")
         self.assertEqual(caps["variable_layer_profile"]["status"], "verified")
         self.assertTrue(all(caps[name]["status"] == "unverified" for name in (
-            "colour_paint", "seam_paint", "support_paint", "fuzzy_skin_paint")))
+            "colour_paint", "seam_paint")))
+        self.assertTrue(all(caps[name]["status"] == "verified" for name in (
+            "support_paint", "fuzzy_skin_paint")))
         self.assertEqual(native_capabilities("prusaslicer", "2.9.6")["variable_layer_profile"]["status"],
                          "unverified")
 
