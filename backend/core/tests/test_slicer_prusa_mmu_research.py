@@ -20,7 +20,7 @@ class PrusaResearchMmuFacetDialectTests(TestCase):
         with zipfile.ZipFile(io.BytesIO(archive)) as z:
             xml = z.read("3D/3dmodel.model")
         self.assertIn(b'xmlns:slic3rpe="http://schemas.slic3r.org/3mf/2017/06"', xml)
-        self.assertIn(b'slic3rpe:mmu_segmentation="4"', xml)
+        self.assertIn(b'slic3rpe:mmu_segmentation="8"', xml)
         self.assertIn(b'name="slic3rpe:MmPaintingVersion"', xml)
         self.assertNotIn(b'ns1:mmu_segmentation', xml)
-        self.assertNotIn(b'slic3rpe:mmu_segmentation="8"', xml)
+        self.assertNotIn(b'slic3rpe:mmu_segmentation="4"', xml)
