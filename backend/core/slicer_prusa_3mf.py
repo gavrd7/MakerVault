@@ -187,9 +187,19 @@ def validate_prusa_project_admission(plate, settings, version):
                 (row.get("fuzzy_skin_paint") or {}).get("faces")):
             raise ValueError("Prusa requires fingerprinted native facet regions.")
         if support or fuzzy:
-            if len(plate) != 1 or overrides or row.get("modifier_volumes") or (
-                    row.get("variable_layer_profile") or {}).get("bands"):
+            two_fuzzy = len(plate) == 2 and bool(fuzzy) and not support and (
+                sum(bool((entry.get("fuzzy_skin_paint") or {}).get("regions"))
+                    for entry in plate) == 1)
+            if ((len(plate) != 1 and not two_fuzzy) or overrides or
+                    row.get("modifier_volumes") or
+                    (row.get("variable_layer_profile") or {}).get("bands"):
                 raise ValueError("Prusa painted facets with other object extensions are not yet verified.")
+            if two_fuzzy and any(other.get("process_overrides") or
+                                 other.get("modifier_volumes") or
+                                 (other.get("support_paint") or {}).get("regions") or
+                                 (other.get("variable_layer_profile") or {}).get("bands")
+                                 for other in plate):
+                raise ValueError("Prusa two-object fuzzy skin cannot combine other regional extensions.")
             if support and fuzzy:
                 raise ValueError("Combined support and fuzzy skin require a regional G-code fixture.")
             if not isinstance(support, list) or not isinstance(fuzzy, list) or any(
