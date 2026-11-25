@@ -66,6 +66,20 @@ class PrusaProjectDialectTests(TestCase):
                 self.assertEqual(receipt["regions"], 1)
                 self.assertEqual(receipt["objects"], 1)
 
+    def test_all_shared_primitive_region_meshes_remain_native_prusa_volumes(self):
+        from core.slicer_modifier_volumes import PRIMITIVE_SHAPES
+        for shape in sorted(PRIMITIVE_SHAPES):
+            with self.subTest(shape=shape):
+                modifier = {**volume("modifier", {"wall_loops": 4}),
+                            "shape": shape}
+                project = build_prusa_native_3mf([
+                    (item(modifier_volumes=[modifier]), cube())
+                ], bed_width=250, bed_depth=210)
+                check = validate_prusa_native_3mf(project)
+                self.assertEqual(check["objects"], 1)
+                self.assertEqual(check["regions"], 1)
+                self.assertGreater(check["triangles"], 12)
+
     def test_native_prusa_support_seam_and_fuzzy_annotations_roundtrip(self):
         from core.slicer_plate_3mf import _triangles
         from core.slicer_native_support_paint import _fingerprint
