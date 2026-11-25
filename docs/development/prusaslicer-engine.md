@@ -1,3 +1,12 @@
+## Prusa seam and MMU native research continuation — 25 November 2026
+
+- Genuine Prusa 2.9.7 seam enforcer evidence: [run 45693338338](https://github.com/gavrd7/MakerVault/actions/runs/45693338338) changed first external perimeter start from x=115.22 (baseline, 69 measured layers) to x=134.78 (painted enforcer, 69 measured layers). A new bounded Prusa-only checker `slicer_prusa_seam_audit.py` verifies first positive-E external-perimeter starts against the *actual painted triangle polygon* and refuses a false baseline. Research test workflow runs the pinned binary and identical geometry; production seam admission is still blocked until the positive/negative native audit is green.
+- Genuine MMU two-model colour routing already verified with 5-virtual-extruder MK3S MMU3 profiles: each tool deposits on its own intended cube, with native tool changes and wipe tower comments. The **first painted MMU facet variant failed** [run 45694139487](https://github.com/gavrd7/MakerVault/actions/runs/45694139487): G-code remained entirely T0, so the worker stays blocked for Prusa MMU painting.
+- Source inspection at immutable upstream `src/libslic3r/Format/3mf.cpp` confirmed Prusa's XML parser reads the **literal** `slic3rpe:mmu_segmentation` attribute; ElementTree's `ns1:mmu_segmentation` substitution is not accepted. `TriangleSelector.cpp` states encode the second logical tool (state 1) as leaf nibble `4`, whereas Orca's reused helper encoded it as `8`. Research fixture now uses the correct prefix and state and restores the namespace declaration after XML round-trip, with a structural test. **Native semantic retest pending**; no normal tool mapping, purge validation or MMU print dispatch is enabled.
+- PR #199 remains draft for full-feature parity, and the three production engines' implementations are unchanged.
+
+---
+
 ## 25 November — verified native support and selective fuzzy skin; MMU research underway
 
 - Exact 2.9.7 source-pinned genuine CLI [run 45691151637](https://github.com/gavrd7/MakerVault/actions/runs/45691151637): **manual painted support enforcer** on same-geometry cantilever generated 1,704 native support-material and 601 interface extrusion moves; unpainted geometry-control generated none. The painted **support blocker** altered native auto-support composition from 1,694 material/617 interface moves to 2,274 material/47 interface; it did not silently disappear.
