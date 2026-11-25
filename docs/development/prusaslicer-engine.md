@@ -1,3 +1,12 @@
+## Prusa MMU genuine native qualification — 25 November 2026, follow-up
+
+- Complete pinned native 2.9.7 [run 45721946986](https://github.com/gavrd7/MakerVault/actions/runs/45721946986) **passed**: isolated model-tool validator, correct 3MF tool assignments, application-generated native MMU colour faceting with T1 on 392 painted external wall moves and T0 on 234 opposite-wall moves, native independent logical temperature vectors producing real `M104 S205` and `M104 S220` commands, 80 vs 220 mm³ purge matrix changing actual tower extrusion (18,464.88→24,415.57 E mm) and tower XY relocation by 130.64 mm. Genuine nozzle heating or physical printing has not been tested.
+- Added independent `slicer_worker/prusa_material_gcode_audit.py` to audit assigned T0/T1 positive-E model deposition against actual generated 3MF mesh footprints, rejecting wrong-tool model extrusion and ambiguous overlap. Added targeted tests; the new opt-in full native workflow must be checked for this exact implementation before production use.
+- Research-only multi-material project validation now optionally checks exact Prusa native per-bed wipe tower metadata, rejecting off-bed or forged positions. **None of these new research paths are called from the authenticated production worker yet**. Original Orca, Creality and Bambu worker contracts remain unchanged. Finish full Prusa parity before merging PR #199.
+- Known native negative evidence still retained: general directional seam painting and two-object painted support isolation are not qualified, so do not enable them merely because the native CLI produced a file. Physical MMU/XL printer submission remains unverified and disabled.
+
+---
+
 ## 25 November 2026 — Prusa MMU/XL palette, purge and colour qualification follow-up
 
 - PR #199 remains **draft**; finish full engine parity before merge. No staging/production deploy and no changes to other existing slicer execution paths. No Prusa hardware exists for physical qualification.
