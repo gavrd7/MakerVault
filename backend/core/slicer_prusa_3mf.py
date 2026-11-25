@@ -11,7 +11,8 @@ from xml.etree import ElementTree as ET
 
 from .slicer_plate_3mf import NS, MAX_PROJECT_BYTES, MAX_TRIANGLES, MAX_SOURCE_TOTAL
 from .slicer_prusa_plate import build_prusa_placed_stl
-from .slicer_modifier_volumes import validate_modifier_volumes, MAX_TOTAL_MODIFIERS
+from .slicer_modifier_volumes import (validate_modifier_volumes, MAX_TOTAL_MODIFIERS,
+                                      assert_native_plate_volume_coverage)
 from .slicer_modifier_3mf import _modifier_parent_transform, _add_child_mesh
 from .slicer_prusa_process_settings import apply_prusa_process_overrides, FIELDS
 from .slicer_prusa_native_resolution import parse_prusa_profile
@@ -123,3 +124,52 @@ def build_prusa_native_3mf(rows, *, bed_width, bed_depth):
     if len(data) > MAX_PROJECT_BYTES:
         raise SlicerProfileError("Prusa native project archive exceeds limit.")
     return data
+
+def validate_prusa_project_admission(plate, settings, version):
+    """Admit exactly the pinned Prusa single-material, single-parent region route.
+
+    Shared BBS-family version gates deliberately remain unchanged. This gate
+    covers Prusa's *different* native 3MF dialect and matches its validator.
+    """
+    if not isinstance(plate, list):
+        return False
+    if version != "2.9.7":
+        raise ValueError("Native Prusa project requires the qualified PrusaSlicer 2.9.7 runtime.")
+    if not isinstance(settings, dict):
+        raise ValueError("Invalid native Prusa plate settings.")
+    assert_native_plate_volume_coverage(plate, settings)
+    if not 1 <= len(plate) <= 12 or any(not isinstance(row, dict) for row in plate):
+        raise ValueError("Native Prusa plate requires one to twelve printable objects.")
+    if any(settings.get(key) for key in (
+            "multi_material_test", "material_tool_bindings", "slot_filament_profiles",
+            "prime_tower")) or settings.get("flush_settings") is not None:
+        raise ValueError("Native Prusa project cannot combine unqualified multi-material settings.")
+    if settings.get("creality_auto_arrange_offline"):
+        raise ValueError("Native Prusa project cannot use Creality auto-arrangement.")
+    seen = set()
+    total = 0
+    for row in plate:
+        overrides = row.get("process_overrides") or {}
+        if not isinstance(overrides, dict) or set(overrides) - OBJECT_KEYS:
+            raise ValueError("Unsupported native Prusa object process settings.")
+        apply_prusa_process_overrides(BASE, overrides)
+        if any(
+            (row.get(key) or {}).get("regions") or (row.get(key) or {}).get("faces")
+            for key in ("colour_paint", "support_paint", "seam_paint", "fuzzy_skin_paint")
+        ) or (row.get("variable_layer_profile") or {}).get("bands"):
+            raise ValueError("Native Prusa painting and variable layers are not qualified.")
+        if row.get("negative_volumes"):
+            raise ValueError("Legacy negative volumes need explicit native volume representation.")
+        volumes = validate_modifier_volumes(row.get("modifier_volumes"))
+        total += len(volumes)
+        if total > MAX_TOTAL_MODIFIERS:
+            raise ValueError("Prusa native modifier count exceeds the limit.")
+        if len(plate) > 1 and volumes:
+            raise ValueError("Prusa native modifiers currently require a single parent model.")
+        for volume in volumes:
+            if volume["id"] in seen:
+                raise ValueError("Duplicate Prusa native volume identity.")
+            seen.add(volume["id"])
+            if volume["kind"] == "negative" and volume.get("coordinate_space") != "world":
+                raise ValueError("Prusa negative volumes require independent plate coordinates.")
+    return total > 0
