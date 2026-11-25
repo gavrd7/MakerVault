@@ -477,19 +477,25 @@ def _validate_plate_execution(job):
                  settings.get("multi_material_test") is True)):
             raise SlicerExecutionError(
                 "Variable layer slicing requires a verified native engine and profile.")
-        if len(objects) != 1 or (settings.get("multi_material_test") and job.engine not in {"crealityprint", "bambustudio"}):
+        prusa_native = job.engine == "prusaslicer" and job.engine_version == "2.9.7"
+        if (len(objects) != 1 and (not prusa_native or len(objects) != 2)) or (
+                settings.get("multi_material_test") and
+                job.engine not in {"crealityprint", "bambustudio"}):
             raise SlicerExecutionError(
-                "Variable layer test slicing requires one model (Creality: one two-colour CFS model).")
-        item = objects[0]
-        if any(abs(float(x)) > 0.000001 for x in
-               item.get("rotation_xyz_deg", [0, 0])) or abs(float(item.get("z_mm", 0))) > 0.000001:
-            raise SlicerExecutionError(
-                "Variable layer test slicing requires an upright, non-elevated model.")
-        if (abs(float(item.get("scale_percent", 100)) - 100) > 0.000001 or
-               any(abs(float(x) - 100) > 0.000001 for x in
-                   item.get("scale_xyz_percent", [item.get("scale_percent", 100)] * 3))):
-            raise SlicerExecutionError(
-                "Variable layer test slicing requires an unscaled model.")
+                "Variable layer test slicing requires one model (Prusa 2.9.7 permits two independently audited models).")
+        # The pinned native Prusa 2.9.7 real-binary two-cube fixture proved
+        # independent per-object layer schedules. Both source models must
+        # remain upright and Z-unscaled for that isolated acceptance.
+        for item in (objects if prusa_native else objects[:1]):
+            if any(abs(float(x)) > 0.000001 for x in
+                   item.get("rotation_xyz_deg", [0, 0])) or abs(float(item.get("z_mm", 0))) > 0.000001:
+                raise SlicerExecutionError(
+                    "Variable layer test slicing requires upright, non-elevated models.")
+            if (abs(float(item.get("scale_percent", 100)) - 100) > 0.000001 or
+                   any(abs(float(x) - 100) > 0.000001 for x in
+                       item.get("scale_xyz_percent", [item.get("scale_percent", 100)] * 3))):
+                raise SlicerExecutionError(
+                    "Variable layer test slicing requires unscaled models.")
         if any(item.get("process_overrides") for item in objects):
             raise SlicerExecutionError(
                 "Combine variable layer height with Object settings after the native test fixture.")
