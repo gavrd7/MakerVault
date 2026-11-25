@@ -9,6 +9,7 @@ import io
 import math
 import zipfile
 from xml.etree import ElementTree as ET
+from defusedxml import ElementTree as SafeET
 
 from .prusa_3mf_validation import validate_prusa_native_3mf, CONFIG, PARTS, NS
 from .runner import WorkerError
@@ -78,7 +79,7 @@ def validate_prusa_material_candidate(data, *, printer_ini, tools=None, colour=F
             tower_xml=parts.pop(TOWER)
             if b"<!" in tower_xml or b"\x00" in tower_xml:
                 _refuse()
-            info=ET.fromstring(tower_xml)
+            info=SafeET.fromstring(tower_xml)
             if info.tag!="wipe_tower_information" or len(info) or set(info.attrib)!={
                     "bed_idx","position_x","position_y","rotation_deg"} or info.get("bed_idx")!="0":
                 _refuse()
@@ -88,8 +89,8 @@ def validate_prusa_material_candidate(data, *, printer_ini, tools=None, colour=F
         for xml_part in (MODEL,CONFIG):
             if b"<!" in parts[xml_part] or b"\x00" in parts[xml_part]:
                 _refuse()
-        model=ET.fromstring(parts[MODEL])
-        cfg=ET.fromstring(parts[CONFIG])
+        model=SafeET.fromstring(parts[MODEL])
+        cfg=SafeET.fromstring(parts[CONFIG])
         objects=cfg.findall("object")
         if (cfg.tag!="config" or cfg.attrib or len(objects)!=len(cfg)
             or (colour and len(objects)!=1)
