@@ -157,6 +157,37 @@ class PrusaSingleMaterialAdmissionTests(TestCase):
                 with self.assertRaisesRegex(SlicerExecutionError, "not yet verified"):
                     _validate_plate_execution(job)
 
+    def test_native_support_enforcer_blocker_and_fuzzy_admit_separately(self):
+        from core.slicer_execution import _validate_plate_execution, SlicerExecutionError
+        def paint(slot=0):
+            return {"version": 2, "signature": "12:deadbeef",
+                    "regions": [{"slot": slot, "patches": [{
+                        "face": 0, "polygon": [[0,0,0],[1,0,0],[0,1,0]]}]}]}
+        base = {"asset_id": "owned-cube", "x_mm": 0, "y_mm": 0,
+                "z_mm": 0, "rotation_deg": 0, "scale_percent": 100}
+        for field, value in (
+            ("support_paint", paint(0)),
+            ("support_paint", paint(1)),
+            ("fuzzy_skin_paint", paint(0)),
+        ):
+            with self.subTest(field=field,value=value):
+                job = SimpleNamespace(engine="prusaslicer", engine_version="2.9.7",
+                                      settings={"plate_objects": [{**base, field: value}]},
+                                      owner=None, printer_profile_id="verified")
+                self.assertTrue(_validate_plate_execution(job))
+        for extras in (
+            {"support_paint": paint(0), "fuzzy_skin_paint": paint(0)},
+            {"support_paint": paint(0), "process_overrides": {"wall_loops": 4}},
+            {"fuzzy_skin_paint": paint(0), "variable_layer_profile":
+                {"version": 1, "bands": [{"from_mm": 3, "to_mm": 10, "layer_mm": .12}]}},
+        ):
+            with self.subTest(extras=extras):
+                job = SimpleNamespace(engine="prusaslicer", engine_version="2.9.7",
+                                      settings={"plate_objects": [{**base, **extras}]},
+                                      owner=None, printer_profile_id="verified")
+                with self.assertRaises(SlicerExecutionError):
+                    _validate_plate_execution(job)
+
     def test_prusa_valid_object_overrides_admitted_without_modifiers(self):
         from core.slicer_execution import _validate_plate_execution
         job = SimpleNamespace(engine="prusaslicer", engine_version="2.9.7",
