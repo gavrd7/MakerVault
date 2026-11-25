@@ -46,17 +46,19 @@ def native_capabilities(engine, version):
         }
         result["fuzzy_skin_paint"] = {
             "status": "verified",
-            "reason": ("Native Prusa 2.9.7 selectively altered external wall "
-                       "toolpaths at the painted surface, leaving the opposite "
-                       "wall unchanged. Limited to one upright, unscaled, "
-                       "single-material model without mixed native extensions."),
+            "reason": ("Native Prusa 2.9.7 selectively altered external walls without "
+                       "changing the unpainted neighbour in a genuine two-object "
+                       "G-code comparison. Supports one or two upright unscaled "
+                       "single-material models, exactly one painted in two-model "
+                       "jobs, and no unqualified mixed native extensions."),
         }
         result["variable_layer_profile"] = {
             "status": "verified",
-            "reason": ("Pinned PrusaSlicer 2.9.7 native per-object 3MF layer ranges "
-                       "passed real-binary Z-step acceptance. Currently one "
-                       "upright, unscaled, non-elevated model without other "
-                       "unverified per-object combinations."),
+            "reason": ("PrusaSlicer 2.9.7 native per-object ranges passed real-binary "
+                       "G-code Z-step acceptance, including two independent "
+                       "models retaining separate layer schedules. Currently up "
+                       "to two upright, unscaled, non-elevated single-material "
+                       "models without unqualified native combinations."),
         }
     if engine == "crealityprint" and version.startswith("7.3."):
         result["colour_paint"] = {
