@@ -77,7 +77,7 @@ def _decode_payload(payload):
         "model", "printer_profile", "filament_profile", "process_profile",
     }
     if not isinstance(payload, dict) or not expected.issubset(payload) or (
-            set(payload) - expected - {"model_format", "filament_profiles", "creality_model_stls", "creality_tool_ids", "creality_native_project", "native_modifier_project"}):
+            set(payload) - expected - {"model_format", "filament_profiles", "creality_model_stls", "creality_tool_ids", "creality_native_project", "native_modifier_project", "prusa_placed_stl"}):
         raise WorkerError("Invalid slicing job payload.")
     try:
         uuid.UUID(str(payload["job_id"]))
@@ -92,6 +92,14 @@ def _decode_payload(payload):
     # Other three engine contracts are deliberately unchanged.
     if payload["engine"] == "prusaslicer" and model_format != "stl":
         raise WorkerError("Prusa native 3MF input is not yet verified.")
+    if "prusa_placed_stl" in payload and (
+            payload["prusa_placed_stl"] is not True or
+            payload["engine"] != "prusaslicer" or
+            payload["engine_version"] != "2.9.7" or model_format != "stl" or
+            any(key in payload for key in (
+                "filament_profiles", "creality_model_stls", "creality_tool_ids",
+                "creality_native_project", "native_modifier_project"))):
+        raise WorkerError("Invalid Prusa placed-STL execution contract.")
     files = {"model_format": model_format}
     for key, limit in (
         ("model", MAX_MODEL_BYTES),
@@ -109,6 +117,8 @@ def _decode_payload(payload):
         if not raw or len(raw) > limit:
             raise WorkerError("Invalid slicing input size.")
         files[key] = raw
+    if payload.get("prusa_placed_stl") is True:
+        files["prusa_placed_stl"] = True
     if "filament_profiles" in payload:
         palette = payload["filament_profiles"]
         if (not ((payload["engine"] in {"orcaslicer", "bambustudio"} and model_format == "3mf") or
@@ -278,6 +288,8 @@ class Handler(BaseHTTPRequestHandler):
                     (workdir / "creality-native-project.marker").write_text("v1")
                 if files.get("native_modifier_project"):
                     (workdir / "native-modifier-project.marker").write_text("v1")
+                if files.get("prusa_placed_stl"):
+                    (workdir / "prusa-placed-stl.marker").write_text("v1")
                 if "creality_model_stls" in files:
                     for index, raw in enumerate(files["creality_model_stls"]):
                         (workdir / ("input-" + str(index) + ".stl")).write_bytes(raw)
