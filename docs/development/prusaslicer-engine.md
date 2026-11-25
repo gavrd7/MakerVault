@@ -1,3 +1,15 @@
+## 25 November 2026 — Prusa MMU/XL palette, purge and colour qualification follow-up
+
+- PR #199 remains **draft**; finish full engine parity before merge. No staging/production deploy and no changes to other existing slicer execution paths. No Prusa hardware exists for physical qualification.
+- Added research-only owner-scoped **Prusa filament palette compiler**, deriving native ordered per-tool `temperature` and `first_layer_temperature` vectors from independently resolved, digest-checked private filament assets. Differing other filament settings are refused, not quietly flattened. Corresponding tests cover owner checks and MMU/XL logical tool counts.
+- Added strictly bounded directional native `wiping_volumes_matrix` compiler with explicit zero diagonal, maximum 1000 mm³ transition and immutable user process profile; no user purge settings enter the production worker. The pinned real CLI smoke now compares different purge matrices by actual positive extruder movement in the tower, which must be confirmed in the workflow logs before claiming semantic acceptance.
+- Added application-native **two-colour Prusa MMU painted 3MF candidate exporter** using fingerprint-checked facet geometry, exact `slic3rpe:mmu_segmentation` and `MmPaintingVersion` tags, and explicit T0/T1 assignment. The previously isolated research fixture now uses this same exporter and a separate spatial G-code wall deposition audit. Unlike the existing exporter it is still **not wired into authenticated production admission**.
+- Added **research-only independent candidate validator** in the worker source tree. It strips only explicitly validated MMU model/volume assignments or painted facets and then runs the existing strict single-material 3MF verifier over the rest; it requires an explicit native printer topology and rejects wrong tool count, malformed XML, executable metadata and arbitrary project parts. The normal worker continues to reject unqualified MMU/XL projects. No multicolour printer submission is authorised.
+- Standard CI for the previous baseline was green. Subsequent passes have additional tests (material candidate tamper, topology, colour geometry, painted-wall deposition); check the **exact latest branch head's** CI before claiming green. The genuine pinned native runtime workflow remains a separate opt-in acceptance and no physical device checks have happened.
+- Outstanding gates: verify the new colour candidate and purge matrices with genuine 2.9.7 CLI and authenticated isolated worker, broaden only independently proven filament settings, five-tool MMU/XL handling, per-surface colour and support/seam correctness, complete UI parity, print submission compatibility and regression/staging verification.
+
+---
+
 ## Ongoing full-parity development — native evidence and guarded routes (25 November 2026)
 
 - **Do not merge PR #199 until Prusa reaches the requested feature parity**. All three released slicers must remain unchanged. The user has no physical Prusa printer and does not need to intervene during routine source development.
