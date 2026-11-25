@@ -358,6 +358,26 @@ jobs:
             /opt/engine-store/versions/prusaslicer/2.9.7/resources/profiles/PrusaResearch.ini \
             /tmp/fixtures/baseline.3mf /tmp/fixtures/modifier.3mf /tmp/fixtures/negative.3mf
 
+      - name: Generate precise Prusa support seam and fuzzy paint fixtures
+        run: |
+          set -euo pipefail
+          echo "PRUSA_PAINT_DIR=$RUNNER_TEMP/prusa-paint" >> "$GITHUB_ENV"
+          PYTHONPATH=backend:. "$RUNNER_TEMP/prusa-backend-venv/bin/python" scripts/prusa_generate_paint_fixtures.py "$RUNNER_TEMP/prusa-paint"
+
+      - name: Verify real Prusa parser accepts each painted 3MF project
+        run: |
+          set -euo pipefail
+          docker run --rm --network none --user 10001:10001 \
+            -v "$TEST_VOLUME:/opt/engine-store:ro" \
+            -v "$GITHUB_WORKSPACE/scripts/prusa_native_paint_import_smoke.py:/tmp/paint_smoke.py:ro" \
+            -v "$PRUSA_PAINT_DIR:/tmp/paint:ro" \
+            --entrypoint python3 prusa-integration:smoke \
+            /tmp/paint_smoke.py \
+            /opt/engine-store/versions/prusaslicer/2.9.7/bin/prusa-slicer \
+            /opt/engine-store/versions/prusaslicer/2.9.7/resources/profiles/PrusaResearch.ini \
+            /tmp/paint/baseline.3mf /tmp/paint/support.3mf \
+            /tmp/paint/seam.3mf /tmp/paint/fuzzy.3mf /tmp/paint/combined.3mf
+
       - name: Verify authenticated native Prusa 3MF HTTP jobs
         run: |
           set -euo pipefail
