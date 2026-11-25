@@ -140,13 +140,17 @@ def main(binary, source, directory):
         settings = validate_flat_prusa_preset(original, kind="filament")
         for key in ("temperature", "first_layer_temperature"):
             assert key in settings, "Pinned Generic PLA missing " + key
-        lines = []
-        for line in original.decode("utf-8").splitlines():
-            key = line.partition("=")[0].strip()
-            if key in ("temperature", "first_layer_temperature"):
-                line = key + " = 205,220,205,205,205"
-            lines.append(line)
-        filament.write_text("\n".join(lines) + "\n", encoding="utf-8")
+        # Import the exact application compiler from the read-only backend
+        # mount in the native acceptance container.
+        from core.slicer_prusa_filament_palette import compile_prusa_filament_palette
+        profiles = []
+        for temperature in (205,220,205,205,205):
+            values = dict(settings)
+            for key in ("temperature", "first_layer_temperature"):
+                values[key] = str(temperature)
+            profiles.append("".join(f"{k} = {v}\n" for k,v in values.items()).encode())
+        filament.write_bytes(compile_prusa_filament_palette(
+            (root / "printer.ini").read_bytes(), profiles))
         try:
             output = root / "distinct-material-temperatures.gcode"
             subprocess.run([binary, *native, "--export-gcode", "--dont-arrange",
