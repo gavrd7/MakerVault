@@ -5,6 +5,9 @@ on:
     paths:
       - "backend/core/slicer_prusa_plate.py"
       - "backend/core/slicer_prusa_3mf.py"
+      - "backend/core/slicer_prusa_paint.py"
+      - "backend/core/slicer_prusa_process_settings.py"
+      - "backend/core/tests/test_slicer_prusa_paint.py"
       - "backend/core/slicer_prusa_layer_ranges.py"
       - "backend/core/tests/test_slicer_prusa_3mf.py"
       - "backend/core/tests/test_slicer_prusa_layer_ranges.py"
@@ -51,7 +54,8 @@ jobs:
           PYTHONPATH=backend /tmp/prusa-plate-venv/bin/python -m unittest -v \
             core.tests.test_slicer_prusa_plate \
             core.tests.test_slicer_prusa_3mf \
-            core.tests.test_slicer_prusa_layer_ranges
+            core.tests.test_slicer_prusa_layer_ranges \
+            core.tests.test_slicer_prusa_paint
 
       - name: Verify actual upstream PrusaResearch 2.9.7 inheritance
         run: |
