@@ -6,7 +6,7 @@ rather than merely trusting that a 3MF import or G-code process succeeded.
 import math
 import re
 
-WORD = re.compile(r"(?:^|\\s)([XYZE])\\s*([-+]?(?:\\d+(?:\\.\\d*)?|\\.\\d+)(?:[Ee][-+]?\\d+)?)", re.I)
+WORD = re.compile(r"(?:^|\s)([XYZE])\s*([-+]?(?:\d+(?:\.\d*)?|\.\d+)(?:[Ee][-+]?\d+)?)", re.I)
 
 
 def audit_prusa_seam_enforcer_gcode(data, item, *, bed_width, bed_depth):
