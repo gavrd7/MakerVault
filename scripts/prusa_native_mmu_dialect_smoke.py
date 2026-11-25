@@ -158,6 +158,10 @@ def main(binary, source, directory):
             profiles.append("".join(f"{k} = {v}\n" for k,v in values.items()).encode())
         filament.write_bytes(compile_prusa_filament_palette(
             (root / "printer.ini").read_bytes(), profiles))
+        print("Native MMU per-tool filament vector",
+              {key: line for key in ("temperature", "first_layer_temperature")
+               for line in filament.read_text().splitlines()
+               if line.split("=", 1)[0].strip() == key}, flush=True)
         try:
             output = root / "distinct-material-temperatures.gcode"
             subprocess.run([binary, *native, "--export-gcode", "--dont-arrange",
