@@ -178,9 +178,26 @@ def validate_prusa_project_admission(plate, settings, version):
         apply_prusa_process_overrides(BASE, overrides)
         if any(
             (row.get(key) or {}).get("regions") or (row.get(key) or {}).get("faces")
-            for key in ("colour_paint", "support_paint", "seam_paint", "fuzzy_skin_paint")
+            for key in ("colour_paint", "seam_paint")
         ):
-            raise ValueError("Native Prusa surface painting has not yet passed binary acceptance.")
+            raise ValueError("Prusa colour and seam painting need independent native toolpath proof.")
+        support = (row.get("support_paint") or {}).get("regions") or []
+        fuzzy = (row.get("fuzzy_skin_paint") or {}).get("regions") or []
+        if ((row.get("support_paint") or {}).get("faces") or
+                (row.get("fuzzy_skin_paint") or {}).get("faces")):
+            raise ValueError("Prusa requires fingerprinted native facet regions.")
+        if support or fuzzy:
+            if len(plate) != 1 or overrides or row.get("modifier_volumes") or (
+                    row.get("variable_layer_profile") or {}).get("bands"):
+                raise ValueError("Prusa painted facets with other object extensions are not yet verified.")
+            if support and fuzzy:
+                raise ValueError("Combined support and fuzzy skin require a regional G-code fixture.")
+            if not isinstance(support, list) or not isinstance(fuzzy, list) or any(
+                    not isinstance(region, dict) or region.get("slot") not in (0, 1)
+                    for region in support) or any(
+                    not isinstance(region, dict) or region.get("slot") != 0
+                    for region in fuzzy):
+                raise ValueError("Invalid Prusa native support/fuzzy paint state.")
         if row.get("negative_volumes"):
             raise ValueError("Legacy negative volumes need explicit native volume representation.")
         volumes = validate_modifier_volumes(row.get("modifier_volumes"))
