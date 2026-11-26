@@ -91,3 +91,51 @@ def validate_prusa_offline_xl_inputs(*, project, printer, filament, process, too
         raise WorkerError("Prusa offline XL model tool assignment mismatch.")
     return {"tools":tuple(tools), "tool_count":count,
             "wipe_tower":False, "offline_only":True}
+
+
+def validate_prusa_offline_colour_inputs(*, project, printer, filament, process,
+                                        tool, tower):
+    """One owner-compiled MMU-painted model; only a single alternate front tool.
+
+    The worker accepts neither unverified multi-facet mixes nor physical
+    printer upload. Exact native 3MF geometry and G-code attribution are
+    independently audited after the CLI returns.
+    """
+    count, changer=_qualified_topology(printer)
+    if (not changer or not 2<=count<=5 or type(tool) is not int or
+            not 1<=tool<count or not isinstance(tower,list) or len(tower)!=5 or
+            any(type(x) not in (int,float) or not math.isfinite(x) for x in tower)):
+        raise WorkerError("Prusa offline painted MMU tool and tower are invalid.")
+    try:
+        material=validate_flat_prusa_preset(filament,kind="filament")
+        settings=validate_flat_prusa_preset(process,kind="print")
+    except PrusaPresetError:
+        raise WorkerError("Prusa offline colour profiles are invalid.") from None
+    if (settings.get("wipe_tower")!="1" or
+            settings.get("wipe_into_infill")!="0" or
+            settings.get("wipe_into_objects")!="0"):
+        raise WorkerError("Prusa offline painted MMU requires isolated native tower purging.")
+    for name in ("temperature","first_layer_temperature"):
+        values=material.get(name,"").split(",")
+        if (len(values)!=count or any(not v.isascii() or not v.isdecimal() or
+                not 0<=int(v)<=350 for v in values)):
+            raise WorkerError("Prusa offline painted filament temperatures are invalid.")
+    matrix=settings.get("wiping_volumes_matrix","").split(",")
+    if len(matrix)!=count*count:
+        raise WorkerError("Prusa offline painted purge matrix is incomplete.")
+    for index,raw in enumerate(matrix):
+        try:
+            value=float(raw)
+        except ValueError:
+            raise WorkerError("Prusa offline painted purge entry is invalid.") from None
+        same=index//count==index%count
+        if (not math.isfinite(value) or not 0<=value<=1000 or
+                (same and value!=0) or (not same and value<1)):
+            raise WorkerError("Prusa offline painted purge entry is invalid.")
+    receipt=validate_prusa_material_candidate(
+        project,printer_ini=printer,colour=True,tower=tower)
+    if receipt["objects"]!=1 or receipt["tools"]!=(1,tool+1):
+        raise WorkerError("Prusa offline painted native tool selection changed.")
+    from .prusa_colour_gcode_audit import _wall_regions
+    _wall_regions(project,tool)
+    return {"tool":tool, "tower":tower, "offline_only":True}
