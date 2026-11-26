@@ -464,6 +464,27 @@ class DirectSingleModelSliceTests(SimpleTestCase):
                 self.assertFalse(_single_unmodified_stl([{**item, **changed}]))
 
 
+class FullPlateAdmissionTests(SimpleTestCase):
+    def test_twenty_plain_models_admitted_for_supported_engines(self):
+        from types import SimpleNamespace
+        plate = [
+            {"asset_id": f"model-{i}", "instance_id": f"instance-{i}",
+             "x_mm": (i % 5) * 35 - 70, "y_mm": (i // 5) * 35 - 52,
+             "rotation_deg": 0, "scale_percent": 100}
+            for i in range(20)
+        ]
+        for engine in ("orcaslicer", "crealityprint", "bambustudio", "prusaslicer"):
+            with self.subTest(engine=engine):
+                job = SimpleNamespace(
+                    settings={"plate_objects": plate}, engine=engine,
+                    engine_version="2.9.7" if engine == "prusaslicer" else "2.5.0",
+                    printer_profile_id="printer", printer_profile=SimpleNamespace(),
+                )
+                with patch("core.slicer_execution.trusted_plate_dimensions",
+                           return_value=(300, 300)):
+                    self.assertTrue(_validate_plate_execution(job))
+
+
 class NativePlateAdmissionTests(SimpleTestCase):
     def test_single_unmodified_stl_does_not_need_3mf_bed_geometry(self):
         from types import SimpleNamespace
