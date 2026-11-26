@@ -17,12 +17,14 @@ from functools import lru_cache
 import tempfile
 import uuid
 
-from .runner import MAX_GCODE_BYTES, MAX_MODEL_BYTES, MAX_PROFILE_BYTES, WorkerError, run_prusa
+from .runner import (MAX_GCODE_BYTES, MAX_MODEL_BYTES, MAX_PROFILE_BYTES, WorkerError,
+                     DEFAULT_TIMEOUT_SECONDS, MAX_NATIVE_SLICE_TIMEOUT_SECONDS, run_prusa)
 from .orca_runner import run_orca
 from .creality_runner import run_creality
 from .bambu_runner import run_bambu
 from .engine_registry import configured_engines
 from .three_mf_validation import validate_worker_3mf
+from .resource_budget import model_input_budget, gcode_output_budget
 from .material_gcode_audit import expected_native_tools, verify_multi_material_output
 
 
@@ -77,7 +79,8 @@ def _decode_payload(payload):
         "model", "printer_profile", "filament_profile", "process_profile",
     }
     if not isinstance(payload, dict) or not expected.issubset(payload) or (
-            set(payload) - expected - {"model_format", "filament_profiles", "creality_model_stls", "creality_tool_ids", "creality_native_project", "native_modifier_project"}):
+            set(payload) - expected - {"model_format", "filament_profiles", "creality_model_stls", "creality_tool_ids", "creality_native_project", "native_modifier_project",
+                "orca_streamed_plate", "orca_streamed_sha256", "slice_timeout_seconds"}):
         raise WorkerError("Invalid slicing job payload.")
     try:
         uuid.UUID(str(payload["job_id"]))
@@ -88,9 +91,32 @@ def _decode_payload(payload):
     model_format = payload.get("model_format", "stl")
     if model_format not in {"stl", "3mf"}:
         raise WorkerError("Unsupported model input format.")
-    files = {"model_format": model_format}
+    streamed = payload.get("orca_streamed_plate") is True
+    if "orca_streamed_plate" in payload or "orca_streamed_sha256" in payload:
+        digest = payload.get("orca_streamed_sha256")
+        if (not streamed or payload["engine"] != "orcaslicer"
+                or payload["engine_version"] != "2.5.0"
+                or model_format != "3mf"
+                or not isinstance(digest, str) or len(digest) != 64
+                or any(c not in "0123456789abcdef" for c in digest)
+                or any(key in payload for key in (
+                    "filament_profiles", "creality_model_stls", "creality_tool_ids",
+                    "creality_native_project", "native_modifier_project"))):
+            raise WorkerError("Invalid streamed Orca plate contract.")
+    native_timeout = payload.get("slice_timeout_seconds", DEFAULT_TIMEOUT_SECONDS)
+    if (type(native_timeout) is not int or
+            not 1 <= native_timeout <= MAX_NATIVE_SLICE_TIMEOUT_SECONDS):
+        raise WorkerError("Invalid native slice timeout.")
+    if streamed:
+        from .streamed_orca_validation import streamed_orca_memory_budget
+        streamed_limit = streamed_orca_memory_budget() // 8
+        if not streamed_limit:
+            raise WorkerError("Insufficient worker memory for streamed Orca geometry.")
+    else:
+        streamed_limit = model_input_budget()
+    files = {"model_format": model_format, "slice_timeout_seconds": native_timeout}
     for key, limit in (
-        ("model", MAX_MODEL_BYTES),
+        ("model", streamed_limit),
         ("printer_profile", MAX_PROFILE_BYTES),
         ("filament_profile", MAX_PROFILE_BYTES),
         ("process_profile", MAX_PROFILE_BYTES),
@@ -105,6 +131,12 @@ def _decode_payload(payload):
         if not raw or len(raw) > limit:
             raise WorkerError("Invalid slicing input size.")
         files[key] = raw
+    if streamed:
+        if hashlib.sha256(files["model"]).hexdigest() != payload["orca_streamed_sha256"]:
+            raise WorkerError("Streamed Orca plate integrity check failed.")
+        from .streamed_orca_validation import validate_streamed_orca_3mf
+        validate_streamed_orca_3mf(files["model"])
+        files["orca_streamed_plate"] = True
     if "filament_profiles" in payload:
         palette = payload["filament_profiles"]
         if (not ((payload["engine"] in {"orcaslicer", "bambustudio"} and model_format == "3mf") or
@@ -243,7 +275,11 @@ class Handler(BaseHTTPRequestHandler):
             length = int(self.headers.get("Content-Length", "0"))
         except ValueError:
             length = 0
-        if not 0 < length <= MAX_REQUEST_BYTES:
+        request_limit = max(MAX_REQUEST_BYTES, model_input_budget() * 2 + 12 * 1024 * 1024)
+        if self.headers.get("X-MakerVault-Streamed-Orca") == "v1":
+            from .streamed_orca_validation import streamed_orca_memory_budget
+            request_limit = max(0, streamed_orca_memory_budget() // 6 + 4 * 1024 * 1024)
+        if not 0 < length <= request_limit:
             return self._json(413, {"error": "Invalid or oversized request."})
         if not SLICE_SLOT.acquire(blocking=False):
             return self._json(429, {"error": "Worker is already processing a slice."})
@@ -258,6 +294,9 @@ class Handler(BaseHTTPRequestHandler):
                 raise WorkerError("Requested engine/version is unavailable.")
             stage = "validating model and profile payloads"
             files = _decode_payload(request)
+            if ((self.headers.get("X-MakerVault-Streamed-Orca") == "v1")
+                    != bool(files.get("orca_streamed_plate"))):
+                raise WorkerError("Unverified streamed Orca request envelope.")
             with tempfile.TemporaryDirectory(prefix="makervault-slice-") as tmp:
                 workdir = Path(tmp)
                 extension = ".json" if current["engine"] in {"orcaslicer", "crealityprint", "bambustudio"} else ".ini"
@@ -286,10 +325,11 @@ class Handler(BaseHTTPRequestHandler):
                           "crealityprint": run_creality,
                           "prusaslicer": run_prusa,
                           "bambustudio": run_bambu}[current["engine"]]
-                receipt = runner(current["binary"], workdir)
+                receipt = runner(current["binary"], workdir,
+                                 timeout_seconds=files["slice_timeout_seconds"])
                 stage = "validating generated G-code"
                 data = (workdir / "output.gcode").read_bytes()
-                if not data or len(data) > MAX_OUTPUT_BYTES:
+                if not data or len(data) > gcode_output_budget():
                     raise WorkerError("Generated G-code exceeded the output size limit.")
                 if files.get("native_modifier_project"):
                     # A successful native CLI exit is not proof that every
