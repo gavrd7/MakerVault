@@ -5,6 +5,7 @@ validated STL geometry, expanded 3MF, worker transfer or native slicer limits.
 A bounded heuristic is intentional: Python object/XML expansion can be much
 larger than the compressed source, and parallel jobs share the same memory.
 """
+import os
 from pathlib import Path
 
 _MIB = 1024 * 1024
@@ -144,3 +145,57 @@ def project_archive_budget():
     available = memory_budget(
         reserve_bytes=_RESERVED_BYTES, expansion_factor=8)
     return available if available is not None else 32 * _MIB
+
+
+def _cpu_quota():
+    """Return effective CPU bandwidth in cores for standard Docker cgroups."""
+    try:
+        quota, period = Path("/sys/fs/cgroup/cpu.max").read_text(
+            encoding="ascii").split()
+        if quota == "max":
+            return None
+        quota, period = int(quota), int(period)
+        if quota > 0 and period > 0:
+            return quota / period
+    except (OSError, ValueError, OverflowError):
+        pass
+    for root in ("/sys/fs/cgroup/cpu", "/sys/fs/cgroup/cpu,cpuacct"):
+        quota = _read_number(root + "/cpu.cfs_quota_us")
+        period = _read_number(root + "/cpu.cfs_period_us")
+        if quota and period:
+            return quota / period
+    return None
+
+
+def effective_cpu_count():
+    """Respect process affinity and CPU quota; always support one-core hosts."""
+    try:
+        affinity = len(os.sched_getaffinity(0))
+    except (AttributeError, OSError):
+        affinity = os.cpu_count() or 1
+    quota = _cpu_quota()
+    return max(1, min(affinity, int(quota)) if quota is not None else affinity)
+
+
+def preparation_worker_count(*, independent_tasks, bytes_per_worker, max_workers=None):
+    """Conservative per-job concurrency estimate, not a global reservation.
+
+    Keep one logical CPU free on multicore hosts, avoid parallel startup for
+    small jobs and unknown memory, and account for each worker's working set.
+    An optional administrator cap can reduce but never exceed safe capacity.
+    """
+    if (type(independent_tasks) is not int or independent_tasks < 1
+            or type(bytes_per_worker) is not int or bytes_per_worker < 1
+            or (max_workers is not None and
+                (type(max_workers) is not int or max_workers < 1))):
+        raise ValueError("Invalid preparation worker allocation.")
+    cpus = effective_cpu_count()
+    memory = resource_snapshot()["available_bytes"]
+    if memory is None:
+        return 1
+    # Reserve memory for the application, and half the remaining headroom
+    # for the parent, concurrent work and eventual native engine execution.
+    memory_workers = max(1, (max(0, memory - _RESERVED_BYTES) // 2)
+                         // bytes_per_worker)
+    return min(independent_tasks, max(1, cpus - 1), memory_workers,
+               max_workers if max_workers is not None else cpus)
