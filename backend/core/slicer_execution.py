@@ -8,6 +8,7 @@ import hashlib
 import json
 import logging
 import math
+import time
 import uuid
 import os
 from datetime import timedelta
@@ -769,6 +770,7 @@ def _single_unmodified_stl(plate):
 
 def process_queued_job(job_id):
     """At most one active run; worker loss becomes a failed, never resent job."""
+    task_started = time.monotonic()
     installed = verified_installation()
     with transaction.atomic():
         job = SliceJob.objects.select_for_update(of=("self",)).select_related(
@@ -1200,9 +1202,18 @@ def process_queued_job(job_id):
         if model_format == "stl" and not (prusa_placed_stl or creality_placed_stl) and job.input_asset.sha256 and hashlib.sha256(model).hexdigest() != job.input_asset.sha256:
             raise SlicerExecutionError("Model contents changed since the job was prepared.")
         stage = "executing the isolated slicer worker"
+        from .slicer_resource_budget import slicer_task_time_limits
+        soft_limit, _hard_limit = slicer_task_time_limits(
+            model_instances=max(1, len((job.settings or {}).get("plate_objects") or [])))
+        preparation_elapsed = max(0, int(time.monotonic() - task_started))
+        # Leave time inside Celery's deadline for worker transport, G-code
+        # validation and private storage. The native binary itself remains
+        # independently bounded and can be interrupted by the worker.
+        native_timeout = max(300, min(10800, soft_limit - preparation_elapsed - 180))
         output = run_remote_job(
             job.pk, job.engine, job.engine_version, model,
             profiles[0], profiles[1], profiles[2],
+            native_timeout_seconds=native_timeout,
             model_format=model_format,
             filament_profiles=(material_result["filament_profiles"]
                                if material_result is not None else None),
