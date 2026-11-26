@@ -101,8 +101,12 @@ def store_generated_gcode(job_id, raw: bytes):
                 raise SlicerOutputError("Slice job ownership changed.")
             # The validated engine output remains authoritative. Thumbnail
             # fallback changes comment-only metadata, never toolpath commands.
-            prusa_offline = (job.engine == "prusaslicer"
-                             and (job.settings or {}).get("multi_material_test") is True)
+            prusa_offline = (job.engine == "prusaslicer" and (
+                (job.settings or {}).get("multi_material_test") is True or
+                any(settings_use_paint_field(job.owner, job.settings or {}, field)
+                    for field in ("colour_paint", "support_paint", "seam_paint",
+                                  "fuzzy_skin_paint", "variable_layer_profile"))
+            ))
             # An offline Prusa native-printer research slice is not a claim
             # that the user's registered physical device can run that G-code.
             # Still validate text, motion, size and forbidden firmware control.
