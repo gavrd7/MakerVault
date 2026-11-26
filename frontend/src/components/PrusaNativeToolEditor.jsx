@@ -52,9 +52,12 @@ export default function PrusaNativeToolEditor({
     matrix[source][target]=safeNumber(raw);
     onChange?.({...value,purge_matrix:matrix});
   };
+  const obsoleteToolMappings=(value?.model_tools||[]).filter(row=>
+    !models.some(model=>model.instance_id===row.instance_id));
   const status=value?(
     value.filament_profile_ids.every(Boolean) &&
     models.length>=2 && models.length<=5 &&
+    value.model_tools.length===models.length &&
     models.every(row=>value.model_tools.some(item=>item.instance_id===row.instance_id)) &&
     new Set(value.model_tools.map(row=>row.tool)).size>=2 &&
     (value.mode==="xl" ||
@@ -126,6 +129,14 @@ export default function PrusaNativeToolEditor({
           </select>
         </label>)}
       </div>
+      {obsoleteToolMappings.length>0 && <div className="projectUploadHint">
+        <p>{obsoleteToolMappings.length} native tool assignment(s) refer to removed models.
+          Clear the stale assignments before slicing; your saved draft remains intact.</p>
+        <button type="button" disabled={disabled} onClick={()=>onChange?.({...value,
+          model_tools:value.model_tools.filter(row=>!obsoleteToolMappings.includes(row))})}>
+          Clear obsolete model assignments
+        </button>
+      </div>}
       {value.mode==="mmu"&&<>
         <p className="projectUploadHint">MMU3 requires a complete, explicit directional purge
           matrix in mm³. Blank entries block slicing; suggested colour values are not proof of
