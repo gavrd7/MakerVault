@@ -1,3 +1,15 @@
+### Official INDX 8T native CLI compatibility diagnosis
+
+The official INDX vendor bundle has passed immutable-source and
+strict vendor-inheritance validation; the real 2.9.7 CLI still needs
+to demonstrate that its exact printer start/toolchange profile can
+slice the eight-tool fixture. A controlled research-only retry
+captures bounded CLI diagnostics on error without exposing user jobs
+or weakening worker output acceptance. Full INDX printer-preset
+support cannot be claimed until this step passes.
+
+---
+
 ### Exact official INDX vendor parsing exception
 
 The signed vendor-update bundle at `2.5.16` contains one
