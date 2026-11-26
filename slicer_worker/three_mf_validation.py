@@ -284,7 +284,7 @@ def validate_worker_3mf(data, *, native_tool_count=None, allow_creality_combined
             raise WorkerError("3MF triangle count exceeds worker limit.")
         if len(vertices) > (operation_memory_budget(
                 reserve_bytes=256 * 1024 * 1024,
-                expansion_factor=1200) or MAX_VERTICES_PER_OBJECT):
+                expansion_factor=400) or MAX_VERTICES_PER_OBJECT):
             raise WorkerError("3MF vertex count exceeds worker limit.")
         for vertex in vertices:
             try:
