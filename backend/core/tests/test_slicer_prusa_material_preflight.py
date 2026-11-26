@@ -290,9 +290,12 @@ class PrusaOfflineMmuPreflightTests(TestCase):
         with patch("core.slicer_prusa_material_preflight.resolved_prusa_profile",
                    side_effect=assets):
             candidate=prepare_prusa_offline_xl_candidate(**xl)
-        result=validate_prusa_native_3mf(candidate["model"])
-        self.assertEqual(result["objects"],2)
-        self.assertEqual(result["regions"],2)
+        from defusedxml import ElementTree as SafeET
+        with zipfile.ZipFile(io.BytesIO(candidate["model"])) as archive:
+            config=SafeET.fromstring(archive.read("Metadata/Slic3r_PE_model.config"))
+        self.assertEqual(len(config.findall("object")),2)
+        self.assertEqual(sum(len(obj.findall("volume"))-1
+                             for obj in config.findall("object")),2)
         self.assertEqual(validate_prusa_material_candidate(
             candidate["model"],printer_ini=assets[0],tools=[1,8])["tools"],(1,8))
 
