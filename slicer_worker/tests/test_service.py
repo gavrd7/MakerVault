@@ -114,6 +114,30 @@ class SlicerWorkerProtocolTests(TestCase):
                 with self.assertRaises(WorkerError):
                     _decode_payload({**payload, **change})
 
+    def test_creality_placed_stl_is_explicitly_version_and_engine_scoped(self):
+        import struct
+        stl = b"fixture".ljust(80, b" ") + struct.pack(
+            "<I12fH", 1, 0, 0, 1, 0, 0, 0, 10, 0, 0, 0, 10, 0, 0)
+        payload = {**self.payload(), "engine": "crealityprint",
+                   "engine_version": "7.3.1",
+                   "model": base64.b64encode(stl).decode(),
+                   "creality_placed_stl": True}
+        decoded = _decode_payload(payload)
+        self.assertTrue(decoded["creality_placed_stl"])
+        for change in (
+            {"engine": "orcaslicer"},
+            {"engine_version": "7.3.0"},
+            {"creality_placed_stl": 1},
+            {"model_format": "3mf"},
+            {"native_modifier_project": True},
+            {"creality_native_project": True},
+            {"prusa_placed_stl": True},
+            {"filament_profiles": [payload["filament_profile"]] * 2},
+        ):
+            with self.subTest(change=change):
+                with self.assertRaises(WorkerError):
+                    _decode_payload({**payload, **change})
+
     def test_creality_multi_stl_contract_uses_distinct_one_based_tools(self):
         import struct
         stl = (b"fixture".ljust(80, b" ") + struct.pack(
