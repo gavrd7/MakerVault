@@ -6,6 +6,7 @@ import SlicerUiIcon from "./SlicerUiIcon";
 import {BedIllustration} from "./SlicerBedTypePicker";
 import {NATIVE_TOOL_FEATURES, FEATURE_NAMES, usedNativeFeatures} from "./slicerEngineCompatibility";
 import SlicerFlushVolumes from "./SlicerFlushVolumes";
+import PrusaNativeToolEditor from "./PrusaNativeToolEditor";
 import { apiFetch } from "../api";
 import { matchLoadedSlotProfiles, slotProfileSearchTerm, resolveSlotLibrarySpool } from "./slicerSlotProfileMatching.js";
 
@@ -69,6 +70,7 @@ export default function SlicerPrepareWorkspace({
   selectedProfiles, workerConfigured, engineCapabilities = {}, printerId,
   processOverrides = {}, onProcessOverridesChange, onSaveCustomProcessProfile,
   flushSettings = null, onFlushSettingsChange,
+  prusaNativeTools = null, onPrusaNativeToolsChange,
   slotFilamentProfiles = [], onSlotFilamentProfilesChange, filamentProfiles = [], onFilamentProfilesReload, onRememberedProfiles, spools = [],
   processProfiles = [], onSelectProcessProfile, onResetProcessSettings,
   printerDetails, nozzleMm, selectedPlateType = "Native / profile default",
@@ -1050,7 +1052,29 @@ export default function SlicerPrepareWorkspace({
       && profile.engine_version === String(engine).split(" ").slice(1).join(" "));
   // Only model/paint-assigned slots participate. A loaded but unused CFS
   // bay requires no native preset and must never disable Slice.
-  const materialRoutingPending = requiredMultiSlots.length > 1
+  const prusaNativeReady = activeEngine === "prusaslicer" && prusaNativeTools != null &&
+    prusaNativeTools.version===1 && prusaNativeTools.filament_profile_ids?.length===prusaNativeTools.tool_count &&
+    prusaNativeTools.filament_profile_ids.every(id=>filamentProfiles.some(profile=>
+      String(profile.id)===String(id) && profile.engine==="prusaslicer" &&
+      profile.engine_version===activeEngineVersion && profile.kind==="filament")) &&
+    prusaNativeTools.filament_profile_ids.includes(selectedProfiles?.filament_id) &&
+    objects.length>=2 && objects.length<=5 &&
+    objects.every(object=>prusaNativeTools.model_tools?.some(row=>row.instance_id===object.instance_id)) &&
+    new Set(prusaNativeTools.model_tools.map(row=>row.tool)).size>=2 &&
+    !objects.some(object=>object.material_slot || object.process_overrides &&
+      Object.keys(object.process_overrides).length || object.modifier_volumes?.length ||
+      object.support_paint?.regions?.length || object.seam_paint?.regions?.length ||
+      object.fuzzy_skin_paint?.regions?.length || object.colour_paint?.regions?.length ||
+      object.variable_layer_profile?.bands?.length) &&
+    !Object.keys(processOverrides||{}).length && !flushSettings &&
+    !slotFilamentProfiles.length &&
+    (prusaNativeTools.mode==="xl" && !primeTower ||
+      prusaNativeTools.mode==="mmu" && !!primeTower &&
+      prusaNativeTools.purge_matrix?.every((row,i)=>row.every((volume,j)=>
+        i===j || volume!=null&&volume>=1&&volume<=1000)));
+  const materialRoutingPending = prusaNativeTools && activeEngine==="prusaslicer"
+    ? !prusaNativeReady
+    : requiredMultiSlots.length > 1
     ? !(multiMaterialReadyForExport || crealityTwoStlReady || crealityPaintReady)
     : assignedSlots.length > 0 ? !(hasSingleSlot && singleSlotProfileMatches) : false;
 
@@ -2178,6 +2202,12 @@ export default function SlicerPrepareWorkspace({
             processProfileId={selectedProfiles?.process_id} engine={activeEngine}
             assignedSlotIds={requiredMultiSlots}
             onChange={onFlushSettingsChange} disabled={!canEdit || busy} />
+          {activeEngine==="prusaslicer" && <PrusaNativeToolEditor
+            value={prusaNativeTools} onChange={onPrusaNativeToolsChange}
+            models={objects.map(object=>({...object,label:itemName(object)}))}
+            profileChoices={filamentProfiles} primaryProfileId={selectedProfiles?.filament_id}
+            engineVersion={activeEngineVersion} primeTower={primeTower}
+            onPrimeTowerChange={onPrimeTowerChange} disabled={!canEdit||busy}/>}
         </section>
 
       </div>
