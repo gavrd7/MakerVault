@@ -71,7 +71,7 @@ def generated_preview(text, *, truncated=False):
     counts = Counter()
     tool = None
     observed_tools = set()
-    for raw in text.splitlines():
+    for raw in (text.splitlines() if isinstance(text, str) else text):
         if len(raw) > 4096:
             continue
         line = raw.strip()
@@ -154,8 +154,7 @@ def generated_preview(text, *, truncated=False):
                         px,py,pz=ax,ay,az
                         continue
                     counts[feature] += 1
-                    if len(heights) < MAX_LAYERS:
-                        heights.add(round(az, 3))
+                    heights.add(round(az, 3))
                     total = sum(counts.values())
                     if total % stride == 0:
                         segments.append([round(px,3),round(py,3),
@@ -174,7 +173,7 @@ def generated_preview(text, *, truncated=False):
     stats["feature_counts"] = dict(counts.most_common(12))
     stats["observed_tools"] = sorted(observed_tools)
     stats["layers"] = sorted(heights)
-    if len(heights) < MAX_LAYERS and not truncated:
+    if not truncated:
         stats["layer_count"] = len(heights)
     else:
         stats["sampled"] = True

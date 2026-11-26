@@ -8,6 +8,8 @@ import math
 import re
 import struct
 
+from .slicer_resource_budget import input_model_budget, memory_budget
+
 MAX_INSPECTION_BYTES = 32 * 1024 * 1024
 MAX_TRIANGLES = 500_000
 COORD_LIMIT_MM = 1_000_000
@@ -21,7 +23,7 @@ class MeshInspectionError(ValueError):
 
 
 def inspect_stl(raw):
-    if not isinstance(raw, bytes) or not raw or len(raw) > MAX_INSPECTION_BYTES:
+    if not isinstance(raw, bytes) or not raw or len(raw) > input_model_budget():
         raise MeshInspectionError("STL is empty or exceeds the safe inspection limit.")
     lower = [float("inf")] * 3
     upper = [float("-inf")] * 3
@@ -34,9 +36,12 @@ def inspect_stl(raw):
             lower[axis] = min(lower[axis], value)
             upper[axis] = max(upper[axis], value)
 
+    face_budget = memory_budget(reserve_bytes=256 * 1024 * 1024, expansion_factor=256)
+    if face_budget is None:
+        face_budget = MAX_TRIANGLES
     if len(raw) >= 84:
         n = struct.unpack_from("<I", raw, 80)[0]
-        if 0 < n <= MAX_TRIANGLES and 84 + 50 * n == len(raw):
+        if 0 < n <= face_budget and 84 + 50 * n == len(raw):
             for record in struct.iter_unpack("<12fH", raw[84:]):
                 if not all(math.isfinite(x) and abs(x) <= COORD_LIMIT_MM for x in record[:3]):
                     raise MeshInspectionError("STL has invalid face normals.")
@@ -76,7 +81,7 @@ def inspect_stl(raw):
             state = "endfacet"
         elif state == "endfacet" and key == "endfacet":
             triangles += 1
-            if triangles > MAX_TRIANGLES:
+            if triangles > face_budget:
                 raise MeshInspectionError("STL triangle count exceeds limit.")
             state = "facet"
         else:

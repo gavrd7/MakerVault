@@ -14,9 +14,10 @@ from xml.etree import ElementTree as ET
 from defusedxml.ElementTree import fromstring as safe_xml_fromstring
 from defusedxml.common import DefusedXmlException
 
+from .slicer_resource_budget import project_archive_budget, xml_geometry_budget
 from .slicer_profiles import SlicerProfileError
 
-MAX_SIZE = 32 * 1024 * 1024
+
 _HEX = re.compile(r"^#[0-9A-Fa-f]{6}$")
 _MEMBERS = frozenset({
     "3D/3dmodel.model", "Metadata/model_settings.config",
@@ -103,7 +104,7 @@ def _field(document, key, *, label):
 def add_bambu_project_settings(project, *, printer, process, filaments,
                                tool_colours):
     """Bind N exact native filaments to N 3MF logical tools (2..16)."""
-    if (not isinstance(project, bytes) or not 0 < len(project) <= MAX_SIZE
+    if (not isinstance(project, bytes) or not 0 < len(project) <= project_archive_budget()
             or not isinstance(filaments, (list, tuple)) or not 2 <= len(filaments) <= 16
             or not isinstance(tool_colours, (list, tuple))
             or len(tool_colours) != len(filaments)
@@ -183,7 +184,7 @@ def add_bambu_project_settings(project, *, printer, process, filaments,
                 with zipfile.ZipFile(output, "w", compression=zipfile.ZIP_DEFLATED,
                                      allowZip64=False) as target:
                     for item in info:
-                        if item.file_size > MAX_SIZE:
+                        if item.file_size > project_archive_budget():
                             raise SlicerProfileError("Unsafe source native 3MF member.")
                         value = original.read(item.filename)
                         if item.filename == "3D/3dmodel.model":
@@ -194,7 +195,7 @@ def add_bambu_project_settings(project, *, printer, process, filaments,
                 result = output.getvalue()
     except (zipfile.BadZipFile, OSError, ValueError) as exc:
         raise SlicerProfileError("Cannot assemble the Bambu native project settings.") from exc
-    if len(result) > MAX_SIZE:
+    if len(result) > project_archive_budget():
         raise SlicerProfileError("Bambu native project exceeds its size limit.")
     return result
 

@@ -480,8 +480,12 @@ def inspect_asset(asset):
     text = sample.decode("utf-8", errors="replace")
     report = analyse_text(text, truncated=truncated)
     if (asset.metadata or {}).get("generated_by") == "makervault-slicer":
-        from .slicer_preview import generated_preview
-        report["slicer_preview"] = generated_preview(text, truncated=truncated)
+        if truncated:
+            from .slicer_preview_cache import complete_preview_inventory
+            report["slicer_preview"] = complete_preview_inventory(asset)
+        else:
+            from .slicer_preview import generated_preview
+            report["slicer_preview"] = generated_preview(text)
     preview = sample[:MAX_PREVIEW_BYTES].decode("utf-8", errors="replace")
     if len(sample) > MAX_PREVIEW_BYTES:
         preview = preview.rsplit("\n", 1)[0]

@@ -31,6 +31,69 @@ class FullLayerParserTests(SimpleTestCase):
         self.assertFalse(result["sampled"])
         self.assertEqual(exact_layer_toolpaths(GCODE, 0.4)["segment_count"], 1)
 
+    def test_streamed_input_matches_string_geometry_without_full_file_copy(self):
+        import io
+        from core.slicer_layer_preview import streamed_gcode_lines
+        for mode in ({}, {"high_fidelity": True}, {"overview": True, "overview_limit": 80}):
+            with self.subTest(mode=mode):
+                expected = layer_batch_toolpaths(GCODE, [0.2, 0.4], **mode)
+                with io.BytesIO(GCODE.encode("utf-8")) as handle:
+                    actual = layer_batch_toolpaths(
+                        streamed_gcode_lines(handle), [0.2, 0.4], **mode)
+                self.assertEqual(actual, expected)
+
+    def test_streamed_input_skips_oversized_lines_without_fake_commands(self):
+        import io
+        from core.slicer_layer_preview import streamed_gcode_lines
+        extra = "; " + "x" * 9000 + "\n"
+        with io.BytesIO((GCODE + extra).encode()) as handle:
+            actual = layer_batch_toolpaths(streamed_gcode_lines(handle), [0.2, 0.4])
+        self.assertEqual(actual, layer_batch_toolpaths(GCODE, [0.2, 0.4]))
+
+    def test_streamed_input_rejects_binary_and_invalid_utf8(self):
+        import io
+        from core.slicer_layer_preview import streamed_gcode_lines
+        for raw in (b"G1 X1 Y1 E1\x00\n", b"G1 X1 Y1 E1\xff\n"):
+            with self.subTest(raw=raw), self.assertRaises((ValueError, UnicodeDecodeError)):
+                with io.BytesIO(raw) as handle:
+                    list(streamed_gcode_lines(handle))
+
+    def test_dense_full_detail_layer_can_be_paged_without_missing_toolpaths(self):
+        from unittest.mock import patch
+        with patch("core.slicer_layer_preview.MAX_LAYER_SEGMENTS", 2):
+            first = layer_batch_toolpaths(GCODE, [0.2], high_fidelity=True,
+                                          page_start=0, max_total_segments=2)
+            second = layer_batch_toolpaths(GCODE, [0.2], high_fidelity=True,
+                                           page_start=2, max_total_segments=2)
+        self.assertFalse(first["complete"])
+        self.assertEqual(first["layers"][0]["next_offset"], 2)
+        self.assertTrue(first["layers"][0]["has_more"])
+        self.assertTrue(second["complete"])
+        self.assertEqual(second["layers"][0]["next_offset"], 3)
+        self.assertFalse(second["layers"][0]["has_more"])
+        combined = first["layers"][0]["segments"] + second["layers"][0]["segments"]
+        self.assertEqual(combined, exact_layer_toolpaths(GCODE, 0.2)["segments"])
+
+    def test_non_coalesced_paged_layer_preserves_original_moves(self):
+        from unittest.mock import patch
+        with patch("core.slicer_layer_preview.MAX_LAYER_SEGMENTS", 2):
+            first = layer_batch_toolpaths(GCODE, [0.2], page_start=0)
+            second = layer_batch_toolpaths(GCODE, [0.2], page_start=2)
+        self.assertFalse(first["complete"])
+        self.assertTrue(second["complete"])
+        self.assertEqual(first["layers"][0]["next_offset"], 2)
+        self.assertEqual(second["layers"][0]["next_offset"], 3)
+        self.assertEqual(
+            first["layers"][0]["segments"] + second["layers"][0]["segments"],
+            exact_layer_toolpaths(GCODE, 0.2)["segments"])
+
+    def test_pagination_rejects_invalid_aggregate_requests(self):
+        for kwargs in ({"page_start": -1}, {"page_start": "0"},
+                       {"page_start": 0, "overview": True},
+                       {"page_start": 2**53 + 1}):
+            with self.subTest(kwargs=kwargs), self.assertRaises(ValueError):
+                layer_batch_toolpaths(GCODE, [0.2], **kwargs)
+
     def test_batched_layers_are_exact_and_ordered(self):
         result = layer_batch_toolpaths(GCODE, [0.2, 0.4])
         self.assertTrue(result["complete"])
@@ -288,6 +351,83 @@ class FullLayerEndpointTests(TestCase):
         self.assertEqual(response.json()["segment_count"], 3)
         self.assertEqual(response.json()["feature_counts"]["Support material"], 1)
 
+    def test_large_source_streaming_preserves_selected_and_full_batch_toolpaths(self):
+        from unittest.mock import patch
+        from core.slicer_preview import generated_preview
+        self.client.force_login(self.owner)
+        with patch("core.slicer_layer_preview.MAX_LAYER_SOURCE_BYTES", 64):
+            direct = self.client.get(
+                f"/api/files/{self.asset.pk}/gcode/layers/?zs=0.2,0.4&quality=full&direct=1")
+            self.assertEqual(direct.status_code, 200, direct.content)
+            self.assertTrue(direct.json()["complete"])
+            self.assertEqual([r["segment_count"] for r in direct.json()["layers"]], [3, 1])
+            exact = self.client.get(self.url)
+            self.assertEqual(exact.status_code, 200, exact.content)
+            self.assertEqual(exact.json()["segment_count"], 3)
+
+    def test_large_source_warmup_is_queued_once_with_exact_direct_fallback(self):
+        from unittest.mock import patch
+        from django.core.cache.backends.locmem import LocMemCache
+        backend = LocMemCache("large-preview-warmup-once", {})
+        self.client.force_login(self.owner)
+        url = f"/api/files/{self.asset.pk}/gcode/layers/?zs=0.2,0.4&quality=full"
+        with (patch("core.slicer_layer_preview.MAX_LAYER_SOURCE_BYTES", 64),
+              patch("core.slicer_preview_cache.cache", backend),
+              patch("django.core.cache.cache", backend),
+              patch("core.tasks.warm_gcode_preview_task.delay") as schedule):
+            # First request schedules a single-flight background full-source
+            # cache, including for files larger than the old 32 MiB ceiling.
+            response = self.client.get(url + "&warm=1")
+            self.assertEqual(response.status_code, 202, response.content)
+            self.assertEqual(self.client.get(url + "&warm=1").status_code, 202)
+            schedule.assert_called_once_with(str(self.asset.pk))
+            # Never make client rendering wait indefinitely on Celery.
+            direct = self.client.get(url + "&direct=1")
+            self.assertEqual(direct.status_code, 200, direct.content)
+            self.assertTrue(direct.json()["complete"])
+
+    def test_selected_layer_endpoint_can_return_every_unmerged_movement(self):
+        from unittest.mock import patch
+        self.client.force_login(self.owner)
+        with patch("core.slicer_layer_preview.MAX_LAYER_SEGMENTS", 2):
+            first = self.client.get(self.url + "&page_start=0")
+            second = self.client.get(self.url + "&page_start=2")
+        self.assertEqual(first.status_code, 200, first.content)
+        self.assertEqual(second.status_code, 200, second.content)
+        self.assertTrue(first.json()["has_more"])
+        self.assertFalse(second.json()["has_more"])
+        self.assertEqual(
+            first.json()["segments"] + second.json()["segments"],
+            exact_layer_toolpaths(GCODE, 0.2)["segments"])
+
+    def test_full_detail_endpoint_paginates_dense_layers_and_keeps_owner_scope(self):
+        from unittest.mock import patch
+        self.client.force_login(self.owner)
+        base = f"/api/files/{self.asset.pk}/gcode/layers/?quality=full&zs=0.2"
+        with patch("core.slicer_layer_preview.MAX_LAYER_SEGMENTS", 2):
+            first = self.client.get(base + "&page_start=0")
+            second = self.client.get(base + "&page_start=2")
+        self.assertEqual(first.status_code, 200, first.content)
+        self.assertEqual(second.status_code, 200, second.content)
+        self.assertTrue(first.json()["layers"][0]["has_more"])
+        self.assertFalse(second.json()["layers"][0]["has_more"])
+        self.assertEqual(first.json()["layers"][0]["next_offset"], 2)
+        self.assertEqual(second.json()["layers"][0]["next_offset"], 3)
+        self.assertEqual(self.client.get(base + "&page_start=-1").status_code, 400)
+        self.assertEqual(self.client.get(base + "&page_start=oops").status_code, 400)
+        self.client.force_login(self.other)
+        self.assertEqual(self.client.get(base + "&page_start=0").status_code, 404)
+
+    def test_large_slicer_preview_inventory_scans_past_metadata_prefix(self):
+        from unittest.mock import patch
+        from core.gcode_analysis import inspect_asset
+        with patch("core.gcode_analysis.MAX_SCAN_BYTES", 60):
+            result = inspect_asset(self.asset)
+        self.assertTrue(result["preview_truncated"])
+        self.assertEqual(result["analysis"]["slicer_preview"]["layer_count"], 2)
+        self.assertEqual(result["analysis"]["slicer_preview"]["layers"], [0.2, 0.4])
+        self.assertTrue(result["analysis"]["slicer_preview"]["complete"])
+
     def test_batch_endpoint_preserves_original_and_owner_scope(self):
         self.client.force_login(self.owner)
         response = self.client.get(
@@ -381,6 +521,20 @@ class FullLayerEndpointTests(TestCase):
                 self.assertTrue(warm_asset_overviews(self.asset, GCODE.encode("utf-8")))
                 self.assertEqual(parse.call_count, 1)
 
+    def test_gzip_transport_preserves_exact_geometry_for_mobile(self):
+        import gzip
+        import json
+        self.client.force_login(self.owner)
+        path = f"/api/files/{self.asset.pk}/gcode/layers/?quality=full&zs=0.2,0.4&direct=1"
+        plain = self.client.get(path)
+        zipped = self.client.get(path, HTTP_ACCEPT_ENCODING="gzip")
+        self.assertEqual(plain.status_code, 200, plain.content)
+        self.assertEqual(zipped.status_code, 200)
+        self.assertEqual(zipped["Content-Encoding"], "gzip")
+        self.assertIn("Accept-Encoding", zipped["Vary"])
+        self.assertEqual(json.loads(gzip.decompress(zipped.content)), plain.json())
+        self.assertEqual(zipped["Cache-Control"], "private, no-store")
+
     def test_preview_cache_response_exposes_timing_and_hit(self):
         from unittest.mock import patch
         from django.core.cache.backends.locmem import LocMemCache
@@ -393,6 +547,130 @@ class FullLayerEndpointTests(TestCase):
             self.assertEqual(cached.status_code, 200)
             self.assertEqual(cached["X-MakerVault-Preview-Cache"], "hit")
             self.assertIn("preview;dur=", cached["Server-Timing"])
+
+    def test_large_file_warmer_streams_bounded_batches_and_publishes_exact_cache(self):
+        from unittest.mock import patch
+        from django.core.cache.backends.locmem import LocMemCache
+        from core.slicer_preview_cache import (
+            warm_streamed_high_fidelity, cached_batch, preview_index_key,
+        )
+        backend = LocMemCache("streamed-large-preview-cache", {})
+        with patch("core.slicer_preview_cache.cache", backend):
+            self.assertTrue(warm_streamed_high_fidelity(self.asset))
+            key = preview_index_key(self.asset, "full-v1")
+            result = cached_batch(key, [0.2, 0.4])
+            self.assertIsNotNone(result)
+            self.assertTrue(result["complete"])
+            self.assertEqual(
+                result["layers"][0]["segment_count"],
+                exact_layer_toolpaths(GCODE, 0.2)["segment_count"])
+
+    def test_memory_aware_large_warmer_uses_one_geometry_scan_when_safe(self):
+        from unittest.mock import patch
+        from django.core.cache.backends.locmem import LocMemCache
+        from core.slicer_preview_cache import warm_streamed_high_fidelity
+        from core.slicer_layer_preview import layer_batch_toolpaths
+        backend = LocMemCache("one-pass-large-source-cache", {})
+        with (patch("core.slicer_preview_cache.cache", backend),
+              patch("core.slicer_resource_budget.resource_snapshot",
+                    return_value={"available_bytes": 8 * 1024**3}),
+              patch("core.slicer_preview_cache.layer_batch_toolpaths",
+                    wraps=layer_batch_toolpaths) as parse):
+            self.assertTrue(warm_streamed_high_fidelity(self.asset))
+            self.assertEqual(parse.call_count, 1)
+
+    def test_memory_aware_warmer_falls_back_without_sacrificing_geometry(self):
+        from unittest.mock import patch
+        from django.core.cache.backends.locmem import LocMemCache
+        from core.slicer_preview_cache import warm_streamed_high_fidelity, cached_batch, preview_index_key
+        backend = LocMemCache("bounded-fallback-large-source-cache", {})
+        with (patch("core.slicer_preview_cache.cache", backend),
+              patch("core.slicer_resource_budget.resource_snapshot",
+                    return_value={"available_bytes": 64 * 1024**2})):
+            self.assertTrue(warm_streamed_high_fidelity(self.asset))
+            result = cached_batch(preview_index_key(self.asset, "full-v1"), [0.2, 0.4])
+            self.assertTrue(result["complete"])
+            self.assertEqual(result["layers"][0]["segment_count"], 3)
+
+    def test_streamed_warmer_does_not_publish_incomplete_geometry(self):
+        from unittest.mock import patch
+        from django.core.cache.backends.locmem import LocMemCache
+        from core.slicer_preview_cache import (
+            warm_streamed_high_fidelity, cached_batch, preview_index_key,
+        )
+        backend = LocMemCache("streamed-incomplete-preview-cache", {})
+        with (patch("core.slicer_preview_cache.cache", backend),
+              patch("core.slicer_layer_preview.MAX_LAYER_SEGMENTS", 1)):
+            self.assertFalse(warm_streamed_high_fidelity(self.asset))
+            self.assertIsNone(cached_batch(
+                preview_index_key(self.asset, "full-v1"), [0.2, 0.4]))
+
+    def test_full_render_cache_uses_smaller_blocks_without_losing_paths(self):
+        from unittest.mock import patch
+        from django.core.cache.backends.locmem import LocMemCache
+        from core.slicer_preview_cache import (
+            warm_streamed_high_fidelity, cached_batch, preview_index_key,
+            FULL_RENDER_CACHE_LAYERS,
+        )
+        backend = LocMemCache("render-block-size-preview", {})
+        with patch("core.slicer_preview_cache.cache", backend):
+            self.assertTrue(warm_streamed_high_fidelity(self.asset))
+            key = preview_index_key(self.asset, "full-v1")
+            self.assertEqual(backend.get(key + ":block_size"), FULL_RENDER_CACHE_LAYERS)
+            self.assertEqual(
+                cached_batch(key, [0.2, 0.4])["layers"][0]["segments"],
+                layer_batch_toolpaths(GCODE, [0.2], high_fidelity=True)["layers"][0]["segments"])
+
+    def test_successful_cold_exact_request_is_reused_without_gcode_scan(self):
+        from unittest.mock import patch
+        from django.core.cache.backends.locmem import LocMemCache
+        from core.slicer_layer_preview import layer_batch_toolpaths
+        backend = LocMemCache("direct-owner-preview", {})
+        self.client.force_login(self.owner)
+        url = f"/api/files/{self.asset.pk}/gcode/layers/?quality=full&zs=0.2,0.4&direct=1"
+        with patch("core.slicer_preview_cache.cache", backend):
+            with patch("core.slicer_layer_preview.layer_batch_toolpaths", wraps=layer_batch_toolpaths) as parser:
+                first = self.client.get(url)
+                second = self.client.get(url)
+                self.assertEqual(first.status_code, 200, first.content)
+                self.assertEqual(second.status_code, 200, second.content)
+                self.assertEqual(first.json()["layers"], second.json()["layers"])
+                self.assertEqual(second["X-MakerVault-Preview-Cache"], "direct-hit")
+                self.assertEqual(parser.call_count, 1)
+        self.client.force_login(self.other)
+        self.assertEqual(self.client.get(url).status_code, 404)
+
+    def test_cached_full_preview_serves_unaligned_mobile_batches_across_blocks(self):
+        import json
+        import zlib
+        from unittest.mock import patch
+        from django.core.cache.backends.locmem import LocMemCache
+        from core.slicer_preview_cache import cached_batch
+        backend = LocMemCache("preview-mobile-unaligned-cache", {})
+        key = "unaligned-64-layer-blocks"
+        heights = [round((i + 1) * 0.2, 3) for i in range(130)]
+        backend.set(key + ":manifest", heights)
+        for block in range(3):
+            data = {
+                "complete": True, "cached": True,
+                "layers": [{"z": z, "segments": [[index]]}
+                           for index, z in enumerate(
+                               heights[block * 64:(block + 1) * 64],
+                               start=block * 64)],
+            }
+            backend.set(
+                key + ":batch:" + str(block),
+                zlib.compress(json.dumps(data).encode("utf-8")))
+        with patch("core.slicer_preview_cache.cache", backend):
+            for start, count in ((0, 15), (15, 15), (60, 15),
+                                 (120, 10), (64, 1)):
+                with self.subTest(start=start, count=count):
+                    result = cached_batch(key, heights[start:start + count])
+                    self.assertIsNotNone(result)
+                    self.assertEqual(len(result["layers"]), count)
+                    self.assertEqual(
+                        [row["segments"][0][0] for row in result["layers"]],
+                        list(range(start, start + count)))
 
     def test_full_quality_cached_response_and_original_selected_layer(self):
         from unittest.mock import patch

@@ -358,7 +358,7 @@ class BambuRunnerContractTests(TestCase):
         with patch("slicer_worker.bambu_runner.subprocess.Popen", return_value=process):
             with self.assertRaisesRegex(WorkerError, "rejected"):
                 run_bambu(self.binary, self.root)
-        for timeout in (0, 901, True, "30"):
+        for timeout in (0, 10801, True, "30"):
             with self.subTest(timeout=timeout):
                 with self.assertRaisesRegex(WorkerError, "timeout"):
                     run_bambu(self.binary, self.root, timeout_seconds=timeout)

@@ -11,6 +11,7 @@ import zipfile
 from xml.etree import ElementTree as ET
 
 from .runner import WorkerError
+from .resource_budget import model_input_budget, operation_memory_budget
 
 CORE_NS = "http://schemas.microsoft.com/3dmanufacturing/core/2015/02"
 ALLOWED = {"3D/3dmodel.model", "_rels/.rels", "[Content_Types].xml"}
@@ -44,6 +45,7 @@ BAMBU_VARIANT_OPTIONS = {
 
 
 
+
 def validate_worker_3mf(data, *, native_tool_count=None, allow_creality_combined_paint=False,
                         allow_creality_layer_ranges=False, allow_bambu_project=False,
                         allow_bambu_combined_paint=False, allow_bambu_layer_ranges=False,
@@ -70,7 +72,7 @@ def validate_worker_3mf(data, *, native_tool_count=None, allow_creality_combined
             allow_bambu_project and allow_bambu_combined_paint
             and native_tool_count is not None):
         raise WorkerError("Bambu variable layers require an exact native palette.")
-    if not isinstance(data, bytes) or not data or len(data) > 32 * 1024 * 1024:
+    if not isinstance(data, bytes) or not data or len(data) > model_input_budget():
         raise WorkerError("3MF input exceeds worker limits.")
     try:
         with zipfile.ZipFile(io.BytesIO(data)) as package:
@@ -86,10 +88,14 @@ def validate_worker_3mf(data, *, native_tool_count=None, allow_creality_combined
                 raise WorkerError("Native layer range metadata is oversized.")
             if PLATE_MANIFEST in names and package.getinfo(PLATE_MANIFEST).file_size > 65536:
                 raise WorkerError("3MF plate metadata is oversized.")
-            if any(part.file_size <= 0 or part.file_size > 80 * 1024 * 1024
+            if any(part.file_size <= 0 or part.file_size > (operation_memory_budget(
+                           reserve_bytes=256 * 1024 * 1024,
+                           expansion_factor=12) or 80 * 1024 * 1024)
                    or part.is_dir() for part in info):
                 raise WorkerError("3MF package contents are not bounded.")
-            if sum(part.file_size for part in info) > 96 * 1024 * 1024:
+            if sum(part.file_size for part in info) > (operation_memory_budget(
+                    reserve_bytes=256 * 1024 * 1024,
+                    expansion_factor=10) or 96 * 1024 * 1024):
                 raise WorkerError("3MF archive expansion exceeds the limit.")
             raw = package.read("3D/3dmodel.model")
             manifest = package.read(PLATE_MANIFEST) if PLATE_MANIFEST in names else None
@@ -272,9 +278,13 @@ def validate_worker_3mf(data, *, native_tool_count=None, allow_creality_combined
                     raise WorkerError("Painted colour refers to an unavailable native filament.")
                 used_native_paint_channels.add("paint_color")
                 painted_native_tools.add(native_states.index(colour))
-        if count > MAX_PLATE_TRIANGLES:
+        if count > (operation_memory_budget(
+                reserve_bytes=256 * 1024 * 1024,
+                expansion_factor=1200) or MAX_PLATE_TRIANGLES):
             raise WorkerError("3MF triangle count exceeds worker limit.")
-        if len(vertices) > MAX_VERTICES_PER_OBJECT:
+        if len(vertices) > (operation_memory_budget(
+                reserve_bytes=256 * 1024 * 1024,
+                expansion_factor=400) or MAX_VERTICES_PER_OBJECT):
             raise WorkerError("3MF vertex count exceeds worker limit.")
         for vertex in vertices:
             try:

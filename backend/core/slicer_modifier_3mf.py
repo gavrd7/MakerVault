@@ -11,7 +11,8 @@ from xml.etree import ElementTree as ET
 from defusedxml import ElementTree as SafeET
 
 from .slicer_modifier_volumes import validate_modifier_volumes, MAX_TOTAL_MODIFIERS
-from .slicer_plate_3mf import build_plate_3mf, _transform, _triangles, NS, MAX_PROJECT_BYTES
+from .slicer_plate_3mf import build_plate_3mf, _transform, _triangles, NS
+from .slicer_resource_budget import project_archive_budget
 from .slicer_process_settings import PROCESS_FIELDS
 from .slicer_profiles import SlicerProfileError
 
@@ -308,7 +309,7 @@ def _export_composite_volume_plate(objects_with_stl, *, bed_width, bed_depth):
         for name, payload in members.items():
             result.writestr(name, payload)
     data = output.getvalue()
-    if len(data) > MAX_PROJECT_BYTES:
+    if len(data) > project_archive_budget():
         raise SlicerProfileError("Native composite project exceeds upload limits.")
     return data
 
@@ -406,6 +407,6 @@ def export_modifier_3mf_fixture(objects_with_stl, *, bed_width, bed_depth):
         for name, payload in members.items():
             result.writestr(name, payload)
     data = output.getvalue()
-    if len(data) > MAX_PROJECT_BYTES:
+    if len(data) > project_archive_budget():
         raise SlicerProfileError("Modifier project exceeds the worker upload limit.")
     return data

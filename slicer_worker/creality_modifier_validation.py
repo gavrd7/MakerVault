@@ -17,6 +17,7 @@ from xml.etree import ElementTree as SafeET
 from xml.etree import ElementTree as ET
 
 from .runner import WorkerError
+from .resource_budget import model_input_budget, operation_memory_budget
 from .modifier_3mf_validation import (
     validate_modifier_fixture_3mf, NS, IDENTITY, MEMBERS,
 )
@@ -88,7 +89,7 @@ def _safe_project_settings(node, depth=0):
 
 def validate_creality_modifier_project(data):
     """Verify exactly the generated 8-member, one-printable-object structure."""
-    if not isinstance(data, bytes) or not 0 < len(data) <= 32 * 1024 * 1024:
+    if not isinstance(data, bytes) or not 0 < len(data) <= model_input_budget():
         raise WorkerError("Invalid Creality modifier upload size.")
     try:
         with zipfile.ZipFile(io.BytesIO(data)) as archive:
@@ -98,8 +99,8 @@ def validate_creality_modifier_project(data):
                            part.file_size > (4 * 1024 * 1024 if
                                part.filename in {"Metadata/project_settings.config",
                                                  "Metadata/creality.config"} else
-                               80 * 1024 * 1024) for part in info)
-                    or sum(part.file_size for part in info) > 96 * 1024 * 1024
+                               (operation_memory_budget(reserve_bytes=256 * 1024 * 1024, expansion_factor=12) or 80 * 1024 * 1024)) for part in info)
+                    or sum(part.file_size for part in info) > (operation_memory_budget(reserve_bytes=256 * 1024 * 1024, expansion_factor=10) or 96 * 1024 * 1024)
                     or archive.getinfo("Metadata/model_settings.config").file_size > 32768
                     or archive.getinfo("3D/_rels/3dmodel.model.rels").file_size > 8192):
                 raise WorkerError("Unsafe Creality modifier project archive.")
