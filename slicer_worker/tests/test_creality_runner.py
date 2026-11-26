@@ -43,7 +43,7 @@ class CrealityCommandTests(TestCase):
             command = creality_command(self.binary, self.root)
         self.assertIn("--load-settings", command)
         self.assertIn("--load-filaments", command)
-        self.assertEqual(command[command.index("--arrange") + 1], "0")
+        self.assertNotIn("--arrange", command)
         self.assertEqual(command[-1], str(self.root / "input.stl"))
         validate.assert_called_once()
         self.assertEqual(validate.call_args.kwargs["max_triangles"], 1_500_000)
