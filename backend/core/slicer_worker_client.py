@@ -7,6 +7,7 @@ URL/token environment settings may select a remote destination.
 import base64
 import hashlib
 import zlib
+from .slicer_resource_budget import input_model_budget, gcode_transport_budget
 import json
 import os
 from urllib.parse import urlsplit
@@ -200,7 +201,7 @@ def run_remote_job(job_id, engine, version, model, printer_profile, filament_pro
                 creality_model_stls[0] != model):
             raise SlicerWorkerError("Invalid Creality native multi-STL model/tool mapping.")
         payload["creality_model_stls"] = [
-            _encode(item, MAX_REQUEST_MODEL) for item in creality_model_stls
+            _encode(item, input_model_budget()) for item in creality_model_stls
         ]
         payload["creality_tool_ids"] = list(creality_tool_ids)
     elif creality_tool_ids is not None:
@@ -303,24 +304,24 @@ def run_remote_job(job_id, engine, version, model, printer_profile, filament_pro
                 message += " Stage: " + stage + "."
             raise SlicerWorkerError(message)
         declared = response.headers.get("Content-Length")
-        if declared and (not declared.isdecimal() or int(declared) > MAX_RESPONSE):
+        if declared and (not declared.isdecimal() or int(declared) > (gcode_transport_budget() * 2 + 4096)):
             raise SlicerWorkerError("Worker response exceeds the allowed size.")
         buffer = bytearray()
         for chunk in response.iter_content(chunk_size=65536):
             buffer.extend(chunk)
-            if len(buffer) > MAX_RESPONSE:
+            if len(buffer) > (gcode_transport_budget() * 2 + 4096):
                 raise SlicerWorkerError("Worker response exceeds the allowed size.")
         result = json.loads(buffer)
         if not isinstance(result, dict) or result.get("status") != "completed":
             raise SlicerWorkerError("Worker returned an invalid slice result.")
         encoded = result.get("gcode")
-        if not isinstance(encoded, str) or len(encoded) > ((MAX_GCODE + 2) // 3) * 4 + 8:
+        if not isinstance(encoded, str) or len(encoded) > ((gcode_transport_budget() + 2) // 3) * 4 + 8:
             raise SlicerWorkerError("Worker output is not bounded plain-text G-code.")
         try:
             data = base64.b64decode(encoded, validate=True)
         except (ValueError, base64.binascii.Error):
             raise SlicerWorkerError("Invalid encoded G-code output.") from None
-        if not data or len(data) > MAX_GCODE or b"\x00" in data[:4096]:
+        if not data or len(data) > gcode_transport_budget() or b"\x00" in data[:4096]:
             raise SlicerWorkerError("Worker returned unsupported G-code content.")
         if result.get("bytes") != len(data) or result.get("sha256") != hashlib.sha256(data).hexdigest():
             raise SlicerWorkerError("Worker G-code checksum/length verification failed.")
