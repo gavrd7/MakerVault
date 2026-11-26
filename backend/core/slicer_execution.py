@@ -797,6 +797,7 @@ def process_queued_job(job_id):
         material_result = None
         prusa_placed_stl = False
         creality_placed_stl = False
+        orca_streamed_plate = False
         is_multi_test = (job.settings or {}).get("multi_material_test") is True
         plate = (job.settings or {}).get("plate_objects")
         stage = "verifying independent modifier and negative-volume coverage"
