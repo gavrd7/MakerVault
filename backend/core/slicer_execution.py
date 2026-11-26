@@ -792,6 +792,7 @@ def process_queued_job(job_id):
         model_format = "stl"
         material_result = None
         prusa_placed_stl = False
+        orca_streamed_plate = False
         is_multi_test = (job.settings or {}).get("multi_material_test") is True
         plate = (job.settings or {}).get("plate_objects")
         stage = "verifying independent modifier and negative-volume coverage"
@@ -883,17 +884,26 @@ def process_queued_job(job_id):
                 # queue admission still blocks unverified per-object jobs.
                 # Ordinary single-material multi-object plates retain their
                 # proven compound-mesh execution path.
-                # Repeated plain Orca instances use one verified mesh resource
-                # referenced by multiple component transforms. Avoid expanding
-                # the source triangles once per instance in the 3MF XML.
-                compact = None
-                if job.engine == "orcaslicer" and len(source_models) > 1:
-                    from .slicer_compact_plate_3mf import compact_repeated_plate
-                    compact = compact_repeated_plate(
-                        source_models, bed_width=width, bed_depth=depth)
-                model = compact if compact is not None else _plate_builder(source_models)(
-                    source_models, bed_width=width, bed_depth=depth
+                # Plain single-material Orca geometry uses a streamed
+                # compound 3MF regardless of whether sources match. This
+                # preserves the proven one-object native 3MF import while
+                # avoiding a full-plate Python XML tree.
+                from .slicer_streamed_plate_3mf import build_streamed_compound_3mf
+                plain_orca = job.engine == "orcaslicer" and len(source_models) > 1 and not any(
+                    any(item.get(key) for key in (
+                        "modifier_volumes", "process_overrides", "colour_paint",
+                        "support_paint", "seam_paint", "fuzzy_skin_paint",
+                        "variable_layer_profile"))
+                    for item, _raw in source_models
                 )
+                if plain_orca:
+                    model = build_streamed_compound_3mf(
+                        source_models, bed_width=width, bed_depth=depth)
+                    orca_streamed_plate = True
+                else:
+                    model = _plate_builder(source_models)(
+                        source_models, bed_width=width, bed_depth=depth
+                    )
                 model_format = "3mf"
         if job.engine == "prusaslicer" and is_multi_test:
             stage = "executing qualified offline Prusa MMU/XL material job"
@@ -1179,6 +1189,7 @@ def process_queued_job(job_id):
                                      job.engine == "crealityprint"),
             native_modifier_project=has_native_modifiers and job.engine != "prusaslicer",
             **({"prusa_placed_stl": True} if prusa_placed_stl else {}),
+            **({"orca_streamed_plate": True} if orca_streamed_plate else {}),
         )
         if material_result is not None:
             stage = "auditing multi-material tool selections and extrusion"
