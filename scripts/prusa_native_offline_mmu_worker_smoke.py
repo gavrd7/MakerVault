@@ -5,7 +5,6 @@ job dispatcher and never printer submission.
 """
 import base64
 import hashlib
-import json
 from pathlib import Path
 import sys
 import tempfile
@@ -30,7 +29,6 @@ def main(binary, vendor, projects):
         raw,kind="filament",name="Generic PLA",expected_sha256=digest)
     process = flatten_prusa_vendor_preset(
         raw,kind="print",name="0.20mm NORMAL",expected_sha256=digest)
-    parsed = dict(line.split("=",1) for line in [] )  # no profile mutation
     from slicer_worker.prusa_vendor_profiles import validate_flat_prusa_preset
     original = validate_flat_prusa_preset(filament,kind="filament")
     filaments = []
