@@ -714,3 +714,30 @@ class MultiMaterialTestAdmissionTests(SimpleTestCase):
         with self.assertRaisesRegex(SlicerExecutionError, "flushing changes"):
             _validate_plate_execution(self.job)
         plan.assert_not_called()
+
+
+class PrusaOfflineMaterialAdmissionTests(SimpleTestCase):
+    def test_normal_slicejob_admission_invokes_prusa_only_owner_preflight(self):
+        from types import SimpleNamespace
+        job=SimpleNamespace(engine="prusaslicer", engine_version="2.9.7",
+                            settings={"multi_material_test":True,"prusa_native_tools":{"version":1}})
+        with patch("core.slicer_prusa_job_material.prepare_prusa_workbench_material",
+                   return_value=("mmu",{})) as plan:
+            self.assertTrue(_validate_plate_execution(job))
+        plan.assert_called_once_with(job,settings=job.settings)
+
+    def test_native_assignments_cannot_silently_fall_back_to_single_filament(self):
+        from types import SimpleNamespace
+        job=SimpleNamespace(engine="prusaslicer",engine_version="2.9.7",
+            settings={"prusa_native_tools":{"version":1}})
+        with patch("core.slicer_prusa_job_material.prepare_prusa_workbench_material") as plan:
+            with self.assertRaisesRegex(SlicerExecutionError,"multi-material"):
+                _validate_plate_execution(job)
+        plan.assert_not_called()
+
+    def test_legacy_engine_admission_does_not_enter_prusa_path(self):
+        from types import SimpleNamespace
+        job=SimpleNamespace(engine="orcaslicer",engine_version="2.5.0",settings={})
+        with patch("core.slicer_prusa_job_material.prepare_prusa_workbench_material") as plan:
+            self.assertTrue(_validate_plate_execution(job))
+        plan.assert_not_called()
