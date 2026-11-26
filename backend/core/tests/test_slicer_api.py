@@ -92,6 +92,47 @@ class SliceJobApiTests(TestCase):
         self.assertIs(job.settings.get("multi_material_test"), True)
         self.assertEqual(len(job.settings["plate_objects"]), 1)
 
+    def test_prusa_native_tool_draft_roundtrips_without_live_printer_slots(self):
+        """Saving virtual MMU/XL mappings never implies any printer connection."""
+        from core.slicer_api import _draft_plate_settings
+        identifiers = [str(uuid.uuid4()) for _ in range(2)]
+        filament_ids = [str(uuid.uuid4()) for _ in range(2)]
+        objects = [{
+            "instance_id": identity, "asset_id": str(self.input_asset.pk),
+            "x_mm": -30 + index * 60, "y_mm": 0,
+            "rotation_deg": 0, "scale_percent": 100, "color": "#abcdef",
+        } for index, identity in enumerate(identifiers)]
+        config = {
+            "version": 1, "mode": "mmu", "tool_count": 2,
+            "filament_profile_ids": filament_ids,
+            "model_tools": [
+                {"instance_id": identity, "tool": index + 1}
+                for index, identity in enumerate(identifiers)],
+            "purge_matrix": [[0, 80], [90, 0]],
+        }
+        settings = {
+            "plate_objects": objects, "plate_label": "Prusa MMU",
+            "multi_material_test": True, "prusa_native_tools": config,
+            "prime_tower": {"x": 55, "y": 150},
+            "plates": [{"id": "plate-1", "name": "Prusa MMU",
+                        "objects": objects, "prime_tower": {"x": 55, "y": 150}}],
+            "active_plate_id": "plate-1",
+        }
+        checked = _draft_plate_settings(self.owner, self.input_asset, settings)
+        self.assertEqual(checked["prusa_native_tools"], config)
+        self.client.force_login(self.owner)
+        response = self.post({**self.payload, "engine_version": "2.9.7",
+                              "settings": settings})
+        self.assertEqual(response.status_code, 201, response.content)
+        saved = SliceJob.objects.get(pk=response.json()["job"]["id"])
+        self.assertEqual(saved.settings["prusa_native_tools"], config)
+        self.assertTrue(saved.settings["multi_material_test"])
+        self.assertFalse(saved.settings.get("material_tool_bindings"))
+        self.assertFalse(saved.settings.get("slot_filament_profiles"))
+        forbidden = self.post({**self.payload, "engine": "orcaslicer",
+                               "engine_version": "2.5.0", "settings": settings})
+        self.assertEqual(forbidden.status_code, 400)
+
     def test_native_volume_ids_cannot_collide_with_models_or_other_volumes(self):
         from core.slicer_api import _draft_plate_settings
         first_id, second_id = str(uuid.uuid4()), str(uuid.uuid4())
