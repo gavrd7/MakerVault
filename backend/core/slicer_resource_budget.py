@@ -199,3 +199,23 @@ def preparation_worker_count(*, independent_tasks, bytes_per_worker, max_workers
                          // bytes_per_worker)
     return min(independent_tasks, max(1, cpus - 1), memory_workers,
                max_workers if max_workers is not None else cpus)
+
+
+def slicer_task_time_limits(*, model_instances):
+    """Job-specific Celery execution deadlines, independent of engine choice.
+
+    The generic 840-second Celery default applies to unrelated application
+    tasks. Slicing receives a larger bounded allowance for multi-instance
+    preparation, scaled by the effective CPU quota/affinity. This remains
+    a safety deadline, not an estimate of native slicing completion.
+    """
+    if type(model_instances) is not int or not 1 <= model_instances <= 200:
+        raise ValueError("Invalid slicer job model count.")
+    cpus = effective_cpu_count()
+    # CPU-bound preparation can exploit up to N-1 parallel workers, whereas
+    # even a powerful host still needs time to assemble and slice the output.
+    parallelism = max(1, cpus - 1)
+    per_instance = 120 * max(0, model_instances - 1)
+    overhead = (per_instance + parallelism - 1) // parallelism
+    soft = min(10800, 840 + overhead)
+    return soft, soft + 60
