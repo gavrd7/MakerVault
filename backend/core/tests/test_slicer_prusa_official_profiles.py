@@ -95,6 +95,36 @@ class PrusaOfficialModelDiscoveryTests(SimpleTestCase):
         self.assertNotIn(b"top solid_infill_speed",result)
 
     @patch("core.slicer_prusa_official_profiles.requests.get")
+    def test_indx_newer_toolchange_variable_is_adapted_only_in_official_printer(self):
+        source = {
+            "printer:INDX 8T": {
+                "printer_technology": "FFF",
+                "bed_shape": "0x0,250x0,250x210,0x210",
+                "nozzle_diameter": ",".join(["0.4"] * 8),
+                "toolchange_gcode":
+                    "G1 E-{filament_retract_length_toolchange[current_extruder]}",
+            }
+        }
+        with patch("core.slicer_prusa_official_profiles._native_sections",
+                   return_value=source):
+            imported = fetch_prusa_profile(
+                "printer", "INDX 8T", "PrusaResearchINDX.ini",
+                vendor="PrusaResearchINDX")
+            self.assertIn(b"retract_length_toolchange[current_extruder]", imported)
+            self.assertNotIn(b"filament_retract_length_toolchange", imported)
+            original = fetch_prusa_profile(
+                "printer", "INDX 8T", "PrusaResearch.ini")
+            self.assertIn(b"filament_retract_length_toolchange", original)
+
+        source["printer:INDX 8T"]["start_gcode"] = (
+            "G1 E-{filament_retract_length_toolchange[current_extruder]}")
+        with patch("core.slicer_prusa_official_profiles._native_sections",
+                   return_value=source):
+            with self.assertRaises(OfficialProfileError):
+                fetch_prusa_profile("printer", "INDX 8T",
+                                    "PrusaResearchINDX.ini",
+                                    vendor="PrusaResearchINDX")
+
     def test_updated_official_indx_vendor_is_pinned_and_importable(self, get):
         from core.slicer_prusa_official_profiles import available_prusa_vendors
         from core.slicer_prusa_machine_topology import prusa_machine_topology
