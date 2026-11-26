@@ -45,7 +45,7 @@ class FullLayerParserTests(SimpleTestCase):
     def test_streamed_input_skips_oversized_lines_without_fake_commands(self):
         import io
         from core.slicer_layer_preview import streamed_gcode_lines
-        extra = "; " + "x" * 9000 + "\\n"
+        extra = "; " + "x" * 9000 + "\n"
         with io.BytesIO((GCODE + extra).encode()) as handle:
             actual = layer_batch_toolpaths(streamed_gcode_lines(handle), [0.2, 0.4])
         self.assertEqual(actual, layer_batch_toolpaths(GCODE, [0.2, 0.4]))
@@ -53,7 +53,7 @@ class FullLayerParserTests(SimpleTestCase):
     def test_streamed_input_rejects_binary_and_invalid_utf8(self):
         import io
         from core.slicer_layer_preview import streamed_gcode_lines
-        for raw in (b"G1 X1 Y1 E1\\x00\\n", b"G1 X1 Y1 E1\\xff\\n"):
+        for raw in (b"G1 X1 Y1 E1\x00\n", b"G1 X1 Y1 E1\xff\n"):
             with self.subTest(raw=raw), self.assertRaises((ValueError, UnicodeDecodeError)):
                 with io.BytesIO(raw) as handle:
                     list(streamed_gcode_lines(handle))
@@ -319,8 +319,8 @@ class FullLayerEndpointTests(TestCase):
         from unittest.mock import patch
         from core.slicer_preview import generated_preview
         self.client.force_login(self.owner)
-        with patch("core.slicer_layer_preview.MAX_LAYER_SOURCE_BYTES", 64), \\
-                patch("core.api_views.MAX_LAYER_SOURCE_BYTES", 64):
+        with (patch("core.slicer_layer_preview.MAX_LAYER_SOURCE_BYTES", 64),
+              patch("core.api_views.MAX_LAYER_SOURCE_BYTES", 64)):
             direct = self.client.get(
                 f"/api/files/{self.asset.pk}/gcode/layers/?zs=0.2,0.4&quality=full&direct=1")
             self.assertEqual(direct.status_code, 200, direct.content)
@@ -333,8 +333,8 @@ class FullLayerEndpointTests(TestCase):
     def test_large_source_skips_unavailable_warmer_and_streams_directly(self):
         from unittest.mock import patch
         self.client.force_login(self.owner)
-        with patch("core.api_views.MAX_LAYER_SOURCE_BYTES", 64), \\
-                patch("core.tasks.warm_gcode_preview_task.delay") as schedule:
+        with (patch("core.api_views.MAX_LAYER_SOURCE_BYTES", 64),
+              patch("core.tasks.warm_gcode_preview_task.delay") as schedule):
             response = self.client.get(
                 f"/api/files/{self.asset.pk}/gcode/layers/?zs=0.2,0.4&quality=full&warm=1")
             self.assertEqual(response.status_code, 200, response.content)
