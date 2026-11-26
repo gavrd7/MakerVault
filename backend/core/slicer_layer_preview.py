@@ -100,7 +100,7 @@ def streamed_gcode_lines(handle):
 
 def layer_batch_toolpaths(text, target_zs, *, overview=False, overview_limit=350,
                           high_fidelity=False, max_requested_layers=MAX_BATCH_LAYERS,
-                          max_total_segments=MAX_BATCH_SEGMENTS):
+                          max_total_segments=MAX_BATCH_SEGMENTS, page_start=None):
     """Return actual, ordered G0/G1 extrusion segments at target Z.
 
     Coordinates use [X1,Y1,X2,Y2,Z,feature,width,logical_tool] as the existing renderer
@@ -111,6 +111,12 @@ def layer_batch_toolpaths(text, target_zs, *, overview=False, overview_limit=350
         raise ValueError("Choose between 1 and 64 layers.")
     if overview and high_fidelity:
         raise ValueError("Choose one preview geometry mode.")
+    if page_start is not None and (
+            type(page_start) is not int or page_start < 0 or
+            page_start > 2**53 or len(target_zs) != 1 or
+            not high_fidelity or overview):
+        raise ValueError("Page an individual full-detail layer only.")
+
     if high_fidelity and not 1 <= max_total_segments <= MAX_FULL_PREVIEW_SEGMENTS:
         raise ValueError("Invalid full preview geometry budget.")
     if (overview and (isinstance(overview_limit, bool) or not isinstance(overview_limit, int)
@@ -214,12 +220,18 @@ def layer_batch_toolpaths(text, target_zs, *, overview=False, overview_limit=350
                         layer["segment_count"] += 1
                         layer["feature_counts"][role] += 1
                         if high_fidelity:
-                            bead=[round(px,3), round(py,3),
-                                  round(ax,3), round(ay,3),
-                                  key,role,width,tool]
-                            if _append_continuous_bead(
-                                    layer, bead, MAX_LAYER_SEGMENTS, budget, motion_token):
-                                layer["captured_count"] += 1
+                            if page_start is not None and layer["segment_count"] <= page_start:
+                                # Retain modal state while skipping already sent
+                                # movements. Pagination splits collinear runs only
+                                # at page boundaries; it never drops a path.
+                                layer["last_token"] = None
+                            else:
+                                bead=[round(px,3), round(py,3),
+                                      round(ax,3), round(ay,3),
+                                      key,role,width,tool]
+                                if _append_continuous_bead(
+                                        layer, bead, MAX_LAYER_SEGMENTS, budget, motion_token):
+                                    layer["captured_count"] += 1
                         elif overview:
                             # Keep a small, distributed set of visible surfaces
                             # as we scan. Never accumulate the full 3D print in
@@ -282,7 +294,12 @@ def layer_batch_toolpaths(text, target_zs, *, overview=False, overview_limit=350
             layer["segments"] = [ordered[index][1] for index in selected_indices]
             layer["overview_reduced"] = len(layer["segments"]) < original
         layer["feature_counts"] = dict(layer["feature_counts"])
-        layer["complete"] = True if overview else original_captured == original
+        if page_start is not None:
+            layer["next_offset"] = page_start + original_captured
+            layer["has_more"] = layer["next_offset"] < original
+            layer["complete"] = not layer["has_more"]
+        else:
+            layer["complete"] = True if overview else original_captured == original
         layer["sampled"] = bool(overview and layer.get("overview_reduced"))
         layer["limited"] = not layer["complete"]
     return {"layers": [by_height[height] for height in targets],
