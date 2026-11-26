@@ -271,6 +271,9 @@ def _validate_plate_execution(job):
         settings=expand_painted_settings(getattr(job, "owner", None), job.settings or {})
     except (ValueError, OSError) as exc:
         raise SlicerExecutionError("A referenced private painting asset is missing or invalid.") from exc
+    if (job.engine == "prusaslicer" and settings.get("prusa_native_tools") is not None
+            and settings.get("multi_material_test") is not True):
+        raise SlicerExecutionError("Prusa native tool assignments require audited multi-material slicing.")
     if job.engine == "prusaslicer" and settings.get("multi_material_test") is True:
         # The only qualified material route is offline MMU/XL and requires a
         # complete owner-bound native palette. Never fall through to Orca's
