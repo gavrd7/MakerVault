@@ -10,9 +10,10 @@ from .slicer_profiles import SlicerProfileError
 
 
 def validate_prusa_native_tools(raw):
-    if not isinstance(raw, dict) or set(raw) != {
-            "version", "mode", "tool_count", "filament_profile_ids",
-            "model_tools", "purge_matrix"}:
+    required={"version", "mode", "tool_count", "filament_profile_ids",
+              "model_tools", "purge_matrix"}
+    if not isinstance(raw, dict) or not required.issubset(raw) or (
+            set(raw)-required-{"colour_tools"}):
         raise SlicerProfileError("Invalid Prusa native tool configuration.")
     count = raw["tool_count"]
     if type(raw["version"]) is not int or raw["version"] != 1 or type(count) is not int or not 2 <= count <= 5 or (
@@ -49,6 +50,20 @@ def validate_prusa_native_tools(raw):
             raise SlicerProfileError("Invalid or duplicate Prusa model tool assignment.")
         seen.add(model_id)
         selected.append({"instance_id":model_id,"tool":tool})
+    colour_rows=raw.get("colour_tools",[])
+    if not isinstance(colour_rows,list) or len(colour_rows)>count:
+        raise SlicerProfileError("Invalid Prusa colour tool assignments.")
+    colour_tools=[]
+    paint_slots=set()
+    for row in colour_rows:
+        if not isinstance(row,dict) or set(row)!={"slot","tool"}:
+            raise SlicerProfileError("Invalid Prusa painted colour assignment.")
+        slot,tool=row["slot"],row["tool"]
+        if (type(slot) is not int or not 0<=slot<16 or slot in paint_slots or
+                type(tool) is not int or not 2<=tool<=count):
+            raise SlicerProfileError("Prusa painted colours require unique T1–T4 tools.")
+        paint_slots.add(slot)
+        colour_tools.append({"slot":slot,"tool":tool})
     matrix = raw["purge_matrix"]
     if raw["mode"] == "xl":
         if matrix is not None:
@@ -79,4 +94,5 @@ def validate_prusa_native_tools(raw):
         "version":1,"mode":raw["mode"],"tool_count":count,
         "filament_profile_ids":profile_ids,
         "model_tools":selected,"purge_matrix":matrix,
+        **({"colour_tools":colour_tools} if "colour_tools" in raw else {}),
     }
