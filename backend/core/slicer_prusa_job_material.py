@@ -236,7 +236,19 @@ def slice_prusa_workbench_material(job, source_models):
     kind, prepared = prepare_prusa_workbench_material(job)
     if len(source_models) != len(prepared["tools"]):
         raise SlicerProfileError("Prusa native model source count changed.")
-    prepared["rows"] = source_models
+    if (job.settings or {}).get("prusa_native_tools") is None:
+        # The legacy physical-slot draft is an explicit operator mapping,
+        # already owner/printer/tool-checked above. Prusa's native 3MF
+        # dialect contains only the selected tool's extruder index, never a
+        # CFS/AMS-style physical slot ID. Strip that advisory field *after*
+        # verification, not before material identity is bound.
+        prepared["rows"] = [
+            ({key: value for key, value in item.items()
+              if key != "material_slot"}, raw)
+            for item, raw in source_models
+        ]
+    else:
+        prepared["rows"] = source_models
     if kind == "mmu":
         return slice_prusa_offline_mmu_candidate(job.pk, **prepared)
     return slice_prusa_offline_xl_candidate(job.pk, **prepared)
