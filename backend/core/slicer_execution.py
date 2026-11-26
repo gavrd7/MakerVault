@@ -1322,7 +1322,7 @@ def process_queued_job(job_id):
                 ) from exc
         if (job.engine == "prusaslicer" and plate and len(plate) == 1
                 and (plate[0].get("seam_paint") or {}).get("regions")):
-            stage = "auditing native Prusa front-face seam placement"
+            stage = "auditing native Prusa selected vertical seam placement"
             from .slicer_prusa_seam_audit import audit_prusa_seam_enforcer_gcode
             width, depth = trusted_plate_dimensions(job.printer_profile)
             try:
@@ -1330,7 +1330,7 @@ def process_queued_job(job_id):
                     output, plate[0], bed_width=width, bed_depth=depth)
             except ValueError as exc:
                 raise SlicerExecutionError(
-                    "Prusa native seam did not follow the painted front-face enforcer.") from exc
+                    "Prusa native seam did not follow the painted vertical-face enforcer.") from exc
         if job.engine == "prusaslicer":
             painted_enforcers = any(
                 any(region.get("slot") == 0 for region in
