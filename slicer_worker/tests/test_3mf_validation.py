@@ -60,6 +60,49 @@ class Core3MFWorkerTests(TestCase):
             zipfile_out.writestr("_rels/.rels", "<Relationships/>")
         return out.getvalue()
 
+    def test_twenty_distinct_plate_objects_are_admitted(self):
+        # Each resource has different geometry and its own build transform.
+        ns = "http://schemas.microsoft.com/3dmanufacturing/core/2015/02"
+        meshes = []
+        items = []
+        members = []
+        for index in range(1, 21):
+            meshes.append(
+                f'<object id="{index}" type="model"><mesh><vertices>'
+                '<vertex x="0" y="0" z="0"/>'
+                f'<vertex x="{index}" y="0" z="0"/>'
+                f'<vertex x="0" y="{index}" z="0"/>'
+                '<triangles><triangle v1="0" v2="1" v3="2"/></triangles>'
+                '</mesh></object>'
+            )
+            items.append(
+                f'<item objectid="{index}" transform="1 0 0 0 1 0 0 0 1 '
+                f'{index * 2} {index * 2} 0"/>'
+            )
+            members.append(
+                '<model_instance>'
+                f'<metadata key="object_id" value="{index}"/>'
+                '<metadata key="instance_id" value="0"/>'
+                f'<metadata key="identify_id" value="{index}"/>'
+                '</model_instance>'
+            )
+        model = (
+            f'<model xmlns="{ns}" unit="millimeter"><resources>'
+            + "".join(meshes) + '</resources><build>'
+            + "".join(items) + '</build></model>'
+        )
+        manifest = (
+            '<config><plate><metadata key="plater_id" value="1"/>'
+            + "".join(members) + '</plate></config>'
+        )
+        output = io.BytesIO()
+        with zipfile.ZipFile(output, "w", compression=zipfile.ZIP_DEFLATED) as archive:
+            archive.writestr("3D/3dmodel.model", model)
+            archive.writestr("Metadata/model_settings.config", manifest)
+            archive.writestr("[Content_Types].xml", "<Types/>")
+            archive.writestr("_rels/.rels", "<Relationships/>")
+        self.assertTrue(validate_worker_3mf(output.getvalue()))
+
     def test_multi_object_3mf_has_separate_model_and_plate_budgets(self):
         # Two one-triangle objects verify the budget split without constructing
         # a potentially gigabyte-sized test fixture.
