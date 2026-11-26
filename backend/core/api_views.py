@@ -2474,6 +2474,14 @@ def file_gcode_layers(request, asset_id):
         response = JsonResponse(data)
         response["Cache-Control"] = "private, no-store"
         response["X-MakerVault-Preview-Cache"] = cache_status
+        # HTTP gzip preserves every coordinate and segment, while avoiding
+        # large uncompressed JSON transfers that can fail on mobile Safari.
+        # Only this authenticated geometry endpoint is affected.
+        if (len(response.content) > 2048 and
+                "gzip" in request.headers.get("Accept-Encoding", "").lower()):
+            from django.middleware.gzip import GZipMiddleware
+            response = GZipMiddleware(lambda _: response).process_response(
+                request, response)
         response["Server-Timing"] = f'preview;dur={(time.monotonic()-begin)*1000:.1f}'
         return response
     from .slicer_layer_preview import (
