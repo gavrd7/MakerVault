@@ -16,33 +16,15 @@ _LANG = "http://www.w3.org/XML/1998/namespace}lang"
 _ALLOWED = {"3D/3dmodel.model", "[Content_Types].xml", "_rels/.rels"}
 
 
-def _memory_headroom():
-    from pathlib import Path
-    values = []
-    try:
-        for line in Path("/proc/meminfo").read_text(encoding="ascii").splitlines():
-            if line.startswith("MemAvailable:"):
-                values.append(int(line.split()[1]) * 1024)
-                break
-    except (OSError, IndexError, ValueError):
-        pass
-    for root, maxfile, currentfile in (
-            ("/sys/fs/cgroup", "memory.max", "memory.current"),
-            ("/sys/fs/cgroup/memory", "memory.limit_in_bytes", "memory.usage_in_bytes")):
-        try:
-            a = (Path(root) / maxfile).read_text(encoding="ascii").strip()
-            b = (Path(root) / currentfile).read_text(encoding="ascii").strip()
-            if a.isdecimal() and b.isdecimal():
-                values.append(max(0, int(a) - int(b)))
-                break
-        except (OSError, ValueError):
-            pass
-    return min(values) if values else None
+from .resource_budget import memory_headroom as _memory_headroom
+from .resource_budget import operation_memory_budget
 
 
 def streamed_orca_memory_budget():
-    available = _memory_headroom()
-    return max(0, available - 256 * 1024 * 1024) // 4 if available is not None else 0
+    # Generic operation policy; the geometry exporter supplies cost estimates.
+    # Keep this function as a compatibility boundary for existing tests.
+    return operation_memory_budget(
+        reserve_bytes=256 * 1024 * 1024, expansion_factor=4) or 0
 
 
 def validate_streamed_orca_3mf(data):
