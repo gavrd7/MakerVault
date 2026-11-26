@@ -74,10 +74,23 @@ class FullLayerParserTests(SimpleTestCase):
         combined = first["layers"][0]["segments"] + second["layers"][0]["segments"]
         self.assertEqual(combined, exact_layer_toolpaths(GCODE, 0.2)["segments"])
 
+    def test_non_coalesced_paged_layer_preserves_original_moves(self):
+        from unittest.mock import patch
+        with patch("core.slicer_layer_preview.MAX_LAYER_SEGMENTS", 2):
+            first = layer_batch_toolpaths(GCODE, [0.2], page_start=0)
+            second = layer_batch_toolpaths(GCODE, [0.2], page_start=2)
+        self.assertFalse(first["complete"])
+        self.assertTrue(second["complete"])
+        self.assertEqual(first["layers"][0]["next_offset"], 2)
+        self.assertEqual(second["layers"][0]["next_offset"], 3)
+        self.assertEqual(
+            first["layers"][0]["segments"] + second["layers"][0]["segments"],
+            exact_layer_toolpaths(GCODE, 0.2)["segments"])
+
     def test_pagination_rejects_invalid_aggregate_requests(self):
         for kwargs in ({"page_start": -1}, {"page_start": "0"},
                        {"page_start": 0, "overview": True},
-                       {"page_start": 0, "high_fidelity": False}):
+                       {"page_start": 2**53 + 1}):
             with self.subTest(kwargs=kwargs), self.assertRaises(ValueError):
                 layer_batch_toolpaths(GCODE, [0.2], **kwargs)
 
@@ -362,6 +375,20 @@ class FullLayerEndpointTests(TestCase):
             self.assertEqual(response.status_code, 200, response.content)
             self.assertTrue(response.json()["complete"])
             schedule.assert_not_called()
+
+    def test_selected_layer_endpoint_can_return_every_unmerged_movement(self):
+        from unittest.mock import patch
+        self.client.force_login(self.owner)
+        with patch("core.slicer_layer_preview.MAX_LAYER_SEGMENTS", 2):
+            first = self.client.get(self.url + "&page_start=0")
+            second = self.client.get(self.url + "&page_start=2")
+        self.assertEqual(first.status_code, 200, first.content)
+        self.assertEqual(second.status_code, 200, second.content)
+        self.assertTrue(first.json()["has_more"])
+        self.assertFalse(second.json()["has_more"])
+        self.assertEqual(
+            first.json()["segments"] + second.json()["segments"],
+            exact_layer_toolpaths(GCODE, 0.2)["segments"])
 
     def test_full_detail_endpoint_paginates_dense_layers_and_keeps_owner_scope(self):
         from unittest.mock import patch
