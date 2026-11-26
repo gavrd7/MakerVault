@@ -31,6 +31,33 @@ class FullLayerParserTests(SimpleTestCase):
         self.assertFalse(result["sampled"])
         self.assertEqual(exact_layer_toolpaths(GCODE, 0.4)["segment_count"], 1)
 
+    def test_streamed_input_matches_string_geometry_without_full_file_copy(self):
+        import io
+        from core.slicer_layer_preview import streamed_gcode_lines
+        for mode in ({}, {"high_fidelity": True}, {"overview": True, "overview_limit": 80}):
+            with self.subTest(mode=mode):
+                expected = layer_batch_toolpaths(GCODE, [0.2, 0.4], **mode)
+                with io.BytesIO(GCODE.encode("utf-8")) as handle:
+                    actual = layer_batch_toolpaths(
+                        streamed_gcode_lines(handle), [0.2, 0.4], **mode)
+                self.assertEqual(actual, expected)
+
+    def test_streamed_input_skips_oversized_lines_without_fake_commands(self):
+        import io
+        from core.slicer_layer_preview import streamed_gcode_lines
+        extra = "; " + "x" * 9000 + "\\n"
+        with io.BytesIO((GCODE + extra).encode()) as handle:
+            actual = layer_batch_toolpaths(streamed_gcode_lines(handle), [0.2, 0.4])
+        self.assertEqual(actual, layer_batch_toolpaths(GCODE, [0.2, 0.4]))
+
+    def test_streamed_input_rejects_binary_and_invalid_utf8(self):
+        import io
+        from core.slicer_layer_preview import streamed_gcode_lines
+        for raw in (b"G1 X1 Y1 E1\\x00\\n", b"G1 X1 Y1 E1\\xff\\n"):
+            with self.subTest(raw=raw), self.assertRaises((ValueError, UnicodeDecodeError)):
+                with io.BytesIO(raw) as handle:
+                    list(streamed_gcode_lines(handle))
+
     def test_batched_layers_are_exact_and_ordered(self):
         result = layer_batch_toolpaths(GCODE, [0.2, 0.4])
         self.assertTrue(result["complete"])
@@ -287,6 +314,32 @@ class FullLayerEndpointTests(TestCase):
         self.assertEqual(response.status_code, 200, response.content)
         self.assertEqual(response.json()["segment_count"], 3)
         self.assertEqual(response.json()["feature_counts"]["Support material"], 1)
+
+    def test_large_source_streaming_preserves_selected_and_full_batch_toolpaths(self):
+        from unittest.mock import patch
+        from core.slicer_preview import generated_preview
+        self.client.force_login(self.owner)
+        with patch("core.slicer_layer_preview.MAX_LAYER_SOURCE_BYTES", 64), \\
+                patch("core.api_views.MAX_LAYER_SOURCE_BYTES", 64):
+            direct = self.client.get(
+                f"/api/files/{self.asset.pk}/gcode/layers/?zs=0.2,0.4&quality=full&direct=1")
+            self.assertEqual(direct.status_code, 200, direct.content)
+            self.assertTrue(direct.json()["complete"])
+            self.assertEqual([r["segment_count"] for r in direct.json()["layers"]], [3, 1])
+            exact = self.client.get(self.url)
+            self.assertEqual(exact.status_code, 200, exact.content)
+            self.assertEqual(exact.json()["segment_count"], 3)
+
+    def test_large_source_skips_unavailable_warmer_and_streams_directly(self):
+        from unittest.mock import patch
+        self.client.force_login(self.owner)
+        with patch("core.api_views.MAX_LAYER_SOURCE_BYTES", 64), \\
+                patch("core.tasks.warm_gcode_preview_task.delay") as schedule:
+            response = self.client.get(
+                f"/api/files/{self.asset.pk}/gcode/layers/?zs=0.2,0.4&quality=full&warm=1")
+            self.assertEqual(response.status_code, 200, response.content)
+            self.assertTrue(response.json()["complete"])
+            schedule.assert_not_called()
 
     def test_batch_endpoint_preserves_original_and_owner_scope(self):
         self.client.force_login(self.owner)
