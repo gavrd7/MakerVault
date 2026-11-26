@@ -5,6 +5,8 @@ Each resource owns its mesh and native object configuration. No external
 paths, embedded print profiles, executable directives or arbitrary metadata.
 """
 import io
+import json
+import hashlib
 import struct
 import zipfile
 from xml.etree import ElementTree as ET
@@ -45,95 +47,128 @@ def build_prusa_native_3mf(rows, *, bed_width, bed_depth):
     total_bytes = total_faces = total_modifiers = 0
     seen_modifiers = set()
     layer_ranges = prusa_layer_config_ranges(rows)
+    # Native painted geometry, transform baking and native STL generation can
+    # be CPU-intensive independently for each model. The same allocator as
+    # Orca/Bambu and Creality/Prusa plain plates controls these children.
+    from .slicer_parallel_geometry import prepared_mesh_batches
+    sources = []
     for index, pair in enumerate(rows, 1):
-        if not isinstance(pair, tuple) or len(pair) != 2 or not isinstance(pair[0], dict) or not isinstance(pair[1], bytes):
+        if (not isinstance(pair, tuple) or len(pair) != 2
+                or not isinstance(pair[0], dict) or not isinstance(pair[1], bytes)):
             raise SlicerProfileError("Invalid Prusa native project object.")
         item, raw = pair
-        total_bytes += len(raw)
-        if total_bytes > source_input_budget(upper_cap=input_model_budget()):
-            raise SlicerProfileError("Prusa native project source limit exceeded.")
-        overrides = item.get("process_overrides") or {}
-        if not isinstance(overrides, dict) or set(overrides) - OBJECT_KEYS:
-            raise SlicerProfileError("Unsupported Prusa per-object settings.")
-        native = parse_prusa_profile(apply_prusa_process_overrides(BASE, overrides), "process")
-        geometry_item = dict(item)
-        geometry_item.pop("process_overrides", None)
-        geometry_item.pop("variable_layer_profile", None)
-        for channel in PAINT_HEADERS:
-            geometry_item.pop(channel, None)
-        modifiers = validate_modifier_volumes(geometry_item.pop("modifier_volumes", None))
-        total_modifiers += len(modifiers)
-        if total_modifiers > MAX_TOTAL_MODIFIERS:
-            raise SlicerProfileError("Prusa native volume limit exceeded.")
-        for modifier in modifiers:
-            if modifier["id"] in seen_modifiers:
-                raise SlicerProfileError("Duplicate Prusa modifier identity.")
-            seen_modifiers.add(modifier["id"])
-            # Each native Prusa resource owns its volume ranges. This allows
-            # standalone two-parent fixtures without propagating an unrelated
-            # modifier onto another model; scheduling remains separately gated.
-        painted_raw, facet_tags, required_headers = native_prusa_painted_stl(item, raw)
-        if not required_headers.issubset(headers):
-            raise SlicerProfileError("Prusa painted metadata is incomplete.")
-        baked = build_prusa_placed_stl([(geometry_item, painted_raw)], bed_width=bed_width, bed_depth=bed_depth)
-        count = struct.unpack_from("<I", baked, 80)[0]
-        total_faces += count
-        if total_faces > plate_triangle_budget():
-            raise SlicerProfileError("Prusa native project triangle limit exceeded.")
-        obj = ET.SubElement(resources, f"{{{NS}}}object", {"id": str(index), "type": "model"})
-        mesh = ET.SubElement(obj, f"{{{NS}}}mesh")
-        vertices = ET.SubElement(mesh, f"{{{NS}}}vertices")
-        triangles = ET.SubElement(mesh, f"{{{NS}}}triangles")
-        indexed = {}
-        if facet_tags is not None and len(facet_tags) != count:
-            raise SlicerProfileError("Prusa native painted facet count changed during placement.")
-        for face_index, tri in enumerate(struct.iter_unpack("<12fH", baked[84:])):
-            ids = []
-            for offset in (3, 6, 9):
-                point = tuple(tri[offset:offset+3])
-                if point not in indexed:
-                    indexed[point] = len(indexed)
-                    ET.SubElement(vertices, f"{{{NS}}}vertex", dict(zip(("x", "y", "z"), map(str, point))))
-                ids.append(indexed[point])
-            attrs = dict(zip(("v1", "v2", "v3"), map(str, ids)))
-            if facet_tags is not None:
-                attrs.update(facet_tags[face_index])
-            ET.SubElement(triangles, f"{{{NS}}}triangle", attrs)
-        ET.SubElement(build, f"{{{NS}}}item", {"objectid": str(index)})
-        settings = ET.SubElement(config, "object", {"id": str(index), "instances_count": "1"})
-        for key in sorted(overrides):
-            native_key = FIELDS[key][0]
-            ET.SubElement(settings, "metadata", {"type": "object", "key": native_key, "value": native[native_key]})
-        printable = ET.SubElement(settings, "volume", {"firstid": "0", "lastid": str(count - 1)})
-        ET.SubElement(printable, "metadata", {"type": "volume", "key": "volume_type", "value": "ModelPart"})
-        if modifiers:
-            matrix, bed_z = _modifier_parent_transform(item, raw, bed_width, bed_depth)
-            parent_bounds = [(min(p[i] for p in indexed), max(p[i] for p in indexed)) for i in range(3)]
+        sources.append((index, raw, {
+            "item": item, "bed_width": bed_width, "bed_depth": bed_depth}))
+    seen_sources = set()
+    estimate = 128 * 1024**2 + max(len(raw) for _, raw, _ in sources) * 16
+    with prepared_mesh_batches(
+            sources, estimated_bytes_per_worker=estimate,
+            mode="prusa_native") as prepared:
+        for index, pair in enumerate(rows, 1):
+            if not isinstance(pair, tuple) or len(pair) != 2 or not isinstance(pair[0], dict) or not isinstance(pair[1], bytes):
+                raise SlicerProfileError("Invalid Prusa native project object.")
+            item, raw = pair
+            identity = (len(raw), hashlib.sha256(raw).digest())
+            if identity not in seen_sources:
+                total_bytes += len(raw)
+                seen_sources.add(identity)
+            if total_bytes > source_input_budget(upper_cap=input_model_budget()):
+                raise SlicerProfileError("Prusa native project source limit exceeded.")
+            overrides = item.get("process_overrides") or {}
+            if not isinstance(overrides, dict) or set(overrides) - OBJECT_KEYS:
+                raise SlicerProfileError("Unsupported Prusa per-object settings.")
+            native = parse_prusa_profile(apply_prusa_process_overrides(BASE, overrides), "process")
+            geometry_item = dict(item)
+            geometry_item.pop("process_overrides", None)
+            geometry_item.pop("variable_layer_profile", None)
+            for channel in PAINT_HEADERS:
+                geometry_item.pop(channel, None)
+            modifiers = validate_modifier_volumes(geometry_item.pop("modifier_volumes", None))
+            total_modifiers += len(modifiers)
+            if total_modifiers > MAX_TOTAL_MODIFIERS:
+                raise SlicerProfileError("Prusa native volume limit exceeded.")
             for modifier in modifiers:
-                scratch = ET.Element(f"{{{NS}}}resources")
-                child = _add_child_mesh(scratch, 1, modifier, parent_bounds, matrix, bed_z, bed_width, bed_depth)
-                child_vertices = child.find(f"./{{{NS}}}mesh/{{{NS}}}vertices")
-                child_triangles = child.find(f"./{{{NS}}}mesh/{{{NS}}}triangles")
-                start_vertex, start_face = len(vertices), len(triangles)
-                total_faces += len(child_triangles)
-                if total_faces > plate_triangle_budget():
-                    raise SlicerProfileError("Prusa native volume triangle limit exceeded.")
-                # Prusa imports a contiguous face and vertex range per volume.
-                # Never weld vertices across independently typed volumes.
-                for vertex in child_vertices:
-                    vertices.append(vertex)
-                for face in child_triangles:
-                    ET.SubElement(triangles, f"{{{NS}}}triangle", {
-                        k: str(int(face.get(k)) + start_vertex) for k in ("v1", "v2", "v3")})
-                volume = ET.SubElement(settings, "volume", {
-                    "firstid": str(start_face), "lastid": str(len(triangles) - 1)})
-                role = "NegativeVolume" if modifier["kind"] == "negative" else "ParameterModifier"
-                ET.SubElement(volume, "metadata", {"type": "volume", "key": "volume_type", "value": role})
-                overrides = modifier["settings"]
-                native = parse_prusa_profile(apply_prusa_process_overrides(BASE, overrides), "process")
-                for key in sorted(overrides):
-                    native_key = FIELDS[key][0]
-                    ET.SubElement(volume, "metadata", {"type": "volume", "key": native_key, "value": native[native_key]})
+                if modifier["id"] in seen_modifiers:
+                    raise SlicerProfileError("Duplicate Prusa modifier identity.")
+                seen_modifiers.add(modifier["id"])
+                # Each native Prusa resource owns its volume ranges. This allows
+                # standalone two-parent fixtures without propagating an unrelated
+                # modifier onto another model; scheduling remains separately gated.
+            _index, _raw, rendered = next(prepared)
+            if rendered is None:
+                painted_raw, facet_tags, required_headers = native_prusa_painted_stl(item, raw)
+                baked = build_prusa_placed_stl(
+                    [(geometry_item, painted_raw)], bed_width=bed_width, bed_depth=bed_depth)
+            else:
+                if len(rendered) > project_archive_budget():
+                    raise SlicerProfileError("Parallel Prusa geometry exceeds memory budget.")
+                with zipfile.ZipFile(io.BytesIO(rendered)) as package:
+                    if set(package.namelist()) != {"model.stl", "paint.json"}:
+                        raise SlicerProfileError("Invalid parallel Prusa project geometry.")
+                    baked = package.read("model.stl")
+                    annotations = json.loads(package.read("paint.json"))
+                facet_tags = annotations["facet_tags"]
+                required_headers = frozenset(annotations["required_headers"])
+            if not required_headers.issubset(headers):
+                raise SlicerProfileError("Prusa painted metadata is incomplete.")
+            count = struct.unpack_from("<I", baked, 80)[0]
+            total_faces += count
+            if total_faces > plate_triangle_budget():
+                raise SlicerProfileError("Prusa native project triangle limit exceeded.")
+            obj = ET.SubElement(resources, f"{{{NS}}}object", {"id": str(index), "type": "model"})
+            mesh = ET.SubElement(obj, f"{{{NS}}}mesh")
+            vertices = ET.SubElement(mesh, f"{{{NS}}}vertices")
+            triangles = ET.SubElement(mesh, f"{{{NS}}}triangles")
+            indexed = {}
+            if facet_tags is not None and len(facet_tags) != count:
+                raise SlicerProfileError("Prusa native painted facet count changed during placement.")
+            for face_index, tri in enumerate(struct.iter_unpack("<12fH", baked[84:])):
+                ids = []
+                for offset in (3, 6, 9):
+                    point = tuple(tri[offset:offset+3])
+                    if point not in indexed:
+                        indexed[point] = len(indexed)
+                        ET.SubElement(vertices, f"{{{NS}}}vertex", dict(zip(("x", "y", "z"), map(str, point))))
+                    ids.append(indexed[point])
+                attrs = dict(zip(("v1", "v2", "v3"), map(str, ids)))
+                if facet_tags is not None:
+                    attrs.update(facet_tags[face_index])
+                ET.SubElement(triangles, f"{{{NS}}}triangle", attrs)
+            ET.SubElement(build, f"{{{NS}}}item", {"objectid": str(index)})
+            settings = ET.SubElement(config, "object", {"id": str(index), "instances_count": "1"})
+            for key in sorted(overrides):
+                native_key = FIELDS[key][0]
+                ET.SubElement(settings, "metadata", {"type": "object", "key": native_key, "value": native[native_key]})
+            printable = ET.SubElement(settings, "volume", {"firstid": "0", "lastid": str(count - 1)})
+            ET.SubElement(printable, "metadata", {"type": "volume", "key": "volume_type", "value": "ModelPart"})
+            if modifiers:
+                matrix, bed_z = _modifier_parent_transform(item, raw, bed_width, bed_depth)
+                parent_bounds = [(min(p[i] for p in indexed), max(p[i] for p in indexed)) for i in range(3)]
+                for modifier in modifiers:
+                    scratch = ET.Element(f"{{{NS}}}resources")
+                    child = _add_child_mesh(scratch, 1, modifier, parent_bounds, matrix, bed_z, bed_width, bed_depth)
+                    child_vertices = child.find(f"./{{{NS}}}mesh/{{{NS}}}vertices")
+                    child_triangles = child.find(f"./{{{NS}}}mesh/{{{NS}}}triangles")
+                    start_vertex, start_face = len(vertices), len(triangles)
+                    total_faces += len(child_triangles)
+                    if total_faces > plate_triangle_budget():
+                        raise SlicerProfileError("Prusa native volume triangle limit exceeded.")
+                    # Prusa imports a contiguous face and vertex range per volume.
+                    # Never weld vertices across independently typed volumes.
+                    for vertex in child_vertices:
+                        vertices.append(vertex)
+                    for face in child_triangles:
+                        ET.SubElement(triangles, f"{{{NS}}}triangle", {
+                            k: str(int(face.get(k)) + start_vertex) for k in ("v1", "v2", "v3")})
+                    volume = ET.SubElement(settings, "volume", {
+                        "firstid": str(start_face), "lastid": str(len(triangles) - 1)})
+                    role = "NegativeVolume" if modifier["kind"] == "negative" else "ParameterModifier"
+                    ET.SubElement(volume, "metadata", {"type": "volume", "key": "volume_type", "value": role})
+                    overrides = modifier["settings"]
+                    native = parse_prusa_profile(apply_prusa_process_overrides(BASE, overrides), "process")
+                    for key in sorted(overrides):
+                        native_key = FIELDS[key][0]
+                        ET.SubElement(volume, "metadata", {"type": "volume", "key": native_key, "value": native[native_key]})
     model_xml = ET.tostring(model, encoding="utf-8", xml_declaration=True)
     if len(model_xml) > xml_geometry_budget():
         raise SlicerProfileError("Prusa native project XML exceeds limit.")
