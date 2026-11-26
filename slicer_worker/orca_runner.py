@@ -250,7 +250,8 @@ def orca_command(binary: Path, workdir: Path, *,
             raise WorkerError("Modifier jobs cannot include an unverified multi-tool palette.")
         validate_worker_3mf(model_bytes,
                             native_tool_count=len(palette) if palette else None,
-                            allow_native_modifier_fixture=native_modifiers)
+                            allow_native_modifier_fixture=native_modifiers,
+                            allow_compact_instances=not native_modifiers and not palette)
         # Inspect the manifest only after all archive bounds have been checked.
         with zipfile.ZipFile(io.BytesIO(model_bytes)) as archive:
             if "Metadata/model_settings.config" in archive.namelist():
