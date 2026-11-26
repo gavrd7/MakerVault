@@ -95,7 +95,7 @@ def _encode(raw, limit):
     return base64.b64encode(raw).decode("ascii")
 
 
-def run_remote_job(job_id, engine, version, model, printer_profile, filament_profile, process_profile, *, timeout_seconds=900, model_format="stl", filament_profiles=None,
+def run_remote_job(job_id, engine, version, model, printer_profile, filament_profile, process_profile, *, timeout_seconds=900, native_timeout_seconds=300, model_format="stl", filament_profiles=None,
                    creality_model_stls=None, creality_tool_ids=None,
                    creality_native_project=False, native_modifier_project=False, prusa_placed_stl=False,
                    prusa_offline_mmu=None, prusa_offline_xl=None,
@@ -103,8 +103,11 @@ def run_remote_job(job_id, engine, version, model, printer_profile, filament_pro
                    creality_placed_stl=False):
     if model_format not in {"stl", "3mf"}:
         raise SlicerWorkerError("Unsupported slicer input format.")
-    if not isinstance(timeout_seconds, int) or not 1 <= timeout_seconds <= 900:
+    if type(timeout_seconds) is not int or not 1 <= timeout_seconds <= 900:
         raise SlicerWorkerError("Invalid slicing timeout.")
+    if (type(native_timeout_seconds) is not int or
+            not 1 <= native_timeout_seconds <= 10800):
+        raise SlicerWorkerError("Invalid native slice timeout.")
     supported = {"orcaslicer", "crealityprint", "prusaslicer"}
     supported.add("bambustudio")
     if (engine not in supported or not isinstance(version, str)
@@ -141,6 +144,8 @@ def run_remote_job(job_id, engine, version, model, printer_profile, filament_pro
         "filament_profile": _encode(filament_profile, MAX_REQUEST_PROFILE),
         "process_profile": _encode(process_profile, MAX_REQUEST_PROFILE),
     }
+    if native_timeout_seconds != 300:
+        payload["slice_timeout_seconds"] = native_timeout_seconds
     if model_format == "3mf":
         payload["model_format"] = "3mf"
     if orca_streamed_plate:
@@ -277,7 +282,7 @@ def run_remote_job(job_id, engine, version, model, printer_profile, filament_pro
             data=json.dumps(payload, separators=(",", ":")).encode(),
             headers={"Authorization": "Bearer " + token, "Content-Type": "application/json",
                      **({"X-MakerVault-Streamed-Orca": "v1"} if orca_streamed_plate else {})},
-            stream=True, timeout=(3, timeout_seconds), allow_redirects=False,
+            stream=True, timeout=(3, max(timeout_seconds, native_timeout_seconds + 60)), allow_redirects=False,
         )
         if response.status_code != 200:
             # The worker returns bounded, structured stage names. Never
