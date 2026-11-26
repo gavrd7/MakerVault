@@ -15,7 +15,8 @@ from defusedxml import ElementTree as SafeET
 
 from .slicer_mesh import MeshInspectionError
 from .slicer_profiles import SlicerProfileError
-from .slicer_resource_budget import source_input_budget
+from .slicer_resource_budget import (source_input_budget, input_model_budget,
+    xml_geometry_budget, plate_triangle_budget, project_archive_budget)
 from .slicer_process_settings import PROCESS_FIELDS, validate_process_overrides
 from .slicer_variable_layers import orca_layer_config_ranges
 from .slicer_native_support_paint import native_support_triangles, native_combined_paint_triangles
@@ -66,7 +67,7 @@ def _render_mesh(raw, element, support_paint=None, seam_paint=None, fuzzy_skin_p
     maximum = [-math.inf, -math.inf, -math.inf]
     for tri in triangles:
         source_count += 1
-        if source_count > MAX_TRIANGLES:
+        if source_count > plate_triangle_budget():
             raise SlicerProfileError("STL triangle count exceeds the 3MF plate limit.")
         for point in tri:
             for axis in range(3):
@@ -229,7 +230,7 @@ def build_plate_3mf(objects_with_stl, *, bed_width, bed_depth, native_tool_indic
     resources = ET.SubElement(model, f"{{{NS}}}resources")
     build = ET.SubElement(model, f"{{{NS}}}build")
     unique_source_bytes = 0
-    source_budget = source_input_budget(upper_cap=MAX_SOURCE_TOTAL)
+    source_budget = source_input_budget(upper_cap=input_model_budget())
     seen_sources = set()
     total_triangles = 0
     resource_xml_bytes = 0
@@ -321,7 +322,7 @@ def build_plate_3mf(objects_with_stl, *, bed_width, bed_depth, native_tool_indic
             raise SlicerProfileError("Invalid model elevation.")
         provisional[11] = desired_z - minimum_z
         placement = " ".join(format(value, ".6f") for value in provisional)
-        if total_triangles > MAX_PLATE_TRIANGLES:
+        if total_triangles > plate_triangle_budget():
             raise SlicerProfileError("Total plate triangles exceed the limit.")
         if bake_native_positions:
             _bake_native_instance_transform(obj, placement)
@@ -334,11 +335,11 @@ def build_plate_3mf(objects_with_stl, *, bed_width, bed_depth, native_tool_indic
         # after all models have been accumulated into a large XML tree.
         # Leave 64 KiB for the build items and model wrapper.
         resource_xml_bytes += len(ET.tostring(obj, encoding="utf-8"))
-        if resource_xml_bytes > MAX_MODEL_XML_BYTES - 65536:
+        if resource_xml_bytes > xml_geometry_budget() - 65536:
             raise SlicerProfileError(
                 "Build plate 3MF geometry exceeds the worker's expanded XML budget.")
     model_xml = ET.tostring(model, encoding="utf-8", xml_declaration=True)
-    if len(model_xml) > MAX_MODEL_XML_BYTES:
+    if len(model_xml) > xml_geometry_budget():
         raise SlicerProfileError(
             "Build plate 3MF geometry exceeds the worker's expanded XML budget.")
     # Preserve Orca's model IDs one-to-one with the 3MF resource IDs.
@@ -404,7 +405,7 @@ def build_plate_3mf(objects_with_stl, *, bed_width, bed_depth, native_tool_indic
                          'Type="http://schemas.microsoft.com/3dmanufacturing/2013/01/3dmodel"/>'
                          '</Relationships>')
     archive = output.getvalue()
-    if len(archive) > MAX_PROJECT_BYTES:
+    if len(archive) > project_archive_budget():
         raise SlicerProfileError("Generated 3MF exceeds the worker upload limit.")
     return archive
 
@@ -481,7 +482,7 @@ def build_compound_plate_3mf(objects_with_stl, *, bed_width, bed_depth):
         archive.writestr("[Content_Types].xml", types)
         archive.writestr("_rels/.rels", relationships)
     data = output.getvalue()
-    if not data or len(data) > MAX_PROJECT_BYTES:
+    if not data or len(data) > project_archive_budget():
         raise SlicerProfileError("Combined 3MF exceeds the safe worker upload limit.")
     return data
 
