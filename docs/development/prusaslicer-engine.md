@@ -1,3 +1,18 @@
+### INDX native modifiers and negative volumes
+
+Owner-bound 6–8-tool INDX slices now admit typed model-local
+Prusa parameter modifiers and independent negative volumes. The
+existing native 3MF dialect validator still verifies contiguous typed
+mesh/vertex ranges, settings and no arbitrary metadata. The material
+validator verifies those volumes **after stripping only the explicit
+T0–T7 object tool annotations** and uses spatial per-model G-code
+attribution on the sliced result. This does not automatically permit
+complex combined support/colour/seam paint or unknown tool pickup
+scripts. A required native 2.9.7 qualification slices an 8-tool
+modifier-plus-cavity project and compares G-code against plain models.
+
+---
+
 ### Real official INDX profile native end-to-end acceptance
 
 The pinned vendor-update source contains named
