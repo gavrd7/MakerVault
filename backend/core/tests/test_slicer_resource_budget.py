@@ -132,3 +132,30 @@ class PreparationWorkerTests(SimpleTestCase):
             with self.subTest(cap=cap), self.assertRaises(ValueError):
                 budget.preparation_worker_count(
                     independent_tasks=4, bytes_per_worker=MiB, max_workers=cap)
+
+
+class SlicerTaskDeadlineTests(SimpleTestCase):
+    @patch.object(budget, "effective_cpu_count", return_value=1)
+    def test_one_core_gets_longer_large_plate_deadline(self, _):
+        soft, hard = budget.slicer_task_time_limits(model_instances=20)
+        self.assertEqual((soft, hard), (3120, 3180))
+
+    @patch.object(budget, "effective_cpu_count", return_value=4)
+    def test_four_core_deadline_does_not_prematurely_kill_20_models(self, _):
+        self.assertEqual(budget.slicer_task_time_limits(model_instances=20),
+                         (1600, 1660))
+
+    @patch.object(budget, "effective_cpu_count", return_value=16)
+    def test_many_cores_reduce_preparation_allowance_without_native_change(self, _):
+        soft, hard = budget.slicer_task_time_limits(model_instances=20)
+        self.assertEqual((soft, hard), (992, 1052))
+
+    @patch.object(budget, "effective_cpu_count", return_value=1)
+    def test_task_deadline_remains_bounded(self, _):
+        soft, hard = budget.slicer_task_time_limits(model_instances=200)
+        self.assertEqual((soft, hard), (10800, 10860))
+
+    def test_invalid_model_count_is_rejected(self):
+        for count in (0, -1, 201, None, "20", True):
+            with self.subTest(count=count), self.assertRaises(ValueError):
+                budget.slicer_task_time_limits(model_instances=count)
