@@ -541,6 +541,33 @@ class FullLayerEndpointTests(TestCase):
                 result["layers"][0]["segment_count"],
                 exact_layer_toolpaths(GCODE, 0.2)["segment_count"])
 
+    def test_memory_aware_large_warmer_uses_one_geometry_scan_when_safe(self):
+        from unittest.mock import patch
+        from django.core.cache.backends.locmem import LocMemCache
+        from core.slicer_preview_cache import warm_streamed_high_fidelity
+        from core.slicer_layer_preview import layer_batch_toolpaths
+        backend = LocMemCache("one-pass-large-source-cache", {})
+        with (patch("core.slicer_preview_cache.cache", backend),
+              patch("core.slicer_resource_budget.resource_snapshot",
+                    return_value={"available_bytes": 8 * 1024**3}),
+              patch("core.slicer_preview_cache.layer_batch_toolpaths",
+                    wraps=layer_batch_toolpaths) as parse):
+            self.assertTrue(warm_streamed_high_fidelity(self.asset))
+            self.assertEqual(parse.call_count, 1)
+
+    def test_memory_aware_warmer_falls_back_without_sacrificing_geometry(self):
+        from unittest.mock import patch
+        from django.core.cache.backends.locmem import LocMemCache
+        from core.slicer_preview_cache import warm_streamed_high_fidelity, cached_batch, preview_index_key
+        backend = LocMemCache("bounded-fallback-large-source-cache", {})
+        with (patch("core.slicer_preview_cache.cache", backend),
+              patch("core.slicer_resource_budget.resource_snapshot",
+                    return_value={"available_bytes": 64 * 1024**2})):
+            self.assertTrue(warm_streamed_high_fidelity(self.asset))
+            result = cached_batch(preview_index_key(self.asset, "full-v1"), [0.2, 0.4])
+            self.assertTrue(result["complete"])
+            self.assertEqual(result["layers"][0]["segment_count"], 3)
+
     def test_streamed_warmer_does_not_publish_incomplete_geometry(self):
         from unittest.mock import patch
         from django.core.cache.backends.locmem import LocMemCache
