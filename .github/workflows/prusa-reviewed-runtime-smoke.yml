@@ -275,7 +275,6 @@ jobs:
 
       - name: Qualify native Prusa XL independent-head offline worker
         id: prusa_xl_offline_research
-        continue-on-error: true
         run: |
           set -euo pipefail
           docker run --rm --network none --user 10001:10001 \
@@ -289,11 +288,6 @@ jobs:
             /opt/engine-store/versions/prusaslicer/2.9.7/bin/prusa-slicer \
             /opt/engine-store/versions/prusaslicer/2.9.7/resources/profiles/PrusaResearch.ini \
             /tmp/mmu
-
-      - name: Record unqualified native XL worker research
-        if: ${{ steps.prusa_xl_offline_research.outcome == 'failure' }}
-        run: |
-          echo "::warning title=Prusa XL toolhead acceptance::Native XL independent-tool research did not pass. XL remains offline-only and blocked from production."
 
       - name: Research actual distinct MMU heater commands
         id: prusa_native_temperature_research
