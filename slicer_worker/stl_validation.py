@@ -7,6 +7,8 @@ import math
 import re
 import struct
 
+from .resource_budget import model_input_budget, operation_memory_budget
+
 
 MAX_STL_TRIANGLES = 500_000
 MAX_COORDINATE_MM = 1_000_000.0
@@ -26,6 +28,13 @@ def validate_stl(data: bytes, *, max_triangles=MAX_STL_TRIANGLES) -> dict:
         raise StlValidationError("Invalid bounded STL triangle budget.")
     if not isinstance(data, bytes) or not data:
         raise StlValidationError("An STL model is required.")
+    budget = model_input_budget()
+    if len(data) > budget:
+        raise StlValidationError("STL exceeds available input memory.")
+    face_budget = operation_memory_budget(
+        reserve_bytes=256 * 1024 * 1024, expansion_factor=256)
+    if face_budget is None:
+        face_budget = MAX_STL_TRIANGLES
     if len(data) >= 84:
         triangles = struct.unpack_from("<I", data, 80)[0]
         expected = 84 + 50 * triangles
@@ -41,8 +50,7 @@ def validate_stl(data: bytes, *, max_triangles=MAX_STL_TRIANGLES) -> dict:
             return {"format": "binary", "triangles": triangles}
     # Enforce ASCII STL nesting, not just counts of facets and vertices.
     # Malformed or truncated facet boundaries must never be passed to Orca.
-    if len(data) > 32 * 1024 * 1024:
-        raise StlValidationError("STL exceeds the model size limit.")
+
     try:
         content = data.decode("ascii")
     except UnicodeDecodeError:
