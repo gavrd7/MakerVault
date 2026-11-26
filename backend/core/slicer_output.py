@@ -14,6 +14,7 @@ from .models import FileAsset, SliceJob
 from .slicer_paint_assets import settings_use_paint_field
 from .slicer_gcode_thumbnails import add_gcode_thumbnails
 from .storage_usage import ensure_storage_capacity
+from .slicer_resource_budget import gcode_transport_budget
 
 
 MAX_OUTPUT = MAX_SCAN_BYTES
@@ -25,7 +26,7 @@ class SlicerOutputError(ValueError):
 
 
 def inspect_generated_gcode(raw: bytes, printer=None) -> dict:
-    if not isinstance(raw, bytes) or not 0 < len(raw) <= MAX_OUTPUT:
+    if not isinstance(raw, bytes) or not 0 < len(raw) <= gcode_transport_budget():
         raise SlicerOutputError("Generated G-code is empty or exceeds the inspected-size limit.")
     if b"\x00" in raw:
         raise SlicerOutputError("Binary G-code is not supported by this release.")
@@ -124,7 +125,7 @@ def store_generated_gcode(job_id, raw: bytes):
             thumbnail_sizes = ()
             try:
                 enriched, candidate_sizes = add_gcode_thumbnails(raw)
-                if len(enriched) <= MAX_OUTPUT:
+                if len(enriched) <= gcode_transport_budget():
                     raw, thumbnail_sizes = enriched, candidate_sizes
             except (ValueError, OSError, OverflowError, MemoryError):
                 raw = original_raw
