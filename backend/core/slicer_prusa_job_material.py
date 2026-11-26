@@ -78,8 +78,8 @@ def prepare_prusa_workbench_material(job, *, settings=None):
     if (job.engine != "prusaslicer" or job.engine_version != "2.9.7" or
             settings.get("multi_material_test") is not True):
         raise SlicerProfileError("A verified Prusa offline material job is required.")
-    if not job.printer_profile_id or not job.process_profile_id:
-        raise SlicerProfileError("Select owned native Prusa printer and process profiles.")
+    if not getattr(job, "printer_profile_id", None) or not getattr(job, "process_profile_id", None):
+        raise SlicerProfileError("Prusa multi-material slicing requires owned native printer and process profiles.")
     for profile, kind in ((job.printer_profile, "printer"),
                           (job.process_profile, "process")):
         if (profile is None or profile.owner_id != job.owner_id or
