@@ -17,4 +17,4 @@ def build_creality_single_filament_plate(objects_with_stl, *, bed_width, bed_dep
     """Bake independently validated models with unchanged MakerVault positions."""
     return build_prusa_placed_stl(
         objects_with_stl, bed_width=bed_width, bed_depth=bed_depth,
-        max_faces=1_500_000, max_stl_bytes=32 * 1024 * 1024)
+        max_faces=1_500_000, max_stl_bytes=84 + 50 * 1_500_000)
