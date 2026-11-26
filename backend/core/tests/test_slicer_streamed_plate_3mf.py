@@ -56,3 +56,37 @@ class StreamedFullPlateTests(SimpleTestCase):
                 ({"x_mm": -35,"y_mm":0,"rotation_deg":0,"scale_percent":100},shape),
                 ({"x_mm": 35,"y_mm":0,"rotation_deg":0,"scale_percent":100},shape),
             ],bed_width=220,bed_depth=220)
+
+
+    @patch("core.slicer_streamed_plate_3mf._available_bytes", return_value=8*1024**3)
+    def test_repeated_source_rendered_once_with_independent_placements(self, _memory):
+        from core.slicer_plate_3mf import _render_mesh
+        shape = fixture_stl()
+        item = {"x_mm": -35, "y_mm": 0, "rotation_deg": 0, "scale_percent": 100}
+        with patch("core.slicer_streamed_plate_3mf._render_mesh", wraps=_render_mesh) as render:
+            data = build_streamed_compound_3mf(
+                [(item, shape), ({**item, "x_mm": 35}, shape)],
+                bed_width=220, bed_depth=220)
+        self.assertEqual(render.call_count, 1)
+        with zipfile.ZipFile(io.BytesIO(data)) as archive:
+            root = ET.fromstring(archive.read("3D/3dmodel.model"))
+        q = "{" + NS + "}"
+        vertices = root.findall(".//" + q + "vertex")
+        faces = root.findall(".//" + q + "triangle")
+        self.assertEqual(len(faces), 8)
+        half = len(vertices) // 2
+        self.assertGreater(half, 0)
+        self.assertEqual(len(vertices), 2 * half)
+        for first, second in zip(vertices[:half], vertices[half:]):
+            self.assertAlmostEqual(float(second.attrib["x"]) - float(first.attrib["x"]), 70)
+            self.assertEqual(first.attrib["y"], second.attrib["y"])
+            self.assertEqual(first.attrib["z"], second.attrib["z"])
+
+    @patch("core.slicer_streamed_plate_3mf._available_bytes", return_value=8*1024**3)
+    def test_cached_source_still_checks_each_instance_placement(self, _memory):
+        shape = fixture_stl()
+        item = {"x_mm": 0, "y_mm": 0, "rotation_deg": 0, "scale_percent": 100}
+        with self.assertRaisesRegex(SlicerProfileError, "Model 2 extends beyond"):
+            build_streamed_compound_3mf(
+                [(item, shape), ({**item, "x_mm": 200}, shape)],
+                bed_width=220, bed_depth=220)
