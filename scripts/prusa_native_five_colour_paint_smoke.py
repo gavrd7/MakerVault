@@ -3,10 +3,11 @@
 Exercises actual palette, directional purge, native 3MF tower and positive-E
 external perimeter deposition. Research-only: never approves printer upload.
 """
+import base64
 import hashlib
+import uuid
 from pathlib import Path
 import re
-import subprocess
 import sys
 from tempfile import TemporaryDirectory
 
@@ -19,6 +20,8 @@ from slicer_worker.prusa_material_validation import validate_prusa_material_cand
 from slicer_worker.prusa_vendor_profiles import flatten_prusa_vendor_preset, validate_flat_prusa_preset
 from slicer_worker.prusa_gcode_audit import WORD, audit_prusa_positive_e
 from slicer_worker.prusa_colour_gcode_audit import audit_prusa_offline_colour_gcode
+from slicer_worker.service import _decode_payload
+from slicer_worker.runner import run_prusa
 
 
 def painted_external_walls(data):
@@ -101,15 +104,24 @@ def main(binary, vendor):
             receipt=validate_prusa_material_candidate(
                 project,printer_ini=printer,colour=True,tower=(55,150,0,250,210))
             assert receipt["tools"] == (1,tool+1),receipt
-            input_file=work/f"paint-T{tool}.3mf"
-            output_file=work/f"paint-T{tool}.gcode"
-            input_file.write_bytes(project)
-            subprocess.run([str(binary),
-                "--load",str(work/"printer.ini"),"--load",str(work/"filament.ini"),
-                "--load",str(work/"process.ini"),
-                "--export-gcode","--dont-arrange","--output",str(output_file),
-                str(input_file)],cwd=work,check=True,timeout=300)
-            raw=output_file.read_bytes()
+            encode=lambda raw:base64.b64encode(raw).decode("ascii")
+            request={
+                "job_id":str(uuid.uuid4()),"engine":"prusaslicer",
+                "engine_version":"2.9.7","model_format":"3mf",
+                "model":encode(project),"printer_profile":encode(printer),
+                "filament_profile":encode(palette),"process_profile":encode(process),
+                "prusa_offline_colour":{"tool":tool,"tower":[55,150,0,250,210]},
+            }
+            decoded=_decode_payload(request)
+            assert decoded["prusa_offline_colour"]["tool"]==tool
+            jobdir=work/f"native-T{tool}"
+            jobdir.mkdir()
+            for name,data in (("input.3mf",project),("printer.ini",printer),
+                              ("filament.ini",palette),("process.ini",process)):
+                (jobdir/name).write_bytes(data)
+            (jobdir/"prusa-offline-colour.marker").write_text("v1")
+            run_prusa(Path(binary),jobdir)
+            raw=(jobdir/"output.gcode").read_bytes()
             assert audit_prusa_positive_e(raw)["positive_e_moves"]>100
             independent=audit_prusa_offline_colour_gcode(
                 raw,project,printer_ini=printer,tool=tool,
