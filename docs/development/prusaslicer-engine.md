@@ -1,3 +1,13 @@
+## 26 November — qualified per-object Prusa MMU/XL wall and infill settings
+
+**Qualified on real native PrusaSlicer 2.9.7** at [reviewed runtime run 45746535217](https://github.com/gavrd7/MakerVault/actions/runs/45746535217): both five-logical-tool MMU3 and five-independent-head Prusa XL generated G-code that passed the existing wrong-tool deposition and MMU wipe tower audits **and** a new independent spatial wall-count comparison. The fixture used otherwise identical adjacent STL cubes with explicitly different native per-object `perimeters` (1 versus 5) and `fill_density` (15% versus 35%). The native acceptance for both mandatory five-tool cases passed.
+
+This permits two additional controls in the normal **offline** Prusa MMU/XL workbench: **Object wall loops** and **Object sparse infill density**. The importer validates bounded numbers against Prusa's native process schema; the native 3MF exporter writes exact per-object `perimeters` and `fill_density` metadata, while the independent worker validator requires the matching native model/tool bindings. Reject every other per-object setting and any combination with unqualified paint, seam, support, variable layers, modifiers or negative volumes. The global Prusa process settings remain a separate, owner-scoped subset.
+
+**Not a physical print qualification**: there is still no Prusa printer hardware validation, MMU filament loading, XL tool pickup, firmware/tool offsets, or approval to upload or start a print; all generated multi-tool assets retain `prusa_offline_native=true` and `printer_submission_verified=false`. PR #199 remains draft until end-to-end staging and remaining feature cases pass.
+
+---
+
 ## 26 November — research: native object-local wall/infill with MMU and XL (not yet enabled)
 
 The native Prusa 2.9.7 project builder and strict material-project validator already understand two bounded object-local fields: `perimeters` and `fill_density`. A new research fixture combines **one-wall** and **five-wall** equal-size cubes with independent MMU3 virtual tools or XL independent heads, while retaining native 3MF tool metadata. The pinned real native CLI acceptance must also demonstrate substantially different **spatial internal-perimeter extrusion counts** before the normal workbench gate can be loosened. The worker's existing audit separately requires correct tool-local positive extrusion and MMU wipe tower deposition. Unsupported per-object controls, modifiers, painting and layer schedules are still rejected.
