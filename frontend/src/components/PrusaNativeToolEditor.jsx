@@ -64,7 +64,7 @@ export default function PrusaNativeToolEditor({
     !models.some(model=>model.instance_id===row.instance_id));
   const status=value?(
     value.filament_profile_ids.every(Boolean) &&
-    ((models.length>=2 && models.length<=5) || singleColour) &&
+    ((models.length>=2 && models.length<=12) || singleColour) &&
     value.model_tools.length===models.length &&
     models.every(row=>value.model_tools.some(item=>item.instance_id===row.instance_id)) &&
     (singleColour
@@ -74,14 +74,14 @@ export default function PrusaNativeToolEditor({
         value.colour_tools[0].tool>=2 && value.colour_tools[0].tool<=value.tool_count
       : new Set(value.model_tools.map(row=>row.tool)).size>=2 &&
         !(value.colour_tools||[]).length) &&
-    (value.mode==="xl" ||
+    (value.mode!=="mmu" ||
       (primeTower!=null && value.purge_matrix?.every((row,i)=>
         row.every((amount,j)=>i===j||amount!=null&&amount>=1&&amount<=1000))))
   ):false;
   return <section className="slicerPrusaNativeTools" aria-label="Prusa native material tools"
     style={{minWidth:0,padding:12,border:"1px solid var(--border-color, #60708044)",borderRadius:10}}>
     <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:12,flexWrap:"wrap"}}>
-      <strong>Prusa MMU / XL native materials</strong>
+      <strong>Prusa MMU / XL / INDX native materials</strong>
       {!value?<button type="button" disabled={disabled}
         onClick={()=>onChange?.(fresh("mmu",2,primaryProfileId))}>
         Configure native tools
@@ -92,18 +92,24 @@ export default function PrusaNativeToolEditor({
     </div>
     <p className="projectUploadHint">Assign actual Prusa native extruders to models, independently of loaded
       printer bays. This produces offline preview/Library G-code only; physical MMU loading,
-      XL pickup and printer submission are not approved.</p>
+      INDX docking and printer submission require matching native firmware and hardware.</p>
     {value && <>
       <div style={{display:"flex",gap:12,flexWrap:"wrap"}}>
         <label>Toolchanger architecture
           <select value={value.mode} disabled={disabled}
             onChange={e=>{
               const mode=e.target.value;
-              onChange?.({...value,mode,purge_matrix:mode==="mmu"?matrixFor(value.tool_count):null});
-              if(mode==="xl")onPrimeTowerChange?.(null);
+              const count=mode==="indx"?value.tool_count:Math.min(value.tool_count,5);
+              onChange?.({...value,mode,tool_count:count,
+                filament_profile_ids:value.filament_profile_ids.slice(0,count),
+                model_tools:value.model_tools.filter(row=>row.tool<=count),
+                colour_tools:(value.colour_tools||[]).filter(row=>row.tool<=count),
+                purge_matrix:mode==="mmu"?matrixFor(count):null});
+              if(mode!=="mmu")onPrimeTowerChange?.(null);
             }}>
             <option value="mmu">MMU3 — one nozzle, multiple filaments</option>
             <option value="xl">Prusa XL — independent toolheads</option>
+            <option value="indx">Bondtech INDX — up to eight tools</option>
           </select>
         </label>
         <label>Native logical tools
@@ -116,12 +122,12 @@ export default function PrusaNativeToolEditor({
                 colour_tools:(value.colour_tools||[]).filter(row=>row.tool<=count),
                 purge_matrix:value.mode==="mmu"?matrixFor(count):null});
             }}>
-            {[2,3,4,5].map(count=><option key={count} value={count}>{count}</option>)}
+            {(value.mode==="indx"?[2,3,4,5,6,7,8]:[2,3,4,5]).map(count=><option key={count} value={count}>{count}</option>)}
           </select>
         </label>
       </div>
       <p className="projectUploadHint">The selected native printer profile must contain the same
-        nozzle/tool count and mechanism. A profile with six to eight tools (INDX) remains unqualified.</p>
+        nozzle/tool count and mechanism. For INDX use a native 4–8 tool printer preset with its own firmware-specific pickup and docking commands; MakerVault never fabricates these commands.</p>
       <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(200px,1fr))",gap:10}}>
         {value.filament_profile_ids.map((id,index)=><label key={index}>
           Native T{index} filament profile
