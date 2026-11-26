@@ -3,6 +3,7 @@
 Source STLs and tool identities must already be owner-resolved. A successful
 Prusa MMU/XL CLI exit, T0/T1 tokens or prime tower alone does not prove that
 each real printable object is extruded by its assigned native material.
+Stationary priming and cross-object travel with E do not qualify as deposition.
 This audit is read-only and does not authorise hardware printing.
 """
 import math
@@ -39,6 +40,7 @@ def audit_prusa_native_object_tools(data, models, assignments, *,
         raise ValueError("Native Prusa tool audit requires text G-code.") from None
     tool=None
     relative=False
+    relative_xy=False
     e=0.
     x=y=None
     good=[0]*len(models)
@@ -58,7 +60,7 @@ def audit_prusa_native_object_tools(data, models, assignments, *,
             continue
         if opcode.startswith("T") and opcode[1:].isdigit():
             raise ValueError("Prusa native G-code selected an unexpected tool.")
-        if opcode not in ("M82","M83","G92","G0","G00","G1","G01"):
+        if opcode not in ("M82","M83","G90","G91","G92","G0","G00","G1","G01"):
             continue
         words={key.upper():float(v) for key,v in _WORD.findall(command)}
         if any(not math.isfinite(v) or abs(v)>1e9 for v in words.values()):
@@ -67,19 +69,34 @@ def audit_prusa_native_object_tools(data, models, assignments, *,
             relative=False
         elif opcode=="M83":
             relative=True
+        elif opcode=="G90":
+            relative_xy=False
+        elif opcode=="G91":
+            relative_xy=True
         elif opcode=="G92":
             e=words.get("E",e)
-        else:
             x=words.get("X",x)
             y=words.get("Y",y)
+        else:
+            old_x,old_y=x,y
+            if relative_xy:
+                x=x+words["X"] if x is not None and "X" in words else (None if "X" in words else x)
+                y=y+words["Y"] if y is not None and "Y" in words else (None if "Y" in words else y)
+            else:
+                x=words.get("X",x)
+                y=words.get("Y",y)
             if "E" not in words:
                 continue
             delta=words["E"] if relative else words["E"]-e
             e=e+words["E"] if relative else words["E"]
-            if delta<=1e-6 or x is None or y is None:
+            if (delta<=1e-6 or opcode not in ("G1","G01") or
+                    x is None or y is None or old_x is None or old_y is None or
+                    abs(x-old_x)+abs(y-old_y)<=1e-7):
                 continue
             for i,(xmin,xmax,ymin,ymax,_zmin,_zmax) in enumerate(bounds):
-                if xmin-.12 <= x <= xmax+.12 and ymin-.12 <= y <= ymax+.12:
+                if (xmin-.12 <= x <= xmax+.12 and ymin-.12 <= y <= ymax+.12
+                        and xmin-.12 <= old_x <= xmax+.12
+                        and ymin-.12 <= old_y <= ymax+.12):
                     if tool==assignments[i]:
                         good[i]+=1
                     else:
