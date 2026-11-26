@@ -44,12 +44,13 @@ class PrusaFilamentPaletteTests(TestCase):
             with self.subTest(profiles=profiles), self.assertRaises(SlicerProfileError):
                 compile_prusa_filament_palette(printer, profiles)
 
-    def test_eight_tool_palette_must_wait_for_indx_qualification(self):
+    def test_six_to_eight_tool_palettes_are_explicit_and_ordered(self):
         for count in (6,7,8):
-            with self.subTest(count=count), self.assertRaises(SlicerProfileError):
-                compile_prusa_filament_palette(
+            with self.subTest(count=count):
+                result = compile_prusa_filament_palette(
                     ini(",".join(["0.4"]*count)),
-                    [filament() for _ in range(count)])
+                    [filament(200+i,205+i) for i in range(count)])
+                self.assertIn(("temperature = "+",".join(str(200+i) for i in range(count))).encode(),result)
 
     @patch("core.slicer_prusa_filament_palette.resolved_prusa_profile")
     def test_mixed_engine_presets_rejected_before_private_read(self, resolve):
