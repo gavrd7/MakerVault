@@ -49,6 +49,30 @@ class PrusaPlacedStlTests(TestCase):
         self.assertAlmostEqual(min(second),135,places=3)
         self.assertAlmostEqual(max(second),155,places=3)
 
+    def test_twenty_distinct_models_preserve_each_native_position(self):
+        models = []
+        for index in range(20):
+            x = -80 + (index % 5) * 40
+            y = -60 + (index // 5) * 40
+            models.append((item(x_mm=x, y_mm=y), cube(size=10 + index % 5)))
+        baked = build_prusa_placed_stl(models, bed_width=220, bed_depth=220)
+        self.assertEqual(inspect_stl(baked)["triangles"], 240)
+        all_vertices = vertices(baked)
+        for index, (_item, _source) in enumerate(models):
+            with self.subTest(index=index):
+                part = all_vertices[index * 36:(index + 1) * 36]
+                cx = 110 - 80 + (index % 5) * 40
+                cy = 110 - 60 + (index // 5) * 40
+                self.assertAlmostEqual((min(p[0] for p in part) + max(p[0] for p in part)) / 2, cx)
+                self.assertAlmostEqual((min(p[1] for p in part) + max(p[1] for p in part)) / 2, cy)
+
+    def test_prusa_200_instance_guard_is_independent_of_geometry_budget(self):
+        # The editor supports up to 200 items. A larger job still has to
+        # pass native STL and resource validation separately.
+        with self.assertRaisesRegex(SlicerProfileError, "one to 200"):
+            build_prusa_placed_stl(
+                [(item(), cube(size=5))] * 201, bed_width=220, bed_depth=220)
+
     def test_streamed_stl_output_is_consistent_and_never_mutates_sources(self):
         source = cube()
         original = bytes(source)
