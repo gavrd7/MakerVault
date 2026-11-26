@@ -82,6 +82,11 @@ def parse_prusa_vendor_bundle(raw: bytes) -> dict:
             raise PrusaPresetError("Invalid Prusa vendor preset setting.")
         key, _, value = line.partition("=")
         key, value = key.strip(), value.strip()
+        # The pinned Prusa INDX 2.5.16 vendor update contains exactly one
+        # upstream spelling with an embedded space. Canonicalize only this
+        # named native key; never permit arbitrary space-bearing CLI keys.
+        if key == "top solid_infill_speed":
+            key = "top_solid_infill_speed"
         _checked_setting(key, value)
         if len(current) >= MAX_KEYS or key in current:
             raise PrusaPresetError("Duplicate or excessive Prusa preset setting.")
