@@ -156,7 +156,7 @@ def creality_command(binary: Path, workdir: Path):
         validate_worker_3mf(model.read_bytes())
     else:
         try:
-            validate_stl(model.read_bytes())
+            validate_stl(model.read_bytes(), max_triangles=1_500_000 if placed.exists() else 500_000)
         except StlValidationError as exc:
             raise WorkerError("Input STL failed structural validation.") from exc
     profiles = [
