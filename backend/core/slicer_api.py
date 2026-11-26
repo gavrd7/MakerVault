@@ -857,10 +857,10 @@ def import_project_3mf(request):
                         raise ValueError("Invalid project paint sidecar.")
                     seen_paint_files.add(filename)
                     info = archive.getinfo(filename)
-                    if not 0 < info.file_size <= 16 * 1024 * 1024:
+                    if not 0 < info.file_size <= xml_geometry_budget():
                         raise ValueError("Project paint sidecar exceeds safe limits.")
                     sidecar_bytes += info.file_size
-                    if sidecar_bytes > 64 * 1024 * 1024:
+                    if sidecar_bytes > xml_geometry_budget():
                         raise ValueError("Project painting regions exceed safe limits.")
                     value = json.loads(archive.read(info).decode("utf-8"))
                     if not isinstance(value, dict) or value.get("version") != 2:
@@ -876,10 +876,10 @@ def import_project_3mf(request):
                         raise ValueError("Invalid project support-paint sidecar.")
                     seen_paint_files.add(support_filename)
                     info = archive.getinfo(support_filename)
-                    if not 0 < info.file_size <= 16 * 1024 * 1024:
+                    if not 0 < info.file_size <= xml_geometry_budget():
                         raise ValueError("Project support-paint sidecar exceeds safe limits.")
                     sidecar_bytes += info.file_size
-                    if sidecar_bytes > 64 * 1024 * 1024:
+                    if sidecar_bytes > xml_geometry_budget():
                         raise ValueError("Project painting regions exceed safe limits.")
                     value = json.loads(archive.read(info).decode("utf-8"))
                     row["support_paint"] = validate_support_paint(value)
@@ -897,10 +897,10 @@ def import_project_3mf(request):
                             raise ValueError("Invalid project semantic paint sidecar.")
                         seen_paint_files.add(native_file)
                         info = archive.getinfo(native_file)
-                        if not 0 < info.file_size <= 16 * 1024 * 1024:
+                        if not 0 < info.file_size <= xml_geometry_budget():
                             raise ValueError("Project semantic paint sidecar exceeds safe limits.")
                         sidecar_bytes += info.file_size
-                        if sidecar_bytes > 64 * 1024 * 1024:
+                        if sidecar_bytes > xml_geometry_budget():
                             raise ValueError("Project painting regions exceed safe limits.")
                         row[field] = validate_semantic_paint(
                             json.loads(archive.read(info).decode("utf-8")), kind)
