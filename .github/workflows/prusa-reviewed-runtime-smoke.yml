@@ -324,8 +324,6 @@ jobs:
           url="https://raw.githubusercontent.com/prusa3d/PrusaSlicer-settings-prusa-fff/058c542282d5a512dcc73fc8be9288fc253ddcfd/PrusaResearch/2.5.16.ini"
           curl --fail --location --silent --show-error --retry 2 --max-time 90 "$url" \
             -o "$RUNNER_TEMP/prusa-indx-official.ini"
-          echo "1aad47dce4b3967c73b38bc996e1ac947c8a23d4  $RUNNER_TEMP/prusa-indx-official.ini" |
-            git hash-object --stdin >/dev/null
           test "$(git hash-object "$RUNNER_TEMP/prusa-indx-official.ini")" = \
             "1aad47dce4b3967c73b38bc996e1ac947c8a23d4"
           echo "PRUSA_INDX_VENDOR=$RUNNER_TEMP/prusa-indx-official.ini" >> "$GITHUB_ENV"
