@@ -14,6 +14,14 @@ from .slicer_prusa_material_preflight import (
 )
 from .slicer_profiles import SlicerProfileError
 
+# High-confidence engine-native settings already supported on plain Prusa jobs.
+# Multi-tool acceptance is deliberately narrower until mixed-feature CLI
+# evidence qualifies the remaining settings independently.
+PRUSA_MULTITOOL_PROCESS_KEYS = frozenset({
+    "layer_height", "wall_loops", "top_shell_layers",
+    "bottom_shell_layers", "sparse_infill_density",
+})
+
 
 def _virtual_native_tools(job, settings, objects, kind, count):
     """Resolve browser-assigned native tools without physical feeder telemetry."""
@@ -118,12 +126,19 @@ def prepare_prusa_workbench_material(job, *, settings=None):
             raise SlicerProfileError("Prusa multi-material models cannot combine unqualified edits.")
         if row.get("z_mm", 0) != 0 or row.get("text_model"):
             raise SlicerProfileError("Prusa offline materials require non-elevated STL models.")
-    if (settings.get("process_overrides") or settings.get("plate_volumes") or
+    overrides = settings.get("process_overrides", {})
+    if not isinstance(overrides, dict) or set(overrides) - PRUSA_MULTITOOL_PROCESS_KEYS:
+        raise SlicerProfileError(
+            "This Prusa multi-tool slice supports only qualified global "
+            "layer height, walls, top/bottom shells and infill density settings.")
+    if (settings.get("plate_volumes") or
             settings.get("creality_auto_arrange_offline")):
         raise SlicerProfileError("Unqualified global settings or independent volumes cannot be dropped.")
 
     if settings.get("prusa_native_tools") is not None:
-        return _virtual_native_tools(job, settings, objects, kind, count)
+        selected_kind, plan = _virtual_native_tools(job, settings, objects, kind, count)
+        plan["process_overrides"] = overrides
+        return selected_kind, plan
 
     routes = settings.get("material_tool_bindings")
     selections = settings.get("slot_filament_profiles")
@@ -187,6 +202,7 @@ def prepare_prusa_workbench_material(job, *, settings=None):
         "process_profile": job.process_profile, "filament_profiles": ordered,
         "tools": tools, "bed_width": width, "bed_depth": depth,
     }
+    result["process_overrides"] = overrides
     if kind == "single_nozzle_changer":
         tower = settings.get("prime_tower")
         flush = settings.get("flush_settings")
