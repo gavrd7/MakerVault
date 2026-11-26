@@ -502,7 +502,7 @@ export default function SlicerGcodePreview({ fileId = null, preview, bedSize = n
           <button type="button" onClick={() => setRetryGeneration(value => value + 1)}>
             Retry remaining layers
           </button>
-        )
+        )}
       </div>
       {wholeModel.complete && <small className="slicerPreviewAccuracyNote">
         Full-detail preview preserves walls, skins, supports and prime tower; only collinear extrusion moves are merged. Select a layer to inspect the original movements.
