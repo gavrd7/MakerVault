@@ -107,7 +107,9 @@ def prepare_prusa_workbench_material(job, *, settings=None):
     ordered = [None] * count
     for slot, tool in by_slot.items():
         profile = owned.get(str(chosen[slot]))
-        if profile is None or profile.owner_id != job.owner_id:
+        if (profile is None or profile.owner_id != job.owner_id or
+                profile.engine != "prusaslicer" or profile.engine_version != "2.9.7"
+                or profile.kind != "filament"):
             raise SlicerProfileError("A selected native filament preset is not owned.")
         ordered[tool] = profile
     if job.filament_profile_id not in {p.pk for p in ordered}:
