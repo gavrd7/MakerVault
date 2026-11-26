@@ -318,6 +318,19 @@ jobs:
             /opt/engine-store/versions/prusaslicer/2.9.7/bin/prusa-slicer \
             /opt/engine-store/versions/prusaslicer/2.9.7/resources/profiles/PrusaResearch.ini
 
+      - name: Require eight-tool independent Prusa native T0–T7 attribution
+        run: |
+          set -euo pipefail
+          docker run --rm --network none --user 10001:10001 \
+            -v "$TEST_VOLUME:/opt/engine-store:ro" \
+            -v "$GITHUB_WORKSPACE/scripts/prusa_native_indx_eight_tool_smoke.py:/tmp/indx_eight.py:ro" \
+            -v "$GITHUB_WORKSPACE/backend:/tmp/mv-backend:ro" \
+            -e PYTHONPATH=/tmp/mv-backend:/opt/makervault-slicer \
+            --entrypoint python3 prusa-integration:smoke \
+            /tmp/indx_eight.py \
+            /opt/engine-store/versions/prusaslicer/2.9.7/bin/prusa-slicer \
+            /opt/engine-store/versions/prusaslicer/2.9.7/resources/profiles/PrusaResearch.ini
+
       - name: Research actual distinct MMU heater commands
         id: prusa_native_temperature_research
         continue-on-error: true
