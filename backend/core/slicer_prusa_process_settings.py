@@ -65,7 +65,7 @@ def prusa_process_schema(raw):
     return result
 
 
-def enable_prusa_painted_support(raw):
+def enable_prusa_painted_support(raw, *, enforcers_only=False):
     """Enable upstream support generation only for a painted enforcer request.
 
     Keep the user's explicit automatic/manual support choice when present.
@@ -74,9 +74,13 @@ def enable_prusa_painted_support(raw):
     """
     options = parse_prusa_profile(raw, "process")
     options["support_material"] = "1"
-    # A sparse user preset without this key defaults to manual-only supports;
-    # never silently enable automatic supports in response to painted enforcers.
-    options.setdefault("support_material_auto", "0")
+    # A sparse user preset without this key defaults to manual-only supports.
+    # Two-object native support isolation was proved with manual enforcers;
+    # do not let an automatic-support preset add unpainted-neighbour geometry.
+    if enforcers_only:
+        options["support_material_auto"] = "0"
+    else:
+        options.setdefault("support_material_auto", "0")
     output = "".join(f"{key} = {value}\n" for key, value in sorted(options.items())).encode("utf-8")
     parse_prusa_profile(output, "process")
     return output
