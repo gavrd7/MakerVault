@@ -72,6 +72,32 @@ def _append_continuous_bead(layer, move, max_records, budget, motion_token):
     return True
 
 
+def streamed_gcode_lines(handle):
+    """Decode source lines incrementally, without allocating a full G-code copy.
+
+    A single maliciously long line must not allocate unbounded memory. Skip
+    lines above the parser's existing 4096-character bound, draining them in
+    small chunks until the next newline. Invalid UTF-8 and binary G-code are
+    rejected rather than silently producing an incomplete toolpath.
+    """
+    while True:
+        raw = handle.readline(4097)
+        if not raw:
+            return
+        if b"\x00" in raw:
+            raise ValueError("Binary G-code is not supported by this viewer.")
+        if len(raw) > 4096:
+            if not raw.endswith(b"\n"):
+                while True:
+                    tail = handle.readline(4097)
+                    if b"\x00" in tail:
+                        raise ValueError("Binary G-code is not supported by this viewer.")
+                    if not tail or tail.endswith(b"\n"):
+                        break
+            continue
+        yield raw.decode("utf-8")
+
+
 def layer_batch_toolpaths(text, target_zs, *, overview=False, overview_limit=350,
                           high_fidelity=False, max_requested_layers=MAX_BATCH_LAYERS,
                           max_total_segments=MAX_BATCH_SEGMENTS):
@@ -117,7 +143,7 @@ def layer_batch_toolpaths(text, target_zs, *, overview=False, overview_limit=350
     motion_token = 0
     tool = None
 
-    for raw in text.splitlines():
+    for raw in (text.splitlines() if isinstance(text, str) else text):
         if len(raw) > 4096:
             continue
         line = raw.strip()
