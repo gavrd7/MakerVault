@@ -268,6 +268,34 @@ class PrusaOfflineMmuPreflightTests(TestCase):
                 self.assertEqual(result["expected_tools"], (1,n))
                 self.assertNotIn(b"wipe_tower = 1", result["process"])
 
+
+    def test_indx_owner_project_preserves_native_modifier_and_cavity(self):
+        from core.tests.test_slicer_prusa_3mf import volume
+        from slicer_worker.prusa_material_validation import validate_prusa_material_candidate
+        values,assets=self.parts()
+        values["filament_profiles"] += [profile("filament") for _ in range(3)]
+        assets += [assets[-1]] * 3
+        assets[0]=ini(",".join(["0.4"]*8),"0")
+        modifier=volume("modifier",{"sparse_infill_density":75})
+        modifier.update(width_mm=3,depth_mm=3,height_mm=5,x_mm=-35,y_mm=0,z_mm=4)
+        cavity=volume("negative",{})
+        cavity.update(width_mm=3,depth_mm=3,height_mm=5,x_mm=35,y_mm=0,z_mm=4)
+        values["rows"]=[
+            (item(x_mm=-35,modifier_volumes=[modifier]),cube()),
+            (item(x_mm=35,modifier_volumes=[cavity]),cube())]
+        values["tools"]=[1,8]
+        xl={key:values[key] for key in
+            ("owner_id","printer_profile","process_profile",
+             "filament_profiles","rows","tools","bed_width","bed_depth")}
+        with patch("core.slicer_prusa_material_preflight.resolved_prusa_profile",
+                   side_effect=assets):
+            candidate=prepare_prusa_offline_xl_candidate(**xl)
+        result=validate_prusa_native_3mf(candidate["model"])
+        self.assertEqual(result["objects"],2)
+        self.assertEqual(result["regions"],2)
+        self.assertEqual(validate_prusa_material_candidate(
+            candidate["model"],printer_ini=assets[0],tools=[1,8])["tools"],(1,8))
+
     def test_five_explicit_mmu_models_preserve_tool_order(self):
         values,assets=self.parts()
         values["rows"]=[
