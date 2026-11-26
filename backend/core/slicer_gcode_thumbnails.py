@@ -16,6 +16,8 @@ NUMBER = r"[-+]?(?:\d+(?:\.\d*)?|\.\d+)"
 AXIS = re.compile(r"([XYZE])\s*(" + NUMBER + r")", re.I)
 TOOL = re.compile(r"^T(\d{1,2})\s*(?:;.*)?$", re.I)
 HEX = re.compile(r"^#[0-9A-Fa-f]{6}$")
+FEATURE = re.compile(r"^;\s*TYPE:\s*(.+)$", re.I)
+NON_MODEL_FEATURES = frozenset({"custom", "skirt/brim", "wipe tower", "prime tower"})
 MAX_LINES = 1_000_000
 MAX_SEGMENTS = 180_000
 MAX_RENDER_SEGMENTS = 48_000
@@ -41,6 +43,7 @@ def _paths(gcode):
     colours = []
     tagged_objects = "EXCLUDE_OBJECT_START" in gcode
     in_object = False
+    feature = None
     segments = []
     observed = 0
     stride = 1
@@ -51,6 +54,9 @@ def _paths(gcode):
         if not line:
             continue
         if line.startswith(";"):
+            feature_match = FEATURE.match(line)
+            if feature_match:
+                feature = feature_match.group(1).strip().lower()
             match = FILAMENT_COLOURS.match(line)
             if match and not colours:
                 colours = [value.strip().strip('"') for value in match.group(1).split(";")][:16]
@@ -95,6 +101,7 @@ def _paths(gcode):
                         all(abs(value) <= 10000 for value in (x, y, z, nx, ny, nz)) and
                         ("X" in params or "Y" in params) and
                         (not tagged_objects or in_object) and
+                        feature not in NON_MODEL_FEATURES and
                         abs(nx - x) + abs(ny - y) > 0.001):
                     observed += 1
                     if observed % stride == 0:
@@ -140,7 +147,10 @@ def _render_png(segments, colours, size):
     canvas_size = size * supersample
     im = Image.new("RGBA", (canvas_size, canvas_size), (0, 0, 0, 0))
     draw = ImageDraw.Draw(im)
-    line_width = max(2, round(size / 130 * supersample))
+    # At 96px subpixel strokes disappear on printer displays. Give small
+    # thumbnails an opaque, legible silhouette without changing the 300px.
+    line_width = (max(2, round(1.65 * supersample)) if size <= 96
+                  else max(2, round(size / 130 * supersample)))
     # A narrow dark keyline separates pale filament from a light printer UI.
     edge_width = line_width + max(1, supersample // 2)
     low_z = min(p[5] for p in projected)
