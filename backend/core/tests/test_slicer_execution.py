@@ -762,3 +762,42 @@ class PrusaOfflineMaterialAdmissionTests(SimpleTestCase):
         with patch("core.slicer_prusa_job_material.prepare_prusa_workbench_material") as plan:
             self.assertTrue(_validate_plate_execution(job))  # Preserve original engine admission semantics.
         plan.assert_not_called()
+
+
+class PrusaTwoObjectSupportAdmissionTests(SimpleTestCase):
+    """The normal queued workbench must use the new gate only for Prusa 2.9.7."""
+
+    def sample(self, engine="prusaslicer", **edits):
+        from types import SimpleNamespace
+        from scripts.prusa_generate_support_overhang import cantilever, support_mask
+        painted = support_mask(cantilever(), 0)
+        rows = [
+            {"asset_id": "left", "x_mm": -50, "y_mm": 0, "z_mm": 0,
+             "rotation_deg": 0, "scale_percent": 100, "support_paint": painted},
+            {"asset_id": "right", "x_mm": 50, "y_mm": 0, "z_mm": 0,
+             "rotation_deg": 0, "scale_percent": 100},
+        ]
+        for i, update in edits.items():
+            if i == "neighbour":
+                rows[1].update(update)
+            elif i == "painted":
+                rows[0].update(update)
+        return SimpleNamespace(
+            engine=engine,
+            engine_version="2.9.7" if engine == "prusaslicer" else "2.5.0",
+            settings={"plate_objects": rows}, printer_profile_id="selected-prusa-native",
+            printer_id=None, filament_profile_id=None,
+        )
+
+    def test_two_object_painted_support_admission_is_prusa_only(self):
+        self.assertTrue(_validate_plate_execution(self.sample()))
+        with self.assertRaises(SlicerExecutionError):
+            _validate_plate_execution(self.sample(engine="orcaslicer"))
+        for invalid in (
+            {"support_paint": self.sample().settings["plate_objects"][0]["support_paint"]},
+            {"scale_percent": 120},
+            {"seam_paint": {"regions": [{"slot": 0}]}},
+            {"process_overrides": {"wall_loops": 4}},
+        ):
+            with self.subTest(invalid=invalid), self.assertRaises(SlicerExecutionError):
+                _validate_plate_execution(self.sample(neighbour=invalid))
