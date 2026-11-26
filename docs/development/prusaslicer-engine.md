@@ -1,3 +1,23 @@
+### Native material deposition audit — stationary toolchange recovery
+
+The official CORE One INDX 8T profile demonstrated 1,042 genuinely
+deposited extrusion movements per model with eight independently
+selected tools, plus approximately 79 **E-only toolchange recovery
+commands** at the previous model XY before nozzle travel. The earlier
+material audit counted those stationary E movements as deposited
+geometry and therefore reported false wrong-tool leakage.
+
+The Prusa material audit now counts only positively extruding,
+**moving XY G1/G01 segments** with both endpoints within an
+independently verified model footprint; it handles G90/G91,
+M82/M83 and G92 resets. Stationary priming and traversing
+extrusion segments do not qualify model material or tower deposition.
+Existing MMU/XL behaviour must pass the same stricter tests,
+along with actual official INDX 8T native G-code and independent
+model-tool attribution.
+
+---
+
 ### Official INDX 8T spatial tool identity diagnosis
 
 The one-variable 2.9.7 toolchange compatibility mapping successfully
