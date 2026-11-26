@@ -2438,10 +2438,7 @@ def file_gcode_layer(request, asset_id):
         return _error("Invalid selected-layer page.", status=400)
     from .slicer_layer_preview import layer_batch_toolpaths
     from .slicer_layer_preview import streamed_gcode_lines
-    from .slicer_resource_budget import gcode_transport_budget
     try:
-        if asset.file.size > gcode_transport_budget():
-            return _error("G-code exceeds available preview memory budget.", status=413)
         with asset.file.storage.open(asset.file.name, "rb") as handle:
             if asset.file.size > MAX_LAYER_SOURCE_BYTES:
                 source = streamed_gcode_lines(handle)
@@ -2571,9 +2568,6 @@ def file_gcode_layers(request, asset_id):
         streamed_gcode_lines, MAX_FULL_PREVIEW_SEGMENTS, MAX_BATCH_SEGMENTS,
         MAX_LAYER_SEGMENTS,
     )
-    from .slicer_resource_budget import gcode_transport_budget
-    if asset.file.size > gcode_transport_budget():
-        return _error("G-code exceeds available preview memory budget.", status=413)
     try:
         with asset.file.storage.open(asset.file.name, "rb") as handle:
             if asset.file.size > MAX_LAYER_SOURCE_BYTES:
