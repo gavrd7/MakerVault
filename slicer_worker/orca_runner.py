@@ -214,6 +214,7 @@ def orca_command(binary: Path, workdir: Path, *,
         raise WorkerError("Experimental plate mode requires a 3MF input.")
     model = _regular_file(workdir, "input.3mf" if is_project else "input.stl", MAX_MODEL_BYTES)
     native_object_settings = False
+    compact_triangles = None
     if not is_project:
         try:
             validate_stl(model.read_bytes())
@@ -257,6 +258,48 @@ def orca_command(binary: Path, workdir: Path, *,
             if "Metadata/model_settings.config" in archive.namelist():
                 metadata = ET.fromstring(archive.read("Metadata/model_settings.config"))
                 native_object_settings = bool(metadata.findall("object"))
+            elif not palette and not native_modifiers:
+                # The separately validated compact contract contains exactly
+                # one shared mesh and one component group. Count actual
+                # placed facets instead of using the old fixed CLI triangle
+                # ceiling. No special handling for other 3MF projects.
+                root = ET.fromstring(archive.read("3D/3dmodel.model"))
+                ns = "{http://schemas.microsoft.com/3dmanufacturing/core/2015/02}"
+                group = root.find("./" + ns + "resources/" + ns + "object[@id='2']/" + ns + "components")
+                if group is not None:
+                    mesh = root.find("./" + ns + "resources/" + ns + "object[@id='1']/" + ns + "mesh")
+                    faces = mesh.find(ns + "triangles")
+                    compact_triangles = len(faces) * len(group)
+                    native_object_settings = True
+                    # Estimate expanded native mesh working-set cost against
+                    # measured available memory, not an arbitrary instance
+                    # count or maximum number of faces.
+                    try:
+                        available = None
+                        with open("/proc/meminfo", encoding="ascii") as info:
+                            for line in info:
+                                if line.startswith("MemAvailable:"):
+                                    available = int(line.split()[1]) * 1024
+                                    break
+                        for prefix in ("/sys/fs/cgroup", "/sys/fs/cgroup/memory"):
+                            maximum_name, used_name = (("memory.max", "memory.current")
+                                if prefix == "/sys/fs/cgroup" else
+                                ("memory.limit_in_bytes", "memory.usage_in_bytes"))
+                            try:
+                                with open(prefix + "/" + maximum_name, encoding="ascii") as f:
+                                    maximum = f.read().strip()
+                                with open(prefix + "/" + used_name, encoding="ascii") as f:
+                                    used = f.read().strip()
+                                if maximum.isdecimal() and used.isdecimal():
+                                    room = max(0, int(maximum) - int(used))
+                                    available = min(available, room) if available is not None else room
+                                    break
+                            except (OSError, ValueError):
+                                continue
+                    except (OSError, ValueError):
+                        pass
+                    if available is None or available < 256 * 1024 * 1024 + compact_triangles * 320:
+                        raise WorkerError("Not enough available worker memory for the repeated-model Orca plate.")
     outdir = workdir / "orca-output"
     if outdir.exists() or outdir.is_symlink():
         raise WorkerError("Output directory is not empty; fresh scratch is required.")
@@ -270,7 +313,7 @@ def orca_command(binary: Path, workdir: Path, *,
         *(["--arrange", "1"] if not is_project else
           ["--arrange", "0"] if native_object_settings or experimental_no_arrange else []),
         "--slice", "0" if experimental_all_plates else "1",
-        "--mtcpp", "500000", "--mstpp", "300",
+        "--mtcpp", str(max(500000, compact_triangles or 0)), "--mstpp", "300",
         "--outputdir", str(outdir),
     ]
 
