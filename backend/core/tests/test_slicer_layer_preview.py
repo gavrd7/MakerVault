@@ -58,6 +58,29 @@ class FullLayerParserTests(SimpleTestCase):
                 with io.BytesIO(raw) as handle:
                     list(streamed_gcode_lines(handle))
 
+    def test_dense_full_detail_layer_can_be_paged_without_missing_toolpaths(self):
+        from unittest.mock import patch
+        with patch("core.slicer_layer_preview.MAX_LAYER_SEGMENTS", 2):
+            first = layer_batch_toolpaths(GCODE, [0.2], high_fidelity=True,
+                                          page_start=0, max_total_segments=2)
+            second = layer_batch_toolpaths(GCODE, [0.2], high_fidelity=True,
+                                           page_start=2, max_total_segments=2)
+        self.assertFalse(first["complete"])
+        self.assertEqual(first["layers"][0]["next_offset"], 2)
+        self.assertTrue(first["layers"][0]["has_more"])
+        self.assertTrue(second["complete"])
+        self.assertEqual(second["layers"][0]["next_offset"], 3)
+        self.assertFalse(second["layers"][0]["has_more"])
+        combined = first["layers"][0]["segments"] + second["layers"][0]["segments"]
+        self.assertEqual(combined, exact_layer_toolpaths(GCODE, 0.2)["segments"])
+
+    def test_pagination_rejects_invalid_aggregate_requests(self):
+        for kwargs in ({"page_start": -1}, {"page_start": "0"},
+                       {"page_start": 0, "overview": True},
+                       {"page_start": 0, "high_fidelity": False}):
+            with self.subTest(kwargs=kwargs), self.assertRaises(ValueError):
+                layer_batch_toolpaths(GCODE, [0.2], **kwargs)
+
     def test_batched_layers_are_exact_and_ordered(self):
         result = layer_batch_toolpaths(GCODE, [0.2, 0.4])
         self.assertTrue(result["complete"])
@@ -339,6 +362,34 @@ class FullLayerEndpointTests(TestCase):
             self.assertEqual(response.status_code, 200, response.content)
             self.assertTrue(response.json()["complete"])
             schedule.assert_not_called()
+
+    def test_full_detail_endpoint_paginates_dense_layers_and_keeps_owner_scope(self):
+        from unittest.mock import patch
+        self.client.force_login(self.owner)
+        base = f"/api/files/{self.asset.pk}/gcode/layers/?quality=full&zs=0.2"
+        with patch("core.slicer_layer_preview.MAX_LAYER_SEGMENTS", 2):
+            first = self.client.get(base + "&page_start=0")
+            second = self.client.get(base + "&page_start=2")
+        self.assertEqual(first.status_code, 200, first.content)
+        self.assertEqual(second.status_code, 200, second.content)
+        self.assertTrue(first.json()["layers"][0]["has_more"])
+        self.assertFalse(second.json()["layers"][0]["has_more"])
+        self.assertEqual(first.json()["layers"][0]["next_offset"], 2)
+        self.assertEqual(second.json()["layers"][0]["next_offset"], 3)
+        self.assertEqual(self.client.get(base + "&page_start=-1").status_code, 400)
+        self.assertEqual(self.client.get(base + "&page_start=oops").status_code, 400)
+        self.client.force_login(self.other)
+        self.assertEqual(self.client.get(base + "&page_start=0").status_code, 404)
+
+    def test_large_slicer_preview_inventory_scans_past_metadata_prefix(self):
+        from unittest.mock import patch
+        from core.gcode_analysis import inspect_asset
+        with patch("core.gcode_analysis.MAX_SCAN_BYTES", 60):
+            result = inspect_asset(self.asset)
+        self.assertTrue(result["preview_truncated"])
+        self.assertEqual(result["analysis"]["slicer_preview"]["layer_count"], 2)
+        self.assertEqual(result["analysis"]["slicer_preview"]["layers"], [0.2, 0.4])
+        self.assertTrue(result["analysis"]["slicer_preview"]["complete"])
 
     def test_batch_endpoint_preserves_original_and_owner_scope(self):
         self.client.force_login(self.owner)
