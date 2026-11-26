@@ -100,6 +100,47 @@ class PrusaOfflineMmuPreflightTests(TestCase):
                     with self.assertRaises(ValueError):
                         prepare_prusa_offline_mmu_candidate(**values)
 
+    def test_single_front_painted_mmu_owns_tool_palette_tower_and_surface(self):
+        from core.slicer_prusa_material_preflight import prepare_prusa_offline_colour_candidate
+        from scripts.prusa_generate_mmu_paint import fixture
+        values,assets=self.parts()
+        source,_model,_states,paint=fixture(include_paint=True)
+        row={"asset_id":"painted-model","x_mm":0,"y_mm":0,"z_mm":0,
+             "rotation_deg":0,"scale_percent":100,"colour_paint":paint}
+        colour={key:values[key] for key in (
+            "owner_id","printer_profile","process_profile","filament_profiles",
+            "purge_matrix","tower_xy","bed_width","bed_depth")}
+        colour.update(rows=[(row,source)],tools=[1],
+                      colour_slot=1,colour_tool=2)
+        with patch("core.slicer_prusa_material_preflight.resolved_prusa_profile",
+                   side_effect=assets):
+            candidate=prepare_prusa_offline_colour_candidate(**colour)
+        self.assertEqual(candidate["tool"],2)
+        self.assertEqual(candidate["tower"],(55,150,0,250,210))
+        from slicer_worker.prusa_material_validation import validate_prusa_material_candidate
+        receipt=validate_prusa_material_candidate(
+            candidate["model"],printer_ini=candidate["printer"],colour=True,
+            tower=candidate["tower"])
+        self.assertEqual(receipt["tools"],(1,3))
+        self.assertTrue(receipt["wipe_tower"])
+
+    def test_painted_mmu_refuses_foreign_preset_before_reading_any_file(self):
+        from core.slicer_prusa_material_preflight import prepare_prusa_offline_colour_candidate
+        from scripts.prusa_generate_mmu_paint import fixture
+        values,_assets=self.parts()
+        source,_model,_states,paint=fixture(include_paint=True)
+        colour={key:values[key] for key in (
+            "owner_id","printer_profile","process_profile","filament_profiles",
+            "purge_matrix","tower_xy","bed_width","bed_depth")}
+        colour.update(
+            rows=[({"x_mm":0,"y_mm":0,"colour_paint":paint},source)],
+            tools=[1],colour_slot=1,colour_tool=1)
+        colour["filament_profiles"][1]=profile("filament",owner_id=77)
+        with patch("core.slicer_prusa_material_preflight.resolved_prusa_profile") as source_profile:
+            with self.assertRaises(SlicerProfileError):
+                prepare_prusa_offline_colour_candidate(**colour)
+        source_profile.assert_not_called()
+
     def test_complete_candidate_roundtrips_but_worker_refuses_admission(self):
         values,assets=self.parts()
         with patch("core.slicer_prusa_material_preflight.resolved_prusa_profile",
