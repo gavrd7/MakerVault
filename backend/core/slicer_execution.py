@@ -883,7 +883,15 @@ def process_queued_job(job_id):
                 # queue admission still blocks unverified per-object jobs.
                 # Ordinary single-material multi-object plates retain their
                 # proven compound-mesh execution path.
-                model = _plate_builder(source_models)(
+                # Repeated plain Orca instances use one verified mesh resource
+                # referenced by multiple component transforms. Avoid expanding
+                # the source triangles once per instance in the 3MF XML.
+                compact = None
+                if job.engine == "orcaslicer" and len(source_models) > 1:
+                    from .slicer_compact_plate_3mf import compact_repeated_plate
+                    compact = compact_repeated_plate(
+                        source_models, bed_width=width, bed_depth=depth)
+                model = compact if compact is not None else _plate_builder(source_models)(
                     source_models, bed_width=width, bed_depth=depth
                 )
                 model_format = "3mf"
