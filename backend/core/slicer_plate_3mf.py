@@ -22,6 +22,9 @@ NS = "http://schemas.microsoft.com/3dmanufacturing/core/2015/02"
 # Match the validated source-STL limit. Generated XML/archive limits remain
 # independent safety checks for highly detailed or poorly compressing meshes.
 MAX_TRIANGLES = 500_000
+# Multiple independently valid models must not share the single-STL budget.
+# Source-byte, expanded XML and compressed archive caps still bound the plate.
+MAX_PLATE_TRIANGLES = 1_500_000
 MAX_SOURCE_TOTAL = 48 * 1024 * 1024
 MAX_PROJECT_BYTES = 32 * 1024 * 1024
 
@@ -288,7 +291,7 @@ def build_plate_3mf(objects_with_stl, *, bed_width, bed_depth, native_tool_indic
             raise SlicerProfileError("Invalid model elevation.")
         provisional[11] = desired_z - minimum_z
         placement = " ".join(format(value, ".6f") for value in provisional)
-        if total_triangles > MAX_TRIANGLES:
+        if total_triangles > MAX_PLATE_TRIANGLES:
             raise SlicerProfileError("Total plate triangles exceed the limit.")
         if bake_native_positions:
             _bake_native_instance_transform(obj, placement)
