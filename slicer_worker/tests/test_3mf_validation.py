@@ -103,25 +103,30 @@ class Core3MFWorkerTests(TestCase):
             archive.writestr("_rels/.rels", "<Relationships/>")
         self.assertTrue(validate_worker_3mf(output.getvalue()))
 
-    def test_multi_object_3mf_has_separate_model_and_plate_budgets(self):
-        # Two one-triangle objects verify the budget split without constructing
-        # a potentially gigabyte-sized test fixture.
+    def test_multi_object_3mf_uses_total_plate_budget(self):
         source = self.with_object_metadata([("wall_loops", "2")])
         from slicer_worker import three_mf_validation as validator
-        with (patch.object(validator, "MAX_TRIANGLES", 1),
-              patch.object(validator, "MAX_PLATE_TRIANGLES", 2)):
+        with patch.object(validator, "MAX_PLATE_TRIANGLES", 2):
             self.assertTrue(validate_worker_3mf(source))
-        with (patch.object(validator, "MAX_TRIANGLES", 1),
-              patch.object(validator, "MAX_PLATE_TRIANGLES", 1)):
+        with patch.object(validator, "MAX_PLATE_TRIANGLES", 1):
             with self.assertRaisesRegex(WorkerError, "3MF triangle count exceeds"):
                 validate_worker_3mf(source)
 
-    def test_individual_3mf_object_still_has_triangle_budget(self):
-        source = self.package()
+    def test_compound_mesh_does_not_inherit_single_stl_triangle_limit(self):
         from slicer_worker import three_mf_validation as validator
-        with patch.object(validator, "MAX_TRIANGLES", 0):
-            with self.assertRaisesRegex(WorkerError, "3MF object triangle count"):
-                validate_worker_3mf(source)
+        source = self.package()
+        with zipfile.ZipFile(io.BytesIO(source)) as archive:
+            contents = {part: archive.read(part) for part in archive.namelist()}
+        triangle = b'<triangle v1="0" v2="1" v3="2"/>'
+        contents["3D/3dmodel.model"] = contents["3D/3dmodel.model"].replace(
+            triangle, triangle + triangle)
+        combined = io.BytesIO()
+        with zipfile.ZipFile(combined, "w", compression=zipfile.ZIP_DEFLATED) as archive:
+            for name, value in contents.items():
+                archive.writestr(name, value)
+        with (patch.object(validator, "MAX_TRIANGLES", 1),
+              patch.object(validator, "MAX_PLATE_TRIANGLES", 2)):
+            self.assertTrue(validate_worker_3mf(combined.getvalue()))
 
     def with_variable_layer_range(self, xml):
         """Wrap one real core model in MakerVault's bounded native metadata."""
