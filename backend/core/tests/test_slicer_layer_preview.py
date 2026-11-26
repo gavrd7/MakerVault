@@ -511,6 +511,20 @@ class FullLayerEndpointTests(TestCase):
                 self.assertTrue(warm_asset_overviews(self.asset, GCODE.encode("utf-8")))
                 self.assertEqual(parse.call_count, 1)
 
+    def test_gzip_transport_preserves_exact_geometry_for_mobile(self):
+        import gzip
+        import json
+        self.client.force_login(self.owner)
+        path = f"/api/files/{self.asset.pk}/gcode/layers/?quality=full&zs=0.2,0.4&direct=1"
+        plain = self.client.get(path)
+        zipped = self.client.get(path, HTTP_ACCEPT_ENCODING="gzip")
+        self.assertEqual(plain.status_code, 200, plain.content)
+        self.assertEqual(zipped.status_code, 200)
+        self.assertEqual(zipped["Content-Encoding"], "gzip")
+        self.assertIn("Accept-Encoding", zipped["Vary"])
+        self.assertEqual(json.loads(gzip.decompress(zipped.content)), plain.json())
+        self.assertEqual(zipped["Cache-Control"], "private, no-store")
+
     def test_preview_cache_response_exposes_timing_and_hit(self):
         from unittest.mock import patch
         from django.core.cache.backends.locmem import LocMemCache
