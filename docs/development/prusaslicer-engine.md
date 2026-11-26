@@ -1,3 +1,23 @@
+### Pinned native two-object SupportBlocker-volume experiment
+
+A separate candidate 3MF now appends an upstream-supported `SupportBlocker`
+volume to the unpainted neighbouring object's resource, with a closed 12-face
+box enclosing its XY footprint and full support Z range. This differs from
+previous failed experiments with object-local `support_material` toggles
+and per-facet blocker flags. The research harness tests both this volume
+alone and volume plus object-local support-off. Unit tests assert unchanged
+painted-object triangles, bounded right-only blocker geometry and correctly
+indexed Prusa volume metadata.
+
+**Not production-enabled:** even a valid native 3MF import does not prove the
+painted object's generated supports are isolated. Only a genuine 2.9.7 G-code
+comparison showing retained positive support under the painted left object,
+zero significant positive support under the right and no unintended neighbour
+extrusion can qualify this. Until that evidence exists, the two-object
+support paint admission remains blocked.
+
+---
+
 ## 26 November — native deposition audit hardening and exact-head regression gates
 
 The Prusa-only support, front-seam, MMU colour-wall and two-model fuzzy-skin
