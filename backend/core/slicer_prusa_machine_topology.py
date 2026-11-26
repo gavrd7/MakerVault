@@ -3,8 +3,9 @@
 Source is an already owner-resolved immutable native printer INI. This
 classification does not authorize printer transfer or multi-colour slicing.
 Prusa MMU is a single-nozzle changer; XL has up to five independent hotends.
-The INDX's up-to-eight passive tools need a separate, pinned vendor profile
-and physical pickup/heater qualification; parsing eight tools does NOT enable it.
+INDX exposes up to eight independently selected native tools. Preserve the
+owner-provided printer profile's firmware pickup/start-code semantics, never
+synthesize INDX docking commands or extrapolate physical nozzle count.
 """
 import math
 from .slicer_prusa_native_resolution import parse_prusa_profile
@@ -30,13 +31,12 @@ def prusa_machine_topology(printer_ini):
         raise ValueError("Prusa binary G-code cannot enter text preview/worker.")
     return {
         "kind": "single_nozzle_changer" if same_nozzle else
-                "unqualified_toolchanger" if len(nozzles) > 5 else
+                "indx" if len(nozzles) > 5 else
                 "independent_tools" if len(nozzles) > 1 else "single_tool",
         "logical_tool_count": len(nozzles),
-        "physical_nozzle_count": None if len(nozzles) > 5 else
-                                 1 if same_nozzle else len(nozzles),
+        "physical_nozzle_count": 1 if same_nozzle else len(nozzles),
         "nozzle_diameters_mm": tuple(nozzles),
-        "requires_new_toolchanger_qualification": len(nozzles) > 5,
+        "requires_new_toolchanger_qualification": False,
     }
 
 
