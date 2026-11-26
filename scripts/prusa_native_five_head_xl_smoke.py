@@ -15,7 +15,7 @@ from core.tests.test_slicer_prusa_plate import cube, item
 from slicer_worker.prusa_vendor_profiles import (
     flatten_prusa_vendor_preset,validate_flat_prusa_preset)
 from slicer_worker.service import _decode_payload
-from slicer_worker.runner import run_prusa
+from slicer_worker.runner import WorkerError, run_prusa
 from slicer_worker.prusa_material_gcode_audit import audit_prusa_material_model_gcode
 
 
@@ -63,6 +63,18 @@ def main(binary,vendor):
         "prusa_offline_xl":{"tools":tools}}
     checked=_decode_payload(candidate)
     assert checked["prusa_offline_xl"]["tools"]==tools
+    for change in (
+        {"prusa_offline_xl":{"tools":[1,2,3,4,4]}},
+        {"prusa_offline_xl":{"tools":[1,2,3,4,6]}},
+        {"prusa_offline_xl":{"tools":[1,2,3,4,5],"tower":[55,150,0,360,360]}},
+        {"prusa_offline_mmu":{"tools":tools,"tower":[55,150,0,360,360]}},
+    ):
+        try:
+            _decode_payload({**candidate, **change})
+        except WorkerError:
+            pass
+        else:
+            raise AssertionError("Unqualified XL five-head request was accepted.")
     with tempfile.TemporaryDirectory(prefix="prusa-five-tools-") as temp:
         work=Path(temp)
         for name,data in (("input.3mf",project),("printer.ini",printer),
