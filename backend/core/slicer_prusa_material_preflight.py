@@ -141,3 +141,19 @@ def slice_prusa_offline_mmu_candidate(job_id, **prepared_settings):
         output,candidate["model"],printer_ini=candidate["printer"],
         tools=list(prepared_settings["tools"]),tower=list(candidate["tower"]))
     return output
+
+
+def slice_prusa_offline_xl_candidate(job_id, **prepared_settings):
+    """Ephemeral independent-XL toolhead research; no model or G-code persisted."""
+    from .slicer_worker_client import run_remote_job
+    from slicer_worker.prusa_material_gcode_audit import audit_prusa_material_model_gcode
+    candidate=prepare_prusa_offline_xl_candidate(**prepared_settings)
+    output=run_remote_job(
+        job_id,"prusaslicer","2.9.7",
+        candidate["model"],candidate["printer"],candidate["filament"],
+        candidate["process"],model_format="3mf",
+        prusa_offline_xl={"tools":list(prepared_settings["tools"])})
+    audit_prusa_material_model_gcode(
+        output,candidate["model"],printer_ini=candidate["printer"],
+        tools=list(prepared_settings["tools"]))
+    return output
