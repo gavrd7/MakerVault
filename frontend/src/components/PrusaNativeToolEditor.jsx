@@ -59,7 +59,7 @@ export default function PrusaNativeToolEditor({
     new Set(value.model_tools.map(row=>row.tool)).size>=2 &&
     (value.mode==="xl" ||
       (primeTower!=null && value.purge_matrix?.every((row,i)=>
-        row.every((amount,j)=>i===j||amount!=null&&amount>=1&&amount<=1000)))
+        row.every((amount,j)=>i===j||amount!=null&&amount>=1&&amount<=1000))))
   ):false;
   return <section className="slicerPrusaNativeTools" aria-label="Prusa native material tools"
     style={{minWidth:0,padding:12,border:"1px solid var(--border-color, #60708044)",borderRadius:10}}>
