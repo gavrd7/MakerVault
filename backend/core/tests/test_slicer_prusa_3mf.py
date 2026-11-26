@@ -3,6 +3,7 @@ import io
 import uuid
 import zipfile
 from unittest import TestCase
+from unittest.mock import patch
 from xml.etree import ElementTree as ET
 from defusedxml import ElementTree as SafeET
 
@@ -41,6 +42,39 @@ def rewrite(archive, path, edit):
 
 
 class PrusaProjectDialectTests(TestCase):
+    def test_parallel_native_paint_and_negative_volume_match_sequential(self):
+        from core.slicer_plate_3mf import _triangles
+        from core.slicer_native_support_paint import _fingerprint
+        raw = cube()
+        local = [[(v[0] - 10, v[1] - 10, v[2]) for v in face]
+                 for face in _triangles(raw)]
+        annotation = {"version": 2, "signature": _fingerprint(local),
+                      "regions": [{"slot": 0, "patches": [{
+                          "face": 0, "polygon": [list(v) for v in local[0]]}]}]}
+        rows = [
+            (item(x_mm=-35, support_paint=annotation), raw),
+            (item(x_mm=35, modifier_volumes=[
+                {**volume("negative"), "x_mm": 35}]), raw),
+        ]
+        with patch("core.slicer_parallel_geometry.preparation_worker_count",
+                   return_value=1):
+            sequential = build_prusa_native_3mf(
+                rows, bed_width=250, bed_depth=210)
+        with patch("core.slicer_parallel_geometry.preparation_worker_count",
+                   return_value=2), patch(
+                       "core.slicer_parallel_geometry._MIN_PARALLEL_INPUT_BYTES", 0):
+            parallel = build_prusa_native_3mf(
+                rows, bed_width=250, bed_depth=210)
+        with zipfile.ZipFile(io.BytesIO(sequential)) as first, \
+                zipfile.ZipFile(io.BytesIO(parallel)) as second:
+            self.assertEqual(set(first.namelist()), set(second.namelist()))
+            for name in first.namelist():
+                self.assertEqual(first.read(name), second.read(name), name)
+        result = validate_prusa_native_3mf(parallel)
+        self.assertEqual(result["objects"], 2)
+        self.assertEqual(result["regions"], 1)
+        self.assertTrue(result["paint_channels"])
+
     def test_bare_and_independent_object_settings(self):
         raw = cube()
         for plate in (
