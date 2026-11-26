@@ -514,7 +514,7 @@ def _validate_plate_execution(job):
                    for item in objects):
                 raise SlicerExecutionError(
                     "Creality colour-painted models require a future native 3MF route.")
-    if not isinstance(objects, list) or not 1 <= len(objects) <= 12:
+    if not isinstance(objects, list) or not 1 <= len(objects) <= 200:
         raise SlicerExecutionError("Plate model list is invalid.")
     for item in objects:
         if not isinstance(item, dict):
