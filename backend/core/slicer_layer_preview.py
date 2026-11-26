@@ -232,6 +232,11 @@ def layer_batch_toolpaths(text, target_zs, *, overview=False, overview_limit=350
                                 if _append_continuous_bead(
                                         layer, bead, MAX_LAYER_SEGMENTS, budget, motion_token):
                                     layer["captured_count"] += 1
+                                    # The cursor counts *original* extrusion
+                                    # movements, not coalesced render beads.
+                                    # Otherwise straight-line merges would
+                                    # repeatedly send earlier paths on pages.
+                                    layer["page_end"] = layer["segment_count"]
                         elif overview:
                             # Keep a small, distributed set of visible surfaces
                             # as we scan. Never accumulate the full 3D print in
@@ -296,7 +301,7 @@ def layer_batch_toolpaths(text, target_zs, *, overview=False, overview_limit=350
             layer["overview_reduced"] = len(layer["segments"]) < original
         layer["feature_counts"] = dict(layer["feature_counts"])
         if page_start is not None:
-            layer["next_offset"] = page_start + original_captured
+            layer["next_offset"] = layer.pop("page_end", page_start + original_captured)
             layer["has_more"] = layer["next_offset"] < original
             layer["complete"] = not layer["has_more"]
         else:
