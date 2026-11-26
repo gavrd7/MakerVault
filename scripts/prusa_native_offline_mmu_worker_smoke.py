@@ -80,6 +80,7 @@ def main(binary, vendor, projects):
             gcode,project,printer_ini=printer,tools=[1,2],tower=tower)
         assert result["incorrect_extrusion_moves"]==[0,0]
         assert min(result["correct_extrusion_moves"])>100
+        assert min(result["tower_extrusion_moves"].values())>100
         print("PASS: pinned Prusa authenticated offline MMU payload, native CLI and post-slice audit",
               result,"G-code SHA256",hashlib.sha256(gcode).hexdigest(),flush=True)
 
