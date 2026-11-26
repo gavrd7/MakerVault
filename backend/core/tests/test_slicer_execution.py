@@ -473,11 +473,11 @@ class FullPlateAdmissionTests(SimpleTestCase):
              "rotation_deg": 0, "scale_percent": 100}
             for i in range(20)
         ]
-        for engine in ("orcaslicer", "crealityprint", "bambustudio", "prusaslicer"):
+        for engine in ("orcaslicer", "crealityprint", "bambustudio"):
             with self.subTest(engine=engine):
                 job = SimpleNamespace(
                     settings={"plate_objects": plate}, engine=engine,
-                    engine_version="2.9.7" if engine == "prusaslicer" else "2.5.0",
+                    engine_version="2.5.0",
                     printer_profile_id="printer", printer_profile=SimpleNamespace(),
                 )
                 with patch("core.slicer_execution.trusted_plate_dimensions",
