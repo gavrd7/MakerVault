@@ -119,3 +119,28 @@ def gcode_transport_budget():
     available = memory_budget(
         reserve_bytes=_RESERVED_BYTES, expansion_factor=6)
     return available if available is not None else 64 * _MIB
+
+
+def xml_geometry_budget():
+    """Allowed expanded XML bytes for in-memory 3MF creation/verification.
+
+    Python XML nodes and indexing require substantially more RAM than raw
+    XML. This ratio is intentionally conservative and shared by all engines.
+    """
+    available = memory_budget(
+        reserve_bytes=_RESERVED_BYTES, expansion_factor=12)
+    return available if available is not None else 80 * _MIB
+
+
+def plate_triangle_budget():
+    """Geometry capacity derived from approximate Python mesh node footprint."""
+    available = memory_budget(
+        reserve_bytes=_RESERVED_BYTES, expansion_factor=1200)
+    return available if available is not None else 500_000
+
+
+def project_archive_budget():
+    """ZIP/JSON handling uses multiple in-memory copies."""
+    available = memory_budget(
+        reserve_bytes=_RESERVED_BYTES, expansion_factor=8)
+    return available if available is not None else 32 * _MIB
