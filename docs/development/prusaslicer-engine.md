@@ -1,3 +1,16 @@
+### Exact official INDX vendor parsing exception
+
+The signed vendor-update bundle at `2.5.16` contains one
+upstream native option typo, `top solid_infill_speed`.
+The owner-bound importer and isolated vendor flattener map that **one
+literal** to the canonical Prusa option `top_solid_infill_speed`,
+reject unknown other whitespace-containing keys, and still reject
+duplicates after normalisation. No generic forgiving parsing is
+introduced. A full native 2.9.7 8-tool official machine-preset slice
+must pass on the resulting file before merge.
+
+---
+
 ### Official vendor literal compatibility
 
 Prusa's current 2.5.16 INDX vendor update carries longer native
