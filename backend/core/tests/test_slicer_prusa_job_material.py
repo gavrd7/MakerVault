@@ -284,6 +284,53 @@ class PrusaVirtualToolDraftTests(TestCase):
         }
         return job,filaments,raw
 
+    def test_painted_single_model_uses_owned_virtual_mmu_palette(self):
+        from scripts.prusa_generate_mmu_paint import fixture as painted_fixture
+        job,filaments,raw=self.config()
+        source,_mesh,_states,paint=painted_fixture(include_paint=True)
+        job.settings["plate_objects"]=job.settings["plate_objects"][:1]
+        job.settings["plate_objects"][0]["colour_paint"]=paint
+        job.settings["prusa_native_tools"]["model_tools"]=job.settings[
+            "prusa_native_tools"]["model_tools"][:1]
+        job.settings["prusa_native_tools"]["colour_tools"]=[{"slot":1,"tool":2}]
+        PrusaWorkbenchMaterialTests.resolve(self,job,filaments,raw)
+        mode,plan=prepare_prusa_workbench_material(job)
+        self.assertEqual(mode,"colour")
+        self.assertEqual(plan["tools"],[1])
+        self.assertEqual(plan["colour_tool"],1)
+        self.assertEqual(plan["colour_slot"],1)
+        self.assertEqual(plan["filament_profiles"],filaments)
+        with patch("core.slicer_prusa_job_material.slice_prusa_offline_colour_candidate",
+                   return_value=b"audited-paint") as worker:
+            output=slice_prusa_workbench_material(
+                job,[(dict(job.settings["plate_objects"][0]),source)])
+        self.assertEqual(output,b"audited-paint")
+        self.assertEqual(worker.call_args.kwargs["colour_tool"],1)
+        self.assertEqual(len(worker.call_args.kwargs["rows"]),1)
+
+    def test_painted_mmu_rejects_unqualified_or_ambiguous_tool_assignments(self):
+        from scripts.prusa_generate_mmu_paint import fixture as painted_fixture
+        _source,_mesh,_states,paint=painted_fixture(include_paint=True)
+        for change in (
+            lambda j:j.settings["prusa_native_tools"].update(colour_tools=[]),
+            lambda j:j.settings["prusa_native_tools"].update(colour_tools=[{"slot":0,"tool":2}]),
+            lambda j:j.settings["prusa_native_tools"].update(colour_tools=[{"slot":1,"tool":1}]),
+            lambda j:j.settings["prusa_native_tools"]["model_tools"][0].update(tool=2),
+            lambda j:j.settings.update(process_overrides={"layer_height":0.16}),
+            lambda j:j.settings["plate_objects"][0].update(support_paint={"regions":[{"slot":0}]}),
+        ):
+            with self.subTest(change=change):
+                job,filaments,raw=self.config()
+                job.settings["plate_objects"]=job.settings["plate_objects"][:1]
+                job.settings["plate_objects"][0]["colour_paint"]=paint
+                job.settings["prusa_native_tools"]["model_tools"]=job.settings[
+                    "prusa_native_tools"]["model_tools"][:1]
+                job.settings["prusa_native_tools"]["colour_tools"]=[{"slot":1,"tool":2}]
+                PrusaWorkbenchMaterialTests.resolve(self,job,filaments,raw)
+                change(job)
+                with self.assertRaises((SlicerProfileError,ValueError)):
+                    prepare_prusa_workbench_material(job)
+
     def test_saved_virtual_mmu_uses_only_explicit_native_tools(self):
         job,filaments,raw=self.config()
         PrusaWorkbenchMaterialTests.resolve(self,job,filaments,raw)
