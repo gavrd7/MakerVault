@@ -68,3 +68,34 @@ def source_input_budget(*, upper_cap):
     proposed = max(_MIN_SOURCE_BYTES,
                    max(0, headroom - _RESERVED_BYTES) // _SOURCE_EXPANSION_FACTOR)
     return min(upper_cap, proposed)
+
+
+def resource_snapshot():
+    """Return live host/cgroup RAM headroom without an engine-specific ceiling.
+
+    Unknown host readings do not bypass a known cgroup limit. Unknown
+    measurements fail closed for callers needing large-job admission.
+    """
+    observations = {
+        "host_available_bytes": _host_available_bytes(),
+        "cgroup_available_bytes": _cgroup_available_bytes(),
+    }
+    known = [n for n in observations.values() if n is not None]
+    return {**observations, "available_bytes": min(known) if known else None}
+
+
+def memory_budget(*, reserve_bytes, expansion_factor):
+    """Provide an engine-neutral working-set admission budget.
+
+    The reserve and empirically calibrated expansion factor are supplied by
+    the operation (STL decoding, native XML, worker transport, or G-code),
+    not chosen from a fixed list of engine names or arbitrary size ceilings.
+    None means live resources could not be measured.
+    """
+    if (type(reserve_bytes) is not int or reserve_bytes < 0 or
+            type(expansion_factor) is not int or expansion_factor < 1):
+        raise ValueError("Invalid slicer operation memory budget parameters.")
+    available = resource_snapshot()["available_bytes"]
+    if available is None:
+        return None
+    return max(0, available - reserve_bytes) // expansion_factor
