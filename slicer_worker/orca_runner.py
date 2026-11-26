@@ -21,7 +21,7 @@ from .stl_validation import StlValidationError, validate_stl
 from .three_mf_validation import validate_worker_3mf
 from .headless_env import slicing_environment
 from .runner import (
-    DEFAULT_TIMEOUT_SECONDS, MAX_GCODE_BYTES, MAX_MODEL_BYTES, MAX_PROFILE_BYTES,
+    DEFAULT_TIMEOUT_SECONDS, MAX_NATIVE_SLICE_TIMEOUT_SECONDS, MAX_GCODE_BYTES, MAX_MODEL_BYTES, MAX_PROFILE_BYTES,
     WorkerError, _regular_file, _output_path,
 )
 
@@ -277,7 +277,7 @@ def orca_command(binary: Path, workdir: Path, *,
 def run_orca(binary: Path, workdir: Path, *, timeout_seconds: int = DEFAULT_TIMEOUT_SECONDS,
              experimental_all_plates=False, experimental_no_arrange=False):
     """Run the proposed Orca integration inside an already isolated worker."""
-    if not isinstance(timeout_seconds, int) or not 1 <= timeout_seconds <= 900:
+    if type(timeout_seconds) is not int or not 1 <= timeout_seconds <= MAX_NATIVE_SLICE_TIMEOUT_SECONDS:
         raise WorkerError("Invalid slice timeout.")
     workdir = Path(workdir).resolve(strict=True)
     if not workdir.is_dir():
