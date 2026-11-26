@@ -1,3 +1,12 @@
+## Five-head XL native acceptance achieved — 26 November 2026
+
+- Pinned genuine PrusaSlicer 2.9.7 [native run 45733816173](https://github.com/gavrd7/MakerVault/actions/runs/45733816173) completed the `Research five independent XL toolheads` step **successfully**, and the failure-warning step was skipped. This test uses the official five-head XL native preset, five spatially distinct objects, explicit T0–T4 assignments and a material-to-model positive-extrusion audit requiring zero wrong-tool moves. This is **offline G-code qualification only**; physical pickup, head offsets, firmware and print delivery remain unverified.
+- First attempt [run 45733586266](https://github.com/gavrd7/MakerVault/actions/runs/45733586266) failed because the official XL 5T profile defaults to binary G-code. The research fixture converts only that flattened trusted profile to `binary_gcode=0`, preserving MakerVault's bounded text-G-code validation and not touching the vendored source or any released engine.
+- Commit `c13bf4e` promotes the five-head XL native acceptance to **required** in the opt-in pinned-runtime workflow; it will now fail the workflow on regressions instead of emitting a research warning. Recheck that promotion's own exact-head native run before claiming a full post-promotion pass.
+- Prusa INDX-scale six-to-eight logical tools remain `unqualified_toolchanger`, have no assumed physical hotend count, and cannot enter the current native palette or offline XL worker route. All ordinary multi-material workbench/Library/printer paths remain disabled pending full parity.
+
+---
+
 ## Five-head XL native qualification work — 26 November 2026
 
 - PR #199 now includes `scripts/prusa_native_five_head_xl_smoke.py`, a distinct pinned PrusaSlicer 2.9.7 five-physical-head fixture using the upstream `Original Prusa XL - 5T 0.4 nozzle` preset, explicit tools 1–5, five model-local deposition audits, per-tool temperatures, and **no MMU purge or wipe tower**. This does **not** claim a successful five-head native run yet.
