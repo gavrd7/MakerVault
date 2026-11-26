@@ -332,12 +332,7 @@ def build_plate_3mf(objects_with_stl, *, bed_width, bed_depth, native_tool_indic
         sources.append((index, raw, options))
     from .slicer_parallel_geometry import prepared_mesh_batches
     estimate = 128 * 1024**2 + max(len(raw) for _, raw, _ in sources) * 48
-    # Native colour maps may use non-string keys: preserve their Python
-    # semantics on the established sequential path until typed IPC is verified.
-    from contextlib import nullcontext
-    preparation = (nullcontext((index, raw, None) for index, raw, _ in sources)
-                   if native_colour_tools is not None else
-                   prepared_mesh_batches(sources, estimated_bytes_per_worker=estimate))
+    preparation = prepared_mesh_batches(sources, estimated_bytes_per_worker=estimate)
     with preparation as prepared:
         for (index, raw, options), (_, _, rendered) in zip(sources, prepared):
             item = objects_with_stl[index - 1][0]
