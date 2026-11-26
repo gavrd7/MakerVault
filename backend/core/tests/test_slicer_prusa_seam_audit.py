@@ -20,7 +20,7 @@ def project():
 
 
 def gcode(*, right=True, relative=False):
-    lines = ["M83" if relative else "M82", "G92 E0"]
+    lines = ["M83" if relative else "M82", "G92 E0", "G0 X120 Y100"]
     e = 0
     for layer in range(1, 13):
         x = 134.78 if right else 115.22
@@ -100,3 +100,19 @@ class PrusaSeamAuditTests(unittest.TestCase):
             with self.subTest(invalid=invalid), self.assertRaises(ValueError):
                 audit_prusa_seam_enforcer_gcode(
                     gcode(), {**project(), **invalid}, bed_width=250, bed_depth=210)
+
+    def test_stationary_extrusion_cannot_satisfy_seam_audit(self):
+        raw = gcode()
+        # Priming in place is not a measured first-wall start even when
+        # the current role and location happen to match the painted face.
+        raw = raw.replace(b"G1 X134.78 Y114.78 E", b"G0 X134.78 Y114.78\nG1 E")
+        with self.assertRaisesRegex(ValueError, "did not follow"):
+            audit_prusa_seam_enforcer_gcode(raw, project(), bed_width=250, bed_depth=210)
+
+    def test_relative_xy_perimeter_starts_are_measured(self):
+        raw = gcode()
+        # Fixture uses absolute XY. Explicitly entering G91 makes identical
+        # coordinates into displacements; the candidate must fail closed.
+        raw = raw.replace(b";TYPE:External perimeter", b"G91\n;TYPE:External perimeter")
+        with self.assertRaises(ValueError):
+            audit_prusa_seam_enforcer_gcode(raw, project(), bed_width=250, bed_depth=210)
