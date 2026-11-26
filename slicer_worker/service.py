@@ -218,7 +218,7 @@ def _decode_payload(payload):
         from .creality_project_validation import validate_creality_project
         validate_creality_project(files["model"], native_tool_count=2)
         files["creality_native_project"] = True
-    elif model_format == "3mf" and not files.get("native_modifier_project"):
+    elif model_format == "3mf" and not files.get("native_modifier_project") and not streamed:
         options = {"native_tool_count": len(files["filament_profiles"])
                    if "filament_profiles" in files else None}
         if payload["engine"] == "bambustudio":
