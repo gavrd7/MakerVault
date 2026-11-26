@@ -786,7 +786,10 @@ def process_queued_job(job_id):
                 # plates use the dedicated bounded streamed compound exporter.
                 # Other engines continue through their proven native adapters.
                 if (job.engine == "orcaslicer" and len(source_models) > 1
-                        and _plate_builder(source_models) is build_compound_plate_3mf):
+                        and all(not any(item.get(key) for key in (
+                            "modifier_volumes", "process_overrides", "colour_paint",
+                            "support_paint", "seam_paint", "fuzzy_skin_paint",
+                            "variable_layer_profile")) for item, _raw in source_models)):
                     from .slicer_streamed_plate_3mf import build_streamed_compound_3mf
                     model = build_streamed_compound_3mf(
                         source_models, bed_width=width, bed_depth=depth)
