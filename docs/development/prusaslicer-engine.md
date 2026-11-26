@@ -1,3 +1,29 @@
+## 26 November — native deposition audit hardening and exact-head regression gates
+
+The Prusa-only support, front-seam, MMU colour-wall and two-model fuzzy-skin
+audits now distinguish **actual moving positive-E toolpaths** from stationary
+retraction recovery / priming. They track absolute versus relative XY (and Z
+for fuzzy-skin work), honour G92 resets and require explicit native extrusion
+roles; the MMU two-colour research audit additionally requires both endpoints
+of a counted external-wall segment within the independently verified region.
+Regression fixtures cover relative modes, invalid role labels and
+non-depositing commands.
+
+The dedicated `prusa-worker-contract` CI workflow now explicitly runs seam
+and fuzzy spatial suites alongside the existing colour and support suites.
+This strengthens the quality gate but **does not** qualify any new painted
+direction, multi-object support, multi-swatch MMU, combined modifier/painter
+workflow, INDX toolhead mechanism or printer submission. The known upstream
+neighbour-support leakage and all existing admission blocks remain in place.
+
+The reviewed permanent Prusa 2.9.7 runtime smoke is required to check these
+stricter invariants against genuine generated G-code. Pass/fail results must
+be recorded against the exact current PR head; simulated fixture tests alone
+are insufficient. Never merge while CI or required native qualification
+is incomplete.
+
+---
+
 ## 26 November — scoped Prusa native painting, authenticated MMU colour worker and front seam
 
 **Scope: draft PR #199, offline G-code/Library only; no printer approval, deployment or released-engine changes.**
