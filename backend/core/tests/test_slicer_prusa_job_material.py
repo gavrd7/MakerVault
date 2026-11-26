@@ -156,6 +156,45 @@ class PrusaWorkbenchMaterialTests(TestCase):
                 with self.assertRaises(SlicerProfileError):
                     prepare_prusa_workbench_material(job)
 
+    def test_native_five_head_acceptance_qualifies_bounded_object_wall_settings(self):
+        for mode in ("mmu", "xl"):
+            with self.subTest(mode=mode):
+                job, filaments, raw = fixture(mode)
+                self.resolve(job, filaments, raw)
+                job.settings["plate_objects"][0]["process_overrides"] = {
+                    "wall_loops": 1, "sparse_infill_density": 15}
+                job.settings["plate_objects"][1]["process_overrides"] = {
+                    "wall_loops": 5, "sparse_infill_density": 35}
+                kind, plan = prepare_prusa_workbench_material(job)
+                self.assertEqual(kind, mode)
+                self.assertEqual(plan["tools"], [1, 2])
+                with patch("core.slicer_prusa_job_material.slice_prusa_offline_" +
+                           ("mmu" if mode=="mmu" else "xl") + "_candidate",
+                           return_value=b"audited-G-code") as worker:
+                    slice_prusa_workbench_material(job,[
+                        (dict(row),b"stl")
+                        for row in job.settings["plate_objects"]])
+                rows=worker.call_args.kwargs["rows"]
+                self.assertEqual([r["process_overrides"]["wall_loops"]
+                                  for r,_ in rows],[1,5])
+                self.assertTrue(all("material_slot" not in r for r,_ in rows))
+                self.assertEqual(worker.call_args.kwargs["tools"],[1,2])
+
+    def test_multi_tool_object_edits_fail_closed_outside_native_qualified_keys(self):
+        for overrides in (
+            {"travel_speed":120}, {"brim_width":5},
+            {"post_process":"G28"}, {"wall_loops":0},
+            {"wall_loops":True}, {"wall_loops":"3"},
+            {"sparse_infill_density":110}, {"sparse_infill_density":float("nan")},
+            ["wall_loops"], False,
+        ):
+            with self.subTest(overrides=overrides):
+                job,filaments,raw=fixture()
+                self.resolve(job,filaments,raw)
+                job.settings["plate_objects"][1]["process_overrides"]=overrides
+                with self.assertRaises(SlicerProfileError):
+                    prepare_prusa_workbench_material(job)
+
     def test_rejects_incomplete_or_ambiguous_bound_materials(self):
         for change in (
             lambda j:j.settings["material_tool_bindings"].pop(),
@@ -165,7 +204,7 @@ class PrusaWorkbenchMaterialTests(TestCase):
             lambda j:j.settings["plate_objects"][1]["material_slot"].update(slot_id="unknown"),
             lambda j:j.settings.update(material_topology="toolchanger"),
             lambda j:j.settings["plate_objects"][1].update(
-                process_overrides={"sparse_infill_density":80}),
+                process_overrides={"travel_speed":120}),
             lambda j:j.settings["plate_objects"][1].update(
                 colour_paint={"regions":[{"slot":1}]}),
             lambda j:j.settings.update(
