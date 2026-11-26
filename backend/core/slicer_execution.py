@@ -271,6 +271,16 @@ def _validate_plate_execution(job):
         settings=expand_painted_settings(getattr(job, "owner", None), job.settings or {})
     except (ValueError, OSError) as exc:
         raise SlicerExecutionError("A referenced private painting asset is missing or invalid.") from exc
+    if job.engine == "prusaslicer" and settings.get("multi_material_test") is True:
+        # The only qualified material route is offline MMU/XL and requires a
+        # complete owner-bound native palette. Never fall through to Orca's
+        # different tool / tower dialect or printer submission.
+        from .slicer_prusa_job_material import prepare_prusa_workbench_material
+        try:
+            prepare_prusa_workbench_material(job, settings=settings)
+        except (SlicerProfileError, ValueError, TypeError) as exc:
+            raise SlicerExecutionError(str(exc)) from exc
+        return True
     # The pinned Prusa 2.9.7 runtime is independently approved for one
     # unmodified FFF STL with native printer/filament/print presets. Do not
     # silently discard Orca/Creality/Bambu-style global overrides, or route
@@ -796,7 +806,11 @@ def process_queued_job(job_id):
                 if asset.sha256 and hashlib.sha256(raw).hexdigest() != asset.sha256:
                     raise SlicerExecutionError("A plate STL has changed since import.")
                 source_models.append((item, raw))
-            if job.engine == "prusaslicer" and (has_native_modifiers or any(
+            if job.engine == "prusaslicer" and is_multi_test:
+                # The dedicated owner-bound MMU/XL adapter builds native 3MF
+                # directly from these verified sources below.
+                pass
+            elif job.engine == "prusaslicer" and (has_native_modifiers or any(
                     item.get("process_overrides") or
                     (item.get("variable_layer_profile") or {}).get("bands") or
                     (item.get("support_paint") or {}).get("regions") or
@@ -862,6 +876,19 @@ def process_queued_job(job_id):
                     source_models, bed_width=width, bed_depth=depth
                 )
                 model_format = "3mf"
+        if job.engine == "prusaslicer" and is_multi_test:
+            stage = "executing qualified offline Prusa MMU/XL material job"
+            from .slicer_prusa_job_material import slice_prusa_workbench_material
+            output = slice_prusa_workbench_material(job, source_models)
+            stage = "validating and storing Prusa offline G-code"
+            asset = store_generated_gcode(job.pk, output)
+            try:
+                from .tasks import warm_gcode_preview_task
+                warm_gcode_preview_task.delay(str(asset.pk))
+            except Exception:
+                logger.warning("Prusa offline preview warm-up failed for %s",
+                               asset.pk, exc_info=True)
+            return {"status": "completed", "asset_id": str(asset.pk)}
         stage = "resolving native slicing profiles"
         profiles = []
         for kind in ("printer", "filament", "process"):
