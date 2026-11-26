@@ -22,8 +22,13 @@ NS = "http://schemas.microsoft.com/3dmanufacturing/core/2015/02"
 # Match the validated source-STL limit. Generated XML/archive limits remain
 # independent safety checks for highly detailed or poorly compressing meshes.
 MAX_TRIANGLES = 500_000
+# Multiple independently valid models must not share the single-STL budget.
+# Source-byte, expanded XML and compressed archive caps still bound the plate.
+MAX_PLATE_TRIANGLES = 1_500_000
 MAX_SOURCE_TOTAL = 48 * 1024 * 1024
 MAX_PROJECT_BYTES = 32 * 1024 * 1024
+# Worker bounds each expanded core model XML entry to 80 MiB.
+MAX_MODEL_XML_BYTES = 80 * 1024 * 1024
 
 def _triangles(raw):
     from .slicer_mesh import inspect_stl
@@ -47,12 +52,28 @@ def _triangles(raw):
 
 def _render_mesh(raw, element, support_paint=None, seam_paint=None, fuzzy_skin_paint=None, *,
                  colour_paint=None, colour_tool_indices=None):
-    triangles = list(_triangles(raw))
-    if not triangles or len(triangles) > MAX_TRIANGLES:
+    active = sum(bool(paint and paint.get("regions")) for paint in
+                 (support_paint, seam_paint, fuzzy_skin_paint, colour_paint))
+    # Ordinary plates often contain many independent, unpainted STLs. Scan
+    # their bounds once and stream the facets a second time; unlike materialised
+    # lists this does not retain all source triangles while building the XML.
+    # Native painting still needs the indexed source-facet sequence.
+    triangles = list(_triangles(raw)) if active else _triangles(raw)
+    source_count = 0
+    minimum = [math.inf, math.inf, math.inf]
+    maximum = [-math.inf, -math.inf, -math.inf]
+    for tri in triangles:
+        source_count += 1
+        if source_count > MAX_TRIANGLES:
+            raise SlicerProfileError("STL triangle count exceeds the 3MF plate limit.")
+        for point in tri:
+            for axis in range(3):
+                minimum[axis] = min(minimum[axis], point[axis])
+                maximum[axis] = max(maximum[axis], point[axis])
+    if not source_count:
         raise SlicerProfileError("STL triangle count exceeds the 3MF plate limit.")
-    # Do not allocate a second 3*triangle-count list of vertex tuples.
-    minimum = [min(point[i] for tri in triangles for point in tri) for i in range(3)]
-    maximum = [max(point[i] for tri in triangles for point in tri) for i in range(3)]
+    if not active:
+        triangles = _triangles(raw)
     origin = ((minimum[0] + maximum[0]) / 2,
               (minimum[1] + maximum[1]) / 2,
               minimum[2])
@@ -62,8 +83,6 @@ def _render_mesh(raw, element, support_paint=None, seam_paint=None, fuzzy_skin_p
     # Weld identical vertices to keep generated 3MF files compact.
     indexed = {}
     try:
-        active = sum(bool(paint and paint.get("regions")) for paint in
-                     (support_paint, seam_paint, fuzzy_skin_paint, colour_paint))
         # Preserve the previously verified fast path for zero/one annotation
         # modes. Combined modes split original facets into disjoint cells,
         # each of which can carry multiple native Orca paint attributes.
@@ -209,6 +228,7 @@ def build_plate_3mf(objects_with_stl, *, bed_width, bed_depth, native_tool_indic
     build = ET.SubElement(model, f"{{{NS}}}build")
     total_bytes = 0
     total_triangles = 0
+    resource_xml_bytes = 0
     # Only native per-object projects use baked individual placements. Existing
     # generic 3MF exports and their transform semantics remain unchanged.
     bake_native_positions = native_tool_indices is not None or any(
@@ -288,7 +308,7 @@ def build_plate_3mf(objects_with_stl, *, bed_width, bed_depth, native_tool_indic
             raise SlicerProfileError("Invalid model elevation.")
         provisional[11] = desired_z - minimum_z
         placement = " ".join(format(value, ".6f") for value in provisional)
-        if total_triangles > MAX_TRIANGLES:
+        if total_triangles > MAX_PLATE_TRIANGLES:
             raise SlicerProfileError("Total plate triangles exceed the limit.")
         if bake_native_positions:
             _bake_native_instance_transform(obj, placement)
@@ -297,9 +317,17 @@ def build_plate_3mf(objects_with_stl, *, bed_width, bed_depth, native_tool_indic
             "objectid": str(index),
             "transform": placement,
         })
+        # Check actual serialised resource growth after every mesh, not only
+        # after all models have been accumulated into a large XML tree.
+        # Leave 64 KiB for the build items and model wrapper.
+        resource_xml_bytes += len(ET.tostring(obj, encoding="utf-8"))
+        if resource_xml_bytes > MAX_MODEL_XML_BYTES - 65536:
+            raise SlicerProfileError(
+                "Build plate 3MF geometry exceeds the worker's expanded XML budget.")
     model_xml = ET.tostring(model, encoding="utf-8", xml_declaration=True)
-    if len(model_xml) > 96 * 1024 * 1024:
-        raise SlicerProfileError("The generated 3MF mesh is too large.")
+    if len(model_xml) > MAX_MODEL_XML_BYTES:
+        raise SlicerProfileError(
+            "Build plate 3MF geometry exceeds the worker's expanded XML budget.")
     # Preserve Orca's model IDs one-to-one with the 3MF resource IDs.
     # A distinct <object> entry holds validated native overrides. The
     # production worker still rejects execution of object-specific edits

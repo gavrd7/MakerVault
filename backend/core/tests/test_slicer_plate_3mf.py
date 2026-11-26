@@ -2,11 +2,113 @@ import io
 import json
 import uuid
 import zipfile
+from unittest.mock import patch
+from xml.etree.ElementTree import Element
 from defusedxml import ElementTree as ET
 from django.test import SimpleTestCase
 from core.slicer_approval import fixture_stl
 from core.slicer_plate_3mf import build_plate_3mf, build_compound_plate_3mf, build_makervault_project_3mf, NS
 from core.slicer_profiles import SlicerProfileError
+
+
+class PlateTriangleBudgetTests(SimpleTestCase):
+    def test_three_individually_valid_models_can_exceed_old_plate_cap(self):
+        from core import slicer_plate_3mf as plate
+        original_render = plate._render_mesh
+        shape = fixture_stl()
+        items = [
+            ({"x_mm": x, "y_mm": 0, "rotation_deg": 0, "scale_percent": 100},
+             shape) for x in (-35, 0, 35)
+        ]
+
+        def counted_render(*args, **kwargs):
+            _count, width, depth = original_render(*args, **kwargs)
+            # Simulate three dense-but-valid source meshes without producing
+            # huge XML fixtures in the unit test.
+            return 300_000, width, depth
+
+        with patch.object(plate, "_render_mesh", side_effect=counted_render):
+            result = build_plate_3mf(items, bed_width=220, bed_depth=220)
+        with zipfile.ZipFile(io.BytesIO(result)) as package:
+            root = ET.fromstring(package.read("3D/3dmodel.model"))
+        self.assertEqual(len(root.findall(".//{%s}build/{%s}item" % (NS, NS))), 3)
+
+    def test_plate_budget_still_rejects_excessive_combined_mesh(self):
+        from core import slicer_plate_3mf as plate
+        original_render = plate._render_mesh
+        shape = fixture_stl()
+        items = [
+            ({"x_mm": x, "y_mm": 0, "rotation_deg": 0, "scale_percent": 100},
+             shape) for x in (-35, 0, 35)
+        ]
+
+        def counted_render(*args, **kwargs):
+            _count, width, depth = original_render(*args, **kwargs)
+            return 300_000, width, depth
+
+        with (patch.object(plate, "_render_mesh", side_effect=counted_render),
+              patch.object(plate, "MAX_PLATE_TRIANGLES", 800_000)):
+            with self.assertRaisesRegex(SlicerProfileError, "Total plate triangles"):
+                build_plate_3mf(items, bed_width=220, bed_depth=220)
+
+
+class ResourceBudgetTests(SimpleTestCase):
+    def test_expanded_geometry_budget_is_enforced_during_plate_construction(self):
+        from core import slicer_plate_3mf as plate
+        source = fixture_stl()
+        objects = [
+            ({"x_mm": x, "y_mm": 0, "rotation_deg": 0, "scale_percent": 100},
+             source) for x in (-35, 0, 35)
+        ]
+        with patch.object(plate, "MAX_MODEL_XML_BYTES", 65536):
+            with self.assertRaisesRegex(SlicerProfileError, "expanded XML budget"):
+                build_plate_3mf(objects, bed_width=220, bed_depth=220)
+
+
+class MeshStreamingTests(SimpleTestCase):
+    def test_unpainted_mesh_streams_source_facets_in_two_passes(self):
+        from core import slicer_plate_3mf as plate
+        original = plate._triangles
+        invocations = []
+
+        def instrumented(raw):
+            invocations.append(1)
+            return original(raw)
+
+        source = fixture_stl()
+        element = Element("object")
+        with patch.object(plate, "_triangles", side_effect=instrumented):
+            count, _width, _depth = plate._render_mesh(source, element)
+        self.assertEqual(count, 4)
+        self.assertEqual(len(invocations), 2)
+        self.assertEqual(len(element.findall(".//{%s}triangle" % NS)), 4)
+
+
+class FullPlateInstanceTests(SimpleTestCase):
+    def test_distinct_models_on_full_plate_preserve_independent_placement(self):
+        # Use distinct triangle footprints and 20 positions to exercise the
+        # general plate route, not just copies of one model.
+        from core.slicer_plate_3mf import build_plate_3mf
+        shape = fixture_stl()
+        models = []
+        for i in range(20):
+            x = -80 + (i % 5) * 40
+            y = -60 + (i // 5) * 40
+            models.append(({
+                "x_mm": x, "y_mm": y,
+                "rotation_deg": (i % 4) * 15,
+                "scale_percent": 75 + (i % 3) * 5,
+            }, shape.replace(b"10", str(10 + i % 7).encode("ascii"))))
+        data = build_plate_3mf(models, bed_width=220, bed_depth=220)
+        with zipfile.ZipFile(io.BytesIO(data)) as package:
+            root = ET.fromstring(package.read("3D/3dmodel.model"))
+            manifest = ET.fromstring(package.read("Metadata/model_settings.config"))
+        objects = root.findall("./{%s}resources/{%s}object" % (NS, NS))
+        items = root.findall("./{%s}build/{%s}item" % (NS, NS))
+        self.assertEqual(len(objects), 20)
+        self.assertEqual(len(items), 20)
+        self.assertEqual(len({item.attrib["transform"] for item in items}), 20)
+        self.assertEqual(len(manifest.findall("./plate/model_instance")), 20)
 
 
 class ExactPlateBoundsTests(SimpleTestCase):
