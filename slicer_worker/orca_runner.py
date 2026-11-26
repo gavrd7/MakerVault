@@ -212,9 +212,22 @@ def orca_command(binary: Path, workdir: Path, *,
     is_project = (workdir / "input.3mf").exists()
     if (experimental_all_plates or experimental_no_arrange) and not is_project:
         raise WorkerError("Experimental plate mode requires a 3MF input.")
-    model = _regular_file(workdir, "input.3mf" if is_project else "input.stl", MAX_MODEL_BYTES)
+    streamed_marker = workdir / "orca-streamed-plate.marker"
+    if streamed_marker.is_symlink():
+        raise WorkerError("Invalid streamed Orca marker.")
+    streamed = streamed_marker.exists()
+    if streamed and (not is_project or not streamed_marker.is_file()
+                     or streamed_marker.read_bytes() != b"v1"):
+        raise WorkerError("Invalid streamed Orca project marker.")
+    if streamed:
+        from .streamed_orca_validation import streamed_orca_memory_budget
+        maximum = streamed_orca_memory_budget() // 8
+    else:
+        maximum = MAX_MODEL_BYTES
+    model = _regular_file(workdir, "input.3mf" if is_project else "input.stl", maximum)
     native_object_settings = False
     compact_triangles = None
+    streamed_triangles = None
     if not is_project:
         try:
             validate_stl(model.read_bytes())
@@ -249,10 +262,16 @@ def orca_command(binary: Path, workdir: Path, *,
         native_modifiers = (workdir / "native-modifier-project.marker").exists()
         if native_modifiers and palette:
             raise WorkerError("Modifier jobs cannot include an unverified multi-tool palette.")
-        validate_worker_3mf(model_bytes,
-                            native_tool_count=len(palette) if palette else None,
-                            allow_native_modifier_fixture=native_modifiers,
-                            allow_compact_instances=not native_modifiers and not palette)
+        if streamed:
+            if native_modifiers or palette:
+                raise WorkerError("Streamed Orca plates cannot contain native object controls.")
+            from .streamed_orca_validation import validate_streamed_orca_3mf
+            streamed_triangles = validate_streamed_orca_3mf(model_bytes)["triangles"]
+        else:
+            validate_worker_3mf(model_bytes,
+                                native_tool_count=len(palette) if palette else None,
+                                allow_native_modifier_fixture=native_modifiers,
+                                allow_compact_instances=not native_modifiers and not palette)
         # Inspect the manifest only after all archive bounds have been checked.
         with zipfile.ZipFile(io.BytesIO(model_bytes)) as archive:
             if "Metadata/model_settings.config" in archive.namelist():
@@ -313,7 +332,7 @@ def orca_command(binary: Path, workdir: Path, *,
         *(["--arrange", "1"] if not is_project else
           ["--arrange", "0"] if native_object_settings or experimental_no_arrange else []),
         "--slice", "0" if experimental_all_plates else "1",
-        "--mtcpp", str(max(500000, compact_triangles or 0)), "--mstpp", "300",
+        "--mtcpp", str(max(500000, streamed_triangles or compact_triangles or 0)), "--mstpp", "300",
         "--outputdir", str(outdir),
     ]
 
