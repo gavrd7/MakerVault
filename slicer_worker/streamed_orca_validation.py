@@ -17,14 +17,11 @@ _ALLOWED = {"3D/3dmodel.model", "[Content_Types].xml", "_rels/.rels"}
 
 
 from .resource_budget import memory_headroom as _memory_headroom
-from .resource_budget import operation_memory_budget
-
-
 def streamed_orca_memory_budget():
-    # Generic operation policy; the geometry exporter supplies cost estimates.
-    # Keep this function as a compatibility boundary for existing tests.
-    return operation_memory_budget(
-        reserve_bytes=256 * 1024 * 1024, expansion_factor=4) or 0
+    # Use the common measurement implementation, preserving the existing
+    # injectable measurement boundary for deterministic worker-unit tests.
+    available = _memory_headroom()
+    return max(0, available - 256 * 1024 * 1024) // 4 if available is not None else 0
 
 
 def validate_streamed_orca_3mf(data):
