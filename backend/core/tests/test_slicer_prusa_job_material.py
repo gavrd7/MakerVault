@@ -166,3 +166,91 @@ class PrusaWorkbenchMaterialTests(TestCase):
         job.filament_profile_id=99
         with self.assertRaises(SlicerProfileError):
             prepare_prusa_workbench_material(job)
+
+
+class PrusaVirtualToolDraftTests(TestCase):
+    def config(self):
+        from uuid import UUID
+        a,b = ("11111111-1111-4111-8111-111111111111",
+               "22222222-2222-4222-8222-222222222222")
+        job,filaments,raw = fixture("mmu")
+        job.settings.pop("slot_filament_profiles")
+        job.settings.pop("material_tool_bindings")
+        job.settings.pop("flush_settings")
+        filaments[0].pk=UUID(a)
+        filaments[1].pk=UUID(b)
+        job.filament_profile_id=UUID(a)
+        mids=("aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+              "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb")
+        for row,mid in zip(job.settings["plate_objects"],mids):
+            row.pop("material_slot")
+            row["instance_id"]=mid
+        job.settings["prusa_native_tools"]={
+            "version":1,"mode":"mmu","tool_count":2,
+            "filament_profile_ids":[a,b],
+            "model_tools":[{"instance_id":mid,"tool":i+1}
+                           for i,mid in enumerate(mids)],
+            "purge_matrix":[[0,80],[90,0]],
+        }
+        return job,filaments,raw
+
+    def test_saved_virtual_mmu_uses_only_explicit_native_tools(self):
+        job,filaments,raw=self.config()
+        PrusaWorkbenchMaterialTests().resolve(job,filaments,raw)
+        kind,result=prepare_prusa_workbench_material(job)
+        self.assertEqual(kind,"mmu")
+        self.assertEqual(result["tools"],[1,2])
+        self.assertEqual(result["purge_matrix"],[[0.0,80.0],[90.0,0.0]])
+        self.assertEqual(result["filament_profiles"],filaments)
+
+    def test_incomplete_virtual_draft_can_be_saved_not_executed(self):
+        from core.slicer_prusa_tool_configuration import validate_prusa_native_tools
+        job,filaments,raw=self.config()
+        PrusaWorkbenchMaterialTests().resolve(job,filaments,raw)
+        job.settings["prusa_native_tools"]["filament_profile_ids"][1]=""
+        self.assertEqual(validate_prusa_native_tools(
+            job.settings["prusa_native_tools"])["filament_profile_ids"][1],"")
+        with self.assertRaises(SlicerProfileError):
+            prepare_prusa_workbench_material(job)
+
+    def test_mmu_purge_and_native_topology_must_match(self):
+        job,filaments,raw=self.config()
+        PrusaWorkbenchMaterialTests().resolve(job,filaments,raw)
+        job.settings["prusa_native_tools"]["purge_matrix"][1][0]=None
+        with self.assertRaises(SlicerProfileError):
+            prepare_prusa_workbench_material(job)
+        job.settings["prusa_native_tools"]["purge_matrix"][1][0]=80
+        job.settings["prusa_native_tools"]["mode"]="xl"
+        job.settings["prusa_native_tools"]["purge_matrix"]=None
+        with self.assertRaises(SlicerProfileError):
+            prepare_prusa_workbench_material(job)
+
+    def test_rejects_forged_model_identity_and_foreign_filaments(self):
+        job,filaments,raw=self.config()
+        PrusaWorkbenchMaterialTests().resolve(job,filaments,raw)
+        job.settings["prusa_native_tools"]["model_tools"][1]["instance_id"]=(
+            "cccccccc-cccc-4ccc-8ccc-cccccccccccc")
+        with self.assertRaises(SlicerProfileError):
+            prepare_prusa_workbench_material(job)
+        job,filaments,raw=self.config()
+        filaments[1].owner_id=91
+        PrusaWorkbenchMaterialTests().resolve(job,filaments,raw)
+        with self.assertRaises(SlicerProfileError):
+            prepare_prusa_workbench_material(job)
+
+    def test_virtual_xl_rejects_mmu_purge_and_requires_xl_native_profile(self):
+        job,filaments,raw=self.config()
+        job.settings["prusa_native_tools"]["mode"]="xl"
+        job.settings["prusa_native_tools"]["purge_matrix"]=None
+        job.settings["prime_tower"]=None
+        PrusaWorkbenchMaterialTests().resolve(job,filaments,raw)
+        with self.assertRaises(SlicerProfileError):
+            prepare_prusa_workbench_material(job)
+        job,filaments,_=self.config()
+        job.settings["prusa_native_tools"]["mode"]="xl"
+        job.settings["prusa_native_tools"]["purge_matrix"]=None
+        job.settings.pop("prime_tower")
+        PrusaWorkbenchMaterialTests().resolve(job,filaments,ini("0.4,0.4","0"))
+        kind,result=prepare_prusa_workbench_material(job)
+        self.assertEqual(kind,"xl")
+        self.assertNotIn("purge_matrix",result)
