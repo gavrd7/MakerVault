@@ -87,6 +87,26 @@ class UniqueSourceBudgetTests(SimpleTestCase):
                 build_plate_3mf(models, bed_width=220, bed_depth=220)
 
 
+class RepeatedNativeMeshReuseTests(SimpleTestCase):
+    def test_twenty_identical_objects_are_built_once_but_remain_independent(self):
+        from core import slicer_plate_3mf as plate
+        source = fixture_stl()
+        rows = [
+            ({"x_mm": -80 + (i % 5) * 40,
+              "y_mm": -60 + (i // 5) * 40,
+              "rotation_deg": 0, "scale_percent": 100}, source)
+            for i in range(20)
+        ]
+        with patch.object(plate, "_render_mesh", wraps=plate._render_mesh) as render:
+            project = build_plate_3mf(rows, bed_width=220, bed_depth=220)
+        self.assertEqual(render.call_count, 1)
+        with zipfile.ZipFile(io.BytesIO(project)) as archive:
+            root = ET.fromstring(archive.read("3D/3dmodel.model"))
+        q = "{" + NS + "}"
+        self.assertEqual(len(root.findall("./"+q+"resources/"+q+"object")), 20)
+        self.assertEqual(len(root.findall("./"+q+"build/"+q+"item")), 20)
+
+
 class ResourceBudgetTests(SimpleTestCase):
     def test_expanded_geometry_budget_is_enforced_during_plate_construction(self):
         from core import slicer_plate_3mf as plate
