@@ -61,7 +61,19 @@ def _native_sections(vendor="PrusaResearch"):
         parser.read_string(data)
         if not 0 < len(parser.sections()) <= 10000:
             raise OfficialProfileError("Official Prusa vendor preset count is invalid.")
-        return {section: dict(parser.items(section)) for section in parser.sections()}
+        sections = {}
+        for section in parser.sections():
+            values = {}
+            for key, value in parser.items(section):
+                # Upstream 2.5.16 INDX bundle has one fixed typo. Preserve
+                # strict key validation for all other native settings.
+                fixed = ("top_solid_infill_speed"
+                         if key == "top solid_infill_speed" else key)
+                if fixed in values:
+                    raise OfficialProfileError("Duplicate official Prusa native setting.")
+                values[fixed] = value
+            sections[section] = values
+        return sections
     except (requests.RequestException, UnicodeDecodeError, ConfigError, ValueError) as exc:
         if isinstance(exc, OfficialProfileError):
             raise
