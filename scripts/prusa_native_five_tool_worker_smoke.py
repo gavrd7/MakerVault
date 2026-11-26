@@ -8,6 +8,7 @@ from pathlib import Path
 import sys
 import tempfile
 import uuid
+import math
 
 from core.slicer_prusa_multitool_project import build_prusa_multitool_candidate
 from core.slicer_prusa_filament_palette import compile_prusa_filament_palette
@@ -92,6 +93,29 @@ def main(binary,vendor):
         (work/"prusa-offline-mmu.marker").write_text("v1")
         run_prusa(Path(binary),work)
         output=(work/"output.gcode").read_bytes()
+        # Native fixture diagnostics only. Never emit user G-code in the
+        # production worker, but identify an out-of-range generator value.
+        from slicer_worker.prusa_gcode_audit import WORD
+        impossible=[]
+        for lineno,raw_line in enumerate(output.splitlines(),1):
+            cmd=raw_line.decode("utf-8","replace").split(";",1)[0].strip()
+            if not cmd or cmd.split(None,1)[0].upper() not in (
+                    "G0","G00","G1","G01","G92"):
+                continue
+            for key,value in WORD.findall(cmd):
+                try:
+                    number=float(value)
+                except ValueError:
+                    continue
+                if not math.isfinite(number) or abs(number)>1e9:
+                    impossible.append((lineno,key,format(number,".6g"),
+                                       cmd[:100]))
+                    if len(impossible)>=8:
+                        break
+            if len(impossible)>=8:
+                break
+        if impossible:
+            print("Research: generator numeric outliers",impossible,flush=True)
         receipt=audit_prusa_material_model_gcode(
             output,project,printer_ini=printer,tools=tools,tower=tower)
         assert len(receipt["correct_extrusion_moves"])==5
