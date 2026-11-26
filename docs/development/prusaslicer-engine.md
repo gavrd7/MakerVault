@@ -1,3 +1,16 @@
+### Prusa native MMU purge versus INDX model deposition
+
+The native material audit now distinguishes two legitimate kinds of
+extrusion. At a verified **MMU wipe-tower XY footprint**, positive-E
+purging may be stationary (a real purge event). At a printable model
+footprint, positive-E only qualifies the assigned tool when it
+actually deposits a moving G1/G01 XY segment. Thus INDX toolchange
+recovery at a prior model is excluded without removing valid MMU
+purging. Existing MMU five-tool native smoke plus real official
+INDX 8T toolpath qualification must pass together.
+
+---
+
 ### Official INDX G-code spatial mismatch remeasurement
 
 Although the official INDX 8T printer profile now passes real native
