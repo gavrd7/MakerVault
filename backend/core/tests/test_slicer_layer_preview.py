@@ -554,6 +554,38 @@ class FullLayerEndpointTests(TestCase):
             self.assertIsNone(cached_batch(
                 preview_index_key(self.asset, "full-v1"), [0.2, 0.4]))
 
+    def test_cached_full_preview_serves_unaligned_mobile_batches_across_blocks(self):
+        import json
+        import zlib
+        from unittest.mock import patch
+        from django.core.cache.backends.locmem import LocMemCache
+        from core.slicer_preview_cache import cached_batch
+        backend = LocMemCache("preview-mobile-unaligned-cache", {})
+        key = "unaligned-64-layer-blocks"
+        heights = [round((i + 1) * 0.2, 3) for i in range(130)]
+        backend.set(key + ":manifest", heights)
+        for block in range(3):
+            data = {
+                "complete": True, "cached": True,
+                "layers": [{"z": z, "segments": [[index]]}
+                           for index, z in enumerate(
+                               heights[block * 64:(block + 1) * 64],
+                               start=block * 64)],
+            }
+            backend.set(
+                key + ":batch:" + str(block),
+                zlib.compress(json.dumps(data).encode("utf-8")))
+        with patch("core.slicer_preview_cache.cache", backend):
+            for start, count in ((0, 15), (15, 15), (60, 15),
+                                 (120, 10), (64, 1)):
+                with self.subTest(start=start, count=count):
+                    result = cached_batch(key, heights[start:start + count])
+                    self.assertIsNotNone(result)
+                    self.assertEqual(len(result["layers"]), count)
+                    self.assertEqual(
+                        [row["segments"][0][0] for row in result["layers"]],
+                        list(range(start, start + count)))
+
     def test_full_quality_cached_response_and_original_selected_layer(self):
         from unittest.mock import patch
         from django.core.cache.backends.locmem import LocMemCache
