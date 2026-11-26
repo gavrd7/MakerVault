@@ -194,6 +194,52 @@ def _bake_native_instance_transform(obj, transform):
             vertex.set(axis, format(value, ".6f"))
 
 
+def _validated_mesh_placement(obj, item, bed_width, bed_depth, index):
+    # Transform the actual welded vertices, not only the original 2D
+    # bounding rectangle: a tilted model has a different XY footprint.
+    # Compute bottom clearance from the same matrix to ensure it rests at
+    # Z=0 in both the 3MF exporter and the browser's 3D preview.
+    provisional = [float(value) for value in
+                   _transform(item, bed_width / 2, bed_depth / 2).split()]
+    vertex_nodes = obj.findall(f"./{{{NS}}}mesh/{{{NS}}}vertices/{{{NS}}}vertex")
+    placed = []
+    for vertex in vertex_nodes:
+        x, y, z = (float(vertex.attrib[key]) for key in ("x", "y", "z"))
+        placed.append((
+            provisional[0] * x + provisional[3] * y + provisional[6] * z + provisional[9],
+            provisional[1] * x + provisional[4] * y + provisional[7] * z + provisional[10],
+            provisional[2] * x + provisional[5] * y + provisional[8] * z,
+        ))
+    # Preview and imported STL coordinates use floating-point transforms.
+    # Never reject a model for sub-millimetre roundoff at an otherwise
+    # valid plate boundary. Real overhangs remain blocked.
+    tolerance = 0.05  # mm; strictly below nozzle/line widths
+    if not placed:
+        raise SlicerProfileError("The prepared build plate contains an empty model.")
+    min_x = min(point[0] for point in placed)
+    max_x = max(point[0] for point in placed)
+    min_y = min(point[1] for point in placed)
+    max_y = max(point[1] for point in placed)
+    if (not all(math.isfinite(v) for v in
+                (min_x, max_x, min_y, max_y)) or
+            min_x < -tolerance or max_x > bed_width + tolerance or
+            min_y < -tolerance or max_y > bed_depth + tolerance):
+        raise SlicerProfileError(
+            "Model %d extends beyond the native %.1f × %.1f mm plate "
+            "(X %.2f–%.2f, Y %.2f–%.2f mm)."
+            % (index, bed_width, bed_depth,
+               min_x, max_x, min_y, max_y))
+    minimum_z = min(point[2] for point in placed)
+    # Tilted STL always rests on its lowest vertex before applying the
+    # explicitly requested elevation. Do not auto-drop stacked objects.
+    desired_z = float(item.get("z_mm", 0))
+    if not math.isfinite(desired_z) or not 0 <= desired_z <= 1000:
+        raise SlicerProfileError("Invalid model elevation.")
+    provisional[11] = desired_z - minimum_z
+    placement = " ".join(format(value, ".6f") for value in provisional)
+    return placement
+
+
 def build_plate_3mf(objects_with_stl, *, bed_width, bed_depth, native_tool_indices=None,
                     native_colour_tools=None, allow_modifier_fixture=False):
     """Render [(validated_plate_item_dict, owned_STL_bytes)] as one core 3MF.
@@ -282,48 +328,7 @@ def build_plate_3mf(objects_with_stl, *, bed_width, bed_depth, native_tool_indic
             colour_tool_indices=(native_colour_tools[index - 1]
                                  if native_colour_tools is not None else None))
         total_triangles += count
-        # Transform the actual welded vertices, not only the original 2D
-        # bounding rectangle: a tilted model has a different XY footprint.
-        # Compute bottom clearance from the same matrix to ensure it rests at
-        # Z=0 in both the 3MF exporter and the browser's 3D preview.
-        provisional = [float(value) for value in
-                       _transform(item, bed_width / 2, bed_depth / 2).split()]
-        vertex_nodes = obj.findall(f"./{{{NS}}}mesh/{{{NS}}}vertices/{{{NS}}}vertex")
-        placed = []
-        for vertex in vertex_nodes:
-            x, y, z = (float(vertex.attrib[key]) for key in ("x", "y", "z"))
-            placed.append((
-                provisional[0] * x + provisional[3] * y + provisional[6] * z + provisional[9],
-                provisional[1] * x + provisional[4] * y + provisional[7] * z + provisional[10],
-                provisional[2] * x + provisional[5] * y + provisional[8] * z,
-            ))
-        # Preview and imported STL coordinates use floating-point transforms.
-        # Never reject a model for sub-millimetre roundoff at an otherwise
-        # valid plate boundary. Real overhangs remain blocked.
-        tolerance = 0.05  # mm; strictly below nozzle/line widths
-        if not placed:
-            raise SlicerProfileError("The prepared build plate contains an empty model.")
-        min_x = min(point[0] for point in placed)
-        max_x = max(point[0] for point in placed)
-        min_y = min(point[1] for point in placed)
-        max_y = max(point[1] for point in placed)
-        if (not all(math.isfinite(v) for v in
-                    (min_x, max_x, min_y, max_y)) or
-                min_x < -tolerance or max_x > bed_width + tolerance or
-                min_y < -tolerance or max_y > bed_depth + tolerance):
-            raise SlicerProfileError(
-                "Model %d extends beyond the native %.1f × %.1f mm plate "
-                "(X %.2f–%.2f, Y %.2f–%.2f mm)."
-                % (index, bed_width, bed_depth,
-                   min_x, max_x, min_y, max_y))
-        minimum_z = min(point[2] for point in placed)
-        # Tilted STL always rests on its lowest vertex before applying the
-        # explicitly requested elevation. Do not auto-drop stacked objects.
-        desired_z = float(item.get("z_mm", 0))
-        if not math.isfinite(desired_z) or not 0 <= desired_z <= 1000:
-            raise SlicerProfileError("Invalid model elevation.")
-        provisional[11] = desired_z - minimum_z
-        placement = " ".join(format(value, ".6f") for value in provisional)
+        placement = _validated_mesh_placement(obj, item, bed_width, bed_depth, index)
         if total_triangles > plate_triangle_budget():
             raise SlicerProfileError("Total plate triangles exceed the limit.")
         if bake_native_positions:
