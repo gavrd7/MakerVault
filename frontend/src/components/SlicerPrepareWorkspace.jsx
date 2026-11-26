@@ -1062,6 +1062,7 @@ export default function SlicerPrepareWorkspace({
       profile.engine_version===activeEngineVersion && profile.kind==="filament")) &&
     prusaNativeTools.filament_profile_ids.includes(selectedProfiles?.filament_id) &&
     objects.length>=2 && objects.length<=5 &&
+    prusaNativeTools.model_tools?.length===objects.length &&
     objects.every(object=>prusaNativeTools.model_tools?.some(row=>row.instance_id===object.instance_id)) &&
     new Set(prusaNativeTools.model_tools.map(row=>row.tool)).size>=2 &&
     !objects.some(object=>object.material_slot || object.process_overrides &&
