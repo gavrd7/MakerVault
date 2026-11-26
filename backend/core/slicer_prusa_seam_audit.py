@@ -171,7 +171,10 @@ def audit_prusa_seam_enforcer_gcode(data, item, *, bed_width, bed_depth):
                 captured = True
                 if zmin <= pos["Z"] <= zmax:
                     sampled += 1
-                    if xmin <= pos["X"] <= xmax and ymin <= pos["Y"] <= ymax:
+                    # The seam is where the first wall starts depositing,
+                    # not where the first extrusion segment finishes.
+                    if (xmin <= old_xy[0] <= xmax and
+                            ymin <= old_xy[1] <= ymax):
                         matching += 1
     if sampled < 5 or matching < 5 or matching < math.ceil(.75*sampled):
         raise ValueError("Native Prusa seam did not follow the enforcer region.")
