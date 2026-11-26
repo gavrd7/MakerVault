@@ -303,9 +303,7 @@ jobs:
             /opt/engine-store/versions/prusaslicer/2.9.7/resources/profiles/PrusaResearch.ini \
             /tmp/mmu
 
-      - name: Research five independent XL toolheads on genuine Prusa 2.9.7
-        id: prusa_five_head_xl_research
-        continue-on-error: true
+      - name: Qualify five independent XL toolheads on genuine Prusa 2.9.7
         run: |
           set -euo pipefail
           docker run --rm --network none --user 10001:10001 \
@@ -317,11 +315,6 @@ jobs:
             /tmp/five_xl.py \
             /opt/engine-store/versions/prusaslicer/2.9.7/bin/prusa-slicer \
             /opt/engine-store/versions/prusaslicer/2.9.7/resources/profiles/PrusaResearch.ini
-
-      - name: Record five-head XL qualification limitation
-        if: ${{ steps.prusa_five_head_xl_research.outcome == 'failure' }}
-        run: |
-          echo "::warning title=Prusa XL five heads::Native five-head toolpath acceptance has not passed; do not enable unqualified production paths."
 
       - name: Research actual distinct MMU heater commands
         id: prusa_native_temperature_research
