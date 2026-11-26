@@ -282,7 +282,9 @@ class PrusaOfflineMmuPreflightTests(TestCase):
         cavity.update(width_mm=3,depth_mm=3,height_mm=5,x_mm=35,y_mm=0,z_mm=4)
         values["rows"]=[
             (item(x_mm=-35,modifier_volumes=[modifier]),cube()),
-            (item(x_mm=35,modifier_volumes=[cavity]),cube())]
+            (item(x_mm=35,modifier_volumes=[cavity],
+                  variable_layer_profile={"version":1,"bands":[
+                      {"from_mm":2,"to_mm":6,"layer_mm":.12}]}),cube())]
         values["tools"]=[1,8]
         xl={key:values[key] for key in
             ("owner_id","printer_profile","process_profile",
@@ -296,6 +298,9 @@ class PrusaOfflineMmuPreflightTests(TestCase):
         self.assertEqual(len(config.findall("object")),2)
         self.assertEqual(sum(len(obj.findall("volume"))-1
                              for obj in config.findall("object")),2)
+        with zipfile.ZipFile(io.BytesIO(candidate["model"])) as archive:
+            self.assertIn("Metadata/Prusa_Slicer_layer_config_ranges.xml",
+                          archive.namelist())
         self.assertEqual(validate_prusa_material_candidate(
             candidate["model"],printer_ini=assets[0],tools=[1,8])["tools"],(1,8))
 
