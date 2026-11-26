@@ -1,3 +1,18 @@
+### INDX independent per-object variable layers
+
+The eight-tool native path also preserves independently configured
+variable-layer ranges alongside typed parameter modifiers and negative
+volumes. The owner-bound 3MF builder serialises the existing,
+upstream-supported `Metadata/Prusa_Slicer_layer_config_ranges.xml`.
+The independent worker strips only material-tool annotations for its
+separate strict XML check; exact layer range IDs, interval ordering and
+native layer settings remain validated. A genuine pinned 2.9.7
+eight-tool CLI test must prove every model still deposits using the
+assigned tool in this combined project. Unknown or invalid layer ranges
+are not silently omitted.
+
+---
+
 ### Qualification checkpoint — official 8T and native spatial regions
 
 The full INDX acceptance must pass after the latest per-tool 3MF
