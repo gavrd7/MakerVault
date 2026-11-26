@@ -30,15 +30,15 @@ class PrusaMachineTopologyTests(TestCase):
                 self.assertEqual(xl["kind"], "independent_tools")
                 self.assertEqual(xl["physical_nozzle_count"], n)
 
-    def test_eight_logical_indx_tools_are_parsed_but_not_runtime_approved(self):
+    def test_indx_six_to_eight_native_tools_have_explicit_assignments(self):
         for count in (6,7,8):
             with self.subTest(count=count):
                 candidate=ini(",".join(["0.4"]*count))
                 topology=prusa_machine_topology(candidate)
-                self.assertEqual(topology["kind"],"unqualified_toolchanger")
-                self.assertIsNone(topology["physical_nozzle_count"])
+                self.assertEqual(topology["kind"],"indx")
+                self.assertEqual(topology["physical_nozzle_count"],count)
                 self.assertEqual(topology["logical_tool_count"],count)
-                self.assertTrue(topology["requires_new_toolchanger_qualification"])
+                self.assertFalse(topology["requires_new_toolchanger_qualification"])
                 result=validate_prusa_model_tool_order(candidate,[1,count])
                 self.assertEqual(result["selected_tools"],(1,count))
         # The 8-tool generic parser is not authorisation for an MMU with
