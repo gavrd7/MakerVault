@@ -72,3 +72,25 @@ class PrusaToolAuditTests(TestCase):
             audit_prusa_native_object_tools(
                 ("\n".join(lines)+"\n").encode(),models(),[0,1],
                 bed_width=250,bed_depth=210)
+
+    def test_all_eight_indx_tools_have_independent_deposited_paths(self):
+        offsets=(-112,-80,-48,-16,16,48,80,112)
+        sources=[]
+        lines=["M83","G90"]
+        for index, x in enumerate(offsets):
+            sources.append((item(x_mm=x),cube(size=8)))
+            lines.extend(["T%d" % index,
+                          "G0 X%.3f Y105" % (125+x)])
+            for step in range(60):
+                lines.append("G1 X%.3f Y105 E0.03" %
+                             (125+x+.05*(step+1)))
+        output=("\n".join(lines)+"\n").encode()
+        observed=audit_prusa_native_object_tools(
+            output,sources,list(range(8)),bed_width=360,bed_depth=360)
+        self.assertEqual(observed["correct_deposition_moves"],[60]*8)
+        self.assertEqual(observed["incorrect_deposition_moves"],[0]*8)
+        tampered=output.replace(b"T7\n",b"T6\n")
+        with self.assertRaisesRegex(ValueError,"did not prove"):
+            audit_prusa_native_object_tools(
+                tampered,sources,list(range(8)),
+                bed_width=360,bed_depth=360)
