@@ -4,6 +4,7 @@ This only validates offline G-code, not hardware/printer submission.
 """
 import base64
 import hashlib
+import re
 from pathlib import Path
 import sys
 import tempfile
@@ -98,6 +99,26 @@ def main(binary,vendor):
         assert receipt["incorrect_extrusion_moves"]==[0]*5
         assert receipt["selected_tools"]==(0,1,2,3,4)
         assert receipt["tower_extrusion_moves"]=={}
+        # Research-only observable executable heater commands. Do not infer
+        # physical heating or firmware behaviour from profile vectors alone.
+        heaters=[]
+        for line in output.splitlines():
+            command=line.split(b";",1)[0].strip()
+            if not command:
+                continue
+            operation=command.split(None,1)[0].upper()
+            if operation not in (b"M104",b"M109"):
+                continue
+            temp=re.search(rb"(?:^|\\s)S([0-9]{1,3})(?:\\s|$)",command)
+            tool=re.search(rb"(?:^|\\s)T([0-9])(?:\\s|$)",command)
+            heaters.append((operation.decode("ascii"),
+                            int(tool.group(1)) if tool else None,
+                            int(temp.group(1)) if temp else None))
+        print("Research: XL 5T executable heater command audit",
+              {"count":len(heaters),"distinct_commands":sorted(set(heaters),
+                key=lambda row:(row[0],-1 if row[1] is None else row[1],
+                                -1 if row[2] is None else row[2]))[:30]},
+              flush=True)
         print("PASS: five XL independent heads selected and deposited correct material on five models",
               receipt,"sha256",hashlib.sha256(output).hexdigest(),flush=True)
 
