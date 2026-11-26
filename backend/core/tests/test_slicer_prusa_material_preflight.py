@@ -135,6 +135,20 @@ class PrusaOfflineMmuPreflightTests(TestCase):
                 prepare_prusa_offline_xl_candidate(**xl)
         load.assert_not_called()
 
+    def test_indx_scale_tools_do_not_enter_xl_offline_worker(self):
+        values,assets=self.parts()
+        values["filament_profiles"].append(profile("filament"))
+        values["tools"]=[1,6]
+        xl={key:values[key] for key in (
+            "owner_id","printer_profile","process_profile","filament_profiles",
+            "rows","tools","bed_width","bed_depth")}
+        assets[0]=ini(",".join(["0.4"]*6),"0")
+        assets.append(assets[-1])
+        with patch("core.slicer_prusa_material_preflight.resolved_prusa_profile",
+                   side_effect=assets):
+            with self.assertRaises(SlicerProfileError):
+                prepare_prusa_offline_xl_candidate(**xl)
+
     def test_five_explicit_mmu_models_preserve_tool_order(self):
         values,assets=self.parts()
         values["rows"]=[
