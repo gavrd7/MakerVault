@@ -2514,6 +2514,13 @@ def file_gcode_layers(request, asset_id):
             raise ValueError()
     except (ValueError, TypeError):
         return _error("Invalid preview detail level.", status=400)
+    from .slicer_preview_cache import cached_direct_batch, store_direct_batch
+    if page_start is None:
+        recent = cached_direct_batch(
+            asset, heights, high_fidelity=high_fidelity,
+            overview=overview, detail=detail)
+        if recent is not None:
+            return respond(recent, "direct-hit")
     index_key = None
     all_heights = None
     if (overview or high_fidelity) and page_start is None:
@@ -2604,6 +2611,10 @@ def file_gcode_layers(request, asset_id):
         return _error("Invalid G-code source or preview detail level.", status=400)
     except OSError:
         return _error("Stored G-code could not be opened.", status=404)
+    if page_start is None and result.get("complete"):
+        store_direct_batch(asset, heights, result,
+                           high_fidelity=high_fidelity,
+                           overview=overview, detail=detail)
     return respond(result, "miss")
 
 
