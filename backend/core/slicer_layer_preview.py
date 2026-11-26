@@ -114,8 +114,8 @@ def layer_batch_toolpaths(text, target_zs, *, overview=False, overview_limit=350
     if page_start is not None and (
             type(page_start) is not int or page_start < 0 or
             page_start > 2**53 or len(target_zs) != 1 or
-            not high_fidelity or overview):
-        raise ValueError("Page an individual full-detail layer only.")
+            overview):
+        raise ValueError("Page an individual exact layer only.")
 
     if high_fidelity and not 1 <= max_total_segments <= MAX_FULL_PREVIEW_SEGMENTS:
         raise ValueError("Invalid full preview geometry budget.")
@@ -264,8 +264,9 @@ def layer_batch_toolpaths(text, target_zs, *, overview=False, overview_limit=350
                                         heapq.heappush(family_heap, entry)
                                     else:
                                         heapq.heapreplace(family_heap, entry)
-                        elif (len(layer["segments"]) < MAX_LAYER_SEGMENTS and
-                              stored_count < MAX_BATCH_SEGMENTS):
+                        elif ((page_start is None or layer["segment_count"] > page_start)
+                              and len(layer["segments"]) < MAX_LAYER_SEGMENTS
+                              and stored_count < MAX_BATCH_SEGMENTS):
                             layer["segments"].append([round(px,3),round(py,3),
                                                        round(ax,3),round(ay,3),
                                                        key,role,width,tool])
