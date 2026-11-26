@@ -27,6 +27,8 @@ MAX_TRIANGLES = 500_000
 MAX_PLATE_TRIANGLES = 1_500_000
 MAX_SOURCE_TOTAL = 48 * 1024 * 1024
 MAX_PROJECT_BYTES = 32 * 1024 * 1024
+# Worker bounds each expanded core model XML entry to 80 MiB.
+MAX_MODEL_XML_BYTES = 80 * 1024 * 1024
 
 def _triangles(raw):
     from .slicer_mesh import inspect_stl
@@ -226,6 +228,7 @@ def build_plate_3mf(objects_with_stl, *, bed_width, bed_depth, native_tool_indic
     build = ET.SubElement(model, f"{{{NS}}}build")
     total_bytes = 0
     total_triangles = 0
+    resource_xml_bytes = 0
     # Only native per-object projects use baked individual placements. Existing
     # generic 3MF exports and their transform semantics remain unchanged.
     bake_native_positions = native_tool_indices is not None or any(
@@ -314,9 +317,17 @@ def build_plate_3mf(objects_with_stl, *, bed_width, bed_depth, native_tool_indic
             "objectid": str(index),
             "transform": placement,
         })
+        # Check actual serialised resource growth after every mesh, not only
+        # after all models have been accumulated into a large XML tree.
+        # Leave 64 KiB for the build items and model wrapper.
+        resource_xml_bytes += len(ET.tostring(obj, encoding="utf-8"))
+        if resource_xml_bytes > MAX_MODEL_XML_BYTES - 65536:
+            raise SlicerProfileError(
+                "Build plate 3MF geometry exceeds the worker's expanded XML budget.")
     model_xml = ET.tostring(model, encoding="utf-8", xml_declaration=True)
-    if len(model_xml) > 96 * 1024 * 1024:
-        raise SlicerProfileError("The generated 3MF mesh is too large.")
+    if len(model_xml) > MAX_MODEL_XML_BYTES:
+        raise SlicerProfileError(
+            "Build plate 3MF geometry exceeds the worker's expanded XML budget.")
     # Preserve Orca's model IDs one-to-one with the 3MF resource IDs.
     # A distinct <object> entry holds validated native overrides. The
     # production worker still rejects execution of object-specific edits
