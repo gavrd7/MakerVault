@@ -693,6 +693,28 @@ jobs:
         run: |
           echo '::warning title=Prusa two-object support isolation::Real G-code shows support extrusion outside the painted model. Do not enable multi-model support painting yet.'
 
+      - name: Research native per-object support disable against painted neighbour leakage
+        id: prusa_support_object_local_research
+        continue-on-error: true
+        run: |
+          set -euo pipefail
+          docker run --rm --network none --user 10001:10001 \
+            -v "$TEST_VOLUME:/opt/engine-store:ro" \
+            -v "$GITHUB_WORKSPACE/scripts/prusa_native_two_support_object_controls.py:/tmp/prusa_support_local.py:ro" \
+            -v "$GITHUB_WORKSPACE/scripts:/tmp/scripts:ro" \
+            -v "$PRUSA_MULTI_SUPPORT_DIR:/tmp/multi-support:ro" \
+            -e PYTHONPATH=/tmp:/opt/makervault-slicer \
+            --entrypoint python3 prusa-integration:smoke \
+            /tmp/prusa_support_local.py \
+            /opt/engine-store/versions/prusaslicer/2.9.7/bin/prusa-slicer \
+            /opt/engine-store/versions/prusaslicer/2.9.7/resources/profiles/PrusaResearch.ini \
+            /tmp/multi-support
+
+      - name: Keep unqualified neighbour support combinations blocked
+        if: ${{ steps.prusa_support_object_local_research.outcome == 'failure' }}
+        run: |
+          echo '::warning title=Prusa support isolation::Object-local native support-off experiment did not eliminate support extrusion in the neighbouring model. Multi-model support paint remains blocked.'
+
       - name: Prepare independently painted native Prusa fuzzy skin models
         run: |
           set -euo pipefail
