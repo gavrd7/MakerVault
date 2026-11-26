@@ -13,6 +13,7 @@ import zipfile
 from defusedxml import ElementTree as SafeET
 from xml.etree import ElementTree as ET
 
+from .slicer_resource_budget import project_archive_budget, xml_geometry_budget
 from .slicer_prusa_machine_topology import validate_prusa_model_tool_order
 from .slicer_profiles import SlicerProfileError
 
@@ -30,7 +31,7 @@ def add_prusa_native_model_tools(project, printer_ini, tool_indices):
     macro modification, slicer process config mutation or external relationship.
     """
     try:
-        if not isinstance(project, bytes) or not 0 < len(project) <= 32 * 1024 * 1024:
+        if not isinstance(project, bytes) or not 0 < len(project) <= project_archive_budget():
             raise ValueError("Invalid internally generated Prusa project.")
         topology = validate_prusa_model_tool_order(printer_ini, tool_indices)
         with zipfile.ZipFile(io.BytesIO(project)) as archive:
@@ -39,7 +40,7 @@ def add_prusa_native_model_tools(project, printer_ini, tool_indices):
             if (len(set(names)) != len(names) or
                     not FIXED_PARTS.issubset(names) or
                     set(names) - allowed or
-                    any(archive.getinfo(name).file_size > 96 * 1024 * 1024
+                    any(archive.getinfo(name).file_size > xml_geometry_budget()
                         for name in names)):
                 raise ValueError("Unexpected native Prusa source project members.")
             original = archive.read(MODEL_PART)
@@ -69,7 +70,7 @@ def add_prusa_native_model_tools(project, printer_ini, tool_indices):
                     result.writestr(name, adjusted if name == MODEL_PART else
                                     archive.read(name))
             output = destination.getvalue()
-            if len(output) > 32 * 1024 * 1024:
+            if len(output) > project_archive_budget():
                 raise ValueError("Native Prusa material project exceeds size cap.")
             return {"project": output, "topology": topology}
     except (OSError, TypeError, ValueError, zipfile.BadZipFile,
