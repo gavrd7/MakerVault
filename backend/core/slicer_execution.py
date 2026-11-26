@@ -1440,23 +1440,32 @@ def reconcile_stale_jobs(*, now=None, limit=250):
     now = now or timezone.now()
     if not isinstance(limit, int) or not 1 <= limit <= 1000:
         raise SlicerExecutionError("Invalid stale-job reconciliation limit.")
-    thresholds = (
-        ("queued", now - timedelta(minutes=30)),
-        ("running", now - timedelta(minutes=25)),
-    )
-    counts = {}
+    from .slicer_resource_budget import slicer_task_time_limits
+    queued_cutoff = now - timedelta(minutes=30)
+    message = "Worker outcome is unknown. Review and create a new draft if required."
+    counts = {"queued": 0, "running": 0}
     with transaction.atomic():
-        for status, cutoff in thresholds:
-            ids = list(
-                SliceJob.objects.filter(status=status, updated_at__lt=cutoff)
-                .order_by("updated_at").values_list("pk", flat=True)[:limit]
-            )
-            updated = SliceJob.objects.filter(
-                pk__in=ids, status=status, updated_at__lt=cutoff
-            ).update(
-                status="stale",
-                message="Worker outcome is unknown. Review and create a new draft if required.",
-                updated_at=now,
-            ) if ids else 0
-            counts[status] = updated
+        queued = list(
+            SliceJob.objects.filter(status="queued", updated_at__lt=queued_cutoff)
+            .order_by("updated_at").values_list("pk", flat=True)[:limit])
+        if queued:
+            counts["queued"] = SliceJob.objects.filter(
+                pk__in=queued, status="queued", updated_at__lt=queued_cutoff).update(
+                    status="stale", message=message, updated_at=now)
+        # Running jobs receive engine-neutral, hardware-aware Celery deadlines.
+        # Do not mark a valid low-power multi-model slice stale after 25 min.
+        # Re-evaluate each candidate under an updated_at predicate to avoid
+        # racing a real worker progress update.
+        candidates = SliceJob.objects.filter(
+            status="running", updated_at__lt=now - timedelta(minutes=25)
+        ).order_by("updated_at").values("pk", "settings", "updated_at")[:limit]
+        for candidate in candidates:
+            instances = max(1, len((candidate["settings"] or {}).get("plate_objects") or []))
+            _, hard = slicer_task_time_limits(model_instances=instances)
+            cutoff = now - timedelta(seconds=max(25 * 60, hard + 120))
+            if candidate["updated_at"] >= cutoff:
+                continue
+            counts["running"] += SliceJob.objects.filter(
+                pk=candidate["pk"], status="running", updated_at__lt=cutoff
+            ).update(status="stale", message=message, updated_at=now)
     return counts
