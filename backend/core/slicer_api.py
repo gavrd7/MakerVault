@@ -37,6 +37,8 @@ from .slicer_semantic_painting import validate_semantic_paint
 from .slicer_variable_layers import validate_variable_layer_profile
 from .slicer_paint_assets import store_paint, load_paint, expand_painted_item, expand_painted_settings, PAINT_FIELDS
 from .slicer_mesh import inspect_stl, MeshInspectionError, MAX_INSPECTION_BYTES
+from .slicer_resource_budget import (
+    input_model_budget, source_input_budget, memory_budget, project_archive_budget)
 from .slicer_bed import inspect_orca_plate, inspect_creality_plate, inspect_bambu_plate
 from .slicer_bed_artwork import (official_artwork_source, cached_official_artwork,
     official_bed_model_source, cached_official_bed_model)
@@ -658,7 +660,7 @@ def _draft(user, data):
                 pk__in=[item["asset_id"] for item in plate_models])}
             validate_plate_collisions([(
                 item, _read_owned_file(owned[str(item["asset_id"])],
-                                       user.pk, MAX_INPUT, "Draft STL")
+                                       user.pk, input_model_budget(), "Draft STL")
             ) for item in plate_models])
         except (KeyError, ValueError, OSError):
             settings_data["plate_conflicts"] = True
@@ -1052,7 +1054,7 @@ def export_native_multimaterial_3mf(request, job_id):
             if asset is None:
                 raise MaterialRoutingError("A model asset is no longer available.")
             source_models.append((
-                item, _read_owned_file(asset, request.user.pk, MAX_INPUT, "Model STL")
+                item, _read_owned_file(asset, request.user.pk, input_model_budget(), "Model STL")
             ))
         result = prepare_multimaterial_plate(
             source_models, bed_width=width, bed_depth=depth,
@@ -1100,7 +1102,7 @@ def export_project_3mf(request, job_id):
             owner=request.user, category="mesh", pk__in=ids)}
         if len(owned) != len(ids):
             raise ValueError("Some project STL assets are no longer available.")
-        raw = {ident:_read_owned_file(asset, request.user.pk, MAX_INPUT, "Project STL")
+        raw = {ident:_read_owned_file(asset, request.user.pk, input_model_budget(), "Project STL")
                for ident, asset in owned.items()}
         rows = [(plate["name"], [(item, raw[str(item["asset_id"])])
                  for item in plate["objects"]]) for plate in plates]
@@ -1221,31 +1223,46 @@ def approve_native_profiles(request):
 
 # Keep the existing 8 MiB on-wire request limit. Painted polygons can be
 # losslessly compressed, but expansion remains bounded and is never trusted.
-MAX_SLICER_REQUEST_BYTES = 8 * 1024 * 1024
-MAX_SLICER_JSON_BYTES = 48 * 1024 * 1024
+MAX_SLICER_REQUEST_BYTES = 8 * 1024 * 1024  # unknown-telemetry fallback
+MAX_SLICER_JSON_BYTES = 48 * 1024 * 1024  # unknown-telemetry fallback
+
+
+def slicer_configuration_limits():
+    """Share resource-derived request/JSON ceilings across all engines."""
+    wire = memory_budget(reserve_bytes=256 * 1024 * 1024, expansion_factor=10)
+    expanded = memory_budget(reserve_bytes=256 * 1024 * 1024, expansion_factor=6)
+    return (
+        MAX_SLICER_REQUEST_BYTES if wire is None else wire,
+        MAX_SLICER_JSON_BYTES if expanded is None else expanded,
+    )
 
 
 def _slicer_request_json(request):
     raw = request.body
-    if len(raw) > MAX_SLICER_REQUEST_BYTES:
-        raise ValueError("Slice configuration exceeds the 8 MiB transfer safety limit. Reduce the number of painted patches.")
+    request_budget, json_budget = slicer_configuration_limits()
+    if len(raw) > request_budget:
+        raise ValueError(
+            "Slice configuration exceeds available request memory. "
+            "Reduce painted patch detail or free memory.")
     encoding = request.headers.get("Content-Encoding", "").strip().lower()
     if encoding == "gzip":
         try:
             decoder = zlib.decompressobj(wbits=16 + zlib.MAX_WBITS)
-            decoded = decoder.decompress(raw, MAX_SLICER_JSON_BYTES + 1)
-            if (len(decoded) > MAX_SLICER_JSON_BYTES or decoder.unconsumed_tail
+            decoded = decoder.decompress(raw, json_budget + 1)
+            if (len(decoded) > json_budget or decoder.unconsumed_tail
                     or not decoder.eof or decoder.unused_data):
-                raise ValueError("Compressed slicing project exceeded the expanded safety limit.")
-            decoded += decoder.flush(MAX_SLICER_JSON_BYTES + 1 - len(decoded))
-            if len(decoded) > MAX_SLICER_JSON_BYTES:
-                raise ValueError("Compressed slicing project exceeded the expanded safety limit.")
+                raise ValueError(
+                    "Compressed slicing project exceeded the expanded safety limit.")
+            decoded += decoder.flush(json_budget + 1 - len(decoded))
+            if len(decoded) > json_budget:
+                raise ValueError(
+                    "Compressed slicing project exceeded the expanded safety limit.")
             raw = decoded
         except zlib.error:
             raise ValueError("Invalid compressed slicing configuration.") from None
     elif encoding:
         raise ValueError("Unsupported slicing request encoding.")
-    if len(raw) > MAX_SLICER_JSON_BYTES:
+    if len(raw) > json_budget:
         raise ValueError("Slicing project exceeded the expanded safety limit.")
     return json.loads(raw.decode("utf-8"))
 
