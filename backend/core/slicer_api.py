@@ -37,6 +37,8 @@ from .slicer_semantic_painting import validate_semantic_paint
 from .slicer_variable_layers import validate_variable_layer_profile
 from .slicer_paint_assets import store_paint, load_paint, expand_painted_item, expand_painted_settings, PAINT_FIELDS
 from .slicer_mesh import inspect_stl, MeshInspectionError, MAX_INSPECTION_BYTES
+from .slicer_resource_budget import (
+    input_model_budget, source_input_budget, memory_budget, project_archive_budget)
 from .slicer_bed import inspect_orca_plate, inspect_creality_plate, inspect_bambu_plate
 from .slicer_bed_artwork import (official_artwork_source, cached_official_artwork,
     official_bed_model_source, cached_official_bed_model)
@@ -605,8 +607,8 @@ def _draft(user, data):
     # the obsolete 128 KiB cap which rejected valid support-paint projects.
     if not isinstance(data, dict):
         raise ValueError("Slice configuration must be a JSON object.")
-    if len(json.dumps(data, ensure_ascii=False, separators=(",", ":")).encode("utf-8")) > MAX_SLICER_JSON_BYTES:
-        raise ValueError("Slice configuration exceeds the expanded 48 MiB safety limit.")
+    if len(json.dumps(data, ensure_ascii=False, separators=(",", ":")).encode("utf-8")) > slicer_configuration_limits()[1]:
+        raise ValueError("Slice configuration exceeds available expanded request memory.")
     allowed = {"engine", "engine_version", "input_asset_id", "printer_id", "spool_id", "printer_preset", "filament_preset", "process_preset", "nozzle_mm", "plate", "settings", "printer_profile_id", "filament_profile_id", "process_profile_id"}
     if set(data) - allowed:
         raise ValueError("Unknown slicing configuration fields.")
@@ -667,7 +669,7 @@ def _draft(user, data):
                 pk__in=[item["asset_id"] for item in plate_models])}
             validate_plate_collisions([(
                 item, _read_owned_file(owned[str(item["asset_id"])],
-                                       user.pk, MAX_INPUT, "Draft STL")
+                                       user.pk, input_model_budget(), "Draft STL")
             ) for item in plate_models])
         except (KeyError, ValueError, OSError):
             settings_data["plate_conflicts"] = True
@@ -759,11 +761,11 @@ def upload_temporary_mesh(request):
         return _error("Choose an STL to slice.")
     filename = Path(str(uploaded.name or "")).name
     size = getattr(uploaded, "size", 0)
-    if not filename.lower().endswith(".stl") or not 0 < size <= MAX_INSPECTION_BYTES:
-        return _error("Choose a nonempty STL no larger than 32 MiB.")
+    if not filename.lower().endswith(".stl") or not 0 < size <= input_model_budget():
+        return _error("Choose a nonempty STL within available preparation memory.")
     try:
         ensure_storage_capacity(request.user, size)
-        data = uploaded.read(MAX_INSPECTION_BYTES + 1)
+        data = uploaded.read(input_model_budget() + 1)
         inspect_stl(data)
     except StorageQuotaExceeded:
         return _error("Insufficient private storage for a temporary slicing input.", 413)
@@ -812,16 +814,16 @@ def import_project_3mf(request):
     uploaded = request.FILES.get("file")
     if not uploaded or not str(uploaded.name or "").lower().endswith(".3mf"):
         return _error("Choose a MakerVault .3mf project.")
-    if uploaded.size <= 0 or uploaded.size > 32 * 1024 * 1024:
-        return _error("Project archive must be no larger than 32 MiB.", 413)
+    if uploaded.size <= 0 or uploaded.size > project_archive_budget():
+        return _error("Project archive exceeds available preparation memory.", 413)
     try:
         from .slicer_execution import MAX_INPUT
-        stream = io.BytesIO(uploaded.read(32 * 1024 * 1024 + 1))
+        stream = io.BytesIO(uploaded.read(project_archive_budget() + 1))
         with zipfile.ZipFile(stream) as archive:
             infos = archive.infolist()
             if (len(infos) > 480 or len({info.filename for info in infos}) != len(infos)
                     or sum(info.file_size for info in infos)
-                    > 128 * 1024 * 1024 or
+                    > max(project_archive_budget(), input_model_budget()) * 4 or
                     any(info.flag_bits & 1 for info in infos)):
                 raise ValueError("Project archive exceeds safe limits.")
             manifest_info = archive.getinfo("Metadata/makervault-project.json")
@@ -944,11 +946,11 @@ def import_project_3mf(request):
             for old_id in source_names:
                 file_name = "Metadata/sources/" + old_id + ".stl"
                 info = archive.getinfo(file_name)
-                if not 0 < info.file_size <= MAX_INPUT:
+                if not 0 < info.file_size <= input_model_budget():
                     raise ValueError("Project source STL exceeds safe limits.")
                 total_bytes += info.file_size
-                if total_bytes > 64 * 1024 * 1024:
-                    raise ValueError("Project contains too much source geometry.")
+                if total_bytes > source_input_budget(upper_cap=input_model_budget()):
+                    raise ValueError("Project source geometry exceeds available preparation memory.")
                 raw = archive.read(info)
                 inspect_stl(raw)
                 original[old_id] = raw
@@ -1061,7 +1063,7 @@ def export_native_multimaterial_3mf(request, job_id):
             if asset is None:
                 raise MaterialRoutingError("A model asset is no longer available.")
             source_models.append((
-                item, _read_owned_file(asset, request.user.pk, MAX_INPUT, "Model STL")
+                item, _read_owned_file(asset, request.user.pk, input_model_budget(), "Model STL")
             ))
         result = prepare_multimaterial_plate(
             source_models, bed_width=width, bed_depth=depth,
@@ -1109,7 +1111,7 @@ def export_project_3mf(request, job_id):
             owner=request.user, category="mesh", pk__in=ids)}
         if len(owned) != len(ids):
             raise ValueError("Some project STL assets are no longer available.")
-        raw = {ident:_read_owned_file(asset, request.user.pk, MAX_INPUT, "Project STL")
+        raw = {ident:_read_owned_file(asset, request.user.pk, input_model_budget(), "Project STL")
                for ident, asset in owned.items()}
         rows = [(plate["name"], [(item, raw[str(item["asset_id"])])
                  for item in plate["objects"]]) for plate in plates]
@@ -1159,7 +1161,7 @@ def inspect_mesh(request, asset_id):
         return _error("Selected STL has no stored content.", 422)
     try:
         with asset.file.open("rb") as stream:
-            raw = stream.read(MAX_INSPECTION_BYTES + 1)
+            raw = stream.read(input_model_budget() + 1)
         result = inspect_stl(raw)
     except (OSError, ValueError, MeshInspectionError):
         return _error("STL geometry could not be safely inspected.", 422)
@@ -1230,31 +1232,46 @@ def approve_native_profiles(request):
 
 # Keep the existing 8 MiB on-wire request limit. Painted polygons can be
 # losslessly compressed, but expansion remains bounded and is never trusted.
-MAX_SLICER_REQUEST_BYTES = 8 * 1024 * 1024
-MAX_SLICER_JSON_BYTES = 48 * 1024 * 1024
+MAX_SLICER_REQUEST_BYTES = 8 * 1024 * 1024  # unknown-telemetry fallback
+MAX_SLICER_JSON_BYTES = 48 * 1024 * 1024  # unknown-telemetry fallback
+
+
+def slicer_configuration_limits():
+    """Share resource-derived request/JSON ceilings across all engines."""
+    wire = memory_budget(reserve_bytes=256 * 1024 * 1024, expansion_factor=10)
+    expanded = memory_budget(reserve_bytes=256 * 1024 * 1024, expansion_factor=6)
+    return (
+        MAX_SLICER_REQUEST_BYTES if wire is None else wire,
+        MAX_SLICER_JSON_BYTES if expanded is None else expanded,
+    )
 
 
 def _slicer_request_json(request):
     raw = request.body
-    if len(raw) > MAX_SLICER_REQUEST_BYTES:
-        raise ValueError("Slice configuration exceeds the 8 MiB transfer safety limit. Reduce the number of painted patches.")
+    request_budget, json_budget = slicer_configuration_limits()
+    if len(raw) > request_budget:
+        raise ValueError(
+            "Slice configuration exceeds available request memory. "
+            "Reduce painted patch detail or free memory.")
     encoding = request.headers.get("Content-Encoding", "").strip().lower()
     if encoding == "gzip":
         try:
             decoder = zlib.decompressobj(wbits=16 + zlib.MAX_WBITS)
-            decoded = decoder.decompress(raw, MAX_SLICER_JSON_BYTES + 1)
-            if (len(decoded) > MAX_SLICER_JSON_BYTES or decoder.unconsumed_tail
+            decoded = decoder.decompress(raw, json_budget + 1)
+            if (len(decoded) > json_budget or decoder.unconsumed_tail
                     or not decoder.eof or decoder.unused_data):
-                raise ValueError("Compressed slicing project exceeded the expanded safety limit.")
-            decoded += decoder.flush(MAX_SLICER_JSON_BYTES + 1 - len(decoded))
-            if len(decoded) > MAX_SLICER_JSON_BYTES:
-                raise ValueError("Compressed slicing project exceeded the expanded safety limit.")
+                raise ValueError(
+                    "Compressed slicing project exceeded the expanded safety limit.")
+            decoded += decoder.flush(json_budget + 1 - len(decoded))
+            if len(decoded) > json_budget:
+                raise ValueError(
+                    "Compressed slicing project exceeded the expanded safety limit.")
             raw = decoded
         except zlib.error:
             raise ValueError("Invalid compressed slicing configuration.") from None
     elif encoding:
         raise ValueError("Unsupported slicing request encoding.")
-    if len(raw) > MAX_SLICER_JSON_BYTES:
+    if len(raw) > json_budget:
         raise ValueError("Slicing project exceeded the expanded safety limit.")
     return json.loads(raw.decode("utf-8"))
 
