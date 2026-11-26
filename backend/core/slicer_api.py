@@ -752,11 +752,11 @@ def upload_temporary_mesh(request):
         return _error("Choose an STL to slice.")
     filename = Path(str(uploaded.name or "")).name
     size = getattr(uploaded, "size", 0)
-    if not filename.lower().endswith(".stl") or not 0 < size <= MAX_INSPECTION_BYTES:
-        return _error("Choose a nonempty STL no larger than 32 MiB.")
+    if not filename.lower().endswith(".stl") or not 0 < size <= input_model_budget():
+        return _error("Choose a nonempty STL within available preparation memory.")
     try:
         ensure_storage_capacity(request.user, size)
-        data = uploaded.read(MAX_INSPECTION_BYTES + 1)
+        data = uploaded.read(input_model_budget() + 1)
         inspect_stl(data)
     except StorageQuotaExceeded:
         return _error("Insufficient private storage for a temporary slicing input.", 413)
@@ -805,16 +805,16 @@ def import_project_3mf(request):
     uploaded = request.FILES.get("file")
     if not uploaded or not str(uploaded.name or "").lower().endswith(".3mf"):
         return _error("Choose a MakerVault .3mf project.")
-    if uploaded.size <= 0 or uploaded.size > 32 * 1024 * 1024:
-        return _error("Project archive must be no larger than 32 MiB.", 413)
+    if uploaded.size <= 0 or uploaded.size > project_archive_budget():
+        return _error("Project archive exceeds available preparation memory.", 413)
     try:
         from .slicer_execution import MAX_INPUT
-        stream = io.BytesIO(uploaded.read(32 * 1024 * 1024 + 1))
+        stream = io.BytesIO(uploaded.read(project_archive_budget() + 1))
         with zipfile.ZipFile(stream) as archive:
             infos = archive.infolist()
             if (len(infos) > 480 or len({info.filename for info in infos}) != len(infos)
                     or sum(info.file_size for info in infos)
-                    > 128 * 1024 * 1024 or
+                    > max(project_archive_budget(), input_model_budget()) * 4 or
                     any(info.flag_bits & 1 for info in infos)):
                 raise ValueError("Project archive exceeds safe limits.")
             manifest_info = archive.getinfo("Metadata/makervault-project.json")
@@ -1152,7 +1152,7 @@ def inspect_mesh(request, asset_id):
         return _error("Selected STL has no stored content.", 422)
     try:
         with asset.file.open("rb") as stream:
-            raw = stream.read(MAX_INSPECTION_BYTES + 1)
+            raw = stream.read(input_model_budget() + 1)
         result = inspect_stl(raw)
     except (OSError, ValueError, MeshInspectionError):
         return _error("STL geometry could not be safely inspected.", 422)
