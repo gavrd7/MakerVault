@@ -138,6 +138,13 @@ def creality_command(binary: Path, workdir: Path):
     model = _regular_file(workdir, "input.3mf" if is_project else "input.stl", MAX_MODEL_BYTES)
     native_project = (workdir / "creality-native-project.marker").exists()
     native_modifiers = (workdir / "native-modifier-project.marker").exists()
+    placed = workdir / "creality-placed-stl.marker"
+    if placed.is_symlink() or (placed.exists() and
+            (not placed.is_file() or placed.read_bytes() != b"v1")):
+        raise WorkerError("Invalid Creality placed-STL marker.")
+    if placed.exists() and (is_project or native_project or native_modifiers or
+                            (workdir / "creality-material-map.json").exists()):
+        raise WorkerError("Creality placed-STL cannot activate native project or material mapping.")
     if native_project and native_modifiers:
         raise WorkerError("Conflicting Creality native project contracts.")
     if is_project and native_modifiers:
@@ -204,7 +211,13 @@ def creality_command(binary: Path, workdir: Path):
             raise WorkerError("Invalid native Creality multi-STL filament assignment.") from exc
         command.extend(material_args)
     else:
-        command.extend(["--load-filaments", str(profiles[1]), str(model)])
+        command.extend(["--load-filaments", str(profiles[1])])
+        if placed.exists():
+            # Native STL path takes external machine/process/filament presets.
+            # Source coordinates are already baked into the positive bed
+            # quadrant. Disable native auto-arrangement for this trusted path.
+            command.extend(["--arrange", "0"])
+        command.append(str(model))
     return command
 
 
