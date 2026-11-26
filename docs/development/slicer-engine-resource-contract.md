@@ -14,16 +14,20 @@ PrusaSlicer, and future engines (including Snapmaker Orca).
    for the application and the slicer worker. Unknown readings fail closed for
    large jobs. The policy is independent of engines; each format's decoder
    supplies an empirically tested expansion factor.
-3. **Transport** must not materialise unbounded base64 JSON payloads. Large
-   jobs require bounded streaming or compressed transport with authenticated
-   message integrity, content-length accounting and backpressure.
+3. **Transport** is currently authenticated JSON/base64 with live resource
+   admission on both peers, plus a hash-bound compressed Creality placed-STL
+   contract and bounded streamed-Orca preparation. The JSON envelope remains
+   in memory, and truly incremental HTTP upload/download is a separate
+   optimisation; never claim the transport itself is streamed.
 4. **Worker admission** independently measures its own cgroup RAM and scratch
    space and revalidates the model. The client-side allowance is not trusted.
 5. **Native invocation** derives geometry/triangle settings from validated
    inputs where the installed engine supports them; unsupported flags must not
    be invented. Actual engine memory/CPU/concurrency remain isolated.
-6. **Output** is streamed to private storage under a measured disk budget,
-   rather than relying on a universal 64-MiB G-code response ceiling.
+6. **Output** is validated and stored privately under shared RAM/disk
+   allowances. The current worker G-code response is buffered JSON/base64,
+   not a streaming download. It no longer uses a universal 64-MiB capacity
+   ceiling when live resources are measurable.
 7. **Regression coverage** must exercise both repeated and distinct source
    models, transformations, paints/modifiers, extreme/corrupt inputs, and a
    constrained-memory worker, for every supported engine.
@@ -43,21 +47,43 @@ A new engine **must not introduce a fresh fixed total-model, XML or G-code byte
 cap** merely to fit the existing transport. Security/resource ceilings remain
 valid when justified by structural or measured machine limits.
 
-## Implementation and limitations
+## Implemented in draft PR #208
 
-- `backend/core/slicer_resource_budget.py`: generic source and job headroom
-  inspection (legacy source ceilings still remain where callers pass them).
-- `slicer_worker/resource_budget.py`: generic worker RAM + scratch filesystem
-  headroom and operation-level admission.
-- `slicer_worker/streamed_orca_validation.py`: first consumer of shared
-  worker measurement; this is **not** a generic worker mesh validator.
-- `backend/core/slicer_streamed_plate_3mf.py`: currently the *plain,
-  single-material Orca* streamed-compound implementation. It is a useful
-  proof of transport and XML preparation, not implementation for every engine.
+- `backend/core/slicer_resource_budget.py` centralises source, geometry,
+  expanded XML, ZIP, G-code and configuration capacity from host/cgroup RAM.
+  Small-job compatibility fallbacks still apply where telemetry is absent.
+- The owner-scoped STL import/read APIs, 3MF project import/export, painting
+  assets and G-code bounds/storage now use the common budget.
+- Prusa's placed STL, Prusa/Creality/Bambu native 3MF project producers, and
+  ordinary 3MF geometry exporters use resource-based capacity admission.
+- `slicer_worker/resource_budget.py` centralises worker RAM, temporary-disk,
+  model and G-code capacity. All four installed native runners use it.
+- Worker STL, core 3MF and native Creality/Prusa/modifier validators now use
+  resource-based geometric size limits but retain format, profile, paint and
+  security checks.
+- `backend/core/slicer_streamed_plate_3mf.py` and
+  `slicer_worker/streamed_orca_validation.py` avoid the full expanded XML
+  DOM for plain single-material Orca plates, including *different* source STLs.
+- PR #206's working Creality multi-model placed STL/CLI adapter has been
+  manually reconciled, with compressed SHA-bound transport and corresponding
+  unit tests preserved.
 
-**Still outstanding before the overall requirement is fulfilled:** migrate
-per-source mesh admission, 3MF and binary STL native format paths, the old
-base64 request/response caps and stored G-code output to measured resource
-admission. Add representative real-binary fixtures for Creality, Orca, Bambu
-and Prusa. The workflow should not be marked complete or merge-ready solely
-on the new Orca 20-model test.
+## Deliberate limits and pending acceptance
+
+- Per-format schema allowlists, bounded numeric coordinates, prohibited scripts,
+  safe project structure and physical tool counts remain mandatory. They are
+  **not** arbitrary hardware-capacity limits.
+- Some metadata, per-paint-region or per-plate *count* limits still exist and
+  need separate feature-level review. They must not be silently relaxed as
+  part of memory-size migration.
+- The current HTTP model and G-code body is still JSON/base64 buffered under
+  measured memory budgets. A fully streaming upload/download protocol is not
+  yet implemented.
+- Full-bed native compatibility remains to be proven for all supported engines:
+  a 20-object real Orca slice (repeated and distinct), large placed-STL
+  Creality and Prusa jobs, and Bambu native multicolour/modifier regression.
+  CI and real-binary checks must be green, followed by staging acceptance.
+- This branch is still based on PR #207. PR #206 was reconciled as code but
+  its merge ancestry must be resolved when #207/#208 are merged into the
+  updated Prusa branch. Avoid overwriting the verified Creality path.
+- No production release or staging deployment is implied by this draft.
