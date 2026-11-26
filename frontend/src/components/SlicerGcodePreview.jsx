@@ -34,6 +34,14 @@ export default function SlicerGcodePreview({ fileId = null, preview, bedSize = n
   const [step, setStep] = useState(null);
   const [colourMode, setColourMode] = useState("feature");
   const [renderMode, setRenderMode] = useState("solid");
+  const manualRenderPreference = useRef(false);
+  useEffect(() => {
+    // Millions of 3D bead instances can exhaust mobile GPU memory.
+    // Line mode still shows every actual extrusion path, without subsampling.
+    if (!manualRenderPreference.current && (preview?.segment_count || 0) > 400000)
+      setRenderMode("lines");
+  }, [preview?.segment_count]);
+
   const [layerDisplay, setLayerDisplay] = useState("all");
   const [highlightCurrent, setHighlightCurrent] = useState(false);
   const [featureFocus, setFeatureFocus] = useState("all");
@@ -118,12 +126,42 @@ export default function SlicerGcodePreview({ fileId = null, preview, bedSize = n
           const data = await response.json();
           if (!Array.isArray(data.layers) || data.layers.length !== requested.length)
             throw new Error("Invalid full-resolution layer response.");
-          if (data.complete === false) limited = true;
           const batch = [];
           for (const item of data.layers) {
-            if (!item.complete) limited = true;
             if (!Array.isArray(item.segments)) throw new Error("Invalid layer geometry.");
-            for (const move of item.segments) batch.push(move);
+            let movements = item.segments;
+            if (!item.complete) {
+              // A busy layer can exceed one response's safety budget.
+              // Page that *single* native layer to completion instead of
+              // stopping the entire print at the first heavy layer.
+              movements = [];
+              let cursor = 0;
+              while (!cancelled) {
+                const pageUrl = "/api/files/" + encodeURIComponent(fileId) +
+                  "/gcode/layers/?quality=full&zs=" +
+                  encodeURIComponent(String(item.z)) + "&page_start=" + cursor;
+                const pageResponse = await fetch(pageUrl, {
+                  credentials: "same-origin", signal: controller.signal,
+                });
+                if (!pageResponse.ok) {
+                  const detail = await pageResponse.json().catch(() => ({}));
+                  throw new Error(detail.error || "Layer pagination failed.");
+                }
+                const page = await pageResponse.json();
+                const slice = page.layers?.[0];
+                if (!slice || !Array.isArray(slice.segments) ||
+                    !Number.isSafeInteger(slice.next_offset) ||
+                    slice.next_offset <= cursor)
+                  throw new Error("Invalid or stalled full-detail layer page.");
+                movements.push(...slice.segments);
+                cursor = slice.next_offset;
+                if (!slice.has_more) break;
+              }
+            }
+            if (cancelled) return;
+            // Exact original geometry is never discarded to satisfy a
+            // whole-model move counter. Keep each bounded HTTP batch separate.
+            for (const move of movements) batch.push(move);
             completed++;
             pendingLayers++;
             // Full-model geometry may coalesce straight runs; exact movement
@@ -134,13 +172,12 @@ export default function SlicerGcodePreview({ fileId = null, preview, bedSize = n
           // renderer appends a new GPU mesh without copying/re-uploading older
           // batches. Keep all layers available rather than stopping at 488.
           if (batch.length) chunks.push(batch);
-          if (pendingLayers >= batchSize || completed === layers.length || limited) {
+          if (pendingLayers >= batchSize || completed === layers.length) {
             setWholeModel({chunks:chunks.slice(),loadedLayers:completed,
               complete:completed===layers.length&&!limited,limited,
               loading:!limited&&completed<layers.length,message:""});
             pendingLayers = 0;
           }
-          if (limited) break;
           // Let camera controls and touch gestures run between large batches.
           await new Promise(resolve=>setTimeout(resolve, 12));
         }
@@ -281,7 +318,7 @@ export default function SlicerGcodePreview({ fileId = null, preview, bedSize = n
           <button type="button" onClick={() => setMobilePanel(null)}>Close</button>
         </div>
         <label>Preview style
-          <select value={renderMode} onChange={e => setRenderMode(e.target.value)}>
+          <select value={renderMode} onChange={e => { manualRenderPreference.current = true; setRenderMode(e.target.value); }}>
             <option value="solid">Solid filament paths</option>
             <option value="lines">Tool movement lines</option>
           </select>
