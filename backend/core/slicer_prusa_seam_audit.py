@@ -10,57 +10,74 @@ WORD = re.compile(r"(?:^|\s)([XYZE])\s*([-+]?(?:\d+(?:\.\d*)?|\.\d+)(?:[Ee][-+]?
 
 
 
-def validate_prusa_front_seam_candidate(item):
-    """Admit the one proven Prusa 2.9.7 seam orientation, not all paint faces.
+def prusa_qualified_seam_direction(item):
+    """Return (paint, face) for one fingerprinted upright Prusa seam patch.
 
-    The native front-direction acceptance proved first perimeter extrusion
-    starts follow an enforcer region on a Y-negative upright face. Reject
-    back, right, left, tilted and mixed painting until individually qualified.
+    Native 2.9.7 independently measured all four vertical faces with
+    seam_position=random; only the front face was qualified in the regular
+    PrusaResearch process preset. Geometry signatures are rechecked by the
+    3MF facet exporter; coordinates alone never authorise external paint.
     """
     from .slicer_semantic_painting import validate_semantic_paint
     if not isinstance(item, dict):
-        raise ValueError("Prusa front seam requires one model.")
-    paint=item.get("seam_paint")
+        raise ValueError("Prusa seam requires exactly one model.")
     try:
-        selected=validate_semantic_paint(paint,"seam")
-    except (ValueError,TypeError) as exc:
-        raise ValueError(
-            "Prusa seam painting outside the verified front enforcer is not yet verified."
-        ) from exc
-    if selected["version"]!=2 or len(selected["regions"])!=1:
-        raise ValueError("Only one fingerprinted Prusa front seam region is qualified.")
-    region=selected["regions"][0]
-    patches=region["patches"]
-    if region["slot"]!=0 or not 1<=len(patches)<=2:
-        raise ValueError("Only a front-face seam enforcer is qualified.")
+        selected = validate_semantic_paint(item.get("seam_paint"), "seam")
+    except (ValueError, TypeError) as exc:
+        raise ValueError("Prusa seam painting requires fingerprinted native regions.") from exc
+    if selected["version"] != 2 or len(selected["regions"]) != 1:
+        raise ValueError("Only one fingerprinted Prusa seam region is qualified.")
+    region = selected["regions"][0]
+    patches = region["patches"]
+    if region["slot"] != 0 or not 1 <= len(patches) <= 2:
+        raise ValueError("Only a single vertical seam enforcer is qualified.")
     if (item.get("colour_paint") or item.get("support_paint") or
             item.get("fuzzy_skin_paint") or item.get("modifier_volumes") or
             item.get("negative_volumes") or item.get("process_overrides") or
             (item.get("variable_layer_profile") or {}).get("bands")):
-        raise ValueError("Prusa front seam cannot combine unqualified edits.")
+        raise ValueError("Prusa directional seam cannot combine unqualified edits.")
     try:
-        if (abs(float(item.get("z_mm",0)))>1e-6 or
-                abs(float(item.get("rotation_deg",0)))>1e-6 or
-                any(abs(float(v))>1e-6 for v in item.get("rotation_xyz_deg",[0,0])) or
-                any(abs(float(v)-100)>1e-6 for v in item.get(
-                    "scale_xyz_percent",[item.get("scale_percent",100)]*3))):
+        if (abs(float(item.get("z_mm", 0))) > 1e-6 or
+                abs(float(item.get("rotation_deg", 0))) > 1e-6 or
+                any(abs(float(v)) > 1e-6
+                    for v in item.get("rotation_xyz_deg", [0, 0])) or
+                abs(float(item.get("scale_percent", 100))-100) > 1e-6 or
+                any(abs(float(v)-100) > 1e-6
+                    for v in item.get("scale_xyz_percent", [100, 100, 100]))):
             raise ValueError()
-        points=[tuple(float(v) for v in pt)
-                for patch in patches for pt in patch["polygon"]]
-        if (not points or any(len(pt)!=3 or any(
-                not math.isfinite(value) or abs(value)>1000 for value in pt)
-                for pt in points)):
+        points = [tuple(float(v) for v in pt)
+                  for patch in patches for pt in patch["polygon"]]
+        if (not points or any(len(pt) != 3 or any(
+                not math.isfinite(value) or abs(value) > 1000
+                for value in pt) for pt in points)):
             raise ValueError()
-        # The known successful direction is the model-local front plane
-        # (negative Y) with a meaningful X/Z span. A tiny mark on a side,
-        # top, bottom or unpainted neighbour has no native evidence.
-        y=points[0][1]
-        if (y>=-.001 or any(abs(pt[1]-y)>.0001 for pt in points)
-                or max(pt[0] for pt in points)-min(pt[0] for pt in points)<3
-                or max(pt[2] for pt in points)-min(pt[2] for pt in points)<3):
+        xs = [pt[0] for pt in points]
+        ys = [pt[1] for pt in points]
+        zs = [pt[2] for pt in points]
+        if max(zs)-min(zs) < 3:
             raise ValueError()
-    except (KeyError,TypeError,ValueError,OverflowError):
-        raise ValueError("Only upright, unscaled Prusa front-face seam patches are qualified.") from None
+        if max(ys)-min(ys) <= .0001 and max(xs)-min(xs) >= 3:
+            if abs(ys[0]) <= .001:
+                raise ValueError()
+            direction = "front" if ys[0] < 0 else "back"
+        elif max(xs)-min(xs) <= .0001 and max(ys)-min(ys) >= 3:
+            if abs(xs[0]) <= .001:
+                raise ValueError()
+            direction = "left" if xs[0] < 0 else "right"
+        else:
+            raise ValueError()
+    except (KeyError, TypeError, ValueError, OverflowError):
+        raise ValueError(
+            "Only upright, unscaled Prusa vertical seam patches are qualified."
+        ) from None
+    return selected, direction
+
+
+def validate_prusa_front_seam_candidate(item):
+    """Retain strict front-only admission for legacy callers and presets."""
+    selected, direction = prusa_qualified_seam_direction(item)
+    if direction != "front":
+        raise ValueError("Only Prusa front-face seams use the default native preset.")
     return selected
 
 
