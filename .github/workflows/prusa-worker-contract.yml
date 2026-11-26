@@ -36,6 +36,8 @@ on:
       - "backend/core/tests/test_slicer_prusa_multitool_project.py"
       - "backend/core/tests/test_slicer_prusa_machine_topology.py"
       - "backend/core/slicer_prusa_paint.py"
+      - "backend/core/slicer_prusa_support_audit.py"
+      - "backend/core/tests/test_slicer_prusa_support_audit.py"
       - "backend/core/slicer_prusa_seam_audit.py"
       - "backend/core/tests/test_slicer_prusa_seam_audit.py"
       - "backend/core/slicer_prusa_fuzzy_audit.py"
@@ -90,6 +92,7 @@ jobs:
             core.tests.test_slicer_prusa_3mf \
             core.tests.test_slicer_prusa_layer_ranges \
             core.tests.test_slicer_prusa_paint \
+            core.tests.test_slicer_prusa_support_audit \
             core.tests.test_slicer_prusa_seam_audit \
             core.tests.test_slicer_prusa_fuzzy_audit \
             core.tests.test_slicer_prusa_machine_topology \
