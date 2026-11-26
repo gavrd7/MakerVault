@@ -44,10 +44,96 @@ BAMBU_VARIANT_OPTIONS = {
 
 
 
+
+def validate_compact_instances(root):
+    """Strictly verify the two-resource, single-build 3MF component contract.
+
+    This does not accept recursive components, external parts, arbitrary object
+    metadata or untrusted per-instance process settings.
+    """
+    q = "{%s}" % CORE_NS
+    if (root.tag != q + "model"
+            or set(root.attrib) != {"unit", "{http://www.w3.org/XML/1998/namespace}lang"}
+            or root.attrib["unit"] != "millimeter"
+            or len(root) != 2):
+        raise WorkerError("Unexpected compact 3MF model structure.")
+    resources, build = root
+    if resources.tag != q+"resources" or build.tag != q+"build":
+        raise WorkerError("Unexpected compact 3MF resource structure.")
+    if len(resources) != 2 or len(build) != 1:
+        raise WorkerError("Compact 3MF needs one mesh and one component group.")
+    source, group = resources
+    if (source.tag != q+"object" or source.attrib != {"id": "1", "type": "model"}
+            or len(source) != 1 or source[0].tag != q+"mesh"
+            or group.tag != q+"object"
+            or group.attrib != {"id": "2", "type": "model"}
+            or len(group) != 1 or group[0].tag != q+"components"):
+        raise WorkerError("Invalid compact 3MF shared resource identity.")
+    mesh = source[0]
+    if (len(mesh) != 2 or mesh[0].tag != q+"vertices"
+            or mesh[1].tag != q+"triangles"):
+        raise WorkerError("Invalid compact 3MF mesh structure.")
+    vertices, facets = mesh
+    if not 1 <= len(facets) <= MAX_TRIANGLES or not 3 <= len(vertices) <= MAX_VERTICES_PER_OBJECT:
+        raise WorkerError("Invalid compact 3MF shared mesh size.")
+    points = []
+    for vertex in vertices:
+        if vertex.tag != q+"vertex" or set(vertex.attrib) != {"x", "y", "z"} or len(vertex):
+            raise WorkerError("Invalid compact 3MF vertex.")
+        try:
+            point = tuple(float(vertex.attrib[axis]) for axis in ("x", "y", "z"))
+        except ValueError:
+            raise WorkerError("Invalid compact 3MF coordinate.") from None
+        if any(not math.isfinite(v) or abs(v) > 10000 for v in point):
+            raise WorkerError("Unsafe compact 3MF coordinate.")
+        points.append(point)
+    for triangle in facets:
+        if triangle.tag != q+"triangle" or set(triangle.attrib) != {"v1","v2","v3"} or len(triangle):
+            raise WorkerError("Invalid compact 3MF triangle.")
+        try:
+            indices = [int(triangle.attrib[key]) for key in ("v1","v2","v3")]
+        except ValueError:
+            raise WorkerError("Invalid compact 3MF facet index.") from None
+        if any(index < 0 or index >= len(points) for index in indices):
+            raise WorkerError("Compact 3MF facet references a missing vertex.")
+    components = group[0]
+    if not 2 <= len(components) <= 200:
+        raise WorkerError("Compact 3MF needs two to 200 placed instances.")
+    for instance in components:
+        if (instance.tag != q+"component" or set(instance.attrib) != {"objectid","transform"}
+                or instance.attrib["objectid"] != "1" or len(instance)):
+            raise WorkerError("Invalid compact 3MF component reference.")
+        try:
+            transform = [float(v) for v in instance.attrib["transform"].split()]
+        except ValueError:
+            raise WorkerError("Invalid compact 3MF transform.") from None
+        if len(transform) != 12 or any(not math.isfinite(v) or abs(v) > 10000 for v in transform):
+            raise WorkerError("Unsafe compact 3MF transform.")
+        # Reject collapsed geometry and negative-Z positioning. Matrix layout
+        # follows 3MF's column-vector affine convention.
+        a, b, c, d, e, f, g, h, i = transform[:9]
+        determinant = a*(e*i-f*h)-d*(b*i-c*h)+g*(b*f-c*e)
+        if not math.isfinite(determinant) or abs(determinant) < 1e-9:
+            raise WorkerError("Degenerate compact 3MF transformation.")
+        for x, y, z in points:
+            placed = (
+                a*x+d*y+g*z+transform[9],
+                b*x+e*y+h*z+transform[10],
+                c*x+f*y+i*z+transform[11],
+            )
+            if any(not math.isfinite(v) or abs(v) > 10000 for v in placed) or placed[2] < -0.05:
+                raise WorkerError("Compact 3MF instance lies outside safe geometry.")
+    item = build[0]
+    if (item.tag != q+"item" or item.attrib != {
+            "objectid": "2", "transform": "1 0 0 0 1 0 0 0 1 0 0 0"} or len(item)):
+        raise WorkerError("Invalid compact 3MF build target.")
+    return True
+
+
 def validate_worker_3mf(data, *, native_tool_count=None, allow_creality_combined_paint=False,
                         allow_creality_layer_ranges=False, allow_bambu_project=False,
                         allow_bambu_combined_paint=False, allow_bambu_layer_ranges=False,
-                        allow_native_modifier_fixture=False):
+                        allow_native_modifier_fixture=False, allow_compact_instances=False):
     if allow_native_modifier_fixture:
         if (native_tool_count is not None or allow_creality_combined_paint
                 or allow_creality_layer_ranges or allow_bambu_project
@@ -186,6 +272,15 @@ def validate_worker_3mf(data, *, native_tool_count=None, allow_creality_combined
         raise WorkerError("Unexpected 3MF namespace.")
     objects = root.findall("./{%s}resources/{%s}object" % (CORE_NS, CORE_NS))
     items = root.findall("./{%s}build/{%s}item" % (CORE_NS, CORE_NS))
+    # A dedicated single-material Orca contract admits a *single* verified
+    # shared mesh with 2..200 explicitly transformed component instances.
+    # Other engines, native painting and ordinary projects remain fail-closed.
+    if any(obj.find("{%s}components" % CORE_NS) is not None for obj in objects):
+        if (not allow_compact_instances or native_tool_count is not None
+                or manifest is not None or layer_ranges is not None
+                or bambu_settings is not None or len(info) != 3):
+            raise WorkerError("Unapproved compact 3MF instance geometry.")
+        return validate_compact_instances(root)
     if not 1 <= len(objects) <= 200 or len(items) != len(objects):
         raise WorkerError("3MF build must contain one to 200 objects.")
     ids = {obj.attrib.get("id") for obj in objects}
