@@ -965,7 +965,8 @@ def process_queued_job(job_id):
                    for item in (job.settings or {}).get("plate_objects", [])
                    if isinstance(item, dict)):
                 from .slicer_prusa_process_settings import enable_prusa_painted_support
-                profiles[2] = enable_prusa_painted_support(profiles[2])
+                profiles[2] = enable_prusa_painted_support(
+                    profiles[2], enforcers_only=len(source_models) == 2)
         if job.engine == "orcaslicer":
             stage = "checking native printer/process compatibility"
             profiles[0] = _execution_printer_profile(
