@@ -701,7 +701,11 @@ def queue_draft(job_id, user):
         job.save(update_fields=["status", "progress", "message", "updated_at"])
     try:
         from .tasks import execute_slice_job_task
-        execute_slice_job_task.delay(str(job.pk))
+        from .slicer_resource_budget import slicer_task_time_limits
+        soft_limit, hard_limit = slicer_task_time_limits(
+            model_instances=max(1, len((job.settings or {}).get("plate_objects") or [])))
+        execute_slice_job_task.apply_async(
+            args=[str(job.pk)], soft_time_limit=soft_limit, time_limit=hard_limit)
     except Exception:
         # If the broker fails, never leave an orphaned queued draft.
         with transaction.atomic():
