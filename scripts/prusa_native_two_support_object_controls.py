@@ -46,6 +46,72 @@ def block_unpainted_object(project):
     return output.getvalue()
 
 
+
+def block_unpainted_with_native_volume(project):
+    """Research a separate Prusa SupportBlocker volume around the neighbour.
+
+    Painted blockers on model facets and per-object support overrides do not
+    necessarily suppress supports projected into an adjacent object's volume.
+    Keep this completely outside production admission until actual native
+    2.9.7 G-code independently proves spatial isolation.
+    """
+    with zipfile.ZipFile(io.BytesIO(project)) as original:
+        parts = {name: original.read(name) for name in original.namelist()}
+    model = SafeET.fromstring(parts[MODEL])
+    config = SafeET.fromstring(parts[CONFIG])
+    objects = model.findall("./" + NS + "resources/" + NS + "object")
+    entries = config.findall("./object")
+    if len(objects) != 2 or len(entries) != 2:
+        raise AssertionError("Native blocker research requires two separate objects.")
+    mesh = objects[1].find(NS + "mesh")
+    vertices = mesh.find(NS + "vertices") if mesh is not None else None
+    triangles = mesh.find(NS + "triangles") if mesh is not None else None
+    if vertices is None or triangles is None or len(triangles) == 0:
+        raise AssertionError("Unpainted Prusa model has no printable mesh.")
+    if len(entries[1].findall("./volume")) != 1:
+        raise AssertionError("Native blocker research requires one printable volume.")
+    position = [(float(v.get("x")), float(v.get("y")), float(v.get("z")))
+                for v in vertices]
+    if not position:
+        raise AssertionError("Unpainted Prusa mesh has no vertices.")
+    xlo, xhi = min(p[0] for p in position)-3, max(p[0] for p in position)+3
+    ylo, yhi = min(p[1] for p in position)-3, max(p[1] for p in position)+3
+    zlo, zhi = 0, max(p[2] for p in position)+3
+    # Deliberately cover all support below the entire neighbouring object,
+    # not just its printed walls or painted triangular facets.
+    corners = [
+        (xlo,ylo,zlo), (xhi,ylo,zlo), (xhi,yhi,zlo), (xlo,yhi,zlo),
+        (xlo,ylo,zhi), (xhi,ylo,zhi), (xhi,yhi,zhi), (xlo,yhi,zhi),
+    ]
+    start_vertex = len(vertices)
+    start_face = len(triangles)
+    for x,y,z in corners:
+        ET.SubElement(vertices, NS+"vertex", {
+            "x": format(x, ".5f"), "y": format(y, ".5f"),
+            "z": format(z, ".5f")})
+    faces = (
+        (0,2,1),(0,3,2), (4,5,6),(4,6,7),
+        (0,1,5),(0,5,4), (1,2,6),(1,6,5),
+        (2,3,7),(2,7,6), (3,0,4),(3,4,7),
+    )
+    for a,b,c in faces:
+        ET.SubElement(triangles, NS+"triangle", {
+            "v1": str(start_vertex+a),
+            "v2": str(start_vertex+b), "v3": str(start_vertex+c)})
+    volume = ET.SubElement(entries[1], "volume", {
+        "firstid": str(start_face), "lastid": str(len(triangles)-1)})
+    ET.SubElement(volume, "metadata", {
+        "type": "volume", "key": "volume_type", "value": "SupportBlocker"})
+    ET.register_namespace("", NS[1:-1])
+    parts[MODEL] = ET.tostring(model, encoding="utf-8", xml_declaration=True)
+    parts[CONFIG] = ET.tostring(config, encoding="utf-8", xml_declaration=True)
+    output = io.BytesIO()
+    with zipfile.ZipFile(output, "w", compression=zipfile.ZIP_DEFLATED) as target:
+        for name, body in parts.items():
+            target.writestr(name, body)
+    return output.getvalue()
+
+
 def disable_unpainted_object(project, keys):
     with zipfile.ZipFile(io.BytesIO(project)) as original:
         parts={name:original.read(name) for name in original.namelist()}
@@ -95,6 +161,9 @@ def main(binary,vendor,directory):
                 "support_material":0,"support_material_auto":0,
             }),
         }
+        variants["right-blocker-volume"]=block_unpainted_with_native_volume(project)
+        variants["right-blocker-volume-off"]=disable_unpainted_object(
+            variants["right-blocker-volume"], {"support_material":0,"support_material_auto":0})
         variants["right-blocked-facets"]=block_unpainted_object(project)
         variants["right-blocked-facets-off"]=disable_unpainted_object(
             variants["right-blocked-facets"], {"support_material":0,"support_material_auto":0})
