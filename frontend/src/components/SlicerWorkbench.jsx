@@ -936,8 +936,8 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
     const exportingProject=mode==="project"||mode==="export-project";
     const sliceNow = !["draft","project","export-project","native-material"].includes(mode);
     const prusaNativeOffline = form.engine==="prusaslicer" && prusaNativeTools !== null;
-    const offlineMultiMaterial = prusaNativeOffline ||
-      (sliceNow && mode !== "all" && plateNeedsMultiMaterial(plateObjects));
+    const offlineMultiMaterial = sliceNow && mode !== "all" &&
+      (plateNeedsMultiMaterial(plateObjects) || prusaNativeOffline);
     if(prusaNativeOffline && mode==="all"){
       setError("Slice the selected Prusa native-tool plate first. Each plate needs separate explicit tool assignments.");
       return;
@@ -1073,7 +1073,7 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
             })),active_plate_id:activePlateId,
             ...(primeTower?{prime_tower:primeTower}:{}),
             save_gcode_to_library: saveOutput, workflow,
-            ...(offlineMultiMaterial ? {multi_material_test:true} : {}),
+            ...((offlineMultiMaterial || prusaNativeOffline) ? {multi_material_test:true} : {}),
             ...(flushSettings ? { flush_settings: flushSettings } : {}),
             ...(slotFilamentProfiles.length && !prusaNativeOffline ? {slot_filament_profiles:slotFilamentProfiles} : {}),
             ...(prusaNativeOffline ? {prusa_native_tools:prusaNativeTools} : {}),
