@@ -196,3 +196,28 @@ def warm_asset_high_fidelity(asset, source):
             pass
         return False
     return _store_overview(index_key, heights, result["layers"], 0, full=True)
+
+def complete_preview_inventory(asset):
+    """Owner-bound cached complete layer inventory for large plain-text G-code.
+
+    Scan in bounded lines from storage, never read an entire sliced job into
+    Python memory or return a first-32-MiB layer list as if complete.
+    """
+    from .slicer_preview import generated_preview
+    from .slicer_layer_preview import streamed_gcode_lines
+    key = preview_index_key(asset, "complete-summary-v1")
+    try:
+        packed = cache.get(key)
+        if packed is not None:
+            return json.loads(zlib.decompress(packed))
+    except Exception:
+        pass
+    with asset.file.storage.open(asset.file.name, "rb") as handle:
+        result = generated_preview(streamed_gcode_lines(handle))
+    try:
+        cache.set(key, zlib.compress(
+            json.dumps(result, separators=(",", ":")).encode("utf-8"), 3),
+            CACHE_SECONDS)
+    except Exception:
+        pass
+    return result
