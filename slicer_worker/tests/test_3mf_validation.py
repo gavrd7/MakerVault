@@ -106,9 +106,14 @@ class Core3MFWorkerTests(TestCase):
     def test_multi_object_3mf_uses_total_plate_budget(self):
         source = self.with_object_metadata([("wall_loops", "2")])
         from slicer_worker import three_mf_validation as validator
-        with patch.object(validator, "MAX_PLATE_TRIANGLES", 2):
+        def budget(limit):
+            return lambda **kwargs: (
+                limit if kwargs["expansion_factor"] == 1200 else 10_000_000)
+        with patch.object(validator, "operation_memory_budget",
+                          side_effect=budget(2)):
             self.assertTrue(validate_worker_3mf(source))
-        with patch.object(validator, "MAX_PLATE_TRIANGLES", 1):
+        with patch.object(validator, "operation_memory_budget",
+                          side_effect=budget(1)):
             with self.assertRaisesRegex(WorkerError, "3MF triangle count exceeds"):
                 validate_worker_3mf(source)
 
