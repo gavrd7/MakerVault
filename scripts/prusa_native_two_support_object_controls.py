@@ -18,6 +18,32 @@ from slicer_worker.prusa_vendor_profiles import flatten_prusa_vendor_preset
 from scripts.prusa_native_multi_support_smoke import count_native_support
 
 CONFIG="Metadata/Slic3r_PE_model.config"
+MODEL="3D/3dmodel.model"
+NS="{http://schemas.microsoft.com/3dmanufacturing/core/2015/02}"
+SUPPORT="{http://schemas.slic3r.org/3mf/2017/06}custom_supports"
+
+
+def block_unpainted_object(project):
+    """Research explicit native blocker facets, preserving the painted mesh."""
+    with zipfile.ZipFile(io.BytesIO(project)) as original:
+        parts={name:original.read(name) for name in original.namelist()}
+    root=SafeET.fromstring(parts[MODEL])
+    meshes=[obj.findall(".//"+NS+"triangle") for obj in root.findall(".//"+NS+"object")]
+    meshes=[mesh for mesh in meshes if mesh]
+    painted=[mesh for mesh in meshes if any(t.get(SUPPORT)=="4" for t in mesh)]
+    plain=[mesh for mesh in meshes if all(t.get(SUPPORT) is None for t in mesh)]
+    if len(meshes)!=2 or len(painted)!=1 or len(plain)!=1:
+        raise AssertionError("Expected one enforced mesh and one unpainted mesh.")
+    for triangle in plain[0]:
+        triangle.set(SUPPORT,"8")
+    ET.register_namespace("",NS[1:-1])
+    ET.register_namespace("slic3rpe",SUPPORT[1:].split("}")[0])
+    parts[MODEL]=ET.tostring(root,encoding="utf-8",xml_declaration=True)
+    output=io.BytesIO()
+    with zipfile.ZipFile(output,"w",compression=zipfile.ZIP_DEFLATED) as target:
+        for name,body in parts.items():
+            target.writestr(name,body)
+    return output.getvalue()
 
 
 def disable_unpainted_object(project, keys):
@@ -69,6 +95,9 @@ def main(binary,vendor,directory):
                 "support_material":0,"support_material_auto":0,
             }),
         }
+        variants["right-blocked-facets"]=block_unpainted_object(project)
+        variants["right-blocked-facets-off"]=disable_unpainted_object(
+            variants["right-blocked-facets"], {"support_material":0,"support_material_auto":0})
         for name,archive in variants.items():
             infile=work/(name+".3mf")
             outfile=work/(name+".gcode")
@@ -85,7 +114,7 @@ def main(binary,vendor,directory):
                 print("PASS: Prusa per-object support-off isolates right neighbour",
                       name,flush=True)
                 return
-        raise AssertionError("Prusa object-local support-off did not isolate neighbour.")
+        raise AssertionError("Prusa object-local support-off and explicit blocker facets did not isolate neighbour.")
 
 
 if __name__=="__main__":
