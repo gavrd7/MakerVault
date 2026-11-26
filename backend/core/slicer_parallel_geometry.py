@@ -60,6 +60,9 @@ def prepared_mesh_batches(sources, *, estimated_bytes_per_worker, mode="mesh"):
                     source = Path(directory) / ("source-%d.stl" % index)
                     result = Path(directory) / ("mesh-%d.out" % index)
                     config = Path(directory) / ("config-%d.json" % index)
+                    options = dict(options)
+                    if mode == "mesh" and options.get("colour_tool_indices") is not None:
+                        options["colour_tool_indices"] = list(options["colour_tool_indices"].items())
                     config.write_text(json.dumps(options), encoding="utf-8")
                     source.write_bytes(raw)
                     child = subprocess.Popen(
@@ -101,6 +104,8 @@ def _main():
         from .slicer_mesh import inspect_stl
         output.write_text(json.dumps(inspect_stl(raw)), encoding="utf-8")
     elif mode == "mesh":
+        if options.get("colour_tool_indices") is not None:
+            options["colour_tool_indices"] = dict(options["colour_tool_indices"])
         obj = ET.Element("{" + NS + "}object")
         _render_mesh(raw, obj, **options)
         with output.open("wb") as stream:
