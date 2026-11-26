@@ -1,7 +1,7 @@
 """Complete Prusa MMU candidate preflight stays private and non-dispatchable."""
-from types import SimpleNamespace
+from types import SimpleNamespace, ModuleType
 from unittest import TestCase
-from unittest.mock import patch
+from unittest.mock import patch, Mock
 import uuid
 import io
 import zipfile
@@ -20,6 +20,15 @@ def profile(kind, owner_id=42, engine="prusaslicer"):
 
 
 class PrusaOfflineMmuPreflightTests(TestCase):
+    @staticmethod
+    def offline_worker_stub():
+        # The lightweight worker contract intentionally lacks Django/requests.
+        # Supply a module-local fake without importing the HTTP transport.
+        module = ModuleType("core.slicer_worker_client")
+        module.run_remote_job = Mock()
+        return module.run_remote_job, patch.dict(
+            "sys.modules", {"core.slicer_worker_client": module})
+
     def parts(self, *, owner_id=42):
         printer=profile("printer",owner_id)
         process=profile("process",owner_id)
@@ -142,8 +151,10 @@ class PrusaOfflineMmuPreflightTests(TestCase):
             for meta in obj.findall("metadata") if meta.get("key")=="extruder"]
         self.assertEqual(selected,["5","3","1","2","4"])
 
-    @patch("core.slicer_worker_client.run_remote_job")
-    def test_ephemeral_owned_mmu_executor_audits_worker_result(self, remote):
+    def test_ephemeral_owned_mmu_executor_audits_worker_result(self):
+        remote, scope = self.offline_worker_stub()
+        scope.start()
+        self.addCleanup(scope.stop)
         values,assets=self.parts()
         from core.tests.test_slicer_prusa_material_gcode_audit import toolpaths
         remote.return_value=toolpaths()
@@ -156,8 +167,10 @@ class PrusaOfflineMmuPreflightTests(TestCase):
         self.assertEqual(remote.call_args.kwargs["model_format"],"3mf")
         self.assertEqual(remote.call_args.args[1:3],("prusaslicer","2.9.7"))
 
-    @patch("core.slicer_worker_client.run_remote_job")
-    def test_ephemeral_mmu_worker_never_receives_foreign_profiles(self, remote):
+    def test_ephemeral_mmu_worker_never_receives_foreign_profiles(self):
+        remote, scope = self.offline_worker_stub()
+        scope.start()
+        self.addCleanup(scope.stop)
         values,_=self.parts()
         values["filament_profiles"][1]=profile("filament",43)
         with patch("core.slicer_prusa_material_preflight.resolved_prusa_profile") as load:
@@ -166,8 +179,10 @@ class PrusaOfflineMmuPreflightTests(TestCase):
         load.assert_not_called()
         remote.assert_not_called()
 
-    @patch("core.slicer_worker_client.run_remote_job")
-    def test_ephemeral_mmu_worker_refuses_misassigned_output(self, remote):
+    def test_ephemeral_mmu_worker_refuses_misassigned_output(self):
+        remote, scope = self.offline_worker_stub()
+        scope.start()
+        self.addCleanup(scope.stop)
         values,assets=self.parts()
         from core.tests.test_slicer_prusa_material_gcode_audit import toolpaths
         remote.return_value=toolpaths(leak=True)
