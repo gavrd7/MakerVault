@@ -135,7 +135,7 @@ def audit_prusa_two_object_support(data, models, *, bed_width, bed_depth):
                 if old_x is not None and old_y is not None and (
                         abs(x-old_x)+abs(y-old_y) > 1e-7):
                     outside += 1
-    if counts[selected] < 50 or counts[1-selected] > 2:
+    if counts[selected] < 50 or counts[1-selected] != 0:
         raise ValueError("Prusa two-object support paths were not isolated to the enforcer.")
     return {
         "painted_model_index": selected,
