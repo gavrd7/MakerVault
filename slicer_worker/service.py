@@ -295,9 +295,6 @@ def _decode_payload(payload):
     elif model_format == "3mf" and not files.get("native_modifier_project") and not streamed:
         options = {"native_tool_count": len(files["filament_profiles"])
                    if "filament_profiles" in files else None}
-        if (payload["engine"] == "orcaslicer" and not files.get("native_modifier_project")
-                and "filament_profiles" not in files):
-            options["allow_compact_instances"] = True
         if payload["engine"] == "bambustudio":
             options["allow_bambu_project"] = True
             if "filament_profiles" in files:
@@ -465,26 +462,6 @@ class Handler(BaseHTTPRequestHandler):
             # Only report a bounded diagnostic category, never command output,
             # profile JSON, private paths, bearer tokens or source filenames.
             safe_reasons = {
-                "Compact 3MF facet references a missing vertex.": "invalid-3mf",
-                "Compact 3MF instance lies outside safe geometry.": "invalid-3mf",
-                "Compact 3MF needs one mesh and one component group.": "invalid-3mf",
-                "Compact 3MF needs two to 200 placed instances.": "invalid-3mf",
-                "Degenerate compact 3MF transformation.": "invalid-3mf",
-                "Invalid compact 3MF build target.": "invalid-3mf",
-                "Invalid compact 3MF component reference.": "invalid-3mf",
-                "Invalid compact 3MF coordinate.": "invalid-3mf",
-                "Invalid compact 3MF facet index.": "invalid-3mf",
-                "Invalid compact 3MF mesh structure.": "invalid-3mf",
-                "Invalid compact 3MF shared mesh size.": "invalid-3mf",
-                "Invalid compact 3MF shared resource identity.": "invalid-3mf",
-                "Invalid compact 3MF transform.": "invalid-3mf",
-                "Invalid compact 3MF triangle.": "invalid-3mf",
-                "Invalid compact 3MF vertex.": "invalid-3mf",
-                "Unapproved compact 3MF instance geometry.": "invalid-3mf",
-                "Unexpected compact 3MF model structure.": "invalid-3mf",
-                "Unexpected compact 3MF resource structure.": "invalid-3mf",
-                "Unsafe compact 3MF coordinate.": "invalid-3mf",
-                "Unsafe compact 3MF transform.": "invalid-3mf",
                 "Invalid Creality modifier upload size.": "creality-region-archive-invalid",
                 "Unsafe Creality modifier XML declaration.": "creality-region-archive-invalid",
                 "Malformed native Creality modifier XML.": "creality-region-archive-invalid",
