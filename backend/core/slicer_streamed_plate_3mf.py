@@ -6,13 +6,16 @@ instance's exact baked transform, even when all source STLs are different.
 The worker's dedicated streamed-core validator checks the result again.
 """
 import io
+import hashlib
+import copy
 import math
 import tempfile
 import zipfile
 from xml.etree import ElementTree as ET
-from defusedxml import ElementTree as SafeET
 
-from .slicer_plate_3mf import NS, build_plate_3mf, _bake_native_instance_transform
+from .slicer_plate_3mf import (NS, _render_mesh, _validated_mesh_placement,
+    _bake_native_instance_transform)
+from .slicer_resource_budget import input_model_budget, source_input_budget, plate_triangle_budget
 from .slicer_profiles import SlicerProfileError
 from .slicer_resource_budget import _cgroup_available_bytes, _host_available_bytes
 
@@ -54,6 +57,9 @@ def build_streamed_compound_3mf(objects_with_stl, *, bed_width, bed_depth):
                "support_paint", "seam_paint", "fuzzy_skin_paint",
                "variable_layer_profile")) for pair in objects_with_stl):
         raise SlicerProfileError("Streamed Orca geometry requires plain single-material models.")
+    if not all(isinstance(v, (int, float)) and not isinstance(v, bool)
+               and math.isfinite(v) and 1 <= v <= 1000 for v in (bed_width, bed_depth)):
+        raise SlicerProfileError("Verified positive build plate size is required.")
     memory = _available_bytes()
     if memory is None:
         raise SlicerProfileError("Available memory cannot be verified for a large Orca plate.")
@@ -61,12 +67,15 @@ def build_streamed_compound_3mf(objects_with_stl, *, bed_width, bed_depth):
     # is admission based on actual headroom rather than a hardcoded face cap.
     budget = max(0, memory - 256 * 1024 * 1024) // 4
     estimated = 0
+    source_budget = source_input_budget(upper_cap=input_model_budget())
+    last_identity = None
+    template = None
     offset = 0
     compressed = io.BytesIO()
     q = "{" + NS + "}"
     with tempfile.TemporaryFile(mode="w+b") as faces:
         with zipfile.ZipFile(compressed, "w", compression=zipfile.ZIP_DEFLATED,
-                             compresslevel=6, allowZip64=True) as archive:
+                             compresslevel=1, allowZip64=True) as archive:
             with archive.open("3D/3dmodel.model", "w", force_zip64=True) as stream:
                 stream.write((
                     '<?xml version="1.0" encoding="utf-8"?>'
@@ -74,17 +83,25 @@ def build_streamed_compound_3mf(objects_with_stl, *, bed_width, bed_depth):
                     '<resources><object id="1" type="model"><mesh><vertices>'
                 ).encode())
                 for index, (item, raw) in enumerate(objects_with_stl, 1):
-                    # Existing single-object path preserves exactly the
-                    # inspected pivot, transforms, bounds and float rounding.
-                    source = build_plate_3mf(
-                        [(item, raw)], bed_width=bed_width, bed_depth=bed_depth)
-                    with zipfile.ZipFile(io.BytesIO(source)) as packaged:
-                        root = SafeET.fromstring(packaged.read("3D/3dmodel.model"))
-                    obj = root.find("./"+q+"resources/"+q+"object")
-                    placement = root.find("./"+q+"build/"+q+"item")
-                    if obj is None or placement is None:
-                        raise SlicerProfileError("Streamed Orca source has no verified mesh.")
-                    _bake_native_instance_transform(obj, placement.attrib["transform"])
+                    # Cache only the most recent unplaced mesh, keeping the
+                    # working set bounded even for entirely distinct sources.
+                    if estimated >= budget:
+                        raise SlicerProfileError(
+                            "Full-plate geometry exceeds available native slicing memory.")
+                    identity = (len(raw), hashlib.sha256(raw).digest())
+                    if len(raw) > source_budget:
+                        raise SlicerProfileError("Source model exceeds available preparation memory.")
+                    if identity != last_identity:
+                        template = None
+                        template = ET.Element(q + "object")
+                        count, _, _ = _render_mesh(raw, template)
+                        if count > plate_triangle_budget():
+                            raise SlicerProfileError("Source mesh exceeds available preparation memory.")
+                        last_identity = identity
+                    obj = copy.deepcopy(template)
+                    placement = _validated_mesh_placement(
+                        obj, item, bed_width, bed_depth, index)
+                    _bake_native_instance_transform(obj, placement)
                     vertices = obj.findall("./"+q+"mesh/"+q+"vertices/"+q+"vertex")
                     triangles = obj.findall("./"+q+"mesh/"+q+"triangles/"+q+"triangle")
                     estimated += len(vertices) * 120 + len(triangles) * 240
