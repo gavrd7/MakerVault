@@ -17,6 +17,7 @@ import logging
 import threading
 from collections import deque
 
+from .resource_budget import model_input_budget, gcode_output_budget
 from .stl_validation import StlValidationError, validate_stl
 from .three_mf_validation import validate_worker_3mf
 from .headless_env import slicing_environment
@@ -223,7 +224,7 @@ def orca_command(binary: Path, workdir: Path, *,
         from .streamed_orca_validation import streamed_orca_memory_budget
         maximum = streamed_orca_memory_budget() // 8
     else:
-        maximum = MAX_MODEL_BYTES
+        maximum = model_input_budget()
     model = _regular_file(workdir, "input.3mf" if is_project else "input.stl", maximum)
     native_object_settings = False
     streamed_triangles = None
@@ -377,13 +378,13 @@ def run_orca(binary: Path, workdir: Path, *, timeout_seconds: int = DEFAULT_TIME
                     for p in outputs)):
             raise WorkerError("OrcaSlicer must produce exactly one G-code plate and only expected metadata.")
         source = gcode[0]
-        if source.is_symlink() or not source.is_file() or not 0 < source.stat().st_size <= MAX_GCODE_BYTES:
+        if source.is_symlink() or not source.is_file() or not 0 < source.stat().st_size <= gcode_output_budget():
             raise WorkerError("OrcaSlicer output is missing or exceeds its limit.")
         target = _output_path(workdir)
         with source.open("rb") as src, target.open("xb") as dst:
             while chunk := src.read(65536):
                 dst.write(chunk)
-                if dst.tell() > MAX_GCODE_BYTES:
+                if dst.tell() > gcode_output_budget():
                     raise WorkerError("G-code exceeded size limit.")
         with target.open("rb") as stream:
             if b"\x00" in stream.read(4096):
