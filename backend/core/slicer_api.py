@@ -607,8 +607,8 @@ def _draft(user, data):
     # the obsolete 128 KiB cap which rejected valid support-paint projects.
     if not isinstance(data, dict):
         raise ValueError("Slice configuration must be a JSON object.")
-    if len(json.dumps(data, ensure_ascii=False, separators=(",", ":")).encode("utf-8")) > MAX_SLICER_JSON_BYTES:
-        raise ValueError("Slice configuration exceeds the expanded 48 MiB safety limit.")
+    if len(json.dumps(data, ensure_ascii=False, separators=(",", ":")).encode("utf-8")) > slicer_configuration_limits()[1]:
+        raise ValueError("Slice configuration exceeds available expanded request memory.")
     allowed = {"engine", "engine_version", "input_asset_id", "printer_id", "spool_id", "printer_preset", "filament_preset", "process_preset", "nozzle_mm", "plate", "settings", "printer_profile_id", "filament_profile_id", "process_profile_id"}
     if set(data) - allowed:
         raise ValueError("Unknown slicing configuration fields.")
@@ -1233,31 +1233,42 @@ def approve_native_profiles(request):
 
 # Keep the existing 8 MiB on-wire request limit. Painted polygons can be
 # losslessly compressed, but expansion remains bounded and is never trusted.
-MAX_SLICER_REQUEST_BYTES = 8 * 1024 * 1024
-MAX_SLICER_JSON_BYTES = 48 * 1024 * 1024
+MAX_SLICER_REQUEST_BYTES = 8 * 1024 * 1024  # compatibility fallback
+MAX_SLICER_JSON_BYTES = 48 * 1024 * 1024  # compatibility fallback
+
+
+def slicer_configuration_limits():
+    """Bound compressed and expanded configuration by currently available RAM."""
+    wire = memory_budget(reserve_bytes=256 * 1024 * 1024, expansion_factor=10)
+    expanded = memory_budget(reserve_bytes=256 * 1024 * 1024, expansion_factor=6)
+    return (
+        MAX_SLICER_REQUEST_BYTES if wire is None else wire,
+        MAX_SLICER_JSON_BYTES if expanded is None else expanded,
+    )
 
 
 def _slicer_request_json(request):
     raw = request.body
-    if len(raw) > MAX_SLICER_REQUEST_BYTES:
-        raise ValueError("Slice configuration exceeds the 8 MiB transfer safety limit. Reduce the number of painted patches.")
+    request_budget, json_budget = slicer_configuration_limits()
+    if len(raw) > request_budget:
+        raise ValueError("Slice configuration exceeds available request memory. Reduce painted patch detail or free memory.")
     encoding = request.headers.get("Content-Encoding", "").strip().lower()
     if encoding == "gzip":
         try:
             decoder = zlib.decompressobj(wbits=16 + zlib.MAX_WBITS)
-            decoded = decoder.decompress(raw, MAX_SLICER_JSON_BYTES + 1)
-            if (len(decoded) > MAX_SLICER_JSON_BYTES or decoder.unconsumed_tail
+            decoded = decoder.decompress(raw, json_budget + 1)
+            if (len(decoded) > json_budget or decoder.unconsumed_tail
                     or not decoder.eof or decoder.unused_data):
                 raise ValueError("Compressed slicing project exceeded the expanded safety limit.")
-            decoded += decoder.flush(MAX_SLICER_JSON_BYTES + 1 - len(decoded))
-            if len(decoded) > MAX_SLICER_JSON_BYTES:
+            decoded += decoder.flush(json_budget + 1 - len(decoded))
+            if len(decoded) > json_budget:
                 raise ValueError("Compressed slicing project exceeded the expanded safety limit.")
             raw = decoded
         except zlib.error:
             raise ValueError("Invalid compressed slicing configuration.") from None
     elif encoding:
         raise ValueError("Unsupported slicing request encoding.")
-    if len(raw) > MAX_SLICER_JSON_BYTES:
+    if len(raw) > json_budget:
         raise ValueError("Slicing project exceeded the expanded safety limit.")
     return json.loads(raw.decode("utf-8"))
 
