@@ -21,6 +21,34 @@ class SlicerWorkerClientTests(SimpleTestCase):
     @patch("core.slicer_worker_client._session")
     @patch("core.slicer_worker_client.worker_settings",
            return_value=("http://slicer-worker:8088", "x" * 40))
+    def test_creality_placed_stl_request_is_explicit_and_engine_scoped(
+            self, settings, session):
+        import json
+        gcode = b";Creality placed plate test\\nG1 X1 Y1 E1\\n"
+        response = Mock()
+        response.status_code = 200
+        response.headers = {"Content-Length": "300"}
+        response.iter_content.return_value = [json.dumps({
+            "status": "completed", "gcode": base64.b64encode(gcode).decode(),
+            "bytes": len(gcode), "sha256": hashlib.sha256(gcode).hexdigest(),
+        }).encode()]
+        session.return_value.post.return_value = response
+        output = run_remote_job(
+            uuid.uuid4(), "crealityprint", "7.3.1",
+            b"composite", b"printer", b"filament", b"process",
+            creality_placed_stl=True)
+        self.assertEqual(output, gcode)
+        sent = json.loads(session.return_value.post.call_args.kwargs["data"])
+        self.assertIs(sent["creality_placed_stl"], True)
+        for engine in ("orcaslicer", "bambustudio", "prusaslicer"):
+            with self.subTest(engine=engine), self.assertRaises(SlicerWorkerError):
+                run_remote_job(uuid.uuid4(), engine, "7.3.1",
+                               b"composite", b"printer", b"filament",
+                               b"process", creality_placed_stl=True)
+
+    @patch("core.slicer_worker_client._session")
+    @patch("core.slicer_worker_client.worker_settings",
+           return_value=("http://slicer-worker:8088", "x" * 40))
     def test_creality_native_code_visible_without_raw_engine_output(self, settings, session):
         import json
         response = Mock()
