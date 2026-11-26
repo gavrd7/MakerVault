@@ -15,6 +15,7 @@ from defusedxml import ElementTree as SafeET
 
 from .slicer_mesh import MeshInspectionError
 from .slicer_profiles import SlicerProfileError
+from .slicer_resource_budget import source_input_budget
 from .slicer_process_settings import PROCESS_FIELDS, validate_process_overrides
 from .slicer_variable_layers import orca_layer_config_ranges
 from .slicer_native_support_paint import native_support_triangles, native_combined_paint_triangles
@@ -26,7 +27,7 @@ MAX_TRIANGLES = 500_000
 # Multiple independently valid models must not share the single-STL budget.
 # Source-byte, expanded XML and compressed archive caps still bound the plate.
 MAX_PLATE_TRIANGLES = 1_500_000
-MAX_SOURCE_TOTAL = 48 * 1024 * 1024
+MAX_SOURCE_TOTAL = 128 * 1024 * 1024  # hard ceiling; live headroom usually imposes less
 MAX_PROJECT_BYTES = 32 * 1024 * 1024
 # Worker bounds each expanded core model XML entry to 80 MiB.
 MAX_MODEL_XML_BYTES = 80 * 1024 * 1024
@@ -228,6 +229,7 @@ def build_plate_3mf(objects_with_stl, *, bed_width, bed_depth, native_tool_indic
     resources = ET.SubElement(model, f"{{{NS}}}resources")
     build = ET.SubElement(model, f"{{{NS}}}build")
     unique_source_bytes = 0
+    source_budget = source_input_budget(upper_cap=MAX_SOURCE_TOTAL)
     seen_sources = set()
     total_triangles = 0
     resource_xml_bytes = 0
@@ -260,9 +262,10 @@ def build_plate_3mf(objects_with_stl, *, bed_width, bed_depth, native_tool_indic
         identity = (len(raw), hashlib.sha256(raw).digest())
         if identity not in seen_sources:
             unique_source_bytes += len(raw)
-            if unique_source_bytes > MAX_SOURCE_TOTAL:
+            if unique_source_bytes > source_budget:
                 raise SlicerProfileError(
-                    "Total unique plate source model size exceeds the limit.")
+                    "Total unique plate source model size exceeds the available "
+                    "memory-based preparation budget.")
             seen_sources.add(identity)
         obj = ET.SubElement(resources, f"{{{NS}}}object", {"id": str(index), "type": "model"})
         count, width, depth = _render_mesh(
