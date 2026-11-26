@@ -46,8 +46,8 @@ def _bounds(project, expected):
     return result
 
 
-def audit_prusa_material_model_gcode(data, project, *, printer_ini, tools):
-    validate_prusa_material_candidate(project,printer_ini=printer_ini,tools=tools)
+def audit_prusa_material_model_gcode(data, project, *, printer_ini, tools, tower=None):
+    validate_prusa_material_candidate(project,printer_ini=printer_ini,tools=tools,tower=tower)
     bounds=_bounds(project,len(tools))
     if not isinstance(data,bytes) or not 0<len(data)<=90*1024*1024:
         raise WorkerError("Invalid native Prusa multi-material G-code.")
