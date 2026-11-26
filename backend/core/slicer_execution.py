@@ -452,9 +452,9 @@ def _validate_plate_execution(job):
             raise SlicerExecutionError("Seam painting test requires one model (Creality: one two-colour CFS model).")
         item = objects[0]
         if job.engine == "prusaslicer":
-            from .slicer_prusa_seam_audit import validate_prusa_front_seam_candidate
+            from .slicer_prusa_seam_audit import prusa_qualified_seam_direction
             try:
-                validate_prusa_front_seam_candidate(item)
+                prusa_qualified_seam_direction(item)
             except ValueError as exc:
                 raise SlicerExecutionError(str(exc)) from exc
         if item.get("process_overrides"):
@@ -967,6 +967,12 @@ def process_queued_job(job_id):
                 from .slicer_prusa_process_settings import enable_prusa_painted_support
                 profiles[2] = enable_prusa_painted_support(
                     profiles[2], enforcers_only=len(source_models) == 2)
+            if plate and len(plate) == 1 and (plate[0].get("seam_paint") or {}).get("regions"):
+                from .slicer_prusa_seam_audit import prusa_qualified_seam_direction
+                from .slicer_prusa_process_settings import qualify_prusa_seam_process
+                _paint, direction = prusa_qualified_seam_direction(plate[0])
+                if direction != "front":
+                    profiles[2] = qualify_prusa_seam_process(profiles[2], "random")
         if job.engine == "orcaslicer":
             stage = "checking native printer/process compatibility"
             profiles[0] = _execution_printer_profile(
