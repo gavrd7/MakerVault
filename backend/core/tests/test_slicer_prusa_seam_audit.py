@@ -129,3 +129,73 @@ class PrusaSeamAuditTests(unittest.TestCase):
             self.assertIn(b"seam_position = "+mode.encode(),result)
         with self.assertRaises(ValueError):
             override_research_seam_position(raw,"not-a-native-mode")
+
+
+class PrusaFourFaceSeamQualificationTests(unittest.TestCase):
+    def test_four_independently_fingerprinted_vertical_directions_roundtrip(self):
+        import json
+        from pathlib import Path
+        from tempfile import TemporaryDirectory
+        from scripts.prusa_generate_paint_fixtures import main as generate
+        from core.slicer_prusa_seam_audit import prusa_qualified_seam_direction
+        from slicer_worker.prusa_3mf_validation import validate_prusa_native_3mf
+
+        with TemporaryDirectory(prefix="prusa-directions-") as root:
+            generate(root)
+            for face in ("front", "back", "left", "right"):
+                with self.subTest(face=face):
+                    item = json.loads((Path(root)/("seam-"+face+".json")).read_text())
+                    selected, direction = prusa_qualified_seam_direction(item)
+                    self.assertEqual(direction, face)
+                    self.assertEqual(selected["version"], 2)
+                    self.assertFalse(validate_prusa_project_admission(
+                        [item], {}, "2.9.7"))
+                    receipt = validate_prusa_native_3mf(
+                        (Path(root)/("seam-"+face+".3mf")).read_bytes())
+                    self.assertIn("slic3rpe:SeamPaintingVersion",
+                                  receipt["paint_channels"])
+                    if face != "front":
+                        with self.assertRaises(ValueError):
+                            validate_prusa_front_seam_candidate(item)
+
+    def test_selected_vertical_face_has_deposited_first_wall_starts(self):
+        from pathlib import Path
+        from tempfile import TemporaryDirectory
+        import json
+        from scripts.prusa_generate_paint_fixtures import main as generate
+        from core.slicer_prusa_seam_audit import prusa_qualified_seam_direction
+
+        with TemporaryDirectory(prefix="prusa-direction-wall-") as root:
+            generate(root)
+            for face in ("front", "back", "left", "right"):
+                with self.subTest(face=face):
+                    item = json.loads((Path(root)/("seam-"+face+".json")).read_text())
+                    _, direction = prusa_qualified_seam_direction(item)
+                    self.assertEqual(direction, face)
+                    xy = {"front": (125, 95.22), "back": (125, 114.78),
+                          "left": (115.22, 105), "right": (134.78, 105)}
+                    x, y = xy[face]
+                    lines = ["M82", "G92 E0", "G0 X120 Y100"]
+                    e = 0
+                    for layer in range(1, 13):
+                        z = round(2+layer*.2, 3)
+                        lines.extend([";LAYER_CHANGE", "G0 Z" + str(z),
+                                      ";TYPE:External perimeter"])
+                        e += 1
+                        lines.append("G1 X%.2f Y%.2f E%.3f" % (x, y, e))
+                        lines.append("G0 X120 Y100")
+                    raw = ("\n".join(lines)+"\n").encode()
+                    observed = audit_prusa_seam_enforcer_gcode(
+                        raw, item, bed_width=250, bed_depth=210)
+                    self.assertEqual(observed["matching_layers"], 12)
+
+    def test_random_native_seam_process_is_temporary_and_bounded(self):
+        from core.slicer_prusa_process_settings import qualify_prusa_seam_process
+        from core.slicer_prusa_native_resolution import parse_prusa_profile
+        source = b"layer_height = .2\nseam_position = rear\n"
+        modified = qualify_prusa_seam_process(source, "random")
+        self.assertEqual(parse_prusa_profile(modified, "process")["seam_position"],
+                         "random")
+        self.assertIn(b"seam_position = rear", source)
+        with self.assertRaises(ValueError):
+            qualify_prusa_seam_process(source, "nearest")
