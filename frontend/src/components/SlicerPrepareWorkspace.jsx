@@ -1052,6 +1052,9 @@ export default function SlicerPrepareWorkspace({
       && profile.engine_version === String(engine).split(" ").slice(1).join(" "));
   // Only model/paint-assigned slots participate. A loaded but unused CFS
   // bay requires no native preset and must never disable Slice.
+  const materialRoutingPending = requiredMultiSlots.length > 1
+    ? !(multiMaterialReadyForExport || crealityTwoStlReady || crealityPaintReady)
+    : assignedSlots.length > 0 ? !(hasSingleSlot && singleSlotProfileMatches) : false;
   const prusaNativeReady = activeEngine === "prusaslicer" && prusaNativeTools != null &&
     prusaNativeTools.version===1 && prusaNativeTools.filament_profile_ids?.length===prusaNativeTools.tool_count &&
     prusaNativeTools.filament_profile_ids.every(id=>filamentProfiles.some(profile=>
@@ -1071,11 +1074,8 @@ export default function SlicerPrepareWorkspace({
       prusaNativeTools.mode==="mmu" && !!primeTower &&
       prusaNativeTools.purge_matrix?.every((row,i)=>row.every((volume,j)=>
         i===j || volume!=null&&volume>=1&&volume<=1000)));
-  const materialRoutingPending = prusaNativeTools && activeEngine==="prusaslicer"
-    ? !prusaNativeReady
-    : requiredMultiSlots.length > 1
-    ? !(multiMaterialReadyForExport || crealityTwoStlReady || crealityPaintReady)
-    : assignedSlots.length > 0 ? !(hasSingleSlot && singleSlotProfileMatches) : false;
+  const prusaMaterialRoutingPending = prusaNativeTools && activeEngine==="prusaslicer"
+    ? !prusaNativeReady : materialRoutingPending;
 
   const projectRoutingPending = plates.some(plate =>
     (plate.objects || []).some(item => item.material_slot != null)
@@ -1120,7 +1120,7 @@ export default function SlicerPrepareWorkspace({
     (!activePlateReady ? "Select a plate containing models to slice." : "") ||
     (conflictsBlockSlice ? "Resolve build-plate conflicts or wait for models to finish loading before slicing." : "") ||
     (flushSettings != null && !(multiMaterialReadyForExport || crealityTwoStlReady || crealityPaintReady) ? "Custom flushing requires at least two assigned filaments with matching native profiles. Configure the loaded slot profiles before slicing." : "") ||
-    (materialRoutingPending ? (missingToolProfile
+    (prusaMaterialRoutingPending ? (missingToolProfile
       ? "An assigned model uses a CFS slot without a matching native filament preset. Set its Profile before slicing."
       : "This plate has multiple assigned materials but its selected engine or model edits are not supported for native slicing.")
       : objectSettingsPending
@@ -2444,7 +2444,7 @@ export default function SlicerPrepareWorkspace({
         </button>
         <div className="slicerSliceSplit">
           <button type="button" className="primary"
-            disabled={!activePlateReady || !profilesReady || !workerConfigured || conflictsBlockSlice || objectSettingsPending || (hasPaintedColours && !paintedNativeReady) || materialRoutingPending}
+            disabled={!activePlateReady || !profilesReady || !workerConfigured || conflictsBlockSlice || objectSettingsPending || (hasPaintedColours && !paintedNativeReady) || prusaMaterialRoutingPending}
             onClick={onSlice}>Slice</button>
           <button type="button" aria-label="More slicing options"
             aria-haspopup="menu" aria-expanded={sliceMenuOpen}
@@ -2452,7 +2452,7 @@ export default function SlicerPrepareWorkspace({
             onClick={()=>setSliceMenuOpen(value=>!value)}>▾</button>
           {sliceMenuOpen && <div className="slicerSliceMenu" role="menu">
             <button type="button" role="menuitem"
-              disabled={!activePlateReady || conflictsBlockSlice || objectSettingsPending || (hasPaintedColours && !paintedNativeReady) || materialRoutingPending}
+              disabled={!activePlateReady || conflictsBlockSlice || objectSettingsPending || (hasPaintedColours && !paintedNativeReady) || prusaMaterialRoutingPending}
               onClick={()=>{setSliceMenuOpen(false);onSlice?.();}}>Slice active plate</button>
             <button type="button" role="menuitem"
               disabled={!projectHasModels || objectSettingsPending || projectRoutingPending}
