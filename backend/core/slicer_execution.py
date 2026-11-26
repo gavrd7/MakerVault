@@ -427,7 +427,7 @@ def _validate_plate_execution(job):
             except (ValueError, TypeError) as exc:
                 raise SlicerExecutionError(str(exc)) from exc
         for item in (objects if prusa_two_support else objects[:1]):
-                if item.get("process_overrides"):
+            if item.get("process_overrides"):
                 raise SlicerExecutionError(
                     "Support painting with per-object overrides is not verified.")
             if (any(abs(float(value)) > 0.000001 for value in
