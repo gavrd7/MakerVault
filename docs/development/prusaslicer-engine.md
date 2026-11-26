@@ -1,3 +1,15 @@
+## 26 November — qualified Prusa MMU/XL global process controls and safe native routing
+
+This draft iteration extends the normal owner-bound Prusa MMU3 and XL workbench jobs with **global** layer height, wall loops, top and bottom solid shell counts, and sparse infill density. The job adapter accepts exactly those native 2.9.7 keys and rejects unsupported global/any per-object advanced edit instead of silently ignoring it. Original imported profiles remain immutable; only a job-local flattened native Prusa process copy changes. The approved MMU purge-matrix compiler runs *after* the numeric overrides, preserving wipe-tower mode and source/destination filament identity. XL independently rejects MMU tower/purge.
+
+The existing physical-slot-to-native-tool adapter also now removes physical printer bay metadata *only after* owner/printer/native-tool mapping has been validated, avoiding an otherwise unavoidable mismatch with Prusa's strict project XML dialect. Virtual native-tool assignments need no physical printer bays and are preserved as before.
+
+Added backend tests for MMU/XL override correctness and unsafe values; workbench owner binding and physical-slot translation; offline Library G-code tagging, download safety, and rejection of unsafe firmware commands. The pinned genuine Prusa 2.9.7 five-MMU-tool and five-independent-XL-head scripts now exercise the same native numeric override function before asserting correct model-local material deposition; running them **does not qualify physical printer tool pickup, purge adequacy or safe print submission**. Future expansions must continue to require actual native G-code checks and unchanged Orca/Creality/Bambu regression workflows.
+
+**Gate**: full exact-head GitHub CI, genuine reviewed runtime native acceptance and desktop/mobile staging verification before any merge. Keep the pull request draft and printer start/upload guarded.
+
+---
+
 ## 26 November — Prusa MMU/XL ordinary workbench and Library integration (draft review)
 
 - Prusa-only application adapter `backend/core/slicer_prusa_job_material.py` joins **explicit owner-bound native profiles, model-to-tool choices, MMU directional purge and wipe tower** to the already verified authenticated offline Prusa 2.9.7 worker. `backend/core/slicer_execution.py` now admits the matching multi-tool SliceJob, validates private imported STLs, executes the bounded MMU or independent XL worker, re-audits the actual per-model deposited toolpaths (and MMU tower per tool) and stores text G-code with normal MakerVault job status, optional Library save and preview warmup.
