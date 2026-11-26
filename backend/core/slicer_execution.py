@@ -697,6 +697,7 @@ def process_queued_job(job_id):
         model_format = "stl"
         material_result = None
         orca_streamed_plate = False
+        creality_placed_stl = False
         is_multi_test = (job.settings or {}).get("multi_material_test") is True
         plate = (job.settings or {}).get("plate_objects")
         stage = "verifying independent modifier and negative-volume coverage"
@@ -760,6 +761,18 @@ def process_queued_job(job_id):
                 model = source_models[0][1]
                 model_format = "stl"
                 logger.info("Slicing job %s: using direct validated STL path", job.pk)
+            elif (job.engine == "crealityprint"
+                  and _plate_builder(source_models) is build_compound_plate_3mf):
+                # Creality 7.3.1 single-material CLI cannot import the
+                # generic 3MF plate with external native profiles. Use the
+                # independent shared geometry-only placed STL adapter.
+                stage = "baking verified Creality single-filament plate geometry"
+                from .slicer_creality_plate import build_creality_single_filament_plate
+                width, depth = trusted_plate_dimensions(job.printer_profile)
+                model = build_creality_single_filament_plate(
+                    source_models, bed_width=width, bed_depth=depth)
+                model_format = "stl"
+                creality_placed_stl = True
             else:
                 stage = "resolving native printer bed dimensions"
                 width, depth = trusted_plate_dimensions(job.printer_profile)
@@ -1030,7 +1043,7 @@ def process_queued_job(job_id):
                 raise SlicerExecutionError(
                     "Bambu multi-material project settings could not be validated: "
                     + str(exc)) from exc
-        if model_format == "stl" and job.input_asset.sha256 and hashlib.sha256(model).hexdigest() != job.input_asset.sha256:
+        if model_format == "stl" and not creality_placed_stl and job.input_asset.sha256 and hashlib.sha256(model).hexdigest() != job.input_asset.sha256:
             raise SlicerExecutionError("Model contents changed since the job was prepared.")
         stage = "executing the isolated slicer worker"
         soft, _hard = slicer_task_time_limits(
@@ -1042,6 +1055,7 @@ def process_queued_job(job_id):
             profiles[0], profiles[1], profiles[2],
             native_timeout_seconds=native_timeout,
             orca_streamed_plate=orca_streamed_plate,
+            creality_placed_stl=creality_placed_stl,
             model_format=model_format,
             filament_profiles=(material_result["filament_profiles"]
                                if material_result is not None else None),
