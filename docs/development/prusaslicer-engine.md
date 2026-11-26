@@ -1,3 +1,11 @@
+## 26 November 2026 — genuine five-slot MMU acceptance
+
+- [Pinned native PrusaSlicer 2.9.7 acceptance run 45730410372](https://github.com/gavrd7/MakerVault/actions/runs/45730410372) **passed** a genuine five-object, five-virtual-tool MMU G-code slice using the new offline worker protocol. Independent model-local audit measured **1,044 correct positive extrusion moves for each of T0, T1, T2, T3, T4**, **zero wrong-material moves on all five models**, and independently identified wipe-tower extrusion for every tool (**1,895 / 2,093 / 2,080 / 1,097 / 1,045 moves**). Selected tools and native purge settings were also validated before executing the pinned binary.
+- This test has now been promoted from exploratory to a **required** step in the expensive native acceptance workflow, alongside already-required two-material MMU and two-tool XL offline worker tests. These are evidence for *native G-code generation only*, **not physical printer firmware, MMU loading reliability, toolhead pickup, print submission, or successful physical printing**.
+- The ordinary MakerVault workbench/Library/print submission pipeline still does not invoke these offline MMU/XL research helpers. Keep PR #199 draft until remaining feature parity and safe printer integration are finished.
+
+---
+
 ## 26 November 2026 — authenticated offline MMU/XL slicing work
 
 - PR #199 remains **draft**. Prusa 2.9.7 genuine [pinned runtime acceptance #45730061299](https://github.com/gavrd7/MakerVault/actions/runs/45730061299) passed both independent offline worker paths: MMU two-material candidate emitted **3,922 correct T0 + 3,922 correct T1 model moves**, **zero wrong-material moves** and **3,334 T0 + 3,325 T1 true wipe-tower extrusion moves**; the independent two-head Prusa XL candidate emitted **3,921 correct positive-E moves on each toolhead**, with **zero wrong-tool model moves**. This validates executable native CLI toolpaths, **not** physical print/swap, tool-offset calibration or upload.
