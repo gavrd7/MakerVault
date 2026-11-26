@@ -176,6 +176,36 @@ class GeneratedSlicerFileTests(TestCase):
         self.assertFalse(FileAsset.objects.filter(
             owner=self.owner, category="gcode").exists())
 
+    def test_prusa_native_output_is_never_accepted_by_the_print_submission_api(self):
+        import uuid
+        from core.printer_gcode_submission import submit, GcodeSubmissionError
+        self.job.settings = {
+            "multi_material_test": True, "save_gcode_to_library": True,
+        }
+        self.job.save(update_fields=["settings"])
+        asset = store_generated_gcode(
+            self.job.pk, b"; Prusa offline\nT0\nG1 X12 Y8 E0.5\n"
+                         b"T1\nG1 X18 Y8 E0.6\n")
+        payload = {
+            "confirmed": True, "source": "makervault", "action": "print",
+            "file_asset_id": str(asset.pk), "request_id": str(uuid.uuid4()),
+            "cfs_mode": "mapped", "creality_supervised_test": True,
+            "creality_test_confirmed": True, "creality_test_sha256": asset.sha256,
+        }
+        with self.assertRaises(GcodeSubmissionError) as refused:
+            submit(None, self.owner, payload)
+        self.assertEqual(refused.exception.status, 409)
+        self.assertIn("Prusa offline", str(refused.exception))
+        # The refusal is independently keyed off the Prusa-native marker;
+        # even a corrupted legacy multicolour marker cannot make it printable.
+        asset.metadata.pop("multi_material_test")
+        asset.save(update_fields=["metadata"])
+        with self.assertRaises(GcodeSubmissionError) as refused_again:
+            submit(None, self.owner, {**payload, "cfs_mode": None,
+                                       "creality_supervised_test": False,
+                                       "creality_test_confirmed": False})
+        self.assertEqual(refused_again.exception.status, 409)
+
     def test_opt_in_auto_adds_completed_output_to_gcode_library(self):
         self.job.settings = {"save_gcode_to_library": True}
         self.job.save(update_fields=["settings"])
