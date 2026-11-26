@@ -46,7 +46,8 @@ def prepare_prusa_offline_mmu_candidate(
     # Check all metadata ownership and kinds *before* reading any asset.
     printer = resolved_prusa_profile(printer_profile)
     process = apply_prusa_process_overrides(
-        resolved_prusa_profile(process_profile), process_overrides or {})
+        resolved_prusa_profile(process_profile),
+        {} if process_overrides is None else process_overrides)
     filaments = [resolved_prusa_profile(p) for p in filament_profiles]
     topology = prusa_machine_topology(printer)
     if topology["kind"] != "single_nozzle_changer":
@@ -101,7 +102,8 @@ def prepare_prusa_offline_xl_candidate(
         raise SlicerProfileError("Prusa XL model/tool assignment is incomplete.")
     printer = resolved_prusa_profile(printer_profile)
     process = apply_prusa_process_overrides(
-        resolved_prusa_profile(process_profile), process_overrides or {})
+        resolved_prusa_profile(process_profile),
+        {} if process_overrides is None else process_overrides)
     filaments = [resolved_prusa_profile(p) for p in filament_profiles]
     topology = prusa_machine_topology(printer)
     if (topology["kind"] != "independent_tools" or
