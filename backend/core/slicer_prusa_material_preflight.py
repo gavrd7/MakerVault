@@ -163,3 +163,76 @@ def slice_prusa_offline_xl_candidate(job_id, **prepared_settings):
         output,candidate["model"],printer_ini=candidate["printer"],
         tools=list(prepared_settings["tools"]))
     return output
+
+
+def prepare_prusa_offline_colour_candidate(
+    *, owner_id, printer_profile, process_profile, filament_profiles,
+    rows, tools, colour_slot, colour_tool, purge_matrix, tower_xy,
+    bed_width, bed_depth
+):
+    """Compile exactly one fingerprinted MMU front-painted STL with private profiles."""
+    if (type(owner_id) is not int or owner_id<1 or
+            not isinstance(rows,(list,tuple)) or len(rows)!=1 or
+            not isinstance(tools,(list,tuple)) or list(tools)!=[1] or
+            type(colour_slot) is not int or not 0<=colour_slot<16 or
+            type(colour_tool) is not int or not 1<=colour_tool<=4 or
+            not isinstance(tower_xy,(list,tuple)) or len(tower_xy)!=2):
+        raise SlicerProfileError("Prusa painted MMU selection requires one model, T0 base and one native colour.")
+    for kind,profile in (("printer",printer_profile),("process",process_profile)):
+        if (profile.owner_id!=owner_id or profile.kind!=kind or
+                profile.engine!="prusaslicer" or
+                profile.engine_version!="2.9.7"):
+            raise SlicerProfileError("Prusa painted native printer or process profile is not owned.")
+    if (not isinstance(filament_profiles,(list,tuple)) or
+            any(profile.owner_id!=owner_id or profile.kind!="filament" or
+                profile.engine!="prusaslicer" or
+                profile.engine_version!="2.9.7" for profile in filament_profiles)):
+        raise SlicerProfileError("Every Prusa painted filament must be owned.")
+    row,model=rows[0]
+    if not isinstance(row,dict) or not isinstance(model,bytes):
+        raise SlicerProfileError("Invalid Prusa native painted model.")
+    if (row.get("colour_paint") or {}).get("regions") is None:
+        raise SlicerProfileError("Prusa native painting requires a fingerprinted region.")
+    printer=resolved_prusa_profile(printer_profile)
+    topology=prusa_machine_topology(printer)
+    if (topology["kind"]!="single_nozzle_changer" or
+            not 2<=topology["logical_tool_count"]<=5 or
+            colour_tool>=topology["logical_tool_count"] or
+            len(filament_profiles)!=topology["logical_tool_count"]):
+        raise SlicerProfileError("Prusa native painting requires a qualified MMU tool palette.")
+    process=resolved_prusa_profile(process_profile)
+    filaments=[resolved_prusa_profile(profile) for profile in filament_profiles]
+    palette=compile_prusa_filament_palette(printer,filaments)
+    native_process=compile_prusa_purge_matrix(printer,process,purge_matrix)
+    from .slicer_prusa_colour_project import build_prusa_colour_candidate
+    project=build_prusa_colour_candidate(
+        row,model,printer_ini=printer,
+        colour_tool_indices={colour_slot:colour_tool},
+        bed_width=bed_width,bed_depth=bed_depth)
+    project=add_prusa_native_wipe_tower(
+        project,x_mm=tower_xy[0],y_mm=tower_xy[1],rotation_deg=0,
+        bed_width=bed_width,bed_depth=bed_depth)
+    tower=(tower_xy[0],tower_xy[1],0,bed_width,bed_depth)
+    from slicer_worker.prusa_offline_contract import validate_prusa_offline_colour_inputs
+    validate_prusa_offline_colour_inputs(
+        project=project,printer=printer,filament=palette,process=native_process,
+        tool=colour_tool,tower=list(tower))
+    return {"model":project,"printer":printer,"filament":palette,
+            "process":native_process,"tower":tower,"tool":colour_tool}
+
+
+def slice_prusa_offline_colour_candidate(job_id, **prepared):
+    """Return genuine authenticated and independently audited painted MMU G-code."""
+    from .slicer_worker_client import run_remote_job
+    from slicer_worker.prusa_colour_gcode_audit import audit_prusa_offline_colour_gcode
+    candidate=prepare_prusa_offline_colour_candidate(**prepared)
+    output=run_remote_job(
+        job_id,"prusaslicer","2.9.7",
+        candidate["model"],candidate["printer"],candidate["filament"],
+        candidate["process"],model_format="3mf",
+        prusa_offline_colour={
+            "tool":candidate["tool"],"tower":list(candidate["tower"])})
+    audit_prusa_offline_colour_gcode(
+        output,candidate["model"],printer_ini=candidate["printer"],
+        tool=candidate["tool"],tower=candidate["tower"])
+    return output
