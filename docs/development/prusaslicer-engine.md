@@ -1,3 +1,16 @@
+### Seam start-position audit correction
+
+The original first-wall spatial research classified the *endpoint* of the
+first deposited external-wall segment. That can be a false positive if a
+segment crosses into the painted patch from elsewhere. Both the production
+Prusa-only seam audit and the research diagnostic now measure the **XY
+origin of the first positively extruding external wall segment** and require
+real XY movement. The four-direction qualification is pending the new
+**required two-repeat native 2.9.7 comparison** using this stricter test.
+No directional expansion should be marked ready if it fails.
+
+---
+
 ## 26 November — qualified four-face seam direction candidate
 
 Real pinned PrusaSlicer **2.9.7** research on the same cube and process
