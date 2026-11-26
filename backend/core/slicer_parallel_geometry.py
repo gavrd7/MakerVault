@@ -75,7 +75,7 @@ def prepared_mesh_batches(sources, *, estimated_bytes_per_worker, mode="mesh"):
     owns all children so Celery soft timeouts can interrupt waits and reap
     every outstanding process before temporary files are removed.
     """
-    if mode not in ("mesh", "stl", "inspect"):
+    if mode not in ("mesh", "stl", "inspect", "prusa_native"):
         raise ValueError("Unknown geometry preparation mode.")
     if not sources:
         yield iter(())
@@ -162,6 +162,30 @@ def _main():
         output.write_bytes(build_prusa_placed_stl(
             [(options["item"], raw)], bed_width=options["bed_width"],
             bed_depth=options["bed_depth"], _parallel=False))
+    elif mode == "prusa_native":
+        # Prusa's painted geometry carries facet annotations outside the
+        # ordinary STL payload. Transport both as a bounded, uncompressed
+        # private package so support, seam and fuzzy data are never lost.
+        import io
+        import zipfile
+        from .slicer_prusa_paint import native_prusa_painted_stl, HEADERS
+        from .slicer_prusa_plate import build_prusa_placed_stl
+        item = options["item"]
+        painted_raw, facet_tags, required_headers = native_prusa_painted_stl(item, raw)
+        geometry_item = dict(item)
+        for key in ("process_overrides", "variable_layer_profile",
+                    "modifier_volumes", *HEADERS):
+            geometry_item.pop(key, None)
+        baked = build_prusa_placed_stl(
+            [(geometry_item, painted_raw)], bed_width=options["bed_width"],
+            bed_depth=options["bed_depth"], _parallel=False)
+        metadata = json.dumps({
+            "facet_tags": facet_tags,
+            "required_headers": sorted(required_headers),
+        }, separators=(",", ":")).encode("utf-8")
+        with zipfile.ZipFile(output, "w", compression=zipfile.ZIP_STORED) as package:
+            package.writestr("model.stl", baked)
+            package.writestr("paint.json", metadata)
     elif mode == "inspect":
         from .slicer_mesh import inspect_stl
         output.write_text(json.dumps(inspect_stl(raw)), encoding="utf-8")
