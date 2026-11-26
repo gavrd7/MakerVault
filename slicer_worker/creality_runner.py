@@ -137,9 +137,8 @@ def creality_command(binary: Path, workdir: Path):
         raise WorkerError("Verified Creality Print executable is unavailable.")
     is_project = (workdir / "input.3mf").exists()
     placed = workdir / "creality-placed-stl.marker"
-    model = _regular_file(workdir, "input.3mf" if is_project else "input.stl",
-                          84 + 50 * 1_500_000 if placed.is_file() and not placed.is_symlink()
-                          else MAX_MODEL_BYTES)
+    model = _regular_file(
+        workdir, "input.3mf" if is_project else "input.stl", model_input_budget())
     native_project = (workdir / "creality-native-project.marker").exists()
     native_modifiers = (workdir / "native-modifier-project.marker").exists()
     if placed.is_symlink() or (placed.exists() and
