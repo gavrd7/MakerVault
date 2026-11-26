@@ -50,7 +50,7 @@ test("Interactive slicer blocks incomplete Prusa mapping but keeps draft saving 
 test("Prusa MMU/XL allows only spatially qualified Object wall/infill controls",()=>{
   assert.match(prepare,/\["wall_loops","sparse_infill_density"\]\.includes\(key\)/);
   assert.match(prepare,/prusaUnsupportedObjectKeys/);
-  assert.match(prepare,/Prusa MMU\/XL supports only Object wall loops and infill density/);
+  assert.match(prepare,/Prusa MMU\/XL\/INDX supports only Object wall loops and infill density/);
   assert.match(prepare,/prusaNativeReady/);
   assert.match(prepare,/prusaMaterialRoutingPending/);
 });
