@@ -16,6 +16,7 @@ from pathlib import Path
 from functools import lru_cache
 import tempfile
 import uuid
+import zlib
 
 from .runner import (MAX_GCODE_BYTES, MAX_MODEL_BYTES, MAX_PROFILE_BYTES, WorkerError,
                      DEFAULT_TIMEOUT_SECONDS, MAX_NATIVE_SLICE_TIMEOUT_SECONDS, run_prusa)
@@ -80,7 +81,8 @@ def _decode_payload(payload):
     }
     if not isinstance(payload, dict) or not expected.issubset(payload) or (
             set(payload) - expected - {"model_format", "filament_profiles", "creality_model_stls", "creality_tool_ids", "creality_native_project", "native_modifier_project",
-                "orca_streamed_plate", "orca_streamed_sha256", "slice_timeout_seconds"}):
+                "orca_streamed_plate", "orca_streamed_sha256", "slice_timeout_seconds",
+                "creality_placed_stl", "creality_model_raw_sha256"}):
         raise WorkerError("Invalid slicing job payload.")
     try:
         uuid.UUID(str(payload["job_id"]))
@@ -91,6 +93,21 @@ def _decode_payload(payload):
     model_format = payload.get("model_format", "stl")
     if model_format not in {"stl", "3mf"}:
         raise WorkerError("Unsupported model input format.")
+    if ("creality_model_raw_sha256" in payload) != ("creality_placed_stl" in payload):
+        raise WorkerError("Missing authenticated Creality placed STL digest.")
+    creality_digest = payload.get("creality_model_raw_sha256")
+    if "creality_placed_stl" in payload:
+        if (payload["creality_placed_stl"] is not True
+                or payload["engine"] != "crealityprint"
+                or payload["engine_version"] != "7.3.1"
+                or model_format != "stl"
+                or not isinstance(creality_digest, str) or len(creality_digest) != 64
+                or any(c not in "0123456789abcdef" for c in creality_digest)
+                or any(key in payload for key in (
+                    "filament_profiles", "creality_model_stls", "creality_tool_ids",
+                    "creality_native_project", "native_modifier_project",
+                    "orca_streamed_plate", "orca_streamed_sha256"))):
+            raise WorkerError("Invalid Creality placed-STL execution contract.")
     streamed = payload.get("orca_streamed_plate") is True
     if "orca_streamed_plate" in payload or "orca_streamed_sha256" in payload:
         digest = payload.get("orca_streamed_sha256")
@@ -131,6 +148,23 @@ def _decode_payload(payload):
         if not raw or len(raw) > limit:
             raise WorkerError("Invalid slicing input size.")
         files[key] = raw
+    if payload.get("creality_placed_stl") is True:
+        # Bound decompression on the worker's local headroom, then bind
+        # the expanded geometry to the exact authenticated source digest.
+        limit = model_input_budget()
+        try:
+            decoder = zlib.decompressobj()
+            original = decoder.decompress(files["model"], limit + 1)
+        except zlib.error as exc:
+            raise WorkerError("Invalid Creality placed STL compression.") from exc
+        if (len(original) < 84 or len(original) > limit
+                or not decoder.eof or decoder.unconsumed_tail or decoder.unused_data
+                or hashlib.sha256(original).hexdigest() != creality_digest):
+            raise WorkerError("Creality placed STL integrity or expansion check failed.")
+        from .stl_validation import validate_stl
+        validate_stl(original)
+        files["model"] = original
+        files["creality_placed_stl"] = True
     if streamed:
         if hashlib.sha256(files["model"]).hexdigest() != payload["orca_streamed_sha256"]:
             raise WorkerError("Streamed Orca plate integrity check failed.")
@@ -313,6 +347,10 @@ class Handler(BaseHTTPRequestHandler):
                     (workdir / "creality-native-project.marker").write_text("v1")
                 if files.get("native_modifier_project"):
                     (workdir / "native-modifier-project.marker").write_text("v1")
+                if files.get("creality_placed_stl"):
+                    (workdir / "creality-placed-stl.marker").write_text("v1")
+                if files.get("orca_streamed_plate"):
+                    (workdir / "orca-streamed-plate.marker").write_text("v1")
                 if "creality_model_stls" in files:
                     for index, raw in enumerate(files["creality_model_stls"]):
                         (workdir / ("input-" + str(index) + ".stl")).write_bytes(raw)
