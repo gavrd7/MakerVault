@@ -3,6 +3,7 @@ import json
 import uuid
 import zipfile
 from unittest.mock import patch
+from xml.etree.ElementTree import Element
 from defusedxml import ElementTree as ET
 from django.test import SimpleTestCase
 from core.slicer_approval import fixture_stl
@@ -75,7 +76,7 @@ class MeshStreamingTests(SimpleTestCase):
             return original(raw)
 
         source = fixture_stl()
-        element = ET.Element("object")
+        element = Element("object")
         with patch.object(plate, "_triangles", side_effect=instrumented):
             count, _width, _depth = plate._render_mesh(source, element)
         self.assertEqual(count, 4)
