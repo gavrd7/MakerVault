@@ -97,7 +97,7 @@ def run_remote_job(job_id, engine, version, model, printer_profile, filament_pro
                    creality_model_stls=None, creality_tool_ids=None,
                    creality_native_project=False, native_modifier_project=False, prusa_placed_stl=False,
                    prusa_offline_mmu=None, prusa_offline_xl=None,
-                   prusa_offline_colour=None):
+                   prusa_offline_colour=None, orca_streamed_plate=False):
     if model_format not in {"stl", "3mf"}:
         raise SlicerWorkerError("Unsupported slicer input format.")
     if not isinstance(timeout_seconds, int) or not 1 <= timeout_seconds <= 900:
@@ -112,16 +112,37 @@ def run_remote_job(job_id, engine, version, model, printer_profile, filament_pro
         canonical_id = str(uuid.UUID(str(job_id)))
     except (TypeError, ValueError):
         raise SlicerWorkerError("Invalid slicing job identifier.") from None
+    if orca_streamed_plate and (
+            orca_streamed_plate is not True or engine != "orcaslicer"
+            or version != "2.5.0" or model_format != "3mf"
+            or any((filament_profiles is not None, creality_model_stls is not None,
+                    creality_tool_ids is not None, creality_native_project,
+                    native_modifier_project, prusa_placed_stl,
+                    prusa_offline_mmu is not None, prusa_offline_xl is not None,
+                    prusa_offline_colour is not None))):
+        raise SlicerWorkerError("Invalid streamed Orca plate transport contract.")
+    if orca_streamed_plate:
+        from .slicer_resource_budget import _cgroup_available_bytes, _host_available_bytes
+        available = [v for v in (_cgroup_available_bytes(), _host_available_bytes())
+                     if v is not None]
+        limit = max(0, min(available) - 256 * 1024 * 1024) // 32 if available else 0
+        if not limit or len(model) > limit:
+            raise SlicerWorkerError("Streamed Orca model exceeds available transfer memory.")
+    else:
+        limit = MAX_REQUEST_MODEL
     url, token = worker_settings()
     payload = {
         "job_id": canonical_id, "engine": engine, "engine_version": version,
-        "model": _encode(model, MAX_REQUEST_MODEL),
+        "model": _encode(model, limit),
         "printer_profile": _encode(printer_profile, MAX_REQUEST_PROFILE),
         "filament_profile": _encode(filament_profile, MAX_REQUEST_PROFILE),
         "process_profile": _encode(process_profile, MAX_REQUEST_PROFILE),
     }
     if model_format == "3mf":
         payload["model_format"] = "3mf"
+    if orca_streamed_plate:
+        payload["orca_streamed_plate"] = True
+        payload["orca_streamed_sha256"] = hashlib.sha256(model).hexdigest()
     if prusa_offline_xl is not None:
         if (engine != "prusaslicer" or version != "2.9.7" or
                 model_format != "3mf" or not isinstance(prusa_offline_xl, dict)
@@ -240,7 +261,8 @@ def run_remote_job(job_id, engine, version, model, printer_profile, filament_pro
         response = session.post(
             url + "/v1/slice",
             data=json.dumps(payload, separators=(",", ":")).encode(),
-            headers={"Authorization": "Bearer " + token, "Content-Type": "application/json"},
+            headers={"Authorization": "Bearer " + token, "Content-Type": "application/json",
+                     **({"X-MakerVault-Streamed-Orca": "v1"} if orca_streamed_plate else {})},
             stream=True, timeout=(3, timeout_seconds), allow_redirects=False,
         )
         if response.status_code != 200:
