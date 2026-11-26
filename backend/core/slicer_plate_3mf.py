@@ -3,6 +3,7 @@
 Optional, validated per-object process metadata is stored in Orca/Bambu
 model_settings.config; this does not itself authorise worker execution.
 """
+import hashlib
 import io
 import json
 import math
@@ -226,7 +227,8 @@ def build_plate_3mf(objects_with_stl, *, bed_width, bed_depth, native_tool_indic
     model = ET.Element(f"{{{NS}}}model", {"unit": "millimeter", "{http://www.w3.org/XML/1998/namespace}lang": "en-US"})
     resources = ET.SubElement(model, f"{{{NS}}}resources")
     build = ET.SubElement(model, f"{{{NS}}}build")
-    total_bytes = 0
+    unique_source_bytes = 0
+    seen_sources = set()
     total_triangles = 0
     resource_xml_bytes = 0
     # Only native per-object projects use baked individual placements. Existing
@@ -251,9 +253,17 @@ def build_plate_3mf(objects_with_stl, *, bed_width, bed_depth, native_tool_indic
         item, raw = pair
         if not isinstance(item, dict) or not isinstance(raw, bytes):
             raise SlicerProfileError("Invalid STL plate entry.")
-        total_bytes += len(raw)
-        if total_bytes > MAX_SOURCE_TOTAL:
-            raise SlicerProfileError("Total plate model size exceeds the limit.")
+        # Multiple instances of the same verified source asset share the
+        # input byte budget. They still retain independent object transforms,
+        # triangle counts, annotations and expanded 3MF resource limits.
+        # A cryptographic content hash avoids trusting names/asset IDs.
+        identity = (len(raw), hashlib.sha256(raw).digest())
+        if identity not in seen_sources:
+            unique_source_bytes += len(raw)
+            if unique_source_bytes > MAX_SOURCE_TOTAL:
+                raise SlicerProfileError(
+                    "Total unique plate source model size exceeds the limit.")
+            seen_sources.add(identity)
         obj = ET.SubElement(resources, f"{{{NS}}}object", {"id": str(index), "type": "model"})
         count, width, depth = _render_mesh(
             raw, obj, item.get("support_paint"), item.get("seam_paint"),
