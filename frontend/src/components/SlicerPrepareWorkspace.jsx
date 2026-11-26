@@ -1065,8 +1065,13 @@ export default function SlicerPrepareWorkspace({
     prusaNativeTools.model_tools?.length===objects.length &&
     objects.every(object=>prusaNativeTools.model_tools?.some(row=>row.instance_id===object.instance_id)) &&
     new Set(prusaNativeTools.model_tools.map(row=>row.tool)).size>=2 &&
-    !objects.some(object=>object.material_slot || object.process_overrides &&
-      Object.keys(object.process_overrides).length || object.modifier_volumes?.length ||
+    !objects.some(object=>object.material_slot ||
+      (object.process_overrides != null &&
+        (typeof object.process_overrides !== "object" ||
+         Array.isArray(object.process_overrides) ||
+         Object.keys(object.process_overrides).some(key=>
+           !["wall_loops","sparse_infill_density"].includes(key)))) ||
+      object.modifier_volumes?.length ||
       object.support_paint?.regions?.length || object.seam_paint?.regions?.length ||
       object.fuzzy_skin_paint?.regions?.length || object.colour_paint?.regions?.length ||
       object.variable_layer_profile?.bands?.length) &&
@@ -1117,6 +1122,10 @@ export default function SlicerPrepareWorkspace({
     ? "Native export not yet verified for " + incompatibleEdits.map(key=>FEATURE_NAMES[key]).join(", ") +
       ". The project is preserved; choose an engine with verified native support before slicing."
     : "";
+  const prusaUnsupportedObjectKeys = activeEngine==="prusaslicer" &&
+    prusaNativeTools ? objects.flatMap(object=>
+      Object.keys(object.process_overrides||{}).filter(key=>
+        !["wall_loops","sparse_infill_density"].includes(key))) : [];
   const prusaUnsupportedGlobalKeys = activeEngine==="prusaslicer" &&
     prusaNativeTools ? Object.keys(processOverrides||{}).filter(key=>![
       "layer_height","wall_loops","top_shell_layers",
@@ -1124,7 +1133,11 @@ export default function SlicerPrepareWorkspace({
     ].includes(key)) : [];
   const prusaNativeBlockReason = activeEngine==="prusaslicer" &&
     prusaNativeTools && !prusaNativeReady
-      ? prusaUnsupportedGlobalKeys.length
+      ? prusaUnsupportedObjectKeys.length
+        ? "Prusa MMU/XL supports only Object wall loops and infill density. Unsupported Object keys: " +
+          [...new Set(prusaUnsupportedObjectKeys)].join(", ") +
+          ". Restore those settings or save the draft."
+        : prusaUnsupportedGlobalKeys.length
         ? "Prusa MMU/XL native slicing cannot apply these global settings yet: " +
           prusaUnsupportedGlobalKeys.join(", ") +
           ". Restore them to the imported native process defaults or save this draft."
