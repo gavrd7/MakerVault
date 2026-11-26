@@ -12,6 +12,7 @@ import subprocess
 
 from .prusa_vendor_profiles import PrusaPresetError, validate_flat_prusa_preset
 from .stl_validation import StlValidationError, validate_stl
+from .resource_budget import model_input_budget, gcode_output_budget
 
 
 MAX_GCODE_BYTES = 64 * 1024 * 1024
@@ -58,7 +59,7 @@ def prusa_command(binary: Path, workdir: Path) -> list[str]:
                 (not marker.is_file() or marker.read_bytes() != b"v1")):
             raise WorkerError("Invalid native Prusa offline marker.")
     if project.exists() or project.is_symlink():
-        model = _regular_file(workdir, "input.3mf", MAX_MODEL_BYTES)
+        model = _regular_file(workdir, "input.3mf", model_input_budget())
         if not (offline.exists() or xl.exists() or colour.exists()):
             from .prusa_3mf_validation import validate_prusa_native_3mf
             validate_prusa_native_3mf(model.read_bytes())
@@ -71,7 +72,7 @@ def prusa_command(binary: Path, workdir: Path) -> list[str]:
     else:
         if offline.exists() or xl.exists() or colour.exists():
             raise WorkerError("Prusa offline material slicing requires native 3MF input.")
-        model = _regular_file(workdir, "input.stl", MAX_MODEL_BYTES)
+        model = _regular_file(workdir, "input.stl", model_input_budget())
         try:
             validate_stl(model.read_bytes())
         except StlValidationError:
@@ -139,7 +140,7 @@ def run_prusa(
             # Never expose raw engine logs: profiles may contain secrets or
             # cloud endpoints. Dedicated scrubbed diagnostics come later.
             raise WorkerError("Slicing engine failed. Check the selected native presets.")
-        output = _regular_file(workdir, "output.gcode", MAX_GCODE_BYTES)
+        output = _regular_file(workdir, "output.gcode", gcode_output_budget())
         with output.open("rb") as stream:
             head = stream.read(min(4096, output.stat().st_size))
         if b"\x00" in head:
