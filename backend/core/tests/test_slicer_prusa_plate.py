@@ -100,6 +100,31 @@ class PrusaPlacedStlTests(TestCase):
         ], bed_width=220, bed_depth=220)
         self.assertAlmostEqual(min(v[2] for v in vertices(baked)),0,places=3)
 
+    def test_placed_prusa_geometry_reuses_shared_engine_neutral_adapter(self):
+        from unittest.mock import patch
+        from core.slicer_placed_stl import build_placed_stl
+        models = [(item(x_mm=-30), cube(size=10)),
+                  (item(x_mm=30), cube(size=12))]
+        with patch("core.slicer_placed_stl.build_placed_stl",
+                   wraps=build_placed_stl) as shared:
+            prusa = build_prusa_placed_stl(
+                models, bed_width=250, bed_depth=250)
+            shared.assert_called_once()
+        native = build_placed_stl(models, bed_width=250, bed_depth=250)
+        self.assertEqual(prusa, native)
+        self.assertEqual(inspect_stl(prusa)["triangles"], 24)
+
+    def test_explicit_native_limits_still_fail_closed_without_default_caps(self):
+        with self.assertRaisesRegex(SlicerProfileError, "explicitly requested"):
+            build_prusa_placed_stl([(item(), cube())],
+                                   bed_width=250, bed_depth=250, max_faces=11)
+        with self.assertRaisesRegex(SlicerProfileError, "explicitly requested"):
+            build_prusa_placed_stl([(item(), cube())],
+                                   bed_width=250, bed_depth=250, max_stl_bytes=600)
+        with self.assertRaisesRegex(SlicerProfileError, "Invalid bounded"):
+            build_prusa_placed_stl([(item(), cube())],
+                                   bed_width=250, bed_depth=250, max_faces=True)
+
     def test_unverified_objects_and_offbed_models_rejected(self):
         for bad in (
             item(x_mm=200), item(z_mm=10), item(process_overrides={"wall_loops":4}),
