@@ -6,7 +6,7 @@ from unittest import TestCase
 from xml.etree import ElementTree as ET
 from defusedxml import ElementTree as SafeET
 
-from core.slicer_prusa_3mf import build_prusa_native_3mf
+from core.slicer_prusa_3mf import build_prusa_native_3mf, validate_prusa_project_admission
 from core.tests.test_slicer_prusa_plate import cube, item
 from slicer_worker.prusa_3mf_validation import validate_prusa_native_3mf
 from slicer_worker.runner import WorkerError
@@ -113,6 +113,46 @@ class PrusaProjectDialectTests(TestCase):
             face.set(prusa+"custom_supports", "FFFF")
         with self.assertRaises(WorkerError):
             validate_prusa_native_3mf(rewrite(archive, "3D/3dmodel.model", tamper))
+
+
+    def test_two_object_support_enforcer_roundtrips_but_mixed_edits_fail_closed(self):
+        from scripts.prusa_generate_support_overhang import cantilever, support_mask
+        model = cantilever()
+        paint = support_mask(model, 0)
+        for painted_index in (0, 1):
+            with self.subTest(painted_index=painted_index):
+                rows = [
+                    item(x_mm=-50, **({"support_paint": paint} if painted_index == 0 else {})),
+                    item(x_mm=50, **({"support_paint": paint} if painted_index == 1 else {})),
+                ]
+                self.assertFalse(validate_prusa_project_admission(rows, {}, "2.9.7"))
+                archive = build_prusa_native_3mf(
+                    [(row, model) for row in rows], bed_width=250, bed_depth=210)
+                receipt = validate_prusa_native_3mf(archive)
+                self.assertEqual(receipt["objects"], 2)
+                self.assertIn("slic3rpe:FdmSupportsPaintingVersion",
+                              receipt["paint_channels"])
+                with zipfile.ZipFile(io.BytesIO(archive)) as package:
+                    tree = SafeET.fromstring(package.read("3D/3dmodel.model"))
+                namespace = "{http://schemas.slic3r.org/3mf/2017/06}"
+                objects = tree.findall(f"./{NS}resources/{NS}object")
+                marked = [any(face.get(namespace+"custom_supports") == "4"
+                              for face in obj.findall(f"./{NS}mesh/{NS}triangles/{NS}triangle"))
+                          for obj in objects]
+                self.assertEqual(marked, [i == painted_index for i in (0, 1)])
+                for changed in ({"rotation_deg": 45},
+                                {"process_overrides": {"wall_loops": 3}},
+                                {"fuzzy_skin_paint": {"regions": [{"slot": 0}]}}):
+                    other = 1-painted_index
+                    invalid = list(rows)
+                    invalid[other] = {**invalid[other], **changed}
+                    with self.assertRaises(ValueError):
+                        validate_prusa_project_admission(invalid, {}, "2.9.7")
+                with self.assertRaises(ValueError):
+                    validate_prusa_project_admission([
+                        {**rows[0], "support_paint": paint},
+                        {**rows[1], "support_paint": paint},
+                    ], {}, "2.9.7")
 
     def test_two_independent_objects_each_keep_a_typed_region(self):
         for kind, overrides in (("modifier", {"sparse_infill_density": 80}),
