@@ -49,9 +49,40 @@ class PrusaMultiToolCandidateTests(TestCase):
                 build_prusa_multitool_candidate(
                     rows, printer_ini=printer_ini, tools=tools,
                     bed_width=250, bed_depth=210)
-        modified = [(item(x_mm=-35,process_overrides={"wall_loops":3}), cube()),
-                    rows[1]]
-        with self.assertRaisesRegex(SlicerProfileError, "advanced edits"):
-            build_prusa_multitool_candidate(
-                modified, printer_ini=printer_ini, tools=[1,2],
-                bed_width=250, bed_depth=210)
+        # Research permits only the two verified Prusa native object keys.
+        for advanced in (
+                {"travel_speed": 123}, {"support_material":1},
+                {"wall_loops":True}, {"sparse_infill_density":500}):
+            modified = [(item(x_mm=-35,process_overrides=advanced), cube()),
+                        rows[1]]
+            with self.subTest(advanced=advanced), self.assertRaises(
+                    (SlicerProfileError,ValueError)):
+                build_prusa_multitool_candidate(
+                    modified, printer_ini=printer_ini, tools=[1,2],
+                    bed_width=250, bed_depth=210)
+
+    def test_native_object_wall_and_infill_metadata_survives_mmu_tool_mapping(self):
+        from slicer_worker.prusa_material_validation import validate_prusa_material_candidate
+        for changer in (0,1):
+            with self.subTest(changer=changer):
+                rows = [
+                    (item(x_mm=-35, process_overrides={
+                        "wall_loops":1,"sparse_infill_density":15}), cube()),
+                    (item(x_mm=35, process_overrides={
+                        "wall_loops":5,"sparse_infill_density":35}), cube()),
+                ]
+                machine=printer(2,changer)
+                project,_=build_prusa_multitool_candidate(
+                    rows,printer_ini=machine,tools=[1,2],
+                    bed_width=250,bed_depth=210)
+                receipt=validate_prusa_material_candidate(
+                    project,printer_ini=machine,tools=[1,2])
+                self.assertEqual(receipt["objects"],2)
+                with zipfile.ZipFile(io.BytesIO(project)) as z:
+                    root=SafeET.fromstring(z.read("Metadata/Slic3r_PE_model.config"))
+                metadata=[{node.get("key"):node.get("value")
+                           for node in obj.findall("metadata")}
+                          for obj in root.findall("object")]
+                self.assertEqual([m["extruder"] for m in metadata],["1","2"])
+                self.assertEqual([m["perimeters"] for m in metadata],["1","5"])
+                self.assertEqual([m["fill_density"] for m in metadata],["15%","35%"])
