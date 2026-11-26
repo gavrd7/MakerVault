@@ -72,3 +72,24 @@ def admit_working_set(*, memory_bytes, scratch_bytes=0,
     return (memory is not None and disk is not None
             and memory_bytes + reserve_bytes <= memory
             and scratch_bytes + disk_reserve_bytes <= disk)
+
+
+def model_input_budget():
+    """Per-input in-memory native model byte budget for any engine."""
+    available = operation_memory_budget(
+        reserve_bytes=256 * 1024 * 1024, expansion_factor=8)
+    return available if available is not None else 32 * 1024 * 1024
+
+
+def gcode_output_budget():
+    """Common worker output ceiling derived from RAM and available disk.
+
+    Legacy fallback applies only when resource readings are unavailable.
+    """
+    available = operation_memory_budget(
+        reserve_bytes=256 * 1024 * 1024, expansion_factor=6)
+    disk = scratch_disk_headroom()
+    budget = available if available is not None else 64 * 1024 * 1024
+    if disk is not None:
+        budget = min(budget, max(0, disk - 256 * 1024 * 1024))
+    return budget
