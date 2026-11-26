@@ -585,7 +585,7 @@ def queue_draft(job_id, user):
                 validate_plate_collisions((
                     item, _read_owned_file(owned[str(item["asset_id"])],
                                            job.owner_id, MAX_INPUT, "Plate STL")
-                ) for item in plate])
+                ) for item in plate))
             except PlateCollisionError as exc:
                 raise SlicerExecutionError(
                     "Model-envelope overlap check: " + str(exc)
