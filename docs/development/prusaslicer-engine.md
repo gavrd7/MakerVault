@@ -1,3 +1,12 @@
+## 26 November 2026 — Multi-toolhead topology: XL versus CORE One INDX
+
+- Prusa XL: supports native **1, 2 or 5 complete independent toolheads**. The offline two-tool XL native 2.9.7 G-code contract has passed, while a genuine five-tool **XL** runtime fixture and physical head pickup remain separate acceptance gates. Do not confuse the proven five-*material* MMU test with five independent XL toolheads.
+- Prusa CORE One INDX: supports up to **eight interchangeable passive nozzle tools** with an induction-heated Smart Head. This differs physically from both MMU (one nozzle, five incoming filaments) and XL (multiple complete independent hotends); tool count alone does **not** identify the physical pickup/heater mechanism. Native 2.9.7 INDX profile availability, G-code dialect, firmware requirements, offsets and actual tool pickup require explicit verification before admission.
+- `backend/core/slicer_prusa_machine_topology.py` now safely parses up to eight independent logical tools and exposes `requires_new_toolchanger_qualification=True` for counts six through eight; MMU remains capped at five. This does **not** enable INDX slicing: the scoped backend offline preparation, worker native profile validator and authenticated MMU/XL protocols **remain capped at five** until a dedicated INDX profile and native acceptance path are implemented. Build the future INDX implementation around explicit toolchange mechanism/capabilities rather than assuming eight physically independent complete hotends.
+- Sources: official Prusa CORE One INDX product/technology documentation and XL product guidance; ensure pins/availability are checked live before future work.
+
+---
+
 ## 26 November 2026 — genuine five-slot MMU acceptance
 
 - [Pinned native PrusaSlicer 2.9.7 acceptance run 45730410372](https://github.com/gavrd7/MakerVault/actions/runs/45730410372) **passed** a genuine five-object, five-virtual-tool MMU G-code slice using the new offline worker protocol. Independent model-local audit measured **1,044 correct positive extrusion moves for each of T0, T1, T2, T3, T4**, **zero wrong-material moves on all five models**, and independently identified wipe-tower extrusion for every tool (**1,895 / 2,093 / 2,080 / 1,097 / 1,045 moves**). Selected tools and native purge settings were also validated before executing the pinned binary.
