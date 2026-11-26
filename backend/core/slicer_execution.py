@@ -436,7 +436,7 @@ def _validate_plate_execution(job):
                 (job.engine == "bambustudio" and job.engine_version == "02.09.01.70") or
                 (job.engine == "crealityprint" and job.engine_version.startswith("7.3.") and
                  settings.get("multi_material_test") is True)):
-            raise SlicerExecutionError("Native seam painting requires a supported verified engine.")
+            raise SlicerExecutionError("Native seam painting test requires PrusaSlicer 2.9.7, OrcaSlicer 2.5.0, or a verified native Creality/Bambu engine.")
         if len(objects) != 1 or (settings.get("multi_material_test") and job.engine not in {"crealityprint", "bambustudio"}):
             raise SlicerExecutionError("Seam painting test requires one model (Creality: one two-colour CFS model).")
         item = objects[0]
