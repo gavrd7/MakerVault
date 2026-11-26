@@ -19,6 +19,18 @@ class SlicerWorkerProtocolTests(TestCase):
             "process_profile": base64.b64encode(b"layer_height = 0.2").decode(),
         }
 
+    def test_native_engine_deadline_is_shared_bounded_and_backward_compatible(self):
+        payload = self.payload()
+        self.assertEqual(_decode_payload(payload)["slice_timeout_seconds"], 300)
+        for seconds in (301, 900, 3600, 10800):
+            with self.subTest(seconds=seconds):
+                result = _decode_payload({
+                    **payload, "slice_timeout_seconds": seconds})
+                self.assertEqual(result["slice_timeout_seconds"], seconds)
+        for seconds in (0, -1, 10801, "900", True, None):
+            with self.subTest(seconds=seconds), self.assertRaises(WorkerError):
+                _decode_payload({**payload, "slice_timeout_seconds": seconds})
+
     def test_disabled_by_default_even_when_binary_settings_present(self):
         with patch.dict(os.environ, {
             "SLICER_WORKER_ENABLED": "0", "SLICER_WORKER_TOKEN": "secret" * 10,
