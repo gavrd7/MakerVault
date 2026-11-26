@@ -1,3 +1,11 @@
+## 26 November — independent sparse-infill verification (additional native qualification)
+
+The previous genuine MMU5 and XL5 acceptance run proved native Object **wall loops** with real per-model spatial internal perimeter counts: first cube (1 wall) **0** internal-perimeter moves; second otherwise identical cube (5 walls) **800** moves, with zero wrong-tool extrusion across all five models. To avoid treating UI import of `fill_density` as proof that distinct **sparse infill** settings work, the pinned 2.9.7 worker acceptance now additionally compares two identical cubes (models 2 and 3, both 3 walls) at **10% versus 55% sparse infill**, measuring positive-E internal-infill paths inside each model's own native-tool bounding box. The audit must pass for **both MMU3 and independent XL** before this is considered independently qualified.
+
+The workbench currently admits only native Object `wall_loops` and `sparse_infill_density`; all other combinations remain forbidden. If this new independent audit fails, restore the safe gate on Object infill until the native dialect is proven. Preserve draft mode and forbid physical printer submission.
+
+---
+
 ## 26 November — qualified per-object Prusa MMU/XL wall and infill settings
 
 **Qualified on real native PrusaSlicer 2.9.7** at [reviewed runtime run 45746535217](https://github.com/gavrd7/MakerVault/actions/runs/45746535217): both five-logical-tool MMU3 and five-independent-head Prusa XL generated G-code that passed the existing wrong-tool deposition and MMU wipe tower audits **and** a new independent spatial wall-count comparison. The fixture used otherwise identical adjacent STL cubes with explicitly different native per-object `perimeters` (1 versus 5) and `fill_density` (15% versus 35%). The native acceptance for both mandatory five-tool cases passed.
