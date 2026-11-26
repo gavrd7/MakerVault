@@ -303,6 +303,7 @@ def build_plate_3mf(objects_with_stl, *, bed_width, bed_depth, native_tool_indic
         )
         for entry in objects_with_stl
     )
+    sources = []
     for index, pair in enumerate(objects_with_stl, start=1):
         if not isinstance(pair, tuple) or len(pair) != 2:
             raise SlicerProfileError("Invalid 3MF plate input.")
@@ -321,35 +322,50 @@ def build_plate_3mf(objects_with_stl, *, bed_width, bed_depth, native_tool_indic
                     "Total unique plate source model size exceeds the available "
                     "memory-based preparation budget.")
             seen_sources.add(identity)
-        obj = ET.SubElement(resources, f"{{{NS}}}object", {"id": str(index), "type": "model"})
-        count, width, depth = _render_mesh(
-            raw, obj, item.get("support_paint"), item.get("seam_paint"),
-            item.get("fuzzy_skin_paint"),
-            # Ordinary MakerVault project exports preserve paint in their
-            # validated sidecars; only a verified native palette may compile
-            # it into print-tool annotations.
-            colour_paint=(item.get("colour_paint")
-                          if native_colour_tools is not None else None),
-            colour_tool_indices=(native_colour_tools[index - 1]
-                                 if native_colour_tools is not None else None))
-        total_triangles += count
-        placement = _validated_mesh_placement(obj, item, bed_width, bed_depth, index)
-        if total_triangles > plate_triangle_budget():
-            raise SlicerProfileError("Total plate triangles exceed the limit.")
-        if bake_native_positions:
-            _bake_native_instance_transform(obj, placement)
-            placement = "1 0 0 0 1 0 0 0 1 0 0 0"
-        ET.SubElement(build, f"{{{NS}}}item", {
-            "objectid": str(index),
-            "transform": placement,
-        })
-        # Check actual serialised resource growth after every mesh, not only
-        # after all models have been accumulated into a large XML tree.
-        # Leave 64 KiB for the build items and model wrapper.
-        resource_xml_bytes += len(ET.tostring(obj, encoding="utf-8"))
-        if resource_xml_bytes > xml_geometry_budget() - 65536:
-            raise SlicerProfileError(
-                "Build plate 3MF geometry exceeds the worker's expanded XML budget.")
+        options = {
+            "support_paint": item.get("support_paint"),
+            "seam_paint": item.get("seam_paint"),
+            "fuzzy_skin_paint": item.get("fuzzy_skin_paint"),
+            "colour_paint": item.get("colour_paint") if native_colour_tools is not None else None,
+            "colour_tool_indices": native_colour_tools[index - 1] if native_colour_tools is not None else None,
+        }
+        sources.append((index, raw, options))
+    from .slicer_parallel_geometry import prepared_mesh_batches
+    estimate = 128 * 1024**2 + max(len(raw) for _, raw, _ in sources) * 48
+    # Native colour maps may use non-string keys: preserve their Python
+    # semantics on the established sequential path until typed IPC is verified.
+    from contextlib import nullcontext
+    preparation = (nullcontext((index, raw, None) for index, raw, _ in sources)
+                   if native_colour_tools is not None else
+                   prepared_mesh_batches(sources, estimated_bytes_per_worker=estimate))
+    with preparation as prepared:
+        for (index, raw, options), (_, _, rendered) in zip(sources, prepared):
+            item = objects_with_stl[index - 1][0]
+            obj = ET.SubElement(resources, f"{{{NS}}}object", {"id": str(index), "type": "model"})
+            if rendered is None:
+                count, _, _ = _render_mesh(raw, obj, **options)
+            else:
+                template = SafeET.fromstring(rendered)
+                obj.extend(template)
+                count = len(obj.findall(f"./{{{NS}}}mesh/{{{NS}}}triangles/{{{NS}}}triangle"))
+            total_triangles += count
+            placement = _validated_mesh_placement(obj, item, bed_width, bed_depth, index)
+            if total_triangles > plate_triangle_budget():
+                raise SlicerProfileError("Total plate triangles exceed the limit.")
+            if bake_native_positions:
+                _bake_native_instance_transform(obj, placement)
+                placement = "1 0 0 0 1 0 0 0 1 0 0 0"
+            ET.SubElement(build, f"{{{NS}}}item", {
+                "objectid": str(index),
+                "transform": placement,
+            })
+            # Check actual serialised resource growth after every mesh, not only
+            # after all models have been accumulated into a large XML tree.
+            # Leave 64 KiB for the build items and model wrapper.
+            resource_xml_bytes += len(ET.tostring(obj, encoding="utf-8"))
+            if resource_xml_bytes > xml_geometry_budget() - 65536:
+                raise SlicerProfileError(
+                    "Build plate 3MF geometry exceeds the worker's expanded XML budget.")
     model_xml = ET.tostring(model, encoding="utf-8", xml_declaration=True)
     if len(model_xml) > xml_geometry_budget():
         raise SlicerProfileError(
