@@ -28,7 +28,7 @@ def build_prusa_multitool_candidate(rows, *, printer_ini, tools,
     for item, _source in rows:
         forbidden = (
             "colour_paint", "support_paint", "seam_paint", "fuzzy_skin_paint",
-            "variable_layer_profile", "negative_volumes", "material_slot",
+            "negative_volumes", "material_slot",
         ) if allow_indx_regions else (
             "modifier_volumes", "colour_paint",
             "support_paint", "seam_paint", "fuzzy_skin_paint",
