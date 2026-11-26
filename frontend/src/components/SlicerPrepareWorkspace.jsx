@@ -2444,7 +2444,7 @@ export default function SlicerPrepareWorkspace({
         </button>
         <div className="slicerSliceSplit">
           <button type="button" className="primary"
-            disabled={!activePlateReady || !profilesReady || !workerConfigured || conflictsBlockSlice || objectSettingsPending || (hasPaintedColours && !paintedNativeReady) || prusaMaterialRoutingPending}
+            disabled={!activePlateReady || !profilesReady || !workerConfigured || conflictsBlockSlice || objectSettingsPending || (hasPaintedColours && !paintedNativeReady) || prusaMaterialRoutingPending || materialRoutingPending}
             onClick={onSlice}>Slice</button>
           <button type="button" aria-label="More slicing options"
             aria-haspopup="menu" aria-expanded={sliceMenuOpen}
@@ -2452,7 +2452,7 @@ export default function SlicerPrepareWorkspace({
             onClick={()=>setSliceMenuOpen(value=>!value)}>▾</button>
           {sliceMenuOpen && <div className="slicerSliceMenu" role="menu">
             <button type="button" role="menuitem"
-              disabled={!activePlateReady || conflictsBlockSlice || objectSettingsPending || (hasPaintedColours && !paintedNativeReady) || prusaMaterialRoutingPending}
+              disabled={!activePlateReady || conflictsBlockSlice || objectSettingsPending || (hasPaintedColours && !paintedNativeReady) || prusaMaterialRoutingPending || materialRoutingPending}
               onClick={()=>{setSliceMenuOpen(false);onSlice?.();}}>Slice active plate</button>
             <button type="button" role="menuitem"
               disabled={!projectHasModels || objectSettingsPending || projectRoutingPending}
