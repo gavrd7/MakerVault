@@ -56,117 +56,35 @@ def prusa_native_bed_dimensions(native_ini):
     return float(xmax), float(ymax)
 
 
+# Legacy native profile capacity constants are retained for explicit callers,
+# but no longer imposed as arbitrary defaults on ordinary Prusa plates.
 MAX_FACES = 500_000
 MAX_STL_BYTES = 32 * 1024 * 1024
 
 
 def build_prusa_placed_stl(objects_with_stl, *, bed_width, bed_depth,
-                           max_faces=MAX_FACES, max_stl_bytes=MAX_STL_BYTES):
-    """Bake independently transformed source meshes into a bounded native STL.
+                           max_faces=None, max_stl_bytes=None):
+    """Use the released engine-independent, resource-aware placed-STL path.
 
-    Visual coordinates are centred on the bed; individual source meshes use
-    the same XY-midpoint and Z-bottom pivot as MakerVault's 3MF preview.
-    We stream facets instead of retaining hundreds of thousands of triangles
-    and transformed copies in Django memory.
+    Preserve source ownership, per-object transforms, native rectangular-bed
+    checks and strict object-setting admission. Native Prusa-specific *optional*
+    capacity constraints remain enforceable by callers that need them. The
+    shared executor preserves exact STL facets and can prepare independent
+    sources in bounded parallel subprocesses.
     """
-    if (type(max_faces) is not int or not 1 <= max_faces <= 1_500_000 or
-            type(max_stl_bytes) is not int or not 84 < max_stl_bytes <= 80 * 1024 * 1024):
-        raise SlicerProfileError("Invalid bounded native STL plate budget.")
-    if not isinstance(objects_with_stl, list) or not 1 <= len(objects_with_stl) <= 200:
-        raise SlicerProfileError("Prusa plate needs one to 200 verified source STLs.")
-    if not all(isinstance(n, (float, int)) and not isinstance(n, bool)
-               and math.isfinite(n) and 1 <= n <= 1000 for n in (bed_width, bed_depth)):
-        raise SlicerProfileError("Prusa plate requires verified native build dimensions.")
-    output = bytearray(b"MakerVault Prusa single-material placed plate".ljust(80, b"\0")
-                       + b"\0" * 4)
-    count = 0
-    source_bytes = 0
-    for index, pair in enumerate(objects_with_stl, 1):
-        if not isinstance(pair, tuple) or len(pair) != 2:
-            raise SlicerProfileError("Invalid Prusa plate source.")
-        item, raw = pair
-        if not isinstance(item, dict) or not isinstance(raw, bytes):
-            raise SlicerProfileError("Invalid Prusa plate source.")
-        source_bytes += len(raw)
-        if source_bytes > 48 * 1024 * 1024:
-            raise SlicerProfileError("Prusa plate source bytes exceed the safe limit.")
-        if (item.get("modifier_volumes") or item.get("process_overrides")
-                or (item.get("colour_paint") or {}).get("regions")
-                or (item.get("colour_paint") or {}).get("faces")
-                or (item.get("support_paint") or {}).get("regions")
-                or (item.get("seam_paint") or {}).get("regions")
-                or (item.get("fuzzy_skin_paint") or {}).get("regions")
-                or (item.get("variable_layer_profile") or {}).get("bands")):
-            raise SlicerProfileError("Unsupported Prusa object settings cannot be discarded.")
-        try:
-            inspected = inspect_stl(raw)
-            expected_faces = inspected["triangles"]
-        except MeshInspectionError as exc:
-            raise SlicerProfileError("Prusa plate contains an invalid STL.") from exc
-        if count + expected_faces > max_faces or 84 + 50 * (count + expected_faces) > max_stl_bytes:
-            raise SlicerProfileError("Prusa plate geometry exceeds the native STL limit.")
-        # Exact source bounds are needed: the inspection summary rounds to
-        # three decimal places, whereas preview pivots are calculated from
-        # the actual source vertices.
-        minimum = [float("inf")] * 3
-        maximum = [float("-inf")] * 3
-        seen = 0
-        for triangle in _triangles(raw):
-            seen += 1
-            for point in triangle:
-                for axis in range(3):
-                    value = float(point[axis])
-                    if not math.isfinite(value) or abs(value) > 1_000_000:
-                        raise SlicerProfileError("Prusa source coordinates are unsafe.")
-                    minimum[axis] = min(minimum[axis], value)
-                    maximum[axis] = max(maximum[axis], value)
-        if seen != expected_faces:
-            raise SlicerProfileError("Prusa input STL triangle count changed.")
-        pivot = ((minimum[0] + maximum[0]) / 2,
-                 (minimum[1] + maximum[1]) / 2, minimum[2])
-        try:
-            matrix = [float(v) for v in _transform(item, bed_width / 2, bed_depth / 2).split()]
-        except (ValueError, TypeError, KeyError) as exc:
-            raise SlicerProfileError("Prusa object placement is invalid.") from exc
-        if len(matrix) != 12 or any(not math.isfinite(v) for v in matrix):
-            raise SlicerProfileError("Invalid Prusa object transform.")
-        if float(item.get("z_mm", 0)) != 0:
-            raise SlicerProfileError("Prusa elevated or stacked objects are not yet approved.")
+    if max_faces is not None and (
+            type(max_faces) is not int or not 1 <= max_faces <= 1_500_000):
+        raise SlicerProfileError("Invalid bounded native STL triangle budget.")
+    if max_stl_bytes is not None and (
+            type(max_stl_bytes) is not int or max_stl_bytes <= 84
+            or max_stl_bytes > 80 * 1024 * 1024):
+        raise SlicerProfileError("Invalid bounded native STL byte budget.")
 
-        def mapped(point):
-            x, y, z = (float(point[i]) - pivot[i] for i in range(3))
-            return (matrix[0]*x + matrix[3]*y + matrix[6]*z + matrix[9],
-                    matrix[1]*x + matrix[4]*y + matrix[7]*z + matrix[10],
-                    matrix[2]*x + matrix[5]*y + matrix[8]*z)
-
-        lower = [float("inf")] * 3
-        upper = [float("-inf")] * 3
-        for triangle in _triangles(raw):
-            for point in triangle:
-                coords = mapped(point)
-                for axis in range(3):
-                    lower[axis] = min(lower[axis], coords[axis])
-                    upper[axis] = max(upper[axis], coords[axis])
-        if (not all(math.isfinite(v) for v in lower + upper) or
-                lower[0] < -0.05 or upper[0] > bed_width + 0.05 or
-                lower[1] < -0.05 or upper[1] > bed_depth + 0.05):
-            raise SlicerProfileError(
-                "Prusa model %d extends beyond the native build plate." % index)
-        dz = -lower[2]
-        for triangle in _triangles(raw):
-            coords = [(x, y, z + dz) for x, y, z in (mapped(point) for point in triangle)]
-            (ax, ay, az), (bx, by, bz), (cx, cy, cz) = coords
-            ux, uy, uz = bx-ax, by-ay, bz-az
-            vx, vy, vz = cx-ax, cy-ay, cz-az
-            nx, ny, nz = uy*vz-uz*vy, uz*vx-ux*vz, ux*vy-uy*vx
-            norm = math.hypot(nx, ny, nz)
-            normal = (nx/norm, ny/norm, nz/norm) if norm > 1e-12 else (0., 0., 0.)
-            flat = (*normal, *coords[0], *coords[1], *coords[2])
-            if any(not math.isfinite(v) or abs(v) > 1_000_000 for v in flat):
-                raise SlicerProfileError("Prusa transformed geometry is not finite.")
-            output.extend(struct.pack("<12fH", *flat, 0))
-            count += 1
-    if not 0 < count <= max_faces or len(output) > max_stl_bytes:
-        raise SlicerProfileError("Prusa model plate exceeds native STL limit.")
-    struct.pack_into("<I", output, 80, count)
-    return bytes(output)
+    from .slicer_placed_stl import build_placed_stl
+    result = build_placed_stl(
+        objects_with_stl, bed_width=bed_width, bed_depth=bed_depth)
+    count = struct.unpack_from("<I", result, 80)[0]
+    if ((max_faces is not None and count > max_faces)
+            or (max_stl_bytes is not None and len(result) > max_stl_bytes)):
+        raise SlicerProfileError("Prusa plate exceeds the explicitly requested native STL budget.")
+    return result
