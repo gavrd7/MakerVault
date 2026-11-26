@@ -41,8 +41,9 @@ def validate_prusa_two_support_plate(plate):
         if (abs(float(row.get("z_mm", 0))) > 1e-6
                 or abs(float(row.get("rotation_deg", 0))) > 1e-6
                 or any(abs(float(v)) > 1e-6 for v in row.get("rotation_xyz_deg", [0, 0]))
+                or abs(float(row.get("scale_percent", 100))-100) > 1e-6
                 or any(abs(float(v)-100) > 1e-6 for v in
-                       row.get("scale_xyz_percent", [row.get("scale_percent", 100)] * 3))):
+                       row.get("scale_xyz_percent", [100, 100, 100]))):
             raise ValueError("Prusa independent painted objects must be upright and unscaled.")
     enforcers = (plate[painted[0]].get("support_paint") or {}).get("regions")
     if (not isinstance(enforcers, list) or not enforcers
