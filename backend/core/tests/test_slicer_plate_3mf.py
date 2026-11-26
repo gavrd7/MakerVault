@@ -47,7 +47,7 @@ class PlateTriangleBudgetTests(SimpleTestCase):
             return 300_000, width, depth
 
         with (patch.object(plate, "_render_mesh", side_effect=counted_render),
-              patch.object(plate, "MAX_PLATE_TRIANGLES", 800_000)):
+              patch.object(plate, "plate_triangle_budget", return_value=800_000)):
             with self.assertRaisesRegex(SlicerProfileError, "Total plate triangles"):
                 build_plate_3mf(items, bed_width=220, bed_depth=220)
 
@@ -62,7 +62,7 @@ class UniqueSourceBudgetTests(SimpleTestCase):
               "rotation_deg": 0, "scale_percent": 100}, raw)
             for i in range(20)
         ]
-        with patch.object(plate, "MAX_SOURCE_TOTAL", len(raw)):
+        with patch.object(plate, "source_input_budget", return_value=len(raw)):
             project = build_plate_3mf(models, bed_width=220, bed_depth=220)
         with zipfile.ZipFile(io.BytesIO(project)) as archive:
             root = ET.fromstring(archive.read("3D/3dmodel.model"))
@@ -81,7 +81,7 @@ class UniqueSourceBudgetTests(SimpleTestCase):
             ({"x_mm": 35, "y_mm": 0,
               "rotation_deg": 0, "scale_percent": 100}, altered),
         ]
-        with patch.object(plate, "MAX_SOURCE_TOTAL", len(raw)):
+        with patch.object(plate, "source_input_budget", return_value=len(raw)):
             with self.assertRaisesRegex(
                     SlicerProfileError, "unique plate source model size"):
                 build_plate_3mf(models, bed_width=220, bed_depth=220)
@@ -95,7 +95,7 @@ class ResourceBudgetTests(SimpleTestCase):
             ({"x_mm": x, "y_mm": 0, "rotation_deg": 0, "scale_percent": 100},
              source) for x in (-35, 0, 35)
         ]
-        with patch.object(plate, "MAX_MODEL_XML_BYTES", 65536):
+        with patch.object(plate, "xml_geometry_budget", return_value=65536):
             with self.assertRaisesRegex(SlicerProfileError, "expanded XML budget"):
                 build_plate_3mf(objects, bed_width=220, bed_depth=220)
 
