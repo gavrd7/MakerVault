@@ -39,7 +39,7 @@ test("MMU purge matrix is directional and blank cells block slicing",()=>{
 
 test("Interactive slicer blocks incomplete Prusa mapping but keeps draft saving available",()=>{
   assert.match(prepare,/const prusaNativeReady = activeEngine === "prusaslicer"/);
-  assert.match(prepare,/const materialRoutingPending = prusaNativeTools && activeEngine==="prusaslicer"/);
+  assert.match(prepare,/const prusaMaterialRoutingPending = prusaNativeTools && activeEngine==="prusaslicer"/);
   assert.match(prepare,/!prusaNativeReady/);
   assert.match(prepare,/<PrusaNativeToolEditor/);
   assert.match(prepare,/onPrusaNativeToolsChange/);
