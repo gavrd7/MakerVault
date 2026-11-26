@@ -255,12 +255,37 @@ def warm_streamed_high_fidelity(asset):
     """
     from .slicer_layer_preview import (
         streamed_gcode_lines, MAX_FULL_PREVIEW_SEGMENTS)
-    heights = complete_preview_inventory(asset).get("layers", [])
+    summary = complete_preview_inventory(asset)
+    heights = summary.get("layers", [])
     if not 1 <= len(heights) <= MAX_INDEX_LAYERS:
         return False
     index_key = preview_index_key(asset, "full-v1")
     if cached_batch(index_key, heights[:MAX_BATCH_LAYERS]) is not None:
         return True
+
+    # Most 20-model prints fit the per-job geometry budget even if their
+    # original G-code is >32 MiB. Parse the complete source once where live
+    # RAM can support all retained Python paths and their JSON encoding.
+    # Larger jobs automatically fall back to bounded 64-layer passes; neither
+    # path loses extrusion geometry.
+    from .slicer_resource_budget import resource_snapshot
+    total_moves = summary.get("segment_count")
+    available = resource_snapshot()["available_bytes"]
+    if (type(total_moves) is int and 0 < total_moves <= MAX_FULL_PREVIEW_SEGMENTS
+            and available is not None
+            and total_moves * 850 + 512 * 1024 * 1024 < available // 2):
+        with asset.file.storage.open(asset.file.name, "rb") as handle:
+            combined = layer_batch_toolpaths(
+                streamed_gcode_lines(handle), heights,
+                high_fidelity=True, max_requested_layers=len(heights),
+                max_total_segments=MAX_FULL_PREVIEW_SEGMENTS,
+            )
+        if combined["complete"]:
+            return _store_overview(index_key, heights, combined["layers"],
+                                   0, full=True)
+        # The full-pass admission is only an optimisation, not a stopping
+        # condition for a dense layer or unexpectedly high extrusion count.
+
     for offset in range(0, len(heights), MAX_BATCH_LAYERS):
         with asset.file.storage.open(asset.file.name, "rb") as handle:
             result = layer_batch_toolpaths(
