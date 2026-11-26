@@ -2,8 +2,9 @@
 
 Source is an already owner-resolved immutable native printer INI. This
 classification does not authorize printer transfer or multi-colour slicing.
-Prusa MMU is a single-nozzle changer; XL with two or five independent hotends
-is a different physical topology even with identical logical T0/T1 G-code.
+Prusa MMU is a single-nozzle changer; XL has up to five independent hotends.
+The INDX's up-to-eight passive tools need a separate, pinned vendor profile
+and physical pickup/heater qualification; parsing eight tools does NOT enable it.
 """
 import math
 from .slicer_prusa_native_resolution import parse_prusa_profile
@@ -16,15 +17,15 @@ def prusa_machine_topology(printer_ini):
         nozzles = [float(x.strip()) for x in raw.split(",")]
     except (TypeError, ValueError):
         raise ValueError("Prusa printer has an invalid native nozzle vector.") from None
-    if not 1 <= len(nozzles) <= 5 or any(
+    if not 1 <= len(nozzles) <= 8 or any(
             not math.isfinite(x) or not .1 <= x <= 1.2 for x in nozzles):
         raise ValueError("Prusa printer has unsupported nozzle count or dimensions.")
     changer = parsed.get("single_extruder_multi_material", "0").strip().lower()
     if changer not in ("0", "1", "true", "false"):
         raise ValueError("Prusa printer material changer type is invalid.")
     same_nozzle = changer in ("1", "true")
-    if same_nozzle and len(nozzles) == 1:
-        raise ValueError("Prusa MMU requires at least two logical material tools.")
+    if same_nozzle and not 2 <= len(nozzles) <= 5:
+        raise ValueError("Prusa MMU requires two to five logical material tools.")
     if parsed.get("binary_gcode", "0").strip().lower() not in ("", "0", "no", "false"):
         raise ValueError("Prusa binary G-code cannot enter text preview/worker.")
     return {
@@ -33,6 +34,8 @@ def prusa_machine_topology(printer_ini):
         "logical_tool_count": len(nozzles),
         "physical_nozzle_count": 1 if same_nozzle else len(nozzles),
         "nozzle_diameters_mm": tuple(nozzles),
+        "native_runtime_verified": len(nozzles) <= 5,
+        "toolchange_mechanism_verified": len(nozzles) <= 5,
     }
 
 
