@@ -12,6 +12,8 @@ from core.slicer_prusa_colour_project import build_prusa_colour_candidate
 from core.slicer_profiles import SlicerProfileError
 from core.tests.test_slicer_prusa_machine_topology import ini
 from scripts.prusa_generate_mmu_paint import fixture
+from slicer_worker.prusa_material_validation import validate_prusa_material_candidate
+from slicer_worker.runner import WorkerError
 
 NS = "{http://schemas.microsoft.com/3dmanufacturing/core/2015/02}"
 
@@ -47,8 +49,48 @@ class PrusaNativeColourProjectTests(TestCase):
                              for x in metadata),1)
         self.assertEqual(config.find("./object/volume/metadata[@key='extruder']").get("value"),"1")
 
+    def test_five_tool_prusa_leaf_states_are_verified_by_independent_worker(self):
+        machine = ini("0.4,0.4,0.4,0.4,0.4", "1")
+        for selected, state in ((1, "8"), (2, "0C"), (3, "1C"), (4, "2C")):
+            with self.subTest(native_tool=selected):
+                data = self.candidate(tool_map={1:selected})
+                with zipfile.ZipFile(io.BytesIO(data)) as source:
+                    model = source.read("3D/3dmodel.model")
+                self.assertIn(('slic3rpe:mmu_segmentation="' + state + '"').encode(), model)
+                receipt = validate_prusa_material_candidate(
+                    data, printer_ini=machine, colour=True)
+                self.assertEqual(receipt["tools"], (1, selected+1))
+                self.assertGreater(receipt["colour_facets"], 0)
+
+    def test_painted_tools_outside_native_printer_capacity_are_blocked(self):
+        candidate = self.candidate(tool_map={1:4})
+        for count in (2,3,4):
+            with self.subTest(logical_count=count), self.assertRaises(WorkerError):
+                validate_prusa_material_candidate(
+                    candidate, printer_ini=ini(",".join(["0.4"]*count), "1"),
+                    colour=True)
+
+    def test_malformed_or_recursive_painted_leaf_states_fail_closed(self):
+        data = self.candidate(tool_map={1:2})
+        with zipfile.ZipFile(io.BytesIO(data)) as source:
+            parts = {name:source.read(name) for name in source.namelist()}
+        for invalid in (b'9', b'3C', b'8C', b'0c', b''):
+            with self.subTest(state=invalid):
+                altered = dict(parts)
+                altered["3D/3dmodel.model"] = altered["3D/3dmodel.model"].replace(
+                    b'slic3rpe:mmu_segmentation="0C"',
+                    b'slic3rpe:mmu_segmentation="' + invalid + b'"')
+                output = io.BytesIO()
+                with zipfile.ZipFile(output, "w", compression=zipfile.ZIP_DEFLATED) as target:
+                    for name, content in altered.items():
+                        target.writestr(name, content)
+                with self.assertRaises(WorkerError):
+                    validate_prusa_material_candidate(
+                        output.getvalue(),
+                        printer_ini=ini("0.4,0.4,0.4,0.4,0.4", "1"), colour=True)
+
     def test_invalid_tool_mapping_and_mixed_features_refused(self):
-        for mapping in ({1:2},{1:True},{True:1},{}, {1:0}):
+        for mapping in ({1:5},{1:True},{True:1},{}, {1:0}, {1:-1}, {1:"2"}):
             with self.subTest(mapping=mapping):
                 if mapping == {1:0}:
                     # A painting assignment to T0 cannot prove a second tool.
