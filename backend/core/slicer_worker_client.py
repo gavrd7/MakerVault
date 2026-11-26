@@ -7,6 +7,7 @@ URL/token environment settings may select a remote destination.
 import base64
 import hashlib
 import json
+import math
 import os
 from urllib.parse import urlsplit
 import uuid
