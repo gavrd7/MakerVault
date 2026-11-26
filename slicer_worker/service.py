@@ -164,7 +164,7 @@ def _decode_payload(payload):
         files[key] = raw
     if payload.get("creality_placed_stl") is True:
         from .stl_validation import validate_stl
-        validate_stl(files["model"])
+        validate_stl(files["model"], max_triangles=1_500_000)
         files["creality_placed_stl"] = True
     if payload.get("prusa_placed_stl") is True:
         files["prusa_placed_stl"] = True
