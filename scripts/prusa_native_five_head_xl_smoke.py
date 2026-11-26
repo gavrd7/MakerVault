@@ -64,7 +64,8 @@ def main(binary,vendor):
     checked=_decode_payload(candidate)
     assert checked["prusa_offline_xl"]["tools"]==tools
     for change in (
-        {"prusa_offline_xl":{"tools":[1,2,3,4,4]}},
+        {"prusa_offline_xl":{"tools":[1,1,1,1,1]}},
+        {"prusa_offline_xl":{"tools":[1,2,3,4]}},
         {"prusa_offline_xl":{"tools":[1,2,3,4,6]}},
         {"prusa_offline_xl":{"tools":[1,2,3,4,5],"tower":[55,150,0,360,360]}},
         {"prusa_offline_mmu":{"tools":tools,"tower":[55,150,0,360,360]}},
