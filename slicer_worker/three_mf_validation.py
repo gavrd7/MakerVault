@@ -84,7 +84,7 @@ def validate_worker_3mf(data, *, native_tool_count=None, allow_creality_combined
                 raise WorkerError("Unsupported 3MF package members.")
             if LAYER_RANGES in names and package.getinfo(LAYER_RANGES).file_size > 32768:
                 raise WorkerError("Native layer range metadata is oversized.")
-            if PLATE_MANIFEST in names and package.getinfo(PLATE_MANIFEST).file_size > 8192:
+            if PLATE_MANIFEST in names and package.getinfo(PLATE_MANIFEST).file_size > 65536:
                 raise WorkerError("3MF plate metadata is oversized.")
             if any(part.file_size <= 0 or part.file_size > 80 * 1024 * 1024
                    or part.is_dir() for part in info):
@@ -186,8 +186,8 @@ def validate_worker_3mf(data, *, native_tool_count=None, allow_creality_combined
         raise WorkerError("Unexpected 3MF namespace.")
     objects = root.findall("./{%s}resources/{%s}object" % (CORE_NS, CORE_NS))
     items = root.findall("./{%s}build/{%s}item" % (CORE_NS, CORE_NS))
-    if not 1 <= len(objects) <= 12 or len(items) != len(objects):
-        raise WorkerError("3MF build must contain one to twelve objects.")
+    if not 1 <= len(objects) <= 200 or len(items) != len(objects):
+        raise WorkerError("3MF build must contain one to 200 objects.")
     ids = {obj.attrib.get("id") for obj in objects}
     if len(ids) != len(objects) or any(item.attrib.get("objectid") not in ids for item in items):
         raise WorkerError("3MF build references unknown objects.")
