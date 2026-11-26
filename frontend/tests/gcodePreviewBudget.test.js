@@ -1,6 +1,6 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { progressiveLayerBatchSize } from "../src/utils/gcodePreviewBudget";
+import { progressiveLayerBatchSize } from "../src/utils/gcodePreviewBudget.js";
 
 describe("progressive full-model G-code preview sizing", () => {
   it("preserves the normal 64-layer request on small prints", () => {
