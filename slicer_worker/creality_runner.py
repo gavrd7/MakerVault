@@ -13,7 +13,7 @@ import signal
 import subprocess
 
 from .runner import (
-    DEFAULT_TIMEOUT_SECONDS, MAX_GCODE_BYTES, MAX_MODEL_BYTES,
+    DEFAULT_TIMEOUT_SECONDS, MAX_NATIVE_SLICE_TIMEOUT_SECONDS, MAX_GCODE_BYTES, MAX_MODEL_BYTES,
     MAX_PROFILE_BYTES, WorkerError, _regular_file, _output_path,
 )
 from .stl_validation import StlValidationError, validate_stl
@@ -209,7 +209,7 @@ def creality_command(binary: Path, workdir: Path):
 
 
 def run_creality(binary: Path, workdir: Path, *, timeout_seconds: int = DEFAULT_TIMEOUT_SECONDS):
-    if not isinstance(timeout_seconds, int) or not 1 <= timeout_seconds <= 900:
+    if type(timeout_seconds) is not int or not 1 <= timeout_seconds <= MAX_NATIVE_SLICE_TIMEOUT_SECONDS:
         raise WorkerError("Invalid slice timeout.")
     workdir = Path(workdir).resolve(strict=True)
     if not workdir.is_dir():
