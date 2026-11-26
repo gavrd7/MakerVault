@@ -16,7 +16,7 @@ from .prusa_material_validation import (
 from .runner import WorkerError
 
 NS="{http://schemas.microsoft.com/3dmanufacturing/core/2015/02}"
-WORD=re.compile(r"(?:^|\\s)([XYZE])\\s*([-+]?(?:\\d+(?:\\.\\d*)?|\\.\\d+)(?:[Ee][-+]?\\d+)?)",re.I)
+WORD=re.compile(r"(?:^|\s)([XYZE])\s*([-+]?(?:\d+(?:\.\d*)?|\.\d+)(?:[Ee][-+]?\d+)?)",re.I)
 PAINTED_STATES={"8":1,"0C":2,"1C":3,"2C":4}
 
 
