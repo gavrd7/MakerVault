@@ -275,7 +275,6 @@ jobs:
 
       - name: Research five-slot native MMU worker deposition
         id: prusa_five_tool_research
-        continue-on-error: true
         run: |
           set -euo pipefail
           docker run --rm --network none --user 10001:10001 \
@@ -287,11 +286,6 @@ jobs:
             /tmp/five_mmu.py \
             /opt/engine-store/versions/prusaslicer/2.9.7/bin/prusa-slicer \
             /opt/engine-store/versions/prusaslicer/2.9.7/resources/profiles/PrusaResearch.ini
-
-      - name: Record incomplete five-tool native MMU qualification
-        if: ${{ steps.prusa_five_tool_research.outcome == 'failure' }}
-        run: |
-          echo "::warning title=Prusa five-tool MMU::Five simultaneously assigned materials were not qualified; retain five-tool production guard."
 
       - name: Qualify native Prusa XL independent-head offline worker
         id: prusa_xl_offline_research
