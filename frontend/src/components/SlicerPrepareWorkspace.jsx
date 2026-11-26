@@ -1117,7 +1117,25 @@ export default function SlicerPrepareWorkspace({
     ? "Native export not yet verified for " + incompatibleEdits.map(key=>FEATURE_NAMES[key]).join(", ") +
       ". The project is preserved; choose an engine with verified native support before slicing."
     : "";
+  const prusaUnsupportedGlobalKeys = activeEngine==="prusaslicer" &&
+    prusaNativeTools ? Object.keys(processOverrides||{}).filter(key=>![
+      "layer_height","wall_loops","top_shell_layers",
+      "bottom_shell_layers","sparse_infill_density"
+    ].includes(key)) : [];
+  const prusaNativeBlockReason = activeEngine==="prusaslicer" &&
+    prusaNativeTools && !prusaNativeReady
+      ? prusaUnsupportedGlobalKeys.length
+        ? "Prusa MMU/XL native slicing cannot apply these global settings yet: " +
+          prusaUnsupportedGlobalKeys.join(", ") +
+          ". Restore them to the imported native process defaults or save this draft."
+        : objects.some(row=>row.material_slot)
+        ? "Prusa virtual tools use native T0–T4 assignments, not printer filament bays. Clear the models' physical slot assignments."
+        : objects.length<2 || objects.length>5
+        ? "Prusa MMU/XL offline native slicing currently needs two to five independently assigned models."
+        : "Complete the Prusa native tool editor, assign all model tools and owned filament presets, and specify an MMU tower and purge matrix when required."
+      : "";
   const sliceBlockReason = draftBlockReason ||
+    prusaNativeBlockReason ||
     paintingRoutingNotice ||
     crealityExperimentalPaintReason ||
     nativeEditReason ||
