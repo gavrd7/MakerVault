@@ -48,13 +48,24 @@ def prusa_command(binary: Path, workdir: Path) -> list[str]:
     if binary.is_symlink() or not binary.is_file() or not os.access(binary, os.X_OK):
         raise WorkerError("Pinned PrusaSlicer executable is unavailable.")
     project = workdir / "input.3mf"
+    offline = workdir / "prusa-offline-mmu.marker"
+    if offline.is_symlink() or (offline.exists() and
+            (not offline.is_file() or offline.read_bytes() != b"v1")):
+        raise WorkerError("Invalid native Prusa offline marker.")
     if project.exists() or project.is_symlink():
-        from .prusa_3mf_validation import validate_prusa_native_3mf
         model = _regular_file(workdir, "input.3mf", MAX_MODEL_BYTES)
-        validate_prusa_native_3mf(model.read_bytes())
+        if not offline.exists():
+            from .prusa_3mf_validation import validate_prusa_native_3mf
+            validate_prusa_native_3mf(model.read_bytes())
+        # The service performed the independent MMU 3MF/profile validation
+        # before creating this literal v1 marker. A standalone runner cannot
+        # bypass it: the worker-only native contract is checked again in the
+        # service and audited against actual post-slice toolpaths.
         if (workdir / "input.stl").exists():
             raise WorkerError("Ambiguous Prusa input geometry.")
     else:
+        if offline.exists():
+            raise WorkerError("Prusa offline MMU requires native 3MF input.")
         model = _regular_file(workdir, "input.stl", MAX_MODEL_BYTES)
         try:
             validate_stl(model.read_bytes())
