@@ -6,6 +6,7 @@ import zipfile
 from xml.etree import ElementTree as ET
 
 from .runner import WorkerError
+from .resource_budget import model_input_budget, operation_memory_budget
 
 NS = "{http://schemas.microsoft.com/3dmanufacturing/core/2015/02}"
 CONFIG = "Metadata/Slic3r_PE_model.config"
@@ -86,13 +87,13 @@ def _validate_layer_ranges(root, object_count):
 
 
 def validate_prusa_native_3mf(data):
-    _require(isinstance(data, bytes) and 0 < len(data) <= 32 * 1024 * 1024)
+    _require(isinstance(data, bytes) and 0 < len(data) <= model_input_budget())
     try:
         with zipfile.ZipFile(io.BytesIO(data)) as z:
             infos = z.infolist()
             names = {i.filename for i in infos}
             _require(len(infos) == len(names) and names in (PARTS, PARTS | {LAYER_RANGES}))
-            _require(all(0 < i.file_size <= (80 * 1024 * 1024 if i.filename == "3D/3dmodel.model"
+            _require(all(0 < i.file_size <= ((operation_memory_budget(reserve_bytes=256 * 1024 * 1024, expansion_factor=12) or 80 * 1024 * 1024) if i.filename == "3D/3dmodel.model"
                                              else 65536) and not i.is_dir() for i in infos))
             layer_root = _xml(z.read(LAYER_RANGES)) if LAYER_RANGES in names else None
             model = _xml(z.read("3D/3dmodel.model"))
@@ -144,9 +145,9 @@ def validate_prusa_native_3mf(data):
             _require(mesh.tag == NS + "mesh" and not mesh.attrib and
                      [n.tag for n in mesh] == [NS + "vertices", NS + "triangles"])
             verts, faces = mesh
-            _require(not verts.attrib and not faces.attrib and 3 <= len(verts) <= 3*LIMIT and len(faces) > 0)
+            _require(not verts.attrib and not faces.attrib and 3 <= len(verts) <= 3*(operation_memory_budget(reserve_bytes=256 * 1024 * 1024, expansion_factor=1200) or LIMIT) and len(faces) > 0)
             count += len(faces)
-            _require(count <= LIMIT)
+            _require(count <= (operation_memory_budget(reserve_bytes=256 * 1024 * 1024, expansion_factor=1200) or LIMIT))
             for vertex in verts:
                 _require(vertex.tag == NS + "vertex" and not len(vertex) and set(vertex.attrib) == {"x", "y", "z"})
                 _require(all(math.isfinite(float(v)) and abs(float(v)) <= 20000 for v in vertex.attrib.values()))
