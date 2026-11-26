@@ -17,7 +17,8 @@ from slicer_worker.runner import WorkerError
 
 
 def profile(kind, owner_id=42, engine="prusaslicer"):
-    return SimpleNamespace(kind=kind, owner_id=owner_id, engine=engine)
+    return SimpleNamespace(kind=kind, owner_id=owner_id, engine=engine,
+                           engine_version="2.9.7")
 
 
 class PrusaOfflineMmuPreflightTests(TestCase):
