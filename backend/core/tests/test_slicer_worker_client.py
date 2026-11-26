@@ -177,6 +177,45 @@ class SlicerWorkerClientTests(SimpleTestCase):
                                    b"model", b"printer", b"one", b"process",
                                    model_format=model_format, filament_profiles=profiles)
 
+
+    @patch("core.slicer_worker_client._session")
+    @patch("core.slicer_worker_client.worker_settings",
+           return_value=("http://slicer-worker:8088", "x" * 40))
+    def test_offline_prusa_mmu_client_uses_distinct_gated_contract(self, settings, session):
+        import json
+        gcode = b"; authenticated offline MMU fixture\\nT0\\nT1\\n"
+        response = Mock(status_code=200,headers={"Content-Length":"300"})
+        response.iter_content.return_value=[json.dumps({
+            "status":"completed","gcode":base64.b64encode(gcode).decode(),
+            "bytes":len(gcode),"sha256":hashlib.sha256(gcode).hexdigest(),
+        }).encode()]
+        session.return_value.post.return_value=response
+        result=run_remote_job(
+            uuid.uuid4(),"prusaslicer","2.9.7",b"project",b"printer",
+            b"filament",b"process",model_format="3mf",
+            prusa_offline_mmu={"tools":(1,2),"tower":(55,150,0,250,210)})
+        self.assertEqual(result,gcode)
+        sent=json.loads(session.return_value.post.call_args.kwargs["data"])
+        self.assertEqual(sent["prusa_offline_mmu"],
+                         {"tools":[1,2],"tower":[55,150,0,250,210]})
+        self.assertNotIn("filament_profiles",sent)
+        for change in (
+            {"engine":"orcaslicer"},
+            {"version":"2.9.6"},
+            {"model_format":"stl"},
+            {"prusa_offline_mmu":{"tools":[1,2],"tower":[float("nan"),150,0,250,210]}},
+            {"prusa_offline_mmu":{"tools":[1,True],"tower":[55,150,0,250,210]}},
+            {"prusa_offline_mmu":{"tools":[1,2],"tower":[55,150,0,250,210],"cmd":"unsafe"}},
+        ):
+            with self.subTest(change=change),self.assertRaises(SlicerWorkerError):
+                arguments=dict(engine="prusaslicer",version="2.9.7",
+                               model_format="3mf",prusa_offline_mmu={
+                                   "tools":[1,2],"tower":[55,150,0,250,210]})
+                arguments.update(change)
+                run_remote_job(uuid.uuid4(),arguments.pop("engine"),
+                               arguments.pop("version"),
+                               b"project",b"printer",b"filament",b"process",**arguments)
+
     def test_dangerous_engine_or_invalid_inputs_are_rejected_before_transport(self):
         with self.assertRaises(SlicerWorkerError):
             run_remote_job(uuid.uuid4(), "/bin/sh", "1", b"stl", b"p", b"f", b"process")
