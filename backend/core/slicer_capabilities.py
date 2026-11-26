@@ -36,6 +36,22 @@ def native_capabilities(engine, version):
                   "work; native slicing is still pending.")
     result = {key: {"status": state, "reason": reason} for key in FEATURES}
     if engine == "prusaslicer" and version == "2.9.7":
+        result["colour_paint"] = {
+            "status": "test_only",
+            "reason": ("Native Prusa 2.9.7 MMU painted front-face toolpaths are "
+                       "available for offline testing with one upright model, "
+                       "T0 base, exactly one painted T1–T4 swatch, explicit "
+                       "owned filament palette and complete wipe-tower purge. "
+                       "Other faces, mixed edits, XL facet painting and printer "
+                       "submission are not qualified."),
+        }
+        result["seam_paint"] = {
+            "status": "test_only",
+            "reason": ("Only one upright front-face native Prusa 2.9.7 seam "
+                       "enforcer has passed a spatial first-wall G-code audit. "
+                       "Back/side faces, seam blockers and mixed edits remain "
+                       "blocked; this is offline slicing only."),
+        }
         result["support_paint"] = {
             "status": "verified",
             "reason": ("Native Prusa 2.9.7 support enforcer and blocker masks "
