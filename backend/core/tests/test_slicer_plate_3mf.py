@@ -47,9 +47,64 @@ class PlateTriangleBudgetTests(SimpleTestCase):
             return 300_000, width, depth
 
         with (patch.object(plate, "_render_mesh", side_effect=counted_render),
-              patch.object(plate, "MAX_PLATE_TRIANGLES", 800_000)):
+              patch.object(plate, "plate_triangle_budget", return_value=800_000)):
             with self.assertRaisesRegex(SlicerProfileError, "Total plate triangles"):
                 build_plate_3mf(items, bed_width=220, bed_depth=220)
+
+
+class UniqueSourceBudgetTests(SimpleTestCase):
+    def test_twenty_repeated_source_instances_count_input_bytes_once(self):
+        from core import slicer_plate_3mf as plate
+        raw = fixture_stl()
+        models = [
+            ({"x_mm": -80 + (i % 5) * 40,
+              "y_mm": -60 + (i // 5) * 40,
+              "rotation_deg": 0, "scale_percent": 100}, raw)
+            for i in range(20)
+        ]
+        with patch.object(plate, "source_input_budget", return_value=len(raw)):
+            project = build_plate_3mf(models, bed_width=220, bed_depth=220)
+        with zipfile.ZipFile(io.BytesIO(project)) as archive:
+            root = ET.fromstring(archive.read("3D/3dmodel.model"))
+        self.assertEqual(
+            len(root.findall(".//{%s}build/{%s}item" % (NS, NS))), 20)
+
+    def test_different_source_bytes_remain_cumulative(self):
+        from core import slicer_plate_3mf as plate
+        raw = fixture_stl()
+        # The ASCII fixture permits a deterministic, still-valid second mesh.
+        altered = raw.replace(b"10", b"11")
+        self.assertNotEqual(raw, altered)
+        models = [
+            ({"x_mm": -35, "y_mm": 0,
+              "rotation_deg": 0, "scale_percent": 100}, raw),
+            ({"x_mm": 35, "y_mm": 0,
+              "rotation_deg": 0, "scale_percent": 100}, altered),
+        ]
+        with patch.object(plate, "source_input_budget", return_value=len(raw)):
+            with self.assertRaisesRegex(
+                    SlicerProfileError, "unique plate source model size"):
+                build_plate_3mf(models, bed_width=220, bed_depth=220)
+
+
+class RepeatedNativeMeshReuseTests(SimpleTestCase):
+    def test_twenty_identical_objects_are_built_once_but_remain_independent(self):
+        from core import slicer_plate_3mf as plate
+        source = fixture_stl()
+        rows = [
+            ({"x_mm": -80 + (i % 5) * 40,
+              "y_mm": -60 + (i // 5) * 40,
+              "rotation_deg": 0, "scale_percent": 100}, source)
+            for i in range(20)
+        ]
+        with patch.object(plate, "_render_mesh", wraps=plate._render_mesh) as render:
+            project = build_plate_3mf(rows, bed_width=220, bed_depth=220)
+        self.assertEqual(render.call_count, 1)
+        with zipfile.ZipFile(io.BytesIO(project)) as archive:
+            root = ET.fromstring(archive.read("3D/3dmodel.model"))
+        q = "{" + NS + "}"
+        self.assertEqual(len(root.findall("./"+q+"resources/"+q+"object")), 20)
+        self.assertEqual(len(root.findall("./"+q+"build/"+q+"item")), 20)
 
 
 class ResourceBudgetTests(SimpleTestCase):
@@ -60,7 +115,7 @@ class ResourceBudgetTests(SimpleTestCase):
             ({"x_mm": x, "y_mm": 0, "rotation_deg": 0, "scale_percent": 100},
              source) for x in (-35, 0, 35)
         ]
-        with patch.object(plate, "MAX_MODEL_XML_BYTES", 65536):
+        with patch.object(plate, "xml_geometry_budget", return_value=65536):
             with self.assertRaisesRegex(SlicerProfileError, "expanded XML budget"):
                 build_plate_3mf(objects, bed_width=220, bed_depth=220)
 
@@ -71,9 +126,9 @@ class MeshStreamingTests(SimpleTestCase):
         original = plate._triangles
         invocations = []
 
-        def instrumented(raw):
+        def instrumented(raw, **kwargs):
             invocations.append(1)
-            return original(raw)
+            return original(raw, **kwargs)
 
         source = fixture_stl()
         element = Element("object")

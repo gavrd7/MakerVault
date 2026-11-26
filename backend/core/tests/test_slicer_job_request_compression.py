@@ -1,6 +1,7 @@
 """Large paint regions must transit losslessly without weakening admission checks."""
 import gzip
 import json
+from unittest.mock import patch
 
 from django.test import RequestFactory, SimpleTestCase
 
@@ -58,8 +59,13 @@ class LargeSlicerJobPayloadTests(SimpleTestCase):
 
     def test_internal_draft_still_rejects_unbounded_expanded_json(self):
         from core.slicer_api import _draft
-        with self.assertRaisesRegex(ValueError, "48 MiB"):
-            _draft(None, {"settings": {"support_paint": "x" * (MAX_SLICER_JSON_BYTES + 1)}})
+        # The request limit is live-memory based; force a known headroom so
+        # this checks the size gate rather than the following engine gate.
+        with patch("core.slicer_api.slicer_configuration_limits",
+                   return_value=(MAX_SLICER_REQUEST_BYTES, MAX_SLICER_JSON_BYTES)):
+            with self.assertRaisesRegex(ValueError, "expanded request memory"):
+                _draft(None, {"settings": {"support_paint":
+                                           "x" * (MAX_SLICER_JSON_BYTES + 1)}})
 
     def test_normal_json_remains_accepted(self):
         data = {"engine": "orcaslicer", "settings": {"plate_objects": []}}
@@ -80,5 +86,7 @@ class LargeSlicerJobPayloadTests(SimpleTestCase):
 
     def test_expansion_limit_is_enforced_before_parsing(self):
         raw = b"x" * (MAX_SLICER_JSON_BYTES + 1)
-        with self.assertRaisesRegex(ValueError, "expanded safety limit"):
-            _slicer_request_json(self.request(gzip.compress(raw), encoding="gzip"))
+        with patch("core.slicer_api.slicer_configuration_limits",
+                   return_value=(MAX_SLICER_REQUEST_BYTES, MAX_SLICER_JSON_BYTES)):
+            with self.assertRaisesRegex(ValueError, "expanded safety limit"):
+                _slicer_request_json(self.request(gzip.compress(raw), encoding="gzip"))
