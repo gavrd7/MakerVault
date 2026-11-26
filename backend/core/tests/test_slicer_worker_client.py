@@ -7,6 +7,35 @@ from core.slicer_worker_client import SlicerWorkerError, run_remote_job, worker_
 
 
 class SlicerWorkerClientTests(SimpleTestCase):
+    @patch("core.slicer_worker_client._session")
+    @patch("core.slicer_worker_client.worker_settings",
+           return_value=("http://slicer-worker:8088", "x" * 40))
+    def test_adaptive_native_timeout_keeps_authenticated_transport_bounded(
+            self, settings, session):
+        import json
+        output = b"; generated\\nG1 X1 Y1 E1\\n"
+        response = Mock()
+        response.status_code = 200
+        response.headers = {"Content-Length": "500"}
+        response.iter_content.return_value = [json.dumps({
+            "status": "completed", "gcode": base64.b64encode(output).decode(),
+            "bytes": len(output), "sha256": hashlib.sha256(output).hexdigest(),
+        }).encode()]
+        session.return_value.post.return_value = response
+        got = run_remote_job(uuid.uuid4(), "prusaslicer", "2.9.7",
+                             b"model", b"printer", b"filament", b"process",
+                             native_timeout_seconds=1800)
+        self.assertEqual(got, output)
+        called = session.return_value.post.call_args.kwargs
+        payload = json.loads(called["data"])
+        self.assertEqual(payload["slice_timeout_seconds"], 1800)
+        self.assertEqual(called["timeout"], (3, 1860))
+        for bad in (0, 10801, "1800", True):
+            with self.subTest(bad=bad), self.assertRaises(SlicerWorkerError):
+                run_remote_job(uuid.uuid4(), "prusaslicer", "2.9.7",
+                               b"model", b"printer", b"filament", b"process",
+                               native_timeout_seconds=bad)
+
     def test_unconfigured_and_invalid_urls_are_rejected(self):
         with patch.dict("os.environ", {}, clear=True):
             with self.assertRaises(SlicerWorkerError):
