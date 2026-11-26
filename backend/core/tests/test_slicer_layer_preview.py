@@ -524,6 +524,36 @@ class FullLayerEndpointTests(TestCase):
             self.assertEqual(cached["X-MakerVault-Preview-Cache"], "hit")
             self.assertIn("preview;dur=", cached["Server-Timing"])
 
+    def test_large_file_warmer_streams_bounded_batches_and_publishes_exact_cache(self):
+        from unittest.mock import patch
+        from django.core.cache.backends.locmem import LocMemCache
+        from core.slicer_preview_cache import (
+            warm_streamed_high_fidelity, cached_batch, preview_index_key,
+        )
+        backend = LocMemCache("streamed-large-preview-cache", {})
+        with patch("core.slicer_preview_cache.cache", backend):
+            self.assertTrue(warm_streamed_high_fidelity(self.asset))
+            key = preview_index_key(self.asset, "full-v1")
+            result = cached_batch(key, [0.2, 0.4])
+            self.assertIsNotNone(result)
+            self.assertTrue(result["complete"])
+            self.assertEqual(
+                result["layers"][0]["segment_count"],
+                exact_layer_toolpaths(GCODE, 0.2)["segment_count"])
+
+    def test_streamed_warmer_does_not_publish_incomplete_geometry(self):
+        from unittest.mock import patch
+        from django.core.cache.backends.locmem import LocMemCache
+        from core.slicer_preview_cache import (
+            warm_streamed_high_fidelity, cached_batch, preview_index_key,
+        )
+        backend = LocMemCache("streamed-incomplete-preview-cache", {})
+        with (patch("core.slicer_preview_cache.cache", backend),
+              patch("core.slicer_layer_preview.MAX_LAYER_SEGMENTS", 1)):
+            self.assertFalse(warm_streamed_high_fidelity(self.asset))
+            self.assertIsNone(cached_batch(
+                preview_index_key(self.asset, "full-v1"), [0.2, 0.4]))
+
     def test_full_quality_cached_response_and_original_selected_layer(self):
         from unittest.mock import patch
         from django.core.cache.backends.locmem import LocMemCache
