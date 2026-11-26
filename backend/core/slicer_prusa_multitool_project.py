@@ -27,12 +27,15 @@ def build_prusa_multitool_candidate(rows, *, printer_ini, tools,
     for item, _source in rows:
         if not isinstance(item, dict) or any(
             item.get(key) for key in (
-                "modifier_volumes", "process_overrides", "colour_paint",
+                "modifier_volumes", "colour_paint",
                 "support_paint", "seam_paint", "fuzzy_skin_paint",
                 "variable_layer_profile", "negative_volumes", "material_slot",
             )
         ):
             raise SlicerProfileError("Prusa multi-tool candidate cannot discard advanced edits.")
+    # The native exporter itself validates the two proven object-local keys:
+    # perimeters and fill_density. The owner-bound workbench still refuses
+    # combined MMU/XL object edits pending independent genuine CLI proof.
     base = build_prusa_native_3mf(rows, bed_width=bed_width, bed_depth=bed_depth)
     out = io.BytesIO()
     with zipfile.ZipFile(io.BytesIO(base)) as src, zipfile.ZipFile(
