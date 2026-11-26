@@ -16,6 +16,8 @@ NUMBER = r"[-+]?(?:\d+(?:\.\d*)?|\.\d+)"
 AXIS = re.compile(r"([XYZE])\s*(" + NUMBER + r")", re.I)
 TOOL = re.compile(r"^T(\d{1,2})\s*(?:;.*)?$", re.I)
 HEX = re.compile(r"^#[0-9A-Fa-f]{6}$")
+FEATURE = re.compile(r"^;\s*TYPE:\s*(.+)$", re.I)
+NON_MODEL_FEATURES = frozenset({"custom", "skirt/brim", "wipe tower", "prime tower"})
 MAX_LINES = 1_000_000
 MAX_SEGMENTS = 180_000
 MAX_RENDER_SEGMENTS = 48_000
@@ -41,6 +43,7 @@ def _paths(gcode):
     colours = []
     tagged_objects = "EXCLUDE_OBJECT_START" in gcode
     in_object = False
+    feature = None
     segments = []
     observed = 0
     stride = 1
@@ -51,6 +54,9 @@ def _paths(gcode):
         if not line:
             continue
         if line.startswith(";"):
+            feature_match = FEATURE.match(line)
+            if feature_match:
+                feature = feature_match.group(1).strip().lower()
             match = FILAMENT_COLOURS.match(line)
             if match and not colours:
                 colours = [value.strip().strip('"') for value in match.group(1).split(";")][:16]
@@ -95,6 +101,7 @@ def _paths(gcode):
                         all(abs(value) <= 10000 for value in (x, y, z, nx, ny, nz)) and
                         ("X" in params or "Y" in params) and
                         (not tagged_objects or in_object) and
+                        feature not in NON_MODEL_FEATURES and
                         abs(nx - x) + abs(ny - y) > 0.001):
                     observed += 1
                     if observed % stride == 0:
@@ -116,7 +123,13 @@ def _paths(gcode):
 
 
 def _render_png(segments, colours, size):
-    """Isometric path projection, sized consistently for printer file browsers."""
+    """Render a transparent, supersampled isometric preview of deposited paths.
+
+    The printer gets the original requested pixel dimensions. Drawing at a
+    higher resolution first improves curved edges and thin mechanical details,
+    especially on the 96-pixel file-browser preview. No bed/background pixels
+    are baked in: the printer UI supplies its own background.
+    """
     projected = []
     for x1, y1, x2, y2, z, tool in segments:
         projected.append(((x1 - y1) * 0.866, (x1 + y1) * 0.44 - z * 1.4,
@@ -126,31 +139,42 @@ def _render_png(segments, colours, size):
     maxx = max(max(p[0], p[2]) for p in projected)
     miny = min(min(p[1], p[3]) for p in projected)
     maxy = max(max(p[1], p[3]) for p in projected)
-    scale = (size * 0.76) / max(maxx - minx, maxy - miny, 0.01)
+    # Size-independent framing avoids clipping tall or very flat parts.
+    scale = (size * 0.84) / max(maxx - minx, maxy - miny, 0.01)
     cx, cy = (minx + maxx) / 2, (miny + maxy) / 2
-    im = Image.new("RGB", (size, size), (18, 29, 43))
+
+    supersample = 3 if size <= 96 else 2
+    canvas_size = size * supersample
+    im = Image.new("RGBA", (canvas_size, canvas_size), (0, 0, 0, 0))
     draw = ImageDraw.Draw(im)
-    # Print-bed reference and gentle depth behind the extrusions.
-    pad = int(size * 0.055)
-    draw.rounded_rectangle((pad, pad, size - pad, size - pad),
-                           radius=max(5, size // 18), fill=(27, 41, 57))
-    width = max(1, round(size / 150))
-    # Layers are drawn bottom-to-top rather than in time order, so the top of
-    # the model remains visible in a compact 2D image.
+    # At 96px subpixel strokes disappear on printer displays. Give small
+    # thumbnails an opaque, legible silhouette without changing the 300px.
+    line_width = (max(2, round(1.65 * supersample)) if size <= 96
+                  else max(2, round(size / 130 * supersample)))
+    # A narrow dark keyline separates pale filament from a light printer UI.
+    edge_width = line_width + max(1, supersample // 2)
+    low_z = min(p[5] for p in projected)
+    high_z = max(p[5] for p in projected)
+    z_span = max(high_z - low_z, 0.01)
+    # Render bottom first, top last; preserve distinct native tool colours.
     for x1, y1, x2, y2, tool, z in sorted(projected, key=lambda p: p[5]):
+        points = (
+            (size / 2 + (x1 - cx) * scale) * supersample,
+            (size / 2 + (y1 - cy) * scale) * supersample,
+            (size / 2 + (x2 - cx) * scale) * supersample,
+            (size / 2 + (y2 - cy) * scale) * supersample,
+        )
         colour = _rgb(colours[tool]) if tool < len(colours) else _rgb("")
-        # Brighten low-value shades for legibility without changing tool IDs.
-        colour = tuple(min(255, round(component * 0.78 + 48)) for component in colour)
-        draw.line((
-            size / 2 + (x1 - cx) * scale,
-            size / 2 + (y1 - cy) * scale,
-            size / 2 + (x2 - cx) * scale,
-            size / 2 + (y2 - cy) * scale,
-        ), fill=colour, width=width)
+        # Subtle height shading adds form without washing out the filament
+        # palette or changing the model's assigned tool colours.
+        light = 0.83 + 0.17 * ((z - low_z) / z_span)
+        colour = tuple(max(0, min(255, round(component * light))) for component in colour)
+        draw.line(points, fill=(39, 46, 53, 225), width=edge_width)
+        draw.line(points, fill=(*colour, 255), width=line_width)
+    im = im.resize((size, size), Image.Resampling.LANCZOS)
     output = BytesIO()
     im.save(output, format="PNG", optimize=True)
     return output.getvalue()
-
 
 def add_gcode_thumbnails(raw):
     """Return (updated_bytes, sizes), preserving all printer commands exactly.
