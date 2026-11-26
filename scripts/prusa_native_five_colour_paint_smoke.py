@@ -18,6 +18,7 @@ from scripts.prusa_generate_mmu_paint import fixture
 from slicer_worker.prusa_material_validation import validate_prusa_material_candidate
 from slicer_worker.prusa_vendor_profiles import flatten_prusa_vendor_preset, validate_flat_prusa_preset
 from slicer_worker.prusa_gcode_audit import WORD, audit_prusa_positive_e
+from slicer_worker.prusa_colour_gcode_audit import audit_prusa_offline_colour_gcode
 
 
 def painted_external_walls(data):
@@ -110,6 +111,11 @@ def main(binary, vendor):
                 str(input_file)],cwd=work,check=True,timeout=300)
             raw=output_file.read_bytes()
             assert audit_prusa_positive_e(raw)["positive_e_moves"]>100
+            independent=audit_prusa_offline_colour_gcode(
+                raw,project,printer_ini=printer,tool=tool,
+                tower=(55,150,0,250,210))
+            assert independent["painted_wall_moves"][tool]["front"]>20
+            print("Authenticated worker research audit",independent,flush=True)
             walls=painted_external_walls(raw)
             assert walls[tool]["front"]>20,walls
             assert walls[0]["back"]>20,walls
