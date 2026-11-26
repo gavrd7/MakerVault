@@ -18,7 +18,14 @@ REF = "version_2.9.7"
 # Immutable commit backing the reviewed 2.9.7 annotated release tag.
 SOURCE_COMMIT = "450d70dd81c9b8990bc6bc8e690e31f82ddceb11"
 BASE = f"https://raw.githubusercontent.com/{SOURCE}/{SOURCE_COMMIT}/resources/profiles"
-VENDORS = ("PrusaResearch",)
+# INDX's official presets ship separately from the pinned 2.9.7 binary.
+# Permit an explicitly reviewed Prusa vendor-update bundle by immutable commit.
+INDX_SOURCE = "prusa3d/PrusaSlicer-settings-prusa-fff"
+INDX_COMMIT = "058c542282d5a512dcc73fc8be9288fc253ddcfd"
+INDX_BUNDLE_VERSION = "2.5.16"
+INDX_BUNDLE_URL = (f"https://raw.githubusercontent.com/{INDX_SOURCE}/"
+                   f"{INDX_COMMIT}/PrusaResearch/{INDX_BUNDLE_VERSION}.ini")
+VENDORS = ("PrusaResearch", "PrusaResearchINDX")
 MAX_INI = 3 * 1024 * 1024
 
 
@@ -28,7 +35,9 @@ def _native_sections(vendor="PrusaResearch"):
     if vendor not in VENDORS:
         raise OfficialProfileError("Prusa vendor is not in the approved catalogue.")
     try:
-        result = requests.get(f"{BASE}/{vendor}.ini", timeout=(3, 15),
+        source_url = (INDX_BUNDLE_URL if vendor == "PrusaResearchINDX"
+                      else f"{BASE}/{vendor}.ini")
+        result = requests.get(source_url, timeout=(3, 15),
                               stream=True, allow_redirects=False,
                               headers={"User-Agent": "MakerVault-PrusaModelBrowser/1"})
         try:
@@ -162,7 +171,8 @@ def fetch_prusa_profile(kind, name, subpath, vendor="PrusaResearch"):
 
 
 def available_prusa_vendors():
-    return [{"id": "PrusaResearch", "label": "Prusa Research"}]
+    return [{"id": "PrusaResearch", "label": "Prusa Research — 2.9.7"},
+            {"id": "PrusaResearchINDX", "label": "Prusa Research — INDX and updated profiles"}]
 
 
 def official_catalogue_models(vendor="PrusaResearch"):
@@ -198,7 +208,9 @@ def search_prusa_profiles(query, kind, vendor="PrusaResearch", printer_model=Non
     matches.sort(key=str.casefold)
     return {
         "engine": ENGINE, "engine_version": ENGINE_VERSION,
-        "vendor": vendor, "kind": kind, "source": SOURCE, "ref": REF,
+        "vendor": vendor, "kind": kind,
+        "source": INDX_SOURCE if vendor == "PrusaResearchINDX" else SOURCE,
+        "ref": INDX_COMMIT if vendor == "PrusaResearchINDX" else REF,
         "profiles": [{"name": name, "sub_path": vendor + ".ini"} for name in matches[offset:offset + 40]],
         "total_matches": len(matches), "import_status": "candidate_only",
         "model_artwork_only": False,
