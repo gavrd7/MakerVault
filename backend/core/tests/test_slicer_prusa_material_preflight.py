@@ -51,6 +51,55 @@ class PrusaOfflineMmuPreflightTests(TestCase):
         }
         return data,[raw_printer,raw_process,*raw_filaments]
 
+    def test_mmu_applies_only_bounded_owner_scoped_global_native_settings(self):
+        values, assets = self.parts()
+        assets[1] = (b"layer_height = 0.2\\nperimeters = 2\\n"
+                     b"fill_density = 15%\\ntop_solid_layers = 3\\n"
+                     b"bottom_solid_layers = 3\\nwipe_tower = 0\\n")
+        values["process_overrides"] = {
+            "layer_height": .16, "wall_loops": 4,
+            "sparse_infill_density": 27, "top_shell_layers": 5,
+        }
+        with patch("core.slicer_prusa_material_preflight.resolved_prusa_profile",
+                   side_effect=assets):
+            result = prepare_prusa_offline_mmu_candidate(**values)
+        for setting in (b"layer_height = 0.16\\n",
+                        b"perimeters = 4\\n",
+                        b"fill_density = 27%\\n",
+                        b"top_solid_layers = 5\\n",
+                        b"wipe_tower = 1\\n"):
+            self.assertIn(setting, result["process"])
+        self.assertIn(b"wiping_volumes_matrix = ", result["process"])
+
+    def test_xl_keeps_overrides_but_never_adds_an_mmu_tower(self):
+        values, assets = self.parts()
+        assets[0] = ini("0.4,0.4,0.4,0.4,0.4", "0")
+        assets[1] = b"layer_height = 0.2\\nperimeters = 2\\n"
+        xl = {key: values[key] for key in (
+            "owner_id", "printer_profile", "process_profile", "filament_profiles",
+            "rows", "tools", "bed_width", "bed_depth")}
+        xl["process_overrides"] = {"layer_height": .12, "wall_loops": 3}
+        with patch("core.slicer_prusa_material_preflight.resolved_prusa_profile",
+                   side_effect=assets):
+            result = prepare_prusa_offline_xl_candidate(**xl)
+        self.assertIn(b"layer_height = 0.12\\n", result["process"])
+        self.assertIn(b"perimeters = 3\\n", result["process"])
+        self.assertNotIn(b"wipe_tower = 1", result["process"])
+
+    def test_mmu_rejects_unsafe_process_overrides_before_worker(self):
+        for bad in (
+            {"layer_height": 1.5}, {"wall_loops": True},
+            {"layer_height": float("inf")}, {"layer_height": "0.12"},
+            {"post_process": "G28"}, [], False,
+        ):
+            with self.subTest(bad=bad):
+                values, assets = self.parts()
+                values["process_overrides"] = bad
+                with patch("core.slicer_prusa_material_preflight.resolved_prusa_profile",
+                           side_effect=assets):
+                    with self.assertRaises(ValueError):
+                        prepare_prusa_offline_mmu_candidate(**values)
+
     def test_complete_candidate_roundtrips_but_worker_refuses_admission(self):
         values,assets=self.parts()
         with patch("core.slicer_prusa_material_preflight.resolved_prusa_profile",
