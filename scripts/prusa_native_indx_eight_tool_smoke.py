@@ -25,7 +25,7 @@ from slicer_worker.prusa_vendor_profiles import (
     flatten_prusa_vendor_preset, validate_flat_prusa_preset)
 from slicer_worker.service import _decode_payload
 from slicer_worker.runner import run_prusa, prusa_command, WorkerError
-from slicer_worker.prusa_material_gcode_audit import audit_prusa_material_model_gcode
+from slicer_worker.prusa_material_gcode_audit import audit_prusa_material_model_gcode, _bounds, WORD
 
 
 def _settings(raw):
@@ -227,9 +227,46 @@ def main(binary, vendor, official=None):
                       "stdout",proc.stdout[-1400:],
                       "stderr",proc.stderr[-2800:],flush=True)
                 raise
-            observed_official=audit_prusa_material_model_gcode(
-                (folder/"output.gcode").read_bytes(),official_project,
-                printer_ini=selected,tools=tools)
+            official_gcode=(folder/"output.gcode").read_bytes()
+            try:
+                observed_official=audit_prusa_material_model_gcode(
+                    official_gcode,official_project,
+                    printer_ini=selected,tools=tools)
+            except WorkerError:
+                # Research-only: report synthetic model/tool positive-E
+                # attribution without relaxing the production validator.
+                boxes=_bounds(official_project,len(tools))
+                matrix=[[0]*8 for _ in range(8)]
+                picked=set()
+                active=None
+                x=y=None
+                prev_e=0.
+                relative=False
+                for raw_line in official_gcode.decode("utf-8").splitlines():
+                    cmd=raw_line.split(";",1)[0].strip()
+                    if not cmd: continue
+                    op=cmd.split(None,1)[0].upper()
+                    if op.startswith("T") and op[1:].isdigit():
+                        active=int(op[1:]); picked.add(active)
+                        continue
+                    if op not in ("M82","M83","G92","G0","G00","G1","G01"): continue
+                    params={k.upper():float(v) for k,v in WORD.findall(cmd)}
+                    if op=="M82": relative=False
+                    elif op=="M83": relative=True
+                    elif op=="G92": prev_e=params.get("E",prev_e)
+                    else:
+                        x=params.get("X",x); y=params.get("Y",y)
+                        if "E" not in params: continue
+                        delta=params["E"] if relative else params["E"]-prev_e
+                        prev_e=prev_e+params["E"] if relative else params["E"]
+                        if delta<=1e-6 or active not in range(8) or x is None or y is None:
+                            continue
+                        for i,(xmin,xmax,ymin,ymax) in enumerate(boxes):
+                            if xmin-.15<=x<=xmax+.15 and ymin-.15<=y<=ymax+.15:
+                                matrix[i][active]+=1
+                print("Official 8T G-code diagnostic: selected tools",
+                      sorted(picked),"per-model/tool positive E",matrix,flush=True)
+                raise
             if (observed_official["selected_tools"]!=tuple(range(8)) or
                     observed_official["incorrect_extrusion_moves"]!=[0]*8 or
                     min(observed_official["correct_extrusion_moves"])<20):
