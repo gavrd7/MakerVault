@@ -60,7 +60,8 @@ MAX_FACES = 500_000
 MAX_STL_BYTES = 32 * 1024 * 1024
 
 
-def build_prusa_placed_stl(objects_with_stl, *, bed_width, bed_depth):
+def build_prusa_placed_stl(objects_with_stl, *, bed_width, bed_depth,
+                           max_faces=MAX_FACES, max_stl_bytes=MAX_STL_BYTES):
     """Bake independently transformed source meshes into a bounded native STL.
 
     Visual coordinates are centred on the bed; individual source meshes use
@@ -68,6 +69,9 @@ def build_prusa_placed_stl(objects_with_stl, *, bed_width, bed_depth):
     We stream facets instead of retaining hundreds of thousands of triangles
     and transformed copies in Django memory.
     """
+    if (type(max_faces) is not int or not 1 <= max_faces <= 1_500_000 or
+            type(max_stl_bytes) is not int or not 84 < max_stl_bytes <= 80 * 1024 * 1024):
+        raise SlicerProfileError("Invalid bounded native STL plate budget.")
     if not isinstance(objects_with_stl, list) or not 1 <= len(objects_with_stl) <= 200:
         raise SlicerProfileError("Prusa plate needs one to 200 verified source STLs.")
     if not all(isinstance(n, (float, int)) and not isinstance(n, bool)
@@ -99,7 +103,7 @@ def build_prusa_placed_stl(objects_with_stl, *, bed_width, bed_depth):
             expected_faces = inspected["triangles"]
         except MeshInspectionError as exc:
             raise SlicerProfileError("Prusa plate contains an invalid STL.") from exc
-        if count + expected_faces > MAX_FACES or 84 + 50 * (count + expected_faces) > MAX_STL_BYTES:
+        if count + expected_faces > max_faces or 84 + 50 * (count + expected_faces) > max_stl_bytes:
             raise SlicerProfileError("Prusa plate geometry exceeds the native STL limit.")
         # Exact source bounds are needed: the inspection summary rounds to
         # three decimal places, whereas preview pivots are calculated from
@@ -162,7 +166,7 @@ def build_prusa_placed_stl(objects_with_stl, *, bed_width, bed_depth):
                 raise SlicerProfileError("Prusa transformed geometry is not finite.")
             output.extend(struct.pack("<12fH", *flat, 0))
             count += 1
-    if not 0 < count <= MAX_FACES or len(output) > MAX_STL_BYTES:
+    if not 0 < count <= max_faces or len(output) > max_stl_bytes:
         raise SlicerProfileError("Prusa model plate exceeds native STL limit.")
     struct.pack_into("<I", output, 80, count)
     return bytes(output)

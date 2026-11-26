@@ -21,13 +21,15 @@ _VERTEX = re.compile(r"^vertex\s+(" + _NUMBER + r")\s+(" + _NUMBER + r")\s+(" + 
 _FACET = re.compile(r"^facet\s+normal\s+" + _NUMBER + r"\s+" + _NUMBER + r"\s+" + _NUMBER + r"\s*$", re.I)
 
 
-def validate_stl(data: bytes) -> dict:
+def validate_stl(data: bytes, *, max_triangles=MAX_STL_TRIANGLES) -> dict:
+    if type(max_triangles) is not int or not 1 <= max_triangles <= 1_500_000:
+        raise StlValidationError("Invalid bounded STL triangle budget.")
     if not isinstance(data, bytes) or not data:
         raise StlValidationError("An STL model is required.")
     if len(data) >= 84:
         triangles = struct.unpack_from("<I", data, 80)[0]
         expected = 84 + 50 * triangles
-        if expected == len(data) and 0 < triangles <= MAX_STL_TRIANGLES:
+        if expected == len(data) and 0 < triangles <= max_triangles:
             finite_vertices = 0
             for record in struct.iter_unpack("<12fH", memoryview(data)[84:]):
                 if not all(math.isfinite(value) and abs(value) <= MAX_COORDINATE_MM for value in record[:12]):
@@ -74,7 +76,7 @@ def validate_stl(data: bytes) -> dict:
             state = "endfacet"
         elif state == "endfacet" and lowered == "endfacet":
             faces += 1
-            if faces > MAX_STL_TRIANGLES:
+            if faces > max_triangles:
                 raise StlValidationError("STL triangle count exceeds limit.")
             state = "facet"
         else:

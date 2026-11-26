@@ -792,6 +792,7 @@ def process_queued_job(job_id):
         model_format = "stl"
         material_result = None
         prusa_placed_stl = False
+        creality_placed_stl = False
         is_multi_test = (job.settings or {}).get("multi_material_test") is True
         plate = (job.settings or {}).get("plate_objects")
         stage = "verifying independent modifier and negative-volume coverage"
@@ -866,6 +867,20 @@ def process_queued_job(job_id):
                 model = source_models[0][1]
                 model_format = "stl"
                 logger.info("Slicing job %s: using direct validated STL path", job.pk)
+            elif (job.engine == "crealityprint" and
+                  _plate_builder(source_models) is build_compound_plate_3mf):
+                # The Creality 7.3.1 CLI's generic core-3MF plus externally
+                # loaded filament preset fails native validation (exit 205).
+                # Keep existing single-STL, native-modifier and CFS paths
+                # unchanged. For ordinary one-filament multi-model plates,
+                # bake validated geometry and invoke the proven STL CLI path.
+                stage = "baking verified Creality single-filament plate geometry"
+                from .slicer_creality_plate import build_creality_single_filament_plate
+                width, depth = trusted_plate_dimensions(job.printer_profile)
+                model = build_creality_single_filament_plate(
+                    source_models, bed_width=width, bed_depth=depth)
+                model_format = "stl"
+                creality_placed_stl = True
             elif job.engine == "prusaslicer":
                 stage = "baking verified native Prusa single-material plate geometry"
                 from .slicer_prusa_plate import build_prusa_placed_stl
@@ -1158,7 +1173,7 @@ def process_queued_job(job_id):
                 raise SlicerExecutionError(
                     "Bambu multi-material project settings could not be validated: "
                     + str(exc)) from exc
-        if model_format == "stl" and not prusa_placed_stl and job.input_asset.sha256 and hashlib.sha256(model).hexdigest() != job.input_asset.sha256:
+        if model_format == "stl" and not (prusa_placed_stl or creality_placed_stl) and job.input_asset.sha256 and hashlib.sha256(model).hexdigest() != job.input_asset.sha256:
             raise SlicerExecutionError("Model contents changed since the job was prepared.")
         stage = "executing the isolated slicer worker"
         output = run_remote_job(
@@ -1171,6 +1186,7 @@ def process_queued_job(job_id):
                                      job.engine == "crealityprint"),
             native_modifier_project=has_native_modifiers and job.engine != "prusaslicer",
             **({"prusa_placed_stl": True} if prusa_placed_stl else {}),
+            **({"creality_placed_stl": True} if creality_placed_stl else {}),
         )
         if material_result is not None:
             stage = "auditing multi-material tool selections and extrusion"

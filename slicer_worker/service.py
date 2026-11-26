@@ -16,6 +16,7 @@ from pathlib import Path
 from functools import lru_cache
 import tempfile
 import uuid
+import zlib
 
 from .runner import MAX_GCODE_BYTES, MAX_MODEL_BYTES, MAX_PROFILE_BYTES, WorkerError, run_prusa
 from .orca_runner import run_orca
@@ -77,7 +78,7 @@ def _decode_payload(payload):
         "model", "printer_profile", "filament_profile", "process_profile",
     }
     if not isinstance(payload, dict) or not expected.issubset(payload) or (
-            set(payload) - expected - {"model_format", "filament_profiles", "creality_model_stls", "creality_tool_ids", "creality_native_project", "native_modifier_project", "prusa_placed_stl", "prusa_offline_mmu", "prusa_offline_xl", "prusa_offline_colour"}):
+            set(payload) - expected - {"model_format", "filament_profiles", "creality_model_stls", "creality_tool_ids", "creality_native_project", "native_modifier_project", "prusa_placed_stl", "creality_placed_stl", "creality_model_raw_sha256", "prusa_offline_mmu", "prusa_offline_xl", "prusa_offline_colour"}):
         raise WorkerError("Invalid slicing job payload.")
     try:
         uuid.UUID(str(payload["job_id"]))
@@ -127,6 +128,22 @@ def _decode_payload(payload):
                     "creality_native_project","native_modifier_project",
                     "prusa_placed_stl"))):
             raise WorkerError("Invalid offline Prusa colour execution contract.")
+    if ("creality_model_raw_sha256" in payload) != ("creality_placed_stl" in payload):
+        raise WorkerError("Missing authenticated Creality placed STL digest.")
+    digest = payload.get("creality_model_raw_sha256")
+    if digest is not None and (not isinstance(digest, str) or len(digest) != 64
+                              or any(c not in "0123456789abcdef" for c in digest)):
+        raise WorkerError("Invalid Creality placed STL digest.")
+    if "creality_placed_stl" in payload and (
+            payload["creality_placed_stl"] is not True or
+            payload["engine"] != "crealityprint" or
+            payload["engine_version"] != "7.3.1" or model_format != "stl" or
+            any(key in payload for key in (
+                "filament_profiles", "creality_model_stls", "creality_tool_ids",
+                "creality_native_project", "native_modifier_project",
+                "prusa_placed_stl", "prusa_offline_mmu", "prusa_offline_xl",
+                "prusa_offline_colour"))):
+        raise WorkerError("Invalid Creality placed-STL execution contract.")
     if "prusa_placed_stl" in payload and (
             payload["prusa_placed_stl"] is not True or
             payload["engine"] != "prusaslicer" or
@@ -152,6 +169,25 @@ def _decode_payload(payload):
         if not raw or len(raw) > limit:
             raise WorkerError("Invalid slicing input size.")
         files[key] = raw
+    if payload.get("creality_placed_stl") is True:
+        from .stl_validation import validate_stl
+        # This optional contract is only ever activated by the authenticated
+        # Creality 7.3.1 single-material placed-plate request. Decompress
+        # strictly to the maximum representable bounded binary STL, and
+        # reject trailing streams and mismatched source digests.
+        limit = 84 + 50 * 1_500_000
+        try:
+            stream = zlib.decompressobj()
+            original = stream.decompress(files["model"], limit + 1)
+        except zlib.error as exc:
+            raise WorkerError("Invalid Creality placed STL compression.") from exc
+        if (not stream.eof or stream.unconsumed_tail or stream.unused_data
+                or len(original) > limit or len(original) < 84
+                or hashlib.sha256(original).hexdigest() != digest):
+            raise WorkerError("Creality placed STL integrity or expansion check failed.")
+        validate_stl(original, max_triangles=1_500_000)
+        files["model"] = original
+        files["creality_placed_stl"] = True
     if payload.get("prusa_placed_stl") is True:
         files["prusa_placed_stl"] = True
     if "filament_profiles" in payload:
@@ -353,6 +389,8 @@ class Handler(BaseHTTPRequestHandler):
                     (workdir / "creality-native-project.marker").write_text("v1")
                 if files.get("native_modifier_project"):
                     (workdir / "native-modifier-project.marker").write_text("v1")
+                if files.get("creality_placed_stl"):
+                    (workdir / "creality-placed-stl.marker").write_text("v1")
                 if files.get("prusa_placed_stl"):
                     (workdir / "prusa-placed-stl.marker").write_text("v1")
                 if files.get("prusa_offline_mmu"):
