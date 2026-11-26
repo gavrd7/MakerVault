@@ -33,7 +33,7 @@ def _qualified_topology(printer_ini):
         nozzles = [float(part.strip()) for part in settings["nozzle_diameter"].split(",")]
     except (TypeError, ValueError):
         _refuse()
-    if (not 1 <= len(nozzles) <= 5 or
+    if (not 1 <= len(nozzles) <= 8 or
             any(not math.isfinite(d) or not .1 <= d <= 1.2 for d in nozzles)):
         _refuse()
     changer = settings.get("single_extruder_multi_material", "0").strip().lower()
@@ -61,7 +61,7 @@ def validate_prusa_material_candidate(data, *, printer_ini, tools=None, colour=F
     if colour:
         if tools is not None or not changer or logical_count < 2:
             _refuse()
-    elif (not isinstance(tools,(tuple,list)) or not 2 <= len(tools) <= 5
+    elif (not isinstance(tools,(tuple,list)) or not 2 <= len(tools) <= 12
           or len(set(tools)) < 2 or any(type(t) is not int or
                                         not 1 <= t <= logical_count for t in tools)):
         _refuse()
