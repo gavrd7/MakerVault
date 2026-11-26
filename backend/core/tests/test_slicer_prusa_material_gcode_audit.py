@@ -18,19 +18,30 @@ def project():
     return add_prusa_native_model_tools(source,PRINTER,[1,2])["project"]
 
 
-def toolpaths(*,swap=False,leak=False,include_tower=False):
-    commands=["M83","T0"]
-    commands.extend(["G1 X90 Y105 E0.03"]*32)
+def toolpaths(*,swap=False,leak=False,include_tower=False,stationary=0):
+    commands=["M83","G90","T0","G0 X90 Y105"]
+    commands.extend(["G1 X%.3f Y105 E0.03" % (90+(i+1)*.06)
+                     for i in range(32)])
     if include_tower:
-        commands.extend(["G1 X65 Y155 E0.03"]*32)
+        commands.append("G0 X65 Y155")
+        commands.extend(["G1 X%.3f Y155 E0.03" % (65+(i+1)*.06)
+                         for i in range(32)])
     if leak:
-        commands.extend(["G1 X160 Y105 E0.03"]*8)
+        commands.append("G0 X160 Y105")
+        commands.extend(["G1 X%.3f Y105 E0.03" % (160+(i+1)*.06)
+                         for i in range(8)])
     commands.append("T1" if not swap else "T0")
-    commands.extend(["G1 X160 Y105 E0.03"]*32)
+    # INDX native toolchange scripts may prime the next head at the
+    # previous head's location: E-only movements are not deposition.
+    commands.extend(["G1 E0.03"]*stationary)
+    commands.append("G0 X160 Y105")
+    commands.extend(["G1 X%.3f Y105 E0.03" % (160+(i+1)*.06)
+                     for i in range(32)])
     if include_tower:
-        commands.extend(["G1 X65 Y155 E0.03"]*32)
-    return ("\n".join(commands)+"\n").encode()
-
+        commands.append("G0 X65 Y155")
+        commands.extend(["G1 X%.3f Y155 E0.03" % (65+(i+1)*.06)
+                         for i in range(32)])
+    return ("\\n".join(commands)+"\\n").encode()
 
 class PrusaNativeToolpathAuditTests(TestCase):
     def test_material_tools_follow_native_mesh_footprints(self):
@@ -38,6 +49,23 @@ class PrusaNativeToolpathAuditTests(TestCase):
             toolpaths(),project(),printer_ini=PRINTER,tools=[1,2])
         self.assertEqual(result["correct_extrusion_moves"],[32,32])
         self.assertEqual(result["incorrect_extrusion_moves"],[0,0])
+
+    def test_indx_toolchange_e_only_recovery_never_counts_as_wrong_model(self):
+        result=audit_prusa_material_model_gcode(
+            toolpaths(stationary=79),project(),
+            printer_ini=PRINTER,tools=[1,2])
+        self.assertEqual(result["correct_extrusion_moves"],[32,32])
+        self.assertEqual(result["incorrect_extrusion_moves"],[0,0])
+
+    def test_relative_xy_and_e_require_actual_deposited_segments(self):
+        rows=["M83","G90","T0","G0 X90 Y105","G91"]
+        rows.extend(["G1 X.06 Y0 E0.03"]*32)
+        rows.extend(["G90","T1","G0 X160 Y105","G91"])
+        rows.extend(["G1 X.06 Y0 E0.03"]*32)
+        result=audit_prusa_material_model_gcode(
+            ("\\n".join(rows)+"\\n").encode(),project(),
+            printer_ini=PRINTER,tools=[1,2])
+        self.assertEqual(result["correct_extrusion_moves"],[32,32])
 
     def test_wrong_side_and_unselected_tools_are_rejected(self):
         for raw in (toolpaths(swap=True),toolpaths(leak=True),
