@@ -221,3 +221,47 @@ def complete_preview_inventory(asset):
     except Exception:
         pass
     return result
+
+def warm_streamed_high_fidelity(asset):
+    """Cache full-detail geometry of large files one bounded batch at a time.
+
+    The manifest becomes visible only when every layer was parsed exactly.
+    A dense batch beyond the budget stays uncached and is still available via
+    the paged on-demand API; we never publish partial geometry as complete.
+    """
+    from .slicer_layer_preview import (
+        streamed_gcode_lines, MAX_FULL_PREVIEW_SEGMENTS)
+    heights = complete_preview_inventory(asset).get("layers", [])
+    if not 1 <= len(heights) <= MAX_INDEX_LAYERS:
+        return False
+    index_key = preview_index_key(asset, "full-v1")
+    if cached_batch(index_key, heights[:MAX_BATCH_LAYERS]) is not None:
+        return True
+    for offset in range(0, len(heights), MAX_BATCH_LAYERS):
+        with asset.file.storage.open(asset.file.name, "rb") as handle:
+            result = layer_batch_toolpaths(
+                streamed_gcode_lines(handle),
+                heights[offset:offset + MAX_BATCH_LAYERS],
+                high_fidelity=True,
+                max_total_segments=MAX_FULL_PREVIEW_SEGMENTS,
+            )
+        if not result["complete"]:
+            return False
+        packed = zlib.compress(json.dumps({
+            "layers": result["layers"], "complete": True,
+            "sampled": False, "overview": False,
+            "high_fidelity": True, "cached": True,
+        }, separators=(",", ":")).encode("utf-8"), level=3)
+        try:
+            cache.set(
+                index_key + ":batch:" + str(offset // MAX_BATCH_LAYERS),
+                packed, CACHE_SECONDS)
+        except Exception:
+            return False
+    try:
+        # Cache readers only observe complete sets; partial writes aren't
+        # advertised and never alter the source G-code.
+        cache.set(index_key + ":manifest", list(heights), CACHE_SECONDS)
+    except Exception:
+        return False
+    return True
