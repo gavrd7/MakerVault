@@ -60,8 +60,8 @@ def override_research_seam_position(source, mode):
         raise ValueError("Unrecognised Prusa seam-position research mode.")
     clean = [line for line in source.splitlines()
              if line.partition(b"=")[0].strip() != b"seam_position"]
-    return b"\\n".join(clean) + (b"\\nseam_position = " +
-                              mode.encode("ascii") + b"\\n")
+    return b"\n".join(clean) + (b"\nseam_position = " +
+                              mode.encode("ascii") + b"\n")
 
 
 def main(binary, vendor, directory, seam_mode=None):
