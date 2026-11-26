@@ -77,7 +77,7 @@ def _decode_payload(payload):
         "model", "printer_profile", "filament_profile", "process_profile",
     }
     if not isinstance(payload, dict) or not expected.issubset(payload) or (
-            set(payload) - expected - {"model_format", "filament_profiles", "creality_model_stls", "creality_tool_ids", "creality_native_project", "native_modifier_project", "prusa_placed_stl"}):
+            set(payload) - expected - {"model_format", "filament_profiles", "creality_model_stls", "creality_tool_ids", "creality_native_project", "native_modifier_project", "prusa_placed_stl", "prusa_offline_mmu"}):
         raise WorkerError("Invalid slicing job payload.")
     try:
         uuid.UUID(str(payload["job_id"]))
@@ -91,8 +91,19 @@ def _decode_payload(payload):
     if payload["engine"] == "prusaslicer" and model_format == "3mf" and (
             payload["engine_version"] != "2.9.7" or any(key in payload for key in (
                 "filament_profiles", "creality_model_stls", "creality_tool_ids",
-                "creality_native_project", "native_modifier_project", "prusa_placed_stl"))):
+                "creality_native_project", "native_modifier_project", "prusa_placed_stl")) and
+            "prusa_offline_mmu" not in payload):
         raise WorkerError("Invalid native Prusa project execution contract.")
+    if "prusa_offline_mmu" in payload:
+        metadata = payload["prusa_offline_mmu"]
+        if (payload["engine"] != "prusaslicer" or
+                payload["engine_version"] != "2.9.7" or model_format != "3mf"
+                or not isinstance(metadata, dict)
+                or set(metadata) != {"tools", "tower"}
+                or any(key in payload for key in (
+                    "filament_profiles", "creality_model_stls", "creality_tool_ids",
+                    "creality_native_project", "native_modifier_project", "prusa_placed_stl"))):
+            raise WorkerError("Invalid Prusa offline MMU execution contract.")
     if "prusa_placed_stl" in payload and (
             payload["prusa_placed_stl"] is not True or
             payload["engine"] != "prusaslicer" or
@@ -144,6 +155,15 @@ def _decode_payload(payload):
         if decoded[0] != files["filament_profile"]:
             raise WorkerError("Native filament palette does not match its first preset.")
         files["filament_profiles"] = decoded
+    if "prusa_offline_mmu" in payload:
+        from .prusa_offline_contract import validate_prusa_offline_mmu_inputs
+        details = payload["prusa_offline_mmu"]
+        receipt = validate_prusa_offline_mmu_inputs(
+            project=files["model"], printer=files["printer_profile"],
+            filament=files["filament_profile"], process=files["process_profile"],
+            tools=details["tools"], tower=details["tower"])
+        files["prusa_offline_mmu"] = {
+            "tools": list(receipt["tools"]), "tower": details["tower"]}
     if "creality_model_stls" in payload:
         if (payload["engine"] != "crealityprint" or model_format != "stl" or
                 "filament_profiles" not in files):
@@ -201,7 +221,7 @@ def _decode_payload(payload):
         from .creality_project_validation import validate_creality_project
         validate_creality_project(files["model"], native_tool_count=2)
         files["creality_native_project"] = True
-    elif model_format == "3mf" and payload["engine"] == "prusaslicer":
+    elif model_format == "3mf" and payload["engine"] == "prusaslicer" and not files.get("prusa_offline_mmu"):
         from .prusa_3mf_validation import validate_prusa_native_3mf
         validate_prusa_native_3mf(files["model"])
     elif model_format == "3mf" and not files.get("native_modifier_project"):
@@ -294,6 +314,9 @@ class Handler(BaseHTTPRequestHandler):
                     (workdir / "native-modifier-project.marker").write_text("v1")
                 if files.get("prusa_placed_stl"):
                     (workdir / "prusa-placed-stl.marker").write_text("v1")
+                if files.get("prusa_offline_mmu"):
+                    (workdir / "prusa-offline-mmu.marker").write_text("v1")
+
                 if "creality_model_stls" in files:
                     for index, raw in enumerate(files["creality_model_stls"]):
                         (workdir / ("input-" + str(index) + ".stl")).write_bytes(raw)
@@ -314,6 +337,12 @@ class Handler(BaseHTTPRequestHandler):
                 if current["engine"] == "prusaslicer":
                     from .prusa_gcode_audit import audit_prusa_positive_e
                     audit_prusa_positive_e(data)
+                if files.get("prusa_offline_mmu"):
+                    from .prusa_material_gcode_audit import audit_prusa_material_model_gcode
+                    details = files["prusa_offline_mmu"]
+                    audit_prusa_material_model_gcode(
+                        data, files["model"], printer_ini=files["printer_profile"],
+                        tools=details["tools"], tower=details["tower"])
                 if files.get("native_modifier_project"):
                     # A successful native CLI exit is not proof that every
                     # requested region was used in the generated toolpaths.
