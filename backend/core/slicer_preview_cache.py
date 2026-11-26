@@ -289,3 +289,49 @@ def warm_streamed_high_fidelity(asset):
     except Exception:
         return False
     return True
+
+def _direct_batch_key(asset, heights, *, high_fidelity, overview, detail):
+    """Key a complete bounded response by source identity and exact layer set."""
+    request = json.dumps([
+        "exact-v1", [round(float(z), 3) for z in heights],
+        bool(high_fidelity), bool(overview), int(detail),
+    ], separators=(",", ":"))
+    digest = hashlib.sha256(request.encode("ascii")).hexdigest()
+    return preview_index_key(asset, "direct-batches-v1") + ":" + digest
+
+
+def cached_direct_batch(asset, heights, *, high_fidelity, overview, detail):
+    """Reuse earlier exact responses without rescanning G-code after reconnect."""
+    try:
+        packed = cache.get(_direct_batch_key(
+            asset, heights, high_fidelity=high_fidelity,
+            overview=overview, detail=detail))
+        if packed is not None:
+            result = json.loads(zlib.decompress(packed))
+            if result.get("complete") and len(result.get("layers", ())) == len(heights):
+                return result
+    except Exception:
+        pass
+    return None
+
+
+def store_direct_batch(asset, heights, result, *,
+                       high_fidelity, overview, detail):
+    """Cache only complete exact batches, never partial geometry or paged cursors.
+
+    Individual Redis items are bounded independently of the overall print;
+    a cache outage or too-large page does not change the requested toolpaths.
+    """
+    if not result.get("complete") or len(result.get("layers", ())) != len(heights):
+        return False
+    try:
+        packed = zlib.compress(json.dumps(
+            result, separators=(",", ":")).encode("utf-8"), level=1)
+        if len(packed) > 4 * 1024 * 1024:
+            return False
+        cache.set(_direct_batch_key(
+            asset, heights, high_fidelity=high_fidelity,
+            overview=overview, detail=detail), packed, CACHE_SECONDS)
+        return True
+    except Exception:
+        return False
