@@ -554,6 +554,41 @@ class FullLayerEndpointTests(TestCase):
             self.assertIsNone(cached_batch(
                 preview_index_key(self.asset, "full-v1"), [0.2, 0.4]))
 
+    def test_full_render_cache_uses_smaller_blocks_without_losing_paths(self):
+        from unittest.mock import patch
+        from django.core.cache.backends.locmem import LocMemCache
+        from core.slicer_preview_cache import (
+            warm_streamed_high_fidelity, cached_batch, preview_index_key,
+            FULL_RENDER_CACHE_LAYERS,
+        )
+        backend = LocMemCache("render-block-size-preview", {})
+        with patch("core.slicer_preview_cache.cache", backend):
+            self.assertTrue(warm_streamed_high_fidelity(self.asset))
+            key = preview_index_key(self.asset, "full-v1")
+            self.assertEqual(backend.get(key + ":block_size"), FULL_RENDER_CACHE_LAYERS)
+            self.assertEqual(
+                cached_batch(key, [0.2, 0.4])["layers"][0]["segments"],
+                layer_batch_toolpaths(GCODE, [0.2], high_fidelity=True)["layers"][0]["segments"])
+
+    def test_successful_cold_exact_request_is_reused_without_gcode_scan(self):
+        from unittest.mock import patch
+        from django.core.cache.backends.locmem import LocMemCache
+        from core.slicer_layer_preview import layer_batch_toolpaths
+        backend = LocMemCache("direct-owner-preview", {})
+        self.client.force_login(self.owner)
+        url = f"/api/files/{self.asset.pk}/gcode/layers/?quality=full&zs=0.2,0.4&direct=1"
+        with patch("core.slicer_preview_cache.cache", backend):
+            with patch("core.api_views.layer_batch_toolpaths", wraps=layer_batch_toolpaths) as parser:
+                first = self.client.get(url)
+                second = self.client.get(url)
+                self.assertEqual(first.status_code, 200, first.content)
+                self.assertEqual(second.status_code, 200, second.content)
+                self.assertEqual(first.json()["layers"], second.json()["layers"])
+                self.assertEqual(second["X-MakerVault-Preview-Cache"], "direct-hit")
+                self.assertEqual(parser.call_count, 1)
+        self.client.force_login(self.other)
+        self.assertEqual(self.client.get(url).status_code, 404)
+
     def test_cached_full_preview_serves_unaligned_mobile_batches_across_blocks(self):
         import json
         import zlib
