@@ -25,7 +25,7 @@ def preview_index_key(asset, detail):
     # cached data if the backing file is replaced without changing its path.
     updated = getattr(asset, "updated_at", None)
     source = "|".join((str(asset.owner_id), str(asset.pk), str(asset.file.name),
-                       str(asset.file.size), str(updated), str(detail), "v4-balanced"))
+                       str(asset.file.size), str(updated), str(detail), "v5-mobile-exact-blocks"))
     return "gcode-preview:" + hashlib.sha256(source.encode("utf-8")).hexdigest()
 
 
