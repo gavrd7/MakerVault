@@ -51,6 +51,19 @@ class PlateTriangleBudgetTests(SimpleTestCase):
                 build_plate_3mf(items, bed_width=220, bed_depth=220)
 
 
+class ResourceBudgetTests(SimpleTestCase):
+    def test_expanded_geometry_budget_is_enforced_during_plate_construction(self):
+        from core import slicer_plate_3mf as plate
+        source = fixture_stl()
+        objects = [
+            ({"x_mm": x, "y_mm": 0, "rotation_deg": 0, "scale_percent": 100},
+             source) for x in (-35, 0, 35)
+        ]
+        with patch.object(plate, "MAX_MODEL_XML_BYTES", 65536):
+            with self.assertRaisesRegex(SlicerProfileError, "expanded XML budget"):
+                build_plate_3mf(objects, bed_width=220, bed_depth=220)
+
+
 class MeshStreamingTests(SimpleTestCase):
     def test_unpainted_mesh_streams_source_facets_in_two_passes(self):
         from core import slicer_plate_3mf as plate
