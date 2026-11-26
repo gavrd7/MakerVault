@@ -63,7 +63,7 @@ class SlicerGcodeThumbnailTests(SimpleTestCase):
     def test_fallback_png_is_transparent_and_antialiased(self):
         enriched, _ = add_gcode_thumbnails(SAMPLE)
         blocks = re.findall(
-            rb"; thumbnail begin (\\d+)x(\\d+) (\\d+)\\n(.*?); thumbnail end\\n",
+            rb"; thumbnail begin (\d+)x(\d+) (\d+)\n(.*?); thumbnail end\n",
             enriched, flags=re.S,
         )
         self.assertEqual(len(blocks), 2)
