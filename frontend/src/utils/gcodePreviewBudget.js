@@ -10,5 +10,5 @@ export function progressiveLayerBatchSize(layerCount, segmentCount) {
   // Bounded requests protect small devices without silently omitting any
   // part of a completed print. Round down to allow uneven layer densities.
   const averageMoves = segmentCount / layerCount;
-  return Math.max(1, Math.min(64, Math.floor(750000 / averageMoves)));
+  return Math.max(1, Math.min(64, Math.floor(120000 / averageMoves)));
 }
