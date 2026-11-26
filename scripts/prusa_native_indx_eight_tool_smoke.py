@@ -27,6 +27,11 @@ def _settings(raw):
 
 
 def candidate_printer(source):
+    # Official XL 5T defaults to binary G-code; text-only MakerVault worker
+    # requires its resolved temporary profile to select ASCII *before* parse.
+    source = b"\n".join(
+        b"binary_gcode = 0" if line.split(b"=",1)[0].strip()==b"binary_gcode"
+        else line for line in source.splitlines()) + b"\n"
     settings = _settings(source)
     if len(settings["nozzle_diameter"].split(",")) != 5:
         raise ValueError("INDX research expects native 5T baseline profile.")
