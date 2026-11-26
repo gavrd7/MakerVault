@@ -684,7 +684,7 @@ def queue_draft(job_id, user):
             try:
                 validate_plate_collisions((
                     item, _read_owned_file(owned[str(item["asset_id"])],
-                                           job.owner_id, MAX_INPUT, "Plate STL")
+                                           job.owner_id, input_model_budget(), "Plate STL")
                 ) for item in plate)
             except PlateCollisionError as exc:
                 raise SlicerExecutionError(
