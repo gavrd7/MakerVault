@@ -157,11 +157,11 @@ class PrusaOfflineMmuPreflightTests(TestCase):
         self.addCleanup(scope.stop)
         values,assets=self.parts()
         from core.tests.test_slicer_prusa_material_gcode_audit import toolpaths
-        remote.return_value=toolpaths()
+        remote.return_value=toolpaths(include_tower=True)
         with patch("core.slicer_prusa_material_preflight.resolved_prusa_profile",
                    side_effect=assets):
             output=slice_prusa_offline_mmu_candidate(uuid.uuid4(),**values)
-        self.assertEqual(output,toolpaths())
+        self.assertEqual(output,toolpaths(include_tower=True))
         self.assertEqual(remote.call_args.kwargs["prusa_offline_mmu"],
                          {"tools":[1,2],"tower":[55,150,0,250,210]})
         self.assertEqual(remote.call_args.kwargs["model_format"],"3mf")
@@ -185,7 +185,7 @@ class PrusaOfflineMmuPreflightTests(TestCase):
         self.addCleanup(scope.stop)
         values,assets=self.parts()
         from core.tests.test_slicer_prusa_material_gcode_audit import toolpaths
-        remote.return_value=toolpaths(leak=True)
+        remote.return_value=toolpaths(leak=True,include_tower=True)
         with patch("core.slicer_prusa_material_preflight.resolved_prusa_profile",
                    side_effect=assets):
             with self.assertRaises(WorkerError):
