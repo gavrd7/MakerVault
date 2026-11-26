@@ -75,7 +75,7 @@ def prepared_mesh_batches(sources, *, estimated_bytes_per_worker, mode="mesh"):
     owns all children so Celery soft timeouts can interrupt waits and reap
     every outstanding process before temporary files are removed.
     """
-    if mode not in ("mesh", "inspect"):
+    if mode not in ("mesh", "inspect", "stl"):
         raise ValueError("Unknown geometry preparation mode.")
     if not sources:
         yield iter(())
@@ -157,7 +157,12 @@ def _main():
     source, output, config = map(Path, sys.argv[2:])
     options = json.loads(config.read_text(encoding="utf-8"))
     raw = source.read_bytes()
-    if mode == "inspect":
+    if mode == "stl":
+        from .slicer_placed_stl import build_placed_stl
+        output.write_bytes(build_placed_stl(
+            [(options["item"], raw)], bed_width=options["bed_width"],
+            bed_depth=options["bed_depth"], _parallel=False))
+    elif mode == "inspect":
         from .slicer_mesh import inspect_stl
         output.write_text(json.dumps(inspect_stl(raw)), encoding="utf-8")
     elif mode == "mesh":
