@@ -214,11 +214,10 @@ def creality_command(binary: Path, workdir: Path):
         command.extend(material_args)
     else:
         command.extend(["--load-filaments", str(profiles[1])])
-        if placed.exists():
-            # Native STL path takes external machine/process/filament presets.
-            # Source coordinates are already baked into the positive bed
-            # quadrant. Disable native auto-arrangement for this trusted path.
-            command.extend(["--arrange", "0"])
+        # The installed Creality Print 7.3.1 binary rejects --arrange 0
+        # with CLI_INVALID_PARAMS. Keep the proven native STL invocation.
+        # Do not assume that the native slicer preserves the baked XY layout:
+        # the resulting G-code requires a placement acceptance check.
         command.append(str(model))
     return command
 
