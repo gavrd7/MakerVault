@@ -60,13 +60,13 @@ class Core3MFWorkerTests(TestCase):
             zipfile_out.writestr("_rels/.rels", "<Relationships/>")
         return out.getvalue()
 
-    def test_twenty_distinct_plate_objects_are_admitted(self):
+    def test_two_hundred_distinct_plate_objects_are_admitted(self):
         # Each resource has different geometry and its own build transform.
         ns = "http://schemas.microsoft.com/3dmanufacturing/core/2015/02"
         meshes = []
         items = []
         members = []
-        for index in range(1, 21):
+        for index in range(1, 201):
             meshes.append(
                 f'<object id="{index}" type="model"><mesh><vertices>'
                 '<vertex x="0" y="0" z="0"/>'
