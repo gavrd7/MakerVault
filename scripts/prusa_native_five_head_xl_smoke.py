@@ -12,6 +12,7 @@ import uuid
 
 from core.slicer_prusa_multitool_project import build_prusa_multitool_candidate
 from core.slicer_prusa_filament_palette import compile_prusa_filament_palette
+from core.slicer_prusa_process_settings import apply_prusa_process_overrides
 from core.tests.test_slicer_prusa_plate import cube, item
 from slicer_worker.prusa_vendor_profiles import (
     flatten_prusa_vendor_preset,validate_flat_prusa_preset)
@@ -62,6 +63,16 @@ def main(binary,vendor):
     for key in ("wipe_tower","wipe_into_infill","wipe_into_objects"):
         options[key]="0"
     process="".join(f"{k} = {v}\n" for k,v in sorted(options.items())).encode()
+    # Exercise the exact owner-facing native global-setting adapter on
+    # genuine five-tool output, not merely independent single-filament CLI.
+    process=apply_prusa_process_overrides(process, {
+        "layer_height":0.16, "wall_loops":3, "sparse_infill_density":23,
+        "top_shell_layers":4, "bottom_shell_layers":4,
+    })
+    assert b"layer_height = 0.16\\n" in process
+    assert b"perimeters = 3\\n" in process
+    assert b"fill_density = 23%\\n" in process
+
     encode=lambda data:base64.b64encode(data).decode()
     candidate={
         "job_id":str(uuid.uuid4()),"engine":"prusaslicer",
