@@ -69,9 +69,9 @@ def main(binary,vendor):
         "layer_height":0.16, "wall_loops":3, "sparse_infill_density":23,
         "top_shell_layers":4, "bottom_shell_layers":4,
     })
-    assert b"layer_height = 0.16\\n" in process
-    assert b"perimeters = 3\\n" in process
-    assert b"fill_density = 23%\\n" in process
+    assert b"layer_height = 0.16\n" in process
+    assert b"perimeters = 3\n" in process
+    assert b"fill_density = 23%\n" in process
 
     encode=lambda data:base64.b64encode(data).decode()
     candidate={
