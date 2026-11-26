@@ -310,8 +310,7 @@ def _validate_plate_execution(job):
             for item in prusa_objects:
                 if not isinstance(item, dict) or (
                         (item.get("colour_paint") or {}).get("regions") or
-                        (item.get("colour_paint") or {}).get("faces") or
-                        (item.get("seam_paint") or {}).get("regions")):
+                        (item.get("colour_paint") or {}).get("faces")):
                     raise SlicerExecutionError(
                         "PrusaSlicer surface painting is not yet verified.")
                 from .slicer_prusa_3mf import OBJECT_KEYS
@@ -344,6 +343,7 @@ def _validate_plate_execution(job):
                 item.get("modifier_volumes") or item.get("process_overrides") or
                 (item.get("variable_layer_profile") or {}).get("bands") or
                 (item.get("support_paint") or {}).get("regions") or
+                (item.get("seam_paint") or {}).get("regions") or
                 (item.get("fuzzy_skin_paint") or {}).get("regions")
                 for item in objects if isinstance(item, dict)):
             from .slicer_prusa_3mf import validate_prusa_project_admission
@@ -431,14 +431,21 @@ def _validate_plate_execution(job):
                 "Support painting test requires an unscaled model.")
     if any(isinstance(item, dict) and isinstance(item.get("seam_paint"), dict)
            and item["seam_paint"].get("regions") for item in objects):
-        if not ((job.engine == "orcaslicer" and job.engine_version == "2.5.0") or
+        if not ((job.engine == "prusaslicer" and job.engine_version == "2.9.7") or
+                (job.engine == "orcaslicer" and job.engine_version == "2.5.0") or
                 (job.engine == "bambustudio" and job.engine_version == "02.09.01.70") or
                 (job.engine == "crealityprint" and job.engine_version.startswith("7.3.") and
                  settings.get("multi_material_test") is True)):
-            raise SlicerExecutionError("Native seam painting test requires OrcaSlicer 2.5.0 or Creality Print 7.3.x CFS test mode.")
+            raise SlicerExecutionError("Native seam painting requires a supported verified engine.")
         if len(objects) != 1 or (settings.get("multi_material_test") and job.engine not in {"crealityprint", "bambustudio"}):
             raise SlicerExecutionError("Seam painting test requires one model (Creality: one two-colour CFS model).")
         item = objects[0]
+        if job.engine == "prusaslicer":
+            from .slicer_prusa_seam_audit import validate_prusa_front_seam_candidate
+            try:
+                validate_prusa_front_seam_candidate(item)
+            except ValueError as exc:
+                raise SlicerExecutionError(str(exc)) from exc
         if item.get("process_overrides"):
             raise SlicerExecutionError("Seam painting with per-object overrides is not yet verified.")
         if (any(abs(float(value)) > 0.000001 for value in
@@ -817,6 +824,7 @@ def process_queued_job(job_id):
                     item.get("process_overrides") or
                     (item.get("variable_layer_profile") or {}).get("bands") or
                     (item.get("support_paint") or {}).get("regions") or
+                    (item.get("seam_paint") or {}).get("regions") or
                     (item.get("fuzzy_skin_paint") or {}).get("regions")
                     for item in plate)):
                 stage = "building qualified native Prusa project"
@@ -1252,6 +1260,17 @@ def process_queued_job(job_id):
                     engine_name + " did not produce the requested variable layer "
                     "heights. The generated G-code has not been approved or stored."
                 ) from exc
+        if (job.engine == "prusaslicer" and plate and len(plate) == 1
+                and (plate[0].get("seam_paint") or {}).get("regions")):
+            stage = "auditing native Prusa front-face seam placement"
+            from .slicer_prusa_seam_audit import audit_prusa_seam_enforcer_gcode
+            width, depth = trusted_plate_dimensions(job.printer_profile)
+            try:
+                audit_prusa_seam_enforcer_gcode(
+                    output, plate[0], bed_width=width, bed_depth=depth)
+            except ValueError as exc:
+                raise SlicerExecutionError(
+                    "Prusa native seam did not follow the painted front-face enforcer.") from exc
         if job.engine == "prusaslicer":
             painted_enforcers = any(
                 any(region.get("slot") == 0 for region in
