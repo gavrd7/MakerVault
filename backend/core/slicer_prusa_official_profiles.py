@@ -150,6 +150,18 @@ def _flatten_native_profile(kind, name, vendor):
         return inherited
 
     settings = resolve(name)
+    # Pinned upstream INDX 2.5.16 uses a PrusaSlicer 3.x toolchange variable.
+    # The reviewed 2.9.7 runtime expects its native per-tool equivalent.
+    # Translate only the INDX printer toolchange script, not arbitrary INIs.
+    if vendor == "PrusaResearchINDX" and kind == "printer":
+        token = "filament_retract_length_toolchange"
+        for key, value in settings.items():
+            if token in value and key != "toolchange_gcode":
+                raise OfficialProfileError(
+                    "INDX preset uses an unsupported toolchange placeholder.")
+        if "toolchange_gcode" in settings:
+            settings["toolchange_gcode"] = settings["toolchange_gcode"].replace(
+                token, "retract_length_toolchange")
     required = {
         "printer": {"nozzle_diameter", "bed_shape"},
         "filament": {"filament_diameter"},
