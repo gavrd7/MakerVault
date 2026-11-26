@@ -29,7 +29,55 @@ def request():
     }
 
 
+
+def xl_request():
+    values,assets=PrusaOfflineMmuPreflightTests().parts()
+    from core.slicer_prusa_material_preflight import prepare_prusa_offline_xl_candidate
+    from core.tests.test_slicer_prusa_machine_topology import ini
+    assets[0]=ini("0.4,0.4,0.4,0.4,0.4","0")
+    settings={k:values[k] for k in (
+        "owner_id","printer_profile","process_profile","filament_profiles",
+        "rows","tools","bed_width","bed_depth")}
+    with patch("core.slicer_prusa_material_preflight.resolved_prusa_profile",
+               side_effect=assets):
+        candidate=prepare_prusa_offline_xl_candidate(**settings)
+    return {
+        "job_id":str(uuid.uuid4()),"engine":"prusaslicer",
+        "engine_version":"2.9.7","model_format":"3mf",
+        "model":encoded(candidate["model"]),
+        "printer_profile":encoded(candidate["printer"]),
+        "filament_profile":encoded(candidate["filament"]),
+        "process_profile":encoded(candidate["process"]),
+        "prusa_offline_xl":{"tools":[1,2]},
+    }
+
+
 class PrusaOfflineWorkerProtocolTests(TestCase):
+    def test_xl_independent_heads_admit_no_mmu_tower(self):
+        result=_decode_payload(xl_request())
+        self.assertEqual(result["prusa_offline_xl"]["tools"],[1,2])
+        self.assertNotIn("prusa_offline_mmu",result)
+
+    def test_xl_rejects_forged_tower_and_incompatible_profiles(self):
+        original=xl_request()
+        for changes in (
+            {"engine":"orcaslicer"},
+            {"engine_version":"2.9.6"},
+            {"prusa_offline_xl":{"tools":[1,2],"tower":[55,150,0,250,210]}},
+            {"prusa_offline_xl":{"tools":[1,1]}},
+            {"prusa_offline_xl":{"tools":[1,6]}},
+            {"prusa_offline_mmu":{"tools":[1,2],"tower":[55,150,0,250,210]}},
+        ):
+            with self.subTest(changes=changes),self.assertRaises(WorkerError):
+                _decode_payload({**original,**changes})
+        altered=dict(original)
+        altered["process_profile"]=encoded(
+            base64.b64decode(original["process_profile"]).replace(
+                b"wipe_tower = 0",b"wipe_tower = 1"))
+        with self.assertRaises(WorkerError):
+            _decode_payload(altered)
+
+
     def test_exact_mmu_preflight_bytes_are_accepted(self):
         payload=request()
         result=_decode_payload(payload)
