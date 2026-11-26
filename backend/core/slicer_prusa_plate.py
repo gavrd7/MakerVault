@@ -80,6 +80,7 @@ def build_prusa_placed_stl(objects_with_stl, *, bed_width, bed_depth):
     count = 0
     source_bytes = 0
     seen_source = set()
+    source_geometry = {}
     source_limit = source_input_budget(upper_cap=input_model_budget())
     facet_limit = plate_triangle_budget()
     byte_limit = input_model_budget()
@@ -103,32 +104,35 @@ def build_prusa_placed_stl(objects_with_stl, *, bed_width, bed_depth):
                 or (item.get("fuzzy_skin_paint") or {}).get("regions")
                 or (item.get("variable_layer_profile") or {}).get("bands")):
             raise SlicerProfileError("Unsupported Prusa object settings cannot be discarded.")
-        try:
-            inspected = inspect_stl(raw)
-            expected_faces = inspected["triangles"]
-        except MeshInspectionError as exc:
-            raise SlicerProfileError("Prusa plate contains an invalid STL.") from exc
+        if identity not in source_geometry:
+            try:
+                inspected = inspect_stl(raw)
+                expected_faces = inspected["triangles"]
+            except MeshInspectionError as exc:
+                raise SlicerProfileError("Prusa plate contains an invalid STL.") from exc
+            # Exact source bounds are needed: the inspection summary rounds to
+            # three decimal places, whereas preview pivots are calculated from
+            # the actual source vertices.
+            minimum = [float("inf")] * 3
+            maximum = [float("-inf")] * 3
+            seen = 0
+            for triangle in _triangles(raw, inspected_format=inspected["format"]):
+                seen += 1
+                for point in triangle:
+                    for axis in range(3):
+                        value = float(point[axis])
+                        if not math.isfinite(value) or abs(value) > 1_000_000:
+                            raise SlicerProfileError("Prusa source coordinates are unsafe.")
+                        minimum[axis] = min(minimum[axis], value)
+                        maximum[axis] = max(maximum[axis], value)
+            if seen != expected_faces:
+                raise SlicerProfileError("Prusa input STL triangle count changed.")
+            pivot = ((minimum[0] + maximum[0]) / 2,
+                     (minimum[1] + maximum[1]) / 2, minimum[2])
+            source_geometry[identity] = (inspected, expected_faces, pivot)
+        inspected, expected_faces, pivot = source_geometry[identity]
         if count + expected_faces > facet_limit or 84 + 50 * (count + expected_faces) > byte_limit:
             raise SlicerProfileError("Prusa plate geometry exceeds the native STL limit.")
-        # Exact source bounds are needed: the inspection summary rounds to
-        # three decimal places, whereas preview pivots are calculated from
-        # the actual source vertices.
-        minimum = [float("inf")] * 3
-        maximum = [float("-inf")] * 3
-        seen = 0
-        for triangle in _triangles(raw, inspected_format=inspected["format"]):
-            seen += 1
-            for point in triangle:
-                for axis in range(3):
-                    value = float(point[axis])
-                    if not math.isfinite(value) or abs(value) > 1_000_000:
-                        raise SlicerProfileError("Prusa source coordinates are unsafe.")
-                    minimum[axis] = min(minimum[axis], value)
-                    maximum[axis] = max(maximum[axis], value)
-        if seen != expected_faces:
-            raise SlicerProfileError("Prusa input STL triangle count changed.")
-        pivot = ((minimum[0] + maximum[0]) / 2,
-                 (minimum[1] + maximum[1]) / 2, minimum[2])
         try:
             matrix = [float(v) for v in _transform(item, bed_width / 2, bed_depth / 2).split()]
         except (ValueError, TypeError, KeyError) as exc:
