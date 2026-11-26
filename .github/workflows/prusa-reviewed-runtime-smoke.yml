@@ -336,11 +336,13 @@ jobs:
             -v "$TEST_VOLUME:/opt/engine-store:ro" \
             -v "$GITHUB_WORKSPACE/scripts/prusa_native_indx_eight_tool_smoke.py:/tmp/indx_eight.py:ro" \
             -v "$GITHUB_WORKSPACE/backend:/tmp/mv-backend:ro" \
+            -v "$PRUSA_INDX_VENDOR:/tmp/official-indx.ini:ro" \
             -e PYTHONPATH=/tmp/mv-backend:/opt/makervault-slicer \
             --entrypoint python3 prusa-integration:smoke \
             /tmp/indx_eight.py \
             /opt/engine-store/versions/prusaslicer/2.9.7/bin/prusa-slicer \
-            /opt/engine-store/versions/prusaslicer/2.9.7/resources/profiles/PrusaResearch.ini
+            /opt/engine-store/versions/prusaslicer/2.9.7/resources/profiles/PrusaResearch.ini \
+            /tmp/official-indx.ini
 
       - name: Research actual distinct MMU heater commands
         id: prusa_native_temperature_research
