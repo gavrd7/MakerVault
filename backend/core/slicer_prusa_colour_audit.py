@@ -3,6 +3,8 @@
 Research-grade geometry-specific contract, not arbitrary surface admission:
 the caller must supply independently verified disjoint wall regions. Purge
 tower moves outside those rectangles are not treated as painted deposition.
+Stationary priming and paths crossing into a region from outside are also
+excluded; a genuine deposited XY segment must lie within a measured wall.
 """
 import math
 import re
@@ -37,6 +39,7 @@ def audit_prusa_painted_wall_tools(data, *, painted_wall, unpainted_wall,
     tool=None
     e=0.0
     relative=False
+    relative_xy=False
     x=y=None
     role=""
     counts={0:{"painted":0,"unpainted":0},1:{"painted":0,"unpainted":0}}
@@ -54,7 +57,7 @@ def audit_prusa_painted_wall_tools(data, *, painted_wall, unpainted_wall,
             continue
         if opcode.startswith("T") and opcode[1:].isdigit():
             raise ValueError("Unsupported native Prusa painted tool selection.")
-        if opcode not in ("M82","M83","G92","G0","G00","G1","G01"):
+        if opcode not in ("M82","M83","G90","G91","G92","G0","G00","G1","G01"):
             continue
         values={k.upper():float(v) for k,v in WORD.findall(cmd)}
         if any(not math.isfinite(v) or abs(v)>1e9 for v in values.values()):
@@ -63,21 +66,34 @@ def audit_prusa_painted_wall_tools(data, *, painted_wall, unpainted_wall,
             relative=False
         elif opcode=="M83":
             relative=True
+        elif opcode=="G90":
+            relative_xy=False
+        elif opcode=="G91":
+            relative_xy=True
         elif opcode=="G92":
             e=values.get("E",e)
-        else:
             x=values.get("X",x)
             y=values.get("Y",y)
+        else:
+            old_x,old_y=x,y
+            if relative_xy:
+                x=x+values["X"] if x is not None and "X" in values else (None if "X" in values else x)
+                y=y+values["Y"] if y is not None and "Y" in values else (None if "Y" in values else y)
+            else:
+                x=values.get("X",x)
+                y=values.get("Y",y)
             if "E" not in values:
                 continue
             delta=values["E"] if relative else values["E"]-e
             e=e+values["E"] if relative else values["E"]
             if (delta<=1e-6 or opcode not in ("G1","G01") or
                     tool not in counts or x is None or y is None or
-                    "external perimeter" not in role):
+                    role.strip()!="external perimeter" or old_x is None or old_y is None or
+                    abs(x-old_x)+abs(y-old_y)<=1e-7):
                 continue
             for label,rect in (("painted",a),("unpainted",b)):
-                if rect[0]<=x<=rect[1] and rect[2]<=y<=rect[3]:
+                if (rect[0]<=x<=rect[1] and rect[2]<=y<=rect[3] and
+                        rect[0]<=old_x<=rect[1] and rect[2]<=old_y<=rect[3]):
                     counts[tool][label]+=1
     if (counts[1]["painted"]<minimum_moves or
             counts[0]["unpainted"]<minimum_moves or
