@@ -99,3 +99,23 @@ def memory_budget(*, reserve_bytes, expansion_factor):
     if available is None:
         return None
     return max(0, available - reserve_bytes) // expansion_factor
+
+
+def input_model_budget():
+    """Live single-source STL budget used by every engine's shared input path.
+
+    Each raw byte is retained alongside parsed geometry and model JSON, so
+    reserve eight times its size from live available RAM. No per-engine cap.
+    When resource telemetry is unavailable, retain the legacy admission for
+    small trusted jobs rather than assuming unlimited capacity.
+    """
+    available = memory_budget(
+        reserve_bytes=_RESERVED_BYTES, expansion_factor=8)
+    return available if available is not None else 32 * _MIB
+
+
+def gcode_transport_budget():
+    """Shared raw-output allowance; the JSON/base64 wire adds memory copies."""
+    available = memory_budget(
+        reserve_bytes=_RESERVED_BYTES, expansion_factor=6)
+    return available if available is not None else 64 * _MIB
