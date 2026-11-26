@@ -1,3 +1,14 @@
+### Qualification checkpoint — official 8T and native spatial regions
+
+The full INDX acceptance must pass after the latest per-tool 3MF
+adapter changes, including all eight native deposition tools,
+model-local modifier and negative-volume geometry, actual official
+CORE One INDX 8T printer-preset slicing, the audited worker protocol,
+and existing Orca and general MakerVault regressions. A failed CLI
+or worker validation is a release blocker, not a testing-only toggle.
+
+---
+
 ### INDX native modifiers and negative volumes
 
 Owner-bound 6–8-tool INDX slices now admit typed model-local
