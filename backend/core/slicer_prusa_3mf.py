@@ -182,8 +182,8 @@ def validate_prusa_project_admission(plate, settings, version):
         if (row.get("seam_paint") or {}).get("regions"):
             if len(plate) != 1:
                 raise ValueError("Prusa front seam painting requires one native object.")
-            from .slicer_prusa_seam_audit import validate_prusa_front_seam_candidate
-            validate_prusa_front_seam_candidate(row)
+            from .slicer_prusa_seam_audit import prusa_qualified_seam_direction
+            prusa_qualified_seam_direction(row)
         elif (row.get("seam_paint") or {}).get("faces"):
             raise ValueError("Prusa seam paint requires fingerprinted 3MF facets.")
         support = (row.get("support_paint") or {}).get("regions") or []
