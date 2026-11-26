@@ -20,6 +20,8 @@ LAYER_RANGES = "Metadata/layer_config_ranges.xml"
 # Keep the worker aligned with the validated STL and server-side 3MF builder.
 # Expanded XML, compressed archive and model upload bounds remain separate.
 MAX_TRIANGLES = 500_000
+# Match the backend plate exporter while retaining the per-model STL cap.
+MAX_PLATE_TRIANGLES = 1_500_000
 MAX_VERTICES_PER_OBJECT = 1_500_000
 
 # Only native, script-free process metadata used by the per-object
@@ -235,6 +237,8 @@ def validate_worker_3mf(data, *, native_tool_count=None, allow_creality_combined
         triangles = obj.findall("./{%s}mesh/{%s}triangles/{%s}triangle" % (CORE_NS, CORE_NS, CORE_NS))
         if not vertices or not triangles:
             raise WorkerError("3MF build contains empty objects.")
+        if len(triangles) > MAX_TRIANGLES:
+            raise WorkerError("3MF object triangle count exceeds worker limit.")
         count += len(triangles)
         for triangle in triangles:
             attributes = set(triangle.attrib)
@@ -266,7 +270,7 @@ def validate_worker_3mf(data, *, native_tool_count=None, allow_creality_combined
                     raise WorkerError("Painted colour refers to an unavailable native filament.")
                 used_native_paint_channels.add("paint_color")
                 painted_native_tools.add(native_states.index(colour))
-        if count > MAX_TRIANGLES:
+        if count > MAX_PLATE_TRIANGLES:
             raise WorkerError("3MF triangle count exceeds worker limit.")
         if len(vertices) > MAX_VERTICES_PER_OBJECT:
             raise WorkerError("3MF vertex count exceeds worker limit.")
