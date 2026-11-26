@@ -34,8 +34,7 @@ def prusa_machine_topology(printer_ini):
         "logical_tool_count": len(nozzles),
         "physical_nozzle_count": 1 if same_nozzle else len(nozzles),
         "nozzle_diameters_mm": tuple(nozzles),
-        "native_runtime_verified": len(nozzles) <= 5,
-        "toolchange_mechanism_verified": len(nozzles) <= 5,
+        "requires_new_toolchanger_qualification": len(nozzles) > 5,
     }
 
 
