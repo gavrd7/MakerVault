@@ -176,11 +176,16 @@ def validate_prusa_project_admission(plate, settings, version):
         if not isinstance(overrides, dict) or set(overrides) - OBJECT_KEYS:
             raise ValueError("Unsupported native Prusa object process settings.")
         apply_prusa_process_overrides(BASE, overrides)
-        if any(
-            (row.get(key) or {}).get("regions") or (row.get(key) or {}).get("faces")
-            for key in ("colour_paint", "seam_paint")
-        ):
-            raise ValueError("Prusa colour and seam painting need independent native toolpath proof.")
+        if ((row.get("colour_paint") or {}).get("regions") or
+                (row.get("colour_paint") or {}).get("faces")):
+            raise ValueError("Prusa colour painting needs audited native material routing.")
+        if (row.get("seam_paint") or {}).get("regions"):
+            if len(plate) != 1:
+                raise ValueError("Prusa front seam painting requires one native object.")
+            from .slicer_prusa_seam_audit import validate_prusa_front_seam_candidate
+            validate_prusa_front_seam_candidate(row)
+        elif (row.get("seam_paint") or {}).get("faces"):
+            raise ValueError("Prusa seam paint requires fingerprinted 3MF facets.")
         support = (row.get("support_paint") or {}).get("regions") or []
         fuzzy = (row.get("fuzzy_skin_paint") or {}).get("regions") or []
         if ((row.get("support_paint") or {}).get("faces") or
