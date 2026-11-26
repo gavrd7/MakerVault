@@ -9,7 +9,7 @@ const matrixFor = count => Array.from({length:count},(_,i)=>
 const fresh = (mode="mmu",count=2,primary="") => ({
   version:1,mode,tool_count:count,
   filament_profile_ids:Array.from({length:count},(_,i)=>i===0?primary:""),
-  model_tools:[],purge_matrix:mode==="mmu"?matrixFor(count):null,
+  model_tools:[],colour_tools:[],purge_matrix:mode==="mmu"?matrixFor(count):null,
 });
 const safeNumber = raw => {
   if(raw==="" || raw==null)return null;
@@ -47,6 +47,14 @@ export default function PrusaNativeToolEditor({
     onChange?.({...value,model_tools:tool?[
       ...existing,{instance_id:instanceId,tool:Number(tool)}]:existing});
   };
+  const updateColour=(slot,tool)=>{
+    const others=(value.colour_tools||[]).filter(row=>row.slot!==slot);
+    onChange?.({...value,colour_tools:tool?[
+      ...others,{slot,tool:Number(tool)}]:others});
+  };
+  const paintedSlots=[...new Set(models.flatMap(model=>
+    model.colour_paint?.regions?.map(region=>region.slot)||[]))];
+  const singleColour=models.length===1 && paintedSlots.length===1 && value?.mode==="mmu";
   const editMatrix=(source,target,raw)=>{
     const matrix=value.purge_matrix.map(row=>[...row]);
     matrix[source][target]=safeNumber(raw);
@@ -56,10 +64,16 @@ export default function PrusaNativeToolEditor({
     !models.some(model=>model.instance_id===row.instance_id));
   const status=value?(
     value.filament_profile_ids.every(Boolean) &&
-    models.length>=2 && models.length<=5 &&
+    ((models.length>=2 && models.length<=5) || singleColour) &&
     value.model_tools.length===models.length &&
     models.every(row=>value.model_tools.some(item=>item.instance_id===row.instance_id)) &&
-    new Set(value.model_tools.map(row=>row.tool)).size>=2 &&
+    (singleColour
+      ? value.model_tools[0]?.tool===1 &&
+        value.colour_tools?.length===1 &&
+        value.colour_tools[0].slot===paintedSlots[0] &&
+        value.colour_tools[0].tool>=2 && value.colour_tools[0].tool<=value.tool_count
+      : new Set(value.model_tools.map(row=>row.tool)).size>=2 &&
+        !(value.colour_tools||[]).length) &&
     (value.mode==="xl" ||
       (primeTower!=null && value.purge_matrix?.every((row,i)=>
         row.every((amount,j)=>i===j||amount!=null&&amount>=1&&amount<=1000))))
@@ -99,6 +113,7 @@ export default function PrusaNativeToolEditor({
               onChange?.({...value,tool_count:count,
                 filament_profile_ids:Array.from({length:count},(_,i)=>value.filament_profile_ids[i]||""),
                 model_tools:value.model_tools.filter(row=>row.tool<=count),
+                colour_tools:(value.colour_tools||[]).filter(row=>row.tool<=count),
                 purge_matrix:value.mode==="mmu"?matrixFor(count):null});
             }}>
             {[2,3,4,5].map(count=><option key={count} value={count}>{count}</option>)}
@@ -129,6 +144,22 @@ export default function PrusaNativeToolEditor({
           </select>
         </label>)}
       </div>
+      {paintedSlots.length>0 && <div style={{marginTop:10}}>
+        <p className="projectUploadHint">Native Prusa surface colour: the verified offline
+          MMU route currently accepts one upright model painted on its front face,
+          with base extruder T0 and one different painted native tool. Other paint
+          directions and combined tools can be saved but cannot yet be sliced.</p>
+        {paintedSlots.map(slot=><label key={slot} style={{display:"block",marginBottom:8}}>
+          Painted swatch {slot} — native Prusa tool
+          <select disabled={disabled} value={(value.colour_tools||[]).find(
+              row=>row.slot===slot)?.tool||""}
+            onChange={e=>updateColour(slot,e.target.value)}>
+            <option value="">Choose a painted tool…</option>
+            {Array.from({length:value.tool_count-1},(_,i)=>i+2).map(tool=>
+              <option key={tool} value={tool}>T{tool-1} (native tool {tool})</option>)}
+          </select>
+        </label>)}
+      </div>}
       {obsoleteToolMappings.length>0 && <div className="projectUploadHint">
         <p>{obsoleteToolMappings.length} native tool assignment(s) refer to removed models.
           Clear the stale assignments before slicing; your saved draft remains intact.</p>
@@ -168,7 +199,7 @@ export default function PrusaNativeToolEditor({
       </>}
       <p role="status">{status
         ?"Native tool assignments are complete. The server will verify the exact printer profile and run a model-local G-code audit before saving output."
-        :"Complete all native tool profiles, assign every model to at least two different tools, and provide MMU purge/tower values where applicable. You can save an incomplete draft."}</p>
+        :"Complete all native tool profiles, assign at least two distinct tools (or one model plus a painted native colour), and provide MMU purge/tower values where applicable. You can save an incomplete draft."}</p>
     </>}
   </section>;
 }
