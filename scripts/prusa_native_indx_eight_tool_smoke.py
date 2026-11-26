@@ -162,6 +162,18 @@ def main(binary, vendor, official=None):
             # distributed INDX machine profile and its exact toolchange
             # settings, not only the expanded XL independent-head control.
             source=Path(official).read_bytes()
+            from slicer_worker.prusa_vendor_profiles import KEY
+            outliers=[]
+            for raw_line in source.decode("utf-8-sig").splitlines():
+                line=raw_line.strip()
+                if not line or line.startswith(("#",";","[")) or "=" not in line:
+                    continue
+                key,_,value=line.partition("=")
+                key,value=key.strip(),value.strip()
+                if not KEY.fullmatch(key) or len(value)>65536:
+                    outliers.append((key[:64],len(value),bool(KEY.fullmatch(key))))
+            print("Official INDX vendor extended literals",outliers[:12],
+                  "total",len(outliers),flush=True)
             selected=flatten_prusa_vendor_preset(
                 source,kind="printer",
                 name="Prusa CORE One INDX 8T HF0.4 nozzle",
