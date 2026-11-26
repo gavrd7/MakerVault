@@ -123,6 +123,30 @@ class PrusaOfflineMmuPreflightTests(TestCase):
             tower=candidate["tower"])
         self.assertEqual(receipt["tools"],(1,3))
         self.assertTrue(receipt["wipe_tower"])
+        from slicer_worker.service import _decode_payload
+        import base64
+        encode=lambda value:base64.b64encode(value).decode("ascii")
+        payload={
+            "job_id":str(uuid.uuid4()),"engine":"prusaslicer",
+            "engine_version":"2.9.7","model_format":"3mf",
+            "model":encode(candidate["model"]),
+            "printer_profile":encode(candidate["printer"]),
+            "filament_profile":encode(candidate["filament"]),
+            "process_profile":encode(candidate["process"]),
+            "prusa_offline_colour":{
+                "tool":candidate["tool"],"tower":list(candidate["tower"])},
+        }
+        checked=_decode_payload(payload)
+        self.assertEqual(checked["prusa_offline_colour"]["tool"],2)
+        for corrupt in (
+            {"tool":1,"tower":list(candidate["tower"])},
+            {"tool":5,"tower":list(candidate["tower"])},
+            {"tool":2,"tower":list(candidate["tower"]),"script":"G28"},
+        ):
+            with self.subTest(corrupt=corrupt), self.assertRaises(WorkerError):
+                _decode_payload({**payload,"prusa_offline_colour":corrupt})
+        with self.assertRaises(WorkerError):
+            _decode_payload({**payload,"prusa_offline_xl":{"tools":[1,2]}})
 
     def test_painted_mmu_refuses_foreign_preset_before_reading_any_file(self):
         from core.slicer_prusa_material_preflight import prepare_prusa_offline_colour_candidate
