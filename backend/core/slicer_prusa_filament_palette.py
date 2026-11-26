@@ -21,6 +21,8 @@ NUMBER = re.compile(r"[0-9]{1,3}")
 
 def compile_prusa_filament_palette(printer_ini, filament_inis):
     topology = prusa_machine_topology(printer_ini)
+    if topology["requires_new_toolchanger_qualification"]:
+        raise SlicerProfileError("Prusa six-to-eight-tool palettes require separate qualification.")
     count = topology["logical_tool_count"]
     if count < 2 or not isinstance(filament_inis, (list, tuple)) or len(filament_inis) != count:
         raise SlicerProfileError("Prusa palette requires one explicit preset per native tool.")
@@ -52,10 +54,12 @@ def compile_prusa_filament_palette(printer_ini, filament_inis):
 
 
 def resolve_owned_prusa_filament_palette(printer_profile, filament_profiles, *, owner_id):
-    if owner_id is None or printer_profile.owner_id != owner_id or printer_profile.kind != "printer":
+    if owner_id is None or printer_profile.owner_id != owner_id or printer_profile.kind != "printer" or
+            printer_profile.engine != "prusaslicer":
         raise SlicerProfileError("Prusa palette printer profile is not owned.")
     if not isinstance(filament_profiles, (tuple, list)) or any(
-        p.owner_id != owner_id or p.kind != "filament" for p in filament_profiles
+        p.owner_id != owner_id or p.kind != "filament" or
+        p.engine != "prusaslicer" for p in filament_profiles
     ):
         raise SlicerProfileError("Prusa palette filament profile is not owned.")
     return compile_prusa_filament_palette(
