@@ -95,18 +95,18 @@ def prepare_prusa_offline_xl_candidate(
             not isinstance(filament_profiles, (tuple, list)) or
             any(p.owner_id != owner_id or p.kind != "filament" or
                 p.engine != "prusaslicer" for p in filament_profiles)):
-        raise SlicerProfileError("Prusa XL candidate requires privately owned native profiles.")
+        raise SlicerProfileError("Prusa XL/INDX candidate requires privately owned native profiles.")
     if (not isinstance(rows, (tuple, list)) or not isinstance(tools, (tuple, list)) or
-            len(rows) != len(tools) or not 2 <= len(rows) <= 5 or
+            len(rows) != len(tools) or not 2 <= len(rows) <= 12 or
             any(type(tool) is not int for tool in tools)):
-        raise SlicerProfileError("Prusa XL model/tool assignment is incomplete.")
+        raise SlicerProfileError("Prusa independent-head model/tool assignment is incomplete.")
     printer = resolved_prusa_profile(printer_profile)
     process = apply_prusa_process_overrides(
         resolved_prusa_profile(process_profile),
         {} if process_overrides is None else process_overrides)
     filaments = [resolved_prusa_profile(p) for p in filament_profiles]
     topology = prusa_machine_topology(printer)
-    if (topology["kind"] != "independent_tools" or
+    if (topology["kind"] not in ("independent_tools", "indx") or
             len(filaments) != topology["logical_tool_count"]):
         raise SlicerProfileError("Prusa XL candidate needs one preset per independent toolhead.")
     palette = compile_prusa_filament_palette(printer, filaments)
@@ -117,7 +117,7 @@ def prepare_prusa_offline_xl_candidate(
         project, printer_ini=printer, tools=tools)
     if (receipt["objects"] != len(rows) or receipt["wipe_tower"] or
             assignment["selected_tools"] != tuple(sorted(set(tools)))):
-        raise SlicerProfileError("Prusa XL native candidate verification failed.")
+        raise SlicerProfileError("Prusa independent native candidate verification failed.")
     return {
         "model": project, "printer": printer, "filament": palette,
         "process": process, "expected_tools": assignment["selected_tools"],
