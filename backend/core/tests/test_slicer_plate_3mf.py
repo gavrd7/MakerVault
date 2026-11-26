@@ -2,11 +2,53 @@ import io
 import json
 import uuid
 import zipfile
+from unittest.mock import patch
 from defusedxml import ElementTree as ET
 from django.test import SimpleTestCase
 from core.slicer_approval import fixture_stl
 from core.slicer_plate_3mf import build_plate_3mf, build_compound_plate_3mf, build_makervault_project_3mf, NS
 from core.slicer_profiles import SlicerProfileError
+
+
+class PlateTriangleBudgetTests(SimpleTestCase):
+    def test_three_individually_valid_models_can_exceed_old_plate_cap(self):
+        from core import slicer_plate_3mf as plate
+        original_render = plate._render_mesh
+        shape = fixture_stl()
+        items = [
+            ({"x_mm": x, "y_mm": 0, "rotation_deg": 0, "scale_percent": 100},
+             shape) for x in (-35, 0, 35)
+        ]
+
+        def counted_render(*args, **kwargs):
+            _count, width, depth = original_render(*args, **kwargs)
+            # Simulate three dense-but-valid source meshes without producing
+            # huge XML fixtures in the unit test.
+            return 300_000, width, depth
+
+        with patch.object(plate, "_render_mesh", side_effect=counted_render):
+            result = build_plate_3mf(items, bed_width=220, bed_depth=220)
+        with zipfile.ZipFile(io.BytesIO(result)) as package:
+            root = ET.fromstring(package.read("3D/3dmodel.model"))
+        self.assertEqual(len(root.findall(".//{%s}build/{%s}item" % (NS, NS))), 3)
+
+    def test_plate_budget_still_rejects_excessive_combined_mesh(self):
+        from core import slicer_plate_3mf as plate
+        original_render = plate._render_mesh
+        shape = fixture_stl()
+        items = [
+            ({"x_mm": x, "y_mm": 0, "rotation_deg": 0, "scale_percent": 100},
+             shape) for x in (-35, 0, 35)
+        ]
+
+        def counted_render(*args, **kwargs):
+            _count, width, depth = original_render(*args, **kwargs)
+            return 300_000, width, depth
+
+        with (patch.object(plate, "_render_mesh", side_effect=counted_render),
+              patch.object(plate, "MAX_PLATE_TRIANGLES", 800_000)):
+            with self.assertRaisesRegex(SlicerProfileError, "Total plate triangles"):
+                build_plate_3mf(items, bed_width=220, bed_depth=220)
 
 
 class ExactPlateBoundsTests(SimpleTestCase):
