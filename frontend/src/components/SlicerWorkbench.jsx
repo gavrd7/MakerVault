@@ -150,6 +150,7 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
   const [customBed, setCustomBed] = useState({ enabled: false, x: "220", y: "220" });
   const [flushSettings, setFlushSettings] = useState(null);
   const [slotFilamentProfiles,setSlotFilamentProfiles] = useState([]);
+  const [prusaNativeTools,setPrusaNativeTools] = useState(null);
   const [profileLineages, setProfileLineages] = useState({});
   const [workerConfigured, setWorkerConfigured] = useState(false);
   const [workerDeploymentEnabled, setWorkerDeploymentEnabled] = useState(false);
@@ -356,7 +357,7 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
     const hasWork = projectPlates.some(plate =>
       plate.objects.length || (plate.volumes || []).length) ||
       Object.keys(processOverrides).length > 0 || flushSettings !== null ||
-      slotFilamentProfiles.length > 0;
+      slotFilamentProfiles.length > 0 || prusaNativeTools !== null;
     if (hasWork && !window.confirm(
       "Start a new empty slicer project? Unsaved models, volumes and settings in this workspace will be discarded. Saved drafts, files and profiles are not deleted.")) return;
     plateLocalAssets.forEach(asset => {
@@ -370,6 +371,7 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
     setProcessOverrides({});
     setFlushSettings(null);
     setSlotFilamentProfiles([]);
+    setPrusaNativeTools(null);
     setCustomBed({enabled:false,x:"220",y:"220"});
     setPlateValidation(null);
     setWorkspaceEpoch(epoch => epoch + 1);
@@ -683,6 +685,7 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
     setProcessOverrides(job.settings?.process_overrides || {});
     setFlushSettings(job.settings?.flush_settings || null);
     setSlotFilamentProfiles(job.settings?.slot_filament_profiles || []);
+    setPrusaNativeTools(job.settings?.prusa_native_tools || null);
     userChosePlateRef.current = !!job.plate && job.plate !== "default";
     setEditorOpen(true);
     setForm(current => ({
@@ -932,8 +935,13 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
     if (busy || loading || !canPrepare) return;
     const exportingProject=mode==="project"||mode==="export-project";
     const sliceNow = !["draft","project","export-project","native-material"].includes(mode);
-    const offlineMultiMaterial = sliceNow && mode !== "all" &&
-      plateNeedsMultiMaterial(plateObjects);
+    const prusaNativeOffline = form.engine==="prusaslicer" && prusaNativeTools !== null;
+    const offlineMultiMaterial = prusaNativeOffline ||
+      (sliceNow && mode !== "all" && plateNeedsMultiMaterial(plateObjects));
+    if(prusaNativeOffline && mode==="all"){
+      setError("Slice the selected Prusa native-tool plate first. Each plate needs separate explicit tool assignments.");
+      return;
+    }
     const crealityMaterialTest = offlineMultiMaterial && form.engine==="crealityprint";
     if (crealityMaterialTest) {
       const singlePainted = plateObjects.length === 1 &&
@@ -1018,6 +1026,7 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
               save_gcode_to_library:false,
               ...(flushSettings ? {flush_settings:flushSettings} : {}),
               ...(slotFilamentProfiles.length ? {slot_filament_profiles:slotFilamentProfiles} : {}),
+              ...(prusaNativeOffline ? {prusa_native_tools:prusaNativeTools,multi_material_test:true} : {}),
               ...(["orcaslicer","prusaslicer"].includes(form.engine)?{process_overrides:processOverrides}:{}),
             },
           };
@@ -1066,7 +1075,8 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
             save_gcode_to_library: saveOutput, workflow,
             ...(offlineMultiMaterial ? {multi_material_test:true} : {}),
             ...(flushSettings ? { flush_settings: flushSettings } : {}),
-            ...(slotFilamentProfiles.length ? {slot_filament_profiles:slotFilamentProfiles} : {}),
+            ...(slotFilamentProfiles.length && !prusaNativeOffline ? {slot_filament_profiles:slotFilamentProfiles} : {}),
+            ...(prusaNativeOffline ? {prusa_native_tools:prusaNativeTools} : {}),
             ...(["orcaslicer", "prusaslicer"].includes(form.engine) ? { process_overrides: processOverrides } : {}) },
         },
       });
@@ -1636,6 +1646,7 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
       processOverrides={processOverrides} onProcessOverridesChange={setProcessOverrides}
       flushSettings={flushSettings} onFlushSettingsChange={setFlushSettings}
       slotFilamentProfiles={slotFilamentProfiles} onSlotFilamentProfilesChange={setSlotFilamentProfiles}
+      prusaNativeTools={prusaNativeTools} onPrusaNativeToolsChange={setPrusaNativeTools}
       filamentProfiles={slotFilamentChoices} spools={spools}
       onRememberedProfiles={remembered => {
         setProfiles(current => {
@@ -1702,6 +1713,7 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
               userChosePlateRef.current=false;
               setFlushSettings(null);
               setSlotFilamentProfiles([]);
+              setPrusaNativeTools(null);
               setForm(current => ({
                 ...current, engine: key,
                 plate: key !== current.engine ? "default" : current.plate,
@@ -1733,7 +1745,7 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
                 issues.map(item => item.label).join(", ") +
                 ". Your edits will be preserved. Change version anyway?"
               )) return;
-              setFlushSettings(null);setSlotFilamentProfiles([]);
+              setFlushSettings(null);setSlotFilamentProfiles([]);setPrusaNativeTools(null);
               update("engine_version",version);
             }}>
             <option value="">Choose a slicer version</option>
