@@ -36,6 +36,7 @@ from .slicer_modifier_volumes import (validate_native_modifier_execution,
                                       assert_native_plate_volume_coverage)
 from .slicer_plate_validation import validate_plate_collisions, PlateCollisionError
 from .slicer_worker_client import SlicerWorkerError, health, run_remote_job
+from .slicer_resource_budget import input_model_budget
 
 
 logger = logging.getLogger(__name__)
@@ -788,7 +789,7 @@ def process_queued_job(job_id):
         # Decode immutable private paint assets in memory only. The database
         # job retains compact references and is never overwritten with masks.
         job.settings = expand_painted_settings(job.owner, job.settings or {})
-        model = _read_owned_file(job.input_asset, job.owner_id, MAX_INPUT, "Model")
+        model = _read_owned_file(job.input_asset, job.owner_id, input_model_budget(), "Model")
         model_format = "stl"
         material_result = None
         prusa_placed_stl = False
@@ -813,7 +814,7 @@ def process_queued_job(job_id):
                 ).first()
                 if not asset:
                     raise SlicerExecutionError("A source STL is no longer available.")
-                raw = _read_owned_file(asset, job.owner_id, MAX_INPUT, "Plate STL")
+                raw = _read_owned_file(asset, job.owner_id, input_model_budget(), "Plate STL")
                 if asset.sha256 and hashlib.sha256(raw).hexdigest() != asset.sha256:
                     raise SlicerExecutionError("A plate STL has changed since import.")
                 source_models.append((item, raw))
