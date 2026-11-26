@@ -169,15 +169,15 @@ class PrusaSingleMaterialAdmissionTests(TestCase):
         from core.slicer_execution import _validate_plate_execution, SlicerExecutionError
         base = {"x_mm": 10, "y_mm": 0, "z_mm": 0,
                 "rotation_deg": 0, "scale_percent": 100}
-        for field, value in (
-            ("colour_paint", {"regions": [{"colour": "#ff0000"}]}),
-            ("seam_paint", {"regions": [{"state": "enforce"}]}),
+        for field, value, expected in (
+            ("colour_paint", {"regions": [{"colour": "#ff0000"}]}, "not yet verified"),
+            ("seam_paint", {"regions": [{"state": "enforce"}]}, "fingerprinted native regions"),
         ):
             with self.subTest(field=field):
                 job = SimpleNamespace(engine="prusaslicer", engine_version="2.9.7",
                                       settings={"plate_objects": [{**base, field: value}]},
                                       owner=None, printer_profile_id="verified")
-                with self.assertRaisesRegex(SlicerExecutionError, "not yet verified"):
+                with self.assertRaisesRegex(SlicerExecutionError, expected):
                     _validate_plate_execution(job)
 
     def test_native_support_enforcer_blocker_and_fuzzy_admit_separately(self):
