@@ -62,7 +62,7 @@ MAX_FACES = 500_000
 MAX_STL_BYTES = 32 * 1024 * 1024
 
 
-def build_prusa_placed_stl(objects_with_stl, *, bed_width, bed_depth):
+def build_prusa_placed_stl(objects_with_stl, *, bed_width, bed_depth, _parallel=True):
     """Bake independently transformed source meshes into a bounded native STL.
 
     Visual coordinates are centred on the bed; individual source meshes use
@@ -75,6 +75,47 @@ def build_prusa_placed_stl(objects_with_stl, *, bed_width, bed_depth):
     if not all(isinstance(n, (float, int)) and not isinstance(n, bool)
                and math.isfinite(n) and 1 <= n <= 1000 for n in (bed_width, bed_depth)):
         raise SlicerProfileError("Prusa plate requires verified native build dimensions.")
+    if _parallel and len(objects_with_stl) > 1:
+        from .slicer_parallel_geometry import prepared_mesh_batches
+        # Validate aggregate source and output budgets before spawning children.
+        sources = []
+        seen = {}
+        total_faces = 0
+        for index, pair in enumerate(objects_with_stl):
+            if (not isinstance(pair, tuple) or len(pair) != 2
+                    or not isinstance(pair[0], dict) or not isinstance(pair[1], bytes)):
+                raise SlicerProfileError("Invalid Prusa plate source.")
+            item, raw = pair
+            identity = (len(raw), hashlib.sha256(raw).digest())
+            if identity not in seen:
+                try:
+                    seen[identity] = inspect_stl(raw)["triangles"]
+                except MeshInspectionError as exc:
+                    raise SlicerProfileError("Prusa plate contains an invalid STL.") from exc
+            total_faces += seen[identity]
+            sources.append((index, raw, {"item": item, "bed_width": bed_width,
+                                         "bed_depth": bed_depth}))
+        if (sum(identity[0] for identity in seen) >
+                source_input_budget(upper_cap=input_model_budget()) or
+                total_faces > plate_triangle_budget() or
+                84 + 50 * total_faces > input_model_budget()):
+            raise SlicerProfileError("Prusa plate geometry exceeds the native STL limit.")
+        estimate = 128 * 1024**2 + max(len(raw) for _, raw, _ in sources) * 16
+        with prepared_mesh_batches(sources, estimated_bytes_per_worker=estimate,
+                                   mode="stl") as prepared:
+            first = next(prepared)
+            if first[2] is not None:
+                from itertools import chain
+                merged = bytearray(first[2][:84])
+                for index, raw, data in chain((first,), prepared):
+                    expected = seen[(len(raw), hashlib.sha256(raw).digest())]
+                    if (data is None or len(data) != 84 + 50 * expected
+                            or struct.unpack_from("<I", data, 80)[0] != expected):
+                        raise SlicerProfileError("Invalid parallel placed STL output.")
+                    merged.extend(memoryview(data)[84:])
+                struct.pack_into("<I", merged, 80, total_faces)
+                return bytes(merged)
+        # Single-core fallback retains the efficient per-source pivot cache.
     output = bytearray(b"MakerVault Prusa single-material placed plate".ljust(80, b"\0")
                        + b"\0" * 4)
     count = 0
