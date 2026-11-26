@@ -96,6 +96,7 @@ def _encode(raw, limit):
 def run_remote_job(job_id, engine, version, model, printer_profile, filament_profile, process_profile, *, timeout_seconds=900, model_format="stl", filament_profiles=None,
                    creality_model_stls=None, creality_tool_ids=None,
                    creality_native_project=False, native_modifier_project=False, prusa_placed_stl=False,
+                   creality_placed_stl=False,
                    prusa_offline_mmu=None, prusa_offline_xl=None,
                    prusa_offline_colour=None):
     if model_format not in {"stl", "3mf"}:
@@ -175,6 +176,16 @@ def run_remote_job(job_id, engine, version, model, printer_profile, filament_pro
                     for v in tower)):
             raise SlicerWorkerError("Invalid offline Prusa painted tool or tower.")
         payload["prusa_offline_colour"]={"tool":tool,"tower":list(tower)}
+    if creality_placed_stl:
+        if (creality_placed_stl is not True or engine != "crealityprint"
+                or version != "7.3.1" or model_format != "stl"
+                or any((filament_profiles is not None, creality_model_stls is not None,
+                        creality_tool_ids is not None, creality_native_project,
+                        native_modifier_project, prusa_placed_stl,
+                        prusa_offline_mmu is not None, prusa_offline_xl is not None,
+                        prusa_offline_colour is not None))):
+            raise SlicerWorkerError("Invalid Creality placed-STL worker contract.")
+        payload["creality_placed_stl"] = True
     if prusa_placed_stl:
         if (prusa_placed_stl is not True or engine != "prusaslicer"
                 or version != "2.9.7" or model_format != "stl"
