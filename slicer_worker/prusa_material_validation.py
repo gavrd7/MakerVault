@@ -145,8 +145,13 @@ def validate_prusa_material_candidate(data, *, printer_ini, tools=None, colour=F
         if colour and (receipt["objects"]!=1 or receipt["regions"]!=0
                        or receipt["paint_channels"] or receipt["layer_ranges"]):
             _refuse()
+        # Native INDX modifier/negative volumes retain their exact typed,
+        # independently validated 3MF mesh and per-model tool metadata.
+        # Other architectures still require unmodified model meshes.
+        indx = logical_count > 5 and not changer
         if not colour and (receipt["objects"]!=len(tools) or
-                           receipt["paint_channels"] or receipt["regions"] or
+                           receipt["paint_channels"] or
+                           (receipt["regions"] and not indx) or
                            receipt["layer_ranges"]):
             _refuse()
         return {"objects":receipt["objects"],"colour_facets":marked if colour else 0,
