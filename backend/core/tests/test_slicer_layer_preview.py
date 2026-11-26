@@ -578,7 +578,7 @@ class FullLayerEndpointTests(TestCase):
         self.client.force_login(self.owner)
         url = f"/api/files/{self.asset.pk}/gcode/layers/?quality=full&zs=0.2,0.4&direct=1"
         with patch("core.slicer_preview_cache.cache", backend):
-            with patch("core.api_views.layer_batch_toolpaths", wraps=layer_batch_toolpaths) as parser:
+            with patch("core.slicer_layer_preview.layer_batch_toolpaths", wraps=layer_batch_toolpaths) as parser:
                 first = self.client.get(url)
                 second = self.client.get(url)
                 self.assertEqual(first.status_code, 200, first.content)
