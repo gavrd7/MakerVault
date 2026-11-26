@@ -90,3 +90,16 @@ class StreamedFullPlateTests(SimpleTestCase):
             build_streamed_compound_3mf(
                 [(item, shape), ({**item, "x_mm": 200}, shape)],
                 bed_width=220, bed_depth=220)
+
+
+    @patch("core.slicer_streamed_plate_3mf._available_bytes", return_value=8*1024**3)
+    def test_parallel_and_sequential_geometry_are_identical(self, _memory):
+        shape = fixture_stl()
+        item = {"x_mm": -35, "y_mm": 0, "rotation_deg": 15, "scale_percent": 100}
+        models = [(item, shape), ({**item, "x_mm": 35}, shape.replace(b"10", b"12"))]
+        with patch("core.slicer_parallel_geometry.preparation_worker_count", return_value=1):
+            sequential = build_streamed_compound_3mf(models, bed_width=220, bed_depth=220)
+        with patch("core.slicer_parallel_geometry.preparation_worker_count", return_value=2):
+            parallel = build_streamed_compound_3mf(models, bed_width=220, bed_depth=220)
+        with zipfile.ZipFile(io.BytesIO(sequential)) as a, zipfile.ZipFile(io.BytesIO(parallel)) as b:
+            self.assertEqual(a.read("3D/3dmodel.model"), b.read("3D/3dmodel.model"))
