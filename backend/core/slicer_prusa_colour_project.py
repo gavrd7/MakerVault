@@ -1,7 +1,7 @@
 """Bounded Prusa 2.9.7 two-colour project encoder for offline qualification.
 
 The native worker remains single-material. This function deliberately admits
-only the two logical tools already verified by native painted-wall fixtures.
+up to five logical Prusa tools. The full range must pass native toolpath\nqualification before entering the authenticated MMU/XL workbench.
 """
 import io
 import struct
@@ -20,11 +20,12 @@ from .slicer_profiles import SlicerProfileError
 def build_prusa_colour_candidate(item, source, *, printer_ini, colour_tool_indices,
                                  bed_width, bed_depth):
     topology = prusa_machine_topology(printer_ini)
-    if (topology["logical_tool_count"] < 2 or not isinstance(item, dict)
+    count = topology["logical_tool_count"]
+    if (not 2 <= count <= 5 or not isinstance(item, dict)
             or not isinstance(source, bytes)
             or not isinstance(colour_tool_indices, dict)
             or not colour_tool_indices
-            or any(type(k) is not int or type(v) is not int or v not in (0,1)
+            or any(type(k) is not int or type(v) is not int or not 0 <= v < count
                    for k,v in colour_tool_indices.items())
             or any(item.get(k) for k in ("modifier_volumes","negative_volumes",
                    "process_overrides","variable_layer_profile","support_paint",
@@ -42,10 +43,11 @@ def build_prusa_colour_candidate(item, source, *, printer_ini, colour_tool_indic
         raw.extend(struct.pack("<12fH",0,0,0,
                    *(float(n) for vertex in triangle for n in vertex),0))
         state = tags.get("paint_color")
-        if state is not None and state not in ("4","8"):
+        accepted = {"4", "8", "0C", "1C", "2C"}
+        if state is not None and state not in accepted:
             raise SlicerProfileError("Unqualified Prusa native colour state.")
         states.append(state)
-    if "8" not in states:
+    if not any(state not in (None, "4") for state in states):
         raise SlicerProfileError("Prusa colour candidate needs second-tool facets.")
     row = dict(item)
     row.pop("colour_paint")
