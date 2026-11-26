@@ -118,7 +118,7 @@ def prepare_prusa_workbench_material(job, *, settings=None):
                 or selected[0].get("volumes")
                 or selected[0].get("prime_tower") != settings.get("prime_tower")):
             raise SlicerProfileError("Prusa active plate, models and tower must match saved project.")
-    forbidden = ("modifier_volumes", "process_overrides", "colour_paint",
+    forbidden = ("modifier_volumes", "colour_paint",
                  "support_paint", "seam_paint", "fuzzy_skin_paint",
                  "variable_layer_profile", "negative_volumes")
     for row in objects:
@@ -126,6 +126,23 @@ def prepare_prusa_workbench_material(job, *, settings=None):
             raise SlicerProfileError("Prusa multi-material models cannot combine unqualified edits.")
         if row.get("z_mm", 0) != 0 or row.get("text_model"):
             raise SlicerProfileError("Prusa offline materials require non-elevated STL models.")
+        # Genuine pinned Prusa 2.9.7 MMU5 and independent XL5 G-code
+        # verified different model-local inner perimeters on identical
+        # cubes with distinct native tools. Admit only these two bounded
+        # native object settings; never silently drop other edits.
+        from .slicer_prusa_3mf import BASE, OBJECT_KEYS
+        from .slicer_prusa_process_settings import apply_prusa_process_overrides
+        local = row.get("process_overrides", {})
+        if local is None:
+            local = {}
+        if not isinstance(local, dict) or set(local) - OBJECT_KEYS:
+            raise SlicerProfileError(
+                "Prusa MMU/XL supports only Object wall loops and infill density.")
+        try:
+            apply_prusa_process_overrides(BASE, local)
+        except (ValueError, TypeError, OverflowError) as exc:
+            raise SlicerProfileError("Invalid Prusa multi-tool Object settings.") from exc
+
     overrides = settings.get("process_overrides", {})
     if not isinstance(overrides, dict) or set(overrides) - PRUSA_MULTITOOL_PROCESS_KEYS:
         raise SlicerProfileError(
