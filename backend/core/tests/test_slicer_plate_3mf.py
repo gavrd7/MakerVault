@@ -51,6 +51,26 @@ class PlateTriangleBudgetTests(SimpleTestCase):
                 build_plate_3mf(items, bed_width=220, bed_depth=220)
 
 
+class MeshStreamingTests(SimpleTestCase):
+    def test_unpainted_mesh_streams_source_facets_in_two_passes(self):
+        from core import slicer_plate_3mf as plate
+        from xml.etree import ElementTree as ET
+        original = plate._triangles
+        invocations = []
+
+        def instrumented(raw):
+            invocations.append(1)
+            return original(raw)
+
+        source = fixture_stl()
+        element = ET.Element("object")
+        with patch.object(plate, "_triangles", side_effect=instrumented):
+            count, _width, _depth = plate._render_mesh(source, element)
+        self.assertEqual(count, 4)
+        self.assertEqual(len(invocations), 2)
+        self.assertEqual(len(element.findall(".//{%s}triangle" % NS)), 4)
+
+
 class FullPlateInstanceTests(SimpleTestCase):
     def test_distinct_models_on_full_plate_preserve_independent_placement(self):
         # Use distinct triangle footprints and 20 positions to exercise the
