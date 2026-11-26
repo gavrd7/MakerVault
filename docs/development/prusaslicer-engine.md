@@ -1,3 +1,18 @@
+### Official INDX G-code spatial mismatch remeasurement
+
+Although the official INDX 8T printer profile now passes real native
+2.9.7 parsing and export with the strictly scoped toolchange
+placeholder substitution, its generated G-code has not yet passed
+the model-local moving-material audit. The research-only diagnostic
+now separately counts E-only stationary recovery, true XY-moving
+per-model/T0–T7 segments and a bounded sample of any cross-tool
+paths. Production continues to reject files unless each assigned
+tool is independently proven to deposit only on the corresponding
+model. These findings determine whether the issue is an audit
+false positive or a genuine toolchange mismatch.
+
+---
+
 ### Native material deposition audit — stationary toolchange recovery
 
 The official CORE One INDX 8T profile demonstrated 1,042 genuinely
