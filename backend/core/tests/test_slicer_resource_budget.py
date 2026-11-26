@@ -63,3 +63,30 @@ class SourceInputBudgetTests(SimpleTestCase):
     @patch.object(budget, "_read_number", side_effect=[None, None, None, None])
     def test_unlimited_cgroup_resorts_to_host_budget(self, read):
         self.assertIsNone(budget._cgroup_available_bytes())
+
+
+class EngineNeutralCapacityTests(SimpleTestCase):
+    @patch.object(budget, "_host_available_bytes", return_value=8 * 1024**3)
+    @patch.object(budget, "_cgroup_available_bytes", return_value=4 * 1024**3)
+    def test_shared_model_and_output_budgets_follow_cgroup_memory(self, *_):
+        memory = 4 * 1024**3
+        reserve = 256 * MiB
+        self.assertEqual(budget.input_model_budget(), (memory - reserve) // 8)
+        self.assertEqual(budget.gcode_transport_budget(), (memory - reserve) // 6)
+        self.assertEqual(budget.project_archive_budget(), (memory - reserve) // 8)
+        self.assertEqual(budget.xml_geometry_budget(), (memory - reserve) // 12)
+        self.assertEqual(budget.plate_triangle_budget(), (memory - reserve) // 1200)
+
+    @patch.object(budget, "_host_available_bytes", return_value=16 * 1024**3)
+    @patch.object(budget, "_cgroup_available_bytes", return_value=512 * MiB)
+    def test_low_cgroup_headroom_rejects_large_jobs(self, *_):
+        self.assertEqual(budget.input_model_budget(), 32 * MiB)
+        self.assertEqual(budget.gcode_transport_budget(), (256 * MiB) // 6)
+        self.assertEqual(budget.plate_triangle_budget(), (256 * MiB) // 1200)
+
+    @patch.object(budget, "_host_available_bytes", return_value=None)
+    @patch.object(budget, "_cgroup_available_bytes", return_value=None)
+    def test_unknown_telemetry_does_not_claim_unlimited_slicing(self, *_):
+        self.assertEqual(budget.input_model_budget(), 32 * MiB)
+        self.assertEqual(budget.gcode_transport_budget(), 64 * MiB)
+        self.assertIsNone(budget.resource_snapshot()["available_bytes"])
