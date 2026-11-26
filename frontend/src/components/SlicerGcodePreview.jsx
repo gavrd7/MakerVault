@@ -248,9 +248,38 @@ export default function SlicerGcodePreview({ fileId = null, preview, bedSize = n
         throw new Error(message);
       }
       return response.json();
-    }).then(data => {
+    }).then(async data => {
       if (!live) return;
       if (!Array.isArray(data.segments)) throw new Error("Invalid layer response.");
+      if (!data.complete) {
+        // The original movement inspector deliberately retains separate
+        // G-code moves, unlike the collinear geometry used for the 3D view.
+        // Page the original source instead of leaving a dense layer partial.
+        const segments = [];
+        let cursor = 0;
+        while (live) {
+          const url = "/api/files/" + encodeURIComponent(fileId) +
+            "/gcode/layer/?z=" + encodeURIComponent(z.toFixed(3)) +
+            "&page_start=" + cursor;
+          const response = await fetch(url, {
+            credentials: "same-origin", signal: controller.signal,
+          });
+          if (!response.ok) {
+            const detail = await response.json().catch(() => ({}));
+            throw new Error(detail.error || "Exact layer page unavailable.");
+          }
+          const page = await response.json();
+          if (!Array.isArray(page.segments) ||
+              !Number.isSafeInteger(page.next_offset) ||
+              page.next_offset <= cursor)
+            throw new Error("Invalid exact layer pagination.");
+          for (const move of page.segments) segments.push(move);
+          cursor = page.next_offset;
+          if (!page.has_more) break;
+        }
+        if (!live) return;
+        data = {...data, segments, complete: true, limited: false};
+      }
       fullLayerCache.current.set(key, data);
       // Retain only a small number of recent layers in browser memory.
       if (fullLayerCache.current.size > 12) {
