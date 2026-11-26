@@ -30,9 +30,11 @@ def prusa_machine_topology(printer_ini):
         raise ValueError("Prusa binary G-code cannot enter text preview/worker.")
     return {
         "kind": "single_nozzle_changer" if same_nozzle else
+                "unqualified_toolchanger" if len(nozzles) > 5 else
                 "independent_tools" if len(nozzles) > 1 else "single_tool",
         "logical_tool_count": len(nozzles),
-        "physical_nozzle_count": 1 if same_nozzle else len(nozzles),
+        "physical_nozzle_count": None if len(nozzles) > 5 else
+                                 1 if same_nozzle else len(nozzles),
         "nozzle_diameters_mm": tuple(nozzles),
         "requires_new_toolchanger_qualification": len(nozzles) > 5,
     }
