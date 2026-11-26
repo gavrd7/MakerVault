@@ -109,8 +109,8 @@ def main(binary,vendor):
             operation=command.split(None,1)[0].upper()
             if operation not in (b"M104",b"M109"):
                 continue
-            temp=re.search(rb"(?:^|\\s)S([0-9]{1,3})(?:\\s|$)",command)
-            tool=re.search(rb"(?:^|\\s)T([0-9])(?:\\s|$)",command)
+            temp=re.search(rb"(?:^|\s)S([0-9]{1,3})(?:\s|$)",command)
+            tool=re.search(rb"(?:^|\s)T([0-9])(?:\s|$)",command)
             heaters.append((operation.decode("ascii"),
                             int(tool.group(1)) if tool else None,
                             int(temp.group(1)) if temp else None))
