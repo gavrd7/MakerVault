@@ -106,7 +106,8 @@ export default function SlicerGcodePreview({ fileId = null, preview, bedSize = n
       let completed = checkpoint.completed;
       let limited = false;
       let pendingLayers = 0;
-      let requestSize = batchSize;
+      let requestSize = checkpoint.requestSize || batchSize;
+      let successfulBatches = 0;
       try {
         for (let offset = completed; offset < layers.length && !cancelled;) {
           const requested = layers.slice(offset, offset + requestSize);
@@ -148,6 +149,8 @@ export default function SlicerGcodePreview({ fileId = null, preview, bedSize = n
           if (!data) {
             if (requestSize > 1) {
               requestSize = Math.max(1, Math.floor(requestSize / 2));
+              checkpoint.requestSize = requestSize;
+              successfulBatches = 0;
               continue;
             }
             throw lastError || new Error("Unable to load exact layer geometry.");
@@ -201,6 +204,15 @@ export default function SlicerGcodePreview({ fileId = null, preview, bedSize = n
           offset += requested.length;
           checkpoint.chunks = chunks.slice();
           checkpoint.completed = completed;
+          // Keep the last reliable transfer size across manual retries.
+          // After multiple successful responses, gently increase throughput
+          // again without changing or dropping any extrusion movements.
+          successfulBatches++;
+          if (successfulBatches >= 4 && requestSize < batchSize) {
+            requestSize = Math.min(batchSize, requestSize * 2);
+            successfulBatches = 0;
+          }
+          checkpoint.requestSize = requestSize;
           // Publish every successful page. A retry begins here, not at layer
           // zero; a mobile device never needs to redo finished GPU batches.
           if (pendingLayers || completed === layers.length) {
