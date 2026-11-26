@@ -96,7 +96,7 @@ def _encode(raw, limit):
 def run_remote_job(job_id, engine, version, model, printer_profile, filament_profile, process_profile, *, timeout_seconds=900, model_format="stl", filament_profiles=None,
                    creality_model_stls=None, creality_tool_ids=None,
                    creality_native_project=False, native_modifier_project=False, prusa_placed_stl=False,
-                   prusa_offline_mmu=None):
+                   prusa_offline_mmu=None, prusa_offline_xl=None):
     if model_format not in {"stl", "3mf"}:
         raise SlicerWorkerError("Unsupported slicer input format.")
     if not isinstance(timeout_seconds, int) or not 1 <= timeout_seconds <= 900:
@@ -121,10 +121,26 @@ def run_remote_job(job_id, engine, version, model, printer_profile, filament_pro
     }
     if model_format == "3mf":
         payload["model_format"] = "3mf"
+    if prusa_offline_xl is not None:
+        if (engine != "prusaslicer" or version != "2.9.7" or
+                model_format != "3mf" or not isinstance(prusa_offline_xl, dict)
+                or set(prusa_offline_xl) != {"tools"} or
+                prusa_offline_mmu is not None or
+                any((filament_profiles is not None, creality_model_stls is not None,
+                     creality_tool_ids is not None, creality_native_project,
+                     native_modifier_project, prusa_placed_stl))):
+            raise SlicerWorkerError("Invalid offline Prusa XL worker contract.")
+        tools=prusa_offline_xl["tools"]
+        if (not isinstance(tools,(tuple,list)) or not 2<=len(tools)<=5 or
+                any(type(t) is not int or not 1<=t<=5 for t in tools)
+                or len(set(tools))<2):
+            raise SlicerWorkerError("Invalid offline Prusa XL material tool selection.")
+        payload["prusa_offline_xl"]={"tools":list(tools)}
     if prusa_offline_mmu is not None:
         if (engine != "prusaslicer" or version != "2.9.7" or
                 model_format != "3mf" or not isinstance(prusa_offline_mmu, dict)
                 or set(prusa_offline_mmu) != {"tools", "tower"}
+                or prusa_offline_xl is not None
                 or any((filament_profiles is not None, creality_model_stls is not None,
                         creality_tool_ids is not None, creality_native_project,
                         native_modifier_project, prusa_placed_stl))):
