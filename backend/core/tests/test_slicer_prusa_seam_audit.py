@@ -35,6 +35,7 @@ class PrusaFrontSeamWorkBenchGateTests(unittest.TestCase):
         # The established native research fixture covers both complete
         # front wall triangles of a grounded 20mm Prusa cube.
         paint["regions"][0]["slot"] = 0
+        paint.pop("palette", None)
         return {
             "asset_id": "front-seam-model",
             "x_mm": 0, "y_mm": 0, "z_mm": 0,
