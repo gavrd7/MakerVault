@@ -116,7 +116,7 @@ def build_prusa_placed_stl(objects_with_stl, *, bed_width, bed_depth):
         minimum = [float("inf")] * 3
         maximum = [float("-inf")] * 3
         seen = 0
-        for triangle in _triangles(raw):
+        for triangle in _triangles(raw, inspected_format=inspected["format"]):
             seen += 1
             for point in triangle:
                 for axis in range(3):
@@ -146,7 +146,7 @@ def build_prusa_placed_stl(objects_with_stl, *, bed_width, bed_depth):
 
         lower = [float("inf")] * 3
         upper = [float("-inf")] * 3
-        for triangle in _triangles(raw):
+        for triangle in _triangles(raw, inspected_format=inspected["format"]):
             for point in triangle:
                 coords = mapped(point)
                 for axis in range(3):
@@ -158,7 +158,7 @@ def build_prusa_placed_stl(objects_with_stl, *, bed_width, bed_depth):
             raise SlicerProfileError(
                 "Prusa model %d extends beyond the native build plate." % index)
         dz = -lower[2]
-        for triangle in _triangles(raw):
+        for triangle in _triangles(raw, inspected_format=inspected["format"]):
             coords = [(x, y, z + dz) for x, y, z in (mapped(point) for point in triangle)]
             (ax, ay, az), (bx, by, bz), (cx, cy, cz) = coords
             ux, uy, uz = bx-ax, by-ay, bz-az
