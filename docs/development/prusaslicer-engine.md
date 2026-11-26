@@ -1,3 +1,16 @@
+### Official INDX 8T spatial tool identity diagnosis
+
+The one-variable 2.9.7 toolchange compatibility mapping successfully
+compiled the complete official INDX 8T printer G-code. The real generated
+G-code is subject to the same strict independent-model and material
+identity audit as other Prusa engine configurations. A temporary
+synthetic-only diagnostic counts actual moving positive-E segments
+by model footprint and active T0–T7; no audit thresholds are relaxed
+in the worker. Official INDX profile qualification remains open
+until these model/tool results match the owner-specified assignments.
+
+---
+
 ### INDX 2.9.7 placeholder compatibility research
 
 The official INDX 2.5.16 vendor preset contains a
