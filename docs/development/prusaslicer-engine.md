@@ -1,3 +1,26 @@
+## 26 November — INDX eight-tool independent material route
+
+A four-to-eight-tool `indx` architecture is now available in the normal
+Prusa virtual-tool editor, while Prusa MMU remains limited to its native
+two-to-five logical tools. INDX uses **independent native tool identities**,
+not an MMU single-filament-path switcher. The owner-supplied native printer
+profile, especially any machine-specific tool pickup, heating and firmware
+G-code, remains authoritative; MakerVault does not invent docking or firmware
+sequences. The project compiler preserves explicit T0–T7-to-object assignments,
+compiles eight ordered filament temperature vectors and uses the authenticated
+offline independent-head worker with a strict model-local G-code audit.
+No purge/wipe tower is fabricated for INDX.
+
+The pinned PrusaSlicer 2.9.7 acceptance workflow includes a required
+real eight-tool T0–T7 G-code smoke test, constructed from a reviewed Prusa
+independent-head printer preset in a temporary test scope. It proves slicing
+and tool-index deposition only, **not physical INDX tool exchange**. Native
+firmware/profile compatibility and on-device printing cannot be guaranteed
+without actual printer hardware. Remain explicit about this distinction in
+release notes and guidance.
+
+---
+
 ### Seam start-position audit correction
 
 The original first-wall spatial research classified the *endpoint* of the
