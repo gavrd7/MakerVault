@@ -100,6 +100,20 @@ class PrusaVendorPresetsTests(TestCase):
         settings = flatten_prusa_vendor_preset(BUNDLE, kind="print", name="*common*")
         self.assertIn(b"15%", settings)
 
+    def test_only_the_pinned_official_indx_space_typo_is_normalized(self):
+        original=(b"[print:Official INDX]\nlayer_height = 0.20\n"
+                  b"top solid_infill_speed = 40\n")
+        normalized=flatten_prusa_vendor_preset(
+            original,kind="print",name="Official INDX")
+        self.assertIn(b"top_solid_infill_speed = 40",normalized)
+        self.assertNotIn(b"top solid_infill_speed",normalized)
+        with self.assertRaisesRegex(PrusaPresetError,"invalid setting"):
+            parse_prusa_vendor_bundle(
+                original.replace(b"top solid_infill_speed",b"unsafe other key"))
+        with self.assertRaisesRegex(PrusaPresetError,"Duplicate"):
+            parse_prusa_vendor_bundle(
+                original+b"top_solid_infill_speed = 20\n")
+
     def test_official_indx_vendor_can_contain_long_but_bounded_literals(self):
         base=(b"[printer:INDX 8T]\n"
               b"nozzle_diameter = 0.4,0.4,0.4,0.4,0.4,0.4,0.4,0.4\n"
