@@ -1,3 +1,15 @@
+### Five-tool MMU regression alongside INDX
+
+The INDX extension does not change the native five-tool MMU firmware or
+purge matrix. Because a late reviewed-runtime test reported an abnormal
+native G-code coordinate in the existing five-tool MMU smoke, its
+synthetic CLI harness now logs only bounded numeric outliers to
+distinguish a genuine native generator issue from a parser problem.
+The strict production material audit remains unchanged. Successful
+T0–T7 slicing alone cannot replace the pre-existing MMU regression.
+
+---
+
 ### INDX independent per-object variable layers
 
 The eight-tool native path also preserves independently configured
