@@ -71,7 +71,7 @@ def generated_preview(text, *, truncated=False):
     counts = Counter()
     tool = None
     observed_tools = set()
-    for raw in text.splitlines():
+    for raw in (text.splitlines() if isinstance(text, str) else text):
         if len(raw) > 4096:
             continue
         line = raw.strip()
