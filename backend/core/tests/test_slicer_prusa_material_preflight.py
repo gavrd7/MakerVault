@@ -7,7 +7,8 @@ import io
 import zipfile
 
 from core.slicer_prusa_material_preflight import (prepare_prusa_offline_mmu_candidate,
-    prepare_prusa_offline_xl_candidate, slice_prusa_offline_mmu_candidate)
+    prepare_prusa_offline_xl_candidate, slice_prusa_offline_mmu_candidate,
+    slice_prusa_offline_xl_candidate)
 from core.slicer_profiles import SlicerProfileError
 from core.tests.test_slicer_prusa_machine_topology import ini
 from core.tests.test_slicer_prusa_plate import cube, item
@@ -190,3 +191,23 @@ class PrusaOfflineMmuPreflightTests(TestCase):
                    side_effect=assets):
             with self.assertRaises(WorkerError):
                 slice_prusa_offline_mmu_candidate(uuid.uuid4(),**values)
+
+    def test_ephemeral_xl_offline_executor_enforces_independent_topology(self):
+        values,assets=self.parts()
+        assets[0]=ini("0.4,0.4,0.4,0.4,0.4","0")
+        arguments={k:values[k] for k in (
+            "owner_id","printer_profile","process_profile","filament_profiles",
+            "rows","tools","bed_width","bed_depth")}
+        from core.tests.test_slicer_prusa_material_gcode_audit import toolpaths
+        remote,scope=self.offline_worker_stub()
+        scope.start()
+        self.addCleanup(scope.stop)
+        remote.return_value=toolpaths()
+        with patch("core.slicer_prusa_material_preflight.resolved_prusa_profile",
+                   side_effect=assets):
+            result=slice_prusa_offline_xl_candidate(uuid.uuid4(),**arguments)
+        self.assertEqual(result,toolpaths())
+        self.assertEqual(remote.call_args.kwargs["prusa_offline_xl"],{"tools":[1,2]})
+        self.assertNotIn("prusa_offline_mmu",remote.call_args.kwargs)
+        self.assertEqual(remote.call_args.kwargs["model_format"],"3mf")
+
