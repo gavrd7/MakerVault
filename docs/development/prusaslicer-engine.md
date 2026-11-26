@@ -1,3 +1,11 @@
+## 26 November — research: native object-local wall/infill with MMU and XL (not yet enabled)
+
+The native Prusa 2.9.7 project builder and strict material-project validator already understand two bounded object-local fields: `perimeters` and `fill_density`. A new research fixture combines **one-wall** and **five-wall** equal-size cubes with independent MMU3 virtual tools or XL independent heads, while retaining native 3MF tool metadata. The pinned real native CLI acceptance must also demonstrate substantially different **spatial internal-perimeter extrusion counts** before the normal workbench gate can be loosened. The worker's existing audit separately requires correct tool-local positive extrusion and MMU wipe tower deposition. Unsupported per-object controls, modifiers, painting and layer schedules are still rejected.
+
+**Research only at this stage:** the authenticated normal MMU/XL workbench remains intentionally unable to submit object-specific process overrides. A successful XML import alone will not qualify independent model behaviour. Printer start and upload remain blocked.
+
+---
+
 ## 26 November — qualified Prusa MMU/XL global process controls and safe native routing
 
 This draft iteration extends the normal owner-bound Prusa MMU3 and XL workbench jobs with **global** layer height, wall loops, top and bottom solid shell counts, and sparse infill density. The job adapter accepts exactly those native 2.9.7 keys and rejects unsupported global/any per-object advanced edit instead of silently ignoring it. Original imported profiles remain immutable; only a job-local flattened native Prusa process copy changes. The approved MMU purge-matrix compiler runs *after* the numeric overrides, preserving wipe-tower mode and source/destination filament identity. XL independently rejects MMU tower/purge.
