@@ -50,12 +50,28 @@ def _triangles(raw):
 
 def _render_mesh(raw, element, support_paint=None, seam_paint=None, fuzzy_skin_paint=None, *,
                  colour_paint=None, colour_tool_indices=None):
-    triangles = list(_triangles(raw))
-    if not triangles or len(triangles) > MAX_TRIANGLES:
+    active = sum(bool(paint and paint.get("regions")) for paint in
+                 (support_paint, seam_paint, fuzzy_skin_paint, colour_paint))
+    # Ordinary plates often contain many independent, unpainted STLs. Scan
+    # their bounds once and stream the facets a second time; unlike materialised
+    # lists this does not retain all source triangles while building the XML.
+    # Native painting still needs the indexed source-facet sequence.
+    triangles = list(_triangles(raw)) if active else _triangles(raw)
+    source_count = 0
+    minimum = [math.inf, math.inf, math.inf]
+    maximum = [-math.inf, -math.inf, -math.inf]
+    for tri in triangles:
+        source_count += 1
+        if source_count > MAX_TRIANGLES:
+            raise SlicerProfileError("STL triangle count exceeds the 3MF plate limit.")
+        for point in tri:
+            for axis in range(3):
+                minimum[axis] = min(minimum[axis], point[axis])
+                maximum[axis] = max(maximum[axis], point[axis])
+    if not source_count:
         raise SlicerProfileError("STL triangle count exceeds the 3MF plate limit.")
-    # Do not allocate a second 3*triangle-count list of vertex tuples.
-    minimum = [min(point[i] for tri in triangles for point in tri) for i in range(3)]
-    maximum = [max(point[i] for tri in triangles for point in tri) for i in range(3)]
+    if not active:
+        triangles = _triangles(raw)
     origin = ((minimum[0] + maximum[0]) / 2,
               (minimum[1] + maximum[1]) / 2,
               minimum[2])
@@ -65,8 +81,6 @@ def _render_mesh(raw, element, support_paint=None, seam_paint=None, fuzzy_skin_p
     # Weld identical vertices to keep generated 3MF files compact.
     indexed = {}
     try:
-        active = sum(bool(paint and paint.get("regions")) for paint in
-                     (support_paint, seam_paint, fuzzy_skin_paint, colour_paint))
         # Preserve the previously verified fast path for zero/one annotation
         # modes. Combined modes split original facets into disjoint cells,
         # each of which can carry multiple native Orca paint attributes.
