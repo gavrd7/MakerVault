@@ -100,6 +100,19 @@ class PrusaVendorPresetsTests(TestCase):
         settings = flatten_prusa_vendor_preset(BUNDLE, kind="print", name="*common*")
         self.assertIn(b"15%", settings)
 
+    def test_official_indx_vendor_can_contain_long_but_bounded_literals(self):
+        base=(b"[printer:INDX 8T]\n"
+              b"nozzle_diameter = 0.4,0.4,0.4,0.4,0.4,0.4,0.4,0.4\n"
+              b"bed_shape = 0x0,250x0,250x210,0x210\n")
+        safe=base+b"printer_notes = "+b"A"*24000+b"\n"
+        result=flatten_prusa_vendor_preset(
+            safe,kind="printer",name="INDX 8T")
+        self.assertEqual(len(validate_flat_prusa_preset(
+            result,kind="printer")["printer_notes"]),24000)
+        with self.assertRaisesRegex(PrusaPresetError,"invalid setting"):
+            parse_prusa_vendor_bundle(
+                base+b"printer_notes = "+b"B"*65537+b"\n")
+
     def test_source_content_has_no_implicit_network_access(self):
         # The vendor URL is inert metadata, never resolved or returned.
         parsed = parse_prusa_vendor_bundle(BUNDLE)
