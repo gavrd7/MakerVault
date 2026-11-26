@@ -94,7 +94,6 @@ class PrusaOfficialModelDiscoveryTests(SimpleTestCase):
         self.assertIn(b"top_solid_infill_speed = 40",result)
         self.assertNotIn(b"top solid_infill_speed",result)
 
-    @patch("core.slicer_prusa_official_profiles.requests.get")
     def test_indx_newer_toolchange_variable_is_adapted_only_in_official_printer(self):
         source = {
             "printer:INDX 8T": {
@@ -125,6 +124,7 @@ class PrusaOfficialModelDiscoveryTests(SimpleTestCase):
                                     "PrusaResearchINDX.ini",
                                     vendor="PrusaResearchINDX")
 
+    @patch("core.slicer_prusa_official_profiles.requests.get")
     def test_updated_official_indx_vendor_is_pinned_and_importable(self, get):
         from core.slicer_prusa_official_profiles import available_prusa_vendors
         from core.slicer_prusa_machine_topology import prusa_machine_topology
