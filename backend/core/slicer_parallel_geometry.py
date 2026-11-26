@@ -14,7 +14,7 @@ from contextlib import contextmanager
 from pathlib import Path
 
 from .slicer_profiles import SlicerProfileError
-from .slicer_resource_budget import preparation_worker_count
+from .slicer_resource_budget import preparation_worker_count, effective_cpu_count
 
 
 _MIN_PARALLEL_INPUT_BYTES = 512 * 1024
@@ -41,7 +41,7 @@ def _local_parallel_slots(requested):
     try:
         directory = Path(tempfile.gettempdir()) / "makervault-geometry-slots"
         directory.mkdir(mode=0o700, exist_ok=True)
-        for index in range(max(1, os.cpu_count() or 1)):
+        for index in range(max(1, effective_cpu_count() - 1)):
             if len(slots) == requested:
                 break
             filename = directory / ("slot-%d.lock" % index)
