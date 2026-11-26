@@ -937,11 +937,11 @@ def import_project_3mf(request):
             for old_id in source_names:
                 file_name = "Metadata/sources/" + old_id + ".stl"
                 info = archive.getinfo(file_name)
-                if not 0 < info.file_size <= MAX_INPUT:
+                if not 0 < info.file_size <= input_model_budget():
                     raise ValueError("Project source STL exceeds safe limits.")
                 total_bytes += info.file_size
-                if total_bytes > 64 * 1024 * 1024:
-                    raise ValueError("Project contains too much source geometry.")
+                if total_bytes > source_input_budget(upper_cap=input_model_budget()):
+                    raise ValueError("Project source geometry exceeds available preparation memory.")
                 raw = archive.read(info)
                 inspect_stl(raw)
                 original[old_id] = raw
