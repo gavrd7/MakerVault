@@ -67,3 +67,11 @@ test("Prusa painted MMU draft binds swatches to explicit T1-T4 native tools",()=
   assert.match(prepare,/prusaSinglePaint && prusaNativeReady/);
   assert.match(workbench,/prusaNativeOffline = form\.engine==="prusaslicer"/);
 });
+
+test("Eight native INDX tools are configurable without MMU purge/tower dependencies",()=>{
+  assert.match(editor,/<option value="indx">Bondtech INDX/);
+  assert.match(editor,/\[2,3,4,5,6,7,8\]/);
+  assert.match(editor,/value\.mode!=="mmu"/);
+  assert.match(prepare,/prusaNativeTools\.mode\) && !primeTower/);
+  assert.match(prepare,/objects\.length<=12/);
+});
