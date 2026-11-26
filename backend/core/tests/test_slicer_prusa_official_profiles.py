@@ -101,7 +101,7 @@ class PrusaOfficialModelDiscoveryTests(SimpleTestCase):
                 "bed_shape": "0x0,250x0,250x210,0x210",
                 "nozzle_diameter": ",".join(["0.4"] * 8),
                 "toolchange_gcode":
-                    "G1 E-{filament_retract_length_toolchange[current_extruder]}",
+                    "G1 E-{filament_retract_length_toolchange[next_extruder]}",
             }
         }
         with patch("core.slicer_prusa_official_profiles._native_sections",
@@ -109,14 +109,14 @@ class PrusaOfficialModelDiscoveryTests(SimpleTestCase):
             imported = fetch_prusa_profile(
                 "printer", "INDX 8T", "PrusaResearchINDX.ini",
                 vendor="PrusaResearchINDX")
-            self.assertIn(b"retract_length_toolchange[current_extruder]", imported)
+            self.assertIn(b"retract_length_toolchange[next_extruder]", imported)
             self.assertNotIn(b"filament_retract_length_toolchange", imported)
             original = fetch_prusa_profile(
                 "printer", "INDX 8T", "PrusaResearch.ini")
             self.assertIn(b"filament_retract_length_toolchange", original)
 
         source["printer:INDX 8T"]["start_gcode"] = (
-            "G1 E-{filament_retract_length_toolchange[current_extruder]}")
+            "G1 E-{filament_retract_length_toolchange[next_extruder]}")
         with patch("core.slicer_prusa_official_profiles._native_sections",
                    return_value=source):
             with self.assertRaises(OfficialProfileError):
