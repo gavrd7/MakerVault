@@ -6,6 +6,8 @@ It does not establish firmware safety, CFS semantics or project placement.
 import math
 import re
 
+from .slicer_resource_budget import gcode_transport_budget, memory_budget
+
 MOVE = re.compile(r"^G0?([01])(?:\s|$)", re.I)
 AXIS = re.compile(r"(?:^|\s)([XYE])([-+]?(?:\d+(?:\.\d*)?|\.\d+))(?:\s|$)", re.I)
 MAX_LINES = 2_000_000
@@ -16,7 +18,7 @@ class GcodeExtrusionBoundsError(ValueError):
 
 
 def audit_extrusion_xy_bounds(gcode, *, width, depth, tolerance=0.05):
-    if (not isinstance(gcode, str) or len(gcode) > 90 * 1024 * 1024 or
+    if (not isinstance(gcode, str) or len(gcode.encode("utf-8")) > gcode_transport_budget() or
             not all(isinstance(v, (float, int)) and not isinstance(v, bool) and
                     math.isfinite(v) for v in (width, depth, tolerance)) or
             not 1 <= width <= 1000 or not 1 <= depth <= 1000 or
@@ -28,8 +30,12 @@ def audit_extrusion_xy_bounds(gcode, *, width, depth, tolerance=0.05):
     xyz_absolute = True
     e_absolute = True
     extrusions = 0
+    line_budget = memory_budget(
+        reserve_bytes=256 * 1024 * 1024, expansion_factor=128)
+    if line_budget is None:
+        line_budget = MAX_LINES
     for line_num, raw in enumerate(gcode.splitlines(), 1):
-        if line_num > MAX_LINES:
+        if line_num > line_budget:
             raise GcodeExtrusionBoundsError("G-code exceeds bounds audit limit.")
         line = raw.split(";", 1)[0].strip().upper()
         if not line:
