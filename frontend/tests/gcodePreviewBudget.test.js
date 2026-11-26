@@ -7,7 +7,7 @@ describe("progressive full-model G-code preview sizing", () => {
     assert.equal(progressiveLayerBatchSize(99, 120000), 64);
   });
   it("shrinks heavy requests rather than dropping later layers", () => {
-    assert.equal(progressiveLayerBatchSize(240, 12000000), 15);
+    assert.equal(progressiveLayerBatchSize(240, 12000000), 2);
     assert.equal(progressiveLayerBatchSize(3, 9000000), 1);
   });
   it("handles unknown source size conservatively", () => {
