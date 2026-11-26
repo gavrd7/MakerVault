@@ -1119,6 +1119,10 @@ def submit(connection, user, payload):
         asset = FileAsset.objects.filter(owner=user, pk=aid, superseded_by__isnull=True).first()
         if not asset or (asset.metadata or {}).get("extension") != ".gcode":
             raise GcodeSubmissionError("Select an owned, current plain-text G-code file.", 404)
+        if (asset.metadata or {}).get("prusa_offline_native") is True:
+            raise GcodeSubmissionError(
+                "Prusa offline native toolchange G-code has no approved physical "
+                "printer compatibility; upload and print start are disabled.", 409)
         # Experimental multicolour slices are offline evidence only.
         # No opt-in, adapter flag or CFS acknowledgement bypasses this guard.
         if (asset.metadata or {}).get("multi_material_test") is True:
