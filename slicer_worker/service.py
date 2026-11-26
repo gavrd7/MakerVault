@@ -91,8 +91,7 @@ def _decode_payload(payload):
     if payload["engine"] == "prusaslicer" and model_format == "3mf" and (
             payload["engine_version"] != "2.9.7" or any(key in payload for key in (
                 "filament_profiles", "creality_model_stls", "creality_tool_ids",
-                "creality_native_project", "native_modifier_project", "prusa_placed_stl")) and
-            "prusa_offline_mmu" not in payload):
+                "creality_native_project", "native_modifier_project", "prusa_placed_stl"))):
         raise WorkerError("Invalid native Prusa project execution contract.")
     if "prusa_offline_mmu" in payload:
         metadata = payload["prusa_offline_mmu"]
@@ -221,9 +220,10 @@ def _decode_payload(payload):
         from .creality_project_validation import validate_creality_project
         validate_creality_project(files["model"], native_tool_count=2)
         files["creality_native_project"] = True
-    elif model_format == "3mf" and payload["engine"] == "prusaslicer" and not files.get("prusa_offline_mmu"):
-        from .prusa_3mf_validation import validate_prusa_native_3mf
-        validate_prusa_native_3mf(files["model"])
+    elif model_format == "3mf" and payload["engine"] == "prusaslicer":
+        if not files.get("prusa_offline_mmu"):
+            from .prusa_3mf_validation import validate_prusa_native_3mf
+            validate_prusa_native_3mf(files["model"])
     elif model_format == "3mf" and not files.get("native_modifier_project"):
         options = {"native_tool_count": len(files["filament_profiles"])
                    if "filament_profiles" in files else None}
