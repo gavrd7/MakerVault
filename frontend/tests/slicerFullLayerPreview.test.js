@@ -37,9 +37,11 @@ test("progressive full-quality preview reports limited geometry separately from 
 
 
 test("progressive large prints append complete geometry without polluting exact-layer cache", () => {
-  assert.match(preview, /offset \+= 64/);
+  assert.match(preview, /offset \+= batchSize/);
   assert.match(preview, /quality=full&zs=/);
-  assert.match(preview, /const maxMoves = 1500000/);
+  assert.match(preview, /&page_start=/);
+  assert.doesNotMatch(preview, /const maxMoves = 1500000/);
+  assert.match(preview, /progressiveLayerBatchSize/);
   assert.match(preview, /const EMPTY_PATHS = Object\.freeze\(\[\]\)/);
   assert.match(preview, /full-detail/i);
   assert.doesNotMatch(preview, /fullLayerCache\.current\.set\(key,item\)/);
@@ -88,7 +90,8 @@ test("high-fidelity renderer uses GPU instancing without reducing extrusion path
 
 test("mobile uses the same full-height budget and immutable GPU chunk loading", () => {
   assert.doesNotMatch(preview, /mobile \? 700000/);
-  assert.match(preview, /const maxMoves = 1500000/);
+  assert.doesNotMatch(preview, /const maxMoves = 1500000/);
+  assert.match(preview, /progressiveLayerBatchSize/);
   assert.match(preview, /chunks\.push\(batch\)/);
   assert.match(preview, /chunks:chunks\.slice\(\)/);
   assert.match(toolpath, /for \(const batch of batches\)/);
