@@ -39,6 +39,7 @@ def first_external_wall_starts(data):
         elif op == "G92":
             e = words.get("E", e)
         else:
+            start = pos.copy()
             pos.update({k: value for k, value in words.items() if k in pos})
             if "E" in words:
                 extrusion = words["E"] if relative else words["E"]-e
@@ -46,8 +47,10 @@ def first_external_wall_starts(data):
                 if (not captured and extrusion > 1e-6 and
                         "external perimeter" in role and
                         all(v is not None for v in pos.values()) and
+                        start["X"] is not None and start["Y"] is not None and
+                        abs(pos["X"]-start["X"])+abs(pos["Y"]-start["Y"]) > 1e-7 and
                         3 < pos["Z"] < 17):
-                    starts.append((round(pos["X"],2),round(pos["Y"],2)))
+                    starts.append((round(start["X"],2),round(start["Y"],2)))
                     captured = True
     return {"layers": len(starts), "unique_starts": sorted(set(starts))[:8]}
 
