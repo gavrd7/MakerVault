@@ -514,7 +514,7 @@ def _validate_plate_execution(job):
                    for item in objects):
                 raise SlicerExecutionError(
                     "Creality colour-painted models require a future native 3MF route.")
-    if not isinstance(objects, list) or not 1 <= len(objects) <= 12:
+    if not isinstance(objects, list) or not 1 <= len(objects) <= 200:
         raise SlicerExecutionError("Plate model list is invalid.")
     for item in objects:
         if not isinstance(item, dict):
@@ -582,10 +582,10 @@ def queue_draft(job_id, user):
                 pk__in=[item["asset_id"] for item in plate],
                 owner_id=job.owner_id, category="mesh")}
             try:
-                validate_plate_collisions([(
+                validate_plate_collisions((
                     item, _read_owned_file(owned[str(item["asset_id"])],
                                            job.owner_id, MAX_INPUT, "Plate STL")
-                ) for item in plate])
+                ) for item in plate)
             except PlateCollisionError as exc:
                 raise SlicerExecutionError(
                     "Model-envelope overlap check: " + str(exc)

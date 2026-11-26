@@ -1,6 +1,7 @@
 import io
 import zipfile
 from unittest import TestCase
+from unittest.mock import patch
 from slicer_worker.runner import WorkerError
 from slicer_worker.three_mf_validation import validate_worker_3mf, MAX_TRIANGLES
 
@@ -58,6 +59,74 @@ class Core3MFWorkerTests(TestCase):
             zipfile_out.writestr("[Content_Types].xml", "<Types/>")
             zipfile_out.writestr("_rels/.rels", "<Relationships/>")
         return out.getvalue()
+
+    def test_two_hundred_distinct_plate_objects_are_admitted(self):
+        # Each resource has different geometry and its own build transform.
+        ns = "http://schemas.microsoft.com/3dmanufacturing/core/2015/02"
+        meshes = []
+        items = []
+        members = []
+        for index in range(1, 201):
+            meshes.append(
+                f'<object id="{index}" type="model"><mesh><vertices>'
+                '<vertex x="0" y="0" z="0"/>'
+                f'<vertex x="{index}" y="0" z="0"/>'
+                f'<vertex x="0" y="{index}" z="0"/>'
+                '</vertices><triangles><triangle v1="0" v2="1" v3="2"/></triangles>'
+                '</mesh></object>'
+            )
+            items.append(
+                f'<item objectid="{index}" transform="1 0 0 0 1 0 0 0 1 '
+                f'{index * 2} {index * 2} 0"/>'
+            )
+            members.append(
+                '<model_instance>'
+                f'<metadata key="object_id" value="{index}"/>'
+                '<metadata key="instance_id" value="0"/>'
+                f'<metadata key="identify_id" value="{index}"/>'
+                '</model_instance>'
+            )
+        model = (
+            f'<model xmlns="{ns}" unit="millimeter"><resources>'
+            + "".join(meshes) + '</resources><build>'
+            + "".join(items) + '</build></model>'
+        )
+        manifest = (
+            '<config><plate><metadata key="plater_id" value="1"/>'
+            + "".join(members) + '</plate></config>'
+        )
+        output = io.BytesIO()
+        with zipfile.ZipFile(output, "w", compression=zipfile.ZIP_DEFLATED) as archive:
+            archive.writestr("3D/3dmodel.model", model)
+            archive.writestr("Metadata/model_settings.config", manifest)
+            archive.writestr("[Content_Types].xml", "<Types/>")
+            archive.writestr("_rels/.rels", "<Relationships/>")
+        self.assertTrue(validate_worker_3mf(output.getvalue()))
+
+    def test_multi_object_3mf_uses_total_plate_budget(self):
+        source = self.with_object_metadata([("wall_loops", "2")])
+        from slicer_worker import three_mf_validation as validator
+        with patch.object(validator, "MAX_PLATE_TRIANGLES", 2):
+            self.assertTrue(validate_worker_3mf(source))
+        with patch.object(validator, "MAX_PLATE_TRIANGLES", 1):
+            with self.assertRaisesRegex(WorkerError, "3MF triangle count exceeds"):
+                validate_worker_3mf(source)
+
+    def test_compound_mesh_does_not_inherit_single_stl_triangle_limit(self):
+        from slicer_worker import three_mf_validation as validator
+        source = self.package()
+        with zipfile.ZipFile(io.BytesIO(source)) as archive:
+            contents = {part: archive.read(part) for part in archive.namelist()}
+        triangle = b'<triangle v1="0" v2="1" v3="2"/>'
+        contents["3D/3dmodel.model"] = contents["3D/3dmodel.model"].replace(
+            triangle, triangle + triangle)
+        combined = io.BytesIO()
+        with zipfile.ZipFile(combined, "w", compression=zipfile.ZIP_DEFLATED) as archive:
+            for name, value in contents.items():
+                archive.writestr(name, value)
+        with (patch.object(validator, "MAX_TRIANGLES", 1),
+              patch.object(validator, "MAX_PLATE_TRIANGLES", 2)):
+            self.assertTrue(validate_worker_3mf(combined.getvalue()))
 
     def with_variable_layer_range(self, xml):
         """Wrap one real core model in MakerVault's bounded native metadata."""

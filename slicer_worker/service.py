@@ -492,7 +492,7 @@ class Handler(BaseHTTPRequestHandler):
                 "Native layer range metadata is oversized.": "invalid-native-layer-ranges",
                 "3MF plate metadata is oversized.": "invalid-native-plate",
                 "Unexpected 3MF namespace.": "invalid-3mf",
-                "3MF build must contain one to twelve objects.": "invalid-3mf",
+                "3MF build must contain one to 200 objects.": "invalid-3mf",
                 "3MF build references unknown objects.": "invalid-3mf",
                 "Native variable layer test requires one single-material object.": "native-multimaterial-variable-layers-unsupported",
                 "Malformed native variable layer configuration.": "invalid-native-layer-ranges",

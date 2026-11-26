@@ -20,6 +20,8 @@ LAYER_RANGES = "Metadata/layer_config_ranges.xml"
 # Keep the worker aligned with the validated STL and server-side 3MF builder.
 # Expanded XML, compressed archive and model upload bounds remain separate.
 MAX_TRIANGLES = 500_000
+# Match the backend plate exporter while retaining the per-model STL cap.
+MAX_PLATE_TRIANGLES = 1_500_000
 MAX_VERTICES_PER_OBJECT = 1_500_000
 
 # Only native, script-free process metadata used by the per-object
@@ -82,7 +84,7 @@ def validate_worker_3mf(data, *, native_tool_count=None, allow_creality_combined
                 raise WorkerError("Unsupported 3MF package members.")
             if LAYER_RANGES in names and package.getinfo(LAYER_RANGES).file_size > 32768:
                 raise WorkerError("Native layer range metadata is oversized.")
-            if PLATE_MANIFEST in names and package.getinfo(PLATE_MANIFEST).file_size > 8192:
+            if PLATE_MANIFEST in names and package.getinfo(PLATE_MANIFEST).file_size > 65536:
                 raise WorkerError("3MF plate metadata is oversized.")
             if any(part.file_size <= 0 or part.file_size > 80 * 1024 * 1024
                    or part.is_dir() for part in info):
@@ -184,8 +186,8 @@ def validate_worker_3mf(data, *, native_tool_count=None, allow_creality_combined
         raise WorkerError("Unexpected 3MF namespace.")
     objects = root.findall("./{%s}resources/{%s}object" % (CORE_NS, CORE_NS))
     items = root.findall("./{%s}build/{%s}item" % (CORE_NS, CORE_NS))
-    if not 1 <= len(objects) <= 12 or len(items) != len(objects):
-        raise WorkerError("3MF build must contain one to twelve objects.")
+    if not 1 <= len(objects) <= 200 or len(items) != len(objects):
+        raise WorkerError("3MF build must contain one to 200 objects.")
     ids = {obj.attrib.get("id") for obj in objects}
     if len(ids) != len(objects) or any(item.attrib.get("objectid") not in ids for item in items):
         raise WorkerError("3MF build references unknown objects.")
@@ -235,6 +237,10 @@ def validate_worker_3mf(data, *, native_tool_count=None, allow_creality_combined
         triangles = obj.findall("./{%s}mesh/{%s}triangles/{%s}triangle" % (CORE_NS, CORE_NS, CORE_NS))
         if not vertices or not triangles:
             raise WorkerError("3MF build contains empty objects.")
+        # A core 3MF object can be a compound mesh made from many already-
+        # inspected STLs. Applying the single-source STL triangle cap here
+        # would reject normal multi-model slicing after backend 3MF packing.
+        # Bound the actual worker input by the total plate budget instead.
         count += len(triangles)
         for triangle in triangles:
             attributes = set(triangle.attrib)
@@ -266,7 +272,7 @@ def validate_worker_3mf(data, *, native_tool_count=None, allow_creality_combined
                     raise WorkerError("Painted colour refers to an unavailable native filament.")
                 used_native_paint_channels.add("paint_color")
                 painted_native_tools.add(native_states.index(colour))
-        if count > MAX_TRIANGLES:
+        if count > MAX_PLATE_TRIANGLES:
             raise WorkerError("3MF triangle count exceeds worker limit.")
         if len(vertices) > MAX_VERTICES_PER_OBJECT:
             raise WorkerError("3MF vertex count exceeds worker limit.")
