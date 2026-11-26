@@ -37,6 +37,7 @@ def audit_prusa_two_object_fuzzy(data, models, *, bed_width, bed_depth):
     pos={"X":None,"Y":None,"Z":None}
     e=0.
     relative=False
+    relative_xyz=False
     role=""
     counts=[0,0]
     for idx,line in enumerate(lines):
@@ -49,7 +50,7 @@ def audit_prusa_two_object_fuzzy(data, models, *, bed_width, bed_depth):
         if not cmd:
             continue
         op=cmd.split(None,1)[0].upper()
-        if op not in ("M82","M83","G92","G0","G00","G1","G01"):
+        if op not in ("M82","M83","G90","G91","G92","G0","G00","G1","G01"):
             continue
         words={k.upper():float(v) for k,v in _WORD.findall(cmd)}
         if any(not math.isfinite(value) or abs(value)>1e9 for value in words.values()):
@@ -58,16 +59,26 @@ def audit_prusa_two_object_fuzzy(data, models, *, bed_width, bed_depth):
             relative=False
         elif op=="M83":
             relative=True
+        elif op=="G90":
+            relative_xyz=False
+        elif op=="G91":
+            relative_xyz=True
         elif op=="G92":
             e=words.get("E",e)
+            pos.update({k:value for k,value in words.items() if k in pos})
         else:
             start=pos.copy()
-            pos.update({k:value for k,value in words.items() if k in pos})
+            for axis in pos:
+                if axis in words:
+                    pos[axis] = (pos[axis]+words[axis]
+                                 if relative_xyz and pos[axis] is not None
+                                 else None if relative_xyz else words[axis])
             if "E" not in words:
                 continue
             delta=words["E"] if relative else words["E"]-e
             e=e+words["E"] if relative else words["E"]
-            if (delta<=1e-6 or "external perimeter" not in role or
+            if (delta<=1e-6 or op not in ("G1","G01") or
+                    role!="external perimeter" or
                     any(start[k] is None or pos[k] is None for k in ("X","Y","Z"))):
                 continue
             length=math.hypot(pos["X"]-start["X"],pos["Y"]-start["Y"])
