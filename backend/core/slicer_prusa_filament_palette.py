@@ -11,7 +11,7 @@ from .slicer_prusa_machine_topology import prusa_machine_topology
 from .slicer_prusa_native_resolution import parse_prusa_profile, resolved_prusa_profile
 from .slicer_profiles import SlicerProfileError
 
-# Native ConfigOption vector keys; expand only with genuine CLI evidence.
+# Native ConfigOption vector keys; preserve equal scalar settings for all eight tools.
 LIMITS = {
     "temperature": (0, 350),
     "first_layer_temperature": (0, 350),
@@ -21,8 +21,6 @@ NUMBER = re.compile(r"[0-9]{1,3}")
 
 def compile_prusa_filament_palette(printer_ini, filament_inis):
     topology = prusa_machine_topology(printer_ini)
-    if topology["requires_new_toolchanger_qualification"]:
-        raise SlicerProfileError("Prusa six-to-eight-tool palettes require separate qualification.")
     count = topology["logical_tool_count"]
     if count < 2 or not isinstance(filament_inis, (list, tuple)) or len(filament_inis) != count:
         raise SlicerProfileError("Prusa palette requires one explicit preset per native tool.")
