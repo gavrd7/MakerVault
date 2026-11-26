@@ -58,3 +58,36 @@ def validate_prusa_offline_mmu_inputs(*, project, printer, filament, process,
         raise WorkerError("Prusa offline MMU project/tool assignment mismatch.")
     return {"tools": tuple(tools), "tool_count": count,
             "wipe_tower": True, "offline_only": True}
+
+
+def validate_prusa_offline_xl_inputs(*, project, printer, filament, process, tools):
+    """Independent-head XL research must never inherit MMU changer purging."""
+    count, same_nozzle = _qualified_topology(printer)
+    if same_nozzle or not 2 <= count <= 5:
+        raise WorkerError("Prusa offline XL requires independent native toolheads.")
+    if (not isinstance(tools, list) or not 2 <= len(tools) <= 5
+            or any(type(t) is not int or not 1 <= t <= count for t in tools)
+            or len(set(tools)) < 2):
+        raise WorkerError("Prusa offline XL model tools are invalid.")
+    try:
+        material = validate_flat_prusa_preset(filament, kind="filament")
+        settings = validate_flat_prusa_preset(process, kind="print")
+    except PrusaPresetError:
+        raise WorkerError("Prusa offline XL native profiles are invalid.") from None
+    if (settings.get("wipe_tower", "0") not in ("0", "", "false") or
+            settings.get("wipe_into_objects","0") not in ("0", "", "false") or
+            settings.get("wipe_into_infill","0") not in ("0", "", "false")):
+        raise WorkerError("Unqualified XL wipe tower and model flushing are disabled.")
+    for key in ("temperature", "first_layer_temperature"):
+        parts=material.get(key,"").split(",")
+        if (len(parts)!=count or any(
+                not p.isascii() or not p.isdecimal() or
+                not 0 <= int(p) <= 350 for p in parts)):
+            raise WorkerError("Prusa offline XL temperature vector is invalid.")
+    receipt=validate_prusa_material_candidate(
+        project, printer_ini=printer, tools=tools)
+    if (receipt["objects"]!=len(tools) or receipt["wipe_tower"]
+            or set(receipt["tools"])!=set(tools)):
+        raise WorkerError("Prusa offline XL model tool assignment mismatch.")
+    return {"tools":tuple(tools), "tool_count":count,
+            "wipe_tower":False, "offline_only":True}
