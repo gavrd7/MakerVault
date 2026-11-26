@@ -53,10 +53,10 @@ def main(binary,vendor,directory):
             preset=flatten_prusa_vendor_preset(
                 source,kind=kind,name=name,expected_sha256=digest)
             if kind=="print":
-                preset=b"\\n".join(line for line in preset.splitlines()
+                preset=b"\n".join(line for line in preset.splitlines()
                     if line.split(b"=",1)[0].strip() not in (
-                        b"support_material",b"support_material_auto"))+b"\\n"
-                preset+=b"support_material = 1\\nsupport_material_auto = 0\\n"
+                        b"support_material",b"support_material_auto"))+b"\n"
+                preset+=b"support_material = 1\nsupport_material_auto = 0\n"
             file=work/(kind+".ini")
             file.write_bytes(preset)
             args.extend(["--load",str(file)])
