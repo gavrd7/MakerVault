@@ -41,7 +41,7 @@ def toolpaths(*,swap=False,leak=False,include_tower=False,stationary=0):
         commands.append("G0 X65 Y155")
         commands.extend(["G1 X%.3f Y155 E0.03" % (65+(i+1)*.06)
                          for i in range(32)])
-    return ("\\n".join(commands)+"\\n").encode()
+    return ("\n".join(commands)+"\n").encode()
 
 class PrusaNativeToolpathAuditTests(TestCase):
     def test_material_tools_follow_native_mesh_footprints(self):
@@ -63,7 +63,7 @@ class PrusaNativeToolpathAuditTests(TestCase):
         rows.extend(["G90","T1","G0 X160 Y105","G91"])
         rows.extend(["G1 X.06 Y0 E0.03"]*32)
         result=audit_prusa_material_model_gcode(
-            ("\\n".join(rows)+"\\n").encode(),project(),
+            ("\n".join(rows)+"\n").encode(),project(),
             printer_ini=PRINTER,tools=[1,2])
         self.assertEqual(result["correct_extrusion_moves"],[32,32])
 
