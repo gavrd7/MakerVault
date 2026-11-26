@@ -28,6 +28,7 @@ def gcode(*, right=True, relative=False):
         lines.extend([";LAYER_CHANGE", "G0 Z" + str(z),
                       ";TYPE:External perimeter"])
         e = 1 if relative else e+1
+        lines.append("G0 X%.2f Y114.78" % (x-.25))
         lines.append("G1 X%.2f Y114.78 E%.3f" % (x, e))
         lines.append("G0 X120 Y100")
     return ("\n".join(lines)+"\n").encode()
@@ -182,6 +183,9 @@ class PrusaFourFaceSeamQualificationTests(unittest.TestCase):
                         lines.extend([";LAYER_CHANGE", "G0 Z" + str(z),
                                       ";TYPE:External perimeter"])
                         e += 1
+                        start_x = x-.25 if face in ("front", "back") else x
+                        start_y = y-.25 if face in ("left", "right") else y
+                        lines.append("G0 X%.2f Y%.2f" % (start_x, start_y))
                         lines.append("G1 X%.2f Y%.2f E%.3f" % (x, y, e))
                         lines.append("G0 X120 Y100")
                     raw = ("\n".join(lines)+"\n").encode()
@@ -199,3 +203,9 @@ class PrusaFourFaceSeamQualificationTests(unittest.TestCase):
         self.assertIn(b"seam_position = rear", source)
         with self.assertRaises(ValueError):
             qualify_prusa_seam_process(source, "nearest")
+
+    def test_first_wall_endpoint_inside_but_start_outside_is_rejected(self):
+        raw = gcode().replace(b"G0 X134.53 Y114.78", b"G0 X120 Y100")
+        with self.assertRaisesRegex(ValueError, "did not follow"):
+            audit_prusa_seam_enforcer_gcode(
+                raw, project(), bed_width=250, bed_depth=210)
