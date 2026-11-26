@@ -10,8 +10,6 @@ from tempfile import TemporaryDirectory
 from slicer_worker.prusa_vendor_profiles import flatten_prusa_vendor_preset
 from slicer_worker.prusa_gcode_audit import WORD
 
-audit = runpy.run_path("/tmp/prusa_seam_audit.py")["audit_prusa_seam_enforcer_gcode"]
-
 
 def first_external_wall_starts(data):
     """Research only: inspect real first external perimeters, not an XML flag."""
@@ -54,7 +52,20 @@ def first_external_wall_starts(data):
     return {"layers": len(starts), "unique_starts": sorted(set(starts))[:8]}
 
 
-def main(binary, vendor, directory):
+def override_research_seam_position(source, mode):
+    """Only native-research process-profile edits; never mutate owner presets."""
+    if mode is None:
+        return source
+    if mode not in ("rear", "aligned", "nearest", "random"):
+        raise ValueError("Unrecognised Prusa seam-position research mode.")
+    clean = [line for line in source.splitlines()
+             if line.partition(b"=")[0].strip() != b"seam_position"]
+    return b"\\n".join(clean) + (b"\\nseam_position = " +
+                              mode.encode("ascii") + b"\\n")
+
+
+def main(binary, vendor, directory, seam_mode=None):
+    audit = runpy.run_path("/tmp/prusa_seam_audit.py")["audit_prusa_seam_enforcer_gcode"]
     raw = Path(vendor).read_bytes()
     digest = hashlib.sha256(raw).hexdigest()
     model = Path(directory)
@@ -66,8 +77,10 @@ def main(binary, vendor, directory):
                              ("filament", "Generic PLA"),
                              ("print", "0.20mm NORMAL")):
             ini = root / (kind + ".ini")
-            ini.write_bytes(flatten_prusa_vendor_preset(
-                raw, kind=kind, name=preset, expected_sha256=digest))
+            resolved = flatten_prusa_vendor_preset(
+                raw, kind=kind, name=preset, expected_sha256=digest)
+            ini.write_bytes(override_research_seam_position(
+                resolved, seam_mode) if kind == "print" else resolved)
             options.extend(["--load", str(ini)])
         verified = []
         for name in ("baseline", *names):
@@ -78,21 +91,21 @@ def main(binary, vendor, directory):
         baseline = (root / "baseline.gcode").read_bytes()
         for name in names:
             item = json.loads((model / (name + ".json")).read_text())
-            print("Native seam directional G-code", name,
+            print("Native seam directional G-code", seam_mode or "profile-default", name,
                   first_external_wall_starts((root / (name + ".gcode")).read_bytes()))
             try:
                 observed = audit((root / (name + ".gcode")).read_bytes(),
                                  item, bed_width=250, bed_depth=210)
             except ValueError as exc:
-                print("UNQUALIFIED native seam direction", name, str(exc))
+                print("UNQUALIFIED native seam direction", seam_mode or "profile-default", name, str(exc))
                 continue
             try:
                 audit(baseline, item, bed_width=250, bed_depth=210)
             except ValueError:
-                print("QUALIFIED native seam direction", name, observed)
+                print("QUALIFIED native seam direction", seam_mode or "profile-default", name, observed)
                 verified.append(name)
             else:
-                print("UNQUALIFIED native seam direction", name,
+                print("UNQUALIFIED native seam direction", seam_mode or "profile-default", name,
                       "baseline also satisfies the painted patch")
         if len(verified) < 2:
             raise AssertionError("No independent pair of painted Prusa seam directions has real spatial proof.")
