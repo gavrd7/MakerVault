@@ -365,16 +365,26 @@ class FullLayerEndpointTests(TestCase):
             self.assertEqual(exact.status_code, 200, exact.content)
             self.assertEqual(exact.json()["segment_count"], 3)
 
-    def test_large_source_skips_unavailable_warmer_and_streams_directly(self):
+    def test_large_source_warmup_is_queued_once_with_exact_direct_fallback(self):
         from unittest.mock import patch
+        from django.core.cache.backends.locmem import LocMemCache
+        backend = LocMemCache("large-preview-warmup-once", {})
         self.client.force_login(self.owner)
+        url = f"/api/files/{self.asset.pk}/gcode/layers/?zs=0.2,0.4&quality=full"
         with (patch("core.slicer_layer_preview.MAX_LAYER_SOURCE_BYTES", 64),
+              patch("core.slicer_preview_cache.cache", backend),
+              patch("django.core.cache.cache", backend),
               patch("core.tasks.warm_gcode_preview_task.delay") as schedule):
-            response = self.client.get(
-                f"/api/files/{self.asset.pk}/gcode/layers/?zs=0.2,0.4&quality=full&warm=1")
-            self.assertEqual(response.status_code, 200, response.content)
-            self.assertTrue(response.json()["complete"])
-            schedule.assert_not_called()
+            # First request schedules a single-flight background full-source
+            # cache, including for files larger than the old 32 MiB ceiling.
+            response = self.client.get(url + "&warm=1")
+            self.assertEqual(response.status_code, 202, response.content)
+            self.assertEqual(self.client.get(url + "&warm=1").status_code, 202)
+            schedule.assert_called_once_with(str(self.asset.pk))
+            # Never make client rendering wait indefinitely on Celery.
+            direct = self.client.get(url + "&direct=1")
+            self.assertEqual(direct.status_code, 200, direct.content)
+            self.assertTrue(direct.json()["complete"])
 
     def test_selected_layer_endpoint_can_return_every_unmerged_movement(self):
         from unittest.mock import patch
