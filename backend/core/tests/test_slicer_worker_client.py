@@ -40,6 +40,9 @@ class SlicerWorkerClientTests(SimpleTestCase):
         self.assertEqual(output, gcode)
         sent = json.loads(session.return_value.post.call_args.kwargs["data"])
         self.assertIs(sent["creality_placed_stl"], True)
+        import zlib
+        self.assertEqual(zlib.decompress(base64.b64decode(sent["model"])), b"composite")
+        self.assertEqual(sent["creality_model_raw_sha256"], hashlib.sha256(b"composite").hexdigest())
         for engine in ("orcaslicer", "bambustudio", "prusaslicer"):
             with self.subTest(engine=engine), self.assertRaises(SlicerWorkerError):
                 run_remote_job(uuid.uuid4(), engine, "7.3.1",
