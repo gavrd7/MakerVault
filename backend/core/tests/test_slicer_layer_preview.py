@@ -319,8 +319,7 @@ class FullLayerEndpointTests(TestCase):
         from unittest.mock import patch
         from core.slicer_preview import generated_preview
         self.client.force_login(self.owner)
-        with (patch("core.slicer_layer_preview.MAX_LAYER_SOURCE_BYTES", 64),
-              patch("core.api_views.MAX_LAYER_SOURCE_BYTES", 64)):
+        with patch("core.slicer_layer_preview.MAX_LAYER_SOURCE_BYTES", 64):
             direct = self.client.get(
                 f"/api/files/{self.asset.pk}/gcode/layers/?zs=0.2,0.4&quality=full&direct=1")
             self.assertEqual(direct.status_code, 200, direct.content)
@@ -333,7 +332,7 @@ class FullLayerEndpointTests(TestCase):
     def test_large_source_skips_unavailable_warmer_and_streams_directly(self):
         from unittest.mock import patch
         self.client.force_login(self.owner)
-        with (patch("core.api_views.MAX_LAYER_SOURCE_BYTES", 64),
+        with (patch("core.slicer_layer_preview.MAX_LAYER_SOURCE_BYTES", 64),
               patch("core.tasks.warm_gcode_preview_task.delay") as schedule):
             response = self.client.get(
                 f"/api/files/{self.asset.pk}/gcode/layers/?zs=0.2,0.4&quality=full&warm=1")
