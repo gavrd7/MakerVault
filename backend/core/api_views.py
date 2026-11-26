@@ -2477,7 +2477,7 @@ def file_gcode_layers(request, asset_id):
         # HTTP gzip preserves every coordinate and segment, while avoiding
         # large uncompressed JSON transfers that can fail on mobile Safari.
         # Only this authenticated geometry endpoint is affected.
-        if (len(response.content) > 2048 and
+        if (len(response.content) > 200 and
                 "gzip" in request.headers.get("Accept-Encoding", "").lower()):
             from django.middleware.gzip import GZipMiddleware
             response = GZipMiddleware(lambda _: response).process_response(
