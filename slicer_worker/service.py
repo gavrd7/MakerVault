@@ -77,7 +77,7 @@ def _decode_payload(payload):
         "model", "printer_profile", "filament_profile", "process_profile",
     }
     if not isinstance(payload, dict) or not expected.issubset(payload) or (
-            set(payload) - expected - {"model_format", "filament_profiles", "creality_model_stls", "creality_tool_ids", "creality_native_project", "native_modifier_project", "prusa_placed_stl", "prusa_offline_mmu", "prusa_offline_xl", "prusa_offline_colour"}):
+            set(payload) - expected - {"model_format", "filament_profiles", "creality_model_stls", "creality_tool_ids", "creality_native_project", "native_modifier_project", "prusa_placed_stl", "creality_placed_stl", "prusa_offline_mmu", "prusa_offline_xl", "prusa_offline_colour"}):
         raise WorkerError("Invalid slicing job payload.")
     try:
         uuid.UUID(str(payload["job_id"]))
@@ -127,6 +127,16 @@ def _decode_payload(payload):
                     "creality_native_project","native_modifier_project",
                     "prusa_placed_stl"))):
             raise WorkerError("Invalid offline Prusa colour execution contract.")
+    if "creality_placed_stl" in payload and (
+            payload["creality_placed_stl"] is not True or
+            payload["engine"] != "crealityprint" or
+            payload["engine_version"] != "7.3.1" or model_format != "stl" or
+            any(key in payload for key in (
+                "filament_profiles", "creality_model_stls", "creality_tool_ids",
+                "creality_native_project", "native_modifier_project",
+                "prusa_placed_stl", "prusa_offline_mmu", "prusa_offline_xl",
+                "prusa_offline_colour"))):
+        raise WorkerError("Invalid Creality placed-STL execution contract.")
     if "prusa_placed_stl" in payload and (
             payload["prusa_placed_stl"] is not True or
             payload["engine"] != "prusaslicer" or
@@ -152,6 +162,10 @@ def _decode_payload(payload):
         if not raw or len(raw) > limit:
             raise WorkerError("Invalid slicing input size.")
         files[key] = raw
+    if payload.get("creality_placed_stl") is True:
+        from .stl_validation import validate_stl
+        validate_stl(files["model"])
+        files["creality_placed_stl"] = True
     if payload.get("prusa_placed_stl") is True:
         files["prusa_placed_stl"] = True
     if "filament_profiles" in payload:
@@ -353,6 +367,8 @@ class Handler(BaseHTTPRequestHandler):
                     (workdir / "creality-native-project.marker").write_text("v1")
                 if files.get("native_modifier_project"):
                     (workdir / "native-modifier-project.marker").write_text("v1")
+                if files.get("creality_placed_stl"):
+                    (workdir / "creality-placed-stl.marker").write_text("v1")
                 if files.get("prusa_placed_stl"):
                     (workdir / "prusa-placed-stl.marker").write_text("v1")
                 if files.get("prusa_offline_mmu"):
