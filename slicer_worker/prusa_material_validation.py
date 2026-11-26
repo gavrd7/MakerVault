@@ -104,12 +104,20 @@ def validate_prusa_material_candidate(data, *, printer_ini, tools=None, colour=F
             model.remove(metadata[0])
             facets=model.findall("./"+NS+"resources/"+NS+"object/"+NS+"mesh/"+NS+"triangles/"+NS+"triangle")
             marked=0
+            selected={1}
+            # Verified fixed Prusa TriangleSelector leaf-state encoding.
+            # No caller-controlled recursive/split nibble streams are trusted:
+            # those require a separate bounds and extrusion audit.
+            states={"4":1, "8":2, "0C":3, "1C":4, "2C":5}
             for face in facets:
                 if PAINT in face.attrib:
-                    if face.attrib.pop(PAINT)!="8":
+                    value=face.attrib.pop(PAINT)
+                    tool=states.get(value)
+                    if tool is None or tool>logical_count:
                         _refuse()
+                    selected.add(tool)
                     marked+=1
-            if marked<1:
+            if marked<1 or len(selected)<2:
                 _refuse()
             volumes=objects[0].findall("volume")
             if len(volumes)!=1:
@@ -142,7 +150,7 @@ def validate_prusa_material_candidate(data, *, printer_ini, tools=None, colour=F
                            receipt["layer_ranges"]):
             _refuse()
         return {"objects":receipt["objects"],"colour_facets":marked if colour else 0,
-                "tools":tuple(tools) if not colour else (1,2),
+                "tools":tuple(tools) if not colour else tuple(sorted(selected)),
                 "wipe_tower":tower is not None}
     except WorkerError:
         raise
