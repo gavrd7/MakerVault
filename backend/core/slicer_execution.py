@@ -867,7 +867,8 @@ def process_queued_job(job_id):
                 model = source_models[0][1]
                 model_format = "stl"
                 logger.info("Slicing job %s: using direct validated STL path", job.pk)
-            elif job.engine == "crealityprint":
+            elif (job.engine == "crealityprint" and
+                  _plate_builder(source_models) is build_compound_plate_3mf):
                 # The Creality 7.3.1 CLI's generic core-3MF plus externally
                 # loaded filament preset fails native validation (exit 205).
                 # Keep existing single-STL, native-modifier and CFS paths
