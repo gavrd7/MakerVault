@@ -14,6 +14,10 @@ from .slicer_layer_preview import MAX_BATCH_LAYERS, layer_batch_toolpaths
 
 CACHE_SECONDS = 6 * 3600
 MAX_INDEX_LAYERS = 2000
+# Render-cache granularity, not a cap on how much of the print is shown.
+# Small exact blocks avoid inflating an entire 64-layer model in Redis and
+# Python just to serve an iPhone's 1-2-layer transport request.
+FULL_RENDER_CACHE_LAYERS = 8
 
 
 def preview_index_key(asset, detail):
@@ -51,12 +55,15 @@ def cached_batch(index_key, heights):
             return None
         selected = []
         template = None
+        block_size = cache.get(index_key + ":block_size") or MAX_BATCH_LAYERS
+        if type(block_size) is not int or not 1 <= block_size <= MAX_BATCH_LAYERS:
+            return None
         end = start + len(heights)
         for block_start in range(
-                start // MAX_BATCH_LAYERS * MAX_BATCH_LAYERS,
-                end, MAX_BATCH_LAYERS):
+                start // block_size * block_size,
+                end, block_size):
             packed = cache.get(
-                index_key + ":batch:" + str(block_start // MAX_BATCH_LAYERS))
+                index_key + ":batch:" + str(block_start // block_size))
             if packed is None:
                 return None
             payload = json.loads(zlib.decompress(packed))
@@ -120,18 +127,20 @@ def _store_overview(index_key, heights, layers, detail, *, full=False):
     if len(heights) != len(layers) or not 1 <= len(heights) <= MAX_INDEX_LAYERS:
         raise ValueError("Invalid preview index data.")
     batches = []
-    for offset in range(0, len(heights), MAX_BATCH_LAYERS):
-        part = layers[offset:offset + MAX_BATCH_LAYERS]
+    block_size = FULL_RENDER_CACHE_LAYERS if full else MAX_BATCH_LAYERS
+    for offset in range(0, len(heights), block_size):
+        part = layers[offset:offset + block_size]
         payload = {
             "layers": part, "complete": True, "sampled": not full,
             "overview": not full, "high_fidelity": full, "cached": True,
         }
         packed = zlib.compress(
             json.dumps(payload, separators=(",", ":")).encode("utf-8"), level=3)
-        batches.append((offset // MAX_BATCH_LAYERS, packed))
+        batches.append((offset // block_size, packed))
     try:
         for number, packed in batches:
             cache.set(index_key + ":batch:" + str(number), packed, CACHE_SECONDS)
+        cache.set(index_key + ":block_size", block_size, CACHE_SECONDS)
         cache.set(index_key + ":manifest", list(heights), CACHE_SECONDS)
     except Exception:
         return False
@@ -296,20 +305,22 @@ def warm_streamed_high_fidelity(asset):
             )
         if not result["complete"]:
             return False
-        packed = zlib.compress(json.dumps({
-            "layers": result["layers"], "complete": True,
-            "sampled": False, "overview": False,
-            "high_fidelity": True, "cached": True,
-        }, separators=(",", ":")).encode("utf-8"), level=3)
         try:
-            cache.set(
-                index_key + ":batch:" + str(offset // MAX_BATCH_LAYERS),
-                packed, CACHE_SECONDS)
+            for suboffset in range(0, len(result["layers"]), FULL_RENDER_CACHE_LAYERS):
+                packed = zlib.compress(json.dumps({
+                    "layers": result["layers"][suboffset:suboffset + FULL_RENDER_CACHE_LAYERS],
+                    "complete": True, "sampled": False, "overview": False,
+                    "high_fidelity": True, "cached": True,
+                }, separators=(",", ":")).encode("utf-8"), level=3)
+                cache.set(index_key + ":batch:" +
+                          str((offset + suboffset) // FULL_RENDER_CACHE_LAYERS),
+                          packed, CACHE_SECONDS)
         except Exception:
             return False
     try:
         # Cache readers only observe complete sets; partial writes aren't
         # advertised and never alter the source G-code.
+        cache.set(index_key + ":block_size", FULL_RENDER_CACHE_LAYERS, CACHE_SECONDS)
         cache.set(index_key + ":manifest", list(heights), CACHE_SECONDS)
     except Exception:
         return False
