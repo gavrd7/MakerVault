@@ -88,6 +88,25 @@ class PrusaNativeToolpathAuditTests(TestCase):
                 toolpaths(),source,printer_ini=PRINTER,
                 tools=[1,2],tower=[55,150,0,250,210])
 
+    def test_stationary_purge_at_tower_counts_but_not_at_model(self):
+        from core.slicer_prusa_wipe_tower import add_prusa_native_wipe_tower
+        source=add_prusa_native_wipe_tower(
+            project(),x_mm=55,y_mm=150,rotation_deg=0,
+            bed_width=250,bed_depth=210)
+        lines=["M83","G90"]
+        for tool,center in ((0,90),(1,160)):
+            lines.extend(["T%d" % tool,"G0 X%.3f Y105" % center])
+            lines.extend(["G1 X%.3f Y105 E0.03" % (center+.06*(i+1))
+                          for i in range(32)])
+            lines.extend(["G0 X65 Y155"]+["G1 E0.03"]*32)
+        actual=("\n".join(lines)+"\n").encode()
+        result=audit_prusa_material_model_gcode(
+            actual,source,printer_ini=PRINTER,
+            tools=[1,2],tower=[55,150,0,250,210])
+        self.assertEqual(result["correct_extrusion_moves"],[32,32])
+        self.assertEqual(result["incorrect_extrusion_moves"],[0,0])
+        self.assertEqual(result["tower_extrusion_moves"],{0:32,1:32})
+
     def test_wrong_profile_assignment_is_rejected_before_gcode(self):
         with self.assertRaises(WorkerError):
             audit_prusa_material_model_gcode(
