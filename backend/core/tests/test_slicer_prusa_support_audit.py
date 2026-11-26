@@ -52,6 +52,17 @@ class PrusaTwoObjectSupportTests(TestCase):
                 self.assertEqual(result["unpainted_support_moves"], 0)
                 self.assertEqual(result["stationary_recovery_moves"][1-i], 59)
 
+    def test_small_native_support_paths_are_not_artificially_rejected(self):
+        data = (b"G90\nM83\n;TYPE:Support material\n"
+                b"G0 X90 Y105\nG1 X90.5 Y105 E.02\nG1 X91 Y105 E.03\n"
+                b"G0 X160 Y105\nG1 E.08\n")
+        result = self.audit(data)
+        self.assertEqual(result["painted_support_moves"], 2)
+        self.assertEqual(result["painted_support_e_mm"], .05)
+        self.assertEqual(result["unpainted_support_moves"], 0)
+        with self.assertRaisesRegex(ValueError, "not isolated"):
+            self.audit(data.replace(b"G1 X91 Y105 E.03", b"G0 X91 Y105"))
+
     def test_relative_xy_and_e_are_genuinely_deposited(self):
         result = self.audit(native_paths(relative=True))
         self.assertEqual(result["painted_support_moves"], 60)
