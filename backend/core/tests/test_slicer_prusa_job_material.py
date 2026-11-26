@@ -105,6 +105,57 @@ class PrusaWorkbenchMaterialTests(TestCase):
         self.assertEqual(worker.call_args.kwargs["tools"],[1,2])
         self.assertEqual(len(worker.call_args.kwargs["rows"]),2)
 
+    def test_validated_physical_slots_are_excluded_from_native_project(self):
+        job, filaments, raw = fixture()
+        self.resolve(job, filaments, raw)
+        source = [(dict(row), b"native-stl") for row in job.settings["plate_objects"]]
+        with patch("core.slicer_prusa_job_material.slice_prusa_offline_mmu_candidate",
+                   return_value=b"audited-gcode") as run:
+            self.assertEqual(slice_prusa_workbench_material(job,source),b"audited-gcode")
+        native = run.call_args.kwargs["rows"]
+        self.assertEqual(len(native), 2)
+        self.assertTrue(all("material_slot" not in row for row,_ in native))
+        self.assertEqual([raw for _,raw in native],[b"native-stl"]*2)
+        self.assertEqual([row["material_slot"]["slot_id"] for row,_ in source],
+                         ["explicit-slot-0","explicit-slot-1"])
+        self.assertEqual(run.call_args.kwargs["tools"],[1,2])
+
+    def test_qualified_global_overrides_follow_the_tool_and_filament_plan(self):
+        for mode in ("mmu", "xl"):
+            with self.subTest(mode=mode):
+                job,filaments,raw=fixture(mode)
+                self.resolve(job,filaments,raw)
+                job.settings["process_overrides"] = {
+                    "layer_height":.16, "wall_loops":3,
+                    "sparse_infill_density":25,
+                }
+                kind,plan=prepare_prusa_workbench_material(job)
+                self.assertEqual(kind,mode)
+                self.assertEqual(plan["process_overrides"],job.settings["process_overrides"])
+                with patch("core.slicer_prusa_job_material.slice_prusa_offline_"+
+                           ("mmu" if mode=="mmu" else "xl")+"_candidate",
+                           return_value=b"audited-gcode") as run:
+                    slice_prusa_workbench_material(job,[
+                        (dict(item),b"stl") for item in job.settings["plate_objects"]])
+                self.assertEqual(run.call_args.kwargs["process_overrides"],
+                                 job.settings["process_overrides"])
+
+    def test_multi_tool_global_overrides_refuse_unqualified_controls(self):
+        for value in (
+            {"wipe_tower":1},{"travel_speed":120},{"prime_tower_width":40},
+            {"layer_height":"0.2"},{"wall_loops":True},["layer_height"],
+        ):
+            with self.subTest(value=value):
+                job,filaments,raw=fixture()
+                self.resolve(job,filaments,raw)
+                job.settings["process_overrides"]=value
+                if isinstance(value,dict) and set(value)<={"layer_height","wall_loops"}:
+                    # Numeric validation occurs at the native preflight,
+                    # after exact owner-scoped process profile resolution.
+                    continue
+                with self.assertRaises(SlicerProfileError):
+                    prepare_prusa_workbench_material(job)
+
     def test_rejects_incomplete_or_ambiguous_bound_materials(self):
         for change in (
             lambda j:j.settings["material_tool_bindings"].pop(),
