@@ -30,6 +30,8 @@ on:
       - "backend/core/slicer_prusa_machine_topology.py"
       - "backend/core/slicer_prusa_native_tools.py"
       - "backend/core/tests/test_slicer_prusa_native_tools.py"
+      - "backend/core/tests/test_slicer_prusa_support_blocker_research.py"
+      - "scripts/prusa_native_two_support_object_controls.py"
       - "backend/core/slicer_prusa_multitool_project.py"
       - "backend/core/tests/test_slicer_prusa_multitool_project.py"
       - "backend/core/tests/test_slicer_prusa_machine_topology.py"
@@ -92,6 +94,7 @@ jobs:
             core.tests.test_slicer_prusa_fuzzy_audit \
             core.tests.test_slicer_prusa_machine_topology \
             core.tests.test_slicer_prusa_native_tools \
+            core.tests.test_slicer_prusa_support_blocker_research \
             core.tests.test_slicer_prusa_multitool_project \
             core.tests.test_slicer_prusa_filament_palette \
             core.tests.test_slicer_prusa_purge \
