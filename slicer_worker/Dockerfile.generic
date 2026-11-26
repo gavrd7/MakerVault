@@ -8,7 +8,7 @@ USER root
 # No Bambu asset is downloaded or worker-admitted by this image build.
 RUN apt-get update && apt-get install -y --no-install-recommends \
       libgstreamer-plugins-base1.0-0 libwebkit2gtk-4.1-0 \
-      libjavascriptcoregtk-4.1-0 ca-certificates \
+      libjavascriptcoregtk-4.1-0 ca-certificates python3-defusedxml \
     && rm -rf /var/lib/apt/lists/*
 COPY --chown=10001:10001 slicer_worker/ /opt/makervault-slicer/slicer_worker/
 RUN python3 -m compileall -q /opt/makervault-slicer/slicer_worker && \
