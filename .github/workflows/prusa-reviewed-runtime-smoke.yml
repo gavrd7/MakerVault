@@ -648,6 +648,7 @@ jobs:
         continue-on-error: true
         run: |
           set -euo pipefail
+          failed=0
           for mode in nearest random; do
             echo "Testing pinned native Prusa seam_position=$mode"
             docker run --rm --network none --user 10001:10001 \
@@ -659,8 +660,12 @@ jobs:
               /tmp/prusa_seam_acceptance.py \
               /opt/engine-store/versions/prusaslicer/2.9.7/bin/prusa-slicer \
               /opt/engine-store/versions/prusaslicer/2.9.7/resources/profiles/PrusaResearch.ini \
-              /tmp/paint "$mode"
+              /tmp/paint "$mode" || failed=$((failed+1))
           done
+          if [ "$failed" -gt 0 ]; then
+            echo "::warning title=Prusa seam research::${failed} alternate placement modes remain unqualified."
+            exit 1
+          fi
 
       - name: Generate same-geometry manual support enforcer controls
         run: |
