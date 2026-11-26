@@ -19,6 +19,7 @@ MAX_MODEL_BYTES = 32 * 1024 * 1024
 MAX_PROFILE_BYTES = 2 * 1024 * 1024
 MAX_LOG_BYTES = 4096
 DEFAULT_TIMEOUT_SECONDS = 300
+MAX_NATIVE_SLICE_TIMEOUT_SECONDS = 10800
 
 
 class WorkerError(ValueError):
@@ -115,7 +116,7 @@ def run_prusa(
     This is not a sandbox implementation: the CONTAINER must independently
     constrain filesystem, network, credentials, CPU, memory, PIDs and storage.
     """
-    if not isinstance(timeout_seconds, int) or not 1 <= timeout_seconds <= 900:
+    if type(timeout_seconds) is not int or not 1 <= timeout_seconds <= MAX_NATIVE_SLICE_TIMEOUT_SECONDS:
         raise WorkerError("Invalid slice timeout.")
     workdir = Path(workdir).resolve(strict=True)
     if not workdir.is_dir():
