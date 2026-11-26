@@ -250,19 +250,23 @@ class PrusaOfflineMmuPreflightTests(TestCase):
                 prepare_prusa_offline_xl_candidate(**xl)
         load.assert_not_called()
 
-    def test_indx_scale_tools_do_not_enter_xl_offline_worker(self):
-        values,assets=self.parts()
-        values["filament_profiles"].append(profile("filament"))
-        values["tools"]=[1,6]
-        xl={key:values[key] for key in (
-            "owner_id","printer_profile","process_profile","filament_profiles",
-            "rows","tools","bed_width","bed_depth")}
-        assets[0]=ini(",".join(["0.4"]*6),"0")
-        assets.append(assets[-1])
-        with patch("core.slicer_prusa_material_preflight.resolved_prusa_profile",
-                   side_effect=assets):
-            with self.assertRaises(SlicerProfileError):
-                prepare_prusa_offline_xl_candidate(**xl)
+    def test_indx_six_to_eight_tools_use_independent_native_worker(self):
+        for n in (6, 7, 8):
+            with self.subTest(logical_tools=n):
+                values, assets = self.parts()
+                values["filament_profiles"] += [profile("filament") for _ in range(n-5)]
+                assets += [assets[-1]] * (n-5)
+                values["tools"] = [1, n]
+                xl = {key: values[key] for key in (
+                    "owner_id", "printer_profile", "process_profile",
+                    "filament_profiles", "rows", "tools", "bed_width", "bed_depth")}
+                assets[0] = ini(",".join(["0.4"]*n), "0")
+                with patch("core.slicer_prusa_material_preflight.resolved_prusa_profile",
+                           side_effect=assets):
+                    result = prepare_prusa_offline_xl_candidate(**xl)
+                self.assertEqual(result["topology"], "indx")
+                self.assertEqual(result["expected_tools"], (1,n))
+                self.assertNotIn(b"wipe_tower = 1", result["process"])
 
     def test_five_explicit_mmu_models_preserve_tool_order(self):
         values,assets=self.parts()
