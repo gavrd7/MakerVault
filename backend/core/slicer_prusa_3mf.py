@@ -195,7 +195,13 @@ def validate_prusa_project_admission(plate, settings, version):
             two_fuzzy = len(plate) == 2 and bool(fuzzy) and not support and (
                 sum(bool((entry.get("fuzzy_skin_paint") or {}).get("regions"))
                     for entry in plate) == 1)
-            if ((len(plate) != 1 and not two_fuzzy) or overrides or
+            two_support = len(plate) == 2 and bool(support) and not fuzzy and (
+                sum(bool((entry.get("support_paint") or {}).get("regions"))
+                    for entry in plate) == 1)
+            if two_support:
+                from .slicer_prusa_support_audit import validate_prusa_two_support_plate
+                validate_prusa_two_support_plate(plate)
+            if ((len(plate) != 1 and not two_fuzzy and not two_support) or overrides or
                     row.get("modifier_volumes") or
                     (row.get("variable_layer_profile") or {}).get("bands")):
                 raise ValueError("Prusa painted facets with other object extensions are not yet verified.")
