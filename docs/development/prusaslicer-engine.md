@@ -1,3 +1,20 @@
+### Real official INDX profile native end-to-end acceptance
+
+The pinned vendor-update source contains named
+`Prusa CORE One INDX 8T HF0.4 nozzle` and
+`Prusa CORE One INDX 4T HF0.4 nozzle` profiles, plus
+0.25/0.6/0.8 mm variants. The reviewed CI verifies the
+vendor file's actual Git object ID before using that 8T preset.
+The eight-tool acceptance now runs three distinct native checks:
+eight model/tool depositions using a synthetic independent-head
+control, eight-tool modified/cavity 3MF native slicing, and real
+eight-tool slicing using the official INDX printer profile with
+its exact machine G-code. Slicing and spatial output attribution
+are observable without hardware; firmware tool pickup/heating
+remain physical acceptance criteria.
+
+---
+
 ### Official INDX updated profile source integrity
 
 The INDX wizard imports from Prusa's separately maintained, immutable
