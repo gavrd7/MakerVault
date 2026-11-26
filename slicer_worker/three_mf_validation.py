@@ -237,8 +237,10 @@ def validate_worker_3mf(data, *, native_tool_count=None, allow_creality_combined
         triangles = obj.findall("./{%s}mesh/{%s}triangles/{%s}triangle" % (CORE_NS, CORE_NS, CORE_NS))
         if not vertices or not triangles:
             raise WorkerError("3MF build contains empty objects.")
-        if len(triangles) > MAX_TRIANGLES:
-            raise WorkerError("3MF object triangle count exceeds worker limit.")
+        # A core 3MF object can be a compound mesh made from many already-
+        # inspected STLs. Applying the single-source STL triangle cap here
+        # would reject normal multi-model slicing after backend 3MF packing.
+        # Bound the actual worker input by the total plate budget instead.
         count += len(triangles)
         for triangle in triangles:
             attributes = set(triangle.attrib)
