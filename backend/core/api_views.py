@@ -2536,13 +2536,12 @@ def file_gcode_layers(request, asset_id):
             # The HTTP caller may ask us to enqueue the existing Celery task.
             # Return 202 promptly and let the client poll, with a direct
             # bounded-batch fallback if the background worker is unavailable.
-            if (asset.file.size <= MAX_LAYER_SOURCE_BYTES and
-                    request.GET.get("warm") == "1" and request.GET.get("direct") != "1"):
+            if request.GET.get("warm") == "1" and request.GET.get("direct") != "1":
                 from django.core.cache import cache
                 if not (high_fidelity and cache.get(index_key + ":unavailable")):
                     from .tasks import warm_gcode_preview_task
                     lock_key = index_key + ":warming"
-                    acquired = cache.add(lock_key, 1, timeout=300)
+                    acquired = cache.add(lock_key, 1, timeout=3600)
                     if acquired:
                         try:
                             warm_gcode_preview_task.delay(str(asset.pk))
