@@ -448,6 +448,7 @@ class Handler(BaseHTTPRequestHandler):
                 "Isolated worker could not run OrcaSlicer.": "engine-launch-failed",
                 "Modifier fixtures cannot activate other native project extensions.": "invalid-3mf",
                 "3MF input exceeds worker limits.": "invalid-3mf",
+                "3MF object triangle count exceeds worker limit.": "invalid-3mf",
                 "3MF triangle count exceeds worker limit.": "invalid-3mf",
                 "3MF vertex count exceeds worker limit.": "invalid-3mf",
                 "3MF package contents are not bounded.": "invalid-3mf",
