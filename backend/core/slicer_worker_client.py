@@ -99,7 +99,6 @@ def _encode(raw, limit):
 def run_remote_job(job_id, engine, version, model, printer_profile, filament_profile, process_profile, *, timeout_seconds=900, native_timeout_seconds=300, orca_streamed_plate=False, creality_placed_stl=False, model_format="stl", filament_profiles=None,
                    creality_model_stls=None, creality_tool_ids=None,
                    creality_native_project=False, native_modifier_project=False, prusa_placed_stl=False,
-                   creality_placed_stl=False,
                    prusa_offline_mmu=None, prusa_offline_xl=None,
                    prusa_offline_colour=None):
     if model_format not in {"stl", "3mf"}:
@@ -140,13 +139,18 @@ def run_remote_job(job_id, engine, version, model, printer_profile, filament_pro
     payload = {
         "job_id": canonical_id, "engine": engine, "engine_version": version,
         "model": _encode(zlib.compress(model, level=6) if creality_placed_stl else model,
-                         MAX_REQUEST_MODEL),
+                         limit),
         "printer_profile": _encode(printer_profile, MAX_REQUEST_PROFILE),
         "filament_profile": _encode(filament_profile, MAX_REQUEST_PROFILE),
         "process_profile": _encode(process_profile, MAX_REQUEST_PROFILE),
     }
     if model_format == "3mf":
         payload["model_format"] = "3mf"
+    if native_timeout_seconds != 300:
+        payload["slice_timeout_seconds"] = native_timeout_seconds
+    if orca_streamed_plate:
+        payload["orca_streamed_plate"] = True
+        payload["orca_streamed_sha256"] = hashlib.sha256(model).hexdigest()
     if prusa_offline_xl is not None:
         if (engine != "prusaslicer" or version != "2.9.7" or
                 model_format != "3mf" or not isinstance(prusa_offline_xl, dict)
