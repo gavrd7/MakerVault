@@ -1,3 +1,22 @@
+### Two-object support enforcers with automatic-support presets
+
+The two-object support route applies `support_material = 1` and
+`support_material_auto = 0` to the **temporary, resolved process settings
+for that slice only**, even when the saved process profile requested automatic
+supports. This is intentional: genuine native 2.9.7 support isolation was
+qualified with manual painted enforcers, not unrestricted automatic support
+generation. Single-object support painting still preserves the saved
+automatic/manual setting. No imported preset or printer configuration is
+mutated. This must be separately regression-tested with automatic supports
+present in the native source process file.
+
+The additional normal queued workbench admission test checks that this route
+is Prusa 2.9.7-only and rejects a second painted object, scaling and mixed
+object edits. The native runtime requires bidirectional painted-vs-unpainted
+support isolation. Desktop/mobile staging remains an independent pre-merge gate.
+
+---
+
 ## 26 November — two-object Prusa native support leakage was stationary E recovery
 
 The pinned real PrusaSlicer 2.9.7 run [45890113131](https://github.com/gavrd7/MakerVault/actions/runs/45890113131) demonstrated that the previous 59 “neighbour support moves” were **stationary extruder recovery events**, not deposited support. The native baseline produced zero deposited supports in either region; a left-only painted enforcer produced **2,174 moving support paths left / zero right**; the reverse right-only candidate produced **zero left / 2,174 right**. Research with the earlier unqualified classifier incorrectly rejected the zero-leak baseline. The research gate now recognises this as proof of isolation, rather than a blocker.
