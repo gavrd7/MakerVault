@@ -4,6 +4,7 @@ This does not create a Prusa 3MF project, smuggle object settings into
 profiles, or modify the established Orca/Creality/Bambu plate exporters.
 All source STLs must already have passed owner and integrity checks.
 """
+import hashlib
 import math
 import re
 import struct
@@ -11,6 +12,7 @@ import struct
 from .slicer_plate_3mf import _triangles, _transform
 from .slicer_mesh import inspect_stl, MeshInspectionError
 from .slicer_profiles import SlicerProfileError
+from .slicer_resource_budget import (plate_triangle_budget, input_model_budget, source_input_budget)
 
 _BED_POINT = re.compile(r"^([+-]?\d+(?:\.\d+)?)x([+-]?\d+(?:\.\d+)?)$")
 
@@ -77,14 +79,21 @@ def build_prusa_placed_stl(objects_with_stl, *, bed_width, bed_depth):
                        + b"\0" * 4)
     count = 0
     source_bytes = 0
+    seen_source = set()
+    source_limit = source_input_budget(upper_cap=input_model_budget())
+    facet_limit = plate_triangle_budget()
+    byte_limit = input_model_budget()
     for index, pair in enumerate(objects_with_stl, 1):
         if not isinstance(pair, tuple) or len(pair) != 2:
             raise SlicerProfileError("Invalid Prusa plate source.")
         item, raw = pair
         if not isinstance(item, dict) or not isinstance(raw, bytes):
             raise SlicerProfileError("Invalid Prusa plate source.")
-        source_bytes += len(raw)
-        if source_bytes > 48 * 1024 * 1024:
+        identity = (len(raw), hashlib.sha256(raw).digest())
+        if identity not in seen_source:
+            source_bytes += len(raw)
+            seen_source.add(identity)
+        if source_bytes > source_limit:
             raise SlicerProfileError("Prusa plate source bytes exceed the safe limit.")
         if (item.get("modifier_volumes") or item.get("process_overrides")
                 or (item.get("colour_paint") or {}).get("regions")
@@ -99,7 +108,7 @@ def build_prusa_placed_stl(objects_with_stl, *, bed_width, bed_depth):
             expected_faces = inspected["triangles"]
         except MeshInspectionError as exc:
             raise SlicerProfileError("Prusa plate contains an invalid STL.") from exc
-        if count + expected_faces > MAX_FACES or 84 + 50 * (count + expected_faces) > MAX_STL_BYTES:
+        if count + expected_faces > facet_limit or 84 + 50 * (count + expected_faces) > byte_limit:
             raise SlicerProfileError("Prusa plate geometry exceeds the native STL limit.")
         # Exact source bounds are needed: the inspection summary rounds to
         # three decimal places, whereas preview pivots are calculated from
@@ -162,7 +171,7 @@ def build_prusa_placed_stl(objects_with_stl, *, bed_width, bed_depth):
                 raise SlicerProfileError("Prusa transformed geometry is not finite.")
             output.extend(struct.pack("<12fH", *flat, 0))
             count += 1
-    if not 0 < count <= MAX_FACES or len(output) > MAX_STL_BYTES:
+    if not 0 < count <= facet_limit or len(output) > byte_limit:
         raise SlicerProfileError("Prusa model plate exceeds native STL limit.")
     struct.pack_into("<I", output, 80, count)
     return bytes(output)
