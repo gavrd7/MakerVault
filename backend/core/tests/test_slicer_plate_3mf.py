@@ -106,9 +106,9 @@ class MeshStreamingTests(SimpleTestCase):
         original = plate._triangles
         invocations = []
 
-        def instrumented(raw):
+        def instrumented(raw, **kwargs):
             invocations.append(1)
-            return original(raw)
+            return original(raw, **kwargs)
 
         source = fixture_stl()
         element = Element("object")
