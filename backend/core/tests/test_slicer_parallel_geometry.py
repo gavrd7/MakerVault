@@ -49,6 +49,15 @@ class ParallelGeometryExecutionTests(SimpleTestCase):
                 self.assertEqual([result for _, _, result in results], [None, None])
         popen.assert_not_called()
 
+    @patch("core.slicer_parallel_geometry.effective_cpu_count", return_value=4)
+    def test_parallel_jobs_share_three_global_cpu_slots(self, _):
+        with _local_parallel_slots(3) as first:
+            self.assertEqual(first, 3)
+            with _local_parallel_slots(3) as second:
+                self.assertEqual(second, 1)
+        with _local_parallel_slots(3) as released:
+            self.assertEqual(released, 3)
+
     def test_local_slot_context_never_swallows_caller_error(self):
         with self.assertRaisesRegex(OSError, "work error"):
             with _local_parallel_slots(2):
