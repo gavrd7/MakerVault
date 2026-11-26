@@ -37,6 +37,27 @@ class CrealityCommandTests(TestCase):
         self.assertNotIn("--load_filaments", cmd)
         self.assertEqual(cmd[-1], str(self.root / "input.stl"))
 
+    def test_placed_single_filament_plate_uses_native_stl_preset_and_keeps_positions(self):
+        (self.root / "creality-placed-stl.marker").write_text("v1")
+        with patch("slicer_worker.creality_runner.validate_stl") as validate:
+            command = creality_command(self.binary, self.root)
+        self.assertIn("--load-settings", command)
+        self.assertIn("--load-filaments", command)
+        self.assertEqual(command[command.index("--arrange") + 1], "0")
+        self.assertEqual(command[-1], str(self.root / "input.stl"))
+        validate.assert_called_once()
+        self.assertEqual(validate.call_args.kwargs["max_triangles"], 1_500_000)
+
+    def test_placed_stl_cannot_combine_with_native_project_or_material_map(self):
+        (self.root / "creality-placed-stl.marker").write_text("v1")
+        (self.root / "creality-material-map.json").write_text("{}")
+        with self.assertRaisesRegex(WorkerError, "cannot activate"):
+            creality_command(self.binary, self.root)
+        (self.root / "creality-material-map.json").unlink()
+        (self.root / "creality-placed-stl.marker").write_text("wrong")
+        with self.assertRaisesRegex(WorkerError, "Invalid Creality placed"):
+            creality_command(self.binary, self.root)
+
     def test_unsafe_profile_and_inherited_parent_rejected(self):
         (self.root / "process.json").write_text(json.dumps({"post_process": "touch /tmp/unsafe"}))
         with self.assertRaises(WorkerError):
