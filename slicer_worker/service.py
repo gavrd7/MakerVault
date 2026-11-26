@@ -80,7 +80,8 @@ def _decode_payload(payload):
         "model", "printer_profile", "filament_profile", "process_profile",
     }
     if not isinstance(payload, dict) or not expected.issubset(payload) or (
-            set(payload) - expected - {"model_format", "filament_profiles", "creality_model_stls", "creality_tool_ids", "creality_native_project", "native_modifier_project", "prusa_placed_stl", "creality_placed_stl", "creality_model_raw_sha256", "prusa_offline_mmu", "prusa_offline_xl", "prusa_offline_colour"}):
+            set(payload) - expected - {"model_format", "filament_profiles", "creality_model_stls", "creality_tool_ids", "creality_native_project", "native_modifier_project", "prusa_placed_stl", "creality_placed_stl", "creality_model_raw_sha256", "prusa_offline_mmu", "prusa_offline_xl", "prusa_offline_colour",
+                "orca_streamed_plate", "orca_streamed_sha256", "slice_timeout_seconds"}):
         raise WorkerError("Invalid slicing job payload.")
     try:
         uuid.UUID(str(payload["job_id"]))
@@ -215,7 +216,7 @@ def _decode_payload(payload):
         # Creality 7.3.1 single-material placed-plate request. Decompress
         # strictly to the maximum representable bounded binary STL, and
         # reject trailing streams and mismatched source digests.
-        limit = 84 + 50 * 1_500_000
+        limit = min(84 + 50 * 1_500_000, model_input_budget())
         try:
             stream = zlib.decompressobj()
             original = stream.decompress(files["model"], limit + 1)
@@ -228,6 +229,12 @@ def _decode_payload(payload):
         validate_stl(original, max_triangles=1_500_000)
         files["model"] = original
         files["creality_placed_stl"] = True
+    if streamed:
+        if hashlib.sha256(files["model"]).hexdigest() != payload["orca_streamed_sha256"]:
+            raise WorkerError("Streamed Orca plate integrity check failed.")
+        from .streamed_orca_validation import validate_streamed_orca_3mf
+        validate_streamed_orca_3mf(files["model"])
+        files["orca_streamed_plate"] = True
     if payload.get("prusa_placed_stl") is True:
         files["prusa_placed_stl"] = True
     if "filament_profiles" in payload:
@@ -438,6 +445,8 @@ class Handler(BaseHTTPRequestHandler):
                     (workdir / "native-modifier-project.marker").write_text("v1")
                 if files.get("creality_placed_stl"):
                     (workdir / "creality-placed-stl.marker").write_text("v1")
+                if files.get("orca_streamed_plate"):
+                    (workdir / "orca-streamed-plate.marker").write_text("v1")
                 if files.get("prusa_placed_stl"):
                     (workdir / "prusa-placed-stl.marker").write_text("v1")
                 if files.get("prusa_offline_mmu"):
