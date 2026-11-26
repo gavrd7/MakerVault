@@ -252,8 +252,14 @@ def _draft_plate_settings(user, input_asset, settings):
     """Persist preview-only plate geometry; never compile it into slicer flags."""
     if settings is None:
         settings = {}
-    if not isinstance(settings, dict) or set(settings) - {"plate_objects", "plate_label", "plates", "active_plate_id", "save_gcode_to_library", "workflow", "process_overrides", "flush_settings", "slot_filament_profiles", "material_tool_bindings", "material_topology", "multi_material_test", "creality_auto_arrange_offline", "prime_tower", "project_name", "plate_volumes"}:
+    if not isinstance(settings, dict) or set(settings) - {"plate_objects", "plate_label", "plates", "active_plate_id", "save_gcode_to_library", "workflow", "process_overrides", "flush_settings", "slot_filament_profiles", "material_tool_bindings", "material_topology", "multi_material_test", "creality_auto_arrange_offline", "prime_tower", "project_name", "plate_volumes", "prusa_native_tools"}:
         raise ValueError("Unsupported slicer plate settings.")
+    prusa_native = settings.get("prusa_native_tools")
+    if prusa_native is not None:
+        from .slicer_prusa_tool_configuration import validate_prusa_native_tools
+        prusa_native = validate_prusa_native_tools(prusa_native)
+    prusa_native_field = ({"prusa_native_tools": prusa_native}
+                          if prusa_native is not None else {})
     project_name = settings.get("project_name")
     name_field = {"project_name": _validate_project_name(project_name)} if project_name is not None else {}
     prime_tower = _validate_prime_tower_position(settings.get("prime_tower"))
@@ -449,7 +455,7 @@ def _draft_plate_settings(user, input_asset, settings):
                 "workflow": workflow, "process_overrides": process_overrides,
             **({"multi_material_test": True} if multi_material_test else {}),
                 **({"creality_auto_arrange_offline": True} if creality_auto_arrange_offline else {}),
-                **({"flush_settings": flush_settings} if flush_settings is not None else {}), **name_field, **tower_field, **slot_fields, **routing_fields, **project_fields}
+                **({"flush_settings": flush_settings} if flush_settings is not None else {}), **name_field, **tower_field, **slot_fields, **routing_fields, **prusa_native_field, **project_fields}
     objects = settings["plate_objects"]
     if not isinstance(objects, list) or not 1 <= len(objects) <= 200:
         raise ValueError("The visual build plate supports up to 200 model instances.")
@@ -590,7 +596,7 @@ def _draft_plate_settings(user, input_asset, settings):
             **({"multi_material_test": True} if multi_material_test else {}),
                 **({"creality_auto_arrange_offline": True} if creality_auto_arrange_offline else {}),
             **({"flush_settings": flush_settings} if flush_settings is not None else {}),
-            **name_field, **tower_field, **slot_fields, **routing_fields, **project_fields}
+            **name_field, **tower_field, **slot_fields, **routing_fields, **prusa_native_field, **project_fields}
 
 
 def _draft(user, data):
@@ -645,6 +651,9 @@ def _draft(user, data):
         raise ValueError("Nozzle diameter must be between 0.10 and 2.00 mm with at most two decimals.")
     settings_data = data.get("settings", {})
     settings_data = _draft_plate_settings(user, input_asset, settings_data)
+    if settings_data.get("prusa_native_tools") is not None and (
+            engine.key != "prusaslicer" or version != "2.9.7"):
+        raise ValueError("Virtual native tools are supported only by PrusaSlicer 2.9.7.")
     plate_models = settings_data.get("plate_objects") or []
     if len(plate_models) > 1:
         # An inert draft may keep conflicting objects for editing. Record a
