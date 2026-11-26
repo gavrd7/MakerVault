@@ -90,3 +90,45 @@ class EngineNeutralCapacityTests(SimpleTestCase):
         self.assertEqual(budget.input_model_budget(), 32 * MiB)
         self.assertEqual(budget.gcode_transport_budget(), 64 * MiB)
         self.assertIsNone(budget.resource_snapshot()["available_bytes"])
+
+
+class PreparationWorkerTests(SimpleTestCase):
+    @patch.object(budget, "_cpu_quota", return_value=2.5)
+    @patch.object(budget.os, "sched_getaffinity", return_value=set(range(16)))
+    def test_affinity_and_fractional_quota(self, *_):
+        self.assertEqual(budget.effective_cpu_count(), 2)
+
+    @patch.object(budget, "_cpu_quota", return_value=None)
+    @patch.object(budget.os, "sched_getaffinity", return_value={0})
+    def test_single_core(self, *_):
+        self.assertEqual(budget.effective_cpu_count(), 1)
+
+    @patch.object(budget, "resource_snapshot",
+                  return_value={"available_bytes": 64 * 1024 * MiB})
+    def test_scales_with_hardware_and_workload(self, _):
+        for cpus, expected in ((1, 1), (2, 1), (4, 3), (16, 15), (32, 31)):
+            with self.subTest(cpus=cpus), patch.object(
+                    budget, "effective_cpu_count", return_value=cpus):
+                self.assertEqual(budget.preparation_worker_count(
+                    independent_tasks=100, bytes_per_worker=128 * MiB), expected)
+        with patch.object(budget, "effective_cpu_count", return_value=32):
+            self.assertEqual(budget.preparation_worker_count(
+                independent_tasks=2, bytes_per_worker=128 * MiB), 2)
+            self.assertEqual(budget.preparation_worker_count(
+                independent_tasks=100, bytes_per_worker=128 * MiB,
+                max_workers=4), 4)
+
+    @patch.object(budget, "effective_cpu_count", return_value=32)
+    def test_memory_pressure_and_unknown_telemetry(self, _):
+        for memory in (None, 300 * MiB):
+            with self.subTest(memory=memory), patch.object(
+                    budget, "resource_snapshot",
+                    return_value={"available_bytes": memory}):
+                self.assertEqual(budget.preparation_worker_count(
+                    independent_tasks=20, bytes_per_worker=128 * MiB), 1)
+
+    def test_invalid_worker_parameters(self):
+        for cap in (0, -1, True, "4"):
+            with self.subTest(cap=cap), self.assertRaises(ValueError):
+                budget.preparation_worker_count(
+                    independent_tasks=4, bytes_per_worker=MiB, max_workers=cap)
