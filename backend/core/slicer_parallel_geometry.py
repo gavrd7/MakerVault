@@ -33,6 +33,7 @@ def _worker_cap():
 # the same backend container. Kernel locks are released after worker crashes.
 @contextmanager
 def _local_parallel_slots(requested):
+    """Reserve process-wide parallel CPU slots without a persistent registry."""
     if requested < 2:
         yield 1
         return
@@ -40,8 +41,6 @@ def _local_parallel_slots(requested):
     try:
         directory = Path(tempfile.gettempdir()) / "makervault-geometry-slots"
         directory.mkdir(mode=0o700, exist_ok=True)
-        # The allocator has already capped this request by effective CPU
-        # quota/affinity. Reserve only that many physical parallel slots.
         for index in range(max(1, os.cpu_count() or 1)):
             if len(slots) == requested:
                 break
@@ -49,13 +48,19 @@ def _local_parallel_slots(requested):
             fd = os.open(filename, os.O_CREAT | os.O_RDWR | os.O_NOFOLLOW, 0o600)
             try:
                 fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
-                slots.append(fd)
             except BlockingIOError:
                 os.close(fd)
-        yield len(slots) if len(slots) >= 2 else 1
+                continue
+            slots.append(fd)
     except OSError:
-        # If locking is unavailable, avoid launching uncoordinated children.
-        yield 1
+        # Fail back to serial processing when local coordination cannot be
+        # established; do not swallow exceptions from the caller's work.
+        for fd in slots:
+            fcntl.flock(fd, fcntl.LOCK_UN)
+            os.close(fd)
+        slots.clear()
+    try:
+        yield len(slots) if len(slots) >= 2 else 1
     finally:
         for fd in slots:
             fcntl.flock(fd, fcntl.LOCK_UN)
