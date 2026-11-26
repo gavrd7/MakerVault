@@ -15,6 +15,59 @@ from .slicer_prusa_material_preflight import (
 from .slicer_profiles import SlicerProfileError
 
 
+def _virtual_native_tools(job, settings, objects, kind, count):
+    """Resolve browser-assigned native tools without physical feeder telemetry."""
+    from .slicer_prusa_tool_configuration import validate_prusa_native_tools
+    config = validate_prusa_native_tools(settings["prusa_native_tools"])
+    expected = "mmu" if kind == "single_nozzle_changer" else "xl"
+    if config["mode"] != expected or config["tool_count"] != count:
+        raise SlicerProfileError("Native Prusa profile and selected tool architecture disagree.")
+    if (settings.get("material_tool_bindings") or settings.get("slot_filament_profiles")
+            or settings.get("flush_settings")
+            or any(row.get("material_slot") for row in objects)):
+        raise SlicerProfileError("Clear physical feeder assignments before using Prusa virtual tools.")
+    ids = config["filament_profile_ids"]
+    if any(not value for value in ids):
+        raise SlicerProfileError("Choose a native Prusa filament profile for every tool.")
+    by_id = {str(row.pk):row for row in SlicerProfile.objects.filter(
+        owner_id=job.owner_id, pk__in=ids, kind="filament",
+        engine="prusaslicer", engine_version="2.9.7")}
+    if set(ids) - set(by_id):
+        raise SlicerProfileError("A selected Prusa filament is not owned or has been deleted.")
+    filaments = [by_id[value] for value in ids]
+    if str(job.filament_profile_id) not in ids:
+        raise SlicerProfileError("The Setup filament must be among selected Prusa tool profiles.")
+    for profile in filaments:
+        if (profile.owner_id != job.owner_id or profile.engine != "prusaslicer"
+                or profile.engine_version != "2.9.7" or profile.kind != "filament"):
+            raise SlicerProfileError("Invalid Prusa native filament ownership or version.")
+    selected = config["model_tools"]
+    if len(selected) != len(objects):
+        raise SlicerProfileError("Assign an explicit Prusa tool to every printable object.")
+    mapping = {row["instance_id"]:row["tool"] for row in selected}
+    if set(mapping) != {str(row.get("instance_id")) for row in objects}:
+        raise SlicerProfileError("Prusa tool selections do not match active model identities.")
+    tools = [mapping[str(row["instance_id"])] for row in objects]
+    if len(set(tools)) < 2:
+        raise SlicerProfileError("Prusa offline slicing requires two distinct native tools.")
+    width, depth = trusted_plate_dimensions(job.printer_profile)
+    result = {
+        "owner_id":job.owner_id, "printer_profile":job.printer_profile,
+        "process_profile":job.process_profile, "filament_profiles":filaments,
+        "tools":tools, "bed_width":width, "bed_depth":depth,
+    }
+    if expected == "mmu":
+        tower = settings.get("prime_tower")
+        matrix = config["purge_matrix"]
+        if (not isinstance(tower, dict) or set(tower) != {"x", "y"} or
+                any(value is None for row in matrix for value in row)):
+            raise SlicerProfileError("Complete MMU purge volumes and choose a native wipe tower.")
+        result.update(purge_matrix=matrix, tower_xy=(tower["x"],tower["y"]))
+    elif settings.get("prime_tower") is not None:
+        raise SlicerProfileError("Independent Prusa XL heads do not use an MMU wipe tower.")
+    return expected,result
+
+
 def prepare_prusa_workbench_material(job, *, settings=None):
     """Resolve a full owner-scoped selection before loading any model bytes.
 
@@ -41,7 +94,7 @@ def prepare_prusa_workbench_material(job, *, settings=None):
     kind = topology["kind"]
     expected = ("single_nozzle_changer" if kind == "single_nozzle_changer"
                 else "independent_toolheads" if kind == "independent_tools" else None)
-    if settings.get("material_topology") != expected:
+    if settings.get("prusa_native_tools") is None and settings.get("material_topology") != expected:
         raise SlicerProfileError("Select the matching native Prusa material topology.")
 
     objects = settings.get("plate_objects")
@@ -68,6 +121,9 @@ def prepare_prusa_workbench_material(job, *, settings=None):
     if (settings.get("process_overrides") or settings.get("plate_volumes") or
             settings.get("creality_auto_arrange_offline")):
         raise SlicerProfileError("Unqualified global settings or independent volumes cannot be dropped.")
+
+    if settings.get("prusa_native_tools") is not None:
+        return _virtual_native_tools(job, settings, objects, kind, count)
 
     routes = settings.get("material_tool_bindings")
     selections = settings.get("slot_filament_profiles")
