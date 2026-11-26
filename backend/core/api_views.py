@@ -2485,6 +2485,16 @@ def file_gcode_layers(request, asset_id):
             raise ValueError()
     except (ValueError, TypeError):
         return _error("Invalid or duplicate layer Z coordinate.", status=400)
+    try:
+        page_start = (int(request.GET["page_start"])
+                      if "page_start" in request.GET else None)
+        if page_start is not None and (
+                str(page_start) != request.GET["page_start"]
+                or page_start < 0 or page_start > 2**53
+                or len(heights) != 1 or request.GET.get("quality") != "full"):
+            raise ValueError()
+    except (ValueError, TypeError):
+        return _error("Invalid full-detail layer page.", status=400)
     high_fidelity = request.GET.get("quality") == "full"
     overview = request.GET.get("overview") == "1" and not high_fidelity
     try:
@@ -2495,7 +2505,7 @@ def file_gcode_layers(request, asset_id):
         return _error("Invalid preview detail level.", status=400)
     index_key = None
     all_heights = None
-    if overview or high_fidelity:
+    if (overview or high_fidelity) and page_start is None:
         from .slicer_preview_cache import (
             cached_batch, index_overview, preview_index_key, MAX_INDEX_LAYERS,
         )
@@ -2545,6 +2555,7 @@ def file_gcode_layers(request, asset_id):
                 return _error("Invalid complete preview layer list.", status=400)
     from .slicer_layer_preview import (
         streamed_gcode_lines, MAX_FULL_PREVIEW_SEGMENTS, MAX_BATCH_SEGMENTS,
+        MAX_LAYER_SEGMENTS,
     )
     from .slicer_resource_budget import gcode_transport_budget
     if asset.file.size > gcode_transport_budget():
@@ -2560,7 +2571,9 @@ def file_gcode_layers(request, asset_id):
                     overview=overview, overview_limit=detail,
                     high_fidelity=high_fidelity,
                     max_total_segments=(
+                        MAX_LAYER_SEGMENTS if page_start is not None else
                         MAX_FULL_PREVIEW_SEGMENTS if high_fidelity else MAX_BATCH_SEGMENTS),
+                    page_start=page_start,
                 )
             else:
                 raw = handle.read(MAX_LAYER_SOURCE_BYTES + 1)
@@ -2575,7 +2588,9 @@ def file_gcode_layers(request, asset_id):
                     text, heights, overview=overview, overview_limit=detail,
                     high_fidelity=high_fidelity,
                     max_total_segments=(
+                        MAX_LAYER_SEGMENTS if page_start is not None else
                         MAX_FULL_PREVIEW_SEGMENTS if high_fidelity else MAX_BATCH_SEGMENTS),
+                    page_start=page_start,
                 )
     except (UnicodeDecodeError, ValueError, TypeError):
         return _error("Invalid G-code source or preview detail level.", status=400)
