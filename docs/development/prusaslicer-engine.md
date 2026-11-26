@@ -1,3 +1,16 @@
+### Official vendor literal compatibility
+
+Prusa's current 2.5.16 INDX vendor update carries longer native
+printer conditional strings than the older bundled 2.9.7 catalogue.
+The bounded owner-import parser and isolated worker vendor parser now
+permit native literal option values up to 64 KiB, while retaining their
+UTF-8, control-byte, script-key, section-count and total-profile size
+checks. The official file remains pinned by immutable Git object ID;
+the real 8T profile import and native slicing must both pass the
+reviewed-runtime test before any release.
+
+---
+
 ### Eight-tool native scratch isolation
 
 Each real 8T fixture candidate (plain, modified/cavity/variable-layer,
