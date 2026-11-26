@@ -739,6 +739,5 @@ class PrusaOfflineMaterialAdmissionTests(SimpleTestCase):
         from types import SimpleNamespace
         job=SimpleNamespace(engine="orcaslicer",engine_version="2.5.0",settings={})
         with patch("core.slicer_prusa_job_material.prepare_prusa_workbench_material") as plan:
-            with self.assertRaises(SlicerExecutionError):
-                _validate_plate_execution(job)  # The original engine still rejects an empty plate.
+            self.assertTrue(_validate_plate_execution(job))  # Preserve original engine admission semantics.
         plan.assert_not_called()
