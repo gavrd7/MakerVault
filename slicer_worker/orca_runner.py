@@ -17,6 +17,7 @@ import logging
 import threading
 from collections import deque
 
+from .resource_budget import model_input_budget, gcode_output_budget
 from .stl_validation import StlValidationError, validate_stl
 from .three_mf_validation import validate_worker_3mf
 from .headless_env import slicing_environment
@@ -212,8 +213,21 @@ def orca_command(binary: Path, workdir: Path, *,
     is_project = (workdir / "input.3mf").exists()
     if (experimental_all_plates or experimental_no_arrange) and not is_project:
         raise WorkerError("Experimental plate mode requires a 3MF input.")
-    model = _regular_file(workdir, "input.3mf" if is_project else "input.stl", MAX_MODEL_BYTES)
+    streamed_marker = workdir / "orca-streamed-plate.marker"
+    if streamed_marker.is_symlink():
+        raise WorkerError("Invalid streamed Orca marker.")
+    streamed = streamed_marker.exists()
+    if streamed and (not is_project or not streamed_marker.is_file()
+                     or streamed_marker.read_bytes() != b"v1"):
+        raise WorkerError("Invalid streamed Orca project marker.")
+    if streamed:
+        from .streamed_orca_validation import streamed_orca_memory_budget
+        maximum = streamed_orca_memory_budget() // 8
+    else:
+        maximum = model_input_budget()
+    model = _regular_file(workdir, "input.3mf" if is_project else "input.stl", maximum)
     native_object_settings = False
+    streamed_triangles = None
     if not is_project:
         try:
             validate_stl(model.read_bytes())
@@ -248,9 +262,15 @@ def orca_command(binary: Path, workdir: Path, *,
         native_modifiers = (workdir / "native-modifier-project.marker").exists()
         if native_modifiers and palette:
             raise WorkerError("Modifier jobs cannot include an unverified multi-tool palette.")
-        validate_worker_3mf(model_bytes,
-                            native_tool_count=len(palette) if palette else None,
-                            allow_native_modifier_fixture=native_modifiers)
+        if streamed:
+            if native_modifiers or palette:
+                raise WorkerError("Streamed Orca plates cannot contain native object controls.")
+            from .streamed_orca_validation import validate_streamed_orca_3mf
+            streamed_triangles = validate_streamed_orca_3mf(model_bytes)["triangles"]
+        else:
+            validate_worker_3mf(model_bytes,
+                                native_tool_count=len(palette) if palette else None,
+                                allow_native_modifier_fixture=native_modifiers)
         # Inspect the manifest only after all archive bounds have been checked.
         with zipfile.ZipFile(io.BytesIO(model_bytes)) as archive:
             if "Metadata/model_settings.config" in archive.namelist():
@@ -269,7 +289,7 @@ def orca_command(binary: Path, workdir: Path, *,
         *(["--arrange", "1"] if not is_project else
           ["--arrange", "0"] if native_object_settings or experimental_no_arrange else []),
         "--slice", "0" if experimental_all_plates else "1",
-        "--mtcpp", "500000", "--mstpp", "300",
+        "--mtcpp", str(max(500000, streamed_triangles or 0)), "--mstpp", "300",
         "--outputdir", str(outdir),
     ]
 
@@ -358,13 +378,13 @@ def run_orca(binary: Path, workdir: Path, *, timeout_seconds: int = DEFAULT_TIME
                     for p in outputs)):
             raise WorkerError("OrcaSlicer must produce exactly one G-code plate and only expected metadata.")
         source = gcode[0]
-        if source.is_symlink() or not source.is_file() or not 0 < source.stat().st_size <= MAX_GCODE_BYTES:
+        if source.is_symlink() or not source.is_file() or not 0 < source.stat().st_size <= gcode_output_budget():
             raise WorkerError("OrcaSlicer output is missing or exceeds its limit.")
         target = _output_path(workdir)
         with source.open("rb") as src, target.open("xb") as dst:
             while chunk := src.read(65536):
                 dst.write(chunk)
-                if dst.tell() > MAX_GCODE_BYTES:
+                if dst.tell() > gcode_output_budget():
                     raise WorkerError("G-code exceeded size limit.")
         with target.open("rb") as stream:
             if b"\x00" in stream.read(4096):

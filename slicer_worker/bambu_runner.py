@@ -18,6 +18,7 @@ import tempfile
 import zipfile
 from pathlib import Path
 
+from .resource_budget import model_input_budget, gcode_output_budget
 from .runner import MAX_GCODE_BYTES, MAX_MODEL_BYTES, MAX_PROFILE_BYTES, DEFAULT_TIMEOUT_SECONDS, MAX_NATIVE_SLICE_TIMEOUT_SECONDS
 from .runner import WorkerError, _regular_file, _output_path
 from .orca_runner import _native_json
@@ -150,14 +151,14 @@ def bambu_command(binary: Path, workdir: Path) -> list[str]:
     stl = workdir / "input.stl"
     three_mf = workdir / "input.3mf"
     if stl.is_file() and not stl.is_symlink() and not three_mf.exists():
-        model = _regular_file(workdir, "input.stl", MAX_MODEL_BYTES)
+        model = _regular_file(workdir, "input.stl", model_input_budget())
         try:
             validate_stl(model.read_bytes())
         except StlValidationError as exc:
             raise WorkerError("Input STL failed structural validation.") from exc
         is_stl = True
     elif three_mf.is_file() and not three_mf.is_symlink() and not stl.exists():
-        model = _regular_file(workdir, "input.3mf", MAX_MODEL_BYTES)
+        model = _regular_file(workdir, "input.3mf", model_input_budget())
         is_stl = False
     else:
         raise WorkerError("Choose exactly one supported STL or 3MF input.")
@@ -244,7 +245,7 @@ def verified_bambu_modifier_shift(source_project: bytes, sliced_project: Path) -
                 archive_source = Path(payload)
                 if archive_source.is_symlink() or not archive_source.is_file():
                     raise WorkerError("Bambu native output project is unavailable.")
-                if not 0 < archive_source.stat().st_size <= 128 * 1024 * 1024:
+                if not 0 < archive_source.stat().st_size <= model_input_budget():
                     raise WorkerError("Bambu native output project exceeds limits.")
             with zipfile.ZipFile(archive_source) as archive:
                 for name in ("3D/3dmodel.model", "Metadata/model_settings.config"):
@@ -303,7 +304,7 @@ def extract_single_bambu_gcode(sliced_project: Path, workdir: Path) -> Path:
     No arbitrary ZIP files or member names are extracted to the filesystem.
     Actual native 2.9.1 output/member layout still requires pinned-binary proof.
     """
-    archive = _regular_file(workdir, sliced_project.name, 128 * 1024 * 1024)
+    archive = _regular_file(workdir, sliced_project.name, model_input_budget())
     if archive.name != "bambu-sliced.3mf":
         raise WorkerError("Unexpected Bambu output artifact.")
     try:
@@ -323,7 +324,7 @@ def extract_single_bambu_gcode(sliced_project: Path, workdir: Path) -> Path:
                         r"Metadata/plate_[1-9][0-9]*\.gcode", name):
                     raise WorkerError("Bambu native output includes an unexpected G-code plate.")
                 if re.fullmatch(r"Metadata/plate_[1-9][0-9]*\.gcode", name):
-                    if info.file_size <= 0 or info.file_size > MAX_GCODE_BYTES:
+                    if info.file_size <= 0 or info.file_size > gcode_output_budget():
                         raise WorkerError("Bambu G-code exceeds size limits.")
                     if stat.S_IFMT(info.external_attr >> 16) == stat.S_IFLNK:
                         raise WorkerError("Bambu output cannot contain symlink G-code.")
@@ -339,7 +340,7 @@ def extract_single_bambu_gcode(sliced_project: Path, workdir: Path) -> Path:
                 with zf.open(matches[0]) as source, output.open("xb") as target:
                     while block := source.read(65536):
                         total += len(block)
-                        if total > MAX_GCODE_BYTES:
+                        if total > gcode_output_budget():
                             raise WorkerError("Bambu G-code exceeds size limits.")
                         if len(head) < 4096:
                             head += block[:4096 - len(head)]
