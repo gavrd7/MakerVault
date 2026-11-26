@@ -7,6 +7,8 @@ on:
       - "backend/core/slicer_prusa_3mf.py"
       - "backend/core/slicer_prusa_colour_audit.py"
       - "backend/core/tests/test_slicer_prusa_colour_audit.py"
+      - "slicer_worker/prusa_offline_contract.py"
+      - "backend/core/tests/test_slicer_prusa_offline_worker_protocol.py"
       - "slicer_worker/prusa_material_gcode_audit.py"
       - "backend/core/tests/test_slicer_prusa_material_gcode_audit.py"
       - "slicer_worker/prusa_material_validation.py"
@@ -83,7 +85,8 @@ jobs:
             core.tests.test_slicer_prusa_colour_audit \
             core.tests.test_slicer_prusa_material_validation \
             core.tests.test_slicer_prusa_material_gcode_audit \
-            core.tests.test_slicer_prusa_material_preflight
+            core.tests.test_slicer_prusa_material_preflight \
+            core.tests.test_slicer_prusa_offline_worker_protocol
 
       - name: Verify actual upstream PrusaResearch 2.9.7 inheritance
         run: |
