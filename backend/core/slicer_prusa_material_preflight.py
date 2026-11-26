@@ -9,6 +9,7 @@ from .slicer_prusa_machine_topology import prusa_machine_topology
 from .slicer_prusa_multitool_project import build_prusa_multitool_candidate
 from .slicer_prusa_native_resolution import resolved_prusa_profile
 from .slicer_prusa_purge import compile_prusa_purge_matrix
+from .slicer_prusa_process_settings import apply_prusa_process_overrides
 from .slicer_prusa_wipe_tower import add_prusa_native_wipe_tower
 from .slicer_profiles import SlicerProfileError
 from slicer_worker.prusa_material_validation import validate_prusa_material_candidate
@@ -16,7 +17,8 @@ from slicer_worker.prusa_material_validation import validate_prusa_material_cand
 
 def prepare_prusa_offline_mmu_candidate(
     *, owner_id, printer_profile, process_profile, filament_profiles,
-    rows, tools, purge_matrix, tower_xy, bed_width, bed_depth
+    rows, tools, purge_matrix, tower_xy, bed_width, bed_depth,
+    process_overrides=None
 ):
     """Return a validated candidate, not a user-uploadable/dispatchable job.
 
@@ -43,7 +45,8 @@ def prepare_prusa_offline_mmu_candidate(
         raise SlicerProfileError("Prusa MMU models, tools or wipe tower are incomplete.")
     # Check all metadata ownership and kinds *before* reading any asset.
     printer = resolved_prusa_profile(printer_profile)
-    process = resolved_prusa_profile(process_profile)
+    process = apply_prusa_process_overrides(
+        resolved_prusa_profile(process_profile), process_overrides or {})
     filaments = [resolved_prusa_profile(p) for p in filament_profiles]
     topology = prusa_machine_topology(printer)
     if topology["kind"] != "single_nozzle_changer":
@@ -74,7 +77,7 @@ def prepare_prusa_offline_mmu_candidate(
 
 def prepare_prusa_offline_xl_candidate(
     *, owner_id, printer_profile, process_profile, filament_profiles,
-    rows, tools, bed_width, bed_depth
+    rows, tools, bed_width, bed_depth, process_overrides=None
 ):
     """Research-only independent-toolhead model assignment, no MMU purge.
 
@@ -97,7 +100,8 @@ def prepare_prusa_offline_xl_candidate(
             any(type(tool) is not int for tool in tools)):
         raise SlicerProfileError("Prusa XL model/tool assignment is incomplete.")
     printer = resolved_prusa_profile(printer_profile)
-    process = resolved_prusa_profile(process_profile)
+    process = apply_prusa_process_overrides(
+        resolved_prusa_profile(process_profile), process_overrides or {})
     filaments = [resolved_prusa_profile(p) for p in filament_profiles]
     topology = prusa_machine_topology(printer)
     if (topology["kind"] != "independent_tools" or
