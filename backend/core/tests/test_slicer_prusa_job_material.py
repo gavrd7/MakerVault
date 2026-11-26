@@ -235,16 +235,27 @@ class PrusaWorkbenchMaterialTests(TestCase):
                 from core.slicer_prusa_purge import compile_prusa_purge_matrix
                 compile_prusa_purge_matrix(raw,b"layer_height = 0.2\n",plan["purge_matrix"])
 
-    def test_xl_rejects_tower_and_unsupported_indx_mechanism(self):
+    def test_indx_six_to_eight_tools_and_xl_tower_rejection(self):
         job,filaments,raw=fixture("xl")
         self.resolve(job,filaments,raw)
         job.settings["prime_tower"]={"x":55,"y":150}
         with self.assertRaises(SlicerProfileError):
             prepare_prusa_workbench_material(job)
-        job,filaments,raw=fixture("xl",6)
-        self.resolve(job,filaments,raw)
-        with self.assertRaises(SlicerProfileError):
-            prepare_prusa_workbench_material(job)
+        for n in (6,7,8):
+            with self.subTest(tools=n):
+                job,filaments,raw=fixture("xl",n)
+                self.resolve(job,filaments,raw)
+                kind,plan=prepare_prusa_workbench_material(job)
+                self.assertEqual(kind,"indx")
+                self.assertEqual(plan["tools"],[1,2])
+                self.assertEqual(len(plan["filament_profiles"]),n)
+                with patch("core.slicer_prusa_job_material.slice_prusa_offline_xl_candidate",
+                           return_value=b"audited-indx-gcode") as run:
+                    output=slice_prusa_workbench_material(
+                        job,[(dict(row),b"STL") for row in job.settings["plate_objects"]])
+                self.assertEqual(output,b"audited-indx-gcode")
+                run.assert_called_once()
+                self.assertNotIn("purge_matrix",run.call_args.kwargs)
 
     def test_cross_engine_filament_and_missing_primary_rejected(self):
         job,filaments,raw=fixture()
