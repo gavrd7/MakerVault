@@ -44,11 +44,33 @@ class PrusaFilamentPaletteTests(TestCase):
             with self.subTest(profiles=profiles), self.assertRaises(SlicerProfileError):
                 compile_prusa_filament_palette(printer, profiles)
 
+    def test_eight_tool_palette_must_wait_for_indx_qualification(self):
+        for count in (6,7,8):
+            with self.subTest(count=count), self.assertRaises(SlicerProfileError):
+                compile_prusa_filament_palette(
+                    ini(",".join(["0.4"]*count)),
+                    [filament() for _ in range(count)])
+
+    @patch("core.slicer_prusa_filament_palette.resolved_prusa_profile")
+    def test_mixed_engine_presets_rejected_before_private_read(self, resolve):
+        printer = SimpleNamespace(owner_id=7, kind="printer", engine="prusaslicer")
+        filament_prusa = SimpleNamespace(owner_id=7, kind="filament", engine="prusaslicer")
+        filament_orca = SimpleNamespace(owner_id=7, kind="filament", engine="orcaslicer")
+        with self.assertRaises(SlicerProfileError):
+            resolve_owned_prusa_filament_palette(
+                printer, [filament_prusa, filament_orca], owner_id=7)
+        resolve.assert_not_called()
+        printer.engine="crealityprint"
+        with self.assertRaises(SlicerProfileError):
+            resolve_owned_prusa_filament_palette(
+                printer, [filament_prusa, filament_prusa], owner_id=7)
+        resolve.assert_not_called()
+
     @patch("core.slicer_prusa_filament_palette.resolved_prusa_profile")
     def test_owner_checked_before_read(self, resolve):
-        printer = SimpleNamespace(owner_id=7, kind="printer")
-        owned = SimpleNamespace(owner_id=7, kind="filament")
-        foreign = SimpleNamespace(owner_id=8, kind="filament")
+        printer = SimpleNamespace(owner_id=7, kind="printer", engine="prusaslicer")
+        owned = SimpleNamespace(owner_id=7, kind="filament", engine="prusaslicer")
+        foreign = SimpleNamespace(owner_id=8, kind="filament", engine="prusaslicer")
         with self.assertRaises(SlicerProfileError):
             resolve_owned_prusa_filament_palette(printer, [owned, foreign], owner_id=7)
         resolve.assert_not_called()
