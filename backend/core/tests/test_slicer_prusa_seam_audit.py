@@ -1,7 +1,11 @@
 """Prusa semantic seam audit checks actual G-code, not only 3MF attributes."""
 import unittest
 
-from core.slicer_prusa_seam_audit import (\n    audit_prusa_seam_enforcer_gcode, validate_prusa_front_seam_candidate,\n)\nfrom core.slicer_prusa_3mf import validate_prusa_project_admission\nfrom scripts.prusa_generate_mmu_paint import fixture
+from core.slicer_prusa_seam_audit import (
+    audit_prusa_seam_enforcer_gcode, validate_prusa_front_seam_candidate,
+)
+from core.slicer_prusa_3mf import validate_prusa_project_admission
+from scripts.prusa_generate_mmu_paint import fixture
 
 
 def project():
