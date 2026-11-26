@@ -65,7 +65,7 @@ class FullPlateInstanceTests(SimpleTestCase):
                 "x_mm": x, "y_mm": y,
                 "rotation_deg": (i % 4) * 15,
                 "scale_percent": 75 + (i % 3) * 5,
-            }, shape))
+            }, shape.replace(b"10", str(10 + i % 7).encode("ascii"))))
         data = build_plate_3mf(models, bed_width=220, bed_depth=220)
         with zipfile.ZipFile(io.BytesIO(data)) as package:
             root = ET.fromstring(package.read("3D/3dmodel.model"))
