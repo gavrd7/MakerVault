@@ -28,9 +28,9 @@ def main(binary,vendor):
     # Upstream's XL 5T preset defaults to binary G-code. The verified
     # MakerVault audit accepts only text, so force text in this offline
     # research copy without altering the pinned vendor asset or presets.
-    printer=b"\\n".join(
+    printer=b"\n".join(
         b"binary_gcode = 0" if line.split(b"=",1)[0].strip()==b"binary_gcode" else line
-        for line in printer.splitlines())+b"\\n"
+        for line in printer.splitlines())+b"\n"
     machine=validate_flat_prusa_preset(printer,kind="printer")
     assert machine.get("single_extruder_multi_material","0") in ("0","false")
     assert len(machine["nozzle_diameter"].split(","))==5
