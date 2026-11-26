@@ -4,6 +4,7 @@ Optional, validated per-object process metadata is stored in Orca/Bambu
 model_settings.config; this does not itself authorise worker execution.
 """
 import hashlib
+import copy
 import io
 import json
 import math
@@ -337,35 +338,55 @@ def build_plate_3mf(objects_with_stl, *, bed_width, bed_depth, native_tool_indic
         sources.append((index, raw, options))
     from .slicer_parallel_geometry import prepared_mesh_batches
     estimate = 128 * 1024**2 + max(len(raw) for _, raw, _ in sources) * 48
-    preparation = prepared_mesh_batches(sources, estimated_bytes_per_worker=estimate)
-    with preparation as prepared:
-        for (index, raw, options), (_, _, rendered) in zip(sources, prepared):
-            item = objects_with_stl[index - 1][0]
-            obj = ET.SubElement(resources, f"{{{NS}}}object", {"id": str(index), "type": "model"})
+    # Identical contiguous assets need one validated mesh build even on a
+    # multi-engine native 3MF route. Preserve separate per-instance metadata,
+    # paint tool maps, transforms and global resource accounting.
+    groups = []
+    for entry in sources:
+        index, raw, options = entry
+        key = (len(raw), hashlib.sha256(raw).digest(), repr(options))
+        if groups and groups[-1][0] == key:
+            groups[-1][1].append(entry)
+        else:
+            groups.append((key, [entry]))
+    prepared_sources = [group[0] for _key, group in groups]
+    with prepared_mesh_batches(
+            prepared_sources, estimated_bytes_per_worker=estimate) as prepared:
+        for (_key, members), (_, _, rendered) in zip(groups, prepared):
+            first_index, raw, options = members[0]
             if rendered is None:
-                count, _, _ = _render_mesh(raw, obj, **options)
+                template = ET.Element(f"{{{NS}}}object")
+                count, _, _ = _render_mesh(raw, template, **options)
             else:
                 template = SafeET.fromstring(rendered)
-                obj.extend(template)
-                count = len(obj.findall(f"./{{{NS}}}mesh/{{{NS}}}triangles/{{{NS}}}triangle"))
-            total_triangles += count
-            placement = _validated_mesh_placement(obj, item, bed_width, bed_depth, index)
-            if total_triangles > plate_triangle_budget():
-                raise SlicerProfileError("Total plate triangles exceed the limit.")
-            if bake_native_positions:
-                _bake_native_instance_transform(obj, placement)
-                placement = "1 0 0 0 1 0 0 0 1 0 0 0"
-            ET.SubElement(build, f"{{{NS}}}item", {
-                "objectid": str(index),
-                "transform": placement,
-            })
-            # Check actual serialised resource growth after every mesh, not only
-            # after all models have been accumulated into a large XML tree.
-            # Leave 64 KiB for the build items and model wrapper.
-            resource_xml_bytes += len(ET.tostring(obj, encoding="utf-8"))
-            if resource_xml_bytes > xml_geometry_budget() - 65536:
-                raise SlicerProfileError(
-                    "Build plate 3MF geometry exceeds the worker's expanded XML budget.")
+                count = len(template.findall(
+                    f"./{{{NS}}}mesh/{{{NS}}}triangles/{{{NS}}}triangle"))
+            mesh = template.find(f"{{{NS}}}mesh")
+            if mesh is None:
+                raise SlicerProfileError("Prepared native project mesh is missing.")
+            for index, _raw, _options in members:
+                item = objects_with_stl[index - 1][0]
+                obj = ET.SubElement(
+                    resources, f"{{{NS}}}object", {"id": str(index), "type": "model"})
+                obj.append(copy.deepcopy(mesh))
+                total_triangles += count
+                placement = _validated_mesh_placement(obj, item, bed_width, bed_depth, index)
+                if total_triangles > plate_triangle_budget():
+                    raise SlicerProfileError("Total plate triangles exceed the limit.")
+                if bake_native_positions:
+                    _bake_native_instance_transform(obj, placement)
+                    placement = "1 0 0 0 1 0 0 0 1 0 0 0"
+                ET.SubElement(build, f"{{{NS}}}item", {
+                    "objectid": str(index),
+                    "transform": placement,
+                })
+                # Check actual serialised resource growth after every mesh, not only
+                # after all models have been accumulated into a large XML tree.
+                # Leave 64 KiB for the build items and model wrapper.
+                resource_xml_bytes += len(ET.tostring(obj, encoding="utf-8"))
+                if resource_xml_bytes > xml_geometry_budget() - 65536:
+                    raise SlicerProfileError(
+                        "Build plate 3MF geometry exceeds the worker's expanded XML budget.")
     model_xml = ET.tostring(model, encoding="utf-8", xml_declaration=True)
     if len(model_xml) > xml_geometry_budget():
         raise SlicerProfileError(
