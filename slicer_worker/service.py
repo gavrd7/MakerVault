@@ -18,7 +18,9 @@ import tempfile
 import uuid
 import zlib
 
-from .runner import MAX_GCODE_BYTES, MAX_MODEL_BYTES, MAX_PROFILE_BYTES, WorkerError, run_prusa
+from .runner import (MAX_GCODE_BYTES, MAX_MODEL_BYTES, MAX_PROFILE_BYTES,
+                     DEFAULT_TIMEOUT_SECONDS, MAX_NATIVE_SLICE_TIMEOUT_SECONDS,
+                     WorkerError, run_prusa)
 from .orca_runner import run_orca
 from .creality_runner import run_creality
 from .bambu_runner import run_bambu
@@ -79,7 +81,7 @@ def _decode_payload(payload):
         "model", "printer_profile", "filament_profile", "process_profile",
     }
     if not isinstance(payload, dict) or not expected.issubset(payload) or (
-            set(payload) - expected - {"model_format", "filament_profiles", "creality_model_stls", "creality_tool_ids", "creality_native_project", "native_modifier_project", "prusa_placed_stl", "prusa_offline_mmu", "prusa_offline_xl", "prusa_offline_colour", "orca_streamed_plate", "orca_streamed_sha256", "creality_placed_stl", "creality_model_raw_sha256"}):
+            set(payload) - expected - {"model_format", "filament_profiles", "creality_model_stls", "creality_tool_ids", "creality_native_project", "native_modifier_project", "prusa_placed_stl", "prusa_offline_mmu", "prusa_offline_xl", "prusa_offline_colour", "orca_streamed_plate", "orca_streamed_sha256", "creality_placed_stl", "creality_model_raw_sha256", "slice_timeout_seconds"}):
         raise WorkerError("Invalid slicing job payload.")
     try:
         uuid.UUID(str(payload["job_id"]))
@@ -175,7 +177,12 @@ def _decode_payload(payload):
             raise WorkerError("Insufficient worker memory for streamed Orca geometry.")
     else:
         streamed_limit = model_input_budget()
-    files = {"model_format": model_format}
+    native_timeout = payload.get("slice_timeout_seconds", DEFAULT_TIMEOUT_SECONDS)
+    if (type(native_timeout) is not int or
+            not 1 <= native_timeout <= MAX_NATIVE_SLICE_TIMEOUT_SECONDS):
+        raise WorkerError("Invalid native slice timeout.")
+    files = {"model_format": model_format,
+             "slice_timeout_seconds": native_timeout}
     for key, limit in (
         ("model", streamed_limit),
         ("printer_profile", MAX_PROFILE_BYTES),
@@ -449,7 +456,8 @@ class Handler(BaseHTTPRequestHandler):
                           "crealityprint": run_creality,
                           "prusaslicer": run_prusa,
                           "bambustudio": run_bambu}[current["engine"]]
-                receipt = runner(current["binary"], workdir)
+                receipt = runner(current["binary"], workdir,
+                                 timeout_seconds=files["slice_timeout_seconds"])
                 stage = "validating generated G-code"
                 data = (workdir / "output.gcode").read_bytes()
                 if not data or len(data) > gcode_output_budget():
