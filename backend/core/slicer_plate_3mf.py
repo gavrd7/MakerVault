@@ -532,7 +532,7 @@ def build_makervault_project_3mf(plates_with_stl, *, bed_width, bed_depth, metad
             if asset_id not in source_stls:
                 source_stls[asset_id] = raw
                 total_source_bytes += len(raw)
-                if total_source_bytes > 64 * 1024 * 1024:
+                if total_source_bytes > source_input_budget(upper_cap=input_model_budget()):
                     raise SlicerProfileError("Total project source STL size exceeds 64 MiB.")
         native = build_plate_3mf(pairs, bed_width=bed_width, bed_depth=bed_depth)
         embedded[f"Metadata/plates/plate-{plate_number}.3mf"] = native
@@ -570,7 +570,7 @@ def build_makervault_project_3mf(plates_with_stl, *, bed_width, bed_depth, metad
             if isinstance(paint, dict) and paint.get("version") == 2:
                 name = "Metadata/paint/paint-%04d.json" % (len(paint_sidecars) + 1)
                 blob = json.dumps(paint, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
-                if len(blob) > 16 * 1024 * 1024:
+                if len(blob) > xml_geometry_budget():
                     raise SlicerProfileError("Painted model exceeds project 3MF region limit.")
                 paint_sidecars[name] = blob
                 portable_plate["objects"].append({
@@ -586,7 +586,7 @@ def build_makervault_project_3mf(plates_with_stl, *, bed_width, bed_depth, metad
             if isinstance(support, dict) and support.get("version") == 2:
                 name = "Metadata/paint/support-%04d.json" % (len(paint_sidecars) + 1)
                 blob = json.dumps(support, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
-                if len(blob) > 16 * 1024 * 1024:
+                if len(blob) > xml_geometry_budget():
                     raise SlicerProfileError("Support painted model exceeds project 3MF region limit.")
                 paint_sidecars[name] = blob
                 portable_plate["objects"][-1].pop("support_paint", None)
@@ -599,13 +599,13 @@ def build_makervault_project_3mf(plates_with_stl, *, bed_width, bed_depth, metad
                     name = "Metadata/paint/%s-%04d.json" % (prefix, len(paint_sidecars) + 1)
                     blob = json.dumps(annotation, ensure_ascii=False,
                                       separators=(",", ":")).encode("utf-8")
-                    if len(blob) > 16 * 1024 * 1024:
+                    if len(blob) > xml_geometry_budget():
                         raise SlicerProfileError("Semantic painted model exceeds project 3MF region limit.")
                     paint_sidecars[name] = blob
                     portable_plate["objects"][-1].pop(field, None)
                     portable_plate["objects"][-1][prefix + "_sidecar"] = name
         portable_metadata["plates"].append(portable_plate)
-    if sum(map(len, paint_sidecars.values())) > 64 * 1024 * 1024:
+    if sum(map(len, paint_sidecars.values())) > xml_geometry_budget():
         raise SlicerProfileError("Project painting regions exceed the export limit.")
     manifest = json.dumps(portable_metadata, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
     if len(manifest) > 131072:
@@ -637,6 +637,6 @@ def build_makervault_project_3mf(plates_with_stl, *, bed_width, bed_depth, metad
             'Type="http://schemas.microsoft.com/3dmanufacturing/2013/01/3dmodel"/>'
             '</Relationships>')
     result = output.getvalue()
-    if len(result) > MAX_PROJECT_BYTES:
+    if len(result) > project_archive_budget():
         raise SlicerProfileError("Project 3MF exceeds the safe export limit.")
     return result
