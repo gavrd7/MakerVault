@@ -3,6 +3,7 @@ import SlicerToolpath3D from "./SlicerToolpath3D";
 import "./slicerPreviewMobile.css";
 import GcodeLayerInsert from "./GcodeLayerInsert";
 import { featureColour, hasFeatureFocus } from "./slicerToolpathFeatures";
+import { progressiveLayerBatchSize } from "../utils/gcodePreviewBudget";
 
 const EMPTY_PATHS = Object.freeze([]);
 
@@ -75,24 +76,23 @@ export default function SlicerGcodePreview({ fileId = null, preview, bedSize = n
     loading: false, message: "",
   });
   const sourceLayerHeights = layers.join(",");
+  const batchSize = progressiveLayerBatchSize(layers.length, preview?.segment_count);
   useEffect(() => {
     if (!fileId || !layers.length) return undefined;
     const controller = new AbortController();
     // Retain complete geometry in independent GPU upload batches. The old
     // 700k mobile cutoff silently stopped tall prints halfway through.
     // Streaming batches avoid repeatedly copying the entire model in JS.
-    const maxMoves = 1500000;
     let cancelled = false;
     setWholeModel({chunks:[],loadedLayers:0,complete:false,limited:false,loading:true,message:""});
     const load = async () => {
       const chunks = [];
-      let used = 0;
       let completed = 0;
       let limited = false;
       let pendingLayers = 0;
       try {
-        for (let offset = 0; offset < layers.length && !cancelled; offset += 64) {
-          const requested = layers.slice(offset, offset + 64);
+        for (let offset = 0; offset < layers.length && !cancelled; offset += batchSize) {
+          const requested = layers.slice(offset, offset + batchSize);
           // Cold indexes are prepared by Celery, never synchronously inside
           // a web request. Cached pages load immediately; a failed/unavailable
           // worker falls back to bounded direct parsing after brief polling.
@@ -123,12 +123,7 @@ export default function SlicerGcodePreview({ fileId = null, preview, bedSize = n
           for (const item of data.layers) {
             if (!item.complete) limited = true;
             if (!Array.isArray(item.segments)) throw new Error("Invalid layer geometry.");
-            if (used + item.segments.length > maxMoves) {
-              limited = true;
-              break;
-            }
             for (const move of item.segments) batch.push(move);
-            used += item.segments.length;
             completed++;
             pendingLayers++;
             // Full-model geometry may coalesce straight runs; exact movement
@@ -139,7 +134,7 @@ export default function SlicerGcodePreview({ fileId = null, preview, bedSize = n
           // renderer appends a new GPU mesh without copying/re-uploading older
           // batches. Keep all layers available rather than stopping at 488.
           if (batch.length) chunks.push(batch);
-          if (pendingLayers >= 64 || completed === layers.length || limited) {
+          if (pendingLayers >= batchSize || completed === layers.length || limited) {
             setWholeModel({chunks:chunks.slice(),loadedLayers:completed,
               complete:completed===layers.length&&!limited,limited,
               loading:!limited&&completed<layers.length,message:""});
@@ -168,7 +163,7 @@ export default function SlicerGcodePreview({ fileId = null, preview, bedSize = n
   // The layer list is stable for an inspected file; avoid restarting when a
   // user changes camera, rendering style, or selected layer.
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [fileId, sourceLayerHeights]);
+  }, [fileId, sourceLayerHeights, batchSize]);
 
   // Grow the print from its actual loaded height. Otherwise a fully rendered
   // final-layer island floats above still-loading lower geometry.
