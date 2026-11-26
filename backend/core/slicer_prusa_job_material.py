@@ -47,6 +47,16 @@ def prepare_prusa_workbench_material(job, *, settings=None):
     objects = settings.get("plate_objects")
     if not isinstance(objects, list) or not 2 <= len(objects) <= 5:
         raise SlicerProfileError("Prusa offline materials require two to five models.")
+    plates = settings.get("plates")
+    if plates is not None:
+        if not isinstance(plates, list) or not isinstance(settings.get("active_plate_id"), str):
+            raise SlicerProfileError("Prusa active plate metadata is invalid.")
+        selected = [plate for plate in plates if isinstance(plate, dict)
+                    and plate.get("id") == settings["active_plate_id"]]
+        if (len(selected) != 1 or selected[0].get("objects") != objects
+                or selected[0].get("volumes")
+                or selected[0].get("prime_tower") != settings.get("prime_tower")):
+            raise SlicerProfileError("Prusa active plate, models and tower must match saved project.")
     forbidden = ("modifier_volumes", "process_overrides", "colour_paint",
                  "support_paint", "seam_paint", "fuzzy_skin_paint",
                  "variable_layer_profile", "negative_volumes")
