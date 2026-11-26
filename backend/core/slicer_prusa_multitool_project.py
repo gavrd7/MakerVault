@@ -24,14 +24,17 @@ def build_prusa_multitool_candidate(rows, *, printer_ini, tools,
         raise SlicerProfileError(str(exc)) from exc
     if len(rows) != len(tools):
         raise SlicerProfileError("Native Prusa tool count does not match printable objects.")
+    allow_indx_regions = topology["kind"] == "indx"
     for item, _source in rows:
-        if not isinstance(item, dict) or any(
-            item.get(key) for key in (
-                "modifier_volumes", "colour_paint",
-                "support_paint", "seam_paint", "fuzzy_skin_paint",
-                "variable_layer_profile", "negative_volumes", "material_slot",
-            )
-        ):
+        forbidden = (
+            "colour_paint", "support_paint", "seam_paint", "fuzzy_skin_paint",
+            "variable_layer_profile", "negative_volumes", "material_slot",
+        ) if allow_indx_regions else (
+            "modifier_volumes", "colour_paint",
+            "support_paint", "seam_paint", "fuzzy_skin_paint",
+            "variable_layer_profile", "negative_volumes", "material_slot",
+        )
+        if not isinstance(item, dict) or any(item.get(key) for key in forbidden):
             raise SlicerProfileError("Prusa multi-tool candidate cannot discard advanced edits.")
     # The native exporter itself validates the two proven object-local keys:
     # perimeters and fill_density. The owner-bound workbench still refuses
