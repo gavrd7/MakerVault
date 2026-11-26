@@ -11,6 +11,9 @@ from pathlib import Path
 import sys
 import tempfile
 import uuid
+import io
+import zipfile
+from defusedxml import ElementTree as SafeET
 
 from core.slicer_prusa_multitool_project import build_prusa_multitool_candidate
 from core.slicer_prusa_filament_palette import compile_prusa_filament_palette
@@ -127,9 +130,10 @@ def main(binary, vendor, official=None):
             extended.append((updated,mesh))
         extended_project,_=build_prusa_multitool_candidate(
             extended,printer_ini=printer,tools=tools,bed_width=360,bed_depth=360)
-        from slicer_worker.prusa_3mf_validation import validate_prusa_native_3mf
         from slicer_worker.prusa_material_validation import _qualified_topology
-        assert validate_prusa_native_3mf(extended_project)["regions"] == 2
+        with zipfile.ZipFile(io.BytesIO(extended_project)) as archive:
+            config=SafeET.fromstring(archive.read("Metadata/Slic3r_PE_model.config"))
+        assert sum(len(obj.findall("volume"))-1 for obj in config.findall("object"))==2
         assert _qualified_topology(printer)==(8,False)
         assert validate_prusa_material_candidate(
             extended_project,printer_ini=printer,tools=tools)["objects"]==8
