@@ -10,7 +10,7 @@ import math
 from slicer_worker.prusa_material_gcode_audit import WORD, _bounds
 
 
-def count_internal_perimeters(gcode, project, tools):
+def count_native_object_deposition(gcode, project, tools):
     boxes = _bounds(project, len(tools))
     if not isinstance(gcode, bytes) or len(gcode) > 90 * 1024 * 1024:
         raise ValueError("Invalid native Prusa object-settings G-code.")
@@ -25,6 +25,7 @@ def count_internal_perimeters(gcode, project, tools):
     xyz_absolute = True
     e_absolute = True
     internal = [0]*len(boxes)
+    sparse_infill = [0]*len(boxes)
     for line_number, text in enumerate(source.splitlines(),1):
         if line_number > 2_000_000 or len(text)>16384:
             raise ValueError("Native toolpath exceeds object-settings audit limits.")
@@ -63,13 +64,21 @@ def count_internal_perimeters(gcode, project, tools):
             x,y=nx,ny
             if (op not in ("G1","G01") or amount<=1e-6 or
                     x is None or y is None or active is None or
-                    "perimeter" not in role or "external" in role):
+                    not ("perimeter" in role or "infill" in role)):
                 continue
             for index,(xmin,xmax,ymin,ymax) in enumerate(boxes):
                 if (active==tools[index]-1 and xmin-.15<=x<=xmax+.15
                         and ymin-.15<=y<=ymax+.15):
-                    internal[index]+=1
-    return internal
+                    if "perimeter" in role and "external" not in role:
+                        internal[index]+=1
+                    if "infill" in role and not any(
+                            excluded in role for excluded in ("solid","top","bottom","bridge")):
+                        sparse_infill[index]+=1
+    return {"internal":internal, "sparse_infill":sparse_infill}
+
+
+def count_internal_perimeters(gcode, project, tools):
+    return count_native_object_deposition(gcode,project,tools)["internal"]
 
 
 def require_distinct_object_wall_counts(gcode, project, tools):
@@ -82,3 +91,15 @@ def require_distinct_object_wall_counts(gcode, project, tools):
             "Native Prusa object-local perimeter overrides lack spatial proof: "
             + repr(counts[:2]))
     return {"internal_perimeter_moves":counts}
+
+
+def require_distinct_object_infill(gcode, project, tools):
+    counts=count_native_object_deposition(gcode,project,tools)["sparse_infill"]
+    # Independent identical model pair 2/3 uses 10% vs 55% sparse infill,
+    # same wall count and identical geometry. Fail if real G-code does not
+    # show materially more model-local sparse-infill deposition for model 3.
+    if not counts[3]>=20 or not counts[3]>max(4,counts[2]*1.5):
+        raise AssertionError(
+            "Native Prusa object-local sparse infill lacks spatial proof: "
+            + repr(counts[2:4]))
+    return {"sparse_infill_moves":counts}
