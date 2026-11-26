@@ -15,6 +15,8 @@ import uuid
 from core.slicer_prusa_multitool_project import build_prusa_multitool_candidate
 from core.slicer_prusa_filament_palette import compile_prusa_filament_palette
 from core.tests.test_slicer_prusa_plate import cube, item
+from core.tests.test_slicer_prusa_3mf import volume
+from slicer_worker.prusa_material_validation import validate_prusa_material_candidate
 from slicer_worker.prusa_vendor_profiles import (
     flatten_prusa_vendor_preset, validate_flat_prusa_preset)
 from slicer_worker.service import _decode_payload
@@ -106,6 +108,45 @@ def main(binary, vendor):
             raise AssertionError("Native eight-tool deposition did not match all eight models.")
         print("PASS: pinned Prusa 2.9.7 independently deposited T0-T7 on eight models",
               observed,"sha256",hashlib.sha256(gcode).hexdigest(),flush=True)
+
+        # Validate modifier/infill and negative-volume combinations through
+        # the actual eight-tool worker, not just 3MF metadata acceptance.
+        modifier=volume("modifier",{"sparse_infill_density":80})
+        modifier.update(width_mm=3,depth_mm=3,height_mm=5,
+                        x_mm=positions[0],y_mm=0,z_mm=4)
+        cavity=volume("negative",{})
+        cavity.update(width_mm=3,depth_mm=3,height_mm=5,
+                      x_mm=positions[1],y_mm=0,z_mm=4)
+        extended=[]
+        for index,(obj,mesh) in enumerate(rows):
+            updated=dict(obj)
+            if index==0:
+                updated["modifier_volumes"]=[modifier]
+            if index==1:
+                updated["modifier_volumes"]=[cavity]
+            extended.append((updated,mesh))
+        extended_project,_=build_prusa_multitool_candidate(
+            extended,printer_ini=printer,tools=tools,bed_width=360,bed_depth=360)
+        from slicer_worker.prusa_3mf_validation import validate_prusa_native_3mf
+        from slicer_worker.prusa_material_validation import _qualified_topology
+        assert validate_prusa_native_3mf(extended_project)["regions"] == 2
+        assert _qualified_topology(printer)==(8,False)
+        assert validate_prusa_material_candidate(
+            extended_project,printer_ini=printer,tools=tools)["objects"]==8
+        payload["model"]=encode(extended_project)
+        _decode_payload(payload)
+        (folder/"input.3mf").write_bytes(extended_project)
+        run_prusa(Path(binary),folder)
+        changed=(folder/"output.gcode").read_bytes()
+        changed_audit=audit_prusa_material_model_gcode(
+            changed,extended_project,printer_ini=printer,tools=tools)
+        assert changed_audit["selected_tools"]==tuple(range(8))
+        assert changed_audit["incorrect_extrusion_moves"]==[0]*8
+        assert min(changed_audit["correct_extrusion_moves"])>=20
+        assert hashlib.sha256(changed).digest()!=hashlib.sha256(gcode).digest()
+        print("PASS: eight-tool INDX typed native modifier and negative",
+              changed_audit,"sha256",hashlib.sha256(changed).hexdigest(),flush=True)
+
 
 
 if __name__=="__main__":
