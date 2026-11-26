@@ -1,3 +1,18 @@
+### Official INDX updated profile source integrity
+
+The INDX wizard imports from Prusa's separately maintained, immutable
+`PrusaResearch/2.5.16.ini` vendor-update release at commit
+`058c542282d5a512dcc73fc8be9288fc253ddcfd`, distinct from
+the pinned 2.9.7 slicer executable profile catalogue. The vendor's index
+declares minimum PrusaSlicer version 2.9.6. The native CI downloads this
+bundle at that exact commit and verifies Git blob
+`1aad47dce4b3967c73b38bc996e1ac947c8a23d4` before
+inspecting its published INDX printer presets. This permits browsing and
+importing official device settings rather than synthesising undocumented
+INDX heat-control and docking commands.
+
+---
+
 ### INDX eight-tool native research requalification
 
 The reviewed pinned 2.9.7 CLI test normalises the official XL independent
