@@ -49,3 +49,28 @@ class PrusaTwoObjectFuzzyAuditTests(TestCase):
         with self.assertRaises(ValueError):
             audit_prusa_two_object_fuzzy(gcode(),both,
                                          bed_width=250,bed_depth=210)
+
+    def test_relative_xyz_tracks_short_deposited_wall_segments(self):
+        lines=["M82","G92 E0"]
+        e=0.
+        for i in range(120):
+            z=4+i*.1
+            lines.extend([";TYPE:External perimeter",
+                          "G90","G0 X85 Y95 Z%.3f" % z,"G91"])
+            e+=.025
+            lines.append("G1 X.3 Y0 E%.5f" % e)
+            lines.extend(["G90","G0 X155 Y95","G91"])
+            e+=.025
+            lines.append("G1 X10 Y0 E%.5f" % e)
+        result=audit_prusa_two_object_fuzzy(
+            ("\\n".join(lines)+"\\n").encode(),models(),
+            bed_width=250,bed_depth=210)
+        self.assertEqual(result["painted_short_external_moves"],120)
+        self.assertEqual(result["unpainted_short_external_moves"],0)
+
+    def test_non_external_wall_roles_cannot_qualify_fuzzy_skin(self):
+        raw=gcode().replace(b";TYPE:External perimeter",
+                            b";TYPE:Unsupported external perimeter")
+        with self.assertRaisesRegex(ValueError,"not isolated"):
+            audit_prusa_two_object_fuzzy(
+                raw,models(),bed_width=250,bed_depth=210)
