@@ -18,6 +18,19 @@ class PrusaPaintExecutionTests(TestCase):
             enable_prusa_painted_support(b"layer_height = 0.2\n"), "process")
         self.assertEqual(defaulted["support_material_auto"], "0")
 
+    def test_two_object_manual_enforcers_override_automatic_preset_only_per_job(self):
+        source = (b"layer_height = .2\n"
+                  b"support_material = 0\n"
+                  b"support_material_auto = 1\n")
+        from core.slicer_prusa_process_settings import enable_prusa_painted_support
+        regular = parse_prusa_profile(enable_prusa_painted_support(source), "process")
+        isolated = parse_prusa_profile(
+            enable_prusa_painted_support(source, enforcers_only=True), "process")
+        self.assertEqual(regular["support_material_auto"], "1")
+        self.assertEqual(isolated["support_material_auto"], "0")
+        self.assertEqual(isolated["support_material"], "1")
+        self.assertIn(b"support_material_auto = 1", source)
+
     def test_support_role_audit_requires_actual_positive_xy_extrusion(self):
         data = (b";TYPE:Support material\nM82\nG92 X0 Y0 E0\n"
                 b"G1 X1 Y2 E.125\nG1 X2 Y2 E.50\n"
