@@ -90,7 +90,7 @@ class SlicerGcodeThumbnailTests(SimpleTestCase):
             "G1 X80 Y80 E1\n"
             "G1 X85 Y80 E1\n"
             ";TYPE:External perimeter\n"
-            "G1 X110 Y110 E1\n"
+            "G0 X110 Y110\n"
             "G1 X120 Y110 E1\n"
             "G1 X120 Y120 E1\n"
         )
