@@ -17,6 +17,7 @@ def count_native_support(data):
     regions={"left":0,"right":0,"outside":0}
     bins={"left":{},"right":{},"outside":{}}
     examples={"left":[],"right":[],"outside":[]}
+    stationary={"left":0,"right":0,"outside":0}
     for line in data.decode("utf-8").splitlines():
         if line.startswith(";TYPE:"):
             role=line.partition(":")[2].strip().lower()
@@ -32,6 +33,7 @@ def count_native_support(data):
         elif opcode=="G92":
             tool_e=fields.get("E",tool_e)
         elif opcode in ("G0","G00","G1","G01"):
+            previous_x,previous_y=x,y
             x=fields.get("X",x)
             y=fields.get("Y",y)
             z=fields.get("Z",z)
@@ -42,13 +44,20 @@ def count_native_support(data):
                         and x is not None and y is not None):
                     region=("left" if 56<=x<=94 and 93<=y<=117 else
                             "right" if 156<=x<=194 and 93<=y<=117 else "outside")
+                    # Priming/unretraction at a stationary XY location is not
+                    # deposited support geometry. Keep separate diagnostics.
+                    if previous_x is None or previous_y is None or (
+                            abs(x-previous_x)+abs(y-previous_y)<=1e-7):
+                        stationary[region]+=1
+                        continue
                     regions[region]+=1
                     if z is not None:
                         layer_band=int(z//5)*5
                         bins[region][layer_band]=bins[region].get(layer_band,0)+1
                         if len(examples[region])<3:
                             examples[region].append((round(x,2),round(y,2),round(z,2)))
-    print("Native support regional Z bands",bins,"examples",examples)
+    print("Native support regional Z bands",bins,"examples",examples,
+          "stationary positive-E excluded",stationary)
     return regions
 
 
