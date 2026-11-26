@@ -58,7 +58,7 @@ class PrusaTwoObjectSupportTests(TestCase):
 
     def test_genuine_neighbour_support_leakage_is_refused(self):
         with self.assertRaisesRegex(ValueError, "not isolated"):
-            self.audit(native_paths(leak=8))
+            self.audit(native_paths(leak=1))
         with self.assertRaisesRegex(ValueError, "not isolated"):
             self.audit(native_paths(stationary=0, leak=8))
 
