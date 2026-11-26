@@ -19,6 +19,44 @@ class SlicerWorkerProtocolTests(TestCase):
             "process_profile": base64.b64encode(b"layer_height = 0.2").decode(),
         }
 
+    def test_common_engine_deadline_defaults_and_rejects_unbounded_values(self):
+        payload = self.payload()
+        self.assertEqual(_decode_payload(payload)["slice_timeout_seconds"], 300)
+        for seconds in (301, 900, 3600, 10800):
+            with self.subTest(seconds=seconds):
+                self.assertEqual(_decode_payload({
+                    **payload, "slice_timeout_seconds": seconds
+                })["slice_timeout_seconds"], seconds)
+        for seconds in (0, -1, 10801, "900", True, None):
+            with self.subTest(seconds=seconds), self.assertRaises(WorkerError):
+                _decode_payload({**payload, "slice_timeout_seconds": seconds})
+
+    def test_creality_placed_stl_is_version_scoped_and_integrity_bound(self):
+        import struct
+        import zlib
+        import hashlib
+        raw = b"fixture".ljust(80, b" ") + struct.pack(
+            "<I12fH", 1, 0, 0, 1, 0, 0, 0, 10, 0, 0, 0, 10, 0, 0)
+        payload = {**self.payload(), "engine": "crealityprint",
+                   "engine_version": "7.3.1",
+                   "model": base64.b64encode(zlib.compress(raw)).decode(),
+                   "creality_placed_stl": True,
+                   "creality_model_raw_sha256": hashlib.sha256(raw).hexdigest()}
+        decoded = _decode_payload(payload)
+        self.assertEqual(decoded["model"], raw)
+        self.assertTrue(decoded["creality_placed_stl"])
+        for mutation in (
+            {"creality_model_raw_sha256": "0" * 64},
+            {"model": base64.b64encode(zlib.compress(raw) + b"extra").decode()},
+            {"creality_placed_stl": False},
+            {"engine": "orcaslicer"},
+            {"engine_version": "7.3.0"},
+            {"model_format": "3mf"},
+            {"native_modifier_project": True},
+        ):
+            with self.subTest(mutation=mutation), self.assertRaises(WorkerError):
+                _decode_payload({**payload, **mutation})
+
     def test_disabled_by_default_even_when_binary_settings_present(self):
         with patch.dict(os.environ, {
             "SLICER_WORKER_ENABLED": "0", "SLICER_WORKER_TOKEN": "secret" * 10,
