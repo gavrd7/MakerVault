@@ -16,8 +16,8 @@ def validate_prusa_native_tools(raw):
             set(raw)-required-{"colour_tools"}):
         raise SlicerProfileError("Invalid Prusa native tool configuration.")
     count = raw["tool_count"]
-    if type(raw["version"]) is not int or raw["version"] != 1 or type(count) is not int or not 2 <= count <= 5 or (
-            raw["mode"] not in ("mmu", "xl")):
+    if type(raw["version"]) is not int or raw["version"] != 1 or type(count) is not int or not 2 <= count <= (8 if raw["mode"] == "indx" else 5) or (
+            raw["mode"] not in ("mmu", "xl", "indx")):
         raise SlicerProfileError("Unsupported Prusa native tool configuration.")
     filaments = raw["filament_profile_ids"]
     if not isinstance(filaments, list) or len(filaments) != count:
@@ -65,9 +65,9 @@ def validate_prusa_native_tools(raw):
         paint_slots.add(slot)
         colour_tools.append({"slot":slot,"tool":tool})
     matrix = raw["purge_matrix"]
-    if raw["mode"] == "xl":
+    if raw["mode"] in ("xl", "indx"):
         if matrix is not None:
-            raise SlicerProfileError("XL independent heads do not use an MMU purge matrix.")
+            raise SlicerProfileError("Independent heads do not use an MMU purge matrix.")
     else:
         if not isinstance(matrix, list) or len(matrix) != count:
             raise SlicerProfileError("Prusa MMU needs a complete directional matrix.")
