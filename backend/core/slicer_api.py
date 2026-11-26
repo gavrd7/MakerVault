@@ -37,6 +37,8 @@ from .slicer_semantic_painting import validate_semantic_paint
 from .slicer_variable_layers import validate_variable_layer_profile
 from .slicer_paint_assets import store_paint, load_paint, expand_painted_item, expand_painted_settings, PAINT_FIELDS
 from .slicer_mesh import inspect_stl, MeshInspectionError, MAX_INSPECTION_BYTES
+from .slicer_resource_budget import (input_model_budget, xml_geometry_budget,
+    project_archive_budget, source_input_budget, memory_budget)
 from .slicer_bed import inspect_orca_plate, inspect_creality_plate, inspect_bambu_plate
 from .slicer_bed_artwork import (official_artwork_source, cached_official_artwork,
     official_bed_model_source, cached_official_bed_model)
@@ -667,7 +669,7 @@ def _draft(user, data):
                 pk__in=[item["asset_id"] for item in plate_models])}
             validate_plate_collisions([(
                 item, _read_owned_file(owned[str(item["asset_id"])],
-                                       user.pk, MAX_INPUT, "Draft STL")
+                                       user.pk, input_model_budget(), "Draft STL")
             ) for item in plate_models])
         except (KeyError, ValueError, OSError):
             settings_data["plate_conflicts"] = True
@@ -759,11 +761,11 @@ def upload_temporary_mesh(request):
         return _error("Choose an STL to slice.")
     filename = Path(str(uploaded.name or "")).name
     size = getattr(uploaded, "size", 0)
-    if not filename.lower().endswith(".stl") or not 0 < size <= MAX_INSPECTION_BYTES:
+    if not filename.lower().endswith(".stl") or not 0 < size <= input_model_budget():
         return _error("Choose a nonempty STL no larger than 32 MiB.")
     try:
         ensure_storage_capacity(request.user, size)
-        data = uploaded.read(MAX_INSPECTION_BYTES + 1)
+        data = uploaded.read(input_model_budget() + 1)
         inspect_stl(data)
     except StorageQuotaExceeded:
         return _error("Insufficient private storage for a temporary slicing input.", 413)
@@ -812,16 +814,17 @@ def import_project_3mf(request):
     uploaded = request.FILES.get("file")
     if not uploaded or not str(uploaded.name or "").lower().endswith(".3mf"):
         return _error("Choose a MakerVault .3mf project.")
-    if uploaded.size <= 0 or uploaded.size > 32 * 1024 * 1024:
-        return _error("Project archive must be no larger than 32 MiB.", 413)
+    archive_budget = project_archive_budget()
+    if uploaded.size <= 0 or uploaded.size > archive_budget:
+        return _error("Project archive exceeds the available preparation memory.", 413)
     try:
         from .slicer_execution import MAX_INPUT
-        stream = io.BytesIO(uploaded.read(32 * 1024 * 1024 + 1))
+        stream = io.BytesIO(uploaded.read(archive_budget + 1))
         with zipfile.ZipFile(stream) as archive:
             infos = archive.infolist()
             if (len(infos) > 480 or len({info.filename for info in infos}) != len(infos)
                     or sum(info.file_size for info in infos)
-                    > 128 * 1024 * 1024 or
+                    > xml_geometry_budget() or
                     any(info.flag_bits & 1 for info in infos)):
                 raise ValueError("Project archive exceeds safe limits.")
             manifest_info = archive.getinfo("Metadata/makervault-project.json")
@@ -944,11 +947,11 @@ def import_project_3mf(request):
             for old_id in source_names:
                 file_name = "Metadata/sources/" + old_id + ".stl"
                 info = archive.getinfo(file_name)
-                if not 0 < info.file_size <= MAX_INPUT:
+                if not 0 < info.file_size <= input_model_budget():
                     raise ValueError("Project source STL exceeds safe limits.")
                 total_bytes += info.file_size
-                if total_bytes > 64 * 1024 * 1024:
-                    raise ValueError("Project contains too much source geometry.")
+                if total_bytes > source_input_budget(upper_cap=input_model_budget()):
+                    raise ValueError("Project source geometry exceeds available preparation memory.")
                 raw = archive.read(info)
                 inspect_stl(raw)
                 original[old_id] = raw
@@ -1061,7 +1064,7 @@ def export_native_multimaterial_3mf(request, job_id):
             if asset is None:
                 raise MaterialRoutingError("A model asset is no longer available.")
             source_models.append((
-                item, _read_owned_file(asset, request.user.pk, MAX_INPUT, "Model STL")
+                item, _read_owned_file(asset, request.user.pk, input_model_budget(), "Model STL")
             ))
         result = prepare_multimaterial_plate(
             source_models, bed_width=width, bed_depth=depth,
@@ -1109,7 +1112,7 @@ def export_project_3mf(request, job_id):
             owner=request.user, category="mesh", pk__in=ids)}
         if len(owned) != len(ids):
             raise ValueError("Some project STL assets are no longer available.")
-        raw = {ident:_read_owned_file(asset, request.user.pk, MAX_INPUT, "Project STL")
+        raw = {ident:_read_owned_file(asset, request.user.pk, input_model_budget(), "Project STL")
                for ident, asset in owned.items()}
         rows = [(plate["name"], [(item, raw[str(item["asset_id"])])
                  for item in plate["objects"]]) for plate in plates]
@@ -1159,7 +1162,7 @@ def inspect_mesh(request, asset_id):
         return _error("Selected STL has no stored content.", 422)
     try:
         with asset.file.open("rb") as stream:
-            raw = stream.read(MAX_INSPECTION_BYTES + 1)
+            raw = stream.read(input_model_budget() + 1)
         result = inspect_stl(raw)
     except (OSError, ValueError, MeshInspectionError):
         return _error("STL geometry could not be safely inspected.", 422)
