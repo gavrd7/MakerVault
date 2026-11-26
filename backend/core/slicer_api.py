@@ -762,7 +762,7 @@ def upload_temporary_mesh(request):
     filename = Path(str(uploaded.name or "")).name
     size = getattr(uploaded, "size", 0)
     if not filename.lower().endswith(".stl") or not 0 < size <= input_model_budget():
-        return _error("Choose a nonempty STL no larger than 32 MiB.")
+        return _error("Choose a valid STL within the available model-processing memory.")
     try:
         ensure_storage_capacity(request.user, size)
         data = uploaded.read(input_model_budget() + 1)
