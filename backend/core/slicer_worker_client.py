@@ -11,6 +11,7 @@ import math
 import os
 from urllib.parse import urlsplit
 import uuid
+import zlib
 
 import requests
 
@@ -116,7 +117,8 @@ def run_remote_job(job_id, engine, version, model, printer_profile, filament_pro
     url, token = worker_settings()
     payload = {
         "job_id": canonical_id, "engine": engine, "engine_version": version,
-        "model": _encode(model, MAX_REQUEST_MODEL),
+        "model": _encode(zlib.compress(model, level=6) if creality_placed_stl else model,
+                         MAX_REQUEST_MODEL),
         "printer_profile": _encode(printer_profile, MAX_REQUEST_PROFILE),
         "filament_profile": _encode(filament_profile, MAX_REQUEST_PROFILE),
         "process_profile": _encode(process_profile, MAX_REQUEST_PROFILE),
@@ -186,6 +188,7 @@ def run_remote_job(job_id, engine, version, model, printer_profile, filament_pro
                         prusa_offline_colour is not None))):
             raise SlicerWorkerError("Invalid Creality placed-STL worker contract.")
         payload["creality_placed_stl"] = True
+        payload["creality_model_raw_sha256"] = hashlib.sha256(model).hexdigest()
     if prusa_placed_stl:
         if (prusa_placed_stl is not True or engine != "prusaslicer"
                 or version != "2.9.7" or model_format != "stl"
