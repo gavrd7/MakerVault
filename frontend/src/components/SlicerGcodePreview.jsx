@@ -153,7 +153,7 @@ export default function SlicerGcodePreview({ fileId = null, preview, bedSize = n
                     !Number.isSafeInteger(slice.next_offset) ||
                     slice.next_offset <= cursor)
                   throw new Error("Invalid or stalled full-detail layer page.");
-                movements.push(...slice.segments);
+                for (const move of slice.segments) movements.push(move);
                 cursor = slice.next_offset;
                 if (!slice.has_more) break;
               }
