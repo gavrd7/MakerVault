@@ -143,9 +143,11 @@ def prepare_prusa_workbench_material(job, *, settings=None):
                 or selected[0].get("volumes")
                 or selected[0].get("prime_tower") != settings.get("prime_tower")):
             raise SlicerProfileError("Prusa active plate, models and tower must match saved project.")
-    forbidden = ("modifier_volumes",
-                 "support_paint", "seam_paint", "fuzzy_skin_paint",
-                 "variable_layer_profile", "negative_volumes")
+    forbidden = (("support_paint", "seam_paint", "fuzzy_skin_paint",
+                  "variable_layer_profile", "negative_volumes")
+                 if kind == "indx" else
+                 ("modifier_volumes", "support_paint", "seam_paint",
+                  "fuzzy_skin_paint", "variable_layer_profile", "negative_volumes"))
     for row in objects:
         if not isinstance(row, dict) or any(row.get(key) for key in forbidden):
             raise SlicerProfileError("Prusa multi-material models cannot combine unqualified edits.")
