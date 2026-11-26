@@ -124,7 +124,7 @@ def _flatten_native_profile(kind, name, vendor):
             if key == "inherits":
                 continue
             if (not _NATIVE_KEY.fullmatch(key) or not isinstance(value, str)
-                    or len(value) > 16384 or any(ord(char) == 0 for char in value)):
+                    or len(value) > 65536 or any(ord(char) == 0 for char in value)):
                 raise OfficialProfileError("Invalid official Prusa native setting.")
             if key.lower() in {"post_process", "post_process_scripts",
                                "post_processing", "post_processing_scripts"} and value.strip():
