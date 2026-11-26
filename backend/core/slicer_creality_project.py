@@ -15,7 +15,9 @@ from defusedxml import ElementTree as SafeET
 from .slicer_plate_3mf import build_plate_3mf, NS
 from .slicer_profiles import SlicerProfileError
 
-_MAX_PROJECT = 32 * 1024 * 1024
+from .slicer_resource_budget import project_archive_budget
+
+_MAX_PROJECT = 32 * 1024 * 1024  # legacy compatibility only
 
 
 def build_creality_positioned_plate(source_models, *, bed_width, bed_depth, tool_ids, colour_tool_maps=None):
@@ -37,7 +39,7 @@ def build_creality_positioned_plate(source_models, *, bed_width, bed_depth, tool
         list(source_models), bed_width=bed_width, bed_depth=bed_depth,
         native_tool_indices=list(tool_ids),
         native_colour_tools=list(colour_tool_maps) if colour_tool_maps is not None else None)
-    if len(data) > _MAX_PROJECT:
+    if len(data) > project_archive_budget():
         raise SlicerProfileError("Creality positioned plate exceeds the project limit.")
     ns = "{" + NS + "}"
     try:
@@ -593,7 +595,7 @@ def build_creality_project_candidate(plate, *, printer, process, filaments,
         raise SlicerProfileError("Invalid native Creality flush override preservation mode.")
     if type(require_verified_multicolor_purge) is not bool:
         raise SlicerProfileError("Invalid native Creality machine purge requirement.")
-    if not isinstance(plate, bytes) or len(plate) > _MAX_PROJECT:
+    if not isinstance(plate, bytes) or len(plate) > project_archive_budget():
         raise SlicerProfileError("Invalid Creality plate archive.")
     if not isinstance(filaments, (list, tuple)) or len(filaments) != 2:
         raise SlicerProfileError("Creality project candidate needs two assigned filaments.")
@@ -836,6 +838,6 @@ def build_creality_project_candidate(plate, *, printer, process, filaments,
         for name, blob in entries.items():
             dst.writestr(name, blob)
     result = output.getvalue()
-    if len(result) > _MAX_PROJECT:
+    if len(result) > project_archive_budget():
         raise SlicerProfileError("Creality project candidate exceeds the worker limit.")
     return result
