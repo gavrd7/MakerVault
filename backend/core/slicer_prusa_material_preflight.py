@@ -68,7 +68,7 @@ def prepare_prusa_offline_mmu_candidate(
         "model": project, "printer": printer, "filament": palette,
         "process": print_settings, "expected_tools": assigned["selected_tools"],
         "topology": topology["kind"],
-        "research_only": True,
+        "research_only": True, "tower": (tower_xy[0],tower_xy[1],0,bed_width,bed_depth),
     }
 
 
@@ -117,3 +117,27 @@ def prepare_prusa_offline_xl_candidate(
         "process": process, "expected_tools": assignment["selected_tools"],
         "topology": topology["kind"], "research_only": True,
     }
+
+
+def slice_prusa_offline_mmu_candidate(job_id, **prepared_settings):
+    """Authenticated, ephemeral G-code research. Never persists or dispatches.
+
+    Ownership is rechecked by the full preflight BEFORE any worker request;
+    this entry point is intentionally not linked to SliceJob or printer APIs.
+    """
+    from .slicer_worker_client import run_remote_job
+    from slicer_worker.prusa_material_gcode_audit import audit_prusa_material_model_gcode
+    candidate = prepare_prusa_offline_mmu_candidate(**prepared_settings)
+    output = run_remote_job(
+        job_id, "prusaslicer", "2.9.7",
+        candidate["model"], candidate["printer"], candidate["filament"],
+        candidate["process"], model_format="3mf",
+        prusa_offline_mmu={"tools":list(prepared_settings["tools"]),
+                           "tower":list(candidate["tower"])},
+    )
+    # Defence in depth: the isolated worker has already checked this same
+    # material-to-object relationship, but transport returns arbitrary bytes.
+    audit_prusa_material_model_gcode(
+        output,candidate["model"],printer_ini=candidate["printer"],
+        tools=list(prepared_settings["tools"]),tower=list(candidate["tower"]))
+    return output
