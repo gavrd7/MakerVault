@@ -1072,7 +1072,7 @@ export default function SlicerPrepareWorkspace({
       String(profile.id)===String(id) && profile.engine==="prusaslicer" &&
       profile.engine_version===activeEngineVersion && profile.kind==="filament")) &&
     prusaNativeTools.filament_profile_ids.includes(selectedProfiles?.filament_id) &&
-    ((objects.length>=2 && objects.length<=5) || prusaSinglePaint) &&
+    ((objects.length>=2 && objects.length<=12) || prusaSinglePaint) &&
     prusaNativeTools.model_tools?.length===objects.length &&
     objects.every(object=>prusaNativeTools.model_tools?.some(row=>row.instance_id===object.instance_id)) &&
     (prusaSinglePaint || new Set(prusaNativeTools.model_tools.map(row=>row.tool)).size>=2) &&
@@ -1091,7 +1091,7 @@ export default function SlicerPrepareWorkspace({
       "layer_height","wall_loops","top_shell_layers",
       "bottom_shell_layers","sparse_infill_density"
     ].includes(key)) && !flushSettings &&
-    (prusaNativeTools.mode==="xl" && !primeTower ||
+    (["xl","indx"].includes(prusaNativeTools.mode) && !primeTower ||
       prusaNativeTools.mode==="mmu" && !!primeTower &&
       prusaNativeTools.purge_matrix?.every((row,i)=>row.every((volume,j)=>
         i===j || volume!=null&&volume>=1&&volume<=1000)));
@@ -1147,17 +1147,17 @@ export default function SlicerPrepareWorkspace({
   const prusaNativeBlockReason = activeEngine==="prusaslicer" &&
     prusaNativeTools && !prusaNativeReady
       ? prusaUnsupportedObjectKeys.length
-        ? "Prusa MMU/XL supports only Object wall loops and infill density. Unsupported Object keys: " +
+        ? "Prusa MMU/XL/INDX supports only Object wall loops and infill density. Unsupported Object keys: " +
           [...new Set(prusaUnsupportedObjectKeys)].join(", ") +
           ". Restore those settings or save the draft."
         : prusaUnsupportedGlobalKeys.length
-        ? "Prusa MMU/XL native slicing cannot apply these global settings yet: " +
+        ? "Prusa MMU/XL/INDX native slicing cannot apply these global settings yet: " +
           prusaUnsupportedGlobalKeys.join(", ") +
           ". Restore them to the imported native process defaults or save this draft."
         : objects.some(row=>row.material_slot)
         ? "Prusa virtual tools use native T0–T4 assignments, not printer filament bays. Clear the models' physical slot assignments."
         : (objects.length<2 || objects.length>5) && !prusaSinglePaint
-        ? "Prusa MMU/XL requires two to five separate tool-assigned models, or one verified front-painted MMU model with T0 base."
+        ? "Prusa MMU/XL/INDX requires two to twelve tool-assigned models, or one painted MMU model with T0 base."
         : "Complete the Prusa native tool editor, assign all model tools and owned filament presets, and specify an MMU tower and purge matrix when required."
       : "";
   const sliceBlockReason = draftBlockReason ||
