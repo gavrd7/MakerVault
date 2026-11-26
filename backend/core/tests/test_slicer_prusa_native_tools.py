@@ -86,11 +86,11 @@ class PrusaToolAuditTests(TestCase):
                              (125+x+.05*(step+1)))
         output=("\n".join(lines)+"\n").encode()
         observed=audit_prusa_native_object_tools(
-            output,sources,list(range(8)),bed_width=360,bed_depth=360)
+            output,sources,list(range(8)),bed_width=250,bed_depth=210)
         self.assertEqual(observed["correct_deposition_moves"],[60]*8)
         self.assertEqual(observed["incorrect_deposition_moves"],[0]*8)
         tampered=output.replace(b"T7\n",b"T6\n")
         with self.assertRaisesRegex(ValueError,"did not prove"):
             audit_prusa_native_object_tools(
                 tampered,sources,list(range(8)),
-                bed_width=360,bed_depth=360)
+                bed_width=250,bed_depth=210)
