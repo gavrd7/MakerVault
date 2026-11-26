@@ -12,20 +12,20 @@ import re
 from .slicer_prusa_spatial_layers import _bounds
 
 _WORD = re.compile(r"(?:^|\s)([XYZE])\s*([-+]?(?:\d+(?:\.\d*)?|\.\d+)(?:[Ee][-+]?\d+)?)", re.I)
-_T = re.compile(r"^T([0-4])(?:\s|$)", re.I)
+_T = re.compile(r"^T([0-7])(?:\s|$)", re.I)
 
 
 def audit_prusa_native_object_tools(data, models, assignments, *,
                                     bed_width, bed_depth):
     """Qualify model-local positive extrusion against exact expected tools.
 
-    This checks *per-model* identity for two to five independent models.
+    This checks *per-model* identity for two to twelve independent models.
     Painted single-object colours need a different per-facet spatial auditor.
     """
     if (not isinstance(data, bytes) or not 0 < len(data) <= 90*1024*1024 or
-            not isinstance(models, list) or not 2 <= len(models) <= 5 or
+            not isinstance(models, list) or not 2 <= len(models) <= 12 or
             not isinstance(assignments, (list, tuple)) or len(assignments) != len(models)
-            or any(type(t) is not int or not 0 <= t <= 4 for t in assignments)
+            or any(type(t) is not int or not 0 <= t <= 7 for t in assignments)
             or len(set(assignments)) < 2):
         raise ValueError("Invalid native Prusa multi-tool audit contract.")
     bounds = [_bounds(row, bed_width, bed_depth) for row in models]
