@@ -77,6 +77,24 @@ class PrusaOfficialModelDiscoveryTests(SimpleTestCase):
                     self.assertIn(b"fill_density = 20%", raw)
 
     @patch("core.slicer_prusa_official_profiles.requests.get")
+    def test_updated_indx_vendor_typo_imports_canonical_native_key(self, get):
+        class Updated:
+            status_code=200
+            headers={"Content-Length":"110"}
+            def iter_content(self,size):
+                yield (b"[vendor]\nname = Prusa Research\n"
+                       b"[print:INDX updated]\nlayer_height = 0.2\n"
+                       b"top solid_infill_speed = 40\n")
+            def close(self):
+                pass
+        get.return_value=Updated()
+        result=fetch_prusa_profile(
+            "process","INDX updated","PrusaResearchINDX.ini",
+            vendor="PrusaResearchINDX")
+        self.assertIn(b"top_solid_infill_speed = 40",result)
+        self.assertNotIn(b"top solid_infill_speed",result)
+
+    @patch("core.slicer_prusa_official_profiles.requests.get")
     def test_updated_official_indx_vendor_is_pinned_and_importable(self, get):
         from core.slicer_prusa_official_profiles import available_prusa_vendors
         from core.slicer_prusa_machine_topology import prusa_machine_topology
