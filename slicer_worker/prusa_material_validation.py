@@ -11,7 +11,7 @@ import zipfile
 from xml.etree import ElementTree as ET
 from defusedxml import ElementTree as SafeET
 
-from .prusa_3mf_validation import validate_prusa_native_3mf, CONFIG, PARTS, NS
+from .prusa_3mf_validation import validate_prusa_native_3mf, CONFIG, PARTS, LAYER_RANGES, NS
 from .runner import WorkerError
 from .prusa_vendor_profiles import validate_flat_prusa_preset
 
@@ -68,7 +68,10 @@ def validate_prusa_material_candidate(data, *, printer_ini, tools=None, colour=F
     try:
         with zipfile.ZipFile(io.BytesIO(data)) as z:
             infos=z.infolist()
+            indx=logical_count>5 and not changer
             allowed=PARTS | ({TOWER} if tower is not None else set())
+            if indx and any(i.filename==LAYER_RANGES for i in infos):
+                allowed=allowed|{LAYER_RANGES}
             if (len(infos)!=len(allowed) or {i.filename for i in infos}!=allowed
                 or any(i.is_dir() or i.file_size < 1 or i.file_size >
                        (80*1024*1024 if i.filename==MODEL else 65536)
@@ -152,7 +155,7 @@ def validate_prusa_material_candidate(data, *, printer_ini, tools=None, colour=F
         if not colour and (receipt["objects"]!=len(tools) or
                            receipt["paint_channels"] or
                            (receipt["regions"] and not indx) or
-                           receipt["layer_ranges"]):
+                           (receipt["layer_ranges"] and not indx)):
             _refuse()
         return {"objects":receipt["objects"],"colour_facets":marked if colour else 0,
                 "tools":tuple(tools) if not colour else tuple(sorted(selected)),
