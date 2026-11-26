@@ -241,7 +241,9 @@ def main(binary, vendor, official=None):
                 active=None
                 x=y=None
                 prev_e=0.
-                relative=False
+                relative=relative_xy=False
+                stationary=0
+                examples=[]
                 for raw_line in official_gcode.decode("utf-8").splitlines():
                     cmd=raw_line.split(";",1)[0].strip()
                     if not cmd: continue
@@ -249,23 +251,50 @@ def main(binary, vendor, official=None):
                     if op.startswith("T") and op[1:].isdigit():
                         active=int(op[1:]); picked.add(active)
                         continue
-                    if op not in ("M82","M83","G92","G0","G00","G1","G01"): continue
+                    if op not in ("M82","M83","G90","G91","G92",
+                                  "G0","G00","G1","G01"): continue
                     params={k.upper():float(v) for k,v in WORD.findall(cmd)}
                     if op=="M82": relative=False
                     elif op=="M83": relative=True
-                    elif op=="G92": prev_e=params.get("E",prev_e)
+                    elif op=="G90": relative_xy=False
+                    elif op=="G91": relative_xy=True
+                    elif op=="G92":
+                        prev_e=params.get("E",prev_e)
+                        x=params.get("X",x);y=params.get("Y",y)
                     else:
-                        x=params.get("X",x); y=params.get("Y",y)
+                        old_x,old_y=x,y
+                        if relative_xy:
+                            x=x+params["X"] if x is not None and "X" in params else (
+                                None if "X" in params else x)
+                            y=y+params["Y"] if y is not None and "Y" in params else (
+                                None if "Y" in params else y)
+                        else:
+                            x=params.get("X",x);y=params.get("Y",y)
                         if "E" not in params: continue
                         delta=params["E"] if relative else params["E"]-prev_e
                         prev_e=prev_e+params["E"] if relative else params["E"]
-                        if delta<=1e-6 or active not in range(8) or x is None or y is None:
+                        if delta<=1e-6 or active not in range(8):
                             continue
+                        if (old_x is None or old_y is None or x is None or y is None
+                                or abs(x-old_x)+abs(y-old_y)<=1e-7):
+                            stationary+=1
+                            continue
+                        if op not in ("G1","G01"): continue
                         for i,(xmin,xmax,ymin,ymax) in enumerate(boxes):
-                            if xmin-.15<=x<=xmax+.15 and ymin-.15<=y<=ymax+.15:
+                            if (xmin-.15<=x<=xmax+.15 and ymin-.15<=y<=ymax+.15 and
+                                    xmin-.15<=old_x<=xmax+.15 and
+                                    ymin-.15<=old_y<=ymax+.15):
                                 matrix[i][active]+=1
-                print("Official 8T G-code diagnostic: selected tools",
-                      sorted(picked),"per-model/tool positive E",matrix,flush=True)
+                                if active!=i and len(examples)<12:
+                                    examples.append({
+                                        "model":i,"active":active,
+                                        "old":(round(old_x,3),round(old_y,3)),
+                                        "new":(round(x,3),round(y,3)),
+                                        "e":round(delta,4),"command":cmd[:100]})
+                print("Official INDX moving deposited toolpaths: selected tools",
+                      sorted(picked),"stationary positive E excluded",stationary,
+                      "model/tool matrix",matrix,
+                      "wrong-tool segment examples",examples,flush=True)
                 raise
             if (observed_official["selected_tools"]!=tuple(range(8)) or
                     observed_official["incorrect_extrusion_moves"]!=[0]*8 or
