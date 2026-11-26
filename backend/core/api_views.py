@@ -2543,7 +2543,9 @@ def file_gcode_layers(request, asset_id):
                 all_heights = candidate
             except (ValueError, TypeError):
                 return _error("Invalid complete preview layer list.", status=400)
-    from .slicer_layer_preview import streamed_gcode_lines
+    from .slicer_layer_preview import (
+        streamed_gcode_lines, MAX_FULL_PREVIEW_SEGMENTS, MAX_BATCH_SEGMENTS,
+    )
     from .slicer_resource_budget import gcode_transport_budget
     if asset.file.size > gcode_transport_budget():
         return _error("G-code exceeds available preview memory budget.", status=413)
