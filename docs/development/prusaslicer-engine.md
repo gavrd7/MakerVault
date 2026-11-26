@@ -1,3 +1,13 @@
+## Five-head XL native qualification work — 26 November 2026
+
+- PR #199 now includes `scripts/prusa_native_five_head_xl_smoke.py`, a distinct pinned PrusaSlicer 2.9.7 five-physical-head fixture using the upstream `Original Prusa XL - 5T 0.4 nozzle` preset, explicit tools 1–5, five model-local deposition audits, per-tool temperatures, and **no MMU purge or wipe tower**. This does **not** claim a successful five-head native run yet.
+- `.github/workflows/prusa-reviewed-runtime-smoke.yml` executes that fixture in the existing isolated native-runtime acceptance workflow as **research-only / nonblocking** until exact-run proof. Malformed worker requests (duplicate/out-of-range tools, MMU-only tower metadata and conflicting MMU flags) must fail before launching the native binary.
+- `backend/core/tests/test_slicer_prusa_material_preflight.py` independently tests owner-scoped five-head preparation, nonsequential explicit model tool order `[5,3,1,2,4]` and absence of MMU tower metadata. The test is ordinary CI and does not require a Prusa printer.
+- The initial XL script had an indentation error detected by MakerVault CI in run `45731840298`; corrected by commit `96bc837`. Subsequent commits add request-negative tests and backend five-head coverage. Recheck **all exact-head CI and the actual native workflow** rather than treating earlier passes as current.
+- Do not conflate XL five independent hotends with MMU five logical materials or INDX up to eight passive nozzle tools. Do not activate XL five-head production slicing, INDX, printer submission or physical pickup claims until independently qualified. Existing Creality, Orca and Bambu pathways are deliberately untouched.
+
+---
+
 ## 26 November 2026 — Multi-toolhead topology: XL versus CORE One INDX
 
 - Prusa XL: supports native **1, 2 or 5 complete independent toolheads**. The offline two-tool XL native 2.9.7 G-code contract has passed, while a genuine five-tool **XL** runtime fixture and physical head pickup remain separate acceptance gates. Do not confuse the proven five-*material* MMU test with five independent XL toolheads.
