@@ -45,7 +45,7 @@ def candidate_printer(source):
     return "".join(f"{k} = {v}\n" for k, v in sorted(settings.items())).encode()
 
 
-def main(binary, vendor):
+def main(binary, vendor, official=None):
     bundle = Path(vendor).read_bytes()
     digest = hashlib.sha256(bundle).hexdigest()
     xl = flatten_prusa_vendor_preset(
@@ -146,6 +146,50 @@ def main(binary, vendor):
         assert hashlib.sha256(changed).digest()!=hashlib.sha256(gcode).digest()
         print("PASS: eight-tool INDX typed native modifier and negative",
               changed_audit,"sha256",hashlib.sha256(changed).hexdigest(),flush=True)
+
+        if official is not None:
+            # A second real-binary slice must accept the actual Prusa-
+            # distributed INDX machine profile and its exact toolchange
+            # settings, not only the expanded XL independent-head control.
+            source=Path(official).read_bytes()
+            selected=flatten_prusa_vendor_preset(
+                source,kind="printer",
+                name="Prusa CORE One INDX 8T HF0.4 nozzle",
+                expected_sha256=hashlib.sha256(source).hexdigest())
+            selected=b"\n".join(
+                b"binary_gcode = 0"
+                if line.split(b"=",1)[0].strip()==b"binary_gcode"
+                else line for line in selected.splitlines())+b"\n"
+            settings=validate_flat_prusa_preset(selected,kind="printer")
+            if (len(settings["nozzle_diameter"].split(","))!=8 or
+                    settings.get("single_extruder_multi_material","0") not in
+                    ("0","false")):
+                raise AssertionError("Official INDX eight-tool profile has incompatible topology.")
+            actual_positions=(-100,-72,-44,-16,12,40,68,96)
+            actual_rows=[]
+            for index,x in enumerate(actual_positions):
+                native=item(x_mm=x)
+                native["asset_id"]="official-indx-"+str(index)
+                actual_rows.append((native,cube(size=8)))
+            official_project,_=build_prusa_multitool_candidate(
+                actual_rows,printer_ini=selected,tools=tools,
+                bed_width=250,bed_depth=210)
+            payload["printer_profile"]=encode(selected)
+            payload["model"]=encode(official_project)
+            _decode_payload(payload)
+            (folder/"input.3mf").write_bytes(official_project)
+            (folder/"printer.ini").write_bytes(selected)
+            run_prusa(Path(binary),folder)
+            observed_official=audit_prusa_material_model_gcode(
+                (folder/"output.gcode").read_bytes(),official_project,
+                printer_ini=selected,tools=tools)
+            if (observed_official["selected_tools"]!=tuple(range(8)) or
+                    observed_official["incorrect_extrusion_moves"]!=[0]*8 or
+                    min(observed_official["correct_extrusion_moves"])<20):
+                raise AssertionError("Actual official INDX 8T native material attribution failed.")
+            print("PASS: actual official Prusa CORE One INDX 8T profile "
+                  "slices all eight tool identities",observed_official,flush=True)
+
 
 
 
