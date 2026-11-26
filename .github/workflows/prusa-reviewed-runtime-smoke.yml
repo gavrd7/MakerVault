@@ -649,7 +649,7 @@ jobs:
         run: |
           set -euo pipefail
           failed=0
-          for mode in nearest random; do
+          for mode in nearest random aligned rear; do
             echo "Testing pinned native Prusa seam_position=$mode"
             docker run --rm --network none --user 10001:10001 \
               -v "$TEST_VOLUME:/opt/engine-store:ro" \
