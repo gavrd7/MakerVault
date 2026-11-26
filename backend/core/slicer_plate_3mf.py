@@ -33,14 +33,14 @@ MAX_PROJECT_BYTES = 32 * 1024 * 1024
 # Worker bounds each expanded core model XML entry to 80 MiB.
 MAX_MODEL_XML_BYTES = 80 * 1024 * 1024
 
-def _triangles(raw):
+def _triangles(raw, *, inspected_format=None):
     from .slicer_mesh import inspect_stl
     try:
-        fmt = inspect_stl(raw)["format"]
+        fmt = inspected_format or inspect_stl(raw)["format"]
     except MeshInspectionError as exc:
         raise SlicerProfileError("Invalid source STL for build plate.") from exc
     if fmt == "binary":
-        for tri in struct.iter_unpack("<12fH", raw[84:]):
+        for tri in struct.iter_unpack("<12fH", memoryview(raw)[84:]):
             yield [tri[3:6], tri[6:9], tri[9:12]]
     else:
         current = []
@@ -61,7 +61,12 @@ def _render_mesh(raw, element, support_paint=None, seam_paint=None, fuzzy_skin_p
     # their bounds once and stream the facets a second time; unlike materialised
     # lists this does not retain all source triangles while building the XML.
     # Native painting still needs the indexed source-facet sequence.
-    triangles = list(_triangles(raw)) if active else _triangles(raw)
+    from .slicer_mesh import inspect_stl
+    try:
+        fmt = inspect_stl(raw)["format"]
+    except MeshInspectionError as exc:
+        raise SlicerProfileError("Invalid source STL for build plate.") from exc
+    triangles = list(_triangles(raw, inspected_format=fmt)) if active else _triangles(raw, inspected_format=fmt)
     source_count = 0
     minimum = [math.inf, math.inf, math.inf]
     maximum = [-math.inf, -math.inf, -math.inf]
@@ -78,7 +83,7 @@ def _render_mesh(raw, element, support_paint=None, seam_paint=None, fuzzy_skin_p
     if not source_count:
         raise SlicerProfileError("STL triangle count exceeds the 3MF plate limit.")
     if not active:
-        triangles = _triangles(raw)
+        triangles = _triangles(raw, inspected_format=fmt)
     origin = ((minimum[0] + maximum[0]) / 2,
               (minimum[1] + maximum[1]) / 2,
               minimum[2])
