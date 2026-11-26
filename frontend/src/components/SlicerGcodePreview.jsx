@@ -3,6 +3,7 @@ import SlicerToolpath3D from "./SlicerToolpath3D";
 import "./slicerPreviewMobile.css";
 import GcodeLayerInsert from "./GcodeLayerInsert";
 import { featureColour, hasFeatureFocus } from "./slicerToolpathFeatures";
+import { progressiveLayerBatchSize } from "../utils/gcodePreviewBudget";
 
 const EMPTY_PATHS = Object.freeze([]);
 
@@ -33,6 +34,14 @@ export default function SlicerGcodePreview({ fileId = null, preview, bedSize = n
   const [step, setStep] = useState(null);
   const [colourMode, setColourMode] = useState("feature");
   const [renderMode, setRenderMode] = useState("solid");
+  const manualRenderPreference = useRef(false);
+  useEffect(() => {
+    // Millions of 3D bead instances can exhaust mobile GPU memory.
+    // Line mode still shows every actual extrusion path, without subsampling.
+    if (!manualRenderPreference.current && (preview?.segment_count || 0) > 400000)
+      setRenderMode("lines");
+  }, [preview?.segment_count]);
+
   const [layerDisplay, setLayerDisplay] = useState("all");
   const [highlightCurrent, setHighlightCurrent] = useState(false);
   const [featureFocus, setFeatureFocus] = useState("all");
@@ -75,60 +84,113 @@ export default function SlicerGcodePreview({ fileId = null, preview, bedSize = n
     loading: false, message: "",
   });
   const sourceLayerHeights = layers.join(",");
+  const [retryGeneration, setRetryGeneration] = useState(0);
+  const loadCheckpoint = useRef(null);
+  const batchSize = progressiveLayerBatchSize(layers.length, preview?.segment_count);
   useEffect(() => {
     if (!fileId || !layers.length) return undefined;
     const controller = new AbortController();
     // Retain complete geometry in independent GPU upload batches. The old
     // 700k mobile cutoff silently stopped tall prints halfway through.
     // Streaming batches avoid repeatedly copying the entire model in JS.
-    const maxMoves = 1500000;
     let cancelled = false;
-    setWholeModel({chunks:[],loadedLayers:0,complete:false,limited:false,loading:true,message:""});
+    const key = String(fileId) + ":" + sourceLayerHeights;
+    const checkpoint = loadCheckpoint.current?.key === key
+      ? loadCheckpoint.current : {key, chunks: [], completed: 0};
+    loadCheckpoint.current = checkpoint;
+    setWholeModel({chunks: checkpoint.chunks.slice(), loadedLayers: checkpoint.completed,
+      complete: checkpoint.completed === layers.length, limited: false,
+      loading: checkpoint.completed < layers.length, message: ""});
     const load = async () => {
-      const chunks = [];
-      let used = 0;
-      let completed = 0;
+      const chunks = checkpoint.chunks.slice();
+      let completed = checkpoint.completed;
       let limited = false;
       let pendingLayers = 0;
+      let requestSize = checkpoint.requestSize || batchSize;
+      let successfulBatches = 0;
       try {
-        for (let offset = 0; offset < layers.length && !cancelled; offset += 64) {
-          const requested = layers.slice(offset, offset + 64);
-          // Cold indexes are prepared by Celery, never synchronously inside
-          // a web request. Cached pages load immediately; a failed/unavailable
-          // worker falls back to bounded direct parsing after brief polling.
+        for (let offset = completed; offset < layers.length && !cancelled;) {
+          const requested = layers.slice(offset, offset + requestSize);
           const url = "/api/files/" + encodeURIComponent(fileId) +
             "/gcode/layers/?quality=full&zs=" + encodeURIComponent(requested.join(","));
-          let response;
-          for (let attempt=0;attempt<6;attempt++){
-            response = await fetch(url + "&warm=1", {
-              credentials:"same-origin",signal:controller.signal,
-            });
-            if(response.status !== 202)break;
-            await new Promise(resolve=>setTimeout(resolve,750));
+          let data;
+          let lastError;
+          // Transient Safari network failures must not discard already
+          // rendered geometry. Retry the same exact layers, then halve the
+          // transport request without reducing its detail or skipping layers.
+          for (let attempt = 0; attempt < 3 && !cancelled; attempt++) {
+            try {
+              let response = await fetch(url + "&warm=1", {
+                credentials: "same-origin", signal: controller.signal,
+              });
+              if (response.status === 202) {
+                response = await fetch(url + "&direct=1", {
+                  credentials: "same-origin", signal: controller.signal,
+                });
+              }
+              if (!response.ok) {
+                const detail = await response.json().catch(() => ({}));
+                throw new Error(detail.error || "Preview unavailable (HTTP " +
+                  response.status + ").");
+              }
+              data = await response.json();
+              if (!Array.isArray(data.layers) ||
+                  data.layers.length !== requested.length)
+                throw new Error("Invalid full-resolution layer response.");
+              break;
+            } catch (error) {
+              if (error.name === "AbortError" || cancelled) throw error;
+              lastError = error;
+              if (attempt < 2) {
+                await new Promise(resolve => setTimeout(resolve, 400 * (attempt + 1)));
+              }
+            }
           }
-          if(response?.status===202 || response?.status===503 || response?.status>=500){
-            response=await fetch(url + "&direct=1",{
-              credentials:"same-origin",signal:controller.signal,
-            });
+          if (!data) {
+            if (requestSize > 1) {
+              requestSize = Math.max(1, Math.floor(requestSize / 2));
+              checkpoint.requestSize = requestSize;
+              successfulBatches = 0;
+              continue;
+            }
+            throw lastError || new Error("Unable to load exact layer geometry.");
           }
-          if (!response.ok) {
-            const detail = await response.json().catch(()=>({}));
-            throw new Error(detail.error || "Preview unavailable (HTTP " + response.status + ").");
-          }
-          const data = await response.json();
-          if (!Array.isArray(data.layers) || data.layers.length !== requested.length)
-            throw new Error("Invalid full-resolution layer response.");
-          if (data.complete === false) limited = true;
           const batch = [];
           for (const item of data.layers) {
-            if (!item.complete) limited = true;
             if (!Array.isArray(item.segments)) throw new Error("Invalid layer geometry.");
-            if (used + item.segments.length > maxMoves) {
-              limited = true;
-              break;
+            let movements = item.segments;
+            if (!item.complete) {
+              // A busy layer can exceed one response's safety budget.
+              // Page that *single* native layer to completion instead of
+              // stopping the entire print at the first heavy layer.
+              movements = [];
+              let cursor = 0;
+              while (!cancelled) {
+                const pageUrl = "/api/files/" + encodeURIComponent(fileId) +
+                  "/gcode/layers/?quality=full&zs=" +
+                  encodeURIComponent(String(item.z)) + "&page_start=" + cursor;
+                const pageResponse = await fetch(pageUrl, {
+                  credentials: "same-origin", signal: controller.signal,
+                });
+                if (!pageResponse.ok) {
+                  const detail = await pageResponse.json().catch(() => ({}));
+                  throw new Error(detail.error || "Layer pagination failed.");
+                }
+                const page = await pageResponse.json();
+                const slice = page.layers?.[0];
+                if (!slice || !Array.isArray(slice.segments) ||
+                    !Number.isSafeInteger(slice.next_offset) ||
+                    slice.next_offset <= cursor)
+                  throw new Error("Invalid or stalled full-detail layer page.");
+                for (const move of slice.segments) movements.push(move);
+                cursor = slice.next_offset;
+                if (!slice.has_more) break;
+              }
             }
-            for (const move of item.segments) batch.push(move);
-            used += item.segments.length;
+            if (cancelled) return;
+            // Exact original geometry is never discarded to satisfy a
+            // whole-model move counter. Keep each bounded HTTP batch separate.
+            for (const move of movements) batch.push(move);
             completed++;
             pendingLayers++;
             // Full-model geometry may coalesce straight runs; exact movement
@@ -139,13 +201,26 @@ export default function SlicerGcodePreview({ fileId = null, preview, bedSize = n
           // renderer appends a new GPU mesh without copying/re-uploading older
           // batches. Keep all layers available rather than stopping at 488.
           if (batch.length) chunks.push(batch);
-          if (pendingLayers >= 64 || completed === layers.length || limited) {
+          offset += requested.length;
+          checkpoint.chunks = chunks.slice();
+          checkpoint.completed = completed;
+          // Keep the last reliable transfer size across manual retries.
+          // After multiple successful responses, gently increase throughput
+          // again without changing or dropping any extrusion movements.
+          successfulBatches++;
+          if (successfulBatches >= 4 && requestSize < batchSize) {
+            requestSize = Math.min(batchSize, requestSize * 2);
+            successfulBatches = 0;
+          }
+          checkpoint.requestSize = requestSize;
+          // Publish every successful page. A retry begins here, not at layer
+          // zero; a mobile device never needs to redo finished GPU batches.
+          if (pendingLayers || completed === layers.length) {
             setWholeModel({chunks:chunks.slice(),loadedLayers:completed,
               complete:completed===layers.length&&!limited,limited,
               loading:!limited&&completed<layers.length,message:""});
             pendingLayers = 0;
           }
-          if (limited) break;
           // Let camera controls and touch gestures run between large batches.
           await new Promise(resolve=>setTimeout(resolve, 12));
         }
@@ -157,8 +232,11 @@ export default function SlicerGcodePreview({ fileId = null, preview, bedSize = n
       } catch (error) {
         if (!cancelled && error.name!=="AbortError") {
           setWholeModel({
-            chunks:chunks.slice(),loadedLayers:completed,complete:false,
-            limited:true,loading:false,message:error.message,
+            chunks:checkpoint.chunks.slice(),loadedLayers:checkpoint.completed,
+            complete:false,limited:true,loading:false,
+            message:error instanceof TypeError && /load failed|fetch/i.test(error.message)
+              ? "Preview connection interrupted. Retry the remaining layers without restarting."
+              : error.message,
           });
         }
       }
@@ -168,7 +246,7 @@ export default function SlicerGcodePreview({ fileId = null, preview, bedSize = n
   // The layer list is stable for an inspected file; avoid restarting when a
   // user changes camera, rendering style, or selected layer.
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [fileId, sourceLayerHeights]);
+  }, [fileId, sourceLayerHeights, batchSize, retryGeneration]);
 
   // Grow the print from its actual loaded height. Otherwise a fully rendered
   // final-layer island floats above still-loading lower geometry.
@@ -216,9 +294,38 @@ export default function SlicerGcodePreview({ fileId = null, preview, bedSize = n
         throw new Error(message);
       }
       return response.json();
-    }).then(data => {
+    }).then(async data => {
       if (!live) return;
       if (!Array.isArray(data.segments)) throw new Error("Invalid layer response.");
+      if (!data.complete) {
+        // The original movement inspector deliberately retains separate
+        // G-code moves, unlike the collinear geometry used for the 3D view.
+        // Page the original source instead of leaving a dense layer partial.
+        const segments = [];
+        let cursor = 0;
+        while (live) {
+          const url = "/api/files/" + encodeURIComponent(fileId) +
+            "/gcode/layer/?z=" + encodeURIComponent(z.toFixed(3)) +
+            "&page_start=" + cursor;
+          const response = await fetch(url, {
+            credentials: "same-origin", signal: controller.signal,
+          });
+          if (!response.ok) {
+            const detail = await response.json().catch(() => ({}));
+            throw new Error(detail.error || "Exact layer page unavailable.");
+          }
+          const page = await response.json();
+          if (!Array.isArray(page.segments) ||
+              !Number.isSafeInteger(page.next_offset) ||
+              page.next_offset <= cursor)
+            throw new Error("Invalid exact layer pagination.");
+          for (const move of page.segments) segments.push(move);
+          cursor = page.next_offset;
+          if (!page.has_more) break;
+        }
+        if (!live) return;
+        data = {...data, segments, complete: true, limited: false};
+      }
       fullLayerCache.current.set(key, data);
       // Retain only a small number of recent layers in browser memory.
       if (fullLayerCache.current.size > 12) {
@@ -286,7 +393,7 @@ export default function SlicerGcodePreview({ fileId = null, preview, bedSize = n
           <button type="button" onClick={() => setMobilePanel(null)}>Close</button>
         </div>
         <label>Preview style
-          <select value={renderMode} onChange={e => setRenderMode(e.target.value)}>
+          <select value={renderMode} onChange={e => { manualRenderPreference.current = true; setRenderMode(e.target.value); }}>
             <option value="solid">Solid filament paths</option>
             <option value="lines">Tool movement lines</option>
           </select>
@@ -391,6 +498,11 @@ export default function SlicerGcodePreview({ fileId = null, preview, bedSize = n
         {(wholeModel.limited || wholeModel.message) && <small>
           {wholeModel.message || "The preview reached its resource budget; no missing paths have been fabricated. Select a layer for original G-code inspection."}
         </small>}
+        {!wholeModel.loading && !wholeModel.complete && fileId && (
+          <button type="button" onClick={() => setRetryGeneration(value => value + 1)}>
+            Retry remaining layers
+          </button>
+        )}
       </div>
       {wholeModel.complete && <small className="slicerPreviewAccuracyNote">
         Full-detail preview preserves walls, skins, supports and prime tower; only collinear extrusion moves are merged. Select a layer to inspect the original movements.

@@ -7,6 +7,58 @@ from core.slicer_worker_client import SlicerWorkerError, run_remote_job, worker_
 
 
 class SlicerWorkerClientTests(SimpleTestCase):
+    @patch("core.slicer_worker_client._session")
+    @patch("core.slicer_worker_client.worker_settings",
+           return_value=("http://slicer-worker:8088", "x" * 40))
+    def test_engine_neutral_native_timeout_is_validated_and_transported(
+            self, settings, session):
+        import json
+        response = Mock()
+        output = b"; test\\nG1 X1 Y1 E1\\n"
+        response.status_code = 200
+        response.headers = {"Content-Length": "500"}
+        response.iter_content.return_value = [json.dumps({
+            "status": "completed", "gcode": base64.b64encode(output).decode(),
+            "bytes": len(output), "sha256": hashlib.sha256(output).hexdigest(),
+        }).encode()]
+        session.return_value.post.return_value = response
+        self.assertEqual(run_remote_job(
+            uuid.uuid4(), "orcaslicer", "2.5.0", b"model", b"machine",
+            b"filament", b"process", native_timeout_seconds=1800), output)
+        sent = json.loads(session.return_value.post.call_args.kwargs["data"])
+        self.assertEqual(sent["slice_timeout_seconds"], 1800)
+        self.assertEqual(session.return_value.post.call_args.kwargs["timeout"], (3, 1860))
+        for invalid in (0, 10801, True, "1800"):
+            with self.subTest(invalid=invalid), self.assertRaises(SlicerWorkerError):
+                run_remote_job(
+                    uuid.uuid4(), "orcaslicer", "2.5.0", b"model", b"machine",
+                    b"filament", b"process", native_timeout_seconds=invalid)
+
+    @patch("core.slicer_worker_client._session")
+    @patch("core.slicer_worker_client.worker_settings",
+           return_value=("http://slicer-worker:8088", "x" * 40))
+    def test_creality_placed_stl_authenticates_raw_not_compressed_bytes(
+            self, settings, session):
+        import json
+        import zlib
+        output = b"; test\\nG1 X1 Y1 E1\\n"
+        response = Mock()
+        response.status_code = 200
+        response.headers = {"Content-Length": "500"}
+        response.iter_content.return_value = [json.dumps({
+            "status": "completed", "gcode": base64.b64encode(output).decode(),
+            "bytes": len(output), "sha256": hashlib.sha256(output).hexdigest(),
+        }).encode()]
+        session.return_value.post.return_value = response
+        raw = b"verified placed model"
+        self.assertEqual(run_remote_job(
+            uuid.uuid4(), "crealityprint", "7.3.1", raw, b"printer",
+            b"filament", b"process", creality_placed_stl=True), output)
+        sent = json.loads(session.return_value.post.call_args.kwargs["data"])
+        self.assertTrue(sent["creality_placed_stl"])
+        self.assertEqual(zlib.decompress(base64.b64decode(sent["model"])), raw)
+        self.assertEqual(sent["creality_model_raw_sha256"], hashlib.sha256(raw).hexdigest())
+
     def test_unconfigured_and_invalid_urls_are_rejected(self):
         with patch.dict("os.environ", {}, clear=True):
             with self.assertRaises(SlicerWorkerError):

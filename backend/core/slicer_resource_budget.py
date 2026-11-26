@@ -1,0 +1,221 @@
+"""Conservative per-job source-input admission based on live memory headroom.
+
+This is a *preparation input* budget, not permission to bypass independently
+validated STL geometry, expanded 3MF, worker transfer or native slicer limits.
+A bounded heuristic is intentional: Python object/XML expansion can be much
+larger than the compressed source, and parallel jobs share the same memory.
+"""
+import os
+from pathlib import Path
+
+_MIB = 1024 * 1024
+_FALLBACK_SOURCE_BYTES = 48 * _MIB
+_MIN_SOURCE_BYTES = 8 * _MIB
+_RESERVED_BYTES = 256 * _MIB
+_SOURCE_EXPANSION_FACTOR = 8
+
+
+def _read_number(path):
+    try:
+        value = Path(path).read_text(encoding="ascii").strip()
+        if not value.isdecimal():
+            return None
+        number = int(value)
+        return number if 0 <= number < (1 << 60) else None
+    except (OSError, ValueError, OverflowError):
+        return None
+
+
+def _host_available_bytes():
+    try:
+        for line in Path("/proc/meminfo").read_text(encoding="ascii").splitlines():
+            if line.startswith("MemAvailable:"):
+                parts = line.split()
+                if len(parts) == 3 and parts[1].isdecimal() and parts[2] == "kB":
+                    return int(parts[1]) * 1024
+    except (OSError, ValueError, OverflowError):
+        pass
+    return None
+
+
+def _cgroup_available_bytes():
+    # Prefer cgroups v2, matching the Docker memory limit and current usage.
+    limit = _read_number("/sys/fs/cgroup/memory.max")
+    usage = _read_number("/sys/fs/cgroup/memory.current")
+    if limit is None or usage is None:
+        # Debian / Docker installations using the older cgroups v1 interface.
+        limit = _read_number("/sys/fs/cgroup/memory/memory.limit_in_bytes")
+        usage = _read_number("/sys/fs/cgroup/memory/memory.usage_in_bytes")
+    if limit is not None and usage is not None:
+        return max(0, limit - usage)
+    return None
+
+
+def source_input_budget(*, upper_cap):
+    """Return a bounded byte budget for *unique verified* plate STL sources.
+
+    This is a snapshot, not a memory reservation. Use 1/8 of headroom after a
+    fixed reserve; unknown memory data keeps the historical 48 MiB fallback.
+    Always apply the caller's hard upper cap even when values are unavailable.
+    """
+    if type(upper_cap) is not int or upper_cap < 1:
+        raise ValueError("Positive source budget upper bound required.")
+    available = [value for value in (
+        _cgroup_available_bytes(), _host_available_bytes()
+    ) if value is not None]
+    if not available:
+        return min(upper_cap, _FALLBACK_SOURCE_BYTES)
+    headroom = min(available)
+    proposed = max(_MIN_SOURCE_BYTES,
+                   max(0, headroom - _RESERVED_BYTES) // _SOURCE_EXPANSION_FACTOR)
+    return min(upper_cap, proposed)
+
+
+def resource_snapshot():
+    """Return live host/cgroup RAM headroom without an engine-specific ceiling.
+
+    Unknown host readings do not bypass a known cgroup limit. Unknown
+    measurements fail closed for callers needing large-job admission.
+    """
+    observations = {
+        "host_available_bytes": _host_available_bytes(),
+        "cgroup_available_bytes": _cgroup_available_bytes(),
+    }
+    known = [n for n in observations.values() if n is not None]
+    return {**observations, "available_bytes": min(known) if known else None}
+
+
+def memory_budget(*, reserve_bytes, expansion_factor):
+    """Provide an engine-neutral working-set admission budget.
+
+    The reserve and empirically calibrated expansion factor are supplied by
+    the operation (STL decoding, native XML, worker transport, or G-code),
+    not chosen from a fixed list of engine names or arbitrary size ceilings.
+    None means live resources could not be measured.
+    """
+    if (type(reserve_bytes) is not int or reserve_bytes < 0 or
+            type(expansion_factor) is not int or expansion_factor < 1):
+        raise ValueError("Invalid slicer operation memory budget parameters.")
+    available = resource_snapshot()["available_bytes"]
+    if available is None:
+        return None
+    return max(0, available - reserve_bytes) // expansion_factor
+
+
+def input_model_budget():
+    """Live single-source STL budget used by every engine's shared input path.
+
+    Each raw byte is retained alongside parsed geometry and model JSON, so
+    reserve eight times its size from live available RAM. No per-engine cap.
+    When resource telemetry is unavailable, retain the legacy admission for
+    small trusted jobs rather than assuming unlimited capacity.
+    """
+    available = memory_budget(
+        reserve_bytes=_RESERVED_BYTES, expansion_factor=8)
+    return available if available is not None else 32 * _MIB
+
+
+def gcode_transport_budget():
+    """Shared raw-output allowance; the JSON/base64 wire adds memory copies."""
+    available = memory_budget(
+        reserve_bytes=_RESERVED_BYTES, expansion_factor=6)
+    return available if available is not None else 64 * _MIB
+
+
+def xml_geometry_budget():
+    """Allowed expanded XML bytes for in-memory 3MF creation/verification.
+
+    Python XML nodes and indexing require substantially more RAM than raw
+    XML. This ratio is intentionally conservative and shared by all engines.
+    """
+    available = memory_budget(
+        reserve_bytes=_RESERVED_BYTES, expansion_factor=12)
+    return available if available is not None else 80 * _MIB
+
+
+def plate_triangle_budget():
+    """Geometry capacity derived from approximate Python mesh node footprint."""
+    available = memory_budget(
+        reserve_bytes=_RESERVED_BYTES, expansion_factor=1200)
+    return available if available is not None else 500_000
+
+
+def project_archive_budget():
+    """ZIP/JSON handling uses multiple in-memory copies."""
+    available = memory_budget(
+        reserve_bytes=_RESERVED_BYTES, expansion_factor=8)
+    return available if available is not None else 32 * _MIB
+
+
+def _cpu_quota():
+    """Return effective CPU bandwidth in cores for standard Docker cgroups."""
+    try:
+        quota, period = Path("/sys/fs/cgroup/cpu.max").read_text(
+            encoding="ascii").split()
+        if quota == "max":
+            return None
+        quota, period = int(quota), int(period)
+        if quota > 0 and period > 0:
+            return quota / period
+    except (OSError, ValueError, OverflowError):
+        pass
+    for root in ("/sys/fs/cgroup/cpu", "/sys/fs/cgroup/cpu,cpuacct"):
+        quota = _read_number(root + "/cpu.cfs_quota_us")
+        period = _read_number(root + "/cpu.cfs_period_us")
+        if quota and period:
+            return quota / period
+    return None
+
+
+def effective_cpu_count():
+    """Respect process affinity and CPU quota; always support one-core hosts."""
+    try:
+        affinity = len(os.sched_getaffinity(0))
+    except (AttributeError, OSError):
+        affinity = os.cpu_count() or 1
+    quota = _cpu_quota()
+    return max(1, min(affinity, int(quota)) if quota is not None else affinity)
+
+
+def preparation_worker_count(*, independent_tasks, bytes_per_worker, max_workers=None):
+    """Conservative per-job concurrency estimate, not a global reservation.
+
+    Keep one logical CPU free on multicore hosts, avoid parallel startup for
+    small jobs and unknown memory, and account for each worker's working set.
+    An optional administrator cap can reduce but never exceed safe capacity.
+    """
+    if (type(independent_tasks) is not int or independent_tasks < 1
+            or type(bytes_per_worker) is not int or bytes_per_worker < 1
+            or (max_workers is not None and
+                (type(max_workers) is not int or max_workers < 1))):
+        raise ValueError("Invalid preparation worker allocation.")
+    cpus = effective_cpu_count()
+    memory = resource_snapshot()["available_bytes"]
+    if memory is None:
+        return 1
+    # Reserve memory for the application, and half the remaining headroom
+    # for the parent, concurrent work and eventual native engine execution.
+    memory_workers = max(1, (max(0, memory - _RESERVED_BYTES) // 2)
+                         // bytes_per_worker)
+    return min(independent_tasks, max(1, cpus - 1), memory_workers,
+               max_workers if max_workers is not None else cpus)
+
+
+def slicer_task_time_limits(*, model_instances):
+    """Job-specific Celery execution deadlines, independent of engine choice.
+
+    The generic 840-second Celery default applies to unrelated application
+    tasks. Slicing receives a larger bounded allowance for multi-instance
+    preparation, scaled by the effective CPU quota/affinity. This remains
+    a safety deadline, not an estimate of native slicing completion.
+    """
+    if type(model_instances) is not int or not 1 <= model_instances <= 200:
+        raise ValueError("Invalid slicer job model count.")
+    cpus = effective_cpu_count()
+    # CPU-bound preparation can exploit up to N-1 parallel workers, whereas
+    # even a powerful host still needs time to assemble and slice the output.
+    parallelism = max(1, cpus - 1)
+    per_instance = 120 * max(0, model_instances - 1)
+    overhead = (per_instance + parallelism - 1) // parallelism
+    soft = min(10800, 840 + overhead)
+    return soft, soft + 60

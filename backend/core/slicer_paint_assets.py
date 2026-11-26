@@ -12,6 +12,7 @@ import uuid
 from django.core.files.base import ContentFile
 
 from .models import FileAsset
+from .slicer_resource_budget import memory_budget
 from .slicer_colour_painting import validate_colour_paint
 from .slicer_support_painting import validate_support_paint
 from .slicer_semantic_painting import validate_semantic_paint
@@ -21,6 +22,18 @@ PAINT_FIELDS = ("colour_paint", "support_paint", "seam_paint",
                 "fuzzy_skin_paint", "variable_layer_profile")
 MAX_PAINT_JSON = 48 * 1024 * 1024
 MAX_PAINT_GZIP = 8 * 1024 * 1024
+
+
+def paint_expanded_budget():
+    available = memory_budget(
+        reserve_bytes=256 * 1024 * 1024, expansion_factor=6)
+    return MAX_PAINT_JSON if available is None else available
+
+
+def paint_compressed_budget():
+    available = memory_budget(
+        reserve_bytes=256 * 1024 * 1024, expansion_factor=12)
+    return MAX_PAINT_GZIP if available is None else available
 
 
 def validate_annotations(paint):
@@ -55,11 +68,11 @@ def store_paint(owner, mesh_id, paint, quota_check=None):
     cleaned = validate_annotations(paint)
     raw = json.dumps(cleaned, ensure_ascii=False,
                      separators=(",", ":"), allow_nan=False).encode("utf-8")
-    if len(raw) > MAX_PAINT_JSON:
-        raise ValueError("Painting exceeds the 48 MiB expanded asset limit.")
+    if len(raw) > paint_expanded_budget():
+        raise ValueError("Painting exceeds available expanded paint memory.")
     packed = gzip.compress(raw, compresslevel=6, mtime=0)
-    if len(packed) > MAX_PAINT_GZIP:
-        raise ValueError("Painting exceeds the 8 MiB compressed asset limit.")
+    if len(packed) > paint_compressed_budget():
+        raise ValueError("Painting exceeds available compressed paint memory.")
     digest = hashlib.sha256(raw).hexdigest()
     existing = FileAsset.objects.filter(
         owner=owner, category="slicer", sha256=digest,
@@ -103,14 +116,14 @@ def load_paint(owner, asset_id, mesh_id):
     if not asset or not asset.file:
         raise ValueError("Private painting asset is missing or belongs to another mesh.")
     with asset.file.open("rb") as file:
-        packed = file.read(MAX_PAINT_GZIP + 1)
-    if len(packed) > MAX_PAINT_GZIP:
+        packed = file.read(paint_compressed_budget() + 1)
+    if len(packed) > paint_compressed_budget():
         raise ValueError("Stored painting exceeds compressed safety limits.")
     import zlib
     try:
         decompressor = zlib.decompressobj(16 + zlib.MAX_WBITS)
-        raw = decompressor.decompress(packed, MAX_PAINT_JSON + 1)
-        if (len(raw) > MAX_PAINT_JSON or not decompressor.eof
+        raw = decompressor.decompress(packed, paint_expanded_budget() + 1)
+        if (len(raw) > paint_expanded_budget() or not decompressor.eof
                 or decompressor.unconsumed_tail or decompressor.unused_data):
             raise ValueError("Stored painting exceeds expanded safety limits.")
     except zlib.error:

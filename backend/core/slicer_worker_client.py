@@ -6,6 +6,8 @@ URL/token environment settings may select a remote destination.
 """
 import base64
 import hashlib
+import zlib
+from .slicer_resource_budget import input_model_budget, gcode_transport_budget
 import json
 import os
 from urllib.parse import urlsplit
@@ -92,13 +94,24 @@ def _encode(raw, limit):
     return base64.b64encode(raw).decode("ascii")
 
 
-def run_remote_job(job_id, engine, version, model, printer_profile, filament_profile, process_profile, *, timeout_seconds=900, model_format="stl", filament_profiles=None,
+def run_remote_job(job_id, engine, version, model, printer_profile, filament_profile, process_profile, *, timeout_seconds=900, native_timeout_seconds=300, orca_streamed_plate=False, creality_placed_stl=False, model_format="stl", filament_profiles=None,
                    creality_model_stls=None, creality_tool_ids=None,
                    creality_native_project=False, native_modifier_project=False):
     if model_format not in {"stl", "3mf"}:
         raise SlicerWorkerError("Unsupported slicer input format.")
-    if not isinstance(timeout_seconds, int) or not 1 <= timeout_seconds <= 900:
+    if type(timeout_seconds) is not int or not 1 <= timeout_seconds <= 900:
         raise SlicerWorkerError("Invalid slicing timeout.")
+    if (type(native_timeout_seconds) is not int or
+            not 1 <= native_timeout_seconds <= 10800):
+        raise SlicerWorkerError("Invalid native slice timeout.")
+    if orca_streamed_plate and (orca_streamed_plate is not True
+            or engine != "orcaslicer" or version != "2.5.0"
+            or model_format != "3mf" or any((
+                filament_profiles is not None,
+                creality_model_stls is not None,
+                creality_tool_ids is not None,
+                creality_native_project, native_modifier_project))):
+        raise SlicerWorkerError("Invalid streamed Orca plate transport contract.")
     supported = {"orcaslicer", "crealityprint", "prusaslicer"}
     supported.add("bambustudio")
     if (engine not in supported or not isinstance(version, str)
@@ -109,16 +122,39 @@ def run_remote_job(job_id, engine, version, model, printer_profile, filament_pro
         canonical_id = str(uuid.UUID(str(job_id)))
     except (TypeError, ValueError):
         raise SlicerWorkerError("Invalid slicing job identifier.") from None
+    if orca_streamed_plate:
+        from .slicer_resource_budget import resource_snapshot
+        available = resource_snapshot()["available_bytes"]
+        limit = max(0, available - 256 * 1024 * 1024) // 32 if available is not None else 0
+        if not limit or len(model) > limit:
+            raise SlicerWorkerError("Streamed Orca model exceeds available transfer memory.")
+    else:
+        from .slicer_resource_budget import input_model_budget
+        limit = input_model_budget()
     url, token = worker_settings()
     payload = {
         "job_id": canonical_id, "engine": engine, "engine_version": version,
-        "model": _encode(model, MAX_REQUEST_MODEL),
+        "model": _encode(zlib.compress(model, level=6) if creality_placed_stl else model, limit),
         "printer_profile": _encode(printer_profile, MAX_REQUEST_PROFILE),
         "filament_profile": _encode(filament_profile, MAX_REQUEST_PROFILE),
         "process_profile": _encode(process_profile, MAX_REQUEST_PROFILE),
     }
     if model_format == "3mf":
         payload["model_format"] = "3mf"
+    if native_timeout_seconds != 300:
+        payload["slice_timeout_seconds"] = native_timeout_seconds
+    if orca_streamed_plate:
+        payload["orca_streamed_plate"] = True
+        payload["orca_streamed_sha256"] = hashlib.sha256(model).hexdigest()
+    if creality_placed_stl:
+        if (creality_placed_stl is not True or engine != "crealityprint"
+                or version != "7.3.1" or model_format != "stl"
+                or any((filament_profiles is not None, creality_model_stls is not None,
+                        creality_tool_ids is not None, creality_native_project,
+                        native_modifier_project, orca_streamed_plate))):
+            raise SlicerWorkerError("Invalid Creality placed-STL worker contract.")
+        payload["creality_placed_stl"] = True
+        payload["creality_model_raw_sha256"] = hashlib.sha256(model).hexdigest()
     if native_modifier_project:
         approved = {"orcaslicer": "2.5.0",
                     "bambustudio": "02.09.01.70",
@@ -165,7 +201,7 @@ def run_remote_job(job_id, engine, version, model, printer_profile, filament_pro
                 creality_model_stls[0] != model):
             raise SlicerWorkerError("Invalid Creality native multi-STL model/tool mapping.")
         payload["creality_model_stls"] = [
-            _encode(item, MAX_REQUEST_MODEL) for item in creality_model_stls
+            _encode(item, input_model_budget()) for item in creality_model_stls
         ]
         payload["creality_tool_ids"] = list(creality_tool_ids)
     elif creality_tool_ids is not None:
@@ -176,8 +212,9 @@ def run_remote_job(job_id, engine, version, model, printer_profile, filament_pro
         response = session.post(
             url + "/v1/slice",
             data=json.dumps(payload, separators=(",", ":")).encode(),
-            headers={"Authorization": "Bearer " + token, "Content-Type": "application/json"},
-            stream=True, timeout=(3, timeout_seconds), allow_redirects=False,
+            headers={"Authorization": "Bearer " + token, "Content-Type": "application/json",
+                     **({"X-MakerVault-Streamed-Orca": "v1"} if orca_streamed_plate else {})},
+            stream=True, timeout=(3, max(timeout_seconds, native_timeout_seconds + 60)), allow_redirects=False,
         )
         if response.status_code != 200:
             # The worker returns bounded, structured stage names. Never
@@ -267,24 +304,24 @@ def run_remote_job(job_id, engine, version, model, printer_profile, filament_pro
                 message += " Stage: " + stage + "."
             raise SlicerWorkerError(message)
         declared = response.headers.get("Content-Length")
-        if declared and (not declared.isdecimal() or int(declared) > MAX_RESPONSE):
+        if declared and (not declared.isdecimal() or int(declared) > (gcode_transport_budget() * 2 + 4096)):
             raise SlicerWorkerError("Worker response exceeds the allowed size.")
         buffer = bytearray()
         for chunk in response.iter_content(chunk_size=65536):
             buffer.extend(chunk)
-            if len(buffer) > MAX_RESPONSE:
+            if len(buffer) > (gcode_transport_budget() * 2 + 4096):
                 raise SlicerWorkerError("Worker response exceeds the allowed size.")
         result = json.loads(buffer)
         if not isinstance(result, dict) or result.get("status") != "completed":
             raise SlicerWorkerError("Worker returned an invalid slice result.")
         encoded = result.get("gcode")
-        if not isinstance(encoded, str) or len(encoded) > ((MAX_GCODE + 2) // 3) * 4 + 8:
+        if not isinstance(encoded, str) or len(encoded) > ((gcode_transport_budget() + 2) // 3) * 4 + 8:
             raise SlicerWorkerError("Worker output is not bounded plain-text G-code.")
         try:
             data = base64.b64decode(encoded, validate=True)
         except (ValueError, base64.binascii.Error):
             raise SlicerWorkerError("Invalid encoded G-code output.") from None
-        if not data or len(data) > MAX_GCODE or b"\x00" in data[:4096]:
+        if not data or len(data) > gcode_transport_budget() or b"\x00" in data[:4096]:
             raise SlicerWorkerError("Worker returned unsupported G-code content.")
         if result.get("bytes") != len(data) or result.get("sha256") != hashlib.sha256(data).hexdigest():
             raise SlicerWorkerError("Worker G-code checksum/length verification failed.")

@@ -515,17 +515,22 @@ def warm_gcode_preview_task(self, asset_id):
     """
     import logging
     from .models import FileAsset
-    from .slicer_preview_cache import warm_asset_high_fidelity
+    from .slicer_preview_cache import (
+        warm_asset_high_fidelity, warm_streamed_high_fidelity,
+    )
     log = logging.getLogger(__name__)
     asset = FileAsset.objects.filter(pk=asset_id).first()
     if not asset or (asset.metadata or {}).get("extension") != ".gcode":
         return {"status": "skipped"}
     try:
-        with asset.file.storage.open(asset.file.name, "rb") as handle:
-            raw = handle.read(32 * 1024 * 1024 + 1)
-        if len(raw) > 32 * 1024 * 1024:
-            return {"status": "unsupported_size"}
-        ok = warm_asset_high_fidelity(asset, raw)
+        if asset.file.size > 32 * 1024 * 1024:
+            # No entire-source G-code read on the Celery worker. A large
+            # slice is scanned into independently cached complete batches.
+            ok = warm_streamed_high_fidelity(asset)
+        else:
+            with asset.file.storage.open(asset.file.name, "rb") as handle:
+                raw = handle.read(32 * 1024 * 1024 + 1)
+            ok = warm_asset_high_fidelity(asset, raw)
         return {"status": "ready" if ok else "skipped"}
     except (OSError, UnicodeError, ValueError) as exc:
         log.warning("Preview cache warmup skipped for %s: %s", asset_id, type(exc).__name__)

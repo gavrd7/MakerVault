@@ -11,6 +11,7 @@ import uuid
 from defusedxml import ElementTree as SafeET
 from xml.etree import ElementTree as ET
 
+from .slicer_resource_budget import project_archive_budget, xml_geometry_budget
 from .slicer_creality_project import build_creality_project_candidate
 from .slicer_profiles import SlicerProfileError
 
@@ -200,6 +201,6 @@ def build_creality_modifier_native_project(geometry, *, printer, process,
     )
     result = _split_native_mesh_components(
         _remove_unresolvable_assembly_entries(project), label)
-    if len(result) > 32 * 1024 * 1024:
+    if len(result) > project_archive_budget():
         raise SlicerProfileError("Native modifier project exceeds upload limits.")
     return result

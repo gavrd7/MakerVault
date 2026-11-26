@@ -3,6 +3,8 @@
 Optional, validated per-object process metadata is stored in Orca/Bambu
 model_settings.config; this does not itself authorise worker execution.
 """
+import hashlib
+import copy
 import io
 import json
 import math
@@ -14,6 +16,8 @@ from defusedxml import ElementTree as SafeET
 
 from .slicer_mesh import MeshInspectionError
 from .slicer_profiles import SlicerProfileError
+from .slicer_resource_budget import (source_input_budget, input_model_budget,
+    xml_geometry_budget, plate_triangle_budget, project_archive_budget)
 from .slicer_process_settings import PROCESS_FIELDS, validate_process_overrides
 from .slicer_variable_layers import orca_layer_config_ranges
 from .slicer_native_support_paint import native_support_triangles, native_combined_paint_triangles
@@ -25,19 +29,19 @@ MAX_TRIANGLES = 500_000
 # Multiple independently valid models must not share the single-STL budget.
 # Source-byte, expanded XML and compressed archive caps still bound the plate.
 MAX_PLATE_TRIANGLES = 1_500_000
-MAX_SOURCE_TOTAL = 48 * 1024 * 1024
+MAX_SOURCE_TOTAL = 128 * 1024 * 1024  # hard ceiling; live headroom usually imposes less
 MAX_PROJECT_BYTES = 32 * 1024 * 1024
 # Worker bounds each expanded core model XML entry to 80 MiB.
 MAX_MODEL_XML_BYTES = 80 * 1024 * 1024
 
-def _triangles(raw):
+def _triangles(raw, *, inspected_format=None):
     from .slicer_mesh import inspect_stl
     try:
-        fmt = inspect_stl(raw)["format"]
+        fmt = inspected_format or inspect_stl(raw)["format"]
     except MeshInspectionError as exc:
         raise SlicerProfileError("Invalid source STL for build plate.") from exc
     if fmt == "binary":
-        for tri in struct.iter_unpack("<12fH", raw[84:]):
+        for tri in struct.iter_unpack("<12fH", memoryview(raw)[84:]):
             yield [tri[3:6], tri[6:9], tri[9:12]]
     else:
         current = []
@@ -58,13 +62,20 @@ def _render_mesh(raw, element, support_paint=None, seam_paint=None, fuzzy_skin_p
     # their bounds once and stream the facets a second time; unlike materialised
     # lists this does not retain all source triangles while building the XML.
     # Native painting still needs the indexed source-facet sequence.
-    triangles = list(_triangles(raw)) if active else _triangles(raw)
+    from .slicer_mesh import inspect_stl
+    try:
+        fmt = inspect_stl(raw)["format"]
+    except MeshInspectionError as exc:
+        raise SlicerProfileError("Invalid source STL for build plate.") from exc
+    triangles = list(_triangles(raw, inspected_format=fmt)) if active else _triangles(raw, inspected_format=fmt)
     source_count = 0
     minimum = [math.inf, math.inf, math.inf]
     maximum = [-math.inf, -math.inf, -math.inf]
+    # Snapshot once per mesh, not once per facet (each budget reads procfs/cgroups).
+    triangle_budget = plate_triangle_budget()
     for tri in triangles:
         source_count += 1
-        if source_count > MAX_TRIANGLES:
+        if source_count > triangle_budget:
             raise SlicerProfileError("STL triangle count exceeds the 3MF plate limit.")
         for point in tri:
             for axis in range(3):
@@ -73,7 +84,7 @@ def _render_mesh(raw, element, support_paint=None, seam_paint=None, fuzzy_skin_p
     if not source_count:
         raise SlicerProfileError("STL triangle count exceeds the 3MF plate limit.")
     if not active:
-        triangles = _triangles(raw)
+        triangles = _triangles(raw, inspected_format=fmt)
     origin = ((minimum[0] + maximum[0]) / 2,
               (minimum[1] + maximum[1]) / 2,
               minimum[2])
@@ -189,6 +200,57 @@ def _bake_native_instance_transform(obj, transform):
             vertex.set(axis, format(value, ".6f"))
 
 
+def _validated_mesh_placement(obj, item, bed_width, bed_depth, index):
+    # Transform the actual welded vertices, not only the original 2D
+    # bounding rectangle: a tilted model has a different XY footprint.
+    # Compute bottom clearance from the same matrix to ensure it rests at
+    # Z=0 in both the 3MF exporter and the browser's 3D preview.
+    provisional = [float(value) for value in
+                   _transform(item, bed_width / 2, bed_depth / 2).split()]
+    vertex_nodes = obj.findall(f"./{{{NS}}}mesh/{{{NS}}}vertices/{{{NS}}}vertex")
+    # Track transformed bounds incrementally. Materialising a list of every
+    # placed vertex doubles the preparation working set on detailed models.
+    min_x = min_y = minimum_z = math.inf
+    max_x = max_y = -math.inf
+    any_vertex = False
+    for vertex in vertex_nodes:
+        x, y, z = (float(vertex.attrib[key]) for key in ("x", "y", "z"))
+        px = provisional[0] * x + provisional[3] * y + provisional[6] * z + provisional[9]
+        py = provisional[1] * x + provisional[4] * y + provisional[7] * z + provisional[10]
+        pz = provisional[2] * x + provisional[5] * y + provisional[8] * z
+        if not all(math.isfinite(v) for v in (px, py, pz)):
+            raise SlicerProfileError("Non-finite transformed plate geometry.")
+        any_vertex = True
+        min_x = min(min_x, px)
+        max_x = max(max_x, px)
+        min_y = min(min_y, py)
+        max_y = max(max_y, py)
+        minimum_z = min(minimum_z, pz)
+    # Preview and imported STL coordinates use floating-point transforms.
+    # Never reject a model for sub-millimetre roundoff at an otherwise
+    # valid plate boundary. Real overhangs remain blocked.
+    tolerance = 0.05  # mm; strictly below nozzle/line widths
+    if not any_vertex:
+        raise SlicerProfileError("The prepared build plate contains an empty model.")
+    if (not all(math.isfinite(v) for v in
+                (min_x, max_x, min_y, max_y)) or
+            min_x < -tolerance or max_x > bed_width + tolerance or
+            min_y < -tolerance or max_y > bed_depth + tolerance):
+        raise SlicerProfileError(
+            "Model %d extends beyond the native %.1f × %.1f mm plate "
+            "(X %.2f–%.2f, Y %.2f–%.2f mm)."
+            % (index, bed_width, bed_depth,
+               min_x, max_x, min_y, max_y))
+    # Tilted STL always rests on its lowest vertex before applying the
+    # explicitly requested elevation. Do not auto-drop stacked objects.
+    desired_z = float(item.get("z_mm", 0))
+    if not math.isfinite(desired_z) or not 0 <= desired_z <= 1000:
+        raise SlicerProfileError("Invalid model elevation.")
+    provisional[11] = desired_z - minimum_z
+    placement = " ".join(format(value, ".6f") for value in provisional)
+    return placement
+
+
 def build_plate_3mf(objects_with_stl, *, bed_width, bed_depth, native_tool_indices=None,
                     native_colour_tools=None, allow_modifier_fixture=False):
     """Render [(validated_plate_item_dict, owned_STL_bytes)] as one core 3MF.
@@ -226,7 +288,9 @@ def build_plate_3mf(objects_with_stl, *, bed_width, bed_depth, native_tool_indic
     model = ET.Element(f"{{{NS}}}model", {"unit": "millimeter", "{http://www.w3.org/XML/1998/namespace}lang": "en-US"})
     resources = ET.SubElement(model, f"{{{NS}}}resources")
     build = ET.SubElement(model, f"{{{NS}}}build")
-    total_bytes = 0
+    unique_source_bytes = 0
+    source_budget = source_input_budget(upper_cap=input_model_budget())
+    seen_sources = set()
     total_triangles = 0
     resource_xml_bytes = 0
     # Only native per-object projects use baked individual placements. Existing
@@ -245,87 +309,86 @@ def build_plate_3mf(objects_with_stl, *, bed_width, bed_depth, native_tool_indic
         )
         for entry in objects_with_stl
     )
+    sources = []
     for index, pair in enumerate(objects_with_stl, start=1):
         if not isinstance(pair, tuple) or len(pair) != 2:
             raise SlicerProfileError("Invalid 3MF plate input.")
         item, raw = pair
         if not isinstance(item, dict) or not isinstance(raw, bytes):
             raise SlicerProfileError("Invalid STL plate entry.")
-        total_bytes += len(raw)
-        if total_bytes > MAX_SOURCE_TOTAL:
-            raise SlicerProfileError("Total plate model size exceeds the limit.")
-        obj = ET.SubElement(resources, f"{{{NS}}}object", {"id": str(index), "type": "model"})
-        count, width, depth = _render_mesh(
-            raw, obj, item.get("support_paint"), item.get("seam_paint"),
-            item.get("fuzzy_skin_paint"),
-            # Ordinary MakerVault project exports preserve paint in their
-            # validated sidecars; only a verified native palette may compile
-            # it into print-tool annotations.
-            colour_paint=(item.get("colour_paint")
-                          if native_colour_tools is not None else None),
-            colour_tool_indices=(native_colour_tools[index - 1]
-                                 if native_colour_tools is not None else None))
-        total_triangles += count
-        # Transform the actual welded vertices, not only the original 2D
-        # bounding rectangle: a tilted model has a different XY footprint.
-        # Compute bottom clearance from the same matrix to ensure it rests at
-        # Z=0 in both the 3MF exporter and the browser's 3D preview.
-        provisional = [float(value) for value in
-                       _transform(item, bed_width / 2, bed_depth / 2).split()]
-        vertex_nodes = obj.findall(f"./{{{NS}}}mesh/{{{NS}}}vertices/{{{NS}}}vertex")
-        placed = []
-        for vertex in vertex_nodes:
-            x, y, z = (float(vertex.attrib[key]) for key in ("x", "y", "z"))
-            placed.append((
-                provisional[0] * x + provisional[3] * y + provisional[6] * z + provisional[9],
-                provisional[1] * x + provisional[4] * y + provisional[7] * z + provisional[10],
-                provisional[2] * x + provisional[5] * y + provisional[8] * z,
-            ))
-        # Preview and imported STL coordinates use floating-point transforms.
-        # Never reject a model for sub-millimetre roundoff at an otherwise
-        # valid plate boundary. Real overhangs remain blocked.
-        tolerance = 0.05  # mm; strictly below nozzle/line widths
-        if not placed:
-            raise SlicerProfileError("The prepared build plate contains an empty model.")
-        min_x = min(point[0] for point in placed)
-        max_x = max(point[0] for point in placed)
-        min_y = min(point[1] for point in placed)
-        max_y = max(point[1] for point in placed)
-        if (not all(math.isfinite(v) for v in
-                    (min_x, max_x, min_y, max_y)) or
-                min_x < -tolerance or max_x > bed_width + tolerance or
-                min_y < -tolerance or max_y > bed_depth + tolerance):
-            raise SlicerProfileError(
-                "Model %d extends beyond the native %.1f × %.1f mm plate "
-                "(X %.2f–%.2f, Y %.2f–%.2f mm)."
-                % (index, bed_width, bed_depth,
-                   min_x, max_x, min_y, max_y))
-        minimum_z = min(point[2] for point in placed)
-        # Tilted STL always rests on its lowest vertex before applying the
-        # explicitly requested elevation. Do not auto-drop stacked objects.
-        desired_z = float(item.get("z_mm", 0))
-        if not math.isfinite(desired_z) or not 0 <= desired_z <= 1000:
-            raise SlicerProfileError("Invalid model elevation.")
-        provisional[11] = desired_z - minimum_z
-        placement = " ".join(format(value, ".6f") for value in provisional)
-        if total_triangles > MAX_PLATE_TRIANGLES:
-            raise SlicerProfileError("Total plate triangles exceed the limit.")
-        if bake_native_positions:
-            _bake_native_instance_transform(obj, placement)
-            placement = "1 0 0 0 1 0 0 0 1 0 0 0"
-        ET.SubElement(build, f"{{{NS}}}item", {
-            "objectid": str(index),
-            "transform": placement,
-        })
-        # Check actual serialised resource growth after every mesh, not only
-        # after all models have been accumulated into a large XML tree.
-        # Leave 64 KiB for the build items and model wrapper.
-        resource_xml_bytes += len(ET.tostring(obj, encoding="utf-8"))
-        if resource_xml_bytes > MAX_MODEL_XML_BYTES - 65536:
-            raise SlicerProfileError(
-                "Build plate 3MF geometry exceeds the worker's expanded XML budget.")
+        # Multiple instances of the same verified source asset share the
+        # input byte budget. They still retain independent object transforms,
+        # triangle counts, annotations and expanded 3MF resource limits.
+        # A cryptographic content hash avoids trusting names/asset IDs.
+        identity = (len(raw), hashlib.sha256(raw).digest())
+        if identity not in seen_sources:
+            unique_source_bytes += len(raw)
+            if unique_source_bytes > source_budget:
+                raise SlicerProfileError(
+                    "Total unique plate source model size exceeds the available "
+                    "memory-based preparation budget.")
+            seen_sources.add(identity)
+        options = {
+            "support_paint": item.get("support_paint"),
+            "seam_paint": item.get("seam_paint"),
+            "fuzzy_skin_paint": item.get("fuzzy_skin_paint"),
+            "colour_paint": item.get("colour_paint") if native_colour_tools is not None else None,
+            "colour_tool_indices": native_colour_tools[index - 1] if native_colour_tools is not None else None,
+        }
+        sources.append((index, raw, options))
+    from .slicer_parallel_geometry import prepared_mesh_batches
+    estimate = 128 * 1024**2 + max(len(raw) for _, raw, _ in sources) * 48
+    # Identical contiguous assets need one validated mesh build even on a
+    # multi-engine native 3MF route. Preserve separate per-instance metadata,
+    # paint tool maps, transforms and global resource accounting.
+    groups = []
+    for entry in sources:
+        index, raw, options = entry
+        key = (len(raw), hashlib.sha256(raw).digest(), repr(options))
+        if groups and groups[-1][0] == key:
+            groups[-1][1].append(entry)
+        else:
+            groups.append((key, [entry]))
+    prepared_sources = [group[0] for _key, group in groups]
+    with prepared_mesh_batches(
+            prepared_sources, estimated_bytes_per_worker=estimate) as prepared:
+        for (_key, members), (_, _, rendered) in zip(groups, prepared):
+            first_index, raw, options = members[0]
+            if rendered is None:
+                template = ET.Element(f"{{{NS}}}object")
+                count, _, _ = _render_mesh(raw, template, **options)
+            else:
+                template = SafeET.fromstring(rendered)
+                count = len(template.findall(
+                    f"./{{{NS}}}mesh/{{{NS}}}triangles/{{{NS}}}triangle"))
+            mesh = template.find(f"{{{NS}}}mesh")
+            if mesh is None:
+                raise SlicerProfileError("Prepared native project mesh is missing.")
+            for index, _raw, _options in members:
+                item = objects_with_stl[index - 1][0]
+                obj = ET.SubElement(
+                    resources, f"{{{NS}}}object", {"id": str(index), "type": "model"})
+                obj.append(copy.deepcopy(mesh))
+                total_triangles += count
+                placement = _validated_mesh_placement(obj, item, bed_width, bed_depth, index)
+                if total_triangles > plate_triangle_budget():
+                    raise SlicerProfileError("Total plate triangles exceed the limit.")
+                if bake_native_positions:
+                    _bake_native_instance_transform(obj, placement)
+                    placement = "1 0 0 0 1 0 0 0 1 0 0 0"
+                ET.SubElement(build, f"{{{NS}}}item", {
+                    "objectid": str(index),
+                    "transform": placement,
+                })
+                # Check actual serialised resource growth after every mesh, not only
+                # after all models have been accumulated into a large XML tree.
+                # Leave 64 KiB for the build items and model wrapper.
+                resource_xml_bytes += len(ET.tostring(obj, encoding="utf-8"))
+                if resource_xml_bytes > xml_geometry_budget() - 65536:
+                    raise SlicerProfileError(
+                        "Build plate 3MF geometry exceeds the worker's expanded XML budget.")
     model_xml = ET.tostring(model, encoding="utf-8", xml_declaration=True)
-    if len(model_xml) > MAX_MODEL_XML_BYTES:
+    if len(model_xml) > xml_geometry_budget():
         raise SlicerProfileError(
             "Build plate 3MF geometry exceeds the worker's expanded XML budget.")
     # Preserve Orca's model IDs one-to-one with the 3MF resource IDs.
@@ -391,7 +454,7 @@ def build_plate_3mf(objects_with_stl, *, bed_width, bed_depth, native_tool_indic
                          'Type="http://schemas.microsoft.com/3dmanufacturing/2013/01/3dmodel"/>'
                          '</Relationships>')
     archive = output.getvalue()
-    if len(archive) > MAX_PROJECT_BYTES:
+    if len(archive) > project_archive_budget():
         raise SlicerProfileError("Generated 3MF exceeds the worker upload limit.")
     return archive
 
@@ -468,7 +531,7 @@ def build_compound_plate_3mf(objects_with_stl, *, bed_width, bed_depth):
         archive.writestr("[Content_Types].xml", types)
         archive.writestr("_rels/.rels", relationships)
     data = output.getvalue()
-    if not data or len(data) > MAX_PROJECT_BYTES:
+    if not data or len(data) > project_archive_budget():
         raise SlicerProfileError("Combined 3MF exceeds the safe worker upload limit.")
     return data
 
@@ -518,7 +581,7 @@ def build_makervault_project_3mf(plates_with_stl, *, bed_width, bed_depth, metad
             if asset_id not in source_stls:
                 source_stls[asset_id] = raw
                 total_source_bytes += len(raw)
-                if total_source_bytes > 64 * 1024 * 1024:
+                if total_source_bytes > source_input_budget(upper_cap=input_model_budget()):
                     raise SlicerProfileError("Total project source STL size exceeds 64 MiB.")
         native = build_plate_3mf(pairs, bed_width=bed_width, bed_depth=bed_depth)
         embedded[f"Metadata/plates/plate-{plate_number}.3mf"] = native
@@ -556,7 +619,7 @@ def build_makervault_project_3mf(plates_with_stl, *, bed_width, bed_depth, metad
             if isinstance(paint, dict) and paint.get("version") == 2:
                 name = "Metadata/paint/paint-%04d.json" % (len(paint_sidecars) + 1)
                 blob = json.dumps(paint, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
-                if len(blob) > 16 * 1024 * 1024:
+                if len(blob) > xml_geometry_budget():
                     raise SlicerProfileError("Painted model exceeds project 3MF region limit.")
                 paint_sidecars[name] = blob
                 portable_plate["objects"].append({
@@ -572,7 +635,7 @@ def build_makervault_project_3mf(plates_with_stl, *, bed_width, bed_depth, metad
             if isinstance(support, dict) and support.get("version") == 2:
                 name = "Metadata/paint/support-%04d.json" % (len(paint_sidecars) + 1)
                 blob = json.dumps(support, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
-                if len(blob) > 16 * 1024 * 1024:
+                if len(blob) > xml_geometry_budget():
                     raise SlicerProfileError("Support painted model exceeds project 3MF region limit.")
                 paint_sidecars[name] = blob
                 portable_plate["objects"][-1].pop("support_paint", None)
@@ -585,13 +648,13 @@ def build_makervault_project_3mf(plates_with_stl, *, bed_width, bed_depth, metad
                     name = "Metadata/paint/%s-%04d.json" % (prefix, len(paint_sidecars) + 1)
                     blob = json.dumps(annotation, ensure_ascii=False,
                                       separators=(",", ":")).encode("utf-8")
-                    if len(blob) > 16 * 1024 * 1024:
+                    if len(blob) > xml_geometry_budget():
                         raise SlicerProfileError("Semantic painted model exceeds project 3MF region limit.")
                     paint_sidecars[name] = blob
                     portable_plate["objects"][-1].pop(field, None)
                     portable_plate["objects"][-1][prefix + "_sidecar"] = name
         portable_metadata["plates"].append(portable_plate)
-    if sum(map(len, paint_sidecars.values())) > 64 * 1024 * 1024:
+    if sum(map(len, paint_sidecars.values())) > xml_geometry_budget():
         raise SlicerProfileError("Project painting regions exceed the export limit.")
     manifest = json.dumps(portable_metadata, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
     if len(manifest) > 131072:
@@ -623,6 +686,6 @@ def build_makervault_project_3mf(plates_with_stl, *, bed_width, bed_depth, metad
             'Type="http://schemas.microsoft.com/3dmanufacturing/2013/01/3dmodel"/>'
             '</Relationships>')
     result = output.getvalue()
-    if len(result) > MAX_PROJECT_BYTES:
+    if len(result) > project_archive_budget():
         raise SlicerProfileError("Project 3MF exceeds the safe export limit.")
     return result

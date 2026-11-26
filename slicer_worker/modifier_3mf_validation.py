@@ -10,6 +10,7 @@ import zipfile
 from xml.etree import ElementTree as ET
 
 from .runner import WorkerError
+from .resource_budget import model_input_budget, operation_memory_budget
 
 
 NS = "{http://schemas.microsoft.com/3dmanufacturing/core/2015/02}"
@@ -88,15 +89,15 @@ def _mesh(obj):
 
 def validate_modifier_fixture_3mf(data):
     """Validate one composed build object with printable and non-printing siblings."""
-    if not isinstance(data, bytes) or not 0 < len(data) <= 32 * 1024 * 1024:
+    if not isinstance(data, bytes) or not 0 < len(data) <= model_input_budget():
         raise WorkerError("Native modifier fixture exceeds upload limits.")
     try:
         with zipfile.ZipFile(io.BytesIO(data)) as package:
             info = package.infolist()
             if (len(info) != 4 or {part.filename for part in info} != MEMBERS
                     or any(part.is_dir() or part.file_size <= 0
-                           or part.file_size > 80 * 1024 * 1024 for part in info)
-                    or sum(part.file_size for part in info) > 96 * 1024 * 1024
+                           or part.file_size > (operation_memory_budget(reserve_bytes=256 * 1024 * 1024, expansion_factor=12) or 80 * 1024 * 1024) for part in info)
+                    or sum(part.file_size for part in info) > (operation_memory_budget(reserve_bytes=256 * 1024 * 1024, expansion_factor=10) or 96 * 1024 * 1024)
                     or package.getinfo("Metadata/model_settings.config").file_size > 32768):
                 raise WorkerError("Unsafe native modifier fixture members.")
             root = ET.fromstring(package.read("3D/3dmodel.model"))

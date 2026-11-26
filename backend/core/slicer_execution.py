@@ -8,6 +8,7 @@ import hashlib
 import json
 import logging
 import math
+import time
 import uuid
 import os
 from datetime import timedelta
@@ -32,6 +33,7 @@ from .slicer_paint_assets import expand_painted_settings
 from .slicer_process_settings import apply_process_overrides
 from .slicer_profiles import SlicerProfileError
 from .slicer_plate_3mf import build_plate_3mf, build_compound_plate_3mf
+from .slicer_resource_budget import input_model_budget, slicer_task_time_limits
 from .slicer_modifier_volumes import (validate_native_modifier_execution,
                                       assert_native_plate_volume_coverage)
 from .slicer_plate_validation import validate_plate_collisions, PlateCollisionError
@@ -584,7 +586,7 @@ def queue_draft(job_id, user):
             try:
                 validate_plate_collisions((
                     item, _read_owned_file(owned[str(item["asset_id"])],
-                                           job.owner_id, MAX_INPUT, "Plate STL")
+                                           job.owner_id, input_model_budget(), "Plate STL")
                 ) for item in plate)
             except PlateCollisionError as exc:
                 raise SlicerExecutionError(
@@ -601,7 +603,8 @@ def queue_draft(job_id, user):
         job.save(update_fields=["status", "progress", "message", "updated_at"])
     try:
         from .tasks import execute_slice_job_task
-        execute_slice_job_task.delay(str(job.pk))
+        soft, hard = slicer_task_time_limits(model_instances=max(1, len(plate)))
+        execute_slice_job_task.apply_async(args=[str(job.pk)], soft_time_limit=soft, time_limit=hard)
     except Exception:
         # If the broker fails, never leave an orphaned queued draft.
         with transaction.atomic():
@@ -665,6 +668,7 @@ def _single_unmodified_stl(plate):
 
 def process_queued_job(job_id):
     """At most one active run; worker loss becomes a failed, never resent job."""
+    task_started = time.monotonic()
     installed = verified_installation()
     with transaction.atomic():
         job = SliceJob.objects.select_for_update(of=("self",)).select_related(
@@ -689,9 +693,11 @@ def process_queued_job(job_id):
         # Decode immutable private paint assets in memory only. The database
         # job retains compact references and is never overwritten with masks.
         job.settings = expand_painted_settings(job.owner, job.settings or {})
-        model = _read_owned_file(job.input_asset, job.owner_id, MAX_INPUT, "Model")
+        model = _read_owned_file(job.input_asset, job.owner_id, input_model_budget(), "Model")
         model_format = "stl"
         material_result = None
+        orca_streamed_plate = False
+        creality_placed_stl = False
         is_multi_test = (job.settings or {}).get("multi_material_test") is True
         plate = (job.settings or {}).get("plate_objects")
         stage = "verifying independent modifier and negative-volume coverage"
@@ -706,16 +712,21 @@ def process_queued_job(job_id):
             # Every source remains owner-scoped and verified at execution time;
             # arbitrary file paths and external 3MF projects are never accepted.
             source_models = []
+            verified_sources = {}
             for item in plate:
-                asset = FileAsset.objects.filter(
-                    pk=item["asset_id"], owner_id=job.owner_id, category="mesh",
-                ).first()
-                if not asset:
-                    raise SlicerExecutionError("A source STL is no longer available.")
-                raw = _read_owned_file(asset, job.owner_id, MAX_INPUT, "Plate STL")
-                if asset.sha256 and hashlib.sha256(raw).hexdigest() != asset.sha256:
-                    raise SlicerExecutionError("A plate STL has changed since import.")
-                source_models.append((item, raw))
+                asset_id = item["asset_id"]
+                if asset_id not in verified_sources:
+                    asset = FileAsset.objects.filter(
+                        pk=asset_id, owner_id=job.owner_id, category="mesh",
+                    ).first()
+                    if not asset:
+                        raise SlicerExecutionError("A source STL is no longer available.")
+                    raw = _read_owned_file(
+                        asset, job.owner_id, input_model_budget(), "Plate STL")
+                    if asset.sha256 and hashlib.sha256(raw).hexdigest() != asset.sha256:
+                        raise SlicerExecutionError("A plate STL has changed since import.")
+                    verified_sources[asset_id] = raw
+                source_models.append((item, verified_sources[asset_id]))
             if has_native_modifiers:
                 if is_multi_test:
                     raise SlicerExecutionError(
@@ -750,6 +761,18 @@ def process_queued_job(job_id):
                 model = source_models[0][1]
                 model_format = "stl"
                 logger.info("Slicing job %s: using direct validated STL path", job.pk)
+            elif (job.engine == "crealityprint"
+                  and _plate_builder(source_models) is build_compound_plate_3mf):
+                # Creality 7.3.1 single-material CLI cannot import the
+                # generic 3MF plate with external native profiles. Use the
+                # independent shared geometry-only placed STL adapter.
+                stage = "baking verified Creality single-filament plate geometry"
+                from .slicer_creality_plate import build_creality_single_filament_plate
+                width, depth = trusted_plate_dimensions(job.printer_profile)
+                model = build_creality_single_filament_plate(
+                    source_models, bed_width=width, bed_depth=depth)
+                model_format = "stl"
+                creality_placed_stl = True
             else:
                 stage = "resolving native printer bed dimensions"
                 width, depth = trusted_plate_dimensions(job.printer_profile)
@@ -759,9 +782,21 @@ def process_queued_job(job_id):
                 # queue admission still blocks unverified per-object jobs.
                 # Ordinary single-material multi-object plates retain their
                 # proven compound-mesh execution path.
-                model = _plate_builder(source_models)(
-                    source_models, bed_width=width, bed_depth=depth
-                )
+                # Preserve every object setting. Only plain multi-model Orca
+                # plates use the dedicated bounded streamed compound exporter.
+                # Other engines continue through their proven native adapters.
+                if (job.engine == "orcaslicer" and len(source_models) > 1
+                        and all(not any(item.get(key) for key in (
+                            "modifier_volumes", "process_overrides", "colour_paint",
+                            "support_paint", "seam_paint", "fuzzy_skin_paint",
+                            "variable_layer_profile")) for item, _raw in source_models)):
+                    from .slicer_streamed_plate_3mf import build_streamed_compound_3mf
+                    model = build_streamed_compound_3mf(
+                        source_models, bed_width=width, bed_depth=depth)
+                    orca_streamed_plate = True
+                else:
+                    model = _plate_builder(source_models)(
+                        source_models, bed_width=width, bed_depth=depth)
                 model_format = "3mf"
         stage = "resolving native slicing profiles"
         profiles = []
@@ -1011,12 +1046,19 @@ def process_queued_job(job_id):
                 raise SlicerExecutionError(
                     "Bambu multi-material project settings could not be validated: "
                     + str(exc)) from exc
-        if model_format == "stl" and job.input_asset.sha256 and hashlib.sha256(model).hexdigest() != job.input_asset.sha256:
+        if model_format == "stl" and not creality_placed_stl and job.input_asset.sha256 and hashlib.sha256(model).hexdigest() != job.input_asset.sha256:
             raise SlicerExecutionError("Model contents changed since the job was prepared.")
         stage = "executing the isolated slicer worker"
+        soft, _hard = slicer_task_time_limits(
+            model_instances=max(1, len(plate or [])))
+        elapsed = max(0, int(time.monotonic() - task_started))
+        native_timeout = max(300, min(10800, soft - elapsed - 180))
         output = run_remote_job(
             job.pk, job.engine, job.engine_version, model,
             profiles[0], profiles[1], profiles[2],
+            native_timeout_seconds=native_timeout,
+            orca_streamed_plate=orca_streamed_plate,
+            creality_placed_stl=creality_placed_stl,
             model_format=model_format,
             filament_profiles=(material_result["filament_profiles"]
                                if material_result is not None else None),
@@ -1198,23 +1240,27 @@ def reconcile_stale_jobs(*, now=None, limit=250):
     now = now or timezone.now()
     if not isinstance(limit, int) or not 1 <= limit <= 1000:
         raise SlicerExecutionError("Invalid stale-job reconciliation limit.")
-    thresholds = (
-        ("queued", now - timedelta(minutes=30)),
-        ("running", now - timedelta(minutes=25)),
-    )
-    counts = {}
+    queued_cutoff = now - timedelta(minutes=30)
+    message = "Worker outcome is unknown. Review and create a new draft if required."
+    counts = {"queued": 0, "running": 0}
     with transaction.atomic():
-        for status, cutoff in thresholds:
-            ids = list(
-                SliceJob.objects.filter(status=status, updated_at__lt=cutoff)
-                .order_by("updated_at").values_list("pk", flat=True)[:limit]
-            )
-            updated = SliceJob.objects.filter(
-                pk__in=ids, status=status, updated_at__lt=cutoff
-            ).update(
-                status="stale",
-                message="Worker outcome is unknown. Review and create a new draft if required.",
-                updated_at=now,
-            ) if ids else 0
-            counts[status] = updated
+        queued = list(
+            SliceJob.objects.filter(status="queued", updated_at__lt=queued_cutoff)
+            .order_by("updated_at").values_list("pk", flat=True)[:limit])
+        if queued:
+            counts["queued"] = SliceJob.objects.filter(
+                pk__in=queued, status="queued", updated_at__lt=queued_cutoff).update(
+                    status="stale", message=message, updated_at=now)
+        candidates = SliceJob.objects.filter(
+            status="running", updated_at__lt=now - timedelta(minutes=25)
+        ).order_by("updated_at").values("pk", "settings", "updated_at")[:limit]
+        for candidate in candidates:
+            count = max(1, len((candidate["settings"] or {}).get("plate_objects") or []))
+            _, hard = slicer_task_time_limits(model_instances=count)
+            cutoff = now - timedelta(seconds=max(25 * 60, hard + 120))
+            if candidate["updated_at"] >= cutoff:
+                continue
+            counts["running"] += SliceJob.objects.filter(
+                pk=candidate["pk"], status="running", updated_at__lt=cutoff
+            ).update(status="stale", message=message, updated_at=now)
     return counts

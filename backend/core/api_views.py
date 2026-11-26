@@ -2428,19 +2428,33 @@ def file_gcode_layer(request, asset_id):
     except (ValueError, TypeError):
         return _error("Choose a valid layer Z between 0 and 2000 mm.", status=400)
     try:
-        with asset.file.storage.open(asset.file.name, "rb") as handle:
-            raw = handle.read(MAX_LAYER_SOURCE_BYTES + 1)
-    except (OSError, ValueError):
-        return _error("Stored G-code could not be opened.", status=404)
-    if len(raw) > MAX_LAYER_SOURCE_BYTES:
-        return _error("Full-resolution layer retrieval is unavailable for G-code larger than 32 MiB.", status=413)
-    if b"\x00" in raw:
-        return _error("Binary G-code is not supported by this viewer.", status=400)
+        page_start = (int(request.GET["page_start"])
+                      if "page_start" in request.GET else None)
+        if page_start is not None and (
+                str(page_start) != request.GET["page_start"]
+                or page_start < 0 or page_start > 2**53):
+            raise ValueError()
+    except (ValueError, TypeError):
+        return _error("Invalid selected-layer page.", status=400)
+    from .slicer_layer_preview import layer_batch_toolpaths
+    from .slicer_layer_preview import streamed_gcode_lines
     try:
-        source = raw.decode("utf-8")
-    except UnicodeDecodeError:
-        return _error("Full-resolution layer retrieval requires UTF-8 G-code.", status=400)
-    result = exact_layer_toolpaths(source, layer_z)
+        with asset.file.storage.open(asset.file.name, "rb") as handle:
+            if asset.file.size > MAX_LAYER_SOURCE_BYTES:
+                source = streamed_gcode_lines(handle)
+                result = (layer_batch_toolpaths(source, [layer_z], page_start=page_start)["layers"][0]
+                          if page_start is not None else exact_layer_toolpaths(source, layer_z))
+            else:
+                raw = handle.read(MAX_LAYER_SOURCE_BYTES + 1)
+                if b"\x00" in raw:
+                    return _error("Binary G-code is not supported by this viewer.", status=400)
+                source = raw.decode("utf-8")
+                result = (layer_batch_toolpaths(source, [layer_z], page_start=page_start)["layers"][0]
+                          if page_start is not None else exact_layer_toolpaths(source, layer_z))
+    except (UnicodeDecodeError, ValueError) as exc:
+        return _error("Invalid UTF-8 or binary G-code in source.", status=400)
+    except OSError:
+        return _error("Stored G-code could not be opened.", status=404)
     response = JsonResponse(result)
     response["Cache-Control"] = "private, no-store"
     return response
@@ -2460,6 +2474,14 @@ def file_gcode_layers(request, asset_id):
         response = JsonResponse(data)
         response["Cache-Control"] = "private, no-store"
         response["X-MakerVault-Preview-Cache"] = cache_status
+        # HTTP gzip preserves every coordinate and segment, while avoiding
+        # large uncompressed JSON transfers that can fail on mobile Safari.
+        # Only this authenticated geometry endpoint is affected.
+        if (len(response.content) > 200 and
+                "gzip" in request.headers.get("Accept-Encoding", "").lower()):
+            from django.middleware.gzip import GZipMiddleware
+            response = GZipMiddleware(lambda _: response).process_response(
+                request, response)
         response["Server-Timing"] = f'preview;dur={(time.monotonic()-begin)*1000:.1f}'
         return response
     from .slicer_layer_preview import (
@@ -2482,6 +2504,16 @@ def file_gcode_layers(request, asset_id):
             raise ValueError()
     except (ValueError, TypeError):
         return _error("Invalid or duplicate layer Z coordinate.", status=400)
+    try:
+        page_start = (int(request.GET["page_start"])
+                      if "page_start" in request.GET else None)
+        if page_start is not None and (
+                str(page_start) != request.GET["page_start"]
+                or page_start < 0 or page_start > 2**53
+                or len(heights) != 1 or request.GET.get("quality") != "full"):
+            raise ValueError()
+    except (ValueError, TypeError):
+        return _error("Invalid full-detail layer page.", status=400)
     high_fidelity = request.GET.get("quality") == "full"
     overview = request.GET.get("overview") == "1" and not high_fidelity
     try:
@@ -2490,9 +2522,16 @@ def file_gcode_layers(request, asset_id):
             raise ValueError()
     except (ValueError, TypeError):
         return _error("Invalid preview detail level.", status=400)
+    from .slicer_preview_cache import cached_direct_batch, store_direct_batch
+    if page_start is None:
+        recent = cached_direct_batch(
+            asset, heights, high_fidelity=high_fidelity,
+            overview=overview, detail=detail)
+        if recent is not None:
+            return respond(recent, "direct-hit")
     index_key = None
     all_heights = None
-    if overview or high_fidelity:
+    if (overview or high_fidelity) and page_start is None:
         from .slicer_preview_cache import (
             cached_batch, index_overview, preview_index_key, MAX_INDEX_LAYERS,
         )
@@ -2510,7 +2549,7 @@ def file_gcode_layers(request, asset_id):
                 if not (high_fidelity and cache.get(index_key + ":unavailable")):
                     from .tasks import warm_gcode_preview_task
                     lock_key = index_key + ":warming"
-                    acquired = cache.add(lock_key, 1, timeout=300)
+                    acquired = cache.add(lock_key, 1, timeout=3600)
                     if acquired:
                         try:
                             warm_gcode_preview_task.delay(str(asset.pk))
@@ -2539,35 +2578,50 @@ def file_gcode_layers(request, asset_id):
                 all_heights = candidate
             except (ValueError, TypeError):
                 return _error("Invalid complete preview layer list.", status=400)
+    from .slicer_layer_preview import (
+        streamed_gcode_lines, MAX_FULL_PREVIEW_SEGMENTS, MAX_BATCH_SEGMENTS,
+        MAX_LAYER_SEGMENTS,
+    )
     try:
         with asset.file.storage.open(asset.file.name, "rb") as handle:
-            raw = handle.read(MAX_LAYER_SOURCE_BYTES + 1)
-    except (OSError, ValueError):
+            if asset.file.size > MAX_LAYER_SOURCE_BYTES:
+                # No full-file buffer or Redis warmup for large outputs.
+                # G-code motion state must still be read from the beginning,
+                # but each response retains only its requested layer geometry.
+                result = layer_batch_toolpaths(
+                    streamed_gcode_lines(handle), heights,
+                    overview=overview, overview_limit=detail,
+                    high_fidelity=high_fidelity,
+                    max_total_segments=(
+                        MAX_LAYER_SEGMENTS if page_start is not None else
+                        MAX_FULL_PREVIEW_SEGMENTS if high_fidelity else MAX_BATCH_SEGMENTS),
+                    page_start=page_start,
+                )
+            else:
+                raw = handle.read(MAX_LAYER_SOURCE_BYTES + 1)
+                if b"\x00" in raw:
+                    return _error("Binary G-code is not supported by this viewer.", status=400)
+                text = raw.decode("utf-8")
+                if overview and index_key and all_heights:
+                    first = index_overview(index_key, text, all_heights, detail)
+                    if first is not None:
+                        return respond(first, "built")
+                result = layer_batch_toolpaths(
+                    text, heights, overview=overview, overview_limit=detail,
+                    high_fidelity=high_fidelity,
+                    max_total_segments=(
+                        MAX_LAYER_SEGMENTS if page_start is not None else
+                        MAX_FULL_PREVIEW_SEGMENTS if high_fidelity else MAX_BATCH_SEGMENTS),
+                    page_start=page_start,
+                )
+    except (UnicodeDecodeError, ValueError, TypeError):
+        return _error("Invalid G-code source or preview detail level.", status=400)
+    except OSError:
         return _error("Stored G-code could not be opened.", status=404)
-    if len(raw) > MAX_LAYER_SOURCE_BYTES:
-        return _error("Exact progressive preview is unavailable for G-code larger than 32 MiB.", status=413)
-    if b"\x00" in raw:
-        return _error("Binary G-code is not supported by this viewer.", status=400)
-    try:
-        text = raw.decode("utf-8")
-    except UnicodeDecodeError:
-        return _error("Full-resolution preview requires UTF-8 G-code.", status=400)
-    if overview and index_key and all_heights:
-        try:
-            first = index_overview(index_key, text, all_heights, detail)
-            if first is not None:
-                return respond(first, "built")
-        except (ValueError, TypeError):
-            return _error("Invalid complete overview index.", status=400)
-    try:
-        from .slicer_layer_preview import MAX_FULL_PREVIEW_SEGMENTS, MAX_BATCH_SEGMENTS
-        result = layer_batch_toolpaths(
-            text, heights, overview=overview, overview_limit=detail,
-            high_fidelity=high_fidelity,
-            max_total_segments=(MAX_FULL_PREVIEW_SEGMENTS if high_fidelity else MAX_BATCH_SEGMENTS),
-        )
-    except (ValueError, TypeError):
-        return _error("Invalid preview detail level.", status=400)
+    if page_start is None and result.get("complete"):
+        store_direct_batch(asset, heights, result,
+                           high_fidelity=high_fidelity,
+                           overview=overview, detail=detail)
     return respond(result, "miss")
 
 

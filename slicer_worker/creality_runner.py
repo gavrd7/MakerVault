@@ -12,8 +12,9 @@ from pathlib import Path
 import signal
 import subprocess
 
+from .resource_budget import model_input_budget, gcode_output_budget
 from .runner import (
-    DEFAULT_TIMEOUT_SECONDS, MAX_GCODE_BYTES, MAX_MODEL_BYTES,
+    DEFAULT_TIMEOUT_SECONDS, MAX_NATIVE_SLICE_TIMEOUT_SECONDS, MAX_GCODE_BYTES, MAX_MODEL_BYTES,
     MAX_PROFILE_BYTES, WorkerError, _regular_file, _output_path,
 )
 from .stl_validation import StlValidationError, validate_stl
@@ -135,9 +136,16 @@ def creality_command(binary: Path, workdir: Path):
     if binary.is_symlink() or not binary.is_file() or not os.access(binary, os.X_OK):
         raise WorkerError("Verified Creality Print executable is unavailable.")
     is_project = (workdir / "input.3mf").exists()
-    model = _regular_file(workdir, "input.3mf" if is_project else "input.stl", MAX_MODEL_BYTES)
+    placed = workdir / "creality-placed-stl.marker"
+    if placed.is_symlink() or (placed.exists() and
+            (not placed.is_file() or placed.read_bytes() != b"v1")):
+        raise WorkerError("Invalid Creality placed-STL marker.")
+    model = _regular_file(workdir, "input.3mf" if is_project else "input.stl", model_input_budget())
     native_project = (workdir / "creality-native-project.marker").exists()
     native_modifiers = (workdir / "native-modifier-project.marker").exists()
+    if placed.exists() and (is_project or native_project or native_modifiers or
+                            (workdir / "creality-material-map.json").exists()):
+        raise WorkerError("Creality placed-STL cannot activate native project or material mapping.")
     if native_project and native_modifiers:
         raise WorkerError("Conflicting Creality native project contracts.")
     if is_project and native_modifiers:
@@ -196,7 +204,7 @@ def creality_command(binary: Path, workdir: Path):
             for native in filament_files:
                 _check_native_json(_regular_file(workdir, native.name, MAX_PROFILE_BYTES))
             for native in models:
-                validate_stl(_regular_file(workdir, native.name, MAX_MODEL_BYTES).read_bytes())
+                validate_stl(_regular_file(workdir, native.name, model_input_budget()).read_bytes())
             material_args = native_stl_material_arguments(
                 models, filament_files, metadata["tool_ids"])
         except (ValueError, KeyError, TypeError, CrealityMaterialRouteError,
@@ -209,7 +217,7 @@ def creality_command(binary: Path, workdir: Path):
 
 
 def run_creality(binary: Path, workdir: Path, *, timeout_seconds: int = DEFAULT_TIMEOUT_SECONDS):
-    if not isinstance(timeout_seconds, int) or not 1 <= timeout_seconds <= 900:
+    if type(timeout_seconds) is not int or not 1 <= timeout_seconds <= MAX_NATIVE_SLICE_TIMEOUT_SECONDS:
         raise WorkerError("Invalid slice timeout.")
     workdir = Path(workdir).resolve(strict=True)
     if not workdir.is_dir():
@@ -278,13 +286,13 @@ def run_creality(binary: Path, workdir: Path, *, timeout_seconds: int = DEFAULT_
                                    or p.is_symlink() or not p.is_file() for p in outputs):
             raise WorkerError("Creality Print did not produce exactly one supported G-code artifact.")
         source = gcode[0]
-        if not 0 < source.stat().st_size <= MAX_GCODE_BYTES:
+        if not 0 < source.stat().st_size <= gcode_output_budget():
             raise WorkerError("Creality Print G-code output is empty or oversized.")
         target = _output_path(workdir)
         with source.open("rb") as src, target.open("xb") as dst:
             while chunk := src.read(65536):
                 dst.write(chunk)
-                if dst.tell() > MAX_GCODE_BYTES:
+                if dst.tell() > gcode_output_budget():
                     raise WorkerError("Creality Print output exceeds the G-code limit.")
         if b"\x00" in target.read_bytes()[:4096]:
             raise WorkerError("Creality Print produced unsupported binary G-code.")

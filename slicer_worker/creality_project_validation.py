@@ -10,6 +10,7 @@ import zipfile
 from xml.etree import ElementTree as ET
 
 from .runner import WorkerError
+from .resource_budget import model_input_budget, operation_memory_budget
 from .three_mf_validation import validate_worker_3mf
 
 PROJECT_SETTINGS = "Metadata/project_settings.config"
@@ -23,7 +24,7 @@ BLOCKED = {"post_process", "post_process_script", "post_process_scripts",
 
 
 def validate_creality_project(data, *, native_tool_count=2):
-    if not isinstance(data, bytes) or len(data) > 32 * 1024 * 1024:
+    if not isinstance(data, bytes) or len(data) > model_input_budget():
         raise WorkerError("Invalid Creality native project size.")
     try:
         with zipfile.ZipFile(io.BytesIO(data)) as archive:
@@ -34,8 +35,8 @@ def validate_creality_project(data, *, native_tool_count=2):
                     any(p.is_dir() or p.file_size <= 0 or
                         p.file_size > (32768 if p.filename == LAYER_RANGES else
                                        4 * 1024 * 1024 if p.filename in (PROJECT_SETTINGS, CREALITY_META)
-                                       else 80 * 1024 * 1024) for p in parts) or
-                    sum(p.file_size for p in parts) > 96 * 1024 * 1024):
+                                       else (operation_memory_budget(reserve_bytes=256 * 1024 * 1024, expansion_factor=12) or 80 * 1024 * 1024)) for p in parts) or
+                    sum(p.file_size for p in parts) > (operation_memory_budget(reserve_bytes=256 * 1024 * 1024, expansion_factor=10) or 96 * 1024 * 1024)):
                 raise WorkerError("Creality native project contains unsupported content.")
             xml = ET.fromstring(archive.read(CREALITY_META))
             if xml.tag != "config":
