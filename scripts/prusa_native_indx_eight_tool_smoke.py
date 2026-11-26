@@ -183,6 +183,16 @@ def main(binary, vendor, official=None):
                 b"binary_gcode = 0"
                 if line.split(b"=",1)[0].strip()==b"binary_gcode"
                 else line for line in selected.splitlines())+b"\n"
+            # Official 2.5.16 INDX profile references a 3.0-only filament-
+            # scoped placeholder. 2.9.7 has retract_length_toolchange for
+            # this exact per-tool native G-code parameter. Keep the full
+            # upstream toolchange script, changing only the symbol.
+            original_token=b"filament_retract_length_toolchange"
+            if original_token not in selected:
+                raise AssertionError("Expected pinned official INDX placeholder missing.")
+            selected=selected.replace(original_token,b"retract_length_toolchange")
+            print("INDX 2.9.7 compatibility: replaced official toolchange "
+                  "retraction placeholder, kept machine pickup script",flush=True)
             settings=validate_flat_prusa_preset(selected,kind="printer")
             if (len(settings["nozzle_diameter"].split(","))!=8 or
                     settings.get("single_extruder_multi_material","0") not in
