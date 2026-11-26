@@ -102,13 +102,13 @@ class PrusaOfficialModelDiscoveryTests(SimpleTestCase):
             status_code = 200
             headers = {"Content-Length": "400"}
             def iter_content(self, chunk_size):
-                yield (b"[printer:*base*]\\nprinter_technology = FFF\\n"
-                       b"bed_shape = 0x0,250x0,250x210,0x210\\n"
-                       b"nozzle_diameter = 0.4,0.4,0.4,0.4,0.4,0.4,0.4,0.4\\n"
-                       b"single_extruder_multi_material = 0\\n"
-                       b"binary_gcode = 1\\n"
-                       b"[printer:Prusa CORE One INDX - 8T]\\n"
-                       b"inherits = *base*\\n")
+                yield (b"[printer:*base*]\nprinter_technology = FFF\n"
+                       b"bed_shape = 0x0,250x0,250x210,0x210\n"
+                       b"nozzle_diameter = 0.4,0.4,0.4,0.4,0.4,0.4,0.4,0.4\n"
+                       b"single_extruder_multi_material = 0\n"
+                       b"binary_gcode = 1\n"
+                       b"[printer:Prusa CORE One INDX - 8T]\n"
+                       b"inherits = *base*\n")
             def close(self):
                 pass
         get.return_value = Updated()
