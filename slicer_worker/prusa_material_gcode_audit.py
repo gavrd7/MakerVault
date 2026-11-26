@@ -59,6 +59,17 @@ def audit_prusa_material_model_gcode(data, project, *, printer_ini, tools, tower
         raise WorkerError("Prusa material G-code line limit exceeded.")
     correct=[0]*len(bounds)
     incorrect=[0]*len(bounds)
+    tower_hits={}
+    if tower is not None:
+        if tower[2] != 0:
+            raise WorkerError("Rotated Prusa wipe towers require separate spatial qualification.")
+        tx,ty=tower[:2]
+        tower_box=(tx-6,tx+65,ty-12,ty+45)
+        for box in bounds:
+            if (min(box[1],tower_box[1])>max(box[0],tower_box[0]) and
+                    min(box[3],tower_box[3])>max(box[2],tower_box[2])):
+                raise WorkerError("Prusa material model overlaps the wipe tower audit region.")
+        tower_hits={tool-1:0 for tool in tools}
     active=None
     e=0.
     relative=False
@@ -97,6 +108,10 @@ def audit_prusa_material_model_gcode(data, project, *, printer_ini, tools, tower
             e=e+params["E"] if relative else params["E"]
             if amount<=1e-6 or op not in ("G1","G01") or x is None or y is None:
                 continue
+            if tower is not None and active in tower_hits:
+                if (tower_box[0]<=x<=tower_box[1] and
+                        tower_box[2]<=y<=tower_box[3]):
+                    tower_hits[active]+=1
             for index,box in enumerate(bounds):
                 if box[0]-.15<=x<=box[1]+.15 and box[2]-.15<=y<=box[3]+.15:
                     if active==tools[index]-1:
@@ -107,6 +122,9 @@ def audit_prusa_material_model_gcode(data, project, *, printer_ini, tools, tower
             good<20 or bad>max(2,int(good*.01))
             for good,bad in zip(correct,incorrect))):
         raise WorkerError("Native Prusa material toolpaths do not match the assigned model tools.")
+    if tower is not None and any(count<20 for count in tower_hits.values()):
+        raise WorkerError("Prusa material output lacks verified wipe tower extrusion.")
     return {"correct_extrusion_moves":correct,
             "incorrect_extrusion_moves":incorrect,
-            "selected_tools":tuple(sorted(used))}
+            "selected_tools":tuple(sorted(used)),
+            "tower_extrusion_moves":tower_hits}
