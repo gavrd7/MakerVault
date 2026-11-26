@@ -51,6 +51,33 @@ class PlateTriangleBudgetTests(SimpleTestCase):
                 build_plate_3mf(items, bed_width=220, bed_depth=220)
 
 
+class FullPlateInstanceTests(SimpleTestCase):
+    def test_distinct_models_on_full_plate_preserve_independent_placement(self):
+        # Use distinct triangle footprints and 20 positions to exercise the
+        # general plate route, not just copies of one model.
+        from core.slicer_plate_3mf import build_plate_3mf
+        shape = fixture_stl()
+        models = []
+        for i in range(20):
+            x = -80 + (i % 5) * 40
+            y = -60 + (i // 5) * 40
+            models.append(({
+                "x_mm": x, "y_mm": y,
+                "rotation_deg": (i % 4) * 15,
+                "scale_percent": 75 + (i % 3) * 5,
+            }, shape))
+        data = build_plate_3mf(models, bed_width=220, bed_depth=220)
+        with zipfile.ZipFile(io.BytesIO(data)) as package:
+            root = ET.fromstring(package.read("3D/3dmodel.model"))
+            manifest = ET.fromstring(package.read("Metadata/model_settings.config"))
+        objects = root.findall("./{%s}resources/{%s}object" % (NS, NS))
+        items = root.findall("./{%s}build/{%s}item" % (NS, NS))
+        self.assertEqual(len(objects), 20)
+        self.assertEqual(len(items), 20)
+        self.assertEqual(len({item.attrib["transform"] for item in items}), 20)
+        self.assertEqual(len(manifest.findall("./plate/model_instance")), 20)
+
+
 class ExactPlateBoundsTests(SimpleTestCase):
     def test_roundoff_at_model_boundary_is_accepted(self):
         # Fixture STL has a 10 mm XY footprint. At x=-105.03 on a 220 mm
