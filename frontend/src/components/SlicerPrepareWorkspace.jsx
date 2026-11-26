@@ -1155,8 +1155,8 @@ export default function SlicerPrepareWorkspace({
           prusaUnsupportedGlobalKeys.join(", ") +
           ". Restore them to the imported native process defaults or save this draft."
         : objects.some(row=>row.material_slot)
-        ? "Prusa virtual tools use native T0–T4 assignments, not printer filament bays. Clear the models' physical slot assignments."
-        : (objects.length<2 || objects.length>5) && !prusaSinglePaint
+        ? "Prusa virtual tools use explicit native T0–T7 assignments, not printer filament bays. Clear the models' physical slot assignments."
+        : (objects.length<2 || objects.length>12) && !prusaSinglePaint
         ? "Prusa MMU/XL/INDX requires two to twelve tool-assigned models, or one painted MMU model with T0 base."
         : "Complete the Prusa native tool editor, assign all model tools and owned filament presets, and specify an MMU tower and purge matrix when required."
       : "";
