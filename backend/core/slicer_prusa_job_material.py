@@ -11,6 +11,7 @@ from .slicer_prusa_machine_topology import prusa_machine_topology
 from .slicer_prusa_native_resolution import resolved_prusa_profile
 from .slicer_prusa_material_preflight import (
     slice_prusa_offline_mmu_candidate, slice_prusa_offline_xl_candidate,
+    slice_prusa_offline_colour_candidate,
 )
 from .slicer_profiles import SlicerProfileError
 
@@ -23,7 +24,7 @@ PRUSA_MULTITOOL_PROCESS_KEYS = frozenset({
 })
 
 
-def _virtual_native_tools(job, settings, objects, kind, count):
+def _virtual_native_tools(job, settings, objects, kind, count, *, single_colour=False):
     """Resolve browser-assigned native tools without physical feeder telemetry."""
     from .slicer_prusa_tool_configuration import validate_prusa_native_tools
     config = validate_prusa_native_tools(settings["prusa_native_tools"])
@@ -56,14 +57,28 @@ def _virtual_native_tools(job, settings, objects, kind, count):
     if set(mapping) != {str(row.get("instance_id")) for row in objects}:
         raise SlicerProfileError("Prusa tool selections do not match active model identities.")
     tools = [mapping[str(row["instance_id"])] for row in objects]
-    if len(set(tools)) < 2:
-        raise SlicerProfileError("Prusa offline slicing requires two distinct native tools.")
+    if single_colour:
+        if tools!=[1] or expected!="mmu":
+            raise SlicerProfileError("Prusa painted MMU requires one model based on native T0.")
+        paint=objects[0].get("colour_paint") or {}
+        regions=paint.get("regions") or []
+        colour_rows=config.get("colour_tools",[])
+        if (len(regions)!=1 or len(colour_rows)!=1 or
+                colour_rows[0]["slot"]!=regions[0].get("slot")):
+            raise SlicerProfileError("Assign the painted colour to one explicit native Prusa tool.")
+        colour_tool=colour_rows[0]["tool"]-1
+    elif len(set(tools)) < 2 or config.get("colour_tools"):
+        raise SlicerProfileError("Prusa native tools require two distinct assigned model tools.")
+
     width, depth = trusted_plate_dimensions(job.printer_profile)
     result = {
         "owner_id":job.owner_id, "printer_profile":job.printer_profile,
         "process_profile":job.process_profile, "filament_profiles":filaments,
         "tools":tools, "bed_width":width, "bed_depth":depth,
     }
+    if single_colour:
+        result["colour_tool"]=colour_tool
+        result["colour_slot"]=regions[0]["slot"]
     if expected == "mmu":
         tower = settings.get("prime_tower")
         matrix = config["purge_matrix"]
@@ -106,8 +121,15 @@ def prepare_prusa_workbench_material(job, *, settings=None):
         raise SlicerProfileError("Select the matching native Prusa material topology.")
 
     objects = settings.get("plate_objects")
-    if not isinstance(objects, list) or not 2 <= len(objects) <= 5:
-        raise SlicerProfileError("Prusa offline materials require two to five models.")
+    single_colour=(isinstance(objects,list) and len(objects)==1 and
+                   isinstance(objects[0],dict) and bool(
+                       (objects[0].get("colour_paint") or {}).get("regions")))
+    if not isinstance(objects,list) or not (
+            2<=len(objects)<=5 or single_colour):
+        raise SlicerProfileError("Prusa MMU/XL requires two to five models, or one bounded painted MMU model.")
+    if single_colour and kind!="single_nozzle_changer":
+        raise SlicerProfileError("Single-model Prusa facet painting is MMU-only until XL validation.")
+
     plates = settings.get("plates")
     if plates is not None:
         if not isinstance(plates, list) or not isinstance(settings.get("active_plate_id"), str):
@@ -118,12 +140,14 @@ def prepare_prusa_workbench_material(job, *, settings=None):
                 or selected[0].get("volumes")
                 or selected[0].get("prime_tower") != settings.get("prime_tower")):
             raise SlicerProfileError("Prusa active plate, models and tower must match saved project.")
-    forbidden = ("modifier_volumes", "colour_paint",
+    forbidden = ("modifier_volumes",
                  "support_paint", "seam_paint", "fuzzy_skin_paint",
                  "variable_layer_profile", "negative_volumes")
     for row in objects:
         if not isinstance(row, dict) or any(row.get(key) for key in forbidden):
             raise SlicerProfileError("Prusa multi-material models cannot combine unqualified edits.")
+        if row.get("colour_paint") and not single_colour:
+            raise SlicerProfileError("Prusa multi-object facet colour painting is not yet verified.")
         if row.get("z_mm", 0) != 0 or row.get("text_model"):
             raise SlicerProfileError("Prusa offline materials require non-elevated STL models.")
         # Genuine pinned Prusa 2.9.7 MMU5 and independent XL5 G-code
@@ -153,9 +177,17 @@ def prepare_prusa_workbench_material(job, *, settings=None):
         raise SlicerProfileError("Unqualified global settings or independent volumes cannot be dropped.")
 
     if settings.get("prusa_native_tools") is not None:
-        selected_kind, plan = _virtual_native_tools(job, settings, objects, kind, count)
+        selected_kind, plan = _virtual_native_tools(
+            job, settings, objects, kind, count, single_colour=single_colour)
+        if single_colour:
+            if overrides:
+                raise SlicerProfileError("Prusa colour painting cannot combine global settings.")
+            return "colour",plan
         plan["process_overrides"] = overrides
         return selected_kind, plan
+    if single_colour:
+        raise SlicerProfileError("Select independent Prusa native palette tools for painted MMU.")
+
 
     routes = settings.get("material_tool_bindings")
     selections = settings.get("slot_filament_profiles")
@@ -266,6 +298,8 @@ def slice_prusa_workbench_material(job, source_models):
         ]
     else:
         prepared["rows"] = source_models
+    if kind == "colour":
+        return slice_prusa_offline_colour_candidate(job.pk, **prepared)
     if kind == "mmu":
         return slice_prusa_offline_mmu_candidate(job.pk, **prepared)
     return slice_prusa_offline_xl_candidate(job.pk, **prepared)
