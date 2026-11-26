@@ -268,6 +268,8 @@ def _decode_payload(payload):
     elif model_format == "3mf" and not files.get("native_modifier_project"):
         options = {"native_tool_count": len(files["filament_profiles"])
                    if "filament_profiles" in files else None}
+        if payload["engine"] == "orcaslicer" and not files.get("native_modifier_project"):
+            options["allow_compact_instances"] = True
         if payload["engine"] == "bambustudio":
             options["allow_bambu_project"] = True
             if "filament_profiles" in files:
