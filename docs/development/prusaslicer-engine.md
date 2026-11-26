@@ -1,3 +1,16 @@
+### INDX eight-tool native research requalification
+
+The reviewed pinned 2.9.7 CLI test normalises the official XL independent
+printer preset's binary-G-code default to text only in an ephemeral fixture,
+then verifies eight tool-specific model footprints, T0–T7 identity and no
+cross-model deposition. The same exact worker-side independent-material
+validation is used in production with the owner's selected profiles. Eight
+tool selection is not evidence of physical pickup, dock calibration, heater
+control or firmware compatibility; importing a matching official updated
+INDX printer preset remains necessary.
+
+---
+
 ## 26 November — INDX eight-tool independent material route
 
 A four-to-eight-tool `indx` architecture is now available in the normal
