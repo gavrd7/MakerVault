@@ -2,11 +2,12 @@
 from types import SimpleNamespace
 from unittest import TestCase
 from unittest.mock import patch
+import uuid
 import io
 import zipfile
 
 from core.slicer_prusa_material_preflight import (prepare_prusa_offline_mmu_candidate,
-    prepare_prusa_offline_xl_candidate)
+    prepare_prusa_offline_xl_candidate, slice_prusa_offline_mmu_candidate)
 from core.slicer_profiles import SlicerProfileError
 from core.tests.test_slicer_prusa_machine_topology import ini
 from core.tests.test_slicer_prusa_plate import cube, item
@@ -140,3 +141,37 @@ class PrusaOfflineMmuPreflightTests(TestCase):
             meta.get("value") for obj in model.findall("object")
             for meta in obj.findall("metadata") if meta.get("key")=="extruder"]
         self.assertEqual(selected,["5","3","1","2","4"])
+
+    @patch("core.slicer_worker_client.run_remote_job")
+    def test_ephemeral_owned_mmu_executor_audits_worker_result(self, remote):
+        values,assets=self.parts()
+        from core.tests.test_slicer_prusa_material_gcode_audit import toolpaths
+        remote.return_value=toolpaths()
+        with patch("core.slicer_prusa_material_preflight.resolved_prusa_profile",
+                   side_effect=assets):
+            output=slice_prusa_offline_mmu_candidate(uuid.uuid4(),**values)
+        self.assertEqual(output,toolpaths())
+        self.assertEqual(remote.call_args.kwargs["prusa_offline_mmu"],
+                         {"tools":[1,2],"tower":[55,150,0,250,210]})
+        self.assertEqual(remote.call_args.kwargs["model_format"],"3mf")
+        self.assertEqual(remote.call_args.args[1:3],("prusaslicer","2.9.7"))
+
+    @patch("core.slicer_worker_client.run_remote_job")
+    def test_ephemeral_mmu_worker_never_receives_foreign_profiles(self, remote):
+        values,_=self.parts()
+        values["filament_profiles"][1]=profile("filament",43)
+        with patch("core.slicer_prusa_material_preflight.resolved_prusa_profile") as load:
+            with self.assertRaises(SlicerProfileError):
+                slice_prusa_offline_mmu_candidate(uuid.uuid4(),**values)
+        load.assert_not_called()
+        remote.assert_not_called()
+
+    @patch("core.slicer_worker_client.run_remote_job")
+    def test_ephemeral_mmu_worker_refuses_misassigned_output(self, remote):
+        values,assets=self.parts()
+        from core.tests.test_slicer_prusa_material_gcode_audit import toolpaths
+        remote.return_value=toolpaths(leak=True)
+        with patch("core.slicer_prusa_material_preflight.resolved_prusa_profile",
+                   side_effect=assets):
+            with self.assertRaises(WorkerError):
+                slice_prusa_offline_mmu_candidate(uuid.uuid4(),**values)
