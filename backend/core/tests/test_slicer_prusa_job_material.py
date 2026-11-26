@@ -196,7 +196,7 @@ class PrusaVirtualToolDraftTests(TestCase):
 
     def test_saved_virtual_mmu_uses_only_explicit_native_tools(self):
         job,filaments,raw=self.config()
-        PrusaWorkbenchMaterialTests().resolve(job,filaments,raw)
+        PrusaWorkbenchMaterialTests.resolve(self,job,filaments,raw)
         kind,result=prepare_prusa_workbench_material(job)
         self.assertEqual(kind,"mmu")
         self.assertEqual(result["tools"],[1,2])
@@ -206,7 +206,7 @@ class PrusaVirtualToolDraftTests(TestCase):
     def test_incomplete_virtual_draft_can_be_saved_not_executed(self):
         from core.slicer_prusa_tool_configuration import validate_prusa_native_tools
         job,filaments,raw=self.config()
-        PrusaWorkbenchMaterialTests().resolve(job,filaments,raw)
+        PrusaWorkbenchMaterialTests.resolve(self,job,filaments,raw)
         job.settings["prusa_native_tools"]["filament_profile_ids"][1]=""
         self.assertEqual(validate_prusa_native_tools(
             job.settings["prusa_native_tools"])["filament_profile_ids"][1],"")
@@ -215,7 +215,7 @@ class PrusaVirtualToolDraftTests(TestCase):
 
     def test_mmu_purge_and_native_topology_must_match(self):
         job,filaments,raw=self.config()
-        PrusaWorkbenchMaterialTests().resolve(job,filaments,raw)
+        PrusaWorkbenchMaterialTests.resolve(self,job,filaments,raw)
         job.settings["prusa_native_tools"]["purge_matrix"][1][0]=None
         with self.assertRaises(SlicerProfileError):
             prepare_prusa_workbench_material(job)
@@ -227,14 +227,14 @@ class PrusaVirtualToolDraftTests(TestCase):
 
     def test_rejects_forged_model_identity_and_foreign_filaments(self):
         job,filaments,raw=self.config()
-        PrusaWorkbenchMaterialTests().resolve(job,filaments,raw)
+        PrusaWorkbenchMaterialTests.resolve(self,job,filaments,raw)
         job.settings["prusa_native_tools"]["model_tools"][1]["instance_id"]=(
             "cccccccc-cccc-4ccc-8ccc-cccccccccccc")
         with self.assertRaises(SlicerProfileError):
             prepare_prusa_workbench_material(job)
         job,filaments,raw=self.config()
         filaments[1].owner_id=91
-        PrusaWorkbenchMaterialTests().resolve(job,filaments,raw)
+        PrusaWorkbenchMaterialTests.resolve(self,job,filaments,raw)
         with self.assertRaises(SlicerProfileError):
             prepare_prusa_workbench_material(job)
 
@@ -243,14 +243,14 @@ class PrusaVirtualToolDraftTests(TestCase):
         job.settings["prusa_native_tools"]["mode"]="xl"
         job.settings["prusa_native_tools"]["purge_matrix"]=None
         job.settings["prime_tower"]=None
-        PrusaWorkbenchMaterialTests().resolve(job,filaments,raw)
+        PrusaWorkbenchMaterialTests.resolve(self,job,filaments,raw)
         with self.assertRaises(SlicerProfileError):
             prepare_prusa_workbench_material(job)
         job,filaments,_=self.config()
         job.settings["prusa_native_tools"]["mode"]="xl"
         job.settings["prusa_native_tools"]["purge_matrix"]=None
         job.settings.pop("prime_tower")
-        PrusaWorkbenchMaterialTests().resolve(job,filaments,ini("0.4,0.4","0"))
+        PrusaWorkbenchMaterialTests.resolve(self,job,filaments,ini("0.4,0.4","0"))
         kind,result=prepare_prusa_workbench_material(job)
         self.assertEqual(kind,"xl")
         self.assertNotIn("purge_matrix",result)
