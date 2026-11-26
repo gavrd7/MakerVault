@@ -84,3 +84,20 @@ def enable_prusa_painted_support(raw, *, enforcers_only=False):
     output = "".join(f"{key} = {value}\n" for key, value in sorted(options.items())).encode("utf-8")
     parse_prusa_profile(output, "process")
     return output
+
+
+def qualify_prusa_seam_process(raw, mode):
+    """Use a temporary pinned native seam placement without editing the preset.
+
+    Random is the only mode that passed four-direction independent geometry
+    versus unpainted-baseline testing on genuine PrusaSlicer 2.9.7. A
+    selected face is still subject to the post-slice spatial G-code audit.
+    """
+    if mode != "random":
+        raise ValueError("Unqualified Prusa multi-direction seam placement mode.")
+    options = parse_prusa_profile(raw, "process")
+    options["seam_position"] = "random"
+    output = "".join(f"{key} = {value}\n" for key, value in
+                     sorted(options.items())).encode("utf-8")
+    parse_prusa_profile(output, "process")
+    return output
