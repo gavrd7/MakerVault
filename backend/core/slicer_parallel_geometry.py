@@ -65,24 +65,41 @@ def prepared_mesh_batches(sources, *, estimated_bytes_per_worker, mode="mesh"):
                         options["colour_tool_indices"] = list(options["colour_tool_indices"].items())
                     config.write_text(json.dumps(options), encoding="utf-8")
                     source.write_bytes(raw)
-                    child = subprocess.Popen(
-                        [sys.executable, "-m", "core.slicer_parallel_geometry",
-                         mode, str(source), str(result), str(config)],
-                        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-                    children.append((child, source, result, config))
-                for entry, (child, source, result, config) in zip(batch, children):
+                    # Parent fixture scripts can add backend/ to sys.path without
+                    # exporting PYTHONPATH. Explicitly propagate the package root
+                    # so exec-based children work from any caller working directory.
+                    package_root = str(Path(__file__).resolve().parent.parent)
+                    env = dict(os.environ)
+                    env["PYTHONPATH"] = os.pathsep.join(
+                        [package_root, env.get("PYTHONPATH", "")]).rstrip(os.pathsep)
+                    error = Path(directory) / ("error-%d.log" % index)
+                    with error.open("wb") as stderr:
+                        child = subprocess.Popen(
+                            [sys.executable, "-m", "core.slicer_parallel_geometry",
+                             mode, str(source), str(result), str(config)],
+                            stdout=subprocess.DEVNULL, stderr=stderr, env=env)
+                    children.append((child, source, result, config, error))
+                for entry, (child, source, result, config, error) in zip(batch, children):
                     identity, raw = entry[:2]
                     if child.wait() != 0:
+                        # Diagnostic stays in server logs and never includes
+                        # model contents or arbitrary input file paths.
+                        import logging
+                        logging.getLogger(__name__).error(
+                            "Parallel source preparation failed (exit %s): %s",
+                            child.returncode, error.read_text(
+                                encoding="utf-8", errors="replace")[-4096:])
                         raise SlicerProfileError("Parallel source mesh preparation failed.")
                     yield identity, raw, result.read_bytes()
                     source.unlink()
                     result.unlink()
                     config.unlink()
+                    error.unlink()
                 children.clear()
         try:
             yield batches()
         finally:
-            for child, _, _, _ in children:
+            for child, _, _, _, _ in children:
                 if child.poll() is None:
                     child.kill()
                 child.wait()
