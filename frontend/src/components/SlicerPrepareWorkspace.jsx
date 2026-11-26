@@ -1067,7 +1067,6 @@ export default function SlicerPrepareWorkspace({
       object.fuzzy_skin_paint?.regions?.length || object.colour_paint?.regions?.length ||
       object.variable_layer_profile?.bands?.length) &&
     !Object.keys(processOverrides||{}).length && !flushSettings &&
-    !slotFilamentProfiles.length &&
     (prusaNativeTools.mode==="xl" && !primeTower ||
       prusaNativeTools.mode==="mmu" && !!primeTower &&
       prusaNativeTools.purge_matrix?.every((row,i)=>row.every((volume,j)=>
