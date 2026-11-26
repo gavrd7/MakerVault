@@ -2427,6 +2427,16 @@ def file_gcode_layer(request, asset_id):
             raise ValueError()
     except (ValueError, TypeError):
         return _error("Choose a valid layer Z between 0 and 2000 mm.", status=400)
+    try:
+        page_start = (int(request.GET["page_start"])
+                      if "page_start" in request.GET else None)
+        if page_start is not None and (
+                str(page_start) != request.GET["page_start"]
+                or page_start < 0 or page_start > 2**53):
+            raise ValueError()
+    except (ValueError, TypeError):
+        return _error("Invalid selected-layer page.", status=400)
+    from .slicer_layer_preview import layer_batch_toolpaths
     from .slicer_layer_preview import streamed_gcode_lines
     from .slicer_resource_budget import gcode_transport_budget
     try:
@@ -2434,12 +2444,16 @@ def file_gcode_layer(request, asset_id):
             return _error("G-code exceeds available preview memory budget.", status=413)
         with asset.file.storage.open(asset.file.name, "rb") as handle:
             if asset.file.size > MAX_LAYER_SOURCE_BYTES:
-                result = exact_layer_toolpaths(streamed_gcode_lines(handle), layer_z)
+                source = streamed_gcode_lines(handle)
+                result = (layer_batch_toolpaths(source, [layer_z], page_start=page_start)["layers"][0]
+                          if page_start is not None else exact_layer_toolpaths(source, layer_z))
             else:
                 raw = handle.read(MAX_LAYER_SOURCE_BYTES + 1)
                 if b"\x00" in raw:
                     return _error("Binary G-code is not supported by this viewer.", status=400)
-                result = exact_layer_toolpaths(raw.decode("utf-8"), layer_z)
+                source = raw.decode("utf-8")
+                result = (layer_batch_toolpaths(source, [layer_z], page_start=page_start)["layers"][0]
+                          if page_start is not None else exact_layer_toolpaths(source, layer_z))
     except (UnicodeDecodeError, ValueError) as exc:
         return _error("Invalid UTF-8 or binary G-code in source.", status=400)
     except OSError:
