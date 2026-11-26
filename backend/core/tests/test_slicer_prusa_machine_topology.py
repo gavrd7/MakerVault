@@ -35,7 +35,8 @@ class PrusaMachineTopologyTests(TestCase):
             with self.subTest(count=count):
                 candidate=ini(",".join(["0.4"]*count))
                 topology=prusa_machine_topology(candidate)
-                self.assertEqual(topology["kind"],"independent_tools")
+                self.assertEqual(topology["kind"],"unqualified_toolchanger")
+                self.assertIsNone(topology["physical_nozzle_count"])
                 self.assertEqual(topology["logical_tool_count"],count)
                 self.assertTrue(topology["requires_new_toolchanger_qualification"])
                 result=validate_prusa_model_tool_order(candidate,[1,count])
