@@ -28,8 +28,11 @@ def _virtual_native_tools(job, settings, objects, kind, count, *, single_colour=
     """Resolve browser-assigned native tools without physical feeder telemetry."""
     from .slicer_prusa_tool_configuration import validate_prusa_native_tools
     config = validate_prusa_native_tools(settings["prusa_native_tools"])
-    expected = "mmu" if kind == "single_nozzle_changer" else "xl"
-    if config["mode"] != expected or config["tool_count"] != count:
+    expected = ("mmu" if kind == "single_nozzle_changer" else
+                "indx" if kind == "indx" else "xl")
+    accepted_modes = ({expected} if expected == "mmu" else
+                      {"xl", "indx"} if kind == "independent_tools" else {"indx"})
+    if config["mode"] not in accepted_modes or config["tool_count"] != count:
         raise SlicerProfileError("Native Prusa profile and selected tool architecture disagree.")
     if (settings.get("material_tool_bindings") or settings.get("slot_filament_profiles")
             or settings.get("flush_settings")
@@ -112,11 +115,11 @@ def prepare_prusa_workbench_material(job, *, settings=None):
     printer = resolved_prusa_profile(job.printer_profile)
     topology = prusa_machine_topology(printer)
     count = topology["logical_tool_count"]
-    if topology["requires_new_toolchanger_qualification"] or not 2 <= count <= 5:
-        raise SlicerProfileError("This Prusa toolchanger has not been qualified.")
+    if not 2 <= count <= (5 if topology["kind"] == "single_nozzle_changer" else 8):
+        raise SlicerProfileError("Selected Prusa profile has an invalid tool count.")
     kind = topology["kind"]
     expected = ("single_nozzle_changer" if kind == "single_nozzle_changer"
-                else "independent_toolheads" if kind == "independent_tools" else None)
+                else "independent_toolheads" if kind in ("independent_tools", "indx") else None)
     if settings.get("prusa_native_tools") is None and settings.get("material_topology") != expected:
         raise SlicerProfileError("Select the matching native Prusa material topology.")
 
@@ -125,8 +128,8 @@ def prepare_prusa_workbench_material(job, *, settings=None):
                    isinstance(objects[0],dict) and bool(
                        (objects[0].get("colour_paint") or {}).get("regions")))
     if not isinstance(objects,list) or not (
-            2<=len(objects)<=5 or single_colour):
-        raise SlicerProfileError("Prusa MMU/XL requires two to five models, or one bounded painted MMU model.")
+            2<=len(objects)<=12 or single_colour):
+        raise SlicerProfileError("Prusa native tools require two to twelve models, or one painted MMU model.")
     if single_colour and kind!="single_nozzle_changer":
         raise SlicerProfileError("Single-model Prusa facet painting is MMU-only until XL validation.")
 
@@ -277,7 +280,7 @@ def prepare_prusa_workbench_material(job, *, settings=None):
         return "mmu", result
     if settings.get("flush_settings") is not None or settings.get("prime_tower") is not None:
         raise SlicerProfileError("Prusa XL independent heads cannot use unqualified MMU flushing.")
-    return "xl", result
+    return "indx" if kind == "indx" else "xl", result
 
 
 def slice_prusa_workbench_material(job, source_models):
