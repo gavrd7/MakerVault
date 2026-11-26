@@ -1,3 +1,21 @@
+### Pinned INDX profile importer compatibility (26 November 2026)
+
+The owner-facing official INDX printer import now applies the same narrowly
+scoped PrusaSlicer 2.9.7 `toolchange_gcode` variable substitution that was
+previously available only in the separate native qualification script:
+`filament_retract_length_toolchange` becomes
+`retract_length_toolchange`. Unexpected occurrences outside that exact
+printer toolchange field are rejected instead of being silently changed.
+Source vendor identity and the pinned 2.9.7 runtime are unchanged.
+
+This is an import-compatibility fix, **not** proof of physical INDX pickup,
+calibration, printer submission or mixed painting. The required pinned
+reviewed-runtime smoke must still establish actual official INDX 8T
+model/tool attribution, MMU and XL regression behaviour before PR #199
+may be considered merge-ready.
+
+---
+
 ### Prusa native MMU purge versus INDX model deposition
 
 The native material audit now distinguishes two legitimate kinds of
