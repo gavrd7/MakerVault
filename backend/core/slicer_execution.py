@@ -809,16 +809,20 @@ def process_queued_job(job_id):
             # Every source remains owner-scoped and verified at execution time;
             # arbitrary file paths and external 3MF projects are never accepted.
             source_models = []
+            verified_sources = {}
             for item in plate:
-                asset = FileAsset.objects.filter(
-                    pk=item["asset_id"], owner_id=job.owner_id, category="mesh",
-                ).first()
-                if not asset:
-                    raise SlicerExecutionError("A source STL is no longer available.")
-                raw = _read_owned_file(asset, job.owner_id, input_model_budget(), "Plate STL")
-                if asset.sha256 and hashlib.sha256(raw).hexdigest() != asset.sha256:
-                    raise SlicerExecutionError("A plate STL has changed since import.")
-                source_models.append((item, raw))
+                asset_id = item["asset_id"]
+                if asset_id not in verified_sources:
+                    asset = FileAsset.objects.filter(
+                        pk=asset_id, owner_id=job.owner_id, category="mesh",
+                    ).first()
+                    if not asset:
+                        raise SlicerExecutionError("A source STL is no longer available.")
+                    raw = _read_owned_file(asset, job.owner_id, input_model_budget(), "Plate STL")
+                    if asset.sha256 and hashlib.sha256(raw).hexdigest() != asset.sha256:
+                        raise SlicerExecutionError("A plate STL has changed since import.")
+                    verified_sources[asset_id] = raw
+                source_models.append((item, verified_sources[asset_id]))
             if job.engine == "prusaslicer" and is_multi_test:
                 # The dedicated owner-bound MMU/XL adapter builds native 3MF
                 # directly from these verified sources below.
