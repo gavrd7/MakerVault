@@ -7,7 +7,6 @@ import os
 import subprocess
 import sys
 import tempfile
-from concurrent.futures import ThreadPoolExecutor
 from contextlib import contextmanager
 from pathlib import Path
 
@@ -24,32 +23,13 @@ def _worker_cap():
     return int(value)
 
 
-def _render_file(directory, raw):
-    with tempfile.TemporaryDirectory(dir=directory) as folder:
-        source = Path(folder) / "source.stl"
-        source.write_bytes(raw)
-        result = Path(folder) / "mesh.xml"
-        # Inherit the backend interpreter and import path, never a shell.
-        with subprocess.Popen(
-                [sys.executable, "-m", "core.slicer_parallel_geometry",
-                 str(source), str(result)],
-                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL) as child:
-            try:
-                if child.wait() != 0:
-                    raise SlicerProfileError("Parallel source mesh preparation failed.")
-                return result.read_bytes()
-            finally:
-                if child.poll() is None:
-                    child.kill()
-                    child.wait()
-
-
 @contextmanager
 def prepared_mesh_batches(sources, *, estimated_bytes_per_worker):
-    """Yield ordered batches, bounded by CPU and estimated RAM.
+    """Yield ordered meshes with bounded subprocesses and deterministic cleanup.
 
-    A single worker uses the caller's existing sequential path (None).
-    Only one batch is submitted at a time; no unbounded futures queue.
+    A single worker uses the caller's sequential path (None). The parent
+    owns all children so Celery soft timeouts can interrupt waits and reap
+    every outstanding process before temporary files are removed.
     """
     if not sources:
         yield iter(())
@@ -61,15 +41,33 @@ def prepared_mesh_batches(sources, *, estimated_bytes_per_worker):
         yield ((identity, raw, None) for identity, raw in sources)
         return
     with tempfile.TemporaryDirectory(prefix="mv-geometry-") as directory:
-        with ThreadPoolExecutor(max_workers=count) as executor:
-            def batches():
-                for start in range(0, len(sources), count):
-                    batch = sources[start:start + count]
-                    futures = [executor.submit(_render_file, directory, raw)
-                               for _, raw in batch]
-                    for (identity, raw), future in zip(batch, futures):
-                        yield identity, raw, future.result()
+        children = []
+        def batches():
+            for start in range(0, len(sources), count):
+                batch = sources[start:start + count]
+                for index, (_, raw) in enumerate(batch):
+                    source = Path(directory) / ("source-%d.stl" % index)
+                    result = Path(directory) / ("mesh-%d.xml" % index)
+                    source.write_bytes(raw)
+                    child = subprocess.Popen(
+                        [sys.executable, "-m", "core.slicer_parallel_geometry",
+                         str(source), str(result)],
+                        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                    children.append((child, source, result))
+                for (identity, raw), (child, source, result) in zip(batch, children):
+                    if child.wait() != 0:
+                        raise SlicerProfileError("Parallel source mesh preparation failed.")
+                    yield identity, raw, result.read_bytes()
+                    source.unlink()
+                    result.unlink()
+                children.clear()
+        try:
             yield batches()
+        finally:
+            for child, _, _ in children:
+                if child.poll() is None:
+                    child.kill()
+                child.wait()
 
 
 def _main():
