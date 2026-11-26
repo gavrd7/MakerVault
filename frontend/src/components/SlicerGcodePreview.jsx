@@ -220,8 +220,11 @@ export default function SlicerGcodePreview({ fileId = null, preview, bedSize = n
       } catch (error) {
         if (!cancelled && error.name!=="AbortError") {
           setWholeModel({
-            chunks:chunks.slice(),loadedLayers:completed,complete:false,
-            limited:true,loading:false,message:error.message,
+            chunks:checkpoint.chunks.slice(),loadedLayers:checkpoint.completed,
+            complete:false,limited:true,loading:false,
+            message:error instanceof TypeError && /load failed|fetch/i.test(error.message)
+              ? "Preview connection interrupted. Retry the remaining layers without restarting."
+              : error.message,
           });
         }
       }
