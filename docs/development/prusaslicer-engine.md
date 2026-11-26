@@ -1,3 +1,15 @@
+### Eight-tool native scratch isolation
+
+Each real 8T fixture candidate (plain, modified/cavity/variable-layer,
+then official CORE One INDX 8T) is sliced with a fresh output target.
+The isolated worker intentionally rejects reusing an existing
+`output.gcode` so stale output can never be mistaken for a successful
+second slice. The acceptance harness clears only its own synthetic
+output between fixture cases and performs a full worker result audit
+after each one.
+
+---
+
 ### Five-tool MMU regression alongside INDX
 
 The INDX extension does not change the native five-tool MMU firmware or
