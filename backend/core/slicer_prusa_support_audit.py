@@ -69,6 +69,7 @@ def audit_prusa_two_object_support(data, models, *, bed_width, bed_depth):
     relative_e = relative_xy = False
     role = ""
     counts = [0, 0]
+    deposited_e = [0., 0.]
     stationary = [0, 0]
     outside = 0
     for index, raw_line in enumerate(io.BytesIO(data)):
@@ -126,6 +127,7 @@ def audit_prusa_two_object_support(data, models, *, bed_width, bed_depth):
                         abs(x-old_x)+abs(y-old_y) > 1e-7):
                     if xmin-.2 <= old_x <= xmax+.2 and ymin-.2 <= old_y <= ymax+.2:
                         counts[i] += 1
+                        deposited_e[i] += delta
                     else:
                         outside += 1
                 else:
@@ -135,11 +137,13 @@ def audit_prusa_two_object_support(data, models, *, bed_width, bed_depth):
                 if old_x is not None and old_y is not None and (
                         abs(x-old_x)+abs(y-old_y) > 1e-7):
                     outside += 1
-    if counts[selected] < 50 or counts[1-selected] != 0:
+    if (counts[selected] < 2 or deposited_e[selected] <= .01
+            or counts[1-selected] != 0):
         raise ValueError("Prusa two-object support paths were not isolated to the enforcer.")
     return {
         "painted_model_index": selected,
         "painted_support_moves": counts[selected],
+        "painted_support_e_mm": round(deposited_e[selected], 3),
         "unpainted_support_moves": counts[1-selected],
         "stationary_recovery_moves": stationary,
         "outside_support_moves": outside,
