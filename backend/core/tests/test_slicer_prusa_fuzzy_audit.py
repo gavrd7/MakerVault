@@ -63,7 +63,7 @@ class PrusaTwoObjectFuzzyAuditTests(TestCase):
             e+=.025
             lines.append("G1 X10 Y0 E%.5f" % e)
         result=audit_prusa_two_object_fuzzy(
-            ("\\n".join(lines)+"\\n").encode(),models(),
+            ("\n".join(lines)+"\n").encode(),models(),
             bed_width=250,bed_depth=210)
         self.assertEqual(result["painted_short_external_moves"],120)
         self.assertEqual(result["unpainted_short_external_moves"],0)
