@@ -35,10 +35,11 @@ def validate_stl(data: bytes, *, max_triangles=MAX_STL_TRIANGLES) -> dict:
         reserve_bytes=256 * 1024 * 1024, expansion_factor=256)
     if face_budget is None:
         face_budget = MAX_STL_TRIANGLES
+    face_budget = min(face_budget, max_triangles)
     if len(data) >= 84:
         triangles = struct.unpack_from("<I", data, 80)[0]
         expected = 84 + 50 * triangles
-        if expected == len(data) and 0 < triangles <= max_triangles:
+        if expected == len(data) and 0 < triangles <= face_budget:
             finite_vertices = 0
             for record in struct.iter_unpack("<12fH", memoryview(data)[84:]):
                 if not all(math.isfinite(value) and abs(value) <= MAX_COORDINATE_MM for value in record[:12]):
@@ -84,7 +85,7 @@ def validate_stl(data: bytes, *, max_triangles=MAX_STL_TRIANGLES) -> dict:
             state = "endfacet"
         elif state == "endfacet" and lowered == "endfacet":
             faces += 1
-            if faces > max_triangles:
+            if faces > face_budget:
                 raise StlValidationError("STL triangle count exceeds limit.")
             state = "facet"
         else:
