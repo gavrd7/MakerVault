@@ -21,7 +21,12 @@ def validate_prusa_front_seam_candidate(item):
     if not isinstance(item, dict):
         raise ValueError("Prusa front seam requires one model.")
     paint=item.get("seam_paint")
-    selected=validate_semantic_paint(paint,"seam")
+    try:
+        selected=validate_semantic_paint(paint,"seam")
+    except (ValueError,TypeError) as exc:
+        raise ValueError(
+            "Prusa seam painting outside the verified front enforcer is not yet verified."
+        ) from exc
     if selected["version"]!=2 or len(selected["regions"])!=1:
         raise ValueError("Only one fingerprinted Prusa front seam region is qualified.")
     region=selected["regions"][0]
