@@ -9,7 +9,9 @@ import struct
 import zipfile
 from xml.etree import ElementTree as ET
 
-from .slicer_plate_3mf import NS, MAX_PROJECT_BYTES, MAX_TRIANGLES, MAX_SOURCE_TOTAL
+from .slicer_plate_3mf import NS
+from .slicer_resource_budget import (input_model_budget, plate_triangle_budget,
+    xml_geometry_budget, project_archive_budget, source_input_budget)
 from .slicer_prusa_plate import build_prusa_placed_stl
 from .slicer_modifier_volumes import (validate_modifier_volumes, MAX_TOTAL_MODIFIERS,
                                       assert_native_plate_volume_coverage)
@@ -48,7 +50,7 @@ def build_prusa_native_3mf(rows, *, bed_width, bed_depth):
             raise SlicerProfileError("Invalid Prusa native project object.")
         item, raw = pair
         total_bytes += len(raw)
-        if total_bytes > MAX_SOURCE_TOTAL:
+        if total_bytes > source_input_budget(upper_cap=input_model_budget()):
             raise SlicerProfileError("Prusa native project source limit exceeded.")
         overrides = item.get("process_overrides") or {}
         if not isinstance(overrides, dict) or set(overrides) - OBJECT_KEYS:
@@ -76,7 +78,7 @@ def build_prusa_native_3mf(rows, *, bed_width, bed_depth):
         baked = build_prusa_placed_stl([(geometry_item, painted_raw)], bed_width=bed_width, bed_depth=bed_depth)
         count = struct.unpack_from("<I", baked, 80)[0]
         total_faces += count
-        if total_faces > MAX_TRIANGLES:
+        if total_faces > plate_triangle_budget():
             raise SlicerProfileError("Prusa native project triangle limit exceeded.")
         obj = ET.SubElement(resources, f"{{{NS}}}object", {"id": str(index), "type": "model"})
         mesh = ET.SubElement(obj, f"{{{NS}}}mesh")
@@ -114,7 +116,7 @@ def build_prusa_native_3mf(rows, *, bed_width, bed_depth):
                 child_triangles = child.find(f"./{{{NS}}}mesh/{{{NS}}}triangles")
                 start_vertex, start_face = len(vertices), len(triangles)
                 total_faces += len(child_triangles)
-                if total_faces > MAX_TRIANGLES:
+                if total_faces > plate_triangle_budget():
                     raise SlicerProfileError("Prusa native volume triangle limit exceeded.")
                 # Prusa imports a contiguous face and vertex range per volume.
                 # Never weld vertices across independently typed volumes.
@@ -133,7 +135,7 @@ def build_prusa_native_3mf(rows, *, bed_width, bed_depth):
                     native_key = FIELDS[key][0]
                     ET.SubElement(volume, "metadata", {"type": "volume", "key": native_key, "value": native[native_key]})
     model_xml = ET.tostring(model, encoding="utf-8", xml_declaration=True)
-    if len(model_xml) > 96 * 1024 * 1024:
+    if len(model_xml) > xml_geometry_budget():
         raise SlicerProfileError("Prusa native project XML exceeds limit.")
     output = io.BytesIO()
     with zipfile.ZipFile(output, "w", compression=zipfile.ZIP_DEFLATED, allowZip64=False) as package:
@@ -144,7 +146,7 @@ def build_prusa_native_3mf(rows, *, bed_width, bed_depth):
         package.writestr("[Content_Types].xml", '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="model" ContentType="application/vnd.ms-package.3dmanufacturing-3dmodel+xml"/><Default Extension="config" ContentType="application/xml"/></Types>')
         package.writestr("_rels/.rels", '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Target="/3D/3dmodel.model" Id="rel0" Type="http://schemas.microsoft.com/3dmanufacturing/2013/01/3dmodel"/></Relationships>')
     data = output.getvalue()
-    if len(data) > MAX_PROJECT_BYTES:
+    if len(data) > project_archive_budget():
         raise SlicerProfileError("Prusa native project archive exceeds limit.")
     return data
 
