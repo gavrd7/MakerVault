@@ -136,9 +136,16 @@ def creality_command(binary: Path, workdir: Path):
     if binary.is_symlink() or not binary.is_file() or not os.access(binary, os.X_OK):
         raise WorkerError("Verified Creality Print executable is unavailable.")
     is_project = (workdir / "input.3mf").exists()
+    placed = workdir / "creality-placed-stl.marker"
+    if placed.is_symlink() or (placed.exists() and
+            (not placed.is_file() or placed.read_bytes() != b"v1")):
+        raise WorkerError("Invalid Creality placed-STL marker.")
     model = _regular_file(workdir, "input.3mf" if is_project else "input.stl", model_input_budget())
     native_project = (workdir / "creality-native-project.marker").exists()
     native_modifiers = (workdir / "native-modifier-project.marker").exists()
+    if placed.exists() and (is_project or native_project or native_modifiers or
+                            (workdir / "creality-material-map.json").exists()):
+        raise WorkerError("Creality placed-STL cannot activate native project or material mapping.")
     if native_project and native_modifiers:
         raise WorkerError("Conflicting Creality native project contracts.")
     if is_project and native_modifiers:
