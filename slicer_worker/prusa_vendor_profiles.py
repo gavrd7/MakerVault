@@ -44,7 +44,7 @@ def _decode(raw: bytes) -> str:
 
 
 def _checked_setting(key: str, value: str) -> None:
-    if not KEY.fullmatch(key) or len(value) > 16384:
+    if not KEY.fullmatch(key) or len(value) > 65536:
         raise PrusaPresetError("Prusa vendor bundle has an invalid setting.")
     if key.lower() in SCRIPT_KEYS and value.strip():
         raise PrusaPresetError("Post-processing scripts are forbidden.")
