@@ -1,3 +1,29 @@
+## 26 November — qualified four-face seam direction candidate
+
+Real pinned PrusaSlicer **2.9.7** research on the same cube and process
+profile showed that `seam_position=random` let painted seam enforcers direct
+first external-wall starts to **front, back, left and right**. For each face,
+the unpainted baseline failed the same region-specific G-code audit;
+the painted case showed **94 matching starts from 95 measured layers**.
+Other tested modes (`nearest`, `aligned`, `rear`) either failed spatial
+qualification or coincided with the unpainted baseline on some faces.
+
+The backend now recognises one fingerprint-checked, upright, unscaled,
+vertical face per single-model slice; the default front mode remains
+supported. Back/left/right automatically use `seam_position=random` in a
+**temporary resolved Prusa process profile**, leaving saved presets unchanged.
+G-code is rejected if independent native first-wall starts do not follow the
+chosen polygon. Multi-object seam paints and mixing seam with support, fuzzy,
+colour, modifiers, arbitrary object overrides or layer bands remain blocked.
+
+These newly expanded directions are **not merge-qualified** until the
+new *required* real-binary reviewed-runtime workflow proves all four
+directions against baseline in **two independent runs**, with the ordinary
+Prusa worker contract, general CI and existing engine regressions green.
+Desktop/mobile staging acceptance is still necessary.
+
+---
+
 ### Two-object support enforcers with automatic-support presets
 
 The two-object support route applies `support_material = 1` and
