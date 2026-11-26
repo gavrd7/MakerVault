@@ -127,6 +127,10 @@ def main(binary, vendor, official=None):
                 updated["modifier_volumes"]=[modifier]
             if index==1:
                 updated["modifier_volumes"]=[cavity]
+            if index==2:
+                updated["variable_layer_profile"]={
+                    "version":1,"bands":[
+                        {"from_mm":2,"to_mm":6,"layer_mm":.12}]}
             extended.append((updated,mesh))
         extended_project,_=build_prusa_multitool_candidate(
             extended,printer_ini=printer,tools=tools,bed_width=360,bed_depth=360)
@@ -134,6 +138,7 @@ def main(binary, vendor, official=None):
         with zipfile.ZipFile(io.BytesIO(extended_project)) as archive:
             config=SafeET.fromstring(archive.read("Metadata/Slic3r_PE_model.config"))
         assert sum(len(obj.findall("volume"))-1 for obj in config.findall("object"))==2
+        assert "Metadata/Prusa_Slicer_layer_config_ranges.xml" in zipfile.ZipFile(io.BytesIO(extended_project)).namelist()
         assert _qualified_topology(printer)==(8,False)
         assert validate_prusa_material_candidate(
             extended_project,printer_ini=printer,tools=tools)["objects"]==8
