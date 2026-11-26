@@ -37,7 +37,7 @@ test("progressive full-quality preview reports limited geometry separately from 
 
 
 test("progressive large prints append complete geometry without polluting exact-layer cache", () => {
-  assert.match(preview, /offset \+= batchSize/);
+  assert.match(preview, /offset \+= requested\.length/);
   assert.match(preview, /quality=full&zs=/);
   assert.match(preview, /&page_start=/);
   assert.doesNotMatch(preview, /const maxMoves = 1500000/);
