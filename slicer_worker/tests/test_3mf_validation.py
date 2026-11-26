@@ -63,7 +63,7 @@ class Core3MFWorkerTests(TestCase):
     def test_multi_object_3mf_has_separate_model_and_plate_budgets(self):
         # Two one-triangle objects verify the budget split without constructing
         # a potentially gigabyte-sized test fixture.
-        source = self.with_object_metadata({})
+        source = self.with_object_metadata({"wall_loops": "2"})
         from slicer_worker import three_mf_validation as validator
         with (patch.object(validator, "MAX_TRIANGLES", 1),
               patch.object(validator, "MAX_PLATE_TRIANGLES", 2)):
