@@ -67,7 +67,6 @@ class ResourceBudgetTests(SimpleTestCase):
 class MeshStreamingTests(SimpleTestCase):
     def test_unpainted_mesh_streams_source_facets_in_two_passes(self):
         from core import slicer_plate_3mf as plate
-        from xml.etree import ElementTree as ET
         original = plate._triangles
         invocations = []
 
