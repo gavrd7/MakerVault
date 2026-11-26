@@ -120,20 +120,21 @@ def audit_prusa_material_model_gcode(data, project, *, printer_ini, tools, tower
                 continue
             amount=params["E"] if relative else params["E"]-e
             e=e+params["E"] if relative else params["E"]
-            if (amount<=1e-6 or op not in ("G1","G01")
-                    or previous_x is None or previous_y is None
-                    or x is None or y is None
-                    or abs(x-previous_x)+abs(y-previous_y)<=1e-7):
-                # E-only recovery, retraction compensation and zero-length
-                # moves are not deposited extrusion, including after a tool
-                # change to the next INDX head at the previous model's XY.
+            if amount<=1e-6 or op not in ("G1","G01") or x is None or y is None:
                 continue
             if tower is not None and active in tower_hits:
+                # A native MMU wipe tower may purge filament at stationary
+                # XY, which *is* physical extrusion into its dedicated
+                # tower. Do not confuse legitimate tower purging with model
+                # deposition under the next selected tool.
                 if (tower_box[0]<=x<=tower_box[1] and
-                        tower_box[2]<=y<=tower_box[3] and
-                        tower_box[0]<=previous_x<=tower_box[1] and
-                        tower_box[2]<=previous_y<=tower_box[3]):
+                        tower_box[2]<=y<=tower_box[3]):
                     tower_hits[active]+=1
+            if (previous_x is None or previous_y is None
+                    or abs(x-previous_x)+abs(y-previous_y)<=1e-7):
+                # Stationary model/tool-change recovery is not a deposited
+                # model segment; model attribution requires moving XY.
+                continue
             for index,box in enumerate(bounds):
                 if (box[0]-.15<=x<=box[1]+.15 and
                         box[2]-.15<=y<=box[3]+.15 and
