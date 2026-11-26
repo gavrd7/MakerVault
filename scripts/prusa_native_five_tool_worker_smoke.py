@@ -40,7 +40,12 @@ def main(binary,vendor):
         if index in (0,1):
             obj["process_overrides"] = {
                 "wall_loops": 1 if index == 0 else 5,
-                "sparse_infill_density": 15 if index == 0 else 35,
+                "sparse_infill_density": 23,
+            }
+        if index in (2,3):
+            obj["process_overrides"] = {
+                "wall_loops": 3,
+                "sparse_infill_density": 10 if index == 2 else 55,
             }
         rows.append((obj,cube(size=8)))
     tools=[1,2,3,4,5]
@@ -99,6 +104,10 @@ def main(binary,vendor):
             "require_distinct_object_wall_counts"](output,project,tools)
         print("Research: Prusa native per-object wall deposition",
               perimeters,flush=True)
+        infill=runpy.run_path("/tmp/prusa_object_wall.py")[
+            "require_distinct_object_infill"](output,project,tools)
+        print("Research: Prusa native per-object sparse infill deposition",
+              infill,flush=True)
         assert len(receipt["tower_extrusion_moves"])==5
         print("PASS: five MMU tools selected and deposited correct material on five models",
               receipt,"sha256",hashlib.sha256(output).hexdigest(),flush=True)
