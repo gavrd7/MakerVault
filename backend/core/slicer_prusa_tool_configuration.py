@@ -15,7 +15,7 @@ def validate_prusa_native_tools(raw):
             "model_tools", "purge_matrix"}:
         raise SlicerProfileError("Invalid Prusa native tool configuration.")
     count = raw["tool_count"]
-    if raw["version"] != 1 or type(count) is not int or not 2 <= count <= 5 or (
+    if type(raw["version"]) is not int or raw["version"] != 1 or type(count) is not int or not 2 <= count <= 5 or (
             raw["mode"] not in ("mmu", "xl")):
         raise SlicerProfileError("Unsupported Prusa native tool configuration.")
     filaments = raw["filament_profile_ids"]
