@@ -152,6 +152,31 @@ class PrusaOfflineMmuPreflightTests(TestCase):
             for meta in obj.findall("metadata") if meta.get("key")=="extruder"]
         self.assertEqual(selected,["5","3","1","2","4"])
 
+    def test_five_independent_xl_heads_preserve_explicit_tool_order(self):
+        values,assets=self.parts()
+        assets[0]=ini("0.4,0.4,0.4,0.4,0.4","0")
+        xl={key:values[key] for key in (
+            "owner_id","printer_profile","process_profile","filament_profiles",
+            "rows","tools","bed_width","bed_depth")}
+        xl["rows"]=[(item(x_mm=x),cube()) for x in (-88,-44,0,44,88)]
+        xl["tools"]=[5,3,1,2,4]
+        xl["bed_width"]=360
+        xl["bed_depth"]=360
+        with patch("core.slicer_prusa_material_preflight.resolved_prusa_profile",
+                   side_effect=assets):
+            result=prepare_prusa_offline_xl_candidate(**xl)
+        self.assertEqual(result["expected_tools"],(1,2,3,4,5))
+        self.assertEqual(result["topology"],"independent_tools")
+        with zipfile.ZipFile(io.BytesIO(result["model"])) as archive:
+            from defusedxml import ElementTree as SafeET
+            self.assertNotIn("Metadata/Prusa_Slicer_wipe_tower_information.xml",
+                             archive.namelist())
+            model=SafeET.fromstring(archive.read("Metadata/Slic3r_PE_model.config"))
+        selected=[
+            meta.get("value") for obj in model.findall("object")
+            for meta in obj.findall("metadata") if meta.get("key")=="extruder"]
+        self.assertEqual(selected,["5","3","1","2","4"])
+
     def test_ephemeral_owned_mmu_executor_audits_worker_result(self):
         remote, scope = self.offline_worker_stub()
         scope.start()
