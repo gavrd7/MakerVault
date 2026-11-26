@@ -11,6 +11,7 @@ from pathlib import Path
 import sys
 import tempfile
 import uuid
+import subprocess
 import io
 import zipfile
 from defusedxml import ElementTree as SafeET
@@ -23,7 +24,7 @@ from slicer_worker.prusa_material_validation import validate_prusa_material_cand
 from slicer_worker.prusa_vendor_profiles import (
     flatten_prusa_vendor_preset, validate_flat_prusa_preset)
 from slicer_worker.service import _decode_payload
-from slicer_worker.runner import run_prusa
+from slicer_worker.runner import run_prusa, prusa_command, WorkerError
 from slicer_worker.prusa_material_gcode_audit import audit_prusa_material_model_gcode
 
 
@@ -202,7 +203,20 @@ def main(binary, vendor, official=None):
             (folder/"input.3mf").write_bytes(official_project)
             (folder/"printer.ini").write_bytes(selected)
             (folder/"output.gcode").unlink()
-            run_prusa(Path(binary),folder)
+            try:
+                run_prusa(Path(binary),folder)
+            except WorkerError:
+                # Controlled upstream CLI fixture only: expose bounded native
+                # stderr to diagnose official INDX preset compatibility.
+                (folder/"output.gcode").unlink(missing_ok=True)
+                proc=subprocess.run(
+                    prusa_command(Path(binary),folder),cwd=folder,
+                    stdout=subprocess.PIPE,stderr=subprocess.PIPE,
+                    text=True,timeout=150,check=False)
+                print("Official INDX CLI exit",proc.returncode,
+                      "stdout",proc.stdout[-1400:],
+                      "stderr",proc.stderr[-2800:],flush=True)
+                raise
             observed_official=audit_prusa_material_model_gcode(
                 (folder/"output.gcode").read_bytes(),official_project,
                 printer_ini=selected,tools=tools)
