@@ -31,22 +31,46 @@ def _same_heights(a, b):
 
 
 def cached_batch(index_key, heights):
-    """Return a matching complete cached 64-layer block or None."""
+    """Return exactly the requested complete layer range from cached blocks.
+
+    A mobile client may request smaller batches than the 64-layer cache
+    layout. Cached entries must not return extra layers or require page
+    alignment, and requests crossing a cache boundary must remain valid.
+    """
     try:
+        if not heights:
+            return None
         manifest = cache.get(index_key + ":manifest")
         if not isinstance(manifest, list) or not manifest:
             return None
         first = round(heights[0], 3)
-        # Heights are sorted as originally reported by the slicer analysis.
         start = next((i for i, value in enumerate(manifest)
                       if round(value, 3) == first), -1)
-        if start < 0 or start % MAX_BATCH_LAYERS or not _same_heights(
+        if start < 0 or not _same_heights(
                 manifest[start:start + len(heights)], heights):
             return None
-        packed = cache.get(index_key + ":batch:" + str(start // MAX_BATCH_LAYERS))
-        if packed is None:
+        selected = []
+        template = None
+        end = start + len(heights)
+        for block_start in range(
+                start // MAX_BATCH_LAYERS * MAX_BATCH_LAYERS,
+                end, MAX_BATCH_LAYERS):
+            packed = cache.get(
+                index_key + ":batch:" + str(block_start // MAX_BATCH_LAYERS))
+            if packed is None:
+                return None
+            payload = json.loads(zlib.decompress(packed))
+            block = payload.get("layers")
+            if not isinstance(block, list):
+                return None
+            if template is None:
+                template = payload
+            first_index = max(start, block_start) - block_start
+            last_index = min(end, block_start + len(block)) - block_start
+            selected.extend(block[first_index:last_index])
+        if len(selected) != len(heights) or template is None:
             return None
-        return json.loads(zlib.decompress(packed))
+        return {**template, "layers": selected}
     except Exception:
         # A cache outage or corrupt cached blob must not interrupt preview.
         return None
