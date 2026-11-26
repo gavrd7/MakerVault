@@ -582,7 +582,7 @@ def queue_draft(job_id, user):
                 pk__in=[item["asset_id"] for item in plate],
                 owner_id=job.owner_id, category="mesh")}
             try:
-                validate_plate_collisions([(
+                validate_plate_collisions((
                     item, _read_owned_file(owned[str(item["asset_id"])],
                                            job.owner_id, MAX_INPUT, "Plate STL")
                 ) for item in plate])
