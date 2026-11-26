@@ -1,7 +1,7 @@
 """Prusa native multi-object toolpath audit for *offline* qualification only.
 
-Uses real 3MF model vertices for tool-local positive E deposition rather than
-T commands or the G-code header alone. Purge tower/physical transfer validation
+Uses real 3MF model vertices for moving XY positive-E deposition rather than
+T commands, E-only toolchange recovery or the G-code header alone. Purge tower/physical transfer validation
 is a separate gate. No production caller is enabled here.
 """
 import io
@@ -73,6 +73,7 @@ def audit_prusa_material_model_gcode(data, project, *, printer_ini, tools, tower
     active=None
     e=0.
     relative=False
+    relative_xy=False
     x=y=None
     used=set()
     for line in lines:
@@ -88,7 +89,7 @@ def audit_prusa_material_model_gcode(data, project, *, printer_ini, tools, tower
                 raise WorkerError("Unexpected native Prusa material tool.")
             used.add(active)
             continue
-        if op not in ("M82","M83","G92","G0","G00","G1","G01"):
+        if op not in ("M82","M83","G90","G91","G92","G0","G00","G1","G01"):
             continue
         params={k.upper():float(v) for k,v in WORD.findall(cmd)}
         if any(not math.isfinite(v) or abs(v)>1e9 for v in params.values()):
@@ -97,23 +98,47 @@ def audit_prusa_material_model_gcode(data, project, *, printer_ini, tools, tower
             relative=False
         elif op=="M83":
             relative=True
+        elif op=="G90":
+            relative_xy=False
+        elif op=="G91":
+            relative_xy=True
         elif op=="G92":
             e=params.get("E",e)
-        else:
             x=params.get("X",x)
             y=params.get("Y",y)
+        else:
+            previous_x,previous_y=x,y
+            if relative_xy:
+                x=x+params["X"] if x is not None and "X" in params else (
+                    None if "X" in params else x)
+                y=y+params["Y"] if y is not None and "Y" in params else (
+                    None if "Y" in params else y)
+            else:
+                x=params.get("X",x)
+                y=params.get("Y",y)
             if "E" not in params:
                 continue
             amount=params["E"] if relative else params["E"]-e
             e=e+params["E"] if relative else params["E"]
-            if amount<=1e-6 or op not in ("G1","G01") or x is None or y is None:
+            if (amount<=1e-6 or op not in ("G1","G01")
+                    or previous_x is None or previous_y is None
+                    or x is None or y is None
+                    or abs(x-previous_x)+abs(y-previous_y)<=1e-7):
+                # E-only recovery, retraction compensation and zero-length
+                # moves are not deposited extrusion, including after a tool
+                # change to the next INDX head at the previous model's XY.
                 continue
             if tower is not None and active in tower_hits:
                 if (tower_box[0]<=x<=tower_box[1] and
-                        tower_box[2]<=y<=tower_box[3]):
+                        tower_box[2]<=y<=tower_box[3] and
+                        tower_box[0]<=previous_x<=tower_box[1] and
+                        tower_box[2]<=previous_y<=tower_box[3]):
                     tower_hits[active]+=1
             for index,box in enumerate(bounds):
-                if box[0]-.15<=x<=box[1]+.15 and box[2]-.15<=y<=box[3]+.15:
+                if (box[0]-.15<=x<=box[1]+.15 and
+                        box[2]-.15<=y<=box[3]+.15 and
+                        box[0]-.15<=previous_x<=box[1]+.15 and
+                        box[2]-.15<=previous_y<=box[3]+.15):
                     if active==tools[index]-1:
                         correct[index]+=1
                     else:
