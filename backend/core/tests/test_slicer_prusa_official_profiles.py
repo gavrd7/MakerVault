@@ -76,6 +76,44 @@ class PrusaOfficialModelDiscoveryTests(SimpleTestCase):
                     self.assertIn(b"layer_height = 0.2", raw)
                     self.assertIn(b"fill_density = 20%", raw)
 
+    @patch("core.slicer_prusa_official_profiles.requests.get")
+    def test_updated_official_indx_vendor_is_pinned_and_importable(self, get):
+        from core.slicer_prusa_official_profiles import available_prusa_vendors
+        from core.slicer_prusa_machine_topology import prusa_machine_topology
+        class Updated:
+            status_code = 200
+            headers = {"Content-Length": "400"}
+            def iter_content(self, chunk_size):
+                yield (b"[printer:*base*]\\nprinter_technology = FFF\\n"
+                       b"bed_shape = 0x0,250x0,250x210,0x210\\n"
+                       b"nozzle_diameter = 0.4,0.4,0.4,0.4,0.4,0.4,0.4,0.4\\n"
+                       b"single_extruder_multi_material = 0\\n"
+                       b"binary_gcode = 1\\n"
+                       b"[printer:Prusa CORE One INDX - 8T]\\n"
+                       b"inherits = *base*\\n")
+            def close(self):
+                pass
+        get.return_value = Updated()
+        self.assertTrue(any(v["id"] == "PrusaResearchINDX"
+                            for v in available_prusa_vendors()))
+        selection = search_prusa_profiles(
+            "INDX", "printer", vendor="PrusaResearchINDX")
+        self.assertEqual(selection["total_matches"], 1)
+        self.assertEqual(selection["profiles"][0]["sub_path"],
+                         "PrusaResearchINDX.ini")
+        self.assertEqual(selection["ref"],
+                         "058c542282d5a512dcc73fc8be9288fc253ddcfd")
+        raw = fetch_prusa_profile("printer", "Prusa CORE One INDX - 8T",
+                                  "PrusaResearchINDX.ini", vendor="PrusaResearchINDX")
+        self.assertEqual(prusa_machine_topology(raw)["kind"], "indx")
+        self.assertIn(b"binary_gcode = 0", raw)
+        self.assertIn("PrusaResearch/2.5.16.ini", get.call_args.args[0])
+        self.assertIn("058c542282d5a512dcc73fc8be9288fc253ddcfd",
+                      get.call_args.args[0])
+        with self.assertRaises(OfficialProfileError):
+            fetch_prusa_profile("printer", "Prusa CORE One INDX - 8T",
+                                "PrusaResearch.ini", vendor="PrusaResearchINDX")
+
     @patch("core.slicer_prusa_official_profiles.requests.get", return_value=_Response())
     def test_internal_parents_hidden_from_search(self, get):
         rows = search_prusa_profiles("", "printer")
