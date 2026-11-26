@@ -1055,16 +1055,27 @@ export default function SlicerPrepareWorkspace({
   const materialRoutingPending = requiredMultiSlots.length > 1
     ? !(multiMaterialReadyForExport || crealityTwoStlReady || crealityPaintReady)
     : assignedSlots.length > 0 ? !(hasSingleSlot && singleSlotProfileMatches) : false;
+  const prusaPaintedSlots=[...new Set(objects.flatMap(object=>
+    object.colour_paint?.regions?.map(region=>region.slot)||[]))];
+  const prusaSinglePaint=activeEngine==="prusaslicer" && objects.length===1 &&
+    prusaPaintedSlots.length===1 && prusaNativeTools?.mode==="mmu" &&
+    prusaNativeTools?.model_tools?.length===1 &&
+    prusaNativeTools.model_tools[0].instance_id===objects[0].instance_id &&
+    prusaNativeTools.model_tools[0].tool===1 &&
+    prusaNativeTools?.colour_tools?.length===1 &&
+    prusaNativeTools.colour_tools[0].slot===prusaPaintedSlots[0] &&
+    prusaNativeTools.colour_tools[0].tool>=2 &&
+    prusaNativeTools.colour_tools[0].tool<=prusaNativeTools.tool_count;
   const prusaNativeReady = activeEngine === "prusaslicer" && prusaNativeTools != null &&
     prusaNativeTools.version===1 && prusaNativeTools.filament_profile_ids?.length===prusaNativeTools.tool_count &&
     prusaNativeTools.filament_profile_ids.every(id=>filamentProfiles.some(profile=>
       String(profile.id)===String(id) && profile.engine==="prusaslicer" &&
       profile.engine_version===activeEngineVersion && profile.kind==="filament")) &&
     prusaNativeTools.filament_profile_ids.includes(selectedProfiles?.filament_id) &&
-    objects.length>=2 && objects.length<=5 &&
+    ((objects.length>=2 && objects.length<=5) || prusaSinglePaint) &&
     prusaNativeTools.model_tools?.length===objects.length &&
     objects.every(object=>prusaNativeTools.model_tools?.some(row=>row.instance_id===object.instance_id)) &&
-    new Set(prusaNativeTools.model_tools.map(row=>row.tool)).size>=2 &&
+    (prusaSinglePaint || new Set(prusaNativeTools.model_tools.map(row=>row.tool)).size>=2) &&
     !objects.some(object=>object.material_slot ||
       (object.process_overrides != null &&
         (typeof object.process_overrides !== "object" ||
@@ -1073,7 +1084,8 @@ export default function SlicerPrepareWorkspace({
            !["wall_loops","sparse_infill_density"].includes(key)))) ||
       object.modifier_volumes?.length ||
       object.support_paint?.regions?.length || object.seam_paint?.regions?.length ||
-      object.fuzzy_skin_paint?.regions?.length || object.colour_paint?.regions?.length ||
+      object.fuzzy_skin_paint?.regions?.length ||
+      (object.colour_paint?.regions?.length && !prusaSinglePaint) ||
       object.variable_layer_profile?.bands?.length) &&
     Object.keys(processOverrides||{}).every(key=>[
       "layer_height","wall_loops","top_shell_layers",
@@ -1100,7 +1112,8 @@ export default function SlicerPrepareWorkspace({
   const crealityExperimentalPaintReason = crealityExperimentalPaint && !crealityPaintReady
     ? "Creality experimental painting currently requires one colour-painted model with two assigned native CFS filament profiles; single-colour and two-model projects can save these edits but cannot slice them yet."
     : "";
-  const paintedNativeReady = multiMaterialReadyForExport || crealityPaintReady;
+  const paintedNativeReady = multiMaterialReadyForExport || crealityPaintReady ||
+    (activeEngine==="prusaslicer" && prusaSinglePaint && prusaNativeReady);
   const hasPaintedColours = usedNativeFeatures([{objects}]).includes("colour_paint");
   const paintingRoutingNotice = hasPaintedColours && !paintedNativeReady
     ? !(activeEngine === "orcaslicer" && activeEngineVersion === "2.5.0") && activeEngine !== "crealityprint"
@@ -1143,8 +1156,8 @@ export default function SlicerPrepareWorkspace({
           ". Restore them to the imported native process defaults or save this draft."
         : objects.some(row=>row.material_slot)
         ? "Prusa virtual tools use native T0–T4 assignments, not printer filament bays. Clear the models' physical slot assignments."
-        : objects.length<2 || objects.length>5
-        ? "Prusa MMU/XL offline native slicing currently needs two to five independently assigned models."
+        : (objects.length<2 || objects.length>5) && !prusaSinglePaint
+        ? "Prusa MMU/XL requires two to five separate tool-assigned models, or one verified front-painted MMU model with T0 base."
         : "Complete the Prusa native tool editor, assign all model tools and owned filament presets, and specify an MMU tower and purge matrix when required."
       : "";
   const sliceBlockReason = draftBlockReason ||
