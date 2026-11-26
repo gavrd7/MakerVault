@@ -1070,7 +1070,10 @@ export default function SlicerPrepareWorkspace({
       object.support_paint?.regions?.length || object.seam_paint?.regions?.length ||
       object.fuzzy_skin_paint?.regions?.length || object.colour_paint?.regions?.length ||
       object.variable_layer_profile?.bands?.length) &&
-    !Object.keys(processOverrides||{}).length && !flushSettings &&
+    Object.keys(processOverrides||{}).every(key=>[
+      "layer_height","wall_loops","top_shell_layers",
+      "bottom_shell_layers","sparse_infill_density"
+    ].includes(key)) && !flushSettings &&
     (prusaNativeTools.mode==="xl" && !primeTower ||
       prusaNativeTools.mode==="mmu" && !!primeTower &&
       prusaNativeTools.purge_matrix?.every((row,i)=>row.every((volume,j)=>
