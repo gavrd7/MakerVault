@@ -30,6 +30,21 @@ class PrusaMachineTopologyTests(TestCase):
                 self.assertEqual(xl["kind"], "independent_tools")
                 self.assertEqual(xl["physical_nozzle_count"], n)
 
+    def test_eight_logical_indx_tools_are_parsed_but_not_runtime_approved(self):
+        for count in (6,7,8):
+            with self.subTest(count=count):
+                candidate=ini(",".join(["0.4"]*count))
+                topology=prusa_machine_topology(candidate)
+                self.assertEqual(topology["kind"],"independent_tools")
+                self.assertEqual(topology["logical_tool_count"],count)
+                self.assertTrue(topology["requires_new_toolchanger_qualification"])
+                result=validate_prusa_model_tool_order(candidate,[1,count])
+                self.assertEqual(result["selected_tools"],(1,count))
+        # The 8-tool generic parser is not authorisation for an MMU with
+        # eight virtual materials or for a Prusa 2.9.7 INDX worker job.
+        with self.assertRaises(ValueError):
+            prusa_machine_topology(ini(",".join(["0.4"]*8),"1"))
+
     def test_explicit_native_tool_assignment_rejects_out_of_range(self):
         raw = ini("0.4,0.4,0.4,0.4,0.4", "1")
         result = validate_prusa_model_tool_order(raw, [1, 2])
@@ -44,7 +59,8 @@ class PrusaMachineTopologyTests(TestCase):
             ini("0.4", "1"),
             ini("0.4,0.4", "unknown"),
             ini("0.4,NaN"),
-            ini("0.4,0.4,0.4,0.4,0.4,0.4"),
+            ini(",".join(["0.4"]*9)),
+            ini(",".join(["0.4"]*8),"1"),
             ini("0.4,0.4", "0", binary_gcode="1"),
         ):
             with self.subTest(raw=raw), self.assertRaises(ValueError):
