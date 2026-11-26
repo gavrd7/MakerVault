@@ -107,6 +107,8 @@ def main(binary, vendor, directory, seam_mode=None):
             else:
                 print("UNQUALIFIED native seam direction", seam_mode or "profile-default", name,
                       "baseline also satisfies the painted patch")
+        if seam_mode == "random" and set(verified) != set(names):
+            raise AssertionError("Random-mode Prusa seam painting did not independently qualify every face.")
         if len(verified) < 2:
             raise AssertionError("No independent pair of painted Prusa seam directions has real spatial proof.")
         print("PASS: native Prusa seam painting directed independently:", verified)
