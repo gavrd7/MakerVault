@@ -135,10 +135,12 @@ def creality_command(binary: Path, workdir: Path):
     if binary.is_symlink() or not binary.is_file() or not os.access(binary, os.X_OK):
         raise WorkerError("Verified Creality Print executable is unavailable.")
     is_project = (workdir / "input.3mf").exists()
-    model = _regular_file(workdir, "input.3mf" if is_project else "input.stl", MAX_MODEL_BYTES)
+    placed = workdir / "creality-placed-stl.marker"
+    model = _regular_file(workdir, "input.3mf" if is_project else "input.stl",
+                          84 + 50 * 1_500_000 if placed.is_file() and not placed.is_symlink()
+                          else MAX_MODEL_BYTES)
     native_project = (workdir / "creality-native-project.marker").exists()
     native_modifiers = (workdir / "native-modifier-project.marker").exists()
-    placed = workdir / "creality-placed-stl.marker"
     if placed.is_symlink() or (placed.exists() and
             (not placed.is_file() or placed.read_bytes() != b"v1")):
         raise WorkerError("Invalid Creality placed-STL marker.")
