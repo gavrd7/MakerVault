@@ -65,9 +65,11 @@ def _render_mesh(raw, element, support_paint=None, seam_paint=None, fuzzy_skin_p
     source_count = 0
     minimum = [math.inf, math.inf, math.inf]
     maximum = [-math.inf, -math.inf, -math.inf]
+    # Snapshot once per mesh, not once per facet (each budget reads procfs/cgroups).
+    triangle_budget = plate_triangle_budget()
     for tri in triangles:
         source_count += 1
-        if source_count > plate_triangle_budget():
+        if source_count > triangle_budget:
             raise SlicerProfileError("STL triangle count exceeds the 3MF plate limit.")
         for point in tri:
             for axis in range(3):
