@@ -1,3 +1,17 @@
+### INDX 2.9.7 placeholder compatibility research
+
+The official INDX 2.5.16 vendor preset contains a
+`filament_retract_length_toolchange[next_extruder]` placeholder in its
+native `toolchange_gcode`, which is undefined in pinned 2.9.7
+(`retract_length_toolchange` is the corresponding 2.9.7 native option).
+A controlled, temporary 8T native CLI candidate is comparing the exact
+Prusa-provided toolchange script after substituting only that variable
+name, without omitting docking, heating, extrusion or motion commands.
+This does **not** qualify the modified preset until the pinned 2.9.7
+real-G-code worker and spatial T0–T7 attribution both pass.
+
+---
+
 ### Official INDX 8T native CLI compatibility diagnosis
 
 The official INDX vendor bundle has passed immutable-source and
