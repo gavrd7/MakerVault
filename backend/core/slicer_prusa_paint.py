@@ -78,8 +78,8 @@ def audit_prusa_support_enforcer_gcode(data):
     """Require actual moving positive-E paths with a Prusa support role.
 
     Stationary retract recovery, priming and a role comment alone do not
-    demonstrate deposited support. Track travel position, absolute/relative E
-    and G92 resets before counting supported XY extrusion.
+    demonstrate deposited support. Track travel position, absolute/relative XY
+    and E, G92 resets and exact support roles before counting XY extrusion.
     """
     import io
 
@@ -87,6 +87,7 @@ def audit_prusa_support_enforcer_gcode(data):
         raise ValueError("Invalid Prusa support G-code.")
     role = ""
     relative = False
+    relative_xy = False
     e = 0.
     x = y = None
     moves = 0
@@ -104,7 +105,7 @@ def audit_prusa_support_enforcer_gcode(data):
         if not cmd:
             continue
         opcode = cmd.split(None, 1)[0].upper()
-        if opcode not in ("M82", "M83", "G92", "G0", "G00", "G1", "G01"):
+        if opcode not in ("M82", "M83", "G90", "G91", "G92", "G0", "G00", "G1", "G01"):
             continue
         words = {key.upper(): float(value) for key, value in _WORD.findall(cmd)}
         if any(not math.isfinite(v) for v in words.values()):
@@ -113,14 +114,22 @@ def audit_prusa_support_enforcer_gcode(data):
             relative = False
         elif opcode == "M83":
             relative = True
+        elif opcode == "G90":
+            relative_xy = False
+        elif opcode == "G91":
+            relative_xy = True
         elif opcode == "G92":
             e = words.get("E", e)
             x = words.get("X", x)
             y = words.get("Y", y)
         else:
             old_x, old_y = x, y
-            x = words.get("X", x)
-            y = words.get("Y", y)
+            if relative_xy:
+                x = (x + words["X"]) if x is not None and "X" in words else (None if "X" in words else x)
+                y = (y + words["Y"]) if y is not None and "Y" in words else (None if "Y" in words else y)
+            else:
+                x = words.get("X", x)
+                y = words.get("Y", y)
             if "E" not in words:
                 continue
             delta = words["E"] if relative else words["E"] - e
@@ -129,7 +138,8 @@ def audit_prusa_support_enforcer_gcode(data):
                       and x is not None and y is not None
                       and abs(x-old_x)+abs(y-old_y) > 1e-7)
             if (opcode in ("G1", "G01") and moving and delta > 1e-6
-                    and "support" in role):
+                    and role in ("support material", "support material interface",
+                                 "support", "support interface")):
                 total += delta
                 moves += 1
     if moves < 2 or total <= .01:
