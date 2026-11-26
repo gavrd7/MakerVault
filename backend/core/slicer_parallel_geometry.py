@@ -5,6 +5,7 @@ Celery's daemon workers. Inputs and outputs are private temporary files.
 """
 import os
 import json
+import fcntl
 import shutil
 import subprocess
 import sys
@@ -16,6 +17,9 @@ from .slicer_profiles import SlicerProfileError
 from .slicer_resource_budget import preparation_worker_count
 
 
+_MIN_PARALLEL_INPUT_BYTES = 512 * 1024
+
+
 def _worker_cap():
     value = os.environ.get("MAKERVAULT_SLICER_PREPARATION_WORKERS", "").strip()
     if not value:
@@ -23,6 +27,39 @@ def _worker_cap():
     if not value.isdecimal() or int(value) < 1:
         raise SlicerProfileError("Invalid slicer preparation worker setting.")
     return int(value)
+
+
+# These advisory slots coordinate independent Celery job processes within
+# the same backend container. Kernel locks are released after worker crashes.
+@contextmanager
+def _local_parallel_slots(requested):
+    if requested < 2:
+        yield 1
+        return
+    slots = []
+    try:
+        directory = Path(tempfile.gettempdir()) / "makervault-geometry-slots"
+        directory.mkdir(mode=0o700, exist_ok=True)
+        # The allocator has already capped this request by effective CPU
+        # quota/affinity. Reserve only that many physical parallel slots.
+        for index in range(max(1, os.cpu_count() or 1)):
+            if len(slots) == requested:
+                break
+            filename = directory / ("slot-%d.lock" % index)
+            fd = os.open(filename, os.O_CREAT | os.O_RDWR | os.O_NOFOLLOW, 0o600)
+            try:
+                fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                slots.append(fd)
+            except BlockingIOError:
+                os.close(fd)
+        yield len(slots) if len(slots) >= 2 else 1
+    except OSError:
+        # If locking is unavailable, avoid launching uncoordinated children.
+        yield 1
+    finally:
+        for fd in slots:
+            fcntl.flock(fd, fcntl.LOCK_UN)
+            os.close(fd)
 
 
 @contextmanager
@@ -41,68 +78,71 @@ def prepared_mesh_batches(sources, *, estimated_bytes_per_worker, mode="mesh"):
     count = preparation_worker_count(
         independent_tasks=len(sources),
         bytes_per_worker=estimated_bytes_per_worker, max_workers=_worker_cap())
-    # Avoid subprocess startup on tiny plates and avoid exhausting temp storage.
-    # Explicit tests can still exercise the subprocess path with larger inputs.
+    # Starting several interpreters is slower than direct handling of tiny
+    # source meshes. This is a scheduling threshold, not a geometry cap.
+    if sum(len(entry[1]) for entry in sources) < _MIN_PARALLEL_INPUT_BYTES:
+        count = 1
     if count > 1 and shutil.disk_usage(tempfile.gettempdir()).free < (
             estimated_bytes_per_worker * count):
         count = 1
-    if count == 1:
-        yield ((entry[0], entry[1], None) for entry in sources)
-        return
-    with tempfile.TemporaryDirectory(prefix="mv-geometry-") as directory:
-        children = []
-        def batches():
-            for start in range(0, len(sources), count):
-                batch = sources[start:start + count]
-                for index, entry in enumerate(batch):
-                    raw = entry[1]
-                    options = entry[2] if len(entry) > 2 else {}
-                    source = Path(directory) / ("source-%d.stl" % index)
-                    result = Path(directory) / ("mesh-%d.out" % index)
-                    config = Path(directory) / ("config-%d.json" % index)
-                    options = dict(options)
-                    if mode == "mesh" and options.get("colour_tool_indices") is not None:
-                        options["colour_tool_indices"] = list(options["colour_tool_indices"].items())
-                    config.write_text(json.dumps(options), encoding="utf-8")
-                    source.write_bytes(raw)
-                    # Parent fixture scripts can add backend/ to sys.path without
-                    # exporting PYTHONPATH. Explicitly propagate the package root
-                    # so exec-based children work from any caller working directory.
-                    package_root = str(Path(__file__).resolve().parent.parent)
-                    env = dict(os.environ)
-                    env["PYTHONPATH"] = os.pathsep.join(
-                        [package_root, env.get("PYTHONPATH", "")]).rstrip(os.pathsep)
-                    error = Path(directory) / ("error-%d.log" % index)
-                    with error.open("wb") as stderr:
-                        child = subprocess.Popen(
-                            [sys.executable, "-m", "core.slicer_parallel_geometry",
-                             mode, str(source), str(result), str(config)],
-                            stdout=subprocess.DEVNULL, stderr=stderr, env=env)
-                    children.append((child, source, result, config, error))
-                for entry, (child, source, result, config, error) in zip(batch, children):
-                    identity, raw = entry[:2]
-                    if child.wait() != 0:
-                        # Diagnostic stays in server logs and never includes
-                        # model contents or arbitrary input file paths.
-                        import logging
-                        logging.getLogger(__name__).error(
-                            "Parallel source preparation failed (exit %s): %s",
-                            child.returncode, error.read_text(
-                                encoding="utf-8", errors="replace")[-4096:])
-                        raise SlicerProfileError("Parallel source mesh preparation failed.")
-                    yield identity, raw, result.read_bytes()
-                    source.unlink()
-                    result.unlink()
-                    config.unlink()
-                    error.unlink()
-                children.clear()
-        try:
-            yield batches()
-        finally:
-            for child, _, _, _, _ in children:
-                if child.poll() is None:
-                    child.kill()
-                child.wait()
+    with _local_parallel_slots(count) as count:
+        if count == 1:
+            yield ((entry[0], entry[1], None) for entry in sources)
+            return
+        with tempfile.TemporaryDirectory(prefix="mv-geometry-") as directory:
+            children = []
+            def batches():
+                for start in range(0, len(sources), count):
+                    batch = sources[start:start + count]
+                    for index, entry in enumerate(batch):
+                        raw = entry[1]
+                        options = entry[2] if len(entry) > 2 else {}
+                        source = Path(directory) / ("source-%d.stl" % index)
+                        result = Path(directory) / ("mesh-%d.out" % index)
+                        config = Path(directory) / ("config-%d.json" % index)
+                        options = dict(options)
+                        if mode == "mesh" and options.get("colour_tool_indices") is not None:
+                            options["colour_tool_indices"] = list(options["colour_tool_indices"].items())
+                        config.write_text(json.dumps(options), encoding="utf-8")
+                        source.write_bytes(raw)
+                        # Parent fixture scripts can add backend/ to sys.path without
+                        # exporting PYTHONPATH. Explicitly propagate the package root
+                        # so exec-based children work from any caller working directory.
+                        package_root = str(Path(__file__).resolve().parent.parent)
+                        env = dict(os.environ)
+                        env["PYTHONPATH"] = os.pathsep.join(
+                            [package_root, env.get("PYTHONPATH", "")]).rstrip(os.pathsep)
+                        error = Path(directory) / ("error-%d.log" % index)
+                        with error.open("wb") as stderr:
+                            child = subprocess.Popen(
+                                [sys.executable, "-m", "core.slicer_parallel_geometry",
+                                 mode, str(source), str(result), str(config)],
+                                stdout=subprocess.DEVNULL, stderr=stderr, env=env)
+                        children.append((child, source, result, config, error))
+                    for entry, (child, source, result, config, error) in zip(batch, children):
+                        identity, raw = entry[:2]
+                        if child.wait() != 0:
+                            # Diagnostic stays in server logs and never includes
+                            # model contents or arbitrary input file paths.
+                            import logging
+                            logging.getLogger(__name__).error(
+                                "Parallel source preparation failed (exit %s): %s",
+                                child.returncode, error.read_text(
+                                    encoding="utf-8", errors="replace")[-4096:])
+                            raise SlicerProfileError("Parallel source mesh preparation failed.")
+                        yield identity, raw, result.read_bytes()
+                        source.unlink()
+                        result.unlink()
+                        config.unlink()
+                        error.unlink()
+                    children.clear()
+            try:
+                yield batches()
+            finally:
+                for child, _, _, _, _ in children:
+                    if child.poll() is None:
+                        child.kill()
+                    child.wait()
 
 
 def _main():
