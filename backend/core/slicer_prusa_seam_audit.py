@@ -103,7 +103,7 @@ def audit_prusa_seam_enforcer_gcode(data, item, *, bed_width, bed_depth):
     except (ValueError, TypeError, UnicodeDecodeError, OverflowError):
         raise ValueError("Prusa seam enforcer geometry or text is invalid.") from None
     pos = {"X": None, "Y": None, "Z": None}
-    e, relative, role, captured = 0., False, "", False
+    e, relative, relative_xy, role, captured = 0., False, False, "", False
     sampled = matching = 0
     for n, line in enumerate(text.splitlines()):
         if n > 2_000_000 or len(line) > 16384:
@@ -117,7 +117,7 @@ def audit_prusa_seam_enforcer_gcode(data, item, *, bed_width, bed_depth):
         if not instruction:
             continue
         op = instruction.split(None, 1)[0].upper()
-        if op not in ("G0", "G00", "G1", "G01", "G92", "M82", "M83"):
+        if op not in ("G0", "G00", "G1", "G01", "G90", "G91", "G92", "M82", "M83"):
             continue
         values = {k.upper():float(v) for k,v in WORD.findall(instruction)}
         if any(not math.isfinite(v) or abs(v) > 20000
@@ -127,15 +127,29 @@ def audit_prusa_seam_enforcer_gcode(data, item, *, bed_width, bed_depth):
             relative = False
         elif op == "M83":
             relative = True
+        elif op == "G90":
+            relative_xy = False
+        elif op == "G91":
+            relative_xy = True
         elif op == "G92":
             e = values.get("E", e)
-        else:
             pos.update({k:v for k,v in values.items() if k in pos})
+        else:
+            old_xy = (pos["X"], pos["Y"])
+            for axis in pos:
+                if axis in values:
+                    pos[axis] = (pos[axis] + values[axis]
+                                 if relative_xy and pos[axis] is not None
+                                 else None if relative_xy else values[axis])
             if "E" not in values:
                 continue
             extruded = values["E"] if relative else values["E"]-e
             e = e+values["E"] if relative else values["E"]
-            if (not captured and extruded > 1e-6 and "external perimeter" in role
+            moved_xy = (old_xy[0] is not None and old_xy[1] is not None
+                        and pos["X"] is not None and pos["Y"] is not None
+                        and abs(pos["X"] - old_xy[0]) + abs(pos["Y"] - old_xy[1]) > 1e-7)
+            if (not captured and op in ("G1", "G01") and moved_xy
+                    and extruded > 1e-6 and role.strip() == "external perimeter"
                     and all(v is not None for v in pos.values())):
                 captured = True
                 if zmin <= pos["Z"] <= zmax:
