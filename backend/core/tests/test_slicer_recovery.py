@@ -1,4 +1,5 @@
 from datetime import timedelta
+from unittest.mock import patch
 from django.contrib.auth import get_user_model
 from django.test import TestCase
 from django.utils import timezone
@@ -42,6 +43,22 @@ class SliceJobRecoveryTests(TestCase):
             self.assertEqual(job.status, expected)
         self.assertEqual(process_queued_job(queued.pk)["status"], "skipped")
         self.assertEqual(reconcile_stale_jobs(), {"queued": 0, "running": 0})
+
+    @patch("core.slicer_resource_budget.effective_cpu_count", return_value=1)
+    def test_low_power_multimodel_job_is_not_stale_before_adaptive_deadline(self, _):
+        job = self.create_job("running", 30)
+        job.settings = {"plate_objects": [{} for _ in range(20)]}
+        job.save(update_fields=["settings"])
+        SliceJob.objects.filter(pk=job.pk).update(
+            updated_at=timezone.now() - timedelta(minutes=30))
+        self.assertEqual(reconcile_stale_jobs()["running"], 0)
+        job.refresh_from_db()
+        self.assertEqual(job.status, "running")
+        SliceJob.objects.filter(pk=job.pk).update(
+            updated_at=timezone.now() - timedelta(minutes=65))
+        self.assertEqual(reconcile_stale_jobs()["running"], 1)
+        job.refresh_from_db()
+        self.assertEqual(job.status, "stale")
 
     def test_reconciliation_limit_is_validated(self):
         from core.slicer_execution import SlicerExecutionError
