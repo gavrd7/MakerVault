@@ -88,6 +88,8 @@ def main(binary,vendor):
         assert len(receipt["correct_extrusion_moves"])==5
         assert min(receipt["correct_extrusion_moves"])>=20
         assert receipt["incorrect_extrusion_moves"]==[0]*5
+        assert receipt["selected_tools"]==(0,1,2,3,4)
+        assert receipt["tower_extrusion_moves"]=={}
         print("PASS: five XL independent heads selected and deposited correct material on five models",
               receipt,"sha256",hashlib.sha256(output).hexdigest(),flush=True)
 
