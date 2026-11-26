@@ -1,6 +1,7 @@
 import io
 import zipfile
 from unittest import TestCase
+from unittest.mock import patch
 from slicer_worker.runner import WorkerError
 from slicer_worker.three_mf_validation import validate_worker_3mf, MAX_TRIANGLES
 
@@ -58,6 +59,26 @@ class Core3MFWorkerTests(TestCase):
             zipfile_out.writestr("[Content_Types].xml", "<Types/>")
             zipfile_out.writestr("_rels/.rels", "<Relationships/>")
         return out.getvalue()
+
+    def test_multi_object_3mf_has_separate_model_and_plate_budgets(self):
+        # Two one-triangle objects verify the budget split without constructing
+        # a potentially gigabyte-sized test fixture.
+        source = self.with_object_metadata({})
+        from slicer_worker import three_mf_validation as validator
+        with (patch.object(validator, "MAX_TRIANGLES", 1),
+              patch.object(validator, "MAX_PLATE_TRIANGLES", 2)):
+            self.assertTrue(validate_worker_3mf(source))
+        with (patch.object(validator, "MAX_TRIANGLES", 1),
+              patch.object(validator, "MAX_PLATE_TRIANGLES", 1)):
+            with self.assertRaisesRegex(WorkerError, "3MF triangle count exceeds"):
+                validate_worker_3mf(source)
+
+    def test_individual_3mf_object_still_has_triangle_budget(self):
+        source = self.package()
+        from slicer_worker import three_mf_validation as validator
+        with patch.object(validator, "MAX_TRIANGLES", 0):
+            with self.assertRaisesRegex(WorkerError, "3MF object triangle count"):
+                validate_worker_3mf(source)
 
     def with_variable_layer_range(self, xml):
         """Wrap one real core model in MakerVault's bounded native metadata."""
