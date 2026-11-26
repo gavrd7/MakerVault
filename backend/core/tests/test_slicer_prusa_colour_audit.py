@@ -56,7 +56,7 @@ class PrusaColourAuditTests(TestCase):
         lines.extend(["G1 X0.5 Y0 E0.03"]*25)
         lines.extend(["G90","T0","G0 X115 Y115","G91"])
         lines.extend(["G1 X0.5 Y0 E0.03"]*25)
-        result=self.audit(("\\n".join(lines)+"\\n").encode())
+        result=self.audit(("\n".join(lines)+"\n").encode())
         self.assertEqual(result[1]["painted"],25)
         self.assertEqual(result[0]["unpainted"],25)
 
@@ -67,4 +67,4 @@ class PrusaColourAuditTests(TestCase):
         lines.extend(["T0","G0 X115 Y115"])
         lines.extend(["G1 X%.2f Y115 E0.03" % (115+n*.5) for n in range(25)])
         with self.assertRaisesRegex(ValueError,"did not produce isolated"):
-            self.audit(("\\n".join(lines)+"\\n").encode())
+            self.audit(("\n".join(lines)+"\n").encode())
