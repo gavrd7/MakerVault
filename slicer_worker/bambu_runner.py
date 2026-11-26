@@ -245,7 +245,7 @@ def verified_bambu_modifier_shift(source_project: bytes, sliced_project: Path) -
                 archive_source = Path(payload)
                 if archive_source.is_symlink() or not archive_source.is_file():
                     raise WorkerError("Bambu native output project is unavailable.")
-                if not 0 < archive_source.stat().st_size <= 128 * 1024 * 1024:
+                if not 0 < archive_source.stat().st_size <= model_input_budget():
                     raise WorkerError("Bambu native output project exceeds limits.")
             with zipfile.ZipFile(archive_source) as archive:
                 for name in ("3D/3dmodel.model", "Metadata/model_settings.config"):
@@ -304,7 +304,7 @@ def extract_single_bambu_gcode(sliced_project: Path, workdir: Path) -> Path:
     No arbitrary ZIP files or member names are extracted to the filesystem.
     Actual native 2.9.1 output/member layout still requires pinned-binary proof.
     """
-    archive = _regular_file(workdir, sliced_project.name, 128 * 1024 * 1024)
+    archive = _regular_file(workdir, sliced_project.name, model_input_budget())
     if archive.name != "bambu-sliced.3mf":
         raise WorkerError("Unexpected Bambu output artifact.")
     try:
