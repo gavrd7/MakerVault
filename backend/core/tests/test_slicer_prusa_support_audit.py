@@ -1,0 +1,93 @@
+"""Two-object Prusa painted support cannot be approved by stationary E recovery."""
+from unittest import TestCase
+
+from core.slicer_prusa_support_audit import (
+    audit_prusa_two_object_support, validate_prusa_two_support_plate,
+)
+from core.tests.test_slicer_prusa_plate import item, cube
+
+
+def sources(*, paint=0):
+    region = {"regions": [{"slot": 0, "patches": [
+        {"face": 0, "polygon": [[0, 0, 0], [1, 0, 0], [0, 1, 0]]}
+    ]}]}
+    return [(
+        item(x_mm=x, **({"support_paint": region} if paint == i else {})),
+        cube(),
+    ) for i, x in enumerate((-35, 35))]
+
+
+def native_paths(*, painted=0, leak=0, stationary=59, relative=False):
+    """Two physically disjoint cubes, 60 genuinely deposited painted segments."""
+    left, right = 90, 160
+    base = left if painted == 0 else right
+    other = right if painted == 0 else left
+    lines = ["G90", "M83", ";TYPE:Support material", f"G0 X{base} Y105"]
+    if relative:
+        lines.append("G91")
+        lines.extend(["G1 X0.05 Y0 E0.03"] * 60)
+        lines.append("G90")
+    else:
+        lines.extend([f"G1 X{base + .05*(i+1):.3f} Y105 E0.03" for i in range(60)])
+    lines.append(f"G0 X{other} Y105")
+    # The historical neighbour 'leak' consisted of exactly this kind of
+    # stationary E recovery: it is deliberately not support deposition.
+    lines.extend(["G1 E0.03"] * stationary)
+    if leak:
+        lines.extend([f"G1 X{other + .05*(i+1):.3f} Y105 E0.03" for i in range(leak)])
+    return ("\n".join(lines) + "\n").encode("utf-8")
+
+
+class PrusaTwoObjectSupportTests(TestCase):
+    def audit(self, data, *, painted=0):
+        return audit_prusa_two_object_support(
+            data, sources(paint=painted), bed_width=250, bed_depth=210)
+
+    def test_both_directions_ignore_59_stationary_recovery_events(self):
+        for i in (0, 1):
+            with self.subTest(painted=i):
+                result = self.audit(native_paths(painted=i), painted=i)
+                self.assertEqual(result["painted_model_index"], i)
+                self.assertEqual(result["painted_support_moves"], 60)
+                self.assertEqual(result["unpainted_support_moves"], 0)
+                self.assertEqual(result["stationary_recovery_moves"][1-i], 59)
+
+    def test_relative_xy_and_e_are_genuinely_deposited(self):
+        result = self.audit(native_paths(relative=True))
+        self.assertEqual(result["painted_support_moves"], 60)
+
+    def test_genuine_neighbour_support_leakage_is_refused(self):
+        with self.assertRaisesRegex(ValueError, "not isolated"):
+            self.audit(native_paths(leak=8))
+        with self.assertRaisesRegex(ValueError, "not isolated"):
+            self.audit(native_paths(stationary=0, leak=8))
+
+    def test_missing_paths_and_forged_role_cannot_pass(self):
+        for raw in (native_paths().replace(b"G1 X", b"G0 X"),
+                    native_paths().replace(b";TYPE:Support material",
+                                           b";TYPE:Unsupported material"),
+                    b"\xff"):
+            with self.subTest(raw=raw[:30]), self.assertRaises(ValueError):
+                self.audit(raw)
+
+    def test_ambiguous_or_combined_plate_is_rejected(self):
+        items = [row for row, _ in sources()]
+        self.assertEqual(validate_prusa_two_support_plate(items), 0)
+        with self.assertRaises(ValueError):
+            validate_prusa_two_support_plate([{**items[0], "support_paint": {}},
+                                               items[1]])
+        with self.assertRaises(ValueError):
+            validate_prusa_two_support_plate([items[0],
+                {**items[1], "support_paint": items[0]["support_paint"]}])
+        for forbidden in ({"process_overrides": {"wall_loops": 4}},
+                          {"modifier_volumes": [{"id": "unqualified"}]},
+                          {"rotation_deg": 90},
+                          {"scale_percent": 120},
+                          {"seam_paint": {"regions": [{"slot": 0}]}}):
+            with self.subTest(forbidden=forbidden), self.assertRaises(ValueError):
+                validate_prusa_two_support_plate([items[0], {**items[1], **forbidden}])
+        placed = sources()
+        placed[1] = (item(x_mm=-34), cube())
+        with self.assertRaisesRegex(ValueError, "overlap"):
+            audit_prusa_two_object_support(
+                native_paths(), placed, bed_width=250, bed_depth=210)
