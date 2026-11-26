@@ -116,3 +116,16 @@ class PrusaSeamAuditTests(unittest.TestCase):
         raw = raw.replace(b";TYPE:External perimeter", b"G91\n;TYPE:External perimeter")
         with self.assertRaises(ValueError):
             audit_prusa_seam_enforcer_gcode(raw, project(), bed_width=250, bed_depth=210)
+
+    def test_research_modes_preserve_native_preset_except_seam_position(self):
+        from scripts.prusa_native_seam_acceptance import override_research_seam_position
+        raw=b"layer_height = 0.2\\nseam_position = rear\\nperimeters = 3\\n"
+        self.assertEqual(override_research_seam_position(raw, None),raw)
+        for mode in ("aligned","nearest","random","rear"):
+            result=override_research_seam_position(raw,mode)
+            self.assertIn(b"layer_height = 0.2\\n",result)
+            self.assertIn(b"perimeters = 3\\n",result)
+            self.assertEqual(result.count(b"seam_position ="),1)
+            self.assertIn(b"seam_position = "+mode.encode(),result)
+        with self.assertRaises(ValueError):
+            override_research_seam_position(raw,"not-a-native-mode")
