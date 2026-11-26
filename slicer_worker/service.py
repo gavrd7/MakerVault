@@ -23,6 +23,7 @@ from .creality_runner import run_creality
 from .bambu_runner import run_bambu
 from .engine_registry import configured_engines
 from .three_mf_validation import validate_worker_3mf
+from .resource_budget import model_input_budget, gcode_output_budget
 from .material_gcode_audit import expected_native_tools, verify_multi_material_output
 
 
@@ -155,7 +156,7 @@ def _decode_payload(payload):
         if not streamed_limit:
             raise WorkerError("Insufficient worker memory for streamed Orca geometry.")
     else:
-        streamed_limit = MAX_MODEL_BYTES
+        streamed_limit = model_input_budget()
     files = {"model_format": model_format}
     for key, limit in (
         ("model", streamed_limit),
@@ -244,13 +245,13 @@ def _decode_payload(payload):
             raise WorkerError("Invalid Creality multi-STL model/tool mapping.")
         decoded = []
         for entry in stls:
-            if not isinstance(entry, str) or len(entry) > ((MAX_MODEL_BYTES + 2)//3)*4 + 8:
+            if not isinstance(entry, str) or len(entry) > ((model_input_budget() + 2)//3)*4 + 8:
                 raise WorkerError("Invalid Creality multi-STL model size.")
             try:
                 raw = base64.b64decode(entry, validate=True)
             except (ValueError, base64.binascii.Error):
                 raise WorkerError("Invalid Creality multi-STL model encoding.") from None
-            if not raw or len(raw) > MAX_MODEL_BYTES:
+            if not raw or len(raw) > model_input_budget():
                 raise WorkerError("Invalid Creality multi-STL model size.")
             from .stl_validation import validate_stl
             validate_stl(raw)
@@ -349,7 +350,7 @@ class Handler(BaseHTTPRequestHandler):
             length = int(self.headers.get("Content-Length", "0"))
         except ValueError:
             length = 0
-        request_limit = MAX_REQUEST_BYTES
+        request_limit = max(MAX_REQUEST_BYTES, model_input_budget() * 2 + 12 * 1024 * 1024)
         if self.headers.get("X-MakerVault-Streamed-Orca") == "v1":
             from .streamed_orca_validation import streamed_orca_memory_budget
             budget = streamed_orca_memory_budget()
@@ -414,7 +415,7 @@ class Handler(BaseHTTPRequestHandler):
                 receipt = runner(current["binary"], workdir)
                 stage = "validating generated G-code"
                 data = (workdir / "output.gcode").read_bytes()
-                if not data or len(data) > MAX_OUTPUT_BYTES:
+                if not data or len(data) > gcode_output_budget():
                     raise WorkerError("Generated G-code exceeded the output size limit.")
                 if current["engine"] == "prusaslicer":
                     from .prusa_gcode_audit import audit_prusa_positive_e
