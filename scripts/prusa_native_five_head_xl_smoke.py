@@ -31,6 +31,7 @@ def main(binary,vendor):
     printer=b"\n".join(
         b"binary_gcode = 0" if line.split(b"=",1)[0].strip()==b"binary_gcode" else line
         for line in printer.splitlines())+b"\n"
+    assert printer.count(b"binary_gcode = 0")==1
     machine=validate_flat_prusa_preset(printer,kind="printer")
     assert machine.get("single_extruder_multi_material","0") in ("0","false")
     assert len(machine["nozzle_diameter"].split(","))==5
