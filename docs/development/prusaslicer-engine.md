@@ -1,3 +1,11 @@
+## Five-head XL temperature-vector native research — 26 November 2026
+
+- The new five-head XL native smoke emits a bounded diagnostic of actual `M104`/`M109` heater commands and any explicit tool/temperature values. It retains the already-required spatial T0–T4 positive-extrusion acceptance unchanged.
+- The five distinct filament configurations are 205/210/215/220/225°C, but profile vectors alone are **not** evidence that the slicer emits matching executable per-tool heater commands. The diagnostic must be evaluated from the newest exact-head native run before promoting multi-head thermal compatibility.
+- No printer heat control is sent, no physical toolchange is attempted, and no ordinary workbench or released-engine behaviour changes.
+
+---
+
 ## Five-head XL native acceptance achieved — 26 November 2026
 
 - Pinned genuine PrusaSlicer 2.9.7 [native run 45733816173](https://github.com/gavrd7/MakerVault/actions/runs/45733816173) completed the `Research five independent XL toolheads` step **successfully**, and the failure-warning step was skipped. This test uses the official five-head XL native preset, five spatially distinct objects, explicit T0–T4 assignments and a material-to-model positive-extrusion audit. The real worker logged **1,042 correct model-local positive-E moves for each of T0–T4**, **zero wrong-tool moves**, no MMU wipe-tower moves and output SHA256 `0718a53aeea540d566ebdae858530c896b454d8667fa4401b98a1875b44c2a4e`. This is **offline G-code qualification only**; physical pickup, head offsets, firmware and print delivery remain unverified.
