@@ -207,24 +207,30 @@ def _validated_mesh_placement(obj, item, bed_width, bed_depth, index):
     provisional = [float(value) for value in
                    _transform(item, bed_width / 2, bed_depth / 2).split()]
     vertex_nodes = obj.findall(f"./{{{NS}}}mesh/{{{NS}}}vertices/{{{NS}}}vertex")
-    placed = []
+    # Track transformed bounds incrementally. Materialising a list of every
+    # placed vertex doubles the preparation working set on detailed models.
+    min_x = min_y = minimum_z = math.inf
+    max_x = max_y = -math.inf
+    any_vertex = False
     for vertex in vertex_nodes:
         x, y, z = (float(vertex.attrib[key]) for key in ("x", "y", "z"))
-        placed.append((
-            provisional[0] * x + provisional[3] * y + provisional[6] * z + provisional[9],
-            provisional[1] * x + provisional[4] * y + provisional[7] * z + provisional[10],
-            provisional[2] * x + provisional[5] * y + provisional[8] * z,
-        ))
+        px = provisional[0] * x + provisional[3] * y + provisional[6] * z + provisional[9]
+        py = provisional[1] * x + provisional[4] * y + provisional[7] * z + provisional[10]
+        pz = provisional[2] * x + provisional[5] * y + provisional[8] * z
+        if not all(math.isfinite(v) for v in (px, py, pz)):
+            raise SlicerProfileError("Non-finite transformed plate geometry.")
+        any_vertex = True
+        min_x = min(min_x, px)
+        max_x = max(max_x, px)
+        min_y = min(min_y, py)
+        max_y = max(max_y, py)
+        minimum_z = min(minimum_z, pz)
     # Preview and imported STL coordinates use floating-point transforms.
     # Never reject a model for sub-millimetre roundoff at an otherwise
     # valid plate boundary. Real overhangs remain blocked.
     tolerance = 0.05  # mm; strictly below nozzle/line widths
-    if not placed:
+    if not any_vertex:
         raise SlicerProfileError("The prepared build plate contains an empty model.")
-    min_x = min(point[0] for point in placed)
-    max_x = max(point[0] for point in placed)
-    min_y = min(point[1] for point in placed)
-    max_y = max(point[1] for point in placed)
     if (not all(math.isfinite(v) for v in
                 (min_x, max_x, min_y, max_y)) or
             min_x < -tolerance or max_x > bed_width + tolerance or
@@ -234,7 +240,6 @@ def _validated_mesh_placement(obj, item, bed_width, bed_depth, index):
             "(X %.2f–%.2f, Y %.2f–%.2f mm)."
             % (index, bed_width, bed_depth,
                min_x, max_x, min_y, max_y))
-    minimum_z = min(point[2] for point in placed)
     # Tilted STL always rests on its lowest vertex before applying the
     # explicitly requested elevation. Do not auto-drop stacked objects.
     desired_z = float(item.get("z_mm", 0))
