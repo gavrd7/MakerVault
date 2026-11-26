@@ -68,8 +68,8 @@ def build_prusa_placed_stl(objects_with_stl, *, bed_width, bed_depth):
     We stream facets instead of retaining hundreds of thousands of triangles
     and transformed copies in Django memory.
     """
-    if not isinstance(objects_with_stl, list) or not 1 <= len(objects_with_stl) <= 12:
-        raise SlicerProfileError("Prusa plate needs one to twelve verified source STLs.")
+    if not isinstance(objects_with_stl, list) or not 1 <= len(objects_with_stl) <= 200:
+        raise SlicerProfileError("Prusa plate needs one to 200 verified source STLs.")
     if not all(isinstance(n, (float, int)) and not isinstance(n, bool)
                and math.isfinite(n) and 1 <= n <= 1000 for n in (bed_width, bed_depth)):
         raise SlicerProfileError("Prusa plate requires verified native build dimensions.")

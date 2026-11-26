@@ -585,7 +585,7 @@ def _validate_plate_execution(job):
         # vertices; a dedicated worker flag preserves this exact placement.
         if not job.printer_profile_id:
             raise SlicerExecutionError("Select a native printer profile for slicing.")
-        if objects and not 1 <= len(objects) <= 12:
+        if objects and not 1 <= len(objects) <= 200:
             raise SlicerExecutionError("Prusa plate model count is invalid.")
         return True
     if job.engine not in {"orcaslicer", "crealityprint", "bambustudio"}:
