@@ -57,10 +57,20 @@ test("progressive large prints append complete geometry without polluting exact-
 
 test("cold preview requests asynchronous preparation and has direct fallback", () => {
   assert.match(preview, /"&warm=1"/);
-  assert.match(preview, /response\.status !== 202/);
+  assert.match(preview, /response\.status === 202/);
   assert.match(preview, /"&direct=1"/);
   assert.doesNotMatch(preview, /"&all_zs="/);
 
+});
+
+test("transient mobile network failures retry smaller exact batches without discarding loaded layers", () => {
+  assert.match(preview, /loadCheckpoint\.current/);
+  assert.match(preview, /for \(let offset = completed;/);
+  assert.match(preview, /requestSize = Math\.max\(1, Math\.floor\(requestSize \/ 2\)\)/);
+  assert.match(preview, /checkpoint\.completed = completed/);
+  assert.match(preview, /Retry remaining layers/);
+  assert.match(preview, /setRetryGeneration\(value => value \+ 1\)/);
+  assert.doesNotMatch(preview, /const maxMoves = 1500000/);
 });
 
 test("whole-print layer scrubbing changes a GPU clipping plane rather than geometry", () => {
