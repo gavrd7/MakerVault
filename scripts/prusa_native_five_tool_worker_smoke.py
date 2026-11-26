@@ -37,6 +37,11 @@ def main(binary,vendor):
     for index,offset in enumerate((-90,-45,0,45,90)):
         obj=item(x_mm=offset)
         obj["asset_id"]="five-tool-"+str(index)
+        if index in (0,1):
+            obj["process_overrides"] = {
+                "wall_loops": 1 if index == 0 else 5,
+                "sparse_infill_density": 15 if index == 0 else 35,
+            }
         rows.append((obj,cube(size=8)))
     tools=[1,2,3,4,5]
     project,topology=build_prusa_multitool_candidate(
@@ -87,6 +92,13 @@ def main(binary,vendor):
         assert len(receipt["correct_extrusion_moves"])==5
         assert min(receipt["correct_extrusion_moves"])>=20
         assert receipt["incorrect_extrusion_moves"]==[0]*5
+        # Native object overrides are qualified by real spatial perimeter
+        # deposition, independently of the already-audited selected tools.
+        import runpy
+        perimeters=runpy.run_path("/tmp/prusa_object_wall.py")[
+            "require_distinct_object_wall_counts"](output,project,tools)
+        print("Research: Prusa native per-object wall deposition",
+              perimeters,flush=True)
         assert len(receipt["tower_extrusion_moves"])==5
         print("PASS: five MMU tools selected and deposited correct material on five models",
               receipt,"sha256",hashlib.sha256(output).hexdigest(),flush=True)
