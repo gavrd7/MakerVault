@@ -1,3 +1,32 @@
+### 27 November — full eight-head INDX native facet palette
+
+The existing Prusa 3MF TriangleSelector encoder, worker preflight,
+owner-scoped material mapper and shared desktop/mobile tool selector now
+support **native T5, T6 and T7 facet painting** in addition to T1–T4.
+All paint tool choices are constrained by the *actual inspected printer
+topology*: a five-head XL or five-tool MMU retains its five physical
+material entries; an eight-head INDX may select any of T1–T7 for the
+qualified one-wall or opposing-two-wall paint workflow.
+
+- **Prusa native encoding:** Existing unsplit leaf states `3C`, `4C`
+  and `5C` map exactly to T5, T6 and T7; the worker's independently
+  parsed state map, owner fingerprint validation and bounded native 3MF
+  metadata retain the same protections as the first five tools.
+- **Genuine native research:** With the pinned 2.9.7 binary and the
+  official Prusa CORE One INDX 8T printer profile, each newly mapped
+  head deposited **294 external-perimeter movements** on its assigned
+  front wall, zero on the opposing wall and none on any other alternate
+  head. T0 deposited the unpainted rear wall. The mandatory real-binary
+  acceptance now additionally sends the *normal MakerVault-generated*
+  projects through authenticated worker checks for T5, T6, T7 and an
+  opposing T5/T7 pair; no research-only byte substitution is required.
+- **Limitations:** Native G-code geometry is qualified offline. Arbitrary
+  face masks and cross-object painting combinations remain guarded.
+  Hardware dock/pickup and print-start behaviour are not asserted by
+  these tests. This change does not alter the existing three engines.
+
+---
+
 ### 27 November — native first-layer adhesion across multiple Prusa tools
 
 The same owner-scoped native numeric process adapter used for independent
@@ -65,9 +94,9 @@ authenticated worker are used for all machine topologies.
   shared **200-model-instance** plate budget (still subject to geometric
   source, output and memory limits). Actual physical tool count comes from
   the selected Prusa printer profile. Pinned 2.9.7 colour facet states map
-  **T0 base plus T1–T4 painting**; on an eight-head INDX, T5–T7 remain
-  available for *whole-model* extruder assignment, not unverified facet
-  states. The reviewed binary also tested fifteen models reusing five
+  **T0 base plus T1–T7 painting** when the imported independent
+  eight-head INDX printer profile declares all eight tools. MMU5 and XL5
+  still derive their smaller available ranges from native printer topology. The reviewed binary also tested fifteen models reusing five
   native MMU material tools.
 - **Painted process overrides:** The same bounded native Prusa process
   numeric schema used by the rest of MakerVault is applied to painted MMU
@@ -77,11 +106,9 @@ authenticated worker are used for all machine topologies.
   MMU/XL/INDX print start are *not* qualified by these successful offline
   G-code tests. The existing PrusaLink file API is not proof of machine
   docking, pickup, firmware or safe physical execution. MMU variable-Z
-  combinations still fail the genuine pinned CLI. The native MMU brim/skirt
-  research generated G-code, but its five-model audit observed nonzero
-  wrong-tool spatial footprint hits (8,8,8,9 on models two to five);
-  maintain the current adhesion gate until a role-aware, per-tool
-  spatial audit verifies the actual first-layer deposition.
+  combinations still fail the genuine pinned CLI. Brim/skirt first-layer
+  deposition is now role-aware and positively audited on MMU and INDX,
+  as recorded above; the earlier footprint-only false hits are resolved.
 
 The legacy chronological notes below describe earlier gates at the time
 they were written; this newest acceptance is authoritative for the
