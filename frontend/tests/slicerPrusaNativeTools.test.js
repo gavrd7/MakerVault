@@ -112,3 +112,15 @@ test("offline Prusa bulk material assignment uses native tool indices, never phy
   assert.match(editor,/Change native filament for/);
   assert.match(editor,/onChange=\{event => updateSelectedModels\(event\.target\.value\)\}/);
 });
+
+
+test("Prusa native tool capacity is retrieved from an owner-scoped resolved printer profile",()=>{
+  assert.match(workbench,/prusa_printer_topology_id=/);
+  assert.match(workbench,/prusaProfileTopology=\{prusaProfileTopology\}/);
+  assert.match(prepare,/printerTopology=\{prusaProfileTopology\}/);
+  assert.match(editor,/const profileToolCount = Number\.isInteger\(printerTopology\?\.logical_tool_count\)/);
+  assert.match(editor,/const profileMode = printerTopology\?\.kind/);
+  assert.match(editor,/Match native printer profile/);
+  assert.match(editor,/profileMatches && value\.filament_profile_ids\.every\(Boolean\)/);
+  assert.match(editor,/profileToolCount \? \[profileToolCount\]/);
+});
