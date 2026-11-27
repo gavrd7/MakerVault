@@ -2,12 +2,16 @@
 
 Native Prusa MMU/XL process editing now accepts the full bounded numeric
 process-field map already implemented for the single-material engine:
-global layer height, walls, shells and infill as well as brim, skirts,
+global layer height, walls, shells and infill as well as
 external/internal wall speed, sparse infill speed, travel speed and top
 surface speed. The genuine pinned MMU five-tool worker smoke applies these
-settings before slicing and still audits the resulting per-object native
-deposition. Unrecognised or executable process settings are rejected; a
-missing native profile key is an error, not an ignored override.
+settings before slicing and audits per-object native deposition. A first
+attempt that also enabled brim and skirt failed the independent wrong-tool
+spatial audit. Brim and skirt therefore remain blocked on *multi-tool*
+Prusa slices pending separately qualified native handling of adhesion
+geometry; they remain available where the single-material process route
+has already been validated. Unrecognised/executable settings are rejected,
+and a missing native profile key is not silently ignored.
 
 Ordinary *single-material* Prusa plates use the shared engine-neutral
 200-instance placement budget rather than the obsolete 12-instance
