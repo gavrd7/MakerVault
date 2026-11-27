@@ -419,6 +419,34 @@ class PrusaVirtualToolDraftTests(TestCase):
         self.assertEqual(worker.call_args.kwargs["process_overrides"], job.settings["process_overrides"])
         self.assertEqual(len(worker.call_args.kwargs["rows"]),1)
 
+    def test_multiple_disjoint_brush_regions_share_one_native_colour_tool(self):
+        from scripts.prusa_generate_mmu_paint import fixture as painted_fixture
+        job,filaments,raw=self.config()
+        source,_,_,paint=painted_fixture(include_paint=True)
+        patches=paint["regions"][0]["patches"]
+        self.assertEqual(len(patches),2)
+        separate={**paint,"regions":[
+            {"slot":1,"patches":[patches[0]]},
+            {"slot":1,"patches":[patches[1]]},
+        ]}
+        job.settings["plate_objects"]=job.settings["plate_objects"][:1]
+        job.settings["plate_objects"][0]["colour_paint"]=separate
+        job.settings["prusa_native_tools"]["model_tools"]=job.settings[
+            "prusa_native_tools"]["model_tools"][:1]
+        job.settings["prusa_native_tools"]["colour_tools"]=[
+            {"slot":1,"tool":2}]
+        PrusaWorkbenchMaterialTests.resolve(self,job,filaments,raw)
+        kind,plan=prepare_prusa_workbench_material(job)
+        self.assertEqual(kind,"colour")
+        self.assertEqual(plan["colour_tool_indices"],{1:1})
+        self.assertEqual(plan["tools"],[1])
+        with patch("core.slicer_prusa_job_material.slice_prusa_offline_colour_candidate",
+                   return_value=b"audited-disjoint-brushes") as worker:
+            result=slice_prusa_workbench_material(
+                job,[(dict(job.settings["plate_objects"][0]),source)])
+        self.assertEqual(result,b"audited-disjoint-brushes")
+        self.assertEqual(worker.call_args.kwargs["colour_tool_indices"],{1:1})
+
     def test_painted_mmu_rejects_unqualified_or_ambiguous_tool_assignments(self):
         from scripts.prusa_generate_mmu_paint import fixture as painted_fixture
         _source,_mesh,_states,paint=painted_fixture(include_paint=True)
