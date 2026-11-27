@@ -117,6 +117,53 @@ class PrusaNativeColourProjectTests(TestCase):
         self.assertLess(_two_painted_wall_regions(high,(5,7))["front"][3],
                         _two_painted_wall_regions(high,(5,7))["back"][2])
 
+    def test_opposing_x_axis_colour_walls_use_same_native_worker_contract(self):
+        from core.slicer_plate_3mf import _triangles
+        from core.slicer_native_support_paint import _fingerprint
+        from slicer_worker.prusa_colour_gcode_audit import _two_painted_wall_regions
+        stl,_,_,original=fixture(include_paint=True)
+        faces=list(_triangles(stl))
+        lo=[min(p[a] for face in faces for p in face) for a in range(3)]
+        hi=[max(p[a] for face in faces for p in face) for a in range(3)]
+        origin=((lo[0]+hi[0])/2,(lo[1]+hi[1])/2,lo[2])
+        local=[[tuple(p[a]-origin[a] for a in range(3)) for p in face]
+               for face in faces]
+        sides=[]
+        for wall in (-10,10):
+            patches=[{"face":i,"polygon":[list(p) for p in face]}
+                     for i,face in enumerate(local)
+                     if all(abs(p[0]-wall)<1e-5 for p in face)]
+            self.assertEqual(len(patches),2)
+            sides.append(patches)
+        paint={**original,"signature":_fingerprint(local),
+               "palette":[*original["palette"],
+                          {"color":"#fadd4d","label":"right"}],
+               "regions":[{"slot":1,"patches":sides[0]},
+                          {"slot":2,"patches":sides[1]}]}
+        model={"asset_id":"x-opposing","x_mm":0,"y_mm":0,"z_mm":0,
+               "rotation_deg":0,"scale_percent":100,"colour_paint":paint}
+        printer=ini("0.4,0.4,0.4,0.4,0.4","0")
+        candidate=build_prusa_colour_candidate(
+            model,stl,printer_ini=printer,colour_tool_indices={1:1,2:2},
+            bed_width=250,bed_depth=210)
+        proof=validate_prusa_material_candidate(
+            candidate,printer_ini=printer,colour=True,independent_colour=True)
+        self.assertEqual(proof["tools"],(1,2,3))
+        regions=_two_painted_wall_regions(candidate,(1,2))
+        self.assertLess(regions["front"][1],regions["back"][0])
+        with self.assertRaises(WorkerError):
+            _two_painted_wall_regions(candidate,(2,1))
+        # Missing one of the two wall triangles fails the strict
+        # source-mesh audit even if Prusa could parse the partial mask.
+        incomplete={**paint,"regions":[paint["regions"][0],
+                          {"slot":2,"patches":sides[1][:1]}]}
+        partial=build_prusa_colour_candidate(
+            {**model,"colour_paint":incomplete},stl,
+            printer_ini=printer,colour_tool_indices={1:1,2:2},
+            bed_width=250,bed_depth=210)
+        with self.assertRaises(WorkerError):
+            _two_painted_wall_regions(partial,(1,2))
+
     def test_indx_eight_head_native_colour_accepts_all_seven_alternate_facets(self):
         printer=ini(",".join(["0.4"]*8),"0")
         stl,_mesh,_states,paint=fixture(include_paint=True)
