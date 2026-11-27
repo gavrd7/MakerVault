@@ -105,6 +105,31 @@ class PrusaProjectDialectTests(TestCase):
         self.assertEqual(len(objects[0].findall("volume")), 2)
         self.assertEqual(len(objects[1].findall("volume")), 1)
 
+        # A native two-model stack uses independent object-local infill and
+        # a local box modifier on only the first printable model. Strict
+        # spatial G-code acceptance in the pinned runtime is mandatory.
+        stacked_left = {**left, "process_overrides": {
+            "sparse_infill_density": 10}}
+        self.assertTrue(validate_prusa_project_admission(
+            [stacked_left, item(x_mm=35)], {}, "2.9.7"))
+        stacked_archive = build_prusa_native_3mf(
+            [(stacked_left, cube()), (item(x_mm=35), cube())],
+            bed_width=250, bed_depth=210)
+        stacked_receipt = validate_prusa_native_3mf(stacked_archive)
+        self.assertEqual(stacked_receipt["objects"], 2)
+        self.assertEqual(stacked_receipt["regions"], 1)
+        with self.assertRaisesRegex(ValueError, "two-model plate"):
+            validate_prusa_project_admission([
+                {**stacked_left, "modifier_volumes": [
+                    {**volume("negative"), "x_mm": -35}]},
+                item(x_mm=35),
+            ], {}, "2.9.7")
+        with self.assertRaisesRegex(ValueError, "two-model plate"):
+            validate_prusa_project_admission([
+                stacked_left, right
+            ], {}, "2.9.7")
+
+
     def test_qualified_modifier_and_negative_volumes_roundtrip(self):
         for kind, settings in (("modifier", {"sparse_infill_density": 80}),
                                ("negative", {})):
