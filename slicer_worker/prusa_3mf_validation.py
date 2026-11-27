@@ -56,7 +56,7 @@ def _settings(nodes, kind, allowed):
         elif key in {"external_perimeter_speed", "perimeter_speed",
                      "infill_speed", "top_solid_infill_speed"}:
             _require(isinstance(val, str) and
-                     re.fullmatch(r"[0-9]{1,3}(?:\\.[0-9]{1,4})?", val) is not None and
+                     re.fullmatch(r"[0-9]{1,3}(?:\.[0-9]{1,4})?", val) is not None and
                      5 <= float(val) <= 350)
         result[key] = val
     return result
