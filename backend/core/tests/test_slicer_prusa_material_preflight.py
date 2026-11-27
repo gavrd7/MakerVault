@@ -412,6 +412,74 @@ class PrusaOfflineMmuPreflightTests(TestCase):
         with self.assertRaises(WorkerError):
             _decode_payload({**payload,"prusa_offline_xl":{"tools":[1,2]}})
 
+    def test_partial_wall_mmu_is_authentically_admitted_and_full_wall_gate_stays_strict(self):
+        from core.slicer_prusa_material_preflight import (
+            prepare_prusa_offline_colour_candidate,
+            slice_prusa_offline_colour_candidate)
+        from core.slicer_plate_3mf import _triangles
+        from core.slicer_native_support_paint import _fingerprint
+        from scripts.prusa_generate_mmu_paint import fixture
+        from slicer_worker.service import _decode_payload
+        import base64
+        values, assets = self.parts()
+        source, _, _, paint = fixture(include_paint=True)
+        faces = list(_triangles(source))
+        low = [min(p[i] for face in faces for p in face) for i in range(3)]
+        high = [max(p[i] for face in faces for p in face) for i in range(3)]
+        origin = ((low[0]+high[0])/2, (low[1]+high[1])/2, low[2])
+        local = [[tuple(v[i]-origin[i] for i in range(3)) for v in face]
+                 for face in faces]
+        target = paint["regions"][0]["patches"][0]["face"]
+        a, b, c = local[target]
+        partial = {**paint, "signature": _fingerprint(local),
+                   "regions": [{"slot": 1, "patches": [{
+                       "face": target,
+                       "polygon": [list(a),
+                                   [(a[i]+b[i])/2 for i in range(3)],
+                                   [(a[i]+c[i])/2 for i in range(3)]],
+                   }]}]}
+        row = {"asset_id": "split-wall", "x_mm": 0, "y_mm": 0,
+               "z_mm": 0, "rotation_deg": 0, "scale_percent": 100,
+               "colour_paint": partial}
+        colour = {key: values[key] for key in (
+            "owner_id", "printer_profile", "process_profile",
+            "filament_profiles", "purge_matrix", "tower_xy",
+            "bed_width", "bed_depth")}
+        colour.update(rows=[(row, source)], tools=[1],
+                      colour_slot=1, colour_tool=1)
+        with patch("core.slicer_prusa_material_preflight.resolved_prusa_profile",
+                   side_effect=assets):
+            candidate = prepare_prusa_offline_colour_candidate(**colour)
+        self.assertTrue(candidate["partial_wall"])
+        request = {
+            "job_id": str(uuid.uuid4()), "engine": "prusaslicer",
+            "engine_version": "2.9.7", "model_format": "3mf",
+            "model": base64.b64encode(candidate["model"]).decode(),
+            "printer_profile": base64.b64encode(candidate["printer"]).decode(),
+            "filament_profile": base64.b64encode(candidate["filament"]).decode(),
+            "process_profile": base64.b64encode(candidate["process"]).decode(),
+            "prusa_offline_colour": {
+                "tool": candidate["tool"], "tower": list(candidate["tower"])},
+        }
+        decoded = _decode_payload(request)
+        self.assertTrue(decoded["prusa_offline_colour"]["partial_wall"])
+        # No browser-controlled skip-audit bit: derive it only from signed 3MF.
+        with self.assertRaises(WorkerError):
+            _decode_payload({**request, "prusa_offline_colour": {
+                **request["prusa_offline_colour"], "partial_wall": False}})
+        remote, context = self.offline_worker_stub()
+        remote.return_value = b"audited worker G-code"
+        with context, patch(
+            "core.slicer_prusa_material_preflight.prepare_prusa_offline_colour_candidate",
+            return_value=candidate), patch(
+            "slicer_worker.prusa_partial_surface.audit_prusa_partial_wall_gcode"
+        ) as audit:
+            output = slice_prusa_offline_colour_candidate(
+                str(uuid.uuid4()), **colour)
+        self.assertEqual(output, b"audited worker G-code")
+        audit.assert_called_once_with(
+            output, candidate["model"], tool=1, tower=candidate["tower"])
+
     def test_two_painted_mmu_walls_bind_explicit_tools_and_worker_bytes(self):
         from core.slicer_prusa_material_preflight import prepare_prusa_offline_colour_candidate
         from core.slicer_plate_3mf import _triangles
