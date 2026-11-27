@@ -121,6 +121,20 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
   const [engines, setEngines] = useState([]);
   const [jobs, setJobs] = useState([]);
   const [profiles, setProfiles] = useState([]);
+  const [prusaProfileTopology, setPrusaProfileTopology] = useState(null);
+  useEffect(() => {
+    let cancelled = false;
+    setPrusaProfileTopology(null);
+    if (form.engine !== "prusaslicer" || !form.printer_profile_id) return;
+    apiFetch("/api/printing/slicer/profiles/?prusa_printer_topology_id=" +
+      encodeURIComponent(form.printer_profile_id))
+      .then(response => {
+        if (!cancelled && String(response.printer_profile_id) === String(form.printer_profile_id))
+          setPrusaProfileTopology(response.topology || null);
+      })
+      .catch(() => { if (!cancelled) setPrusaProfileTopology(null); });
+    return () => { cancelled = true; };
+  }, [form.engine, form.printer_profile_id]);
   const [profileModal, setProfileModal] = useState("");
   const [managingSavedProfiles, setManagingSavedProfiles] = useState(false);
   const [profileRemoveError, setProfileRemoveError] = useState("");
@@ -1695,6 +1709,7 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
       flushSettings={flushSettings} onFlushSettingsChange={setFlushSettings}
       slotFilamentProfiles={slotFilamentProfiles} onSlotFilamentProfilesChange={setSlotFilamentProfiles}
       prusaNativeTools={prusaNativeTools} onPrusaNativeToolsChange={setPrusaNativeTools}
+      prusaProfileTopology={prusaProfileTopology}
       filamentProfiles={slotFilamentChoices} spools={spools}
       onRememberedProfiles={remembered => {
         setProfiles(current => {
