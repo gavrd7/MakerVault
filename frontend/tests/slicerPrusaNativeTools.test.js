@@ -125,3 +125,11 @@ test("Prusa native tool capacity is retrieved from an owner-scoped resolved prin
   assert.match(editor,/profileToolCount \? \[\.\.\.new Set\(\[value\.tool_count, profileToolCount\]\)\]/);
   assert.match(editor,/draft; profile mismatch/);
 });
+
+test("Prusa Slice readiness refuses native-profile mismatch before sending the job",()=>{
+  assert.match(prepare,/const prusaProfileMode = prusaProfileTopology\?\.kind/);
+  assert.match(prepare,/const prusaTopologyMatches = !prusaProfileTopology/);
+  assert.match(prepare,/prusaNativeTools\?\.tool_count===prusaProfileTopology\.logical_tool_count/);
+  assert.match(prepare,/prusaTopologyMatches &&/);
+  assert.match(prepare,/Use Match native printer profile in the materials panel/);
+});
