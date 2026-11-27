@@ -41,6 +41,9 @@ def main(binary, vendor):
         base[key]="0"
     process="".join(f"{key} = {value}\n"
                     for key,value in sorted(base.items())).encode()
+    from core.slicer_prusa_process_settings import apply_prusa_process_overrides
+    process = apply_prusa_process_overrides(process, {"layer_height": .16, "wall_loops": 3})
+    assert b"layer_height = 0.16\n" in process and b"perimeters = 3\n" in process
     stl,_,_,paint=fixture(include_paint=True)
     row={"asset_id":"xl-native-paint-research","x_mm":0,"y_mm":0,"z_mm":0,
          "rotation_deg":0,"scale_percent":100,"colour_paint":paint}
