@@ -526,6 +526,82 @@ class PrusaOfflineMmuPreflightTests(TestCase):
         xl_audit.assert_called_once_with(
             output, selected_xl["model"], tool=1)
 
+    def test_horizontal_top_brush_uses_only_qualified_xl5_worker_audit(self):
+        from core.slicer_prusa_material_preflight import (
+            prepare_prusa_offline_xl_colour_candidate,
+            slice_prusa_offline_xl_colour_candidate,
+            prepare_prusa_offline_colour_candidate)
+        from core.slicer_plate_3mf import _triangles
+        from core.slicer_native_support_paint import _fingerprint
+        from scripts.prusa_generate_mmu_paint import fixture
+        from slicer_worker.service import _decode_payload
+        import base64
+        values,assets=self.parts()
+        source,_,_,paint=fixture(include_paint=True)
+        faces=list(_triangles(source))
+        low=[min(p[i] for face in faces for p in face) for i in range(3)]
+        high=[max(p[i] for face in faces for p in face) for i in range(3)]
+        origin=((low[0]+high[0])/2,(low[1]+high[1])/2,low[2])
+        local=[[tuple(p[i]-origin[i] for i in range(3)) for p in face]
+               for face in faces]
+        z=high[2]-low[2]
+        face=next(i for i,tri in enumerate(local)
+                  if all(abs(p[2]-z)<.00001 for p in tri))
+        a,b,c=local[face]
+        partial={**paint,"signature":_fingerprint(local),
+                 "regions":[{"slot":1,"patches":[{"face":face,
+                 "polygon":[list(a),
+                            [(a[i]+b[i])/2 for i in range(3)],
+                            [(a[i]+c[i])/2 for i in range(3)]]}]}]}
+        row={"asset_id":"xl5-top-paint","x_mm":0,"y_mm":0,"z_mm":0,
+             "rotation_deg":0,"scale_percent":100,"colour_paint":partial}
+        params={key:values[key] for key in (
+            "owner_id","printer_profile","process_profile","filament_profiles",
+            "bed_width","bed_depth")}
+        params.update(rows=[(row,source)],tools=[1],
+                      colour_tool_indices={1:1})
+        assets[0]=ini("0.4,0.4,0.4,0.4,0.4","0")
+        with patch("core.slicer_prusa_material_preflight.resolved_prusa_profile",
+                   side_effect=assets):
+            prepared=prepare_prusa_offline_xl_colour_candidate(**params)
+        self.assertFalse(prepared["partial_wall"])
+        self.assertTrue(prepared["partial_top"])
+        encode=lambda payload:base64.b64encode(payload).decode("ascii")
+        request={"job_id":str(uuid.uuid4()),"engine":"prusaslicer",
+                 "engine_version":"2.9.7","model_format":"3mf",
+                 "model":encode(prepared["model"]),
+                 "printer_profile":encode(prepared["printer"]),
+                 "filament_profile":encode(prepared["filament"]),
+                 "process_profile":encode(prepared["process"]),
+                 "prusa_offline_xl_colour":{"tool":1}}
+        self.assertEqual(_decode_payload(request)["prusa_offline_xl_colour"],
+                         {"tool":1,"partial_wall":False,"partial_top":True})
+        with self.assertRaises(WorkerError):
+            _decode_payload({**request,"prusa_offline_xl_colour":{
+                "tool":1,"partial_top":True}})
+        remote,context=self.offline_worker_stub()
+        remote.return_value=b"audited-top"
+        with context,patch(
+            "core.slicer_prusa_material_preflight.prepare_prusa_offline_xl_colour_candidate",
+            return_value=prepared),patch(
+            "slicer_worker.prusa_top_surface.audit_prusa_partial_top_gcode"
+        ) as audit:
+            result=slice_prusa_offline_xl_colour_candidate(
+                str(uuid.uuid4()),**params)
+        self.assertEqual(result,b"audited-top")
+        audit.assert_called_once_with(result,prepared["model"],tool=1)
+        # MMU has no native top-surface purge/deposition proof; never inherit
+        # the independent-head clearance from an otherwise valid mask.
+        assets[0]=ini("0.4,0.4,0.4,0.4,0.4","1")
+        mmu={key:values[key] for key in (
+            "owner_id","printer_profile","process_profile","filament_profiles",
+            "purge_matrix","tower_xy","bed_width","bed_depth")}
+        mmu.update(rows=[(row,source)],tools=[1],
+                   colour_slot=1,colour_tool=1)
+        with patch("core.slicer_prusa_material_preflight.resolved_prusa_profile",
+                   side_effect=assets),self.assertRaises(WorkerError):
+            prepare_prusa_offline_colour_candidate(**mmu)
+
     def test_two_painted_mmu_walls_bind_explicit_tools_and_worker_bytes(self):
         from core.slicer_prusa_material_preflight import prepare_prusa_offline_colour_candidate
         from core.slicer_plate_3mf import _triangles
