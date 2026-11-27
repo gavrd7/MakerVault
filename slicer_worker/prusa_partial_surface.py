@@ -125,7 +125,7 @@ def _inside_triangle(point, triangle, *, margin=0.02):
     return min(u, v, w) > margin
 
 
-def audit_prusa_partial_wall_gcode(data, project, *, tool):
+def audit_prusa_partial_wall_gcode(data, project, *, tool, tower=None):
     """Research-only spatial deposition audit for a split vertical colour mask.
 
     Use verified native 3MF facet polygons and actual positive-E external
@@ -139,12 +139,22 @@ def audit_prusa_partial_wall_gcode(data, project, *, tool):
     source = inspect_prusa_partial_wall(project, tool)
     if not isinstance(data, bytes) or not 0 < len(data) <= 90 * 1024 * 1024:
         raise WorkerError("Invalid Prusa partial-mask G-code.")
+    if tower is not None:
+        if (not isinstance(tower, (tuple, list)) or len(tower) != 5 or
+                any(type(v) not in (int, float) or not math.isfinite(v)
+                    for v in tower)):
+            raise WorkerError("Invalid Prusa partial colour tower geometry.")
+        tx, ty = tower[:2]
+        tower_box = (tx - 6, tx + 65, ty - 12, ty + 45)
+    else:
+        tower_box = None
     axis = source["axis"]
     tangent = 1 - axis
     plane = source["plane"]
     selected = {0, tool}
     counts = {t: {"painted": 0, "unpainted": 0} for t in selected}
     layers = {t: {"painted": set(), "unpainted": set()} for t in selected}
+    purge = {t: 0 for t in selected}
     role = ""
     active = None
     position = [None, None, None]
@@ -201,6 +211,15 @@ def audit_prusa_partial_wall_gcode(data, project, *, tool):
                 continue
             delta = words["E"] if relative_e else words["E"] - extruder
             extruder = extruder + words["E"] if relative_e else words["E"]
+            if (delta > 1e-6 and active in selected and
+                    op in ("G1", "G01") and tower_box is not None and
+                    previous[0] is not None and previous[1] is not None and
+                    position[0] is not None and position[1] is not None and
+                    tower_box[0] <= previous[0] <= tower_box[1] and
+                    tower_box[2] <= previous[1] <= tower_box[3] and
+                    tower_box[0] <= position[0] <= tower_box[1] and
+                    tower_box[2] <= position[1] <= tower_box[3]):
+                purge[active] += 1
             if (op not in ("G1", "G01") or delta <= 1e-6 or
                     active not in selected or role != "external perimeter" or
                     any(v is None for v in previous + tuple(position))):
@@ -239,7 +258,12 @@ def audit_prusa_partial_wall_gcode(data, project, *, tool):
                 counts[tool]["painted"], counts[0]["unpainted"],
                 counts[tool]["unpainted"], counts[0]["painted"],
                 len(layers[tool]["painted"]), len(layers[0]["unpainted"])))
+    if tower_box is not None and any(value < 10 for value in purge.values()):
+        raise WorkerError(
+            "Prusa partial-mask G-code lacks native tool-specific wipe tower purging "
+            "(base=%d, painted=%d)." % (purge[0], purge[tool]))
     return {
+        "tower_extrusion_moves": purge if tower_box is not None else None,
         "tool": tool,
         "deposition_moves": counts,
         "painted_layers": len(layers[tool]["painted"]),
