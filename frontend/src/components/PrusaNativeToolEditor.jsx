@@ -73,8 +73,7 @@ export default function PrusaNativeToolEditor({
   const paintedSlots=[...new Set(models.flatMap(model=>
     model.colour_paint?.regions?.map(region=>region.slot)||[]))];
   const singleColour=models.length===1 && paintedSlots.length>=1 &&
-    ((value?.mode==="mmu" && paintedSlots.length<=2) ||
-     (value?.mode==="xl" && paintedSlots.length===1));
+    (["mmu","xl"].includes(value?.mode) && paintedSlots.length<=2);
   const editMatrix=(source,target,raw)=>{
     const matrix=value.purge_matrix.map(row=>[...row]);
     matrix[source][target]=safeNumber(raw);
