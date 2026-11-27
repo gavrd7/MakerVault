@@ -233,7 +233,7 @@ def prepare_prusa_offline_colour_candidate(
     topology=prusa_machine_topology(printer)
     if (topology["kind"]!="single_nozzle_changer" or
             not 2<=topology["logical_tool_count"]<=5 or
-            colour_tool>=topology["logical_tool_count"] or
+            any(tool>=topology["logical_tool_count"] for tool in colour_tool_indices.values()) or
             len(filament_profiles)!=topology["logical_tool_count"]):
         raise SlicerProfileError("Prusa native painting requires a qualified MMU tool palette.")
     process=resolved_prusa_profile(process_profile)
