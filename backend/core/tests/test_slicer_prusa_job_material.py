@@ -488,6 +488,37 @@ class PrusaVirtualToolDraftTests(TestCase):
         self.assertEqual(kind,"xl")
         self.assertNotIn("purge_matrix",result)
 
+    def test_painted_xl_two_wall_workbench_dispatch(self):
+        from scripts.prusa_generate_mmu_paint import fixture as painted_fixture
+        job, filaments, _ = self.config()
+        _source, _mesh, _states, paint = painted_fixture(include_paint=True)
+        # Workbench validates palette identities; native 3MF preflight
+        # separately verifies exact fingerprinted wall geometry.
+        dual = {**paint, "regions":[
+            *paint["regions"], {"slot":2,"patches":[{"face":0,"polygon":[]}]}]}
+        job.settings["plate_objects"] = job.settings["plate_objects"][:1]
+        job.settings["plate_objects"][0]["colour_paint"] = dual
+        config = job.settings["prusa_native_tools"]
+        config.update(mode="xl", purge_matrix=None,
+                      model_tools=config["model_tools"][:1],
+                      colour_tools=[{"slot":1,"tool":2},{"slot":2,"tool":1+1}])
+        # Use distinct native tools, never duplicate T1 between swatches.
+        config["colour_tools"][1]["tool"] = 3
+        job.settings.pop("prime_tower")
+        PrusaWorkbenchMaterialTests.resolve(
+            self, job, filaments, ini("0.4,0.4,0.4", "0"))
+        # Three native head slots need three owned filament profiles.
+        # The native tool editor will reject an incomplete palette.
+        config["tool_count"] = 3
+        config["filament_profile_ids"].append(str(filaments[0].pk))
+        with patch("core.slicer_prusa_job_material.slice_prusa_offline_xl_colour_candidate",
+                   return_value=b"audited-dual-xl") as worker:
+            result=slice_prusa_workbench_material(
+                job,[(dict(job.settings["plate_objects"][0]),b"source")])
+        self.assertEqual(result,b"audited-dual-xl")
+        self.assertEqual(worker.call_args.kwargs["colour_tool_indices"],{1:1,2:2})
+        self.assertNotIn("tower_xy",worker.call_args.kwargs)
+
     def test_painted_xl_workbench_dispatch_uses_only_xl_candidate_arguments(self):
         from scripts.prusa_generate_mmu_paint import fixture as painted_fixture
         from inspect import signature
