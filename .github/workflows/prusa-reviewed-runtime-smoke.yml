@@ -582,9 +582,21 @@ jobs:
           root = Path(os.environ["LAYER_DIR"])
           base = {"asset_id": "verified-cube", "x_mm": 0, "y_mm": 0,
                   "z_mm": 0, "rotation_deg": 0, "scale_percent": 100}
-          for name, extra in (("baseline", {}), ("layer", {
-              "variable_layer_profile": {"version": 1, "bands": [
-                  {"from_mm": 4, "to_mm": 16, "layer_mm": .12}]}})):
+          layer = {"variable_layer_profile": {"version": 1, "bands": [
+              {"from_mm": 4, "to_mm": 16, "layer_mm": .12}]}}
+          modifier = {"modifier_volumes": [{
+              "id": "cbfd724f-80cc-45a9-9795-31e5612c1b20",
+              "shape": "box", "kind": "modifier",
+              "width_mm": 10, "depth_mm": 10, "height_mm": 22,
+              "x_mm": 0, "y_mm": 0, "z_mm": 10,
+              "coordinate_space": "world",
+              "rotation_xyz_deg": [0, 0, 0],
+              "scale_xyz_percent": [100, 100, 100],
+              "settings": {"sparse_infill_density": 80},
+          }]}
+          for name, extra in (("baseline", {}), ("layer", layer),
+                              ("modifier", modifier),
+                              ("layer-modifier", {**layer, **modifier})):
               row = {**base, **extra}
               raw = build_prusa_native_3mf([(row, cube_stl())],
                                             bed_width=250, bed_depth=210)
@@ -597,12 +609,14 @@ jobs:
           docker run --rm --network none --user 10001:10001 \
             -v "$TEST_VOLUME:/opt/engine-store:ro" \
             -v "$GITHUB_WORKSPACE/scripts/prusa_native_layer_ranges_smoke.py:/tmp/prusa_native_layers.py:ro" \
+            -v "$GITHUB_WORKSPACE/scripts/prusa_native_regions_smoke.py:/tmp/prusa_regions.py:ro" \
             -v "$PRUSA_LAYER_DIR:/tmp/prusa-layers:ro" \
             --entrypoint python3 prusa-integration:smoke \
             /tmp/prusa_native_layers.py \
             /opt/engine-store/versions/prusaslicer/2.9.7/bin/prusa-slicer \
             /opt/engine-store/versions/prusaslicer/2.9.7/resources/profiles/PrusaResearch.ini \
-            /tmp/prusa-layers/baseline.3mf /tmp/prusa-layers/layer.3mf
+            /tmp/prusa-layers/baseline.3mf /tmp/prusa-layers/layer.3mf \
+            /tmp/prusa-layers/modifier.3mf /tmp/prusa-layers/layer-modifier.3mf
 
       - name: Generate Prusa two-object native regional projects
         run: |
