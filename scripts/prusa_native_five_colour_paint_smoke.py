@@ -285,6 +285,44 @@ def main(binary, vendor):
               proof, flush=True)
         print("PASS: research genuine Prusa MMU T1-front/T2-back multi-swatch",
               counts, "sha256",hashlib.sha256(gcode).hexdigest(),flush=True)
+
+        # The same three-tool MMU palette/tower must also work when two
+        # complete *X-axis* walls are painted. The worker derives wall
+        # footprints from the 3MF mesh instead of assuming front/back Y.
+        xpatches={}
+        for slot,ordinate in ((1,-10),(2,10)):
+            patches=[{"face":index,"polygon":[list(v) for v in face]}
+                     for index,face in enumerate(local)
+                     if all(abs(v[0]-ordinate)<.00001 for v in face)]
+            assert len(patches)==2,("Missing X-painted wall",slot)
+            xpatches[slot]=patches
+        xpaint={**multi,"regions":[
+            {"slot":slot,"patches":xpatches[slot]} for slot in (1,2)]}
+        xmodel=build_prusa_colour_candidate(
+            {**row,"colour_paint":xpaint},stl,printer_ini=printer,
+            colour_tool_indices={1:1,2:2},bed_width=250,bed_depth=210)
+        xmodel=add_prusa_native_wipe_tower(
+            xmodel,x_mm=55,y_mm=150,rotation_deg=0,
+            bed_width=250,bed_depth=210)
+        xreceipt=validate_prusa_material_candidate(
+            xmodel,printer_ini=printer,colour=True,
+            tower=(55,150,0,250,210))
+        assert xreceipt["tools"]==(1,2,3),xreceipt
+        (target/"input.3mf").write_bytes(xmodel)
+        (target/"output.gcode").unlink(missing_ok=True)
+        _receipt,xoutput=run_prusa_mmu_with_numeric_recheck(
+            run_prusa,Path(binary),target,timeout_seconds=300,
+            max_bytes=64*1024*1024)
+        xproof=audit_prusa_dual_colour_gcode(
+            xoutput,xmodel,printer_ini=printer,tools=(1,2),
+            tower=(55,150,0,250,210))
+        assert xproof["wall_moves"][1]["front"]>=20,xproof
+        assert xproof["wall_moves"][2]["back"]>=20,xproof
+        assert xproof["wall_moves"][1]["back"]<=2,xproof
+        assert xproof["wall_moves"][2]["front"]<=2,xproof
+        assert all(n>=10 for n in xproof["tower_extrusion_moves"].values()),xproof
+        print("PASS: genuine Prusa MMU X-axis opposing dual-painted walls",
+              xproof,"sha256",hashlib.sha256(xoutput).hexdigest(),flush=True)
     print("PASS: genuine Prusa 2.9.7 native T1-T4 painted facets with isolated wipe tower",
           flush=True)
 
