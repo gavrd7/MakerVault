@@ -108,6 +108,38 @@ def main(binary, vendor, baseline, modifier, negative, mixed_dir=None):
             print("PASS: Prusa cavity removes native material on model A while "
                   "an independent Object setting changes model B.", flush=True)
 
+            stacked = {}
+            for label in ("stack-object", "stack-both"):
+                output = work / (label + ".gcode")
+                subprocess.run([
+                    binary, *profiles, "--export-gcode", "--dont-arrange",
+                    "--output", str(output),
+                    str(Path(mixed_dir) / (label + ".3mf")),
+                ], cwd=work, check=True, timeout=300)
+                stacked[label] = tuple(
+                    sample(output.read_bytes(), center_x=x, center_y=105)
+                    for x in (90, 160))
+                print("Prusa stacked Object and modifier deposition",
+                      label, stacked[label], flush=True)
+            alone, combined = stacked["stack-object"], stacked["stack-both"]
+            if (alone[0][0] <= .1 or combined[0][0] <= alone[0][0]*1.5
+                    or min(alone[0][1], combined[0][1]) <= .1):
+                raise AssertionError(
+                    ("Prusa same-model modifier lost its local effect",
+                     alone, combined))
+            if not .7 <= combined[0][1] / alone[0][1] <= 1.3:
+                raise AssertionError(
+                    ("Prusa same-model region unexpectedly changed outer deposition",
+                     alone, combined))
+            for part in (0, 1):
+                if not .7 <= combined[1][part] / baseline_counts[1][part] <= 1.3:
+                    raise AssertionError(
+                        ("Prusa modifier/Object stack contaminated the other model",
+                         part, combined, baseline_counts))
+            print("PASS: Prusa two-model Object infill and local box modifier "
+                  "stack on one model without neighbour contamination.", flush=True)
+
+
 
 
 if __name__ == "__main__":
