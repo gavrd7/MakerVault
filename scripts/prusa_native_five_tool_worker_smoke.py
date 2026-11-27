@@ -146,6 +146,43 @@ def main(binary,vendor):
         print("PASS: five MMU tools selected and deposited correct material on five models",
               receipt,"sha256",hashlib.sha256(output).hexdigest(),flush=True)
 
+        # More objects than MMU bays: each of the five real logical tools
+        # must independently deposit inside two distinct object footprints.
+        # Never extrapolate the machine's actual five native material tools.
+        repeated_rows=[]
+        for row_index, y_mm in enumerate((-43, 17)):
+            for index, x_mm in enumerate((-90, -45, 0, 45, 90)):
+                obj=item(x_mm=x_mm,y_mm=y_mm)
+                obj["asset_id"]=f"mmu-repeat-{row_index}-{index}"
+                repeated_rows.append((obj,cube(size=8)))
+        repeated_tools=list(range(1,6))*2
+        repeated_project,_=build_prusa_multitool_candidate(
+            repeated_rows,printer_ini=printer,tools=repeated_tools,
+            bed_width=250,bed_depth=210)
+        repeated_project=add_prusa_native_wipe_tower(
+            repeated_project,x_mm=55,y_mm=150,rotation_deg=0,
+            bed_width=250,bed_depth=210)
+        from slicer_worker.prusa_material_validation import validate_prusa_material_candidate
+        validated=validate_prusa_material_candidate(
+            repeated_project,printer_ini=printer,tools=repeated_tools,tower=tower)
+        assert validated["objects"]==10
+        repeated_payload={**candidate,"model":encode(repeated_project),
+                          "prusa_offline_mmu":{"tools":repeated_tools,"tower":tower}}
+        assert _decode_payload(repeated_payload)["prusa_offline_mmu"]["tools"]==repeated_tools
+        (work/"input.3mf").write_bytes(repeated_project)
+        (work/"output.gcode").unlink()
+        run_prusa(Path(binary),work)
+        repeated_gcode=(work/"output.gcode").read_bytes()
+        repeated_receipt=audit_prusa_material_model_gcode(
+            repeated_gcode,repeated_project,printer_ini=printer,
+            tools=repeated_tools,tower=tower)
+        assert len(repeated_receipt["correct_extrusion_moves"])==10
+        assert min(repeated_receipt["correct_extrusion_moves"])>=20
+        assert repeated_receipt["incorrect_extrusion_moves"]==[0]*10
+        assert len(repeated_receipt["tower_extrusion_moves"])==5
+        print("PASS: ten Prusa MMU models repeat five native tools with audited deposition",
+              repeated_receipt,"sha256",hashlib.sha256(repeated_gcode).hexdigest(),flush=True)
+
 
 if __name__=="__main__":
     main(*sys.argv[1:])
