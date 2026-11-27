@@ -68,12 +68,17 @@ def _virtual_native_tools(job, settings, objects, kind, count, *, single_colour=
         regions=paint.get("regions") or []
         colour_rows=config.get("colour_tools",[])
         slots = [region.get("slot") for region in regions if isinstance(region,dict)]
+        unique_slots = set(slots)
         allowed=(1,2,4) if expected=="xl" else (1,2)
-        if (len(regions) not in allowed or len(slots)!=len(regions) or
-                len(set(slots))!=len(slots) or
-                len(colour_rows)!=len(slots) or
-                {row["slot"] for row in colour_rows}!=set(slots) or
-                len({row["tool"] for row in colour_rows})!=len(slots)):
+        # MakerVault's shared v2 painter stores individual brush regions.
+        # Several disjoint regions may intentionally share one palette slot.
+        # Native tools bind *distinct swatches*, not region-count or strokes.
+        if (len(slots)!=len(regions) or
+                any(type(slot) is not int for slot in slots) or
+                len(unique_slots) not in allowed or
+                len(colour_rows)!=len(unique_slots) or
+                {row["slot"] for row in colour_rows}!=unique_slots or
+                len({row["tool"] for row in colour_rows})!=len(unique_slots)):
             raise SlicerProfileError(
                 "Assign distinct native tools to each supported Prusa painted swatch.")
         colour_tool_indices = {row["slot"]:row["tool"]-1 for row in colour_rows}
