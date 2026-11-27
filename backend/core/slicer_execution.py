@@ -234,7 +234,7 @@ def _check_profile_integrity(profile, job, kind):
         inspection = inspect_native_profile(profile.file_asset, profile.engine)
         if inspection["sha256"] != profile.content_sha256:
             raise SlicerExecutionError("Native profile contents changed after import.")
-        if profile.engine in {"orcaslicer", "crealityprint", "bambustudio"}:
+        if profile.engine in {"orcaslicer", "crealityprint", "bambustudio", "prusaslicer"}:
             resolved_native_profile(profile)
     except (SlicerProfileError, ValueError, OSError) as exc:
         raise SlicerExecutionError("Native profile is invalid or its parent presets are incomplete: " +
@@ -273,6 +273,61 @@ def _validate_plate_execution(job):
         settings=expand_painted_settings(getattr(job, "owner", None), job.settings or {})
     except (ValueError, OSError) as exc:
         raise SlicerExecutionError("A referenced private painting asset is missing or invalid.") from exc
+    if (job.engine == "prusaslicer" and settings.get("prusa_native_tools") is not None
+            and settings.get("multi_material_test") is not True):
+        raise SlicerExecutionError("Prusa native tool assignments require audited multi-material slicing.")
+    if job.engine == "prusaslicer" and settings.get("multi_material_test") is True:
+        # The only qualified material route is offline MMU/XL and requires a
+        # complete owner-bound native palette. Never fall through to Orca's
+        # different tool / tower dialect or printer submission.
+        from .slicer_prusa_job_material import prepare_prusa_workbench_material
+        try:
+            prepare_prusa_workbench_material(job, settings=settings)
+        except (SlicerProfileError, ValueError, TypeError) as exc:
+            raise SlicerExecutionError(str(exc)) from exc
+        return True
+    # The pinned Prusa 2.9.7 runtime is independently approved for one
+    # unmodified FFF STL with native printer/filament/print presets. Do not
+    # silently discard Orca/Creality/Bambu-style global overrides, or route
+    # transformed/multi-object Prusa plates into an unverified 3MF dialect.
+    # This conditional does not change those three working engines.
+    if job.engine == "prusaslicer":
+        if settings.get("process_overrides"):
+            from .slicer_prusa_process_settings import apply_prusa_process_overrides
+            if not job.process_profile_id:
+                raise SlicerExecutionError("Select a native Prusa process profile.")
+            try:
+                apply_prusa_process_overrides(
+                    resolved_native_profile(job.process_profile),
+                    settings["process_overrides"])
+            except (ValueError, OSError) as exc:
+                raise SlicerExecutionError(str(exc)) from exc
+        if settings.get("multi_material_test") is True:
+            raise SlicerExecutionError(
+                "PrusaSlicer multi-material slicing is not yet verified.")
+        prusa_objects = settings.get("plate_objects")
+        if prusa_objects:
+            if not isinstance(prusa_objects, list) or not 1 <= len(prusa_objects) <= 200:
+                raise SlicerExecutionError("PrusaSlicer requires 1–200 single-material STL objects within the shared placement budget.")
+            for item in prusa_objects:
+                if not isinstance(item, dict) or (
+                        (item.get("colour_paint") or {}).get("regions") or
+                        (item.get("colour_paint") or {}).get("faces")):
+                    raise SlicerExecutionError(
+                        "PrusaSlicer surface painting is not yet verified.")
+                from .slicer_prusa_3mf import OBJECT_KEYS
+                from .slicer_prusa_process_settings import apply_prusa_process_overrides
+                from .slicer_prusa_3mf import BASE
+                overrides = item.get("process_overrides") or {}
+                if not isinstance(overrides, dict) or set(overrides) - OBJECT_KEYS:
+                    raise SlicerExecutionError("PrusaSlicer per-object settings are not yet verified for these keys.")
+                try:
+                    apply_prusa_process_overrides(BASE, overrides)
+                except ValueError as exc:
+                    raise SlicerExecutionError(str(exc)) from exc
+                if float(item.get("z_mm", 0)) != 0:
+                    raise SlicerExecutionError(
+                        "PrusaSlicer elevated or stacked objects are not yet verified.")
     # Do not silently discard native flush / prime-tower preferences when
     # admitting an otherwise single-filament job. They require the future
     # exact-printer, multi-tool worker route and verified CFS bindings.
@@ -286,9 +341,20 @@ def _validate_plate_execution(job):
         )
     objects=settings.get("plate_objects")
     try:
-        native_modifier_request = validate_native_modifier_execution(
-            objects, engine=job.engine, version=getattr(job, "engine_version", None),
-            settings=settings)
+        if job.engine == "prusaslicer" and objects and any(
+                item.get("modifier_volumes") or item.get("process_overrides") or
+                (item.get("variable_layer_profile") or {}).get("bands") or
+                (item.get("support_paint") or {}).get("regions") or
+                (item.get("seam_paint") or {}).get("regions") or
+                (item.get("fuzzy_skin_paint") or {}).get("regions")
+                for item in objects if isinstance(item, dict)):
+            from .slicer_prusa_3mf import validate_prusa_project_admission
+            native_modifier_request = validate_prusa_project_admission(
+                objects, settings, getattr(job, "engine_version", None))
+        else:
+            native_modifier_request = validate_native_modifier_execution(
+                objects, engine=job.engine, version=getattr(job, "engine_version", None),
+                settings=settings)
     except ValueError as exc:
         raise SlicerExecutionError(str(exc)) from exc
     project=settings.get("plates")
@@ -341,39 +407,57 @@ def _validate_plate_execution(job):
            and item["support_paint"].get("regions") for item in objects):
         # Native geometry splitting and paint_supports attributes are
         # experimental until compared with real Orca-generated toolpaths.
-        if not ((job.engine == "orcaslicer" and job.engine_version == "2.5.0") or
+        if not ((job.engine == "prusaslicer" and job.engine_version == "2.9.7") or
+                (job.engine == "orcaslicer" and job.engine_version == "2.5.0") or
                 (job.engine == "bambustudio" and job.engine_version == "02.09.01.70") or
                 (job.engine == "crealityprint" and job.engine_version.startswith("7.3.") and
                  settings.get("multi_material_test") is True)):
             raise SlicerExecutionError(
                 "Native support painting test requires OrcaSlicer 2.5.0 or Creality Print 7.3.x CFS test mode.")
-        if len(objects) != 1 or (settings.get("multi_material_test") and job.engine not in {"crealityprint", "bambustudio"}):
+        prusa_multi_support = (job.engine == "prusaslicer" and
+                               job.engine_version == "2.9.7" and
+                               2 <= len(objects) <= 12)
+        if ((len(objects) != 1 and not prusa_multi_support) or
+                (settings.get("multi_material_test") and job.engine not in {"crealityprint", "bambustudio"})):
             raise SlicerExecutionError(
                 "Support painting test requires one upright model (Creality: one two-colour CFS model).")
-        item = objects[0]
-        if item.get("process_overrides"):
-            raise SlicerExecutionError(
-                "Support painting with per-object overrides is not verified.")
-        if (any(abs(float(value)) > 0.000001 for value in
-                item.get("rotation_xyz_deg", [0, 0]))
-                or abs(float(item.get("z_mm", 0))) > 0.000001):
-            raise SlicerExecutionError(
-                "Support painting test requires an upright, non-elevated model.")
-        if (abs(float(item.get("scale_percent", 100)) - 100) > 0.000001 or
-               any(abs(float(value) - 100) > 0.000001 for value in
-                   item.get("scale_xyz_percent", [item.get("scale_percent", 100)] * 3))):
-            raise SlicerExecutionError(
-                "Support painting test requires an unscaled model.")
+        if prusa_multi_support:
+            from .slicer_prusa_support_audit import validate_prusa_multi_support_plate
+            try:
+                validate_prusa_multi_support_plate(objects)
+            except (ValueError, TypeError) as exc:
+                raise SlicerExecutionError(str(exc)) from exc
+        for item in (objects if prusa_multi_support else objects[:1]):
+            if item.get("process_overrides"):
+                raise SlicerExecutionError(
+                    "Support painting with per-object overrides is not verified.")
+            if (any(abs(float(value)) > 0.000001 for value in
+                    item.get("rotation_xyz_deg", [0, 0]))
+                    or abs(float(item.get("z_mm", 0))) > 0.000001):
+                raise SlicerExecutionError(
+                    "Support painting test requires an upright, non-elevated model.")
+            if (abs(float(item.get("scale_percent", 100)) - 100) > 0.000001 or
+                   any(abs(float(value) - 100) > 0.000001 for value in
+                       item.get("scale_xyz_percent", [item.get("scale_percent", 100)] * 3))):
+                raise SlicerExecutionError(
+                    "Support painting test requires an unscaled model.")
     if any(isinstance(item, dict) and isinstance(item.get("seam_paint"), dict)
            and item["seam_paint"].get("regions") for item in objects):
-        if not ((job.engine == "orcaslicer" and job.engine_version == "2.5.0") or
+        if not ((job.engine == "prusaslicer" and job.engine_version == "2.9.7") or
+                (job.engine == "orcaslicer" and job.engine_version == "2.5.0") or
                 (job.engine == "bambustudio" and job.engine_version == "02.09.01.70") or
                 (job.engine == "crealityprint" and job.engine_version.startswith("7.3.") and
                  settings.get("multi_material_test") is True)):
-            raise SlicerExecutionError("Native seam painting test requires OrcaSlicer 2.5.0 or Creality Print 7.3.x CFS test mode.")
+            raise SlicerExecutionError("Native seam painting test requires PrusaSlicer 2.9.7, OrcaSlicer 2.5.0, or a verified native Creality/Bambu engine.")
         if len(objects) != 1 or (settings.get("multi_material_test") and job.engine not in {"crealityprint", "bambustudio"}):
             raise SlicerExecutionError("Seam painting test requires one model (Creality: one two-colour CFS model).")
         item = objects[0]
+        if job.engine == "prusaslicer":
+            from .slicer_prusa_seam_audit import prusa_qualified_seam_direction
+            try:
+                prusa_qualified_seam_direction(item)
+            except ValueError as exc:
+                raise SlicerExecutionError(str(exc)) from exc
         if item.get("process_overrides"):
             raise SlicerExecutionError("Seam painting with per-object overrides is not yet verified.")
         if (any(abs(float(value)) > 0.000001 for value in
@@ -389,29 +473,38 @@ def _validate_plate_execution(job):
         # Orca 2.5 saves painted fuzzy regions in paint_fuzzy_skin and uses
         # fuzzy_skin=none ("Painted only") to activate them. The distinct
         # disabled_fuzzy value turns the effect off entirely.
-        if not ((job.engine == "orcaslicer" and job.engine_version == "2.5.0") or
+        if not ((job.engine == "prusaslicer" and job.engine_version == "2.9.7") or
+                (job.engine == "orcaslicer" and job.engine_version == "2.5.0") or
                 (job.engine == "bambustudio" and job.engine_version == "02.09.01.70") or
                 (job.engine == "crealityprint" and job.engine_version.startswith("7.3.") and
                  settings.get("multi_material_test") is True)):
             raise SlicerExecutionError(
                 "Native fuzzy skin painting test requires OrcaSlicer 2.5.0 or Creality Print 7.3.x CFS test mode.")
-        if len(objects) != 1 or (settings.get("multi_material_test") and job.engine not in {"crealityprint", "bambustudio"}):
+        prusa_two_fuzzy = (job.engine == "prusaslicer" and
+                           job.engine_version == "2.9.7" and len(objects) == 2)
+        if ((len(objects) != 1 and not prusa_two_fuzzy) or
+                (settings.get("multi_material_test") and
+                 job.engine not in {"crealityprint", "bambustudio"})):
             raise SlicerExecutionError(
-                "Selective fuzzy skin test requires one model (Creality: one two-colour CFS model).")
-        item = objects[0]
-        if item.get("process_overrides"):
+                "Selective fuzzy skin requires one model (Prusa 2.9.7 allows two independently audited models).")
+        if prusa_two_fuzzy and sum(bool((row.get("fuzzy_skin_paint") or {}).get("regions"))
+                                for row in objects) != 1:
             raise SlicerExecutionError(
-                "Fuzzy skin painting with per-object overrides is not verified.")
-        if (any(abs(float(value)) > 0.000001 for value in
-                item.get("rotation_xyz_deg", [0, 0]))
-                or abs(float(item.get("z_mm", 0))) > 0.000001):
-            raise SlicerExecutionError(
-                "Fuzzy skin painting test requires an upright, non-elevated model.")
-        if (abs(float(item.get("scale_percent", 100)) - 100) > 0.000001 or
-               any(abs(float(value) - 100) > 0.000001 for value in
-                   item.get("scale_xyz_percent", [item.get("scale_percent", 100)] * 3))):
-            raise SlicerExecutionError(
-                "Fuzzy skin painting test requires an unscaled model.")
+                "Prusa 2.9.7 two-model fuzzy skin requires exactly one painted model.")
+        for item in (objects if prusa_two_fuzzy else objects[:1]):
+            if item.get("process_overrides"):
+                raise SlicerExecutionError(
+                    "Fuzzy skin painting with per-object overrides is not verified.")
+            if (any(abs(float(value)) > 0.000001 for value in
+                    item.get("rotation_xyz_deg", [0, 0]))
+                    or abs(float(item.get("z_mm", 0))) > 0.000001):
+                raise SlicerExecutionError(
+                    "Fuzzy skin painting requires upright, non-elevated models.")
+            if (abs(float(item.get("scale_percent", 100)) - 100) > 0.000001 or
+                   any(abs(float(value) - 100) > 0.000001 for value in
+                       item.get("scale_xyz_percent", [item.get("scale_percent", 100)] * 3))):
+                raise SlicerExecutionError(
+                    "Fuzzy skin painting requires unscaled models.")
     if any(isinstance(item, dict) and isinstance(item.get("variable_layer_profile"), dict)
            and item["variable_layer_profile"].get("bands") for item in objects):
         # Native Orca layer_config_ranges.xml export is available for an
@@ -419,23 +512,30 @@ def _validate_plate_execution(job):
         # G-code and firmware checks are still needed for print approval.
         if not ((job.engine == "orcaslicer" and job.engine_version == "2.5.0") or
                 (job.engine == "bambustudio" and job.engine_version == "02.09.01.70") or
+                (job.engine == "prusaslicer" and job.engine_version == "2.9.7") or
                 (job.engine == "crealityprint" and job.engine_version.startswith("7.3.") and
                  settings.get("multi_material_test") is True)):
             raise SlicerExecutionError(
-                "Variable layer slicing requires OrcaSlicer 2.5.0 or Creality Print 7.3.x CFS test mode.")
-        if len(objects) != 1 or (settings.get("multi_material_test") and job.engine not in {"crealityprint", "bambustudio"}):
+                "Variable layer slicing requires OrcaSlicer 2.5.0, PrusaSlicer 2.9.7, or another verified native engine and profile.")
+        prusa_native = job.engine == "prusaslicer" and job.engine_version == "2.9.7"
+        if (len(objects) != 1 and (not prusa_native or len(objects) != 2)) or (
+                settings.get("multi_material_test") and
+                job.engine not in {"crealityprint", "bambustudio"}):
             raise SlicerExecutionError(
-                "Variable layer test slicing requires one model (Creality: one two-colour CFS model).")
-        item = objects[0]
-        if any(abs(float(x)) > 0.000001 for x in
-               item.get("rotation_xyz_deg", [0, 0])) or abs(float(item.get("z_mm", 0))) > 0.000001:
-            raise SlicerExecutionError(
-                "Variable layer test slicing requires an upright, non-elevated model.")
-        if (abs(float(item.get("scale_percent", 100)) - 100) > 0.000001 or
-               any(abs(float(x) - 100) > 0.000001 for x in
-                   item.get("scale_xyz_percent", [item.get("scale_percent", 100)] * 3))):
-            raise SlicerExecutionError(
-                "Variable layer test slicing requires an unscaled model.")
+                "Variable layer test slicing requires one model (Prusa 2.9.7 permits two independently audited models).")
+        # The pinned native Prusa 2.9.7 real-binary two-cube fixture proved
+        # independent per-object layer schedules. Both source models must
+        # remain upright and Z-unscaled for that isolated acceptance.
+        for item in (objects if prusa_native else objects[:1]):
+            if any(abs(float(x)) > 0.000001 for x in
+                   item.get("rotation_xyz_deg", [0, 0])) or abs(float(item.get("z_mm", 0))) > 0.000001:
+                raise SlicerExecutionError(
+                    "Variable layer test slicing requires upright, non-elevated models.")
+            if (abs(float(item.get("scale_percent", 100)) - 100) > 0.000001 or
+                   any(abs(float(x) - 100) > 0.000001 for x in
+                       item.get("scale_xyz_percent", [item.get("scale_percent", 100)] * 3))):
+                raise SlicerExecutionError(
+                    "Variable layer test slicing requires unscaled models.")
         if any(item.get("process_overrides") for item in objects):
             raise SlicerExecutionError(
                 "Combine variable layer height with Object settings after the native test fixture.")
@@ -491,6 +591,15 @@ def _validate_plate_execution(job):
         )
     except MaterialRoutingError as exc:
         raise SlicerExecutionError(str(exc)) from exc
+    if job.engine == "prusaslicer":
+        # Only strictly single-material STL geometry is admitted. The plate
+        # adapter bakes translations, rotations and scales into native STL
+        # vertices; a dedicated worker flag preserves this exact placement.
+        if not job.printer_profile_id:
+            raise SlicerExecutionError("Select a native printer profile for slicing.")
+        if objects and not 1 <= len(objects) <= 200:
+            raise SlicerExecutionError("Prusa plate model count is invalid.")
+        return True
     if job.engine not in {"orcaslicer", "crealityprint", "bambustudio"}:
         raise SlicerExecutionError("This engine does not yet support native build-plate slicing.")
     # Bambu and Orca both import 3MF per-object extruder settings and native
@@ -696,8 +805,9 @@ def process_queued_job(job_id):
         model = _read_owned_file(job.input_asset, job.owner_id, input_model_budget(), "Model")
         model_format = "stl"
         material_result = None
-        orca_streamed_plate = False
+        prusa_placed_stl = False
         creality_placed_stl = False
+        orca_streamed_plate = False
         is_multi_test = (job.settings or {}).get("multi_material_test") is True
         plate = (job.settings or {}).get("plate_objects")
         stage = "verifying independent modifier and negative-volume coverage"
@@ -727,7 +837,23 @@ def process_queued_job(job_id):
                         raise SlicerExecutionError("A plate STL has changed since import.")
                     verified_sources[asset_id] = raw
                 source_models.append((item, verified_sources[asset_id]))
-            if has_native_modifiers:
+            if job.engine == "prusaslicer" and is_multi_test:
+                # The dedicated owner-bound MMU/XL adapter builds native 3MF
+                # directly from these verified sources below.
+                pass
+            elif job.engine == "prusaslicer" and (has_native_modifiers or any(
+                    item.get("process_overrides") or
+                    (item.get("variable_layer_profile") or {}).get("bands") or
+                    (item.get("support_paint") or {}).get("regions") or
+                    (item.get("seam_paint") or {}).get("regions") or
+                    (item.get("fuzzy_skin_paint") or {}).get("regions")
+                    for item in plate)):
+                stage = "building qualified native Prusa project"
+                from .slicer_prusa_3mf import build_prusa_native_3mf
+                width, depth = trusted_plate_dimensions(job.printer_profile)
+                model = build_prusa_native_3mf(source_models, bed_width=width, bed_depth=depth)
+                model_format = "3mf"
+            elif has_native_modifiers:
                 if is_multi_test:
                     raise SlicerExecutionError(
                         "Native modifier and multi-material combinations require separate real-binary acceptance.")
@@ -761,11 +887,13 @@ def process_queued_job(job_id):
                 model = source_models[0][1]
                 model_format = "stl"
                 logger.info("Slicing job %s: using direct validated STL path", job.pk)
-            elif (job.engine == "crealityprint"
-                  and _plate_builder(source_models) is build_compound_plate_3mf):
-                # Creality 7.3.1 single-material CLI cannot import the
-                # generic 3MF plate with external native profiles. Use the
-                # independent shared geometry-only placed STL adapter.
+            elif (job.engine == "crealityprint" and
+                  _plate_builder(source_models) is build_compound_plate_3mf):
+                # The Creality 7.3.1 CLI's generic core-3MF plus externally
+                # loaded filament preset fails native validation (exit 205).
+                # Keep existing single-STL, native-modifier and CFS paths
+                # unchanged. For ordinary one-filament multi-model plates,
+                # bake validated geometry and invoke the proven STL CLI path.
                 stage = "baking verified Creality single-filament plate geometry"
                 from .slicer_creality_plate import build_creality_single_filament_plate
                 width, depth = trusted_plate_dimensions(job.printer_profile)
@@ -773,6 +901,14 @@ def process_queued_job(job_id):
                     source_models, bed_width=width, bed_depth=depth)
                 model_format = "stl"
                 creality_placed_stl = True
+            elif job.engine == "prusaslicer":
+                stage = "baking verified native Prusa single-material plate geometry"
+                from .slicer_prusa_plate import build_prusa_placed_stl
+                width, depth = trusted_plate_dimensions(job.printer_profile)
+                model = build_prusa_placed_stl(
+                    source_models, bed_width=width, bed_depth=depth)
+                model_format = "stl"
+                prusa_placed_stl = True
             else:
                 stage = "resolving native printer bed dimensions"
                 width, depth = trusted_plate_dimensions(job.printer_profile)
@@ -798,6 +934,19 @@ def process_queued_job(job_id):
                     model = _plate_builder(source_models)(
                         source_models, bed_width=width, bed_depth=depth)
                 model_format = "3mf"
+        if job.engine == "prusaslicer" and is_multi_test:
+            stage = "executing qualified offline Prusa MMU/XL material job"
+            from .slicer_prusa_job_material import slice_prusa_workbench_material
+            output = slice_prusa_workbench_material(job, source_models)
+            stage = "validating and storing Prusa offline G-code"
+            asset = store_generated_gcode(job.pk, output)
+            try:
+                from .tasks import warm_gcode_preview_task
+                warm_gcode_preview_task.delay(str(asset.pk))
+            except Exception:
+                logger.warning("Prusa offline preview warm-up failed for %s",
+                               asset.pk, exc_info=True)
+            return {"status": "completed", "asset_id": str(asset.pk)}
         stage = "resolving native slicing profiles"
         profiles = []
         for kind in ("printer", "filament", "process"):
@@ -807,7 +956,24 @@ def process_queued_job(job_id):
             if hashlib.sha256(data).hexdigest() != profile.content_sha256:
                 raise SlicerExecutionError("Native profile contents changed since verification.")
             profiles.append(resolved_native_profile(profile)
-                            if job.engine in {"orcaslicer", "crealityprint", "bambustudio"} else data)
+                            if job.engine in {"orcaslicer", "crealityprint", "bambustudio", "prusaslicer"} else data)
+        if job.engine == "prusaslicer":
+            from .slicer_prusa_process_settings import apply_prusa_process_overrides
+            stage = "applying verified native Prusa process settings"
+            profiles[2] = apply_prusa_process_overrides(
+                profiles[2], (job.settings or {}).get("process_overrides") or {})
+            if any((item.get("support_paint") or {}).get("regions")
+                   for item in (job.settings or {}).get("plate_objects", [])
+                   if isinstance(item, dict)):
+                from .slicer_prusa_process_settings import enable_prusa_painted_support
+                profiles[2] = enable_prusa_painted_support(
+                    profiles[2], enforcers_only=len(source_models) >= 2)
+            if plate and len(plate) == 1 and (plate[0].get("seam_paint") or {}).get("regions"):
+                from .slicer_prusa_seam_audit import prusa_qualified_seam_direction
+                from .slicer_prusa_process_settings import qualify_prusa_seam_process
+                _paint, direction = prusa_qualified_seam_direction(plate[0])
+                if direction != "front":
+                    profiles[2] = qualify_prusa_seam_process(profiles[2], "random")
         if job.engine == "orcaslicer":
             stage = "checking native printer/process compatibility"
             profiles[0] = _execution_printer_profile(
@@ -1046,7 +1212,7 @@ def process_queued_job(job_id):
                 raise SlicerExecutionError(
                     "Bambu multi-material project settings could not be validated: "
                     + str(exc)) from exc
-        if model_format == "stl" and not creality_placed_stl and job.input_asset.sha256 and hashlib.sha256(model).hexdigest() != job.input_asset.sha256:
+        if model_format == "stl" and not (prusa_placed_stl or creality_placed_stl) and job.input_asset.sha256 and hashlib.sha256(model).hexdigest() != job.input_asset.sha256:
             raise SlicerExecutionError("Model contents changed since the job was prepared.")
         stage = "executing the isolated slicer worker"
         soft, _hard = slicer_task_time_limits(
@@ -1064,7 +1230,8 @@ def process_queued_job(job_id):
                                if material_result is not None else None),
             creality_native_project=(material_result is not None and
                                      job.engine == "crealityprint"),
-            native_modifier_project=has_native_modifiers,
+            native_modifier_project=has_native_modifiers and job.engine != "prusaslicer",
+            **({"prusa_placed_stl": True} if prusa_placed_stl else {}),
         )
         if material_result is not None:
             stage = "auditing multi-material tool selections and extrusion"
@@ -1132,14 +1299,73 @@ def process_queued_job(job_id):
             try:
                 if job.engine == "bambustudio":
                     audit_bambu_variable_layers(output.decode("utf-8"), variable_test)
+                elif job.engine == "prusaslicer":
+                    if len(source_models) > 1:
+                        from .slicer_prusa_spatial_layers import audit_prusa_multi_object_layer_ranges
+                        from .slicer_prusa_native_resolution import parse_prusa_profile
+                        process = parse_prusa_profile(profiles[2], "process")
+                        width, depth = trusted_plate_dimensions(job.printer_profile)
+                        audit_prusa_multi_object_layer_ranges(
+                            output, source_models, bed_width=width, bed_depth=depth,
+                            base_layer_mm=float(process["layer_height"]))
+                    else:
+                        from .slicer_prusa_layer_ranges import audit_prusa_variable_layers
+                        audit_prusa_variable_layers(output.decode("utf-8"), variable_test)
                 else:
                     audit_orca_variable_layers(output.decode("utf-8"), variable_test)
             except (UnicodeDecodeError, ValueError) as exc:
                 engine_name = ("Bambu Studio" if job.engine == "bambustudio"
+                               else "PrusaSlicer" if job.engine == "prusaslicer"
                                else "Orca")
                 raise SlicerExecutionError(
                     engine_name + " did not produce the requested variable layer "
                     "heights. The generated G-code has not been approved or stored."
+                ) from exc
+        if (job.engine == "prusaslicer" and plate and len(plate) == 1
+                and (plate[0].get("seam_paint") or {}).get("regions")):
+            stage = "auditing native Prusa selected vertical seam placement"
+            from .slicer_prusa_seam_audit import audit_prusa_seam_enforcer_gcode
+            width, depth = trusted_plate_dimensions(job.printer_profile)
+            try:
+                audit_prusa_seam_enforcer_gcode(
+                    output, plate[0], bed_width=width, bed_depth=depth)
+            except ValueError as exc:
+                raise SlicerExecutionError(
+                    "Prusa native seam did not follow the painted vertical-face enforcer.") from exc
+        if job.engine == "prusaslicer":
+            painted_enforcers = any(
+                any(region.get("slot") == 0 for region in
+                    (item.get("support_paint") or {}).get("regions", []))
+                for item in (job.settings or {}).get("plate_objects", [])
+                if isinstance(item, dict))
+            if painted_enforcers:
+                stage = "auditing native Prusa painted support toolpaths"
+                try:
+                    if plate and len(plate) >= 2:
+                        from .slicer_prusa_support_audit import audit_prusa_multi_object_support
+                        width, depth = trusted_plate_dimensions(job.printer_profile)
+                        audit_prusa_multi_object_support(
+                            output, source_models, bed_width=width, bed_depth=depth)
+                    else:
+                        from .slicer_prusa_paint import audit_prusa_support_enforcer_gcode
+                        audit_prusa_support_enforcer_gcode(output)
+                except ValueError as exc:
+                    raise SlicerExecutionError(
+                        "Prusa native painted support enforcers produced no verified support paths."
+                    ) from exc
+        if (job.engine == "prusaslicer" and plate and len(plate) == 2 and
+                any((row.get("fuzzy_skin_paint") or {}).get("regions")
+                    for row in plate)):
+            stage = "auditing independent native Prusa fuzzy skin toolpaths"
+            from .slicer_prusa_fuzzy_audit import audit_prusa_two_object_fuzzy
+            width, depth = trusted_plate_dimensions(job.printer_profile)
+            try:
+                audit_prusa_two_object_fuzzy(
+                    output, source_models, bed_width=width, bed_depth=depth)
+            except ValueError as exc:
+                raise SlicerExecutionError(
+                    "Prusa two-object fuzzy skin G-code did not preserve "
+                    "the selected painted model and smooth neighbour."
                 ) from exc
         stage = "validating and storing generated G-code"
         asset = store_generated_gcode(job.pk, output)

@@ -5,26 +5,39 @@ executable printer preset and cannot be used to approve a slicing worker.
 """
 from configparser import ConfigParser, Error as ConfigError
 from functools import lru_cache
+import re
 
 import requests
 
 from .slicer_official_profiles import OfficialProfileError
 
 ENGINE = "prusaslicer"
-ENGINE_VERSION = "2.9.6"
+ENGINE_VERSION = "2.9.7"
 SOURCE = "prusa3d/PrusaSlicer"
-REF = "version_2.9.6"
-BASE = f"https://raw.githubusercontent.com/{SOURCE}/{REF}/resources/profiles"
-VENDORS = ("PrusaResearch",)
+REF = "version_2.9.7"
+# Immutable commit backing the reviewed 2.9.7 annotated release tag.
+SOURCE_COMMIT = "450d70dd81c9b8990bc6bc8e690e31f82ddceb11"
+BASE = f"https://raw.githubusercontent.com/{SOURCE}/{SOURCE_COMMIT}/resources/profiles"
+# INDX's official presets ship separately from the pinned 2.9.7 binary.
+# Permit an explicitly reviewed Prusa vendor-update bundle by immutable commit.
+INDX_SOURCE = "prusa3d/PrusaSlicer-settings-prusa-fff"
+INDX_COMMIT = "058c542282d5a512dcc73fc8be9288fc253ddcfd"
+INDX_BUNDLE_VERSION = "2.5.16"
+INDX_BUNDLE_URL = (f"https://raw.githubusercontent.com/{INDX_SOURCE}/"
+                   f"{INDX_COMMIT}/PrusaResearch/{INDX_BUNDLE_VERSION}.ini")
+VENDORS = ("PrusaResearch", "PrusaResearchINDX")
 MAX_INI = 3 * 1024 * 1024
 
 
 @lru_cache(maxsize=4)
-def _sections(vendor="PrusaResearch"):
+def _native_sections(vendor="PrusaResearch"):
+    """Read exactly one pinned upstream vendor INI into bounded literal sections."""
     if vendor not in VENDORS:
         raise OfficialProfileError("Prusa vendor is not in the approved catalogue.")
     try:
-        result = requests.get(f"{BASE}/{vendor}.ini", timeout=(3, 15),
+        source_url = (INDX_BUNDLE_URL if vendor == "PrusaResearchINDX"
+                      else f"{BASE}/{vendor}.ini")
+        result = requests.get(source_url, timeout=(3, 15),
                               stream=True, allow_redirects=False,
                               headers={"User-Agent": "MakerVault-PrusaModelBrowser/1"})
         try:
@@ -41,26 +54,44 @@ def _sections(vendor="PrusaResearch"):
         finally:
             result.close()
         data = bytes(chunks).decode("utf-8-sig")
-        parser = ConfigParser(strict=False, interpolation=None, delimiters=("=",))
-        parser.optionxform = str.lower
+        if any(ord(char) == 0 for char in data):
+            raise OfficialProfileError("Prusa vendor bundle is not plain text.")
+        parser = ConfigParser(strict=True, interpolation=None, delimiters=("=",))
+        parser.optionxform = str
         parser.read_string(data)
+        if not 0 < len(parser.sections()) <= 10000:
+            raise OfficialProfileError("Official Prusa vendor preset count is invalid.")
+        sections = {}
+        for section in parser.sections():
+            values = {}
+            for key, value in parser.items(section):
+                # Upstream 2.5.16 INDX bundle has one fixed typo. Preserve
+                # strict key validation for all other native settings.
+                fixed = ("top_solid_infill_speed"
+                         if key == "top solid_infill_speed" else key)
+                if fixed in values:
+                    raise OfficialProfileError("Duplicate official Prusa native setting.")
+                values[fixed] = value
+            sections[section] = values
+        return sections
     except (requests.RequestException, UnicodeDecodeError, ConfigError, ValueError) as exc:
         if isinstance(exc, OfficialProfileError):
             raise
         raise OfficialProfileError("Could not inspect the official Prusa vendor bundle.") from exc
+
+
+@lru_cache(maxsize=4)
+def _sections(vendor="PrusaResearch"):
+    """Printer artwork metadata, separate from executable printer profiles."""
     found = {}
-    for section in parser.sections():
+    for section, values in _native_sections(vendor).items():
         if not section.startswith("printer_model:"):
             continue
-        values = dict(parser.items(section))
         name = values.get("name") or section.partition(":")[2]
         if not 1 <= len(name) <= 200:
             continue
         if name in found:
             raise OfficialProfileError("Ambiguous Prusa printer model names in vendor bundle.")
-        # Keep the original registered name and only the exact native
-        # bed-model metadata; user-supplied arbitrary filesystem paths cannot
-        # reach the asset downloader, which independently validates them.
         found[name] = (section, {
             key: value for key, value in values.items()
             if key in ("name", "bed_model", "bed_texture")
@@ -70,30 +101,144 @@ def _sections(vendor="PrusaResearch"):
     return found
 
 
+_PRUSA_KINDS = {"printer": "printer", "filament": "filament", "process": "print"}
+_NATIVE_KEY = re.compile(r"[A-Za-z_][A-Za-z0-9_]*\Z")
+_MAX_NATIVE_SETTINGS = 400
+
+
+def _flatten_native_profile(kind, name, vendor):
+    """Flatten same-vendor/same-kind inheritance; never load external paths."""
+    prefix = _PRUSA_KINDS.get(kind)
+    if not prefix or not isinstance(name, str) or not 1 <= len(name) <= 200:
+        raise OfficialProfileError("Unsupported Prusa native preset selection.")
+    sections = _native_sections(vendor)
+    resolved = {}
+
+    def resolve(selected, depth=0, active=frozenset()):
+        section = prefix + ":" + selected
+        if depth >= 16 or section in active:
+            raise OfficialProfileError("Prusa native preset inheritance is circular or too deep.")
+        if section in resolved:
+            return dict(resolved[section])
+        fields = sections.get(section)
+        if not isinstance(fields, dict):
+            raise OfficialProfileError("Prusa native preset parent is missing.")
+        inherited = {}
+        parents = fields.get("inherits", "").strip()
+        if parents:
+            names = [parent.strip() for parent in parents.split(";")]
+            if (len(names) > 12 or any(not 1 <= len(parent) <= 200
+                                       or "[" in parent or "]" in parent for parent in names)):
+                raise OfficialProfileError("Invalid Prusa native preset inheritance.")
+            for parent in names:
+                inherited.update(resolve(parent, depth + 1, active | {section}))
+        for key, value in fields.items():
+            if key == "inherits":
+                continue
+            if (not _NATIVE_KEY.fullmatch(key) or not isinstance(value, str)
+                    or len(value) > 65536 or any(ord(char) == 0 for char in value)):
+                raise OfficialProfileError("Invalid official Prusa native setting.")
+            if key.lower() in {"post_process", "post_process_scripts",
+                               "post_processing", "post_processing_scripts"} and value.strip():
+                raise OfficialProfileError("Prusa native post-processing scripts are forbidden.")
+            if key.lower() in {"config_include", "include", "include_file", "script"}:
+                raise OfficialProfileError("External Prusa preset references are unsupported.")
+            inherited[key] = value
+        if len(inherited) > _MAX_NATIVE_SETTINGS:
+            raise OfficialProfileError("Prusa native preset exceeds its complexity limit.")
+        resolved[section] = dict(inherited)
+        return inherited
+
+    settings = resolve(name)
+    # Pinned upstream INDX 2.5.16 uses a PrusaSlicer 3.x toolchange variable.
+    # The reviewed 2.9.7 runtime expects its native per-tool equivalent.
+    # Translate only the INDX printer toolchange script, not arbitrary INIs.
+    if vendor == "PrusaResearchINDX" and kind == "printer":
+        token = "filament_retract_length_toolchange"
+        for key, value in settings.items():
+            if token in value and key != "toolchange_gcode":
+                raise OfficialProfileError(
+                    "INDX preset uses an unsupported toolchange placeholder.")
+        if "toolchange_gcode" in settings:
+            settings["toolchange_gcode"] = settings["toolchange_gcode"].replace(
+                token, "retract_length_toolchange")
+    required = {
+        "printer": {"nozzle_diameter", "bed_shape"},
+        "filament": {"filament_diameter"},
+        "process": {"layer_height"},
+    }[kind]
+    if not required.issubset(settings):
+        raise OfficialProfileError("Official Prusa native preset is incomplete.")
+    if kind == "printer" and settings.get("printer_technology", "FFF") != "FFF":
+        raise OfficialProfileError("Only Prusa FFF printer presets are supported.")
+    # Official MK4, MK4S and CORE One FFF presets often default to BG-code.
+    # MakerVault's bounded G-code preview/auditor needs text G-code instead.
+    # This import-only conversion follows validated, immutable upstream
+    # inheritance. Do not alter stored originals or arbitrary user INI.
+    binary_gcode = settings.get("binary_gcode", "0").strip().lower()
+    if binary_gcode in {"1", "true", "yes"}:
+        settings["binary_gcode"] = "0"
+    elif binary_gcode not in {"", "0", "false", "no"}:
+        raise OfficialProfileError("Unsupported Prusa binary G-code preference.")
+    flattened = "".join(f"{key} = {value}\n" for key, value in sorted(settings.items()))
+    raw = flattened.encode("utf-8")
+    if not 0 < len(raw) <= 1024 * 1024:
+        raise OfficialProfileError("Official Prusa resolved preset exceeds its limit.")
+    return raw
+
+
+def fetch_prusa_profile(kind, name, subpath, vendor="PrusaResearch"):
+    """Import one verified-source, fully flattened *candidate* CLI preset."""
+    if vendor not in VENDORS or subpath != vendor + ".ini":
+        raise OfficialProfileError("Prusa source selection does not match the approved vendor.")
+    return _flatten_native_profile(kind, name, vendor)
+
+
 def available_prusa_vendors():
-    return [{"id": "PrusaResearch", "label": "Prusa Research"}]
+    return [{"id": "PrusaResearch", "label": "Prusa Research — 2.9.7"},
+            {"id": "PrusaResearchINDX", "label": "Prusa Research — INDX and updated profiles"}]
 
 
 def official_catalogue_models(vendor="PrusaResearch"):
     return sorted(_sections(vendor), key=str.casefold)
 
 
-def search_prusa_profiles(query, kind, vendor="PrusaResearch", printer_model=None):
-    if kind != "printer":
-        raise OfficialProfileError("Prusa artwork discovery currently supports printer-model metadata only.")
+def search_prusa_profiles(query, kind, vendor="PrusaResearch", printer_model=None, *, offset=0):
+    """Discover *native* Prusa printer, filament and process candidates."""
+    prefix = _PRUSA_KINDS.get(kind)
+    if not prefix:
+        raise OfficialProfileError("Choose a Prusa printer, filament or process preset.")
     if not isinstance(query, str) or len(query.strip()) > 80:
         raise OfficialProfileError("Search terms must be 80 characters or fewer.")
+    if printer_model is not None and (
+            not isinstance(printer_model, str) or len(printer_model) > 200):
+        raise OfficialProfileError("Invalid Prusa native printer-model filter.")
     needle = query.strip().casefold()
-    models = _sections(vendor)
-    matches = [name for name in models if needle in name.casefold()]
-    if printer_model:
-        matches = [name for name in matches if name == printer_model]
+    sections = _native_sections(vendor)
+    matches = []
+    for section in sections:
+        if not section.startswith(prefix + ":"):
+            continue
+        name = section[len(prefix) + 1:]
+        # Internal symbolic defaults are resolved through inheritance, never
+        # presented to users as complete ready-to-select profiles.
+        if not 1 <= len(name) <= 200 or name.startswith("*"):
+            continue
+        if needle not in name.casefold():
+            continue
+        if printer_model and kind == "printer" and printer_model.casefold() not in name.casefold():
+            continue
+        matches.append(name)
+    matches.sort(key=str.casefold)
     return {
         "engine": ENGINE, "engine_version": ENGINE_VERSION,
-        "vendor": vendor, "kind": kind, "source": SOURCE, "ref": REF,
-        "profiles": [{"name": name, "sub_path": vendor + ".ini"} for name in matches[:40]],
+        "vendor": vendor, "kind": kind,
+        "source": INDX_SOURCE if vendor == "PrusaResearchINDX" else SOURCE,
+        "ref": INDX_COMMIT if vendor == "PrusaResearchINDX" else REF,
+        "profiles": [{"name": name, "sub_path": vendor + ".ini"} for name in matches[offset:offset + 40]],
         "total_matches": len(matches), "import_status": "candidate_only",
-        "model_artwork_only": True,
+        "model_artwork_only": False,
+        "compatibility_not_verified": True,
     }
 
 

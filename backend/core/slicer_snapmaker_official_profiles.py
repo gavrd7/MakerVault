@@ -56,7 +56,7 @@ def official_catalogue_models(vendor="Snapmaker"):
     return models_from_machines(_entries("printer", vendor))
 
 
-def search_snapmaker_profiles(query, kind, vendor="Snapmaker", printer_model=None):
+def search_snapmaker_profiles(query, kind, vendor="Snapmaker", printer_model=None, *, offset=0):
     if not isinstance(query, str) or len(query.strip()) > 80:
         raise OfficialProfileError("Search terms must be 80 characters or fewer.")
     candidates = [(name, path) for name, path in _entries(kind, vendor)
@@ -66,7 +66,7 @@ def search_snapmaker_profiles(query, kind, vendor="Snapmaker", printer_model=Non
     return {
         "engine": ENGINE, "engine_version": ENGINE_VERSION, "vendor": vendor,
         "kind": kind, "source": SOURCE, "ref": REF,
-        "profiles": [{"name": n, "sub_path": p} for n, p in candidates[:40]],
+        "profiles": [{"name": n, "sub_path": p} for n, p in candidates[offset:offset + 40]],
         "total_matches": len(candidates), "import_status": "candidate_only",
     }
 

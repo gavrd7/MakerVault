@@ -59,7 +59,7 @@ from .slicer_snapmaker_official_profiles import (
     REF as OFFICIAL_SNAP_REF,
 )
 from .slicer_prusa_official_profiles import (
-    search_prusa_profiles, fetch_prusa_model, available_prusa_vendors,
+    search_prusa_profiles, fetch_prusa_model, fetch_prusa_profile, available_prusa_vendors,
     official_catalogue_models as prusa_catalogue_models,
     ENGINE_VERSION as OFFICIAL_PRUSA_VERSION, SOURCE as OFFICIAL_PRUSA_SOURCE,
     REF as OFFICIAL_PRUSA_REF,
@@ -75,7 +75,9 @@ from .slicer_bambu_native_profiles import (
 )
 from .slicer_official_profiles import (
     OfficialProfileError, search_official_profiles, fetch_official_profile, available_official_vendors,
-    official_filament_brands, APPROVED_VERSIONS as ORCA_APPROVED_PROFILE_VERSIONS,
+    official_filament_brands, all_official_filament_manufacturers,
+    search_all_official_filaments,
+    APPROVED_VERSIONS as ORCA_APPROVED_PROFILE_VERSIONS,
     official_catalogue_models as orca_catalogue_models,
     ENGINE_VERSION as OFFICIAL_ORCA_VERSION, SOURCE as OFFICIAL_ORCA_SOURCE,
     REF as OFFICIAL_ORCA_REF,
@@ -254,19 +256,28 @@ def _draft_plate_settings(user, input_asset, settings):
     """Persist preview-only plate geometry; never compile it into slicer flags."""
     if settings is None:
         settings = {}
-    if not isinstance(settings, dict) or set(settings) - {"plate_objects", "plate_label", "plates", "active_plate_id", "save_gcode_to_library", "workflow", "process_overrides", "flush_settings", "slot_filament_profiles", "material_tool_bindings", "material_topology", "multi_material_test", "creality_auto_arrange_offline", "prime_tower", "project_name", "plate_volumes"}:
+    if not isinstance(settings, dict) or set(settings) - {"plate_objects", "plate_label", "plates", "active_plate_id", "save_gcode_to_library", "workflow", "process_overrides", "flush_settings", "slot_filament_profiles", "material_tool_bindings", "material_topology", "multi_material_test", "creality_auto_arrange_offline", "prime_tower", "project_name", "plate_volumes", "prusa_native_tools"}:
         raise ValueError("Unsupported slicer plate settings.")
+    prusa_native = settings.get("prusa_native_tools")
+    if prusa_native is not None:
+        from .slicer_prusa_tool_configuration import validate_prusa_native_tools
+        prusa_native = validate_prusa_native_tools(prusa_native)
+    prusa_native_field = ({"prusa_native_tools": prusa_native}
+                          if prusa_native is not None else {})
     project_name = settings.get("project_name")
     name_field = {"project_name": _validate_project_name(project_name)} if project_name is not None else {}
     prime_tower = _validate_prime_tower_position(settings.get("prime_tower"))
     tower_field = {"prime_tower": prime_tower} if prime_tower is not None else {}
     process_overrides = validate_process_overrides(settings.get("process_overrides"))
     flush_settings = validate_flush_settings(settings.get("flush_settings"))
+    # The 1024-row bounds below protect request/storage resources; they do not
+    # define a physical printer material limit. Actual engine and printer tool
+    # capabilities must be verified independently before slicing or dispatch.
     # Independent per-bay filament presets are draft annotations only until
     # the engine's verified native tool routing is available. Never synthesize
     # a different tool/profile from a physical bay number.
     raw_slot_profiles = settings.get("slot_filament_profiles", [])
-    if not isinstance(raw_slot_profiles, list) or len(raw_slot_profiles) > 16:
+    if not isinstance(raw_slot_profiles, list) or len(raw_slot_profiles) > 1024:
         raise ValueError("Invalid per-slot filament profile assignments.")
     slot_profiles, seen_slots = [], set()
     for entry in raw_slot_profiles:
@@ -287,7 +298,7 @@ def _draft_plate_settings(user, input_asset, settings):
     # order. Persisted for multi-material preflight only; physical printer
     # changeover remains a separate gated capability.
     raw_bindings = settings.get("material_tool_bindings", [])
-    if not isinstance(raw_bindings, list) or len(raw_bindings) > 16:
+    if not isinstance(raw_bindings, list) or len(raw_bindings) > 1024:
         raise ValueError("Invalid native tool binding list.")
     bindings, used_slots, used_tools = [], set(), set()
     for entry in raw_bindings:
@@ -297,7 +308,7 @@ def _draft_plate_settings(user, input_asset, settings):
         if (not isinstance(slot_id, str) or not 1 <= len(slot_id) <= 128 or
                 any(ord(ch) < 33 or ord(ch) > 126 for ch in slot_id)
                 or slot_id in used_slots or isinstance(tool, bool)
-                or not isinstance(tool, int) or not 0 <= tool <= 15 or tool in used_tools):
+                or not isinstance(tool, int) or not 0 <= tool < 1024 or tool in used_tools):
             raise ValueError("Slot and logical tool assignments must be unique and bounded.")
         used_slots.add(slot_id)
         used_tools.add(tool)
@@ -451,7 +462,7 @@ def _draft_plate_settings(user, input_asset, settings):
                 "workflow": workflow, "process_overrides": process_overrides,
             **({"multi_material_test": True} if multi_material_test else {}),
                 **({"creality_auto_arrange_offline": True} if creality_auto_arrange_offline else {}),
-                **({"flush_settings": flush_settings} if flush_settings is not None else {}), **name_field, **tower_field, **slot_fields, **routing_fields, **project_fields}
+                **({"flush_settings": flush_settings} if flush_settings is not None else {}), **name_field, **tower_field, **slot_fields, **routing_fields, **prusa_native_field, **project_fields}
     objects = settings["plate_objects"]
     if not isinstance(objects, list) or not 1 <= len(objects) <= 200:
         raise ValueError("The visual build plate supports up to 200 model instances.")
@@ -592,7 +603,7 @@ def _draft_plate_settings(user, input_asset, settings):
             **({"multi_material_test": True} if multi_material_test else {}),
                 **({"creality_auto_arrange_offline": True} if creality_auto_arrange_offline else {}),
             **({"flush_settings": flush_settings} if flush_settings is not None else {}),
-            **name_field, **tower_field, **slot_fields, **routing_fields, **project_fields}
+            **name_field, **tower_field, **slot_fields, **routing_fields, **prusa_native_field, **project_fields}
 
 
 def _draft(user, data):
@@ -647,6 +658,9 @@ def _draft(user, data):
         raise ValueError("Nozzle diameter must be between 0.10 and 2.00 mm with at most two decimals.")
     settings_data = data.get("settings", {})
     settings_data = _draft_plate_settings(user, input_asset, settings_data)
+    if settings_data.get("prusa_native_tools") is not None and (
+            engine.key != "prusaslicer" or version != "2.9.7"):
+        raise ValueError("Virtual native tools are supported only by PrusaSlicer 2.9.7.")
     plate_models = settings_data.get("plate_objects") or []
     if len(plate_models) > 1:
         # An inert draft may keep conflicting objects for editing. Record a
@@ -1382,10 +1396,15 @@ def official_profiles(request):
         except OfficialProfileError as exc:
             return _error(str(exc))
         if request.GET.get("brands") == "1":
-            if selected != "orcaslicer" or request.GET.get("vendor") != "OrcaFilamentLibrary":
-                return _error("Filament brand browsing requires the official Orca library.")
+            if selected != "orcaslicer":
+                return _error("Unified filament manufacturer browsing requires OrcaSlicer.")
             try:
-                return JsonResponse({"brands": official_filament_brands(version), "engine_version": version})
+                unified = request.GET.get("unified_filaments") == "1"
+                return JsonResponse({
+                    "brands": (all_official_filament_manufacturers(version) if unified
+                               else official_filament_brands(version)),
+                    "engine_version": version,
+                })
             except OfficialProfileError as exc:
                 return _error(str(exc))
         if request.GET.get("catalogues") == "1":
@@ -1426,10 +1445,22 @@ def official_profiles(request):
                 models = (orca_catalogue_models(request.GET.get("vendor", "Creality"))
                           if selected == "orcaslicer" and version == OFFICIAL_ORCA_VERSION else
                           orca_catalogue_models(request.GET.get("vendor", "Creality"), version)
-                          if selected == "orcaslicer" else provider(request.GET.get("vendor", "Creality")))
+                          if selected == "orcaslicer" else provider(request.GET.get(
+                               "vendor", "PrusaResearch" if selected == "prusaslicer" else "Creality")))
             except OfficialProfileError as exc:
                 return _error(str(exc), 400)
             return JsonResponse({"engine": selected, "models": models})
+        # Bounded, one-based server-side pagination applies to all official
+        # catalogues and preset kinds, including the large Prusa INI bundle.
+        # An invalid page is rejected rather than scanning an unbounded offset.
+        page_text = request.GET.get("page", "1")
+        if not page_text.isdecimal() or len(page_text) > 6:
+            return _error("Page must be a positive integer.")
+        page = int(page_text)
+        if not 1 <= page <= 10000:
+            return _error("Page must be between 1 and 10000.")
+        page_size = 40
+        offset = (page - 1) * page_size
         searcher = {
             "orcaslicer": search_official_profiles,
             "crealityprint": search_creality_profiles,
@@ -1468,28 +1499,39 @@ def official_profiles(request):
                                     if selected == "orcaslicer" and version == OFFICIAL_ORCA_VERSION else
                                     orca_catalogue_models(request.GET.get("vendor", "Creality"), version)
                                     if selected == "orcaslicer" else
-                                    model_catalogues[selected](request.GET.get("vendor", "Creality")))
+                                    model_catalogues[selected](request.GET.get(
+                                         "vendor", "PrusaResearch" if selected == "prusaslicer" else "Creality")))
                 if chosen_model not in catalogue_models:
                     return _error("Choose a printer model listed in the official catalogue.")
                 printer_model = chosen_model
             args = (
                 request.GET.get("q", ""),
                 request.GET.get("kind", "printer"),
-                request.GET.get("vendor", "Creality"),
+                request.GET.get("vendor", "PrusaResearch" if selected == "prusaslicer" else "Creality"),
             )
             slot_discovery = request.GET.get("slot_discovery") == "1"
             if slot_discovery and (selected != "orcaslicer" or not printer_id):
                 return _error("Slot profile discovery requires OrcaSlicer and a selected printer.")
             material_query = request.GET.get("material", "")[:32]
             manufacturer_query = request.GET.get("manufacturer", "")[:80]
-            results = (search_official_profiles(*args, printer_model=printer_model, version=version,
+            page_kwargs = {"offset": offset} if offset else {}
+            results = (search_all_official_filaments(
+                           args[0], brand=request.GET.get("brand", ""),
+                           version=version, printer_model=printer_model, offset=offset)
+                       if selected == "orcaslicer" and args[1] == "filament"
+                          and request.GET.get("unified_filaments") == "1" else
+                       search_official_profiles(*args, printer_model=printer_model, version=version,
                            brand=request.GET.get("brand", ""),
                            slot_discovery=slot_discovery, material=material_query,
-                           manufacturer=manufacturer_query)
+                           manufacturer=manufacturer_query, **page_kwargs)
                        if selected == "orcaslicer" and
                           (slot_discovery or version != OFFICIAL_ORCA_VERSION or request.GET.get("brand")) else
-                       searcher(*args, printer_model=printer_model) if printer_model else searcher(*args))
+                       searcher(*args, printer_model=printer_model, **page_kwargs) if printer_model else
+                       searcher(*args, **page_kwargs))
             results["printer_model_filter"] = printer_model
+            results["page"] = page
+            results["page_size"] = page_size
+            results["total_pages"] = max(1, (results.get("total_matches", 0) + page_size - 1) // page_size)
         except OfficialProfileError as exc:
             return _error(str(exc), 503 if "source" in str(exc).lower() or "contact" in str(exc).lower() else 400)
         return JsonResponse(results)
@@ -1506,7 +1548,7 @@ def official_profiles(request):
             "orcaslicer": (OFFICIAL_ORCA_VERSION, OFFICIAL_ORCA_SOURCE, OFFICIAL_ORCA_REF, fetch_official_profile),
             "crealityprint": (OFFICIAL_CRE_VERSION, OFFICIAL_CRE_SOURCE, OFFICIAL_CRE_REF, fetch_creality_profile),
             "bambustudio": (OFFICIAL_BAMBU_VERSION, OFFICIAL_BAMBU_SOURCE, OFFICIAL_BAMBU_REF, fetch_bambu_model),
-            "prusaslicer": (OFFICIAL_PRUSA_VERSION, OFFICIAL_PRUSA_SOURCE, OFFICIAL_PRUSA_REF, fetch_prusa_model),
+            "prusaslicer": (OFFICIAL_PRUSA_VERSION, OFFICIAL_PRUSA_SOURCE, OFFICIAL_PRUSA_REF, fetch_prusa_profile),
             "snapmakerorca": (OFFICIAL_SNAP_VERSION, OFFICIAL_SNAP_SOURCE, OFFICIAL_SNAP_REF, fetch_snapmaker_profile),
         }
         if engine not in providers:
@@ -1520,7 +1562,7 @@ def official_profiles(request):
             raise ValueError("Official provider configuration differs from the reviewed release.")
         version, source, ref = release.version, release.source, release.ref
         kind = selection.get("kind")
-        vendor = selection.get("vendor", "Creality")
+        vendor = selection.get("vendor", "PrusaResearch" if engine == "prusaslicer" else "Creality")
         name = selection.get("name")
         subpath = selection.get("sub_path")
         if not isinstance(name, str) or len(name) > 200:
@@ -1532,7 +1574,7 @@ def official_profiles(request):
         # mutating the database. Never install a partial official preset.
         chain = (fetch_bambu_native_chain(kind, name, subpath, vendor, version=version)
                  if engine == "bambustudio" else
-                 [(name, subpath, fetch_prusa_model(kind, name, subpath, vendor))]
+                 [(name, subpath, fetch_prusa_profile(kind, name, subpath, vendor))]
                  if engine == "prusaslicer" else
                  official_profile_chain(engine, kind, name, subpath, vendor, version=version))
         # Official source identity is pinned to an engine repository/tag and
@@ -1653,6 +1695,30 @@ def _native_parent_ids(rows):
 @require_http_methods(["GET", "POST"])
 def profiles(request):
     if request.method == "GET":
+        # Inspect exactly one owner-owned native printer preset on demand.
+        # Never infer tool capacity from the display name or physical feeder bays.
+        topology_id = request.GET.get("prusa_printer_topology_id")
+        if topology_id is not None:
+            try:
+                profile = SlicerProfile.objects.filter(
+                    owner=request.user, pk=_uuid(topology_id),
+                    engine="prusaslicer", kind="printer"
+                ).first()
+                if profile is None:
+                    return _error("Prusa printer profile was not found.", 404)
+                from .slicer_prusa_native_resolution import resolved_prusa_profile
+                from .slicer_prusa_machine_topology import prusa_machine_topology
+                topology = prusa_machine_topology(resolved_prusa_profile(profile))
+            except (ValueError, TypeError, UnicodeDecodeError, OSError,
+                    SlicerProfileError) as exc:
+                return _error(str(exc) if isinstance(exc, ValueError)
+                              else "Prusa printer topology cannot be inspected.", 422)
+            return JsonResponse({"printer_profile_id": str(profile.pk),
+                                 "topology": {
+                                     "kind": topology["kind"],
+                                     "logical_tool_count": topology["logical_tool_count"],
+                                     "physical_nozzle_count": topology["physical_nozzle_count"],
+                                 }})
         rows = list(SlicerProfile.objects.filter(owner=request.user).select_related(
             "file_asset"
         ).order_by("engine", "kind", "name")[:500])
@@ -1812,7 +1878,7 @@ def save_process_profile(request, profile_id):
     if not request.user.has_perm("core.add_fileasset"):
         return _error("You do not have permission to save custom profiles.", 403)
     profile = SlicerProfile.objects.filter(
-        pk=profile_id, owner=request.user, engine__in=["orcaslicer", "crealityprint", "bambustudio"], kind="process"
+        pk=profile_id, owner=request.user, engine__in=["orcaslicer", "crealityprint", "bambustudio", "prusaslicer"], kind="process"
     ).select_related("file_asset").first()
     if not profile:
         return _error("An owned native slicing process profile is required.", 404)
@@ -1832,19 +1898,24 @@ def save_process_profile(request, profile_id):
         ).exists():
             return _error("A process profile with this name already exists.", 409)
         source = resolved_native_profile(profile)
-        updated = apply_process_overrides(source, edits)
-        native = json.loads(updated.decode("utf-8-sig"))
-        native["name"] = name
-        updated = json.dumps(native, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
+        extension = ".ini" if profile.engine == "prusaslicer" else ".json"
+        if profile.engine == "prusaslicer":
+            from .slicer_prusa_process_settings import apply_prusa_process_overrides
+            updated = apply_prusa_process_overrides(source, edits)
+        else:
+            updated = apply_process_overrides(source, edits)
+            native = json.loads(updated.decode("utf-8-sig"))
+            native["name"] = name
+            updated = json.dumps(native, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
         if len(updated) > 1024 * 1024:
             raise ValueError("Custom process profile exceeds the file size limit.")
         asset = FileAsset(
-            owner=request.user, name=name + ".json", category="source",
-            metadata={"original_name": name + ".json", "extension": ".json",
+            owner=request.user, name=name + extension, category="source",
+            metadata={"original_name": name + extension, "extension": extension,
                       "slicer_custom_source_profile_id": str(profile.pk),
                       "slicer_profile_internal": True},
         )
-        asset.file = ContentFile(updated, name="custom-native-process-profile.json")
+        asset.file = ContentFile(updated, name="custom-native-process-profile" + extension)
         inspected = inspect_native_profile(asset, profile.engine)
         with transaction.atomic():
             asset.save()
@@ -2009,13 +2080,17 @@ def delete_profile(request, profile_id):
 def profile_process_settings(request, profile_id):
     """Read editable native process settings from the user's resolved preset."""
     profile = SlicerProfile.objects.filter(
-        pk=profile_id, owner=request.user, engine__in=["orcaslicer", "crealityprint", "bambustudio"], kind="process"
+        pk=profile_id, owner=request.user, engine__in=["orcaslicer", "crealityprint", "bambustudio", "prusaslicer"], kind="process"
     ).select_related("file_asset").first()
     if not profile:
         return _error("Owned native slicing process profile not found.", 404)
     try:
         resolved = resolved_native_profile(profile)
-        fields = process_schema(resolved)
+        if profile.engine == "prusaslicer":
+            from .slicer_prusa_process_settings import prusa_process_schema
+            fields = prusa_process_schema(resolved)
+        else:
+            fields = process_schema(resolved)
     except (SlicerProfileError, ValueError, OSError):
         return _error("Native process settings could not be inspected.", 422)
     return JsonResponse({"profile_id": str(profile.pk), "engine": profile.engine,

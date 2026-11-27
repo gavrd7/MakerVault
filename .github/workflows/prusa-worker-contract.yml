@@ -1,0 +1,139 @@
+name: PrusaSlicer worker contract
+
+on:
+  pull_request:
+    paths:
+      - "backend/core/slicer_prusa_plate.py"
+      - "backend/core/slicer_prusa_3mf.py"
+      - "backend/core/slicer_prusa_colour_audit.py"
+      - "backend/core/tests/test_slicer_prusa_colour_audit.py"
+      - "slicer_worker/prusa_offline_contract.py"
+      - "backend/core/tests/test_slicer_prusa_offline_worker_protocol.py"
+      - "slicer_worker/prusa_material_gcode_audit.py"
+      - "backend/core/tests/test_slicer_prusa_material_gcode_audit.py"
+      - "slicer_worker/prusa_material_validation.py"
+      - "backend/core/tests/test_slicer_prusa_material_validation.py"
+      - "backend/core/slicer_prusa_material_preflight.py"
+      - "backend/core/slicer_prusa_job_material.py"
+      - "backend/core/slicer_prusa_tool_configuration.py"
+      - "backend/core/slicer_prusa_process_settings.py"
+      - "backend/core/tests/test_slicer_prusa_job_material.py"
+      - "backend/core/tests/test_slicer_output.py"
+      - "backend/core/tests/test_slicer_prusa_material_preflight.py"
+      - "backend/core/slicer_prusa_colour_project.py"
+      - "backend/core/tests/test_slicer_prusa_colour_project.py"
+      - "scripts/prusa_generate_mmu_paint.py"
+      - "backend/core/slicer_prusa_purge.py"
+      - "backend/core/tests/test_slicer_prusa_purge.py"
+      - "backend/core/slicer_prusa_filament_palette.py"
+      - "backend/core/tests/test_slicer_prusa_filament_palette.py"
+      - "backend/core/slicer_prusa_machine_topology.py"
+      - "backend/core/slicer_prusa_native_tools.py"
+      - "backend/core/tests/test_slicer_prusa_native_tools.py"
+      - "backend/core/tests/test_slicer_prusa_support_blocker_research.py"
+      - "scripts/prusa_native_two_support_object_controls.py"
+      - "backend/core/slicer_prusa_multitool_project.py"
+      - "backend/core/tests/test_slicer_prusa_multitool_project.py"
+      - "backend/core/tests/test_slicer_prusa_machine_topology.py"
+      - "backend/core/slicer_prusa_paint.py"
+      - "backend/core/slicer_prusa_support_audit.py"
+      - "backend/core/tests/test_slicer_prusa_support_audit.py"
+      - "backend/core/slicer_prusa_seam_audit.py"
+      - "backend/core/tests/test_slicer_prusa_seam_audit.py"
+      - "backend/core/slicer_prusa_fuzzy_audit.py"
+      - "backend/core/tests/test_slicer_prusa_fuzzy_audit.py"
+      - "backend/core/slicer_prusa_process_settings.py"
+      - "backend/core/tests/test_slicer_prusa_paint.py"
+      - "backend/core/slicer_prusa_layer_ranges.py"
+      - "backend/core/tests/test_slicer_prusa_3mf.py"
+      - "backend/core/tests/test_slicer_prusa_layer_ranges.py"
+      - "slicer_worker/prusa_3mf_validation.py"
+      - "backend/core/slicer_bed_dimensions.py"
+      - "backend/core/tests/test_slicer_prusa_plate.py"
+      - "backend/core/tests/test_slicer_prusa_native_resolution.py"
+      - "backend/core/slicer_execution.py"
+      - "slicer_worker/runner.py"
+      - "slicer_worker/tests/test_runner.py"
+      - "slicer_worker/prusa_process_overrides.py"
+      - "slicer_worker/tests/test_prusa_process_overrides.py"
+      - "slicer_worker/prusa_vendor_profiles.py"
+      - "slicer_worker/tests/test_prusa_vendor_profiles.py"
+      - "slicer_worker/prusa_gcode_audit.py"
+      - "slicer_worker/tests/test_prusa_gcode_audit.py"
+      - "scripts/prusa_candidate_manifest.py"
+      - "slicer_worker/tests/test_prusa_candidate_manifest.py"
+      - "slicer_worker/prusa_runtime_install.py"
+      - "slicer_worker/engine_installer_service.py"
+      - "slicer_worker/tests/test_prusa_runtime_install.py"
+      - ".github/workflows/prusa-worker-contract.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  prusa-worker-unit:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify bounded Prusa CLI contract (no slicer download)
+        run: |
+          set -euo pipefail
+          python3 -m unittest -v slicer_worker.tests.test_prusa_process_overrides slicer_worker.tests.test_runner slicer_worker.tests.test_prusa_vendor_profiles slicer_worker.tests.test_prusa_gcode_audit slicer_worker.tests.test_prusa_candidate_manifest slicer_worker.tests.test_prusa_runtime_install
+
+      - name: Verify Prusa-specific plate geometry and native INI bed parsing
+        run: |
+          set -euo pipefail
+          python3 -m venv /tmp/prusa-plate-venv
+          /tmp/prusa-plate-venv/bin/pip install --quiet defusedxml==0.7.1
+          PYTHONPATH=backend /tmp/prusa-plate-venv/bin/python -m unittest -v \
+            core.tests.test_slicer_prusa_plate \
+            core.tests.test_slicer_prusa_3mf \
+            core.tests.test_slicer_prusa_layer_ranges \
+            core.tests.test_slicer_prusa_paint \
+            core.tests.test_slicer_prusa_support_audit \
+            core.tests.test_slicer_prusa_seam_audit \
+            core.tests.test_slicer_prusa_fuzzy_audit \
+            core.tests.test_slicer_prusa_machine_topology \
+            core.tests.test_slicer_prusa_native_tools \
+            core.tests.test_slicer_prusa_support_blocker_research \
+            core.tests.test_slicer_prusa_multitool_project \
+            core.tests.test_slicer_prusa_filament_palette \
+            core.tests.test_slicer_prusa_purge \
+            core.tests.test_slicer_prusa_colour_project \
+            core.tests.test_slicer_prusa_colour_audit \
+            core.tests.test_slicer_prusa_material_validation \
+            core.tests.test_slicer_prusa_material_gcode_audit \
+            core.tests.test_slicer_prusa_material_preflight \
+            core.tests.test_slicer_prusa_offline_worker_protocol
+
+      - name: Verify actual upstream PrusaResearch 2.9.7 inheritance
+        run: |
+          set -euo pipefail
+          # GitHub source is addressed by the reviewed 2.9.7 commit, never by
+          # a moving branch, catalogue URL or user-supplied preset name.
+          curl -fsSL --retry 2 --max-time 60 \
+            https://raw.githubusercontent.com/prusa3d/PrusaSlicer/450d70dd81c9b8990bc6bc8e690e31f82ddceb11/resources/profiles/PrusaResearch.ini \
+            -o /tmp/PrusaResearch-2.9.7.ini
+          python3 - <<'PY'
+          from pathlib import Path
+          import hashlib
+          from slicer_worker.prusa_vendor_profiles import (
+              parse_prusa_vendor_bundle, flatten_prusa_vendor_preset,
+              validate_flat_prusa_preset)
+          raw = Path('/tmp/PrusaResearch-2.9.7.ini').read_bytes()
+          sections = parse_prusa_vendor_bundle(raw)
+          assert len(sections) >= 6000, "Unexpectedly incomplete vendor bundle"
+          for kind, name in (
+              ('printer', 'Original Prusa i3 MK2S'),
+              ('filament', 'Generic PLA'),
+              ('print', '0.20mm NORMAL'),
+          ):
+              flat = flatten_prusa_vendor_preset(
+                  raw, kind=kind, name=name,
+                  expected_sha256=hashlib.sha256(raw).hexdigest())
+              options = validate_flat_prusa_preset(flat, kind=kind)
+              assert len(options) >= 5, f'Incomplete native {kind} preset'
+              print(f'Official Prusa 2.9.7 {kind} native profile: {len(options)} settings')
+          PY

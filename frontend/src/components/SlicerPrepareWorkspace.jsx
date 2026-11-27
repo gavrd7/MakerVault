@@ -6,6 +6,7 @@ import SlicerUiIcon from "./SlicerUiIcon";
 import {BedIllustration} from "./SlicerBedTypePicker";
 import {NATIVE_TOOL_FEATURES, FEATURE_NAMES, usedNativeFeatures} from "./slicerEngineCompatibility";
 import SlicerFlushVolumes from "./SlicerFlushVolumes";
+import PrusaNativeToolEditor from "./PrusaNativeToolEditor";
 import { apiFetch } from "../api";
 import { matchLoadedSlotProfiles, slotProfileSearchTerm, resolveSlotLibrarySpool } from "./slicerSlotProfileMatching.js";
 
@@ -69,6 +70,7 @@ export default function SlicerPrepareWorkspace({
   selectedProfiles, workerConfigured, engineCapabilities = {}, printerId,
   processOverrides = {}, onProcessOverridesChange, onSaveCustomProcessProfile,
   flushSettings = null, onFlushSettingsChange,
+  prusaNativeTools = null, onPrusaNativeToolsChange, onUsePrusaSingleMaterial, prusaProfileTopology = null,
   slotFilamentProfiles = [], onSlotFilamentProfilesChange, filamentProfiles = [], onFilamentProfilesReload, onRememberedProfiles, spools = [],
   processProfiles = [], onSelectProcessProfile, onResetProcessSettings,
   printerDetails, nozzleMm, selectedPlateType = "Native / profile default",
@@ -87,6 +89,7 @@ export default function SlicerPrepareWorkspace({
   const [selectionClearVersion, setSelectionClearVersion] = useState(0);
   const [expandedAssemblies, setExpandedAssemblies] = useState([]);
   const [assemblySelectionOpen, setAssemblySelectionOpen] = useState(false);
+  const [bulkFilamentOpen, setBulkFilamentOpen] = useState(false);
   const [movePlateTarget,setMovePlateTarget]=useState("");
   const [sliceMenuOpen,setSliceMenuOpen]=useState(false);
   const [showAllPlates,setShowAllPlates]=useState(false);
@@ -204,7 +207,7 @@ export default function SlicerPrepareWorkspace({
   };
   useEffect(() => {
     const id = selectedProfiles?.process_id;
-    if (!id || !["orcaslicer", "crealityprint"].includes(String(engine || "").split(" ")[0])) {
+    if (!id || !["orcaslicer", "crealityprint", "prusaslicer"].includes(String(engine || "").split(" ")[0])) {
       setNativeProcessFields({});
       setNativeProcessError("");
       return undefined;
@@ -309,6 +312,10 @@ export default function SlicerPrepareWorkspace({
   };
   const visibleNativeFields = Object.entries(nativeProcessFields)
     .filter(([key, spec]) => {
+      // Prusa 2.9.7 has native G-code evidence for precisely these two
+      // per-object options. Other controls remain available at Global scope.
+      if (editingObject && String(engine || "").split(" ")[0] === "prusaslicer" &&
+          !["wall_loops", "sparse_infill_density"].includes(key)) return false;
       const conditions = spec.enabled_when
         ? (Array.isArray(spec.enabled_when) ? spec.enabled_when : [spec.enabled_when])
         : [];
@@ -374,7 +381,9 @@ export default function SlicerPrepareWorkspace({
   // A physical slot selection is an advisory project mapping, independent of
   // the preview colour and of the native slicer's filament preset. Never use it
   // to imply that a multi-material tool change has been configured.
-  const changeModelPreviewFilament = (instanceId, slot) => {
+  const changeModelsPreviewFilament = (instanceIds, slot) => {
+    const ids = new Set(instanceIds);
+    if (!canEdit || busy || !ids.size) return;
     if (!printerId || slot?.id == null) return;
     const hex = validSlotColor(slot);
     const materialSlot = {
@@ -382,13 +391,15 @@ export default function SlicerPrepareWorkspace({
       slot_id: String(slot.id),
       slot_index: Number(slot.slot_index ?? 0),
     };
-    updatePlate(latest.current.map(item => item.instance_id === instanceId
+    updatePlate(latest.current.map(item => ids.has(item.instance_id)
       ? { ...item, ...(hex ? {color:hex} : {}), material_slot:materialSlot } : item));
-    if (hex) onManualColorChange?.(instanceId);
+    if (hex) ids.forEach(id => onManualColorChange?.(id));
     setFilamentPickerId("");
+    setBulkFilamentOpen(false);
     setFilamentNotice("Assigned " + slotName(slot) +
-      " to the project model. Single-slot slicing uses that slot's native filament preset when assigned; multi-slot printing requires verified tool routing.");
+      " to " + ids.size + " project model(s). Single-slot slicing uses that slot's native filament preset when assigned; multi-slot printing requires verified tool routing.");
   };
+  const changeModelPreviewFilament = (instanceId, slot) => changeModelsPreviewFilament([instanceId], slot);
   const clearModelFilament = instanceId => {
     updatePlate(latest.current.map(item => {
       if (item.instance_id !== instanceId) return item;
@@ -735,6 +746,52 @@ export default function SlicerPrepareWorkspace({
     setMeasurementVisible(false);
   };
   const selectedModels = objects.filter(row => validSelection.includes(row.instance_id));
+  const bulkPrusaNative = String(engine || "").split(" ")[0] === "prusaslicer";
+  const changeSelectedPrusaNativeTool = tool => {
+    if (!canEdit || busy || !prusaNativeTools || !onPrusaNativeToolsChange ||
+        !Number.isInteger(tool) || tool < 1 || tool > prusaNativeTools.tool_count) return;
+    const ids = new Set(selectedModels.map(row => row.instance_id));
+    if (!ids.size) return;
+    const filamentId = prusaNativeTools.filament_profile_ids?.[tool - 1];
+    const matchingProfile = filamentProfiles.find(row => String(row.id) === String(filamentId) &&
+      row.engine === "prusaslicer" && row.engine_version === String(engine || "").split(" ")[1] &&
+      row.kind === "filament");
+    if (!matchingProfile) return;
+    const entirePlateSelected = ids.size === objects.length;
+    const hasPaintedColours = objects.some(row =>
+      (row.colour_paint?.regions || []).length ||
+      Object.keys(row.colour_paint?.faces || {}).length);
+    if (entirePlateSelected && !hasPaintedColours && onUsePrusaSingleMaterial) {
+      onUsePrusaSingleMaterial(matchingProfile.id);
+      setBulkFilamentOpen(false);
+      setFilamentNotice("All " + ids.size + " models now use " + matchingProfile.name +
+        " with ordinary single-material Prusa slicing. Painting and modifier volumes are unchanged.");
+      return;
+    }
+    const existing = (prusaNativeTools.model_tools || []).filter(row => !ids.has(row.instance_id));
+    onPrusaNativeToolsChange({
+      ...prusaNativeTools,
+      model_tools: [...existing, ...selectedModels.map(row => ({
+        instance_id: row.instance_id, tool,
+      }))],
+    });
+    setBulkFilamentOpen(false);
+    setFilamentNotice("Assigned native T" + (tool - 1) + " to " + ids.size +
+      " model(s). The selected Prusa printer profile and native worker must validate this tool.");
+  };
+  const selectableRows = allPlateRows.filter(row => !row.detached);
+  const allSelected = selectableRows.length > 0 && selectableRows.every(row => validSelection.includes(row.instance_id));
+  const toggleSelectAll = () => {
+    if (!canEdit || busy) return;
+    const next = allSelected ? [] : selectableRows.map(row => row.instance_id);
+    setSelectedIds(next);
+    const focus = selectableRows.find(row => row.instance_id === next.at(-1));
+    setSelectedId(focus?.isPlateVolume ? focus.owner_instance_id || "" : focus?.instance_id || "");
+    setSelectedModifierId(focus?.isPlateVolume ? focus.id : null);
+    setScope("objects");
+    setMeasurementVisible(false);
+    setBulkFilamentOpen(false);
+  };
   const selectedRows = allPlateRows.filter(row => validSelection.includes(row.instance_id));
   // Assemblies display as contiguous logical groups regardless of the
   // underlying object order. Individual parts retain their instance IDs
@@ -938,9 +995,14 @@ export default function SlicerPrepareWorkspace({
     : !projectHasModels ? "Add a model to at least one build plate first."
     : !profilesReady ? "Missing native " + missingNativeProfiles.join(", ") + (missingNativeProfiles.length === 1 ? " profile" : " profiles") + ". Choose the matching profiles in Slicer setup."
     : "";
-  // Matches the bounded keys proven by the pinned Orca 2.5.0 real-binary
-  // two-object G-code fixture. Object edits outside this set remain draft-only.
-  const verifiedObjectSettings = new Set(["wall_loops", "sparse_infill_density"]);
+  // Preserve Orca's existing object-setting gate. Prusa independently
+  // qualifies native shell metadata and must not be blocked by Orca's smaller
+  // object-key set; neither engine inherits the other's verification.
+  const verifiedObjectSettings = new Set(
+    String(engine || "").split(" ")[0] === "prusaslicer"
+      ? ["wall_loops", "sparse_infill_density",
+         "top_shell_layers", "bottom_shell_layers"]
+      : ["wall_loops", "sparse_infill_density"]);
   const objectSettingsPending = objects.some(item =>
     Object.keys(item.process_overrides || {}).some(key => !verifiedObjectSettings.has(key))
   );
@@ -993,7 +1055,8 @@ export default function SlicerPrepareWorkspace({
   const nativeMultiMaterialBaseReady =
     assignedSlots.length === objects.length &&
     assignedSlots.every(slot => String(slot.printer_id) === String(printerId)) &&
-    requiredMultiSlots.length >= 2 && requiredMultiSlots.length <= 16 &&
+    requiredMultiSlots.length >= 2 &&
+    requiredMultiSlots.every(slotId => liveMaterials.some(slot => String(slot.id) === slotId)) &&
     requiredMultiSlots.every(compatibleSlotProfile);
   const crealityTwoStlReady = activeEngine === "crealityprint" &&
     objects.length === 2 && requiredMultiSlots.length === 2 &&
@@ -1021,7 +1084,7 @@ export default function SlicerPrepareWorkspace({
     && assignedSlots.length === objects.length
     && assignedSlots.every(slot => String(slot.printer_id) === String(printerId))
     && requiredMultiSlots.length >= 2
-    && requiredMultiSlots.length <= 16
+    && requiredMultiSlots.every(slotId => liveMaterials.some(slot => String(slot.id) === slotId))
     && requiredMultiSlots.every(compatibleSlotProfile)
     && objects.every(item => (item.colour_paint?.regions || []).every(region => {
       const swatch = item.colour_paint?.palette?.[region.slot];
@@ -1049,6 +1112,68 @@ export default function SlicerPrepareWorkspace({
   const materialRoutingPending = requiredMultiSlots.length > 1
     ? !(multiMaterialReadyForExport || crealityTwoStlReady || crealityPaintReady)
     : assignedSlots.length > 0 ? !(hasSingleSlot && singleSlotProfileMatches) : false;
+  const prusaPaintedSlots=[...new Set(objects.flatMap(object=>
+    object.colour_paint?.regions?.map(region=>region.slot)||[]))];
+  const prusaSinglePaint=activeEngine==="prusaslicer" && objects.length===1 &&
+    prusaPaintedSlots.length>=1 &&
+    (["mmu","xl","indx"].includes(prusaNativeTools?.mode) &&
+     prusaPaintedSlots.length<=2) &&
+    prusaNativeTools?.model_tools?.length===1 &&
+    prusaNativeTools.model_tools[0].instance_id===objects[0].instance_id &&
+    prusaNativeTools.model_tools[0].tool===1 &&
+    prusaNativeTools?.colour_tools?.length===prusaPaintedSlots.length &&
+    prusaPaintedSlots.every(slot=>prusaNativeTools.colour_tools.some(row=>
+      row.slot===slot && row.tool>=2 && row.tool<=Math.min(prusaNativeTools.tool_count,8))) &&
+    new Set(prusaNativeTools.colour_tools.map(row=>row.tool)).size===
+      prusaPaintedSlots.length;
+  const prusaProfileMode = prusaProfileTopology?.kind==="single_nozzle_changer" ? "mmu"
+    : prusaProfileTopology?.kind==="indx" ? "indx"
+    : prusaProfileTopology?.kind==="independent_tools" ? "xl" : null;
+  const prusaTopologyMatches = !!prusaProfileTopology && (
+    prusaNativeTools?.tool_count===prusaProfileTopology.logical_tool_count &&
+    !!prusaProfileMode && prusaNativeTools.mode===prusaProfileMode);
+  const prusaNativeReady = activeEngine === "prusaslicer" && prusaNativeTools != null &&
+    prusaTopologyMatches &&
+    prusaNativeTools.version===1 && prusaNativeTools.filament_profile_ids?.length===prusaNativeTools.tool_count &&
+    prusaNativeTools.filament_profile_ids.every(id=>filamentProfiles.some(profile=>
+      String(profile.id)===String(id) && profile.engine==="prusaslicer" &&
+      profile.engine_version===activeEngineVersion && profile.kind==="filament")) &&
+    prusaNativeTools.filament_profile_ids.includes(selectedProfiles?.filament_id) &&
+    ((objects.length>=2 && objects.length<=200) || prusaSinglePaint) &&
+    prusaNativeTools.model_tools?.length===objects.length &&
+    objects.every(object=>prusaNativeTools.model_tools?.some(row=>row.instance_id===object.instance_id)) &&
+    (prusaSinglePaint || new Set(prusaNativeTools.model_tools.map(row=>row.tool)).size>=2) &&
+    !objects.some(object=>object.material_slot ||
+      (object.process_overrides != null &&
+        (typeof object.process_overrides !== "object" ||
+         Array.isArray(object.process_overrides) ||
+         Object.keys(object.process_overrides).some(key=>
+           !["wall_loops","sparse_infill_density",
+             "top_shell_layers","bottom_shell_layers",
+             "outer_wall_speed","inner_wall_speed",
+             "sparse_infill_speed","top_surface_speed"].includes(key)))) ||
+      object.negative_volumes?.length ||
+      (object.variable_layer_profile?.bands?.length &&
+        prusaNativeTools?.mode==="mmu") ||
+      ((object.modifier_volumes?.length || object.variable_layer_profile?.bands?.length) &&
+        prusaSinglePaint) ||
+      object.support_paint?.regions?.length || object.seam_paint?.regions?.length ||
+      object.fuzzy_skin_paint?.regions?.length ||
+      (object.colour_paint?.regions?.length && !prusaSinglePaint)) &&
+    Object.keys(processOverrides||{}).every(key=>[
+      "layer_height","wall_loops","top_shell_layers",
+      "bottom_shell_layers","sparse_infill_density",
+      "outer_wall_speed",
+      "inner_wall_speed","sparse_infill_speed",
+      "travel_speed","top_surface_speed",
+      "brim_width","skirt_loops"
+    ].includes(key)) && !flushSettings &&
+    (["xl","indx"].includes(prusaNativeTools.mode) && !primeTower ||
+      prusaNativeTools.mode==="mmu" && !!primeTower &&
+      prusaNativeTools.purge_matrix?.every((row,i)=>row.every((volume,j)=>
+        i===j || volume!=null&&volume>=1&&volume<=1000)));
+  const prusaMaterialRoutingPending = prusaNativeTools && activeEngine==="prusaslicer"
+    ? !prusaNativeReady : materialRoutingPending;
 
   const projectRoutingPending = plates.some(plate =>
     (plate.objects || []).some(item => item.material_slot != null)
@@ -1064,11 +1189,14 @@ export default function SlicerPrepareWorkspace({
   const crealityExperimentalPaintReason = crealityExperimentalPaint && !crealityPaintReady
     ? "Creality experimental painting currently requires one colour-painted model with two assigned native CFS filament profiles; single-colour and two-model projects can save these edits but cannot slice them yet."
     : "";
-  const paintedNativeReady = multiMaterialReadyForExport || crealityPaintReady;
+  const paintedNativeReady = multiMaterialReadyForExport || crealityPaintReady ||
+    (activeEngine==="prusaslicer" && prusaSinglePaint && prusaNativeReady);
   const hasPaintedColours = usedNativeFeatures([{objects}]).includes("colour_paint");
   const paintingRoutingNotice = hasPaintedColours && !paintedNativeReady
-    ? !(activeEngine === "orcaslicer" && activeEngineVersion === "2.5.0") && activeEngine !== "crealityprint"
-      ? "Native multi-colour slicing currently requires OrcaSlicer 2.5.0 or Creality Print."
+    ? activeEngine === "prusaslicer"
+      ? "Prusa native colour painting needs a selected MMU or XL printer profile, an owned filament preset for each reported tool, an exact painted-swatch mapping and qualified native paint geometry. Check Prusa native tools."
+      : !(activeEngine === "orcaslicer" && activeEngineVersion === "2.5.0") && activeEngine !== "crealityprint"
+      ? "Native multi-colour slicing is not verified for this engine and version."
       : paintedObjectsWithoutBase.length
         ? "The loaded CFS slots have profiles, but the painted model has no base filament slot. Assign its base filament; this is separate from choosing native profiles for loaded slots."
         : incompletePaintSlot
@@ -1086,14 +1214,54 @@ export default function SlicerPrepareWorkspace({
     ? "Native export not yet verified for " + incompatibleEdits.map(key=>FEATURE_NAMES[key]).join(", ") +
       ". The project is preserved; choose an engine with verified native support before slicing."
     : "";
+  const prusaUnsupportedObjectKeys = activeEngine==="prusaslicer" &&
+    prusaNativeTools ? objects.flatMap(object=>
+      Object.keys(object.process_overrides||{}).filter(key=>
+        !["wall_loops","sparse_infill_density",
+          "top_shell_layers","bottom_shell_layers",
+             "outer_wall_speed","inner_wall_speed",
+             "sparse_infill_speed","top_surface_speed"].includes(key))) : [];
+  const prusaUnsupportedGlobalKeys = activeEngine==="prusaslicer" &&
+    prusaNativeTools ? Object.keys(processOverrides||{}).filter(key=>![
+      "layer_height","wall_loops","top_shell_layers",
+      "bottom_shell_layers","sparse_infill_density",
+      "outer_wall_speed",
+      "inner_wall_speed","sparse_infill_speed",
+      "travel_speed","top_surface_speed",
+      "brim_width","skirt_loops"
+    ].includes(key)) : [];
+  const prusaNativeBlockReason = activeEngine==="prusaslicer" &&
+    prusaNativeTools && !prusaNativeReady
+      ? !prusaTopologyMatches
+        ? !prusaProfileTopology
+          ? "The selected Prusa printer profile topology has not been inspected yet. Select an imported native printer profile and wait for its verified tool count before slicing."
+          : "The selected Prusa printer profile reports " +
+            prusaProfileTopology.logical_tool_count + " native tools (" +
+            String(prusaProfileTopology.kind || "unknown").replaceAll("_", " ") +
+            "), which does not match this draft. Use Match native printer profile in the materials panel."
+        : prusaUnsupportedObjectKeys.length
+        ? "Prusa MMU/XL/INDX maps Object walls, shells, infill density and native perimeter/infill/top-surface speeds. Unsupported Object keys: " +
+          [...new Set(prusaUnsupportedObjectKeys)].join(", ") +
+          ". Restore those settings or save the draft."
+        : prusaUnsupportedGlobalKeys.length
+        ? "Prusa MMU/XL/INDX native slicing cannot apply these global settings yet: " +
+          prusaUnsupportedGlobalKeys.join(", ") +
+          ". Restore them to the imported native process defaults or save this draft."
+        : objects.some(row=>row.material_slot)
+        ? "Prusa virtual tools use native extruder assignments from the selected printer profile, not physical filament bays. Clear the models' physical slot assignments."
+        : (objects.length<2 || objects.length>200) && !prusaSinglePaint
+        ? "Prusa MMU/XL/INDX requires two to 200 tool-assigned models, or one qualified painted MMU/XL model with T0 base."
+        : "Complete the Prusa native tool editor, assign all model tools and owned filament presets, and specify an MMU tower and purge matrix when required."
+      : "";
   const sliceBlockReason = draftBlockReason ||
+    prusaNativeBlockReason ||
     paintingRoutingNotice ||
     crealityExperimentalPaintReason ||
     nativeEditReason ||
     (!activePlateReady ? "Select a plate containing models to slice." : "") ||
     (conflictsBlockSlice ? "Resolve build-plate conflicts or wait for models to finish loading before slicing." : "") ||
     (flushSettings != null && !(multiMaterialReadyForExport || crealityTwoStlReady || crealityPaintReady) ? "Custom flushing requires at least two assigned filaments with matching native profiles. Configure the loaded slot profiles before slicing." : "") ||
-    (materialRoutingPending ? (missingToolProfile
+    (prusaMaterialRoutingPending ? (missingToolProfile
       ? "An assigned model uses a CFS slot without a matching native filament preset. Set its Profile before slicing."
       : "This plate has multiple assigned materials but its selected engine or model edits are not supported for native slicing.")
       : objectSettingsPending
@@ -1206,8 +1374,9 @@ export default function SlicerPrepareWorkspace({
             </option>)}
           </select>
           <small>Object overrides inherit Global values unless changed.
-            Wall loops and sparse infill density have passed native Orca 2.4.2 slicing tests.
-            Other Object settings can be saved in drafts but remain unavailable for slicing until verified.</small>
+            {String(engine || "").split(" ")[0] === "prusaslicer"
+              ? "PrusaSlicer supports per-object wall loops, top/bottom shell layers and infill density. Other print settings remain available at Global scope."
+              : "Wall loops and sparse infill density are verified per-object controls. Other Object settings can be saved in drafts but remain unavailable for slicing until verified."}</small>
 
           <div className="slicerModifierDrafts" aria-label="Regional volume settings">
             <strong>Regional slicing settings</strong>
@@ -1353,7 +1522,8 @@ export default function SlicerPrepareWorkspace({
   const paintPalette = (() => {
     const saved = objects.find(item => item.instance_id === selectedId)?.colour_paint?.palette;
     if (Array.isArray(saved) && saved.length) return saved;
-    const loaded = [...liveMaterials].sort((a, b) => Number(a.slot_index ?? 0) - Number(b.slot_index ?? 0)).slice(0, 64);
+    // Show every reported material. Native slicing capabilities are checked separately.
+    const loaded = [...liveMaterials].sort((a, b) => Number(a.slot_index ?? 0) - Number(b.slot_index ?? 0));
     return loaded.length ? loaded.map(slot => ({
       color: validSlotColor(slot) || "#8c80d9",
       label: slotName(slot),
@@ -1842,7 +2012,13 @@ export default function SlicerPrepareWorkspace({
           {assemblySelectionOpen && <div id="slicer-assembly-selection"
             className="slicerAssemblySelectionList" role="group"
             aria-label="Select models and volumes for assembly">
-            <p>Tick the models and volumes to assemble. Ctrl-click also works on desktop.</p>
+            <p>Tick models and volumes for selection actions. Ctrl-click also works on desktop.</p>
+            <label className="slicerAssemblySelectionRow">
+              <input type="checkbox" checked={allSelected}
+                ref={node => { if (node) node.indeterminate = !allSelected && selectableRows.some(row => validSelection.includes(row.instance_id)); }}
+                disabled={!canEdit || busy || !selectableRows.length} onChange={toggleSelectAll} />
+              <span>Select all</span>
+            </label>
             {modelTreeRows.map((row, index) =>
               <label key={row.instance_id} className={"slicerAssemblySelectionRow"+(row.detached?" unavailable":"")}>
                 <input type="checkbox" checked={validSelection.includes(row.instance_id)}
@@ -1858,11 +2034,32 @@ export default function SlicerPrepareWorkspace({
               </label>)}
             <div className="slicerAssemblySelectionFooter">
               <span role="status">{validSelection.length} selected</span>
+              <button type="button" disabled={!canEdit || busy || !selectedModels.length ||
+                  (bulkPrusaNative ? !prusaNativeTools : !liveMaterials.length)}
+                aria-expanded={bulkFilamentOpen} onClick={() => setBulkFilamentOpen(current => !current)}>
+                Change filament for selected
+              </button>
               <button type="button" disabled={!validSelection.length}
                 onClick={() => {setSelectedIds([]);setSelectedId("");setSelectedModifierId(null);}}>
                 Clear selection
               </button>
             </div>
+            {bulkFilamentOpen && selectedModels.length > 0 && <div className="slicerModelFilamentChoices">
+              <strong>Assign one filament to {selectedModels.length} selected model(s)</strong>
+              <small>Base material only; painted colours and modifier volumes remain unchanged.</small>
+              {bulkPrusaNative ? Array.from({length:prusaNativeTools?.tool_count || 0},(_,index) => {
+                const profile = filamentProfiles.find(item => String(item.id) ===
+                  String(prusaNativeTools.filament_profile_ids?.[index]));
+                return <button type="button" key={index} disabled={!canEdit || busy || !profile}
+                  onClick={() => changeSelectedPrusaNativeTool(index + 1)}>
+                  Native T{index} · {profile?.name || "Choose a filament profile in Prusa native tools"}
+                </button>;
+              }) : liveMaterials.map(slot => <button type="button" key={slot.id} disabled={!canEdit || busy}
+                onClick={() => changeModelsPreviewFilament(selectedModels.map(model => model.instance_id), slot)}>
+                <span className="slicerLiveMaterialSwatch" style={{backgroundColor:validSlotColor(slot) || "#697b91"}} aria-hidden="true" />
+                <span>{slotName(slot)}</span>
+              </button>)}
+            </div>}
           </div>}
         </div>}
         {selectedModels.length>0 && plates.length>1 && <div className="slicerMoveToPlate">
@@ -2173,6 +2370,14 @@ export default function SlicerPrepareWorkspace({
             processProfileId={selectedProfiles?.process_id} engine={activeEngine}
             assignedSlotIds={requiredMultiSlots}
             onChange={onFlushSettingsChange} disabled={!canEdit || busy} />
+          {activeEngine==="prusaslicer" && <PrusaNativeToolEditor
+            value={prusaNativeTools} onChange={onPrusaNativeToolsChange}
+            printerTopology={prusaProfileTopology}
+            models={objects.map(object=>({...object,label:itemName(object)}))}
+            selectedModelIds={selectedModels.map(model => model.instance_id)}
+            profileChoices={filamentProfiles} primaryProfileId={selectedProfiles?.filament_id}
+            engineVersion={activeEngineVersion} primeTower={primeTower}
+            onPrimeTowerChange={onPrimeTowerChange} disabled={!canEdit||busy}/>}
         </section>
 
       </div>
@@ -2364,8 +2569,7 @@ export default function SlicerPrepareWorkspace({
             <select id="slicer-painted-base-slot" value="" disabled={!canEdit || busy}
               onChange={event => {
                 const slot = liveMaterials.find(row => String(row.id) === event.target.value);
-                if (slot) paintedObjectsWithoutBase.forEach(model =>
-                  changeModelPreviewFilament(model.instance_id, slot));
+                if (slot) changeModelsPreviewFilament(paintedObjectsWithoutBase.map(model => model.instance_id), slot);
               }}>
               <option value="">Choose a CFS slot for the model's unpainted areas</option>
               {liveMaterials.filter(slot => compatibleSlotProfile(slot.id)).map(slot =>
@@ -2375,8 +2579,7 @@ export default function SlicerPrepareWorkspace({
             </select>
             {suggestedBaseSlot && <button type="button"
               disabled={!canEdit || busy}
-              onClick={() => paintedObjectsWithoutBase.forEach(model =>
-                changeModelPreviewFilament(model.instance_id, suggestedBaseSlot))}>
+              onClick={() => changeModelsPreviewFilament(paintedObjectsWithoutBase.map(model => model.instance_id), suggestedBaseSlot)}>
               Use matching base profile: {slotName(suggestedBaseSlot)}
             </button>}
             <small>The base slot selects the main native filament preset when a job is saved.
@@ -2410,7 +2613,7 @@ export default function SlicerPrepareWorkspace({
         </button>
         <div className="slicerSliceSplit">
           <button type="button" className="primary"
-            disabled={!activePlateReady || !profilesReady || !workerConfigured || conflictsBlockSlice || objectSettingsPending || (hasPaintedColours && !paintedNativeReady) || materialRoutingPending}
+            disabled={!activePlateReady || !profilesReady || !workerConfigured || conflictsBlockSlice || objectSettingsPending || (hasPaintedColours && !paintedNativeReady) || prusaMaterialRoutingPending || materialRoutingPending}
             onClick={onSlice}>Slice</button>
           <button type="button" aria-label="More slicing options"
             aria-haspopup="menu" aria-expanded={sliceMenuOpen}
@@ -2418,7 +2621,7 @@ export default function SlicerPrepareWorkspace({
             onClick={()=>setSliceMenuOpen(value=>!value)}>▾</button>
           {sliceMenuOpen && <div className="slicerSliceMenu" role="menu">
             <button type="button" role="menuitem"
-              disabled={!activePlateReady || conflictsBlockSlice || objectSettingsPending || (hasPaintedColours && !paintedNativeReady) || materialRoutingPending}
+              disabled={!activePlateReady || conflictsBlockSlice || objectSettingsPending || (hasPaintedColours && !paintedNativeReady) || prusaMaterialRoutingPending || materialRoutingPending}
               onClick={()=>{setSliceMenuOpen(false);onSlice?.();}}>Slice active plate</button>
             <button type="button" role="menuitem"
               disabled={!projectHasModels || objectSettingsPending || projectRoutingPending}

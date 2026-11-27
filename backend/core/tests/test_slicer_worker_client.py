@@ -73,6 +73,37 @@ class SlicerWorkerClientTests(SimpleTestCase):
     @patch("core.slicer_worker_client._session")
     @patch("core.slicer_worker_client.worker_settings",
            return_value=("http://slicer-worker:8088", "x" * 40))
+    def test_creality_placed_stl_request_is_explicit_and_engine_scoped(
+            self, settings, session):
+        import json
+        gcode = b";Creality placed plate test\\nG1 X1 Y1 E1\\n"
+        response = Mock()
+        response.status_code = 200
+        response.headers = {"Content-Length": "300"}
+        response.iter_content.return_value = [json.dumps({
+            "status": "completed", "gcode": base64.b64encode(gcode).decode(),
+            "bytes": len(gcode), "sha256": hashlib.sha256(gcode).hexdigest(),
+        }).encode()]
+        session.return_value.post.return_value = response
+        output = run_remote_job(
+            uuid.uuid4(), "crealityprint", "7.3.1",
+            b"composite", b"printer", b"filament", b"process",
+            creality_placed_stl=True)
+        self.assertEqual(output, gcode)
+        sent = json.loads(session.return_value.post.call_args.kwargs["data"])
+        self.assertIs(sent["creality_placed_stl"], True)
+        import zlib
+        self.assertEqual(zlib.decompress(base64.b64decode(sent["model"])), b"composite")
+        self.assertEqual(sent["creality_model_raw_sha256"], hashlib.sha256(b"composite").hexdigest())
+        for engine in ("orcaslicer", "bambustudio", "prusaslicer"):
+            with self.subTest(engine=engine), self.assertRaises(SlicerWorkerError):
+                run_remote_job(uuid.uuid4(), engine, "7.3.1",
+                               b"composite", b"printer", b"filament",
+                               b"process", creality_placed_stl=True)
+
+    @patch("core.slicer_worker_client._session")
+    @patch("core.slicer_worker_client.worker_settings",
+           return_value=("http://slicer-worker:8088", "x" * 40))
     def test_creality_native_code_visible_without_raw_engine_output(self, settings, session):
         import json
         response = Mock()
@@ -228,6 +259,89 @@ class SlicerWorkerClientTests(SimpleTestCase):
                     run_remote_job(uuid.uuid4(), engine, "2.4.2",
                                    b"model", b"printer", b"one", b"process",
                                    model_format=model_format, filament_profiles=profiles)
+
+
+    @patch("core.slicer_worker_client._session")
+    @patch("core.slicer_worker_client.worker_settings",
+           return_value=("http://slicer-worker:8088", "x" * 40))
+    def test_offline_prusa_mmu_client_uses_distinct_gated_contract(self, settings, session):
+        import json
+        gcode = b"; authenticated offline MMU fixture\\nT0\\nT1\\n"
+        response = Mock(status_code=200,headers={"Content-Length":"300"})
+        response.iter_content.return_value=[json.dumps({
+            "status":"completed","gcode":base64.b64encode(gcode).decode(),
+            "bytes":len(gcode),"sha256":hashlib.sha256(gcode).hexdigest(),
+        }).encode()]
+        session.return_value.post.return_value=response
+        result=run_remote_job(
+            uuid.uuid4(),"prusaslicer","2.9.7",b"project",b"printer",
+            b"filament",b"process",model_format="3mf",
+            prusa_offline_mmu={"tools":(1,2),"tower":(55,150,0,250,210)})
+        self.assertEqual(result,gcode)
+        sent=json.loads(session.return_value.post.call_args.kwargs["data"])
+        self.assertEqual(sent["prusa_offline_mmu"],
+                         {"tools":[1,2],"tower":[55,150,0,250,210]})
+        self.assertNotIn("filament_profiles",sent)
+        # Model count is independent of the number of native material tools.
+        repeated = [1, 2, 3, 4, 5] * 3
+        run_remote_job(uuid.uuid4(), "prusaslicer", "2.9.7", b"project",
+                       b"printer", b"filament", b"process", model_format="3mf",
+                       prusa_offline_mmu={"tools": repeated, "tower": [55,150,0,250,210]})
+        sent = json.loads(session.return_value.post.call_args.kwargs["data"])
+        self.assertEqual(sent["prusa_offline_mmu"]["tools"], repeated)
+        independent = list(range(1, 9)) * 2
+        run_remote_job(uuid.uuid4(), "prusaslicer", "2.9.7", b"project",
+                       b"printer", b"filament", b"process", model_format="3mf",
+                       prusa_offline_xl={"tools": independent})
+        sent = json.loads(session.return_value.post.call_args.kwargs["data"])
+        self.assertEqual(sent["prusa_offline_xl"]["tools"], independent)
+        for change in (
+            {"engine":"orcaslicer"},
+            {"version":"2.9.6"},
+            {"model_format":"stl"},
+            {"prusa_offline_mmu":{"tools":[1,2],"tower":[float("nan"),150,0,250,210]}},
+            {"prusa_offline_mmu":{"tools":[1,True],"tower":[55,150,0,250,210]}},
+            {"prusa_offline_mmu":{"tools":[1,2],"tower":[55,150,0,250,210],"cmd":"unsafe"}},
+        ):
+            with self.subTest(change=change),self.assertRaises(SlicerWorkerError):
+                arguments=dict(engine="prusaslicer",version="2.9.7",
+                               model_format="3mf",prusa_offline_mmu={
+                                   "tools":[1,2],"tower":[55,150,0,250,210]})
+                arguments.update(change)
+                run_remote_job(uuid.uuid4(),arguments.pop("engine"),
+                               arguments.pop("version"),
+                               b"project",b"printer",b"filament",b"process",**arguments)
+
+    @patch("core.slicer_worker_client._session")
+    @patch("core.slicer_worker_client.worker_settings",
+           return_value=("http://slicer-worker:8088", "x" * 40))
+    def test_prusa_painted_contracts_reach_worker(self, settings, session):
+        import json
+        gcode = b"; authenticated painted fixture\nT0\nT1\n"
+        response = Mock(status_code=200, headers={"Content-Length": "300"})
+        response.iter_content.return_value = [json.dumps({
+            "status": "completed", "gcode": base64.b64encode(gcode).decode(),
+            "bytes": len(gcode), "sha256": hashlib.sha256(gcode).hexdigest(),
+        }).encode()]
+        session.return_value.post.return_value = response
+        contracts = (
+            ("prusa_offline_colour", {"tools": [1, 2], "tower": [55,150,0,250,210]}),
+            ("prusa_offline_xl_colour", {"tool": 4}),
+            ("prusa_offline_xl_colour", {"tools": [1, 2]}),
+        )
+        for field, metadata in contracts:
+            with self.subTest(field=field):
+                self.assertEqual(run_remote_job(
+                    uuid.uuid4(), "prusaslicer", "2.9.7", b"project",
+                    b"printer", b"filament", b"process", model_format="3mf",
+                    **{field: metadata}), gcode)
+                sent = json.loads(session.return_value.post.call_args.kwargs["data"])
+                self.assertEqual(sent[field], metadata)
+        with self.assertRaises(SlicerWorkerError):
+            run_remote_job(uuid.uuid4(), "prusaslicer", "2.9.7", b"project",
+                           b"printer", b"filament", b"process", model_format="3mf",
+                           prusa_offline_colour=contracts[0][1],
+                           prusa_offline_xl_colour=contracts[1][1])
 
     def test_dangerous_engine_or_invalid_inputs_are_rejected_before_transport(self):
         with self.assertRaises(SlicerWorkerError):
