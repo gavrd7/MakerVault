@@ -74,6 +74,26 @@ class PrusaNativeToolpathAuditTests(TestCase):
                 audit_prusa_material_model_gcode(
                     raw,project(),printer_ini=PRINTER,tools=[1,2])
 
+    def test_native_first_layer_skirt_brim_does_not_impersonate_neighbour_model(self):
+        native=toolpaths().replace(
+            b"T0\nG0 X90 Y105\n",
+            b"T0\nG0 Z0.2\n;TYPE:Skirt/Brim\n"
+            b"G0 X160 Y105\nG1 X160.1 Y105 E0.1\n"
+            b";TYPE:External perimeter\nG0 X90 Y105\n")
+        result=audit_prusa_material_model_gcode(
+            native,project(),printer_ini=PRINTER,tools=[1,2])
+        self.assertEqual(result["correct_extrusion_moves"],[32,32])
+        self.assertEqual(result["incorrect_extrusion_moves"],[0,0])
+        self.assertEqual(result["native_first_layer_adhesion_moves"],{0:1,1:0})
+        for forged in (
+            native.replace(b"G0 Z0.2",b"G0 Z2.5"),
+            native.replace(b";TYPE:Skirt/Brim",b";TYPE:External perimeter"),
+            native.replace(b";TYPE:Skirt/Brim",b";TYPE:Skirt/Brim\nT9"),
+        ):
+            with self.subTest(raw=forged[:140]),self.assertRaises(WorkerError):
+                audit_prusa_material_model_gcode(
+                    forged,project(),printer_ini=PRINTER,tools=[1,2])
+
     def test_real_tower_audit_requires_both_materials_purging(self):
         from core.slicer_prusa_wipe_tower import add_prusa_native_wipe_tower
         source=add_prusa_native_wipe_tower(
