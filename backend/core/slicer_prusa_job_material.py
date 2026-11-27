@@ -72,8 +72,7 @@ def _virtual_native_tools(job, settings, objects, kind, count, *, single_colour=
         regions=paint.get("regions") or []
         colour_rows=config.get("colour_tools",[])
         slots = [region.get("slot") for region in regions if isinstance(region,dict)]
-        if ((expected=="xl" and len(regions)!=1) or
-                not 1<=len(regions)<=2 or len(slots)!=len(regions) or
+        if (not 1<=len(regions)<=2 or len(slots)!=len(regions) or
                 len(set(slots))!=len(slots) or
                 len(colour_rows)!=len(slots) or
                 {row["slot"] for row in colour_rows}!=set(slots) or
