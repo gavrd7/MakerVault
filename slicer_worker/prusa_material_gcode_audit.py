@@ -87,6 +87,11 @@ def audit_prusa_material_model_gcode(data, project, *, printer_ini, tools, tower
         raise WorkerError("Prusa material G-code line limit exceeded.")
     correct=[0]*len(bounds)
     incorrect=[0]*len(bounds)
+    # Native brim/skirt has its own first-layer G-code role. These moves
+    # must not be attributed to a neighbouring model's material footprint.
+    adhesion={tool-1:0 for tool in set(tools)}
+    role=""
+    z=None
     tower_hits={}
     if tower is not None:
         if tower[2] != 0:
@@ -111,6 +116,8 @@ def audit_prusa_material_model_gcode(data, project, *, printer_ini, tools, tower
         if len(line)>16384:
             raise WorkerError("Prusa material G-code line too long.")
         stripped=line.strip()
+        if stripped.startswith(";TYPE:"):
+            role=stripped.partition(":")[2].strip().lower()
         # The pinned INDX 8T toolchange physically diverts extrusion into
         # its firmware cleaner (G12 S90/S91). Its five relative-XY purge
         # strokes otherwise appear to be located at the previous model XY.
@@ -155,6 +162,13 @@ def audit_prusa_material_model_gcode(data, project, *, printer_ini, tools, tower
         if op not in ("M82","M83","G90","G91","G92","G0","G00","G1","G01"):
             continue
         params={k.upper():float(v) for k,v in WORD.findall(cmd)}
+        z_word=re.search(r"(?:^|\s)Z\s*([-+]?(?:\d+(?:\.\d*)?|\.\d+)(?:[Ee][-+]?\d+)?)",cmd,re.I)
+        if z_word:
+            next_z=float(z_word.group(1))
+            if not math.isfinite(next_z) or abs(next_z)>1e9:
+                raise WorkerError("Prusa toolpath has invalid native Z.")
+            if op in ("G0","G00","G1","G01","G92"):
+                z=(z+next_z if op in ("G0","G00","G1","G01") and relative_xy and z is not None else next_z)
         if any(not math.isfinite(v) or abs(v)>1e9 for v in params.values()):
             raise WorkerError("Prusa material toolpath contains invalid coordinates.")
         if flush and op in ("G90","G92","M82"):
@@ -222,6 +236,13 @@ def audit_prusa_material_model_gcode(data, project, *, printer_ini, tools, tower
                 # Stationary model/tool-change recovery is not a deposited
                 # model segment; model attribution requires moving XY.
                 continue
+            if role=="skirt/brim":
+                # Exclude only native first-layer moving extrusion under the
+                # exact slicer adhesion role. Normal wall tools remain strict.
+                if z is None or not 0 < z <= 1.0 or active not in adhesion:
+                    raise WorkerError("Prusa adhesion extrusion is not on the first layer.")
+                adhesion[active]+=1
+                continue
             for index,box in enumerate(bounds):
                 if (box[0]-.15<=x<=box[1]+.15 and
                         box[2]-.15<=y<=box[3]+.15 and
@@ -243,4 +264,5 @@ def audit_prusa_material_model_gcode(data, project, *, printer_ini, tools, tower
             "incorrect_extrusion_moves":incorrect,
             "selected_tools":tuple(sorted(used)),
             "tower_extrusion_moves":tower_hits,
-            "qualified_cleaner_flushes":flush_blocks}
+            "qualified_cleaner_flushes":flush_blocks,
+            "native_first_layer_adhesion_moves":adhesion}
