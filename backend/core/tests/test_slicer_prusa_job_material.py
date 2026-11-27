@@ -128,6 +128,10 @@ class PrusaWorkbenchMaterialTests(TestCase):
                 job.settings["process_overrides"] = {
                     "layer_height":.16, "wall_loops":3,
                     "sparse_infill_density":25,
+                    "brim_width":2, "skirt_loops":2,
+                    "outer_wall_speed":25, "inner_wall_speed":45,
+                    "sparse_infill_speed":60, "travel_speed":140,
+                    "top_surface_speed":30,
                 }
                 kind,plan=prepare_prusa_workbench_material(job)
                 self.assertEqual(kind,mode)
@@ -172,7 +176,7 @@ class PrusaWorkbenchMaterialTests(TestCase):
 
     def test_multi_tool_global_overrides_refuse_unqualified_controls(self):
         for value in (
-            {"wipe_tower":1},{"travel_speed":120},{"prime_tower_width":40},
+            {"wipe_tower":1},{"machine_start_gcode":"G28"},{"prime_tower_width":40},
             {"layer_height":"0.2"},{"wall_loops":True},["layer_height"],
         ):
             with self.subTest(value=value):
