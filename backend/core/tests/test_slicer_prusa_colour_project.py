@@ -316,6 +316,33 @@ class PrusaDualColourResearchTests(TestCase):
         self.assertTrue(all(value>=10 for value
                             in stationary["tower_extrusion_moves"].values()))
 
+    def test_independent_xl_reuses_dual_wall_audit_without_mmu_purge(self):
+        from unittest.mock import patch
+        from slicer_worker.prusa_colour_gcode_audit import audit_prusa_dual_colour_gcode
+        with patch(
+            "slicer_worker.prusa_colour_gcode_audit.validate_prusa_material_candidate",
+            return_value={"tools":(1,2,3),"wipe_tower":False}
+        ) as validate, patch(
+            "slicer_worker.prusa_colour_gcode_audit._two_painted_wall_regions",
+            return_value={"front":(114,136,93,97),"back":(114,136,113,117)}
+        ):
+            output=audit_prusa_dual_colour_gcode(
+                self.gcode(),b"controlled-xl-project",
+                printer_ini=b"owned-independent-xl",tools=(1,2),tower=None)
+            self.assertEqual(output["wall_moves"][1]["front"],25)
+            self.assertEqual(output["wall_moves"][2]["back"],25)
+            self.assertEqual(output["tower_extrusion_moves"],{})
+            self.assertFalse(output["wipe_tower"])
+            self.assertTrue(validate.call_args.kwargs["independent_colour"])
+            with self.assertRaises(WorkerError):
+                audit_prusa_dual_colour_gcode(
+                    self.gcode(wrong_tool=True),b"controlled-xl-project",
+                    printer_ini=b"owned-independent-xl",tools=(1,2),tower=None)
+            with self.assertRaises(WorkerError):
+                audit_prusa_dual_colour_gcode(
+                    self.gcode(crossing=True),b"controlled-xl-project",
+                    printer_ini=b"owned-independent-xl",tools=(1,2),tower=None)
+
     def test_non_distinct_and_unqualified_tool_assignments_rejected(self):
         from slicer_worker.prusa_colour_gcode_audit import _two_painted_wall_regions
         for tools in ((1,1),(0,2),(1,5),(True,2),(1,2,3)):
