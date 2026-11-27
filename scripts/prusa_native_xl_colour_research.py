@@ -65,8 +65,15 @@ def main(binary, vendor):
         assert counts[0]["front"]<=2,counts
         for key in (2,3,4):
             assert counts[key]["front"]<=2 and counts[key]["back"]<=2,counts
+        from slicer_worker.prusa_colour_gcode_audit import audit_prusa_xl_colour_gcode
+        receipt=audit_prusa_xl_colour_gcode(
+            output,project,printer_ini=printer,tool=1)
+        assert receipt["painted_wall_moves"][1]["front"]>20
+        assert receipt["painted_wall_moves"][0]["back"]>20
+        assert receipt["wipe_tower"] is False
         print("PASS: genuine independent XL5 T1-front/T0-back paint",
-              counts,"sha256",hashlib.sha256(output).hexdigest(),flush=True)
+              counts,receipt,"sha256",hashlib.sha256(output).hexdigest(),
+              flush=True)
 
 
 if __name__=="__main__":
