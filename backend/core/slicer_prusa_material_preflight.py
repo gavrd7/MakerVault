@@ -328,7 +328,7 @@ def prepare_prusa_offline_xl_colour_candidate(
             not isinstance(colour_tool_indices,dict) or
             not 1 <= len(colour_tool_indices) <= 2 or
             any(type(slot) is not int or not 0<=slot<16 or
-                type(tool) is not int or not 1<=tool<=4
+                type(tool) is not int or not 1<=tool<=7
                 for slot,tool in colour_tool_indices.items()) or
             len(set(colour_tool_indices.values()))!=len(colour_tool_indices)):
         raise SlicerProfileError("Prusa XL colour requires one T0 model and distinct native wall tools.")
