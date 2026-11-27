@@ -13,6 +13,9 @@ LAYER_RANGES = "Metadata/Prusa_Slicer_layer_config_ranges.xml"
 PARTS = {"3D/3dmodel.model", CONFIG, "[Content_Types].xml", "_rels/.rels"}
 LIMIT = 500_000
 PAINT_NS = "{http://schemas.slic3r.org/3mf/2017/06}"
+COLOUR_FACET = PAINT_NS + "mmu_segmentation"
+COLOUR_HEADER = "slic3rpe:MmPaintingVersion"
+COLOUR_STATES = frozenset({"4", "8", "0C", "1C", "2C", "3C", "4C", "5C"})
 PAINT_HEADERS = {
     PAINT_NS + "custom_supports": "slic3rpe:FdmSupportsPaintingVersion",
     PAINT_NS + "custom_seam": "slic3rpe:SeamPaintingVersion",
@@ -46,6 +49,8 @@ def _settings(nodes, kind, allowed):
         _require(key in allowed and key not in result)
         if key == "volume_type":
             _require(val in {"ModelPart", "ParameterModifier", "NegativeVolume"})
+        elif key == "extruder":
+            _require(val == "1")
         elif key == "perimeters":
             _require(1 <= _integer(val, 12) <= 12)
         elif key in {"top_solid_layers", "bottom_solid_layers"}:
@@ -92,7 +97,8 @@ def _validate_layer_ranges(root, object_count):
     return total
 
 
-def validate_prusa_native_3mf(data):
+def validate_prusa_native_3mf(data, *, research_colour=False):
+    _require(type(research_colour) is bool)
     _require(isinstance(data, bytes) and 0 < len(data) <= 32 * 1024 * 1024)
     try:
         with zipfile.ZipFile(io.BytesIO(data)) as z:
@@ -124,7 +130,7 @@ def validate_prusa_native_3mf(data):
                          types.pop(node.get("Extension"), None) == node.get("ContentType"))
         _require(model.tag == NS + "model" and model.attrib == {"unit": "millimeter"})
         entries = list(model)
-        _require(3 <= len(entries) <= 6 and
+        _require(3 <= len(entries) <= (7 if research_colour else 6) and
                  entries[-2].tag == NS + "resources" and entries[-1].tag == NS + "build")
         meta, resources, build = entries[0], entries[-2], entries[-1]
         _require(meta.tag == NS + "metadata" and
@@ -135,7 +141,10 @@ def validate_prusa_native_3mf(data):
             _require(header.tag == NS + "metadata" and not len(header) and
                      set(header.attrib) == {"name"} and (header.text or "").strip() == "2")
             name = header.get("name")
-            _require(name in PAINT_HEADERS.values() and name not in declared_paints)
+            _require(name in (
+                set(PAINT_HEADERS.values()) |
+                ({COLOUR_HEADER} if research_colour else set()))
+                and name not in declared_paints)
             declared_paints.add(name)
         _require(not resources.attrib and not build.attrib and 1 <= len(resources) <= 200
                  and len(build) == len(resources))
@@ -160,13 +169,18 @@ def validate_prusa_native_3mf(data):
             for face in faces:
                 _require(face.tag == NS + "triangle" and not len(face) and
                          {"v1", "v2", "v3"}.issubset(face.attrib) and
-                         set(face.attrib) <= {"v1", "v2", "v3", *PAINT_HEADERS})
+                         set(face.attrib) <= (
+                             {"v1", "v2", "v3", *PAINT_HEADERS} |
+                             ({COLOUR_FACET} if research_colour else set())))
                 ids = [_integer(face.get(v), len(verts)-1) for v in ("v1", "v2", "v3")]
                 _require(len(set(ids)) == 3)
                 for key, val in face.attrib.items():
                     if key in PAINT_HEADERS:
                         _require(val in (("4",) if key.endswith("fuzzy_skin") else ("4", "8")))
                         observed_paints.add(PAINT_HEADERS[key])
+                    elif key == COLOUR_FACET:
+                        _require(research_colour and val in COLOUR_STATES)
+                        observed_paints.add(COLOUR_HEADER)
             _require(cfg.tag == "object" and cfg.attrib == {"id": oid, "instances_count": "1"})
             metadata = [n for n in cfg if n.tag == "metadata"]
             volumes = [n for n in cfg if n.tag == "volume"]
@@ -192,13 +206,25 @@ def validate_prusa_native_3mf(data):
                        for axis in ("v1", "v2", "v3")}
                 _require(min(ids) == next_vertex and len(ids) == max(ids)-min(ids)+1)
                 next_vertex = max(ids)+1
-                values = _settings(vol, "volume", {"volume_type", "perimeters", "fill_density", "top_solid_layers", "bottom_solid_layers"})
+                values = _settings(vol, "volume", {
+                    "volume_type", "perimeters", "fill_density",
+                    "top_solid_layers", "bottom_solid_layers",
+                    *({"extruder"} if research_colour else set())})
                 role = values.pop("volume_type", None)
-                _require((n == 0 and role == "ModelPart" and not values) or
+                _require((n == 0 and role == "ModelPart" and
+                          (not values or
+                           (research_colour and values == {"extruder": "1"}))) or
                          (n > 0 and role == "NegativeVolume" and not values) or
-                         (n > 0 and role == "ParameterModifier" and bool(values)))
+                         (n > 0 and role == "ParameterModifier" and bool(values)
+                          and "extruder" not in values))
+                if n > 0:
+                    _require(all(not any(name in face.attrib
+                                         for name in (*PAINT_HEADERS, COLOUR_FACET))
+                                 for face in faces[first:last+1]))
             _require(next_face == len(faces) and next_vertex == len(verts))
         _require(observed_paints == declared_paints)
+        if research_colour:
+            _require(COLOUR_HEADER in observed_paints)
         layer_count = _validate_layer_ranges(layer_root, len(resources)) if layer_root is not None else 0
         return {"objects": len(resources), "triangles": count, "regions": regions,
                 "layer_ranges": layer_count, "paint_channels": sorted(observed_paints)}
