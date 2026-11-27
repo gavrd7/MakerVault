@@ -154,6 +154,51 @@ def main(binary,vendor):
         print("PASS: five XL independent heads selected and deposited correct material on five models",
               receipt,"sha256",hashlib.sha256(output).hexdigest(),flush=True)
 
+        # Qualify actual 2.9.7 binary output with independent modifier, cavity,
+        # layer scheduling and object settings on different XL heads.
+        from core.tests.test_slicer_prusa_3mf import volume
+        from slicer_worker.prusa_material_validation import validate_prusa_material_candidate
+        modified = []
+        for index, (object_settings, mesh) in enumerate(rows):
+            entry = dict(object_settings)
+            if index == 0:
+                modifier = volume("modifier", {"sparse_infill_density": 80})
+                modifier.update(width_mm=3, depth_mm=3, height_mm=5,
+                                x_mm=-90, y_mm=0, z_mm=4)
+                entry["modifier_volumes"] = [modifier]
+            if index == 1:
+                cavity = volume("negative")
+                cavity.update(width_mm=3, depth_mm=3, height_mm=5,
+                              x_mm=-45, y_mm=0, z_mm=4)
+                entry["modifier_volumes"] = [cavity]
+            if index == 2:
+                entry["variable_layer_profile"] = {
+                    "version": 1, "bands": [
+                        {"from_mm": 2, "to_mm": 6, "layer_mm": .12}]}
+            modified.append((entry, mesh))
+        project2, topology2 = build_prusa_multitool_candidate(
+            modified, printer_ini=printer, tools=tools,
+            bed_width=360, bed_depth=360)
+        assert topology2["kind"] == "independent_tools"
+        native_receipt = validate_prusa_material_candidate(
+            project2, printer_ini=printer, tools=tools)
+        assert native_receipt["objects"] == 5
+        candidate["model"] = encode(project2)
+        _decode_payload(candidate)
+        (work/"input.3mf").write_bytes(project2)
+        (work/"output.gcode").unlink()
+        run_prusa(Path(binary), work)
+        mixed = (work/"output.gcode").read_bytes()
+        mixed_receipt = audit_prusa_material_model_gcode(
+            mixed, project2, printer_ini=printer, tools=tools)
+        assert mixed_receipt["selected_tools"] == tuple(range(5))
+        assert mixed_receipt["incorrect_extrusion_moves"] == [0]*5
+        assert min(mixed_receipt["correct_extrusion_moves"]) >= 20
+        assert hashlib.sha256(output).digest() != hashlib.sha256(mixed).digest()
+        print("PASS: native XL five-tool modifier/cavity/variable-layer mix",
+              mixed_receipt, "sha256", hashlib.sha256(mixed).hexdigest(),
+              flush=True)
+
 
 if __name__=="__main__":
     main(*sys.argv[1:])
