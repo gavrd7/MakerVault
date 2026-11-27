@@ -160,7 +160,9 @@ class PrusaNativeColourProjectTests(TestCase):
                            (b[1] - a[1]) * (c[0] - a[0]))
             triangle = max(triangles, key=triangle_area)
             commands.extend([f"T{assigned}", ";TYPE:External perimeter"])
-            for barycentric in ((.2, .3, .5), (.3, .5, .2), (.5, .2, .3)):
+            for barycentric in ((.20, .25, .55), (.25, .30, .45),
+                                (.30, .35, .35), (.35, .40, .25),
+                                (.40, .45, .15)):
                 tangent, z = (
                     sum(w * vertex[axis] for w, vertex
                         in zip(barycentric, triangle))
@@ -179,8 +181,8 @@ class PrusaNativeColourProjectTests(TestCase):
         synthetic = ("\\n".join(commands) + "\\n").encode()
         audited = audit_prusa_partial_wall_gcode(
             synthetic, project, tool=1)
-        self.assertEqual(audited["deposition_moves"][1]["painted"], 12)
-        self.assertEqual(audited["deposition_moves"][0]["unpainted"], 12)
+        self.assertEqual(audited["deposition_moves"][1]["painted"], 20)
+        self.assertEqual(audited["deposition_moves"][0]["unpainted"], 20)
         self.assertTrue(audited["offline_only"])
         with self.assertRaises(WorkerError):
             audit_prusa_partial_wall_gcode(
