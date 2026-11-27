@@ -214,7 +214,36 @@ def validate_prusa_project_admission(plate, settings, version):
                                  for other in plate):
                 raise ValueError("Prusa two-object fuzzy skin cannot combine other regional extensions.")
             if support and fuzzy:
-                raise ValueError("Combined support and fuzzy skin require a regional G-code fixture.")
+                # The native support/fuzzy fixture requires distinct painted
+                # source triangles: a manual enforcer on a cantilever underside
+                # and fuzzy exterior walls. No same-face overlap or additional
+                # painted seam channel is qualified.
+                if (len(plate) != 1 or len(support) != 1 or len(fuzzy) != 1
+                        or support[0].get("slot") != 0
+                        or fuzzy[0].get("slot") != 0
+                        or (row.get("seam_paint") or {}).get("regions")
+                        or abs(float(row.get("rotation_deg", 0))) > 1e-6
+                        or abs(float(row.get("scale_percent", 100)) - 100) > 1e-6
+                        or any(abs(float(v)) > 1e-6 for v in
+                               row.get("rotation_xyz_deg", [0, 0]))
+                        or any(abs(float(v) - 100) > 1e-6 for v in
+                               row.get("scale_xyz_percent", [100, 100, 100]))):
+                    raise ValueError(
+                        "Combined Prusa support and fuzzy paint requires one "
+                        "upright unscaled model with manual support enforcers.")
+                painted_faces = []
+                for regions in (support, fuzzy):
+                    patches = regions[0].get("patches")
+                    if (not isinstance(patches, list) or not patches
+                            or any(not isinstance(patch, dict)
+                                   or type(patch.get("face")) is not int
+                                   for patch in patches)):
+                        raise ValueError(
+                            "Combined Prusa support/fuzzy needs fingerprinted face patches.")
+                    painted_faces.append({patch["face"] for patch in patches})
+                if painted_faces[0] & painted_faces[1]:
+                    raise ValueError(
+                        "Combined Prusa support and fuzzy masks cannot share source faces.")
             if not isinstance(support, list) or not isinstance(fuzzy, list) or any(
                     not isinstance(region, dict) or region.get("slot") not in (0, 1)
                     for region in support) or any(
