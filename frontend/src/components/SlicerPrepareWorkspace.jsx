@@ -2303,6 +2303,7 @@ export default function SlicerPrepareWorkspace({
           {activeEngine==="prusaslicer" && <PrusaNativeToolEditor
             value={prusaNativeTools} onChange={onPrusaNativeToolsChange}
             models={objects.map(object=>({...object,label:itemName(object)}))}
+            selectedModelIds={selectedModels.map(model => model.instance_id)}
             profileChoices={filamentProfiles} primaryProfileId={selectedProfiles?.filament_id}
             engineVersion={activeEngineVersion} primeTower={primeTower}
             onPrimeTowerChange={onPrimeTowerChange} disabled={!canEdit||busy}/>}
