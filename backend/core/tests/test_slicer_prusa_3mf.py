@@ -104,6 +104,24 @@ class PrusaProjectDialectTests(TestCase):
                 self.assertEqual(receipt["regions"], 1)
                 self.assertEqual(receipt["objects"], 1)
 
+    def test_native_modifier_and_variable_z_metadata_can_coexist_before_slice_qualification(self):
+        model = item(
+            modifier_volumes=[volume("modifier", {"sparse_infill_density": 80})],
+            variable_layer_profile={"version": 1, "bands": [
+                {"from_mm": 4, "to_mm": 16, "layer_mm": .12},
+            ]},
+        )
+        archive = build_prusa_native_3mf([(model, cube())],
+                                          bed_width=250, bed_depth=210)
+        receipt = validate_prusa_native_3mf(archive)
+        self.assertEqual(receipt["objects"], 1)
+        self.assertEqual(receipt["regions"], 1)
+        self.assertGreaterEqual(receipt["layer_ranges"], 1)
+        # A parseable 3MF is not evidence that the native G-code preserves
+        # both changes. This gate stays closed until pinned CLI acceptance.
+        with self.assertRaisesRegex(ValueError, "separate G-code proof"):
+            validate_prusa_project_admission([model], {}, "2.9.7")
+
     def test_all_shared_primitive_region_meshes_remain_native_prusa_volumes(self):
         from core.slicer_modifier_volumes import PRIMITIVE_SHAPES
         for shape in sorted(PRIMITIVE_SHAPES):
