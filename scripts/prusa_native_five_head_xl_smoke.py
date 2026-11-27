@@ -175,6 +175,10 @@ def main(binary,vendor):
                 entry["variable_layer_profile"] = {
                     "version": 1, "bands": [
                         {"from_mm": 2, "to_mm": 6, "layer_mm": .12}]}
+            if index == 4:
+                entry["process_overrides"] = {
+                    **entry.get("process_overrides", {}),
+                    "top_shell_layers": 0, "bottom_shell_layers": 0}
             modified.append((entry, mesh))
         project2, topology2 = build_prusa_multitool_candidate(
             modified, printer_ini=printer, tools=tools,
@@ -195,6 +199,17 @@ def main(binary,vendor):
         assert mixed_receipt["incorrect_extrusion_moves"] == [0]*5
         assert min(mixed_receipt["correct_extrusion_moves"]) >= 20
         assert hashlib.sha256(output).digest() != hashlib.sha256(mixed).digest()
+        # The fifth model has identical native geometry/material and global
+        # profile in both runs; only its own top/bottom shell counts changed.
+        # Require actual deposited top-surface paths to disappear on T4.
+        counters = runpy.run_path("/tmp/prusa_object_wall.py")[
+            "count_native_object_deposition"]
+        before_shell = counters(output, project, tools)["top_solid_infill"][4]
+        after_shell = counters(mixed, project2, tools)["top_solid_infill"][4]
+        assert before_shell >= 20 and after_shell < before_shell * .15, (
+            before_shell, after_shell)
+        print("PASS: independent T4 shell override changes local top infill",
+              before_shell, after_shell, flush=True)
         # An edited layer schedule must be independently visible in G-code
         # deposited over its own model, not merely in the 3MF metadata.
         from core.slicer_prusa_spatial_layers import audit_prusa_multi_object_layer_ranges
