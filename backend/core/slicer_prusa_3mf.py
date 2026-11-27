@@ -194,9 +194,10 @@ def validate_prusa_project_admission(plate, settings, version):
                 (row.get("colour_paint") or {}).get("faces")):
             raise ValueError("Prusa colour painting needs audited native material routing.")
         if (row.get("seam_paint") or {}).get("regions"):
-            if len(plate) != 1:
-                raise ValueError("Prusa front seam painting requires one native object.")
             from .slicer_prusa_seam_audit import prusa_qualified_seam_direction
+            # Each painted object has its own validated fingerprinted face.
+            # Post-slice admission must additionally audit the first actual
+            # external-wall extrusion separately for every model.
             prusa_qualified_seam_direction(row)
         elif (row.get("seam_paint") or {}).get("faces"):
             raise ValueError("Prusa seam paint requires fingerprinted 3MF facets.")
