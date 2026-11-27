@@ -416,23 +416,36 @@ test("first slicer navigation is queued while engine status is checking", () => 
 });
 
 
-test("confirmed completed slice actions return to slicer without hiding uncertain submissions", () => {
+test("printer submissions from every slicer engine return to the existing G-code preview", () => {
   const workbench = read("SlicerWorkbench.jsx");
   const printer = read("PrinterStartGcodeModal.jsx");
   const saved = workbench.slice(workbench.indexOf("async function saveOutputToLibrary"),
     workbench.indexOf("async function startSlice"));
-  assert.match(saved, /await apiFetch\(/);
+  // Explicit Add to Library remains a different operation from printer transfer.
   assert.match(saved, /setPreviewJobId\(null\)/);
   assert.match(saved, /setShowDrafts\(false\)/);
-  assert.match(workbench, /onSubmissionConfirmed=\{receipt =>/);
-  assert.match(workbench, /setPrintSelection\(null\)/);
+
+  const printerHandler = workbench.slice(workbench.indexOf("onSubmissionConfirmed={receipt =>"),
+    workbench.indexOf("onClose={() => setPrintSelection(null)}", workbench.indexOf("onSubmissionConfirmed={receipt =>")));
+  assert.match(printerHandler, /setPrintSelection\(null\)/);
+  assert.doesNotMatch(printerHandler, /setPreviewJobId\(null\)/);
+  assert.doesNotMatch(printerHandler, /setShowDrafts\(false\)/);
+  assert.match(printerHandler, /onSubmissionDispatched=\{receipt =>/);
+  assert.match(printerHandler, /live start is not yet verified/);
+  assert.match(printerHandler, /receipt\.request_id/);
+  assert.match(workbench, /<PrinterStartGcodeModal/);
   assert.match(printer, /isConfirmedSubmission\(result\.submission, operation\)/);
   assert.match(printer, /onSubmissionConfirmed\?\.\(updated\)/);
+  assert.match(printer, /onSubmissionDispatched\?\.\(result\.submission\)/);
+  // An uncertain command is not treated as a confirmed printer start.
   assert.match(printer, /submission\?\.status !== "started"/);
   assert.match(printer, /submittedAction === "upload"/);
   assert.match(printer, /submission\?\.status === "uploaded"/);
+  assert.match(printer, /result\.submission\?\.request_id/);
+  assert.match(printer, /"mapping and print-start commands dispatched"/);
+  assert.match(printer, /"Print-start sent without acknowledgement; awaiting live job verification"/);
+  assert.doesNotMatch(printer, /onSubmissionConfirmed\?\.\(result\.submission\);\s*onSubmissionDispatched/);
 });
-
 
 test("slicer Device action opens selected printer live monitoring without navigation", () => {
   const app = fs.readFileSync(path.resolve(root, "../App.jsx"), "utf8");
