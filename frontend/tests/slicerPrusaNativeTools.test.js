@@ -201,3 +201,10 @@ test("Prusa Slice explains uninspected profile topology without dereferencing nu
   assert.match(prepare,/String\(prusaProfileTopology\.kind \|\| "unknown"\)\.replaceAll/);
   assert.match(prepare,/const prusaTopologyMatches = !!prusaProfileTopology/);
 });
+
+
+test("MMU retains native modifier volumes while known upstream variable-layer failure is gated",()=>{
+  assert.match(prepare,/object\.variable_layer_profile\?\.bands\?\.length &&\s*prusaNativeTools\?\.mode==="mmu"/);
+  assert.match(prepare,/\(object\.modifier_volumes\?\.length \|\| object\.variable_layer_profile\?\.bands\?\.length\) &&\s*prusaSinglePaint/);
+  assert.doesNotMatch(prepare,/!prusaIndependentTools/);
+});
