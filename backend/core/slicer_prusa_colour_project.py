@@ -19,7 +19,8 @@ from .slicer_profiles import SlicerProfileError
 
 
 def build_prusa_colour_candidate(item, source, *, printer_ini, colour_tool_indices,
-                                 bed_width, bed_depth):
+                                 bed_width, bed_depth,
+                                 research_compound=False):
     topology = prusa_machine_topology(printer_ini)
     count = topology["logical_tool_count"]
     # Object-scoped MakerVault process controls already serialize to native
@@ -41,11 +42,18 @@ def build_prusa_colour_candidate(item, source, *, printer_ini, colour_tool_indic
             item.get("modifier_volumes") if isinstance(item,dict) else None)
     except (ValueError,TypeError) as exc:
         raise SlicerProfileError("Invalid painted native modifier geometry.") from exc
-    if typed and (len(typed)!=1 or typed[0]["kind"]!="modifier" or
+    if typed and not research_compound and (len(typed)!=1 or typed[0]["kind"]!="modifier" or
                   typed[0]["shape"]!="box" or
                   set(typed[0]["settings"])!={"sparse_infill_density"}):
         raise SlicerProfileError(
             "This Prusa painted/modifier pairing requires one native box infill region.")
+    if type(research_compound) is not bool:
+        raise SlicerProfileError("Invalid Prusa native research mode.")
+    channels = tuple(k for k in ("support_paint", "seam_paint", "fuzzy_skin_paint")
+                     if isinstance(item, dict) and
+                     isinstance(item.get(k), dict) and item[k].get("regions"))
+    if channels and not research_compound:
+        raise SlicerProfileError("Prusa compound colour painting needs genuine native qualification.")
     if (not 2 <= count <= 8 or not isinstance(item, dict)
             or not isinstance(source, bytes)
             or not isinstance(colour_tool_indices, dict)
@@ -54,13 +62,19 @@ def build_prusa_colour_candidate(item, source, *, printer_ini, colour_tool_indic
                    for k,v in colour_tool_indices.items())
             or any(item.get(k) for k in ("negative_volumes",
                    "variable_layer_profile","support_paint",
-                   "seam_paint","fuzzy_skin_paint","material_slot"))):
+                   "material_slot")) or
+            any(item.get(k) for k in ("support_paint","seam_paint","fuzzy_skin_paint")
+                if k not in channels)):
         raise SlicerProfileError("Unsupported Prusa native colour candidate.")
     paint = item.get("colour_paint")
     if not isinstance(paint,dict) or not paint.get("regions"):
         raise SlicerProfileError("Prusa native colour candidate requires facet regions.")
     painted = native_combined_paint_triangles(
-        list(_triangles(source)), colour=paint, colour_tool_indices=colour_tool_indices)
+        list(_triangles(source)),
+        support=item.get("support_paint") if research_compound else None,
+        seam=item.get("seam_paint") if research_compound else None,
+        fuzzy=item.get("fuzzy_skin_paint") if research_compound else None,
+        colour=paint, colour_tool_indices=colour_tool_indices)
     raw = bytearray(b"MakerVault Prusa native colour facets".ljust(80,b"\0"))
     raw.extend(struct.pack("<I",len(painted)))
     states = []
@@ -71,11 +85,16 @@ def build_prusa_colour_candidate(item, source, *, printer_ini, colour_tool_indic
         accepted = {"4", "8", "0C", "1C", "2C", "3C", "4C", "5C"}
         if state is not None and state not in accepted:
             raise SlicerProfileError("Unqualified Prusa native colour state.")
-        states.append(state)
-    if not any(state not in (None, "4") for state in states):
+        states.append(dict(tags))
+    if not any(tags.get("paint_color") not in (None, "4") for tags in states):
         raise SlicerProfileError("Prusa colour candidate needs second-tool facets.")
     row = dict(item)
     row.pop("colour_paint")
+    if research_compound:
+        for channel in channels:
+            # Already split and encoded in the same ModelPart as mmu paint.
+            # Never run the independent source-fingerprint splitter twice.
+            row.pop(channel)
     project = build_prusa_native_3mf([(row,bytes(raw))],
                                      bed_width=bed_width,bed_depth=bed_depth)
     m = "{"+NS+"}"
@@ -91,6 +110,12 @@ def build_prusa_colour_candidate(item, source, *, printer_ini, colour_tool_indic
                 header = ET.Element(m+"metadata",{"name":"slic3rpe:MmPaintingVersion"})
                 header.text = "2"
                 root.insert(list(root).index(resources),header)
+                if channels:
+                    from .slicer_prusa_paint import HEADERS
+                    for channel in sorted(channels):
+                        metadata = ET.Element(m+"metadata", {"name":HEADERS[channel]})
+                        metadata.text = "2"
+                        root.insert(list(root).index(resources), metadata)
                 faces = root.findall("./"+m+"resources/"+m+"object/"+m+"mesh/"+m+"triangles/"+m+"triangle")
                 # The printable ModelPart is first; native typed volumes
                 # append their own triangles after it. Painted source facet
@@ -104,9 +129,22 @@ def build_prusa_colour_candidate(item, source, *, printer_ini, colour_tool_indic
                         (len(faces)>len(states))!=bool(typed) or
                         len(faces)<len(states)):
                     raise SlicerProfileError("Prusa painted ModelPart face boundaries changed.")
-                for face,state in zip(faces[:len(states)],states):
-                    if state is not None:
-                        face.set("slic3rpe:mmu_segmentation",state)
+                from .slicer_prusa_paint import NATIVE_ATTRIBUTES
+                expected = set()
+                for face,tags in zip(faces[:len(states)],states):
+                    if "paint_color" in tags:
+                        face.set("slic3rpe:mmu_segmentation",tags["paint_color"])
+                    for key, native_key in NATIVE_ATTRIBUTES.items():
+                        if key in tags:
+                            face.set(native_key, tags[key])
+                            expected.add(key)
+                requested = {name for name, field in (
+                    ("paint_supports", "support_paint"),
+                    ("paint_seam", "seam_paint"),
+                    ("paint_fuzzy_skin", "fuzzy_skin_paint"))
+                    if field in channels}
+                if expected != requested:
+                    raise SlicerProfileError("Prusa compound colour exporter dropped a painted channel.")
                 data = ET.tostring(root,encoding="utf-8",xml_declaration=True)
             elif name == "Metadata/Slic3r_PE_model.config":
                 root = SafeET.fromstring(data)
