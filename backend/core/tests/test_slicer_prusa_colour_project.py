@@ -93,6 +93,9 @@ class PrusaNativeColourProjectTests(TestCase):
             colour=True)
         self.assertEqual(receipt["tools"],(1,2,3))
         self.assertGreater(receipt["colour_facets"],3)
+        from slicer_worker.prusa_colour_gcode_audit import _two_painted_wall_regions
+        regions = _two_painted_wall_regions(project, (1,2))
+        self.assertLess(regions["front"][3], regions["back"][2])
         with self.assertRaises((SlicerProfileError, ValueError)):
             self.candidate(settings={"colour_paint":paint},
                            tool_map={1:1})
@@ -233,3 +236,61 @@ class PrusaPaintedWallMotionTests(TestCase):
                       b"G1 E0.03", data)
         with self.assertRaisesRegex(WorkerError, "tower purging"):
             self.checked(data)
+
+
+class PrusaDualColourResearchTests(TestCase):
+    """Do not enable MMU multi-swatch until the actual native G-code qualifies."""
+
+    def gcode(self, *, crossing=False, stationary_tower=False, wrong_tool=False):
+        lines=["G90", "M83", "G92 E0"]
+        for tool, y in ((1,95),(2,115)):
+            actual=0 if wrong_tool and tool==2 else tool
+            lines += [f"T{actual}", ";TYPE:External perimeter",
+                      f"G0 X115 Y{y}"]
+            for n in range(25):
+                if crossing:
+                    lines += [f"G0 X110 Y{y}", f"G1 X120 Y{y} E0.03"]
+                else:
+                    lines.append(f"G1 X{115+(n+1)*.5:.2f} Y{y} E0.03")
+        for tool in (0,1,2):
+            lines += [f"T{tool}", ";TYPE:Wipe tower", "G0 X55 Y155"]
+            for n in range(15):
+                lines.append(("G1 E0.03" if stationary_tower else
+                              f"G1 X{55+(n+1)*.5:.2f} Y155 E0.03"))
+        return ("\n".join(lines)+"\n").encode()
+
+    def audit(self, data):
+        from unittest.mock import patch
+        from slicer_worker.prusa_colour_gcode_audit import audit_prusa_dual_colour_gcode
+        with patch(
+            "slicer_worker.prusa_colour_gcode_audit.validate_prusa_material_candidate",
+            return_value={"tools":(1,2,3)}
+        ), patch(
+            "slicer_worker.prusa_colour_gcode_audit._two_painted_wall_regions",
+            return_value={"front":(114,136,93,97),
+                          "back":(114,136,113,117)}
+        ):
+            return audit_prusa_dual_colour_gcode(
+                data, b"controlled-native", printer_ini=b"controlled-printer",
+                tools=(1,2), tower=(55,150,0,250,210))
+
+    def test_independent_native_walls_and_all_three_purge_tools(self):
+        receipt=self.audit(self.gcode())
+        self.assertEqual(receipt["wall_moves"][1]["front"],25)
+        self.assertEqual(receipt["wall_moves"][2]["back"],25)
+        self.assertEqual(receipt["wall_moves"][0],{"front":0,"back":0})
+        self.assertTrue(all(v>=10 for v in receipt["tower_extrusion_moves"].values()))
+
+    def test_wrong_tool_or_cross_wall_paths_fail_closed(self):
+        for variant in ({"crossing":True},{"wrong_tool":True},
+                        {"stationary_tower":True}):
+            with self.subTest(variant=variant),self.assertRaises(WorkerError):
+                self.audit(self.gcode(**variant))
+        with self.assertRaises(WorkerError):
+            self.audit(self.gcode().replace(b"T2",b"T7"))
+
+    def test_non_distinct_and_unqualified_tool_assignments_rejected(self):
+        from slicer_worker.prusa_colour_gcode_audit import _two_painted_wall_regions
+        for tools in ((1,1),(0,2),(1,5),(True,2),(1,2,3)):
+            with self.subTest(tools=tools),self.assertRaises(WorkerError):
+                _two_painted_wall_regions(b"not-an-archive", tools)
