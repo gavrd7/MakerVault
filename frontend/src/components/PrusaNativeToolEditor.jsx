@@ -73,7 +73,10 @@ export default function PrusaNativeToolEditor({
   const paintedSlots=[...new Set(models.flatMap(model=>
     model.colour_paint?.regions?.map(region=>region.slot)||[]))];
   const singleColour=models.length===1 && paintedSlots.length>=1 &&
-    (["mmu","xl","indx"].includes(value?.mode) && paintedSlots.length<=2);
+    (["mmu","xl","indx"].includes(value?.mode) &&
+     (paintedSlots.length<=2 ||
+      (value?.mode==="xl" && value?.tool_count===5 &&
+       paintedSlots.length===4)));
   const editMatrix=(source,target,raw)=>{
     const matrix=value.purge_matrix.map(row=>[...row]);
     matrix[source][target]=safeNumber(raw);
@@ -203,8 +206,9 @@ export default function PrusaNativeToolEditor({
           with an isolated wipe tower. Independent Prusa XL accepts one
           front-wall swatch with T0 base and independently mapped T1–T7 painted heads (as
           supported by the selected printer), without MMU purging.
-          Complete opposite-wall swatches are supported; arbitrary painted
-          geometry is not yet qualified.</p>
+          Complete opposite-wall swatches are supported. For five-head XL,
+          four distinct complete exterior walls can use T1–T4. Arbitrary
+          split-surface painting is not yet qualified.</p>
         {paintedSlots.map(slot=><label key={slot} style={{display:"block",marginBottom:8}}>
           Painted swatch {slot} — native Prusa tool
           <select disabled={disabled} value={(value.colour_tools||[]).find(
