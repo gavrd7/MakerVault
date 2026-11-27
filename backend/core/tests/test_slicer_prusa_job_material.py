@@ -444,6 +444,15 @@ class PrusaVirtualToolDraftTests(TestCase):
         with self.assertRaises(SlicerProfileError):
             prepare_prusa_workbench_material(job)
 
+    def test_virtual_xl_profile_rejects_forged_indx_mode(self):
+        job, filaments, _ = self.config()
+        job.settings["prusa_native_tools"]["mode"] = "indx"
+        job.settings["prusa_native_tools"]["purge_matrix"] = None
+        job.settings.pop("prime_tower")
+        PrusaWorkbenchMaterialTests.resolve(self, job, filaments, ini("0.4,0.4", "0"))
+        with self.assertRaisesRegex(SlicerProfileError, "tool"):
+            prepare_prusa_workbench_material(job)
+
     def test_virtual_xl_rejects_mmu_purge_and_requires_xl_native_profile(self):
         job,filaments,raw=self.config()
         job.settings["prusa_native_tools"]["mode"]="xl"
