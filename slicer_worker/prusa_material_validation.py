@@ -68,9 +68,9 @@ def validate_prusa_material_candidate(data, *, printer_ini, tools=None, colour=F
     try:
         with zipfile.ZipFile(io.BytesIO(data)) as z:
             infos=z.infolist()
-            indx=logical_count>5 and not changer
+            independent_heads=not changer and logical_count>=2
             allowed=PARTS | ({TOWER} if tower is not None else set())
-            if indx and any(i.filename==LAYER_RANGES for i in infos):
+            if independent_heads and any(i.filename==LAYER_RANGES for i in infos):
                 allowed=allowed|{LAYER_RANGES}
             if (len(infos)!=len(allowed) or {i.filename for i in infos}!=allowed
                 or any(i.is_dir() or i.file_size < 1 or i.file_size >
@@ -151,11 +151,11 @@ def validate_prusa_material_candidate(data, *, printer_ini, tools=None, colour=F
         # Native INDX modifier/negative volumes retain their exact typed,
         # independently validated 3MF mesh and per-model tool metadata.
         # Other architectures still require unmodified model meshes.
-        indx = logical_count > 5 and not changer
+        independent_heads = not changer and logical_count>=2
         if not colour and (receipt["objects"]!=len(tools) or
                            receipt["paint_channels"] or
-                           (receipt["regions"] and not indx) or
-                           (receipt["layer_ranges"] and not indx)):
+                           (receipt["regions"] and not independent_heads) or
+                           (receipt["layer_ranges"] and not independent_heads)):
             _refuse()
         return {"objects":receipt["objects"],"colour_facets":marked if colour else 0,
                 "tools":tuple(tools) if not colour else tuple(sorted(selected)),
