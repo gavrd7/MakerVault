@@ -11,7 +11,7 @@ from .slicer_prusa_machine_topology import prusa_machine_topology
 from .slicer_prusa_native_resolution import resolved_prusa_profile
 from .slicer_prusa_material_preflight import (
     slice_prusa_offline_mmu_candidate, slice_prusa_offline_xl_candidate,
-    slice_prusa_offline_colour_candidate,
+    slice_prusa_offline_colour_candidate, slice_prusa_offline_xl_colour_candidate,
 )
 from .slicer_profiles import SlicerProfileError
 
@@ -61,13 +61,14 @@ def _virtual_native_tools(job, settings, objects, kind, count, *, single_colour=
         raise SlicerProfileError("Prusa tool selections do not match active model identities.")
     tools = [mapping[str(row["instance_id"])] for row in objects]
     if single_colour:
-        if tools!=[1] or expected!="mmu":
-            raise SlicerProfileError("Prusa painted MMU requires one model based on native T0.")
+        if tools!=[1] or expected not in ("mmu","xl"):
+            raise SlicerProfileError("Prusa painted native tools require one T0 base model.")
         paint=objects[0].get("colour_paint") or {}
         regions=paint.get("regions") or []
         colour_rows=config.get("colour_tools",[])
         slots = [region.get("slot") for region in regions if isinstance(region,dict)]
-        if (not 1<=len(regions)<=2 or len(slots)!=len(regions) or
+        if ((expected=="xl" and len(regions)!=1) or
+                not 1<=len(regions)<=2 or len(slots)!=len(regions) or
                 len(set(slots))!=len(slots) or
                 len(colour_rows)!=len(slots) or
                 {row["slot"] for row in colour_rows}!=set(slots) or
@@ -139,8 +140,8 @@ def prepare_prusa_workbench_material(job, *, settings=None):
     if not isinstance(objects,list) or not (
             2<=len(objects)<=12 or single_colour):
         raise SlicerProfileError("Prusa native tools require two to twelve models, or one painted MMU model.")
-    if single_colour and kind!="single_nozzle_changer":
-        raise SlicerProfileError("Single-model Prusa facet painting is MMU-only until XL validation.")
+    if single_colour and kind not in ("single_nozzle_changer","independent_tools"):
+        raise SlicerProfileError("This Prusa native facet painting needs MMU or XL independent heads.")
 
     plates = settings.get("plates")
     if plates is not None:
@@ -197,7 +198,7 @@ def prepare_prusa_workbench_material(job, *, settings=None):
         if single_colour:
             if overrides:
                 raise SlicerProfileError("Prusa colour painting cannot combine global settings.")
-            return "colour",plan
+            return ("colour" if selected_kind=="mmu" else "xl_colour"),plan
         plan["process_overrides"] = overrides
         return selected_kind, plan
     if single_colour:
@@ -315,6 +316,9 @@ def slice_prusa_workbench_material(job, source_models):
         prepared["rows"] = source_models
     if kind == "colour":
         return slice_prusa_offline_colour_candidate(job.pk, **prepared)
+    if kind == "xl_colour":
+        # XL single-swatch does not inherit MMU tower or purge admission.
+        return slice_prusa_offline_xl_colour_candidate(job.pk, **prepared)
     if kind == "mmu":
         return slice_prusa_offline_mmu_candidate(job.pk, **prepared)
     return slice_prusa_offline_xl_candidate(job.pk, **prepared)
