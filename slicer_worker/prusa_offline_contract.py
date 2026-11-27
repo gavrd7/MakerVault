@@ -166,8 +166,8 @@ def validate_prusa_offline_xl_colour_inputs(*, project, printer, filament, proce
     attribution and no MMU purge or wipe tower.
     """
     count, same_nozzle = _qualified_topology(printer)
-    if same_nozzle or not 2 <= count <= 5:
-        raise WorkerError("Prusa painted XL needs independent native heads.")
+    if same_nozzle or not 2 <= count <= 8:
+        raise WorkerError("Prusa painted XL/INDX needs independent native heads.")
     if tools is not None:
         if (tool is not None or not isinstance(tools, list) or len(tools) != 2
                 or any(type(t) is not int or not 1 <= t <= 4 or t >= count
