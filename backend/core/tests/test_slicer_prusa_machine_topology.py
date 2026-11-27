@@ -51,7 +51,7 @@ class PrusaMachineTopologyTests(TestCase):
         result = validate_prusa_model_tool_order(raw, [1, 2])
         self.assertEqual(result["selected_tools"], (1, 2))
         self.assertEqual(result["physical_nozzle_count"], 1)
-        for selected in ([1,1], [1,6], [0,1], [True,2], [1,2.0], [], [1]*13):
+        for selected in ([1,1], [1,6], [0,1], [True,2], [1,2.0], [], [1,2]*100+[1]):
             with self.subTest(selected=selected), self.assertRaises(ValueError):
                 validate_prusa_model_tool_order(raw, selected)
 
