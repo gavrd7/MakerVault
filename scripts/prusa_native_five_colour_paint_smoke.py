@@ -233,9 +233,34 @@ def main(binary, vendor):
         # tools is forbidden, not legitimate T0 foundation extrusion.
         assert counts[0]["front"]>0 and counts[0]["back"]>0, counts
         from slicer_worker.prusa_colour_gcode_audit import audit_prusa_dual_colour_gcode
-        proof = audit_prusa_dual_colour_gcode(
-            gcode, multi_project, printer_ini=printer, tools=(1,2),
-            tower=(55,150,0,250,210))
+        try:
+            proof = audit_prusa_dual_colour_gcode(
+                gcode, multi_project, printer_ini=printer, tools=(1,2),
+                tower=(55,150,0,250,210))
+        except WorkerError:
+            # Diagnostic is bounded numeric metadata for a synthetic
+            # fixture only; neither user G-code nor printer scripts are
+            # ever exposed in logs.
+            import math
+            invalid=[]
+            for lineno,line in enumerate(gcode.splitlines()):
+                cmd=line.split(b";",1)[0].strip()
+                if not cmd: continue
+                opcode=cmd.split(None,1)[0].upper()
+                if opcode not in (b"G0",b"G00",b"G1",b"G01",
+                                  b"G90",b"G91",b"G92"): continue
+                for axis,number in WORD.findall(cmd.decode("utf-8","replace")):
+                    value=float(number)
+                    if not math.isfinite(value) or abs(value)>1e9:
+                        invalid.append((lineno,opcode.decode(),axis,
+                                        len(number),
+                                        "nonfinite" if not math.isfinite(value)
+                                        else "out-of-range"))
+                        if len(invalid)>=8: break
+                if len(invalid)>=8: break
+            print("Prusa synthetic dual-swatch numeric audit rejection",
+                  invalid,flush=True)
+            raise
         assert proof["wall_moves"][1]["front"]>20, proof
         assert proof["wall_moves"][2]["back"]>20, proof
         print("PASS: independently audited native three-tool painted MMU",
