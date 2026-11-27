@@ -66,7 +66,7 @@ def _virtual_native_tools(job, settings, objects, kind, count, *, single_colour=
         raise SlicerProfileError("Prusa tool selections do not match active model identities.")
     tools = [mapping[str(row["instance_id"])] for row in objects]
     if single_colour:
-        if tools!=[1] or expected not in ("mmu","xl"):
+        if tools!=[1] or expected not in ("mmu","xl","indx"):
             raise SlicerProfileError("Prusa painted native tools require one T0 base model.")
         paint=objects[0].get("colour_paint") or {}
         regions=paint.get("regions") or []
@@ -144,7 +144,7 @@ def prepare_prusa_workbench_material(job, *, settings=None):
     if not isinstance(objects,list) or not (
             2<=len(objects)<=200 or single_colour):
         raise SlicerProfileError("Prusa native tools require two to 200 models, or one painted MMU model.")
-    if single_colour and kind not in ("single_nozzle_changer","independent_tools"):
+    if single_colour and kind not in ("single_nozzle_changer","independent_tools","indx"):
         raise SlicerProfileError("This Prusa native facet painting needs MMU or XL independent heads.")
 
     plates = settings.get("plates")
