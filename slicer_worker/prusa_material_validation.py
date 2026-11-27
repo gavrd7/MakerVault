@@ -73,9 +73,11 @@ def validate_prusa_material_candidate(data, *, printer_ini, tools=None, colour=F
     try:
         with zipfile.ZipFile(io.BytesIO(data)) as z:
             infos=z.infolist()
-            independent_heads=not changer and logical_count>=2
             allowed=PARTS | ({TOWER} if tower is not None else set())
-            if independent_heads and any(i.filename==LAYER_RANGES for i in infos):
+            # Prusa's native per-Object layer ranges use the same XML file
+            # for an MMU shared nozzle and for independent XL/INDX heads.
+            # Its contents remain strictly parsed by validate_prusa_native_3mf.
+            if any(i.filename==LAYER_RANGES for i in infos):
                 allowed=allowed|{LAYER_RANGES}
             if (len(infos)!=len(allowed) or {i.filename for i in infos}!=allowed
                 or any(i.is_dir() or i.file_size < 1 or i.file_size >
