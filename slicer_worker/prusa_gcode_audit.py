@@ -67,16 +67,16 @@ def audit_prusa_positive_e(data: bytes) -> dict[str, int]:
     return {"positive_e_moves": positive, "z_moves": layers}
 
 
-def run_prusa_painted_with_numeric_recheck(
+def run_prusa_mmu_with_numeric_recheck(
         runner, binary, workdir, *, timeout_seconds, max_bytes):
     """Bounded offline-only recovery from intermittent native coordinate overflow.
 
-    The pinned Prusa 2.9.7 MMU painted-facet route has intermittently emitted
+    The pinned Prusa 2.9.7 MMU multi-tool and painted-facet routes have emitted
     Y coordinates around 1e13. Never repair or sanitize those bytes. Discard
     the entire file, invoke a new isolated native CLI process at most twice,
     and require the original strict numeric audit on every candidate.
     Downstream spatial/tool/purge audits remain independently mandatory.
-    No unpainted engine or hardware submission uses this helper.
+    No independent-head or non-Prusa engine or hardware submission uses this helper.
     """
     if not isinstance(max_bytes, int) or max_bytes < 2000:
         raise WorkerError("Invalid Prusa G-code output budget.")
