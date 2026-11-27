@@ -493,12 +493,20 @@ class Handler(BaseHTTPRequestHandler):
                           "crealityprint": run_creality,
                           "prusaslicer": run_prusa,
                           "bambustudio": run_bambu}[current["engine"]]
-                receipt = runner(current["binary"], workdir,
-                                 timeout_seconds=files["slice_timeout_seconds"])
+                if (current["engine"] == "prusaslicer" and
+                        files.get("prusa_offline_colour")):
+                    from .prusa_gcode_audit import run_prusa_painted_with_numeric_recheck
+                    receipt, data = run_prusa_painted_with_numeric_recheck(
+                        runner, current["binary"], workdir,
+                        timeout_seconds=files["slice_timeout_seconds"],
+                        max_bytes=gcode_output_budget())
+                else:
+                    receipt = runner(current["binary"], workdir,
+                                     timeout_seconds=files["slice_timeout_seconds"])
+                    data = (workdir / "output.gcode").read_bytes()
+                    if not data or len(data) > gcode_output_budget():
+                        raise WorkerError("Generated G-code exceeded the output size limit.")
                 stage = "validating generated G-code"
-                data = (workdir / "output.gcode").read_bytes()
-                if not data or len(data) > gcode_output_budget():
-                    raise WorkerError("Generated G-code exceeded the output size limit.")
                 if current["engine"] == "prusaslicer":
                     from .prusa_gcode_audit import audit_prusa_positive_e
                     audit_prusa_positive_e(data)
