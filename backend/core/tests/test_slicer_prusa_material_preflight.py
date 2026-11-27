@@ -188,8 +188,7 @@ class PrusaOfflineMmuPreflightTests(TestCase):
             result=prepare_prusa_offline_xl_colour_candidate(**settings)
         self.assertEqual(result["tool"],1)
         self.assertNotIn("tower",result)
-        self.assertEqual(len(result["filament_profiles"]) if
-                         isinstance(result["filament"],list) else 8,8)
+        self.assertIsInstance(result["filament"], bytes)
         encode=lambda data:base64.b64encode(data).decode("ascii")
         payload={"job_id":str(uuid.uuid4()),"engine":"prusaslicer",
                  "engine_version":"2.9.7","model_format":"3mf",
