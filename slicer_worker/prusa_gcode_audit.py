@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import math
 import re
+import time
 
 from .runner import WorkerError
 
@@ -79,6 +80,9 @@ def run_prusa_painted_with_numeric_recheck(
     """
     if not isinstance(max_bytes, int) or max_bytes < 2000:
         raise WorkerError("Invalid Prusa G-code output budget.")
+    if type(timeout_seconds) is not int or timeout_seconds < 1:
+        raise WorkerError("Invalid Prusa numeric recovery timeout.")
+    deadline = time.monotonic() + timeout_seconds
     output = workdir / "output.gcode"
     for attempt in range(3):
         if attempt:
@@ -89,7 +93,12 @@ def run_prusa_painted_with_numeric_recheck(
                 output.unlink(missing_ok=True)
             except OSError as exc:
                 raise WorkerError("Prusa temporary output could not be cleared.") from exc
-        receipt = runner(binary, workdir, timeout_seconds=timeout_seconds)
+        # The whole regeneration sequence shares the original per-job
+        # timeout; up to three attempts never triples resource entitlement.
+        remaining = deadline - time.monotonic()
+        if remaining < 1:
+            raise WorkerError("Prusa native numeric recovery time budget exhausted.")
+        receipt = runner(binary, workdir, timeout_seconds=max(1, int(remaining)))
         try:
             data = output.read_bytes()
         except OSError as exc:
