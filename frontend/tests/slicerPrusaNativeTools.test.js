@@ -101,3 +101,14 @@ test("Prusa XL native one-swatch paint is separate from MMU and INDX",()=>{
   assert.match(prepare,/!prusaIndependentTools \|\| prusaSinglePaint/);
   assert.match(editor,/without\s+MMU purging/);
 });
+
+
+test("offline Prusa bulk material assignment uses native tool indices, never physical slot IDs",()=>{
+  assert.match(prepare,/selectedModelIds=\{selectedModels\.map\(model => model\.instance_id\)\}/);
+  assert.match(editor,/selectedModelIds=\[\]/);
+  assert.match(editor,/const updateSelectedModels = tool =>/);
+  assert.match(editor,/const ids = new Set\(selectedModelIds\)/);
+  assert.match(editor,/models\.filter\(row => ids\.has\(row\.instance_id\)\)/);
+  assert.match(editor,/Change native filament for/);
+  assert.match(editor,/onChange=\{event => updateSelectedModels\(event\.target\.value\)\}/);
+});
