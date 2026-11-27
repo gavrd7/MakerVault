@@ -139,6 +139,18 @@ def main(binary,vendor,directory):
         print("PASS: genuine native Prusa 15-object fuzzy model isolation",
               motion,flush=True)
 
+        both_output=scratch/"fifteen-two.gcode"
+        subprocess.run(
+            [binary,*flags,"--export-gcode","--dont-arrange",
+             "--output",str(both_output),str(root/"fifteen-two.3mf")],
+            cwd=scratch,check=True,timeout=300)
+        both=audited_fifteen_fuzzy(both_output.read_bytes())
+        assert min(both[7],both[8])>100,both
+        assert sum(n for i,n in enumerate(both) if i not in (7,8))<=5,both
+        print("PASS: genuine native Prusa two independent fuzzy-painted "
+              "models among fifteen",both,flush=True)
+
+
 
 if __name__=="__main__":
     main(*sys.argv[1:])
