@@ -197,6 +197,42 @@ class PrusaProjectDialectTests(TestCase):
                 self.assertEqual(receipt["regions"], 1)
                 self.assertEqual(receipt["objects"], 1)
 
+    def test_shared_prusa_native_volume_auditor_reads_typed_cavity_and_modifier(self):
+        from slicer_worker.modifier_gcode_audit import (
+            modifier_bounds, audit_modifier_positive_e)
+        from slicer_worker.runner import WorkerError
+        left={**volume("modifier", {"sparse_infill_density": 85}),
+              "x_mm": -6}
+        right={**volume("negative"), "x_mm": 6}
+        project=build_prusa_native_3mf([
+            (item(modifier_volumes=[left,right]),cube())
+        ],bed_width=250,bed_depth=210)
+        bounds,kinds,meshes=modifier_bounds(
+            project,"prusaslicer",include_meshes=True)
+        self.assertEqual(kinds,["modifier_part","negative_part"])
+        self.assertEqual(len(bounds),2)
+        self.assertTrue(all(len(mesh)==12 for mesh in meshes))
+        x=(bounds[0][0][0]+bounds[0][0][1])/2
+        y=(bounds[0][1][0]+bounds[0][1][1])/2
+        z=(bounds[0][2][0]+bounds[0][2][1])/2
+        clean=["G90","M83",f"G0 X{x:.3f} Y{y:.3f} Z{z:.3f}"]
+        for index in range(20):
+            clean.extend([f"G0 X{x:.3f} Y{y:.3f}",
+                          f"G1 X{x+.02:.3f} Y{y:.3f} E.1"])
+        good=("\\n".join(clean)+"\\n").encode()
+        proof=audit_modifier_positive_e(good,project,"prusaslicer")
+        self.assertGreater(proof["modifier_region_paths"][0],0)
+        self.assertEqual(proof["modifier_region_paths"][1],0)
+        nx=(bounds[1][0][0]+bounds[1][0][1])/2
+        ny=(bounds[1][1][0]+bounds[1][1][1])/2
+        nz=(bounds[1][2][0]+bounds[1][2][1])/2
+        leaked=good+(f"G0 X{nx:.3f} Y{ny:.3f} Z{nz:.3f}\\n"
+                     f"G1 X{nx+.02:.3f} E.2\\n").encode()
+        with self.assertRaises(WorkerError):
+            audit_modifier_positive_e(leaked,project,"prusaslicer")
+        with self.assertRaises(WorkerError):
+            modifier_bounds(b"bad", "prusaslicer",include_meshes=True)
+
     def test_native_modifier_and_variable_z_metadata_can_coexist_before_slice_qualification(self):
         model = item(
             modifier_volumes=[volume("modifier", {"sparse_infill_density": 80})],
