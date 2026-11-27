@@ -17,6 +17,65 @@ from slicer_worker.prusa_vendor_profiles import (
 from slicer_worker.runner import run_prusa, WorkerError
 
 
+def painted_object_internal_wall_moves(data):
+    """Actual moving positive-E native inner perimeters for a painted object.
+
+    No G-code annotations, source tags or stationary E recovery alone can
+    qualify a changed wall count.
+    """
+    import math
+    from slicer_worker.prusa_colour_gcode_audit import WORD
+    mode_relative_e=False
+    mode_relative_xy=False
+    e=0.
+    x=y=None
+    role=""
+    counted=0
+    for number,line in enumerate(data.decode("utf-8").splitlines()):
+        if number>2_000_000 or len(line)>16384:
+            raise AssertionError("Native painted wall-count audit exceeded limits")
+        if line.startswith(";TYPE:"):
+            role=line.partition(":")[2].strip().lower()
+        command=line.split(";",1)[0].strip()
+        if not command:
+            continue
+        op=command.split(None,1)[0].upper()
+        if op not in ("M82","M83","G90","G91","G92","G0","G00","G1","G01"):
+            continue
+        fields={k.upper():float(v) for k,v in WORD.findall(command)}
+        if any(not math.isfinite(v) or abs(v)>1e9 for v in fields.values()):
+            raise AssertionError("Native painted-wall coordinate invalid")
+        if op=="M82":
+            mode_relative_e=False
+        elif op=="M83":
+            mode_relative_e=True
+        elif op=="G90":
+            mode_relative_xy=False
+        elif op=="G91":
+            mode_relative_xy=True
+        elif op=="G92":
+            e=fields.get("E",e)
+            x=fields.get("X",x)
+            y=fields.get("Y",y)
+        else:
+            old_x,old_y=x,y
+            if mode_relative_xy:
+                x=x+fields["X"] if x is not None and "X" in fields else x
+                y=y+fields["Y"] if y is not None and "Y" in fields else y
+            else:
+                x=fields.get("X",x)
+                y=fields.get("Y",y)
+            changed=(fields["E"] if mode_relative_e else
+                     fields["E"]-e) if "E" in fields else 0
+            if "E" in fields:
+                e=e+fields["E"] if mode_relative_e else fields["E"]
+            if (op in ("G1","G01") and changed>1e-6 and
+                    role=="perimeter" and None not in (old_x,old_y,x,y) and
+                    math.hypot(x-old_x,y-old_y)>1e-6):
+                counted+=1
+    return counted
+
+
 def main(binary, vendor):
     blob=Path(vendor).read_bytes()
     source_sha=hashlib.sha256(blob).hexdigest()
@@ -80,6 +139,35 @@ def main(binary, vendor):
         print("PASS: genuine independent XL5 T1-front/T0-back paint",
               counts,receipt,"sha256",hashlib.sha256(output).hexdigest(),
               flush=True)
+        # The same MakerVault painter must preserve its ordinary Object
+        # walls setting, rather than forcing users to clear Object settings.
+        # Compare moving positive-E native *internal* perimeters with one
+        # and five requested walls on the identical painted source and tools.
+        wall_observations={}
+        from slicer_worker.prusa_offline_contract import validate_prusa_offline_xl_colour_inputs
+        from slicer_worker.prusa_colour_gcode_audit import audit_prusa_xl_colour_gcode
+        for requested in (1,5):
+            changed=build_prusa_colour_candidate(
+                {**row,"process_overrides":{"wall_loops":requested}},
+                stl,printer_ini=printer,colour_tool_indices={1:1},
+                bed_width=360,bed_depth=360)
+            validate_prusa_offline_xl_colour_inputs(
+                project=changed,printer=printer,filament=palette,
+                process=process,tool=1)
+            (work/"input.3mf").write_bytes(changed)
+            (work/"output.gcode").unlink(missing_ok=True)
+            run_prusa(Path(binary),work)
+            printed=(work/"output.gcode").read_bytes()
+            audit_prusa_xl_colour_gcode(
+                printed,changed,printer_ini=printer,tool=1)
+            wall_observations[requested]=painted_object_internal_wall_moves(printed)
+        print("Prusa genuine painted model Object wall settings",
+              wall_observations,flush=True)
+        assert wall_observations[5]>=40,wall_observations
+        assert wall_observations[5]>max(4,wall_observations[1]*1.5),wall_observations
+        print("PASS: Prusa native painted XL Object wall loops change deposited "
+              "interior perimeters",wall_observations,flush=True)
+
         # The same native facet encoder supports two opposing selected
         # tools. Run this through the *independent-head* worker contract
         # and spatial auditor; it must never inherit an MMU wipe tower.
