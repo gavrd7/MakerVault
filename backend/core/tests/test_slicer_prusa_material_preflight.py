@@ -166,7 +166,7 @@ class PrusaOfflineMmuPreflightTests(TestCase):
                  "prusa_offline_xl_colour":{"tool":1}}
         self.assertEqual(
             _decode_payload(request)["prusa_offline_xl_colour"],
-            {"tool":1,"partial_wall":False})
+            {"tool":1,"partial_wall":False,"partial_top":False})
         for invalid in ({"tool":True},{"tool":5},{"tool":0},
                         {"tool":1,"tower":[55,150,0,250,210]}):
             with self.subTest(invalid=invalid),self.assertRaises(WorkerError):
@@ -209,7 +209,7 @@ class PrusaOfflineMmuPreflightTests(TestCase):
                  "process_profile":encode(result["process"]),
                  "prusa_offline_xl_colour":{"tool":1}}
         self.assertEqual(_decode_payload(payload)["prusa_offline_xl_colour"],
-                         {"tool":1,"partial_wall":False})
+                         {"tool":1,"partial_wall":False,"partial_top":False})
         for alternate in (5,6,7):
             with self.subTest(native_tool=alternate):
                 settings["colour_tool_indices"]={1:alternate}
@@ -222,7 +222,7 @@ class PrusaOfflineMmuPreflightTests(TestCase):
                          "prusa_offline_xl_colour":{"tool":alternate}}
                 self.assertEqual(
                     _decode_payload(request)["prusa_offline_xl_colour"],
-                    {"tool":alternate,"partial_wall":False})
+                    {"tool":alternate,"partial_wall":False,"partial_top":False})
         for invalid in (8,True,-1):
             with self.subTest(invalid=invalid),self.assertRaises(SlicerProfileError):
                 settings["colour_tool_indices"]={1:invalid}
@@ -508,7 +508,8 @@ class PrusaOfflineMmuPreflightTests(TestCase):
         xl_request.pop("prusa_offline_colour")
         xl_request["prusa_offline_xl_colour"] = {"tool": 1}
         self.assertEqual(_decode_payload(xl_request)[
-            "prusa_offline_xl_colour"], {"tool": 1, "partial_wall": True})
+            "prusa_offline_xl_colour"], {"tool": 1, "partial_wall": True,
+                                         "partial_top": False})
         with self.assertRaises(WorkerError):
             _decode_payload({**xl_request,
                              "prusa_offline_xl_colour": {
