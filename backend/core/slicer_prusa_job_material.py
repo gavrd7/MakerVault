@@ -68,13 +68,14 @@ def _virtual_native_tools(job, settings, objects, kind, count, *, single_colour=
         regions=paint.get("regions") or []
         colour_rows=config.get("colour_tools",[])
         slots = [region.get("slot") for region in regions if isinstance(region,dict)]
-        if (not 1<=len(regions)<=2 or len(slots)!=len(regions) or
+        allowed=(1,2,4) if expected=="xl" else (1,2)
+        if (len(regions) not in allowed or len(slots)!=len(regions) or
                 len(set(slots))!=len(slots) or
                 len(colour_rows)!=len(slots) or
                 {row["slot"] for row in colour_rows}!=set(slots) or
-                (len(slots)==2 and len({row["tool"] for row in colour_rows})!=2)):
+                len({row["tool"] for row in colour_rows})!=len(slots)):
             raise SlicerProfileError(
-                "Assign one or two distinct painted Prusa native tools to their exact swatches.")
+                "Assign distinct native tools to each supported Prusa painted swatch.")
         colour_tool_indices = {row["slot"]:row["tool"]-1 for row in colour_rows}
         colour_tool = colour_tool_indices[slots[0]] if len(slots)==1 else None
     elif len(set(tools)) < 2 or config.get("colour_tools"):
