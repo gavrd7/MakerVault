@@ -87,6 +87,28 @@ def main(binary, vendor, baseline, modifier, negative, mixed_dir=None):
             print("PASS: Prusa two-object native parameter modifiers and Object settings "
                   "deposit independently without neighbour contamination.", flush=True)
 
+            cavity = work / "mix-negative-object.gcode"
+            subprocess.run([
+                binary, *profiles, "--export-gcode", "--dont-arrange",
+                "--output", str(cavity),
+                str(Path(mixed_dir) / "mix-negative-object.3mf"),
+            ], cwd=work, check=True, timeout=300)
+            cavity_counts = tuple(
+                sample(cavity.read_bytes(), center_x=x, center_y=105)
+                for x in (90, 160))
+            print("Prusa native cavity plus independent Object settings",
+                  cavity_counts, flush=True)
+            if (cavity_counts[0][0] >= .01 or
+                    cavity_counts[0][1] <= .1 or
+                    cavity_counts[1][0] <= baseline_counts[1][0] * 1.5 or
+                    cavity_counts[1][1] <= .1):
+                raise AssertionError(
+                    ("Prusa native cavity/other Object setting contaminated "
+                     "either model", cavity_counts, baseline_counts))
+            print("PASS: Prusa cavity removes native material on model A while "
+                  "an independent Object setting changes model B.", flush=True)
+
+
 
 if __name__ == "__main__":
     main(*sys.argv[1:])
