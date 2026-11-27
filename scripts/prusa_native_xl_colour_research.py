@@ -159,6 +159,40 @@ def main(binary, vendor):
         print("PASS: genuine independent XL5 X-opposing dual painted walls",
               xproof,"sha256",hashlib.sha256(xoutput).hexdigest(),flush=True)
 
+        # Native transform parity: a 90-degree rotated Y-painted pair now
+        # presents on X faces. The workbench's mesh-derived tool ordering
+        # must reverse where required; colour facet identities cannot be
+        # inferred from the original browser swatch order.
+        from slicer_worker.prusa_colour_gcode_audit import _two_painted_wall_regions
+        rotated=build_prusa_colour_candidate(
+            {**row,"rotation_deg":90,"colour_paint":multi},stl,
+            printer_ini=printer,colour_tool_indices={1:1,2:2},
+            bed_width=360,bed_depth=360)
+        selection=(1,2)
+        try:
+            _two_painted_wall_regions(rotated,selection)
+        except WorkerError:
+            selection=(2,1)
+            _two_painted_wall_regions(rotated,selection)
+        checked=validate_prusa_offline_xl_colour_inputs(
+            project=rotated,printer=printer,filament=palette,
+            process=process,tools=list(selection))
+        assert checked["tools"]==list(selection),checked
+        (work/"input.3mf").write_bytes(rotated)
+        (work/"output.gcode").unlink(missing_ok=True)
+        run_prusa(Path(binary),work)
+        rotated_output=(work/"output.gcode").read_bytes()
+        rotated_proof=audit_prusa_dual_colour_gcode(
+            rotated_output,rotated,printer_ini=printer,
+            tools=selection,tower=None)
+        assert rotated_proof["wall_moves"][selection[0]]["front"]>=20,rotated_proof
+        assert rotated_proof["wall_moves"][selection[1]]["back"]>=20,rotated_proof
+        assert rotated_proof["wall_moves"][selection[0]]["back"]<=2,rotated_proof
+        assert rotated_proof["wall_moves"][selection[1]]["front"]<=2,rotated_proof
+        print("PASS: XL5 native 90-degree rotated opposing painted walls",
+              selection,rotated_proof,flush=True)
+
+
         # Four-sided native painting feasibility (base T0 plus T1..T4):
         # do not authorize the workbench until independent spatial G-code
         # evidence establishes that no alternate colour prints another wall.
