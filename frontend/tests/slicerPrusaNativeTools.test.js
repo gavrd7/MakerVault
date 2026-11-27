@@ -81,10 +81,10 @@ test("Eight native INDX tools are configurable without MMU purge/tower dependenc
   assert.match(prepare,/objects\.length<=12/);
 });
 
-test("independent XL and INDX heads enable local native modifiers and variable layers",()=>{
-  assert.match(prepare,/const prusaIndependentTools = \["xl","indx"\]\.includes\(prusaNativeTools\?\.mode\)/);
+test("MMU, XL and INDX map native modifier and variable layer regions",()=>{
   assert.match(prepare,/\(object\.modifier_volumes\?\.length \|\| object\.variable_layer_profile\?\.bands\?\.length\) &&/);
-  assert.match(prepare,/!prusaIndependentTools/);
+  assert.match(prepare,/prusaSinglePaint\) \|\|/);
+  assert.doesNotMatch(prepare,/!prusaIndependentTools/);
   for (const key of ["top_shell_layers","bottom_shell_layers",
                      "outer_wall_speed","inner_wall_speed",
                      "sparse_infill_speed","top_surface_speed"])
@@ -104,7 +104,7 @@ test("independent XL and INDX heads enable local native modifiers and variable l
 test("Prusa XL native one-swatch paint is separate from MMU and INDX",()=>{
   assert.match(editor,/value\?\.mode==="xl" && paintedSlots\.length===1/);
   assert.match(prepare,/prusaNativeTools\?\.mode==="xl" && prusaPaintedSlots\.length===1/);
-  assert.match(prepare,/!prusaIndependentTools \|\| prusaSinglePaint/);
+  assert.doesNotMatch(prepare,/!prusaIndependentTools/);
   assert.match(editor,/without\s+MMU purging/);
 });
 
