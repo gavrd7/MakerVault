@@ -137,11 +137,13 @@ class PrusaOfflineMmuPreflightTests(TestCase):
         params={key:values[key] for key in (
             "owner_id","printer_profile","process_profile",
             "filament_profiles","bed_width","bed_depth")}
-        params.update(rows=[(row,source)],tools=[1],colour_tool_indices={1:1})
+        params.update(rows=[(row,source)],tools=[1],colour_tool_indices={1:1},
+                      process_overrides={"layer_height": .16})
         with patch("core.slicer_prusa_material_preflight.resolved_prusa_profile",
                    side_effect=assets):
             prepared=prepare_prusa_offline_xl_colour_candidate(**params)
         self.assertEqual(prepared["tool"],1)
+        self.assertIn(b"layer_height = 0.16\n", prepared["process"])
         self.assertNotIn("tower",prepared)
         self.assertNotIn("wipe_tower = 1",prepared["process"].decode())
         encode=lambda data:base64.b64encode(data).decode("ascii")
@@ -173,11 +175,13 @@ class PrusaOfflineMmuPreflightTests(TestCase):
             "owner_id","printer_profile","process_profile","filament_profiles",
             "purge_matrix","tower_xy","bed_width","bed_depth")}
         colour.update(rows=[(row,source)],tools=[1],
-                      colour_slot=1,colour_tool=2)
+                      colour_slot=1,colour_tool=2,
+                      process_overrides={"layer_height": .16})
         with patch("core.slicer_prusa_material_preflight.resolved_prusa_profile",
                    side_effect=assets):
             candidate=prepare_prusa_offline_colour_candidate(**colour)
         self.assertEqual(candidate["tool"],2)
+        self.assertIn(b"layer_height = 0.16\n", candidate["process"])
         self.assertEqual(candidate["tower"],(55,150,0,250,210))
         from slicer_worker.prusa_material_validation import validate_prusa_material_candidate
         receipt=validate_prusa_material_candidate(
