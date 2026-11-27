@@ -414,19 +414,20 @@ def _validate_plate_execution(job):
                  settings.get("multi_material_test") is True)):
             raise SlicerExecutionError(
                 "Native support painting test requires OrcaSlicer 2.5.0 or Creality Print 7.3.x CFS test mode.")
-        prusa_two_support = (job.engine == "prusaslicer" and
-                             job.engine_version == "2.9.7" and len(objects) == 2)
-        if ((len(objects) != 1 and not prusa_two_support) or
+        prusa_multi_support = (job.engine == "prusaslicer" and
+                               job.engine_version == "2.9.7" and
+                               2 <= len(objects) <= 12)
+        if ((len(objects) != 1 and not prusa_multi_support) or
                 (settings.get("multi_material_test") and job.engine not in {"crealityprint", "bambustudio"})):
             raise SlicerExecutionError(
                 "Support painting test requires one upright model (Creality: one two-colour CFS model).")
-        if prusa_two_support:
-            from .slicer_prusa_support_audit import validate_prusa_two_support_plate
+        if prusa_multi_support:
+            from .slicer_prusa_support_audit import validate_prusa_multi_support_plate
             try:
-                validate_prusa_two_support_plate(objects)
+                validate_prusa_multi_support_plate(objects)
             except (ValueError, TypeError) as exc:
                 raise SlicerExecutionError(str(exc)) from exc
-        for item in (objects if prusa_two_support else objects[:1]):
+        for item in (objects if prusa_multi_support else objects[:1]):
             if item.get("process_overrides"):
                 raise SlicerExecutionError(
                     "Support painting with per-object overrides is not verified.")
@@ -966,7 +967,7 @@ def process_queued_job(job_id):
                    if isinstance(item, dict)):
                 from .slicer_prusa_process_settings import enable_prusa_painted_support
                 profiles[2] = enable_prusa_painted_support(
-                    profiles[2], enforcers_only=len(source_models) == 2)
+                    profiles[2], enforcers_only=len(source_models) >= 2)
             if plate and len(plate) == 1 and (plate[0].get("seam_paint") or {}).get("regions"):
                 from .slicer_prusa_seam_audit import prusa_qualified_seam_direction
                 from .slicer_prusa_process_settings import qualify_prusa_seam_process
@@ -1340,10 +1341,10 @@ def process_queued_job(job_id):
             if painted_enforcers:
                 stage = "auditing native Prusa painted support toolpaths"
                 try:
-                    if plate and len(plate) == 2:
-                        from .slicer_prusa_support_audit import audit_prusa_two_object_support
+                    if plate and len(plate) >= 2:
+                        from .slicer_prusa_support_audit import audit_prusa_multi_object_support
                         width, depth = trusted_plate_dimensions(job.printer_profile)
-                        audit_prusa_two_object_support(
+                        audit_prusa_multi_object_support(
                             output, source_models, bed_width=width, bed_depth=depth)
                     else:
                         from .slicer_prusa_paint import audit_prusa_support_enforcer_gcode
