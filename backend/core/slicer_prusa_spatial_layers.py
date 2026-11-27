@@ -42,7 +42,7 @@ def audit_prusa_multi_object_layer_ranges(gcode, sources, *, bed_width,
     variable band, so an edit on one model cannot silently alter its neighbour.
     """
     if (not isinstance(gcode, bytes) or not 0 < len(gcode) <= 90*1024*1024 or
-            not isinstance(sources, list) or not 2 <= len(sources) <= 12 or
+            not isinstance(sources, list) or not 2 <= len(sources) <= 200 or
             type(base_layer_mm) not in (int,float) or not math.isfinite(base_layer_mm)
             or not .05 <= base_layer_mm <= .5):
         raise ValueError("Invalid native Prusa multi-object layer audit.")
