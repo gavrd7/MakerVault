@@ -143,8 +143,8 @@ def prepare_prusa_workbench_material(job, *, settings=None):
                    isinstance(objects[0],dict) and bool(
                        (objects[0].get("colour_paint") or {}).get("regions")))
     if not isinstance(objects,list) or not (
-            2<=len(objects)<=12 or single_colour):
-        raise SlicerProfileError("Prusa native tools require two to twelve models, or one painted MMU model.")
+            2<=len(objects)<=200 or single_colour):
+        raise SlicerProfileError("Prusa native tools require two to 200 models, or one painted MMU model.")
     if single_colour and kind not in ("single_nozzle_changer","independent_tools"):
         raise SlicerProfileError("This Prusa native facet painting needs MMU or XL independent heads.")
 
