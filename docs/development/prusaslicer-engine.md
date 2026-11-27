@@ -1,3 +1,33 @@
+### 27 November — two-swatch Prusa MMU native routing and G-code audit
+
+Prusa's first owner-bound **two painted-colour** candidate now flows through
+the standard workbench and its authenticated isolated worker. The qualified
+input is intentionally narrow: exactly one upright model, T0 base material,
+two distinct native tools painting **complete opposing front and back walls**,
+a fully selected owned MMU filament palette, explicit directional purge
+matrix and separate native wipe tower. Painted palette slot numbers are not
+assumed to mean front/back; the owner 3MF is checked to derive the actual
+face-tool order. Single-swatch MMU remains backwards-compatible.
+
+The worker independently revalidates the typed, bounded 3MF and palette
+assignment before running Prusa 2.9.7. Its distinct two-swatch post-slice
+auditor requires moving positive-E extrusion with both segment endpoints
+inside the correct model wall, prohibits wrong-tool deposition on either
+painted wall, and requires isolated positive-E moving purge paths for
+T0, T1 and T2. Relative XY/E, coordinate resets and stationary recovery
+are interpreted, not counted as material evidence. Unsupported paint
+patterns, partial facets, other painted faces, duplicate selected native
+tools, MMU/XL topology substitution and mixed paint/edit combinations
+are refused. Existing single-swatch worker requests are unchanged.
+
+**Release gate:** this does not independently prove physical printing or
+purge adequacy. The pinned headless Prusa 2.9.7 multi-swatch native smoke
+must pass on the branch head, alongside standard frontend/backend/container
+CI, before the new route is accepted as native parity. XL/INDX face-paint
+deposition still needs a separate independently audited worker contract.
+
+---
+
 ### 27 November — independently painted support on larger plates
 
 The earlier spatial bug was stationary positive-E recovery misclassified
