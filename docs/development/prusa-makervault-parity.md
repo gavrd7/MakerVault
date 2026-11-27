@@ -36,8 +36,8 @@ tests; leave unsafe printer-start blocked until that is proven.
 | Printer filament list with >4 tools | Printer-derived native topology | MMU5 / XL5 and eight-head INDX proved in real CLI; verify saved and restored UI state and no extra fixed limit |
 | Support painting | Native painted support and spatial audit | One selected painted model among up to 200 objects qualifies; simultaneous multi-object paint variants remain unqualified |
 | Seam painting | Native facet seam states and G-code spatial audit | Qualified pinned directions only; test broader requested MakerVault seam selections |
-| Fuzzy skin painting | Native facet fuzz, owner geometry and G-code audit | **2–200-model one-painted-instance route added in PR #213**; require real 15-object native CI acceptance before marking done |
-| Variable layer height | Native layer range 3MF + object-local toolpath audit | Single and two-model routes tested; multi-object and MMU combinations remain limited |
+| Fuzzy skin painting | Native facet fuzz, owner geometry and G-code audit | **2–200 objects, including multiple independently painted objects**, now mapped; real fifteen-object one/two-painted native CLI assertions must pass before marking done |
+| Variable layer height | Native layer range 3MF + object-local toolpath audit | **2–200 single-material objects** now mapped; require native fifteen-object one-variable/fourteen-baseline positive-E tests. MMU combinations remain unqualified |
 | Prime tower, purge and independent heads | MMU directional purge; no tower on XL/INDX | Genuine binary tests for MMU, XL and official INDX exist |
 | Print from slicer and printer start confirmation | Shared submission adapter; PrusaLink API | Offline G-code valid; native Prusa physical toolchange upload/start currently intentionally guarded. Do not present upload as print start confirmation |
 | Mobile and desktop | Shared React components | Required manual visual/interaction pass on actual staging before ready-for-review |
