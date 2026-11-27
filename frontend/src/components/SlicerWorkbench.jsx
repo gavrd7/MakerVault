@@ -1206,7 +1206,8 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
   // Catalogue models come from the pinned upstream index, never a guessed
   // printer list. Changing manufacturer or engine invalidates old results.
   useEffect(() => {
-    if (profileModal !== "search" || !officialVendor) return undefined;
+    if (profileModal !== "search" || !officialVendor || importKind === "filament")
+      return undefined;
     let active = true;
     setOfficialModelsBusy(true);
     setOfficialModels([]);
@@ -1228,15 +1229,16 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
       }
     }).finally(() => { if (active) setOfficialModelsBusy(false); });
     return () => { active = false; };
-  }, [profileModal, officialVendor, officialProfileVersion, form.engine, selectedPrinter?.id, selectedPrinter?.model, selectedPrinter?.name]);
+  }, [profileModal, officialVendor, officialProfileVersion, form.engine, importKind,
+      selectedPrinter?.id, selectedPrinter?.model, selectedPrinter?.name]);
   useEffect(() => {
     if (profileModal !== "search" || form.engine !== "orcaslicer" ||
-        officialVendor !== "OrcaFilamentLibrary" || importKind !== "filament") {
+        importKind !== "filament") {
       setOfficialBrands([]);setOfficialBrand("");return undefined;
     }
     let active = true;
     apiFetch("/api/printing/slicer/official-profiles/?" + new URLSearchParams({
-      engine:form.engine,version:officialProfileVersion,vendor:officialVendor,brands:"1",
+      engine:form.engine,version:officialProfileVersion,brands:"1",unified_filaments:"1",
     })).then(result=>{if(active)setOfficialBrands(result.brands||[]);})
       .catch(err=>{if(active)setOfficialError(err.message||"Could not load filament manufacturers.");});
     return ()=>{active=false;};
@@ -1254,9 +1256,12 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
       if (q.length > 80) throw new Error("Search terms must not exceed 80 characters.");
       const params = new URLSearchParams({q, kind:importKind,vendor:officialVendor,
         engine:form.engine,version:officialProfileVersion});
-      if(officialBrand && importKind==="filament" && officialVendor==="OrcaFilamentLibrary")
-        params.set("brand",officialBrand);
-      if (!officialManualModel.trim() && officialModel) params.set("model", officialModel);
+      if (form.engine==="orcaslicer" && importKind==="filament") {
+        params.set("unified_filaments","1");
+        if (officialBrand) params.set("brand",officialBrand);
+      }
+      if (importKind!=="filament" && !officialManualModel.trim() && officialModel)
+        params.set("model", officialModel);
       const result = await apiFetch("/api/printing/slicer/official-profiles/?" + params.toString());
       setOfficialResults(result);
       setOfficialSearchParams(params.toString());
@@ -1313,7 +1318,7 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
       const result = await apiFetch("/api/printing/slicer/official-profiles/", {
         method: "POST",
         body: {
-          kind: importKind, vendor: officialVendor, engine: form.engine,
+          kind: importKind, vendor: candidate.vendor || officialVendor, engine: form.engine,
           engine_version: form.engine_version,
           name: candidate.name, sub_path: candidate.sub_path,
         },
@@ -2145,10 +2150,12 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
             <select value={importKind} disabled={officialBusy} onChange={e => {
                 const kind=e.target.value;
                 setImportKind(kind);setOfficialResults(null);setOfficialImportNotice("");setOfficialBrand("");
-                setOfficialQuery("");
+                setOfficialQuery("");setOfficialModel("");setOfficialManualModel("");
                 if(form.engine==="orcaslicer" && kind==="filament" &&
                     officialVendors.some(v=>v.id==="OrcaFilamentLibrary"))
                   setOfficialVendor("OrcaFilamentLibrary");
+                else
+                  setOfficialVendor(suggestOfficialVendor(selectedPrinter,officialVendors));
               }}>
               <option value="printer">Printer / machine</option>
               <option value="filament">Filament</option>
