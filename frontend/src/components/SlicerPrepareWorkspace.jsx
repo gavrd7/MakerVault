@@ -1143,7 +1143,10 @@ export default function SlicerPrepareWorkspace({
       (object.colour_paint?.regions?.length && !prusaSinglePaint)) &&
     Object.keys(processOverrides||{}).every(key=>[
       "layer_height","wall_loops","top_shell_layers",
-      "bottom_shell_layers","sparse_infill_density"
+      "bottom_shell_layers","sparse_infill_density",
+      "brim_width","skirt_loops","outer_wall_speed",
+      "inner_wall_speed","sparse_infill_speed",
+      "travel_speed","top_surface_speed"
     ].includes(key)) && !flushSettings &&
     (["xl","indx"].includes(prusaNativeTools.mode) && !primeTower ||
       prusaNativeTools.mode==="mmu" && !!primeTower &&
@@ -1197,7 +1200,10 @@ export default function SlicerPrepareWorkspace({
   const prusaUnsupportedGlobalKeys = activeEngine==="prusaslicer" &&
     prusaNativeTools ? Object.keys(processOverrides||{}).filter(key=>![
       "layer_height","wall_loops","top_shell_layers",
-      "bottom_shell_layers","sparse_infill_density"
+      "bottom_shell_layers","sparse_infill_density",
+      "brim_width","skirt_loops","outer_wall_speed",
+      "inner_wall_speed","sparse_infill_speed",
+      "travel_speed","top_surface_speed"
     ].includes(key)) : [];
   const prusaNativeBlockReason = activeEngine==="prusaslicer" &&
     prusaNativeTools && !prusaNativeReady
