@@ -320,9 +320,8 @@ jobs:
             /opt/engine-store/versions/prusaslicer/2.9.7/bin/prusa-slicer \
             /opt/engine-store/versions/prusaslicer/2.9.7/resources/profiles/PrusaResearch.ini
 
-      - name: Research genuine XL5 painted facets on independent heads
+      - name: Require genuine XL5 one- and two-wall native painted deposition
         id: prusa_xl_paint_research
-        continue-on-error: true
         run: |
           set -euo pipefail
           docker run --rm --network none --user 10001:10001 \
