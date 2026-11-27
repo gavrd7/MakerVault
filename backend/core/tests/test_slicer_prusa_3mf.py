@@ -66,19 +66,27 @@ class PrusaProjectDialectTests(TestCase):
             (left, cube()), (right, cube())],
             bed_width=250, bed_depth=210)
         # The qualified combination is independent: modifier on model one,
-        # bounded object setting on model two. Same-model stacks and cavity
-        # mixtures remain gated pending separate native proof.
+        # bounded object setting on model two. The cavity variant is
+        # separately G-code audited; same-model stacks remain gated.
         self.assertTrue(validate_prusa_project_admission(
             [left, right], {}, "2.9.7"))
         with self.assertRaisesRegex(ValueError, "two-model plate"):
             validate_prusa_project_admission([
                 {**left, "process_overrides": {"wall_loops": 4}}, right
             ], {}, "2.9.7")
+        cavity = {**left, "modifier_volumes": [
+            {**volume("negative"), "x_mm": -35}
+        ]}
+        self.assertTrue(validate_prusa_project_admission(
+            [cavity, right], {}, "2.9.7"))
+        cavity_archive = build_prusa_native_3mf(
+            [(cavity, cube()), (right, cube())],
+            bed_width=250, bed_depth=210)
+        self.assertEqual(validate_prusa_native_3mf(cavity_archive)["regions"], 1)
         with self.assertRaisesRegex(ValueError, "two-model plate"):
             validate_prusa_project_admission([
-                {**left, "modifier_volumes": [
-                    {**volume("negative"), "x_mm": -35}
-                ]}, right
+                {**cavity, "process_overrides": {"sparse_infill_density": 50}},
+                right,
             ], {}, "2.9.7")
         receipt = validate_prusa_native_3mf(archive)
         self.assertEqual(receipt["objects"], 2)
