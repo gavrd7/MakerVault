@@ -746,6 +746,23 @@ export default function SlicerPrepareWorkspace({
     setMeasurementVisible(false);
   };
   const selectedModels = objects.filter(row => validSelection.includes(row.instance_id));
+  const bulkPrusaNative = String(engine || "").split(" ")[0] === "prusaslicer";
+  const changeSelectedPrusaNativeTool = tool => {
+    if (!canEdit || busy || !prusaNativeTools || !onPrusaNativeToolsChange ||
+        !Number.isInteger(tool) || tool < 1 || tool > prusaNativeTools.tool_count) return;
+    const ids = new Set(selectedModels.map(row => row.instance_id));
+    if (!ids.size) return;
+    const existing = (prusaNativeTools.model_tools || []).filter(row => !ids.has(row.instance_id));
+    onPrusaNativeToolsChange({
+      ...prusaNativeTools,
+      model_tools: [...existing, ...selectedModels.map(row => ({
+        instance_id: row.instance_id, tool,
+      }))],
+    });
+    setBulkFilamentOpen(false);
+    setFilamentNotice("Assigned native T" + (tool - 1) + " to " + ids.size +
+      " model(s). The selected Prusa printer profile and native worker must validate this tool.");
+  };
   const selectableRows = allPlateRows.filter(row => !row.detached);
   const allSelected = selectableRows.length > 0 && selectableRows.every(row => validSelection.includes(row.instance_id));
   const toggleSelectAll = () => {
@@ -1972,7 +1989,8 @@ export default function SlicerPrepareWorkspace({
               </label>)}
             <div className="slicerAssemblySelectionFooter">
               <span role="status">{validSelection.length} selected</span>
-              <button type="button" disabled={!canEdit || busy || !selectedModels.length || !liveMaterials.length}
+              <button type="button" disabled={!canEdit || busy || !selectedModels.length ||
+                  (bulkPrusaNative ? !prusaNativeTools : !liveMaterials.length)}
                 aria-expanded={bulkFilamentOpen} onClick={() => setBulkFilamentOpen(current => !current)}>
                 Change filament for selected
               </button>
@@ -1982,9 +2000,16 @@ export default function SlicerPrepareWorkspace({
               </button>
             </div>
             {bulkFilamentOpen && selectedModels.length > 0 && <div className="slicerModelFilamentChoices">
-              <strong>Assign one loaded slot to {selectedModels.length} selected model(s)</strong>
-              <small>Base filament only; painted colours and modifier volumes are unchanged.</small>
-              {liveMaterials.map(slot => <button type="button" key={slot.id} disabled={!canEdit || busy}
+              <strong>Assign one filament to {selectedModels.length} selected model(s)</strong>
+              <small>Base material only; painted colours and modifier volumes remain unchanged.</small>
+              {bulkPrusaNative ? Array.from({length:prusaNativeTools?.tool_count || 0},(_,index) => {
+                const profile = filamentProfiles.find(item => String(item.id) ===
+                  String(prusaNativeTools.filament_profile_ids?.[index]));
+                return <button type="button" key={index} disabled={!canEdit || busy || !profile}
+                  onClick={() => changeSelectedPrusaNativeTool(index + 1)}>
+                  Native T{index} · {profile?.name || "Choose a filament profile in Prusa native tools"}
+                </button>;
+              }) : liveMaterials.map(slot => <button type="button" key={slot.id} disabled={!canEdit || busy}
                 onClick={() => changeModelsPreviewFilament(selectedModels.map(model => model.instance_id), slot)}>
                 <span className="slicerLiveMaterialSwatch" style={{backgroundColor:validSlotColor(slot) || "#697b91"}} aria-hidden="true" />
                 <span>{slotName(slot)}</span>
