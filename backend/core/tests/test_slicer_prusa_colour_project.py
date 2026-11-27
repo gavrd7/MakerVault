@@ -192,12 +192,12 @@ class PrusaNativeColourProjectTests(TestCase):
                        commands[5], commands[6]]
         accepted = (commands[:cut] + base_corner * 2 + commands[cut:])
         proven = audit_prusa_partial_wall_gcode(
-            ("\\n".join(accepted) + "\\n").encode(), project, tool=1)
+            ("\n".join(accepted) + "\n").encode(), project, tool=1)
         self.assertEqual(proven["deposition_moves"][0]["painted"], 2)
         rejected = (commands[:cut] + base_corner * 3 + commands[cut:])
         with self.assertRaises(WorkerError):
             audit_prusa_partial_wall_gcode(
-                ("\\n".join(rejected) + "\\n").encode(), project, tool=1)
+                ("\n".join(rejected) + "\n").encode(), project, tool=1)
         with self.assertRaises(WorkerError):
             audit_prusa_partial_wall_gcode(
                 synthetic.replace(b"T1", b"T0"), project, tool=1)
