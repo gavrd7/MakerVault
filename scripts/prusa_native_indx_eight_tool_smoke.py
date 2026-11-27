@@ -428,6 +428,47 @@ def main(binary, vendor, official=None):
             print("PASS: actual official eight-head INDX native opposing T1/T2 paint",
                   dual_receipt,flush=True)
 
+            # Research the exact native 2.9.7 leaf-state encoding of T5–T7,
+            # beyond the five currently admitted facet states. The encoder,
+            # validator and UI remain gated until *both* real deposition and
+            # strict post-slice attribution pass. This does not authorize
+            # physical printing or silently widen live painter selection.
+            from scripts.prusa_native_five_colour_paint_smoke import painted_external_walls
+            t4=build_prusa_colour_candidate(
+                row,stl,printer_ini=selected,colour_tool_indices={1:4},
+                bed_width=250,bed_depth=210)
+            for tool,state in ((5,b"3C"),(6,b"4C"),(7,b"5C")):
+                try:
+                    sink=io.BytesIO()
+                    with zipfile.ZipFile(io.BytesIO(t4)) as z, zipfile.ZipFile(
+                            sink,"w",compression=zipfile.ZIP_DEFLATED) as out:
+                        for part in z.namelist():
+                            raw=z.read(part)
+                            if part=="3D/3dmodel.model":
+                                old=b'slic3rpe:mmu_segmentation="2C"'
+                                assert old in raw,"Pinned native T4 facet state changed"
+                                raw=raw.replace(old,b'slic3rpe:mmu_segmentation="'+state+b'"')
+                            out.writestr(part,raw)
+                    (folder/"input.3mf").write_bytes(sink.getvalue())
+                    (folder/"output.gcode").unlink(missing_ok=True)
+                    run_prusa(Path(binary),folder)
+                    output=(folder/"output.gcode").read_bytes()
+                    observed=painted_external_walls(
+                        output,center_x=125,center_y=105,tool_count=8)
+                    if (observed[tool]["front"]<20 or
+                            observed[tool]["back"]>2 or
+                            observed[0]["back"]<20 or
+                            any(observed[other]["front"]>2 or
+                                observed[other]["back"]>2
+                                for other in (1,2,3,4,5,6,7) if other!=tool)):
+                        raise AssertionError("Native extra-tool surface was not isolated: "+repr(observed))
+                    print("RESEARCH PASS: native INDX painted-facet T"+str(tool),
+                          state.decode(),observed,flush=True)
+                except (WorkerError,AssertionError) as exc:
+                    print("RESEARCH BLOCKED: pinned native painted-facet T"+
+                          str(tool),type(exc).__name__,str(exc)[:300],flush=True)
+
+
 
 
 
