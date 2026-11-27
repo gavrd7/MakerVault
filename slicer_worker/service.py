@@ -124,7 +124,7 @@ def _decode_payload(payload):
         metadata=payload["prusa_offline_xl_colour"]
         if (payload["engine"]!="prusaslicer" or
                 payload["engine_version"]!="2.9.7" or model_format!="3mf" or
-                not isinstance(metadata,dict) or set(metadata)!={"tool"} or
+                not isinstance(metadata,dict) or set(metadata) not in ({"tool"},{"tools"}) or
                 any(key in payload for key in (
                     "prusa_offline_mmu","prusa_offline_xl","prusa_offline_colour",
                     "filament_profiles","creality_model_stls","creality_tool_ids",
@@ -296,8 +296,10 @@ def _decode_payload(payload):
         receipt=validate_prusa_offline_xl_colour_inputs(
             project=files["model"],printer=files["printer_profile"],
             filament=files["filament_profile"],process=files["process_profile"],
-            tool=details["tool"])
-        files["prusa_offline_xl_colour"]={"tool":receipt["tool"]}
+            **({"tools":details["tools"]} if "tools" in details
+               else {"tool":details["tool"]}))
+        files["prusa_offline_xl_colour"]={
+            "tools":receipt["tools"]} if "tools" in receipt else {"tool":receipt["tool"]}
     if "prusa_offline_colour" in payload:
         from .prusa_offline_contract import validate_prusa_offline_colour_inputs
         details=payload["prusa_offline_colour"]
@@ -530,10 +532,17 @@ class Handler(BaseHTTPRequestHandler):
                             data,files["model"],printer_ini=files["printer_profile"],
                             tool=details["tool"],tower=details["tower"])
                 if files.get("prusa_offline_xl_colour"):
-                    from .prusa_colour_gcode_audit import audit_prusa_xl_colour_gcode
-                    audit_prusa_xl_colour_gcode(
-                        data,files["model"],printer_ini=files["printer_profile"],
-                        tool=files["prusa_offline_xl_colour"]["tool"])
+                    details=files["prusa_offline_xl_colour"]
+                    if "tools" in details:
+                        from .prusa_colour_gcode_audit import audit_prusa_dual_colour_gcode
+                        audit_prusa_dual_colour_gcode(
+                            data,files["model"],printer_ini=files["printer_profile"],
+                            tools=details["tools"],tower=None)
+                    else:
+                        from .prusa_colour_gcode_audit import audit_prusa_xl_colour_gcode
+                        audit_prusa_xl_colour_gcode(
+                            data,files["model"],printer_ini=files["printer_profile"],
+                            tool=details["tool"])
                 if files.get("prusa_offline_xl"):
                     from .prusa_material_gcode_audit import audit_prusa_material_model_gcode
                     audit_prusa_material_model_gcode(
