@@ -82,6 +82,15 @@ class PrusaProjectDialectTests(TestCase):
             "top_solid_infill_speed": "19",
         })
         self.assertEqual(objects[1].findall("metadata"), [])
+        def forge_speed(root):
+            first = root.find("object")
+            node = next(node for node in first.findall("metadata")
+                        if node.get("key") == "infill_speed")
+            node.set("value", "9999")
+        forged = rewrite(archive, "Metadata/Slic3r_PE_model.config",
+                         forge_speed)
+        with self.assertRaises(WorkerError):
+            validate_prusa_native_3mf(forged)
         with self.assertRaises(ValueError):
             validate_prusa_project_admission([
                 {**left, "process_overrides": {"travel_speed": 100}},
