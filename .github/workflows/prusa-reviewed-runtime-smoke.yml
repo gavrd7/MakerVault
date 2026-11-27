@@ -442,11 +442,10 @@ jobs:
             /opt/engine-store/versions/prusaslicer/2.9.7/resources/profiles/PrusaResearch.ini \
             /tmp/mmu-colour/baseline.3mf /tmp/mmu-colour/colour.3mf
 
-      - name: Research genuine Prusa split-surface colour deposition
+      - name: Require genuine Prusa split-wall MMU colour and purge deposition
         id: prusa_partial_surface_research
-        # Keep the established full-wall route unchanged until this test
-        # passes with native output; never certify a synthetic audit alone.
-        continue-on-error: true
+        # Mandatory: authenticated offline MMU now admits verified split
+        # vertical masks; failing native toolpaths must block merging.
         run: |
           set -euo pipefail
           docker run --rm --network none --user 10001:10001 \
