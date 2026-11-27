@@ -62,6 +62,21 @@ class PrusaNativeColourProjectTests(TestCase):
                 self.assertEqual(receipt["tools"], (1, selected+1))
                 self.assertGreater(receipt["colour_facets"], 0)
 
+    def test_single_wall_requires_complete_facet_coverage_before_slicing(self):
+        from slicer_worker.prusa_colour_gcode_audit import _wall_regions
+        stl,_,_,paint=fixture(include_paint=True)
+        control=self.candidate(source=stl)
+        front,back=_wall_regions(control,1)
+        self.assertLess(front[3],back[2])
+        patches=paint["regions"][0]["patches"]
+        self.assertEqual(len(patches),2)
+        partial={**paint,"regions":[{"slot":1,"patches":patches[:1]}]}
+        result=self.candidate(settings={"colour_paint":partial},source=stl)
+        # A single native wall triangle has legitimate painted metadata,
+        # but the spatial wall audit must not approve the partial mask.
+        with self.assertRaisesRegex(WorkerError,"unqualified painted surface"):
+            _wall_regions(result,1)
+
     def test_two_distinct_wall_colours_retain_three_independent_native_tools(self):
         from core.slicer_plate_3mf import _triangles
         from core.slicer_native_support_paint import _fingerprint
