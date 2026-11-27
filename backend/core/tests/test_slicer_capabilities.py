@@ -40,7 +40,8 @@ class SlicerCapabilityTests(SimpleTestCase):
         self.assertEqual(caps["colour_paint"]["status"], "test_only")
         self.assertEqual(caps["seam_paint"]["status"], "test_only")
         self.assertIn("T1–T4", caps["colour_paint"]["reason"])
-        self.assertIn("front-face", caps["seam_paint"]["reason"])
+        self.assertIn("front, back, left or right", caps["seam_paint"]["reason"])
+        self.assertIn("offline", caps["seam_paint"]["reason"])
         self.assertIn("offline", caps["colour_paint"]["reason"])
         self.assertTrue(all(caps[name]["status"] == "verified" for name in (
             "support_paint", "fuzzy_skin_paint")))
