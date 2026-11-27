@@ -162,6 +162,31 @@ def slice_prusa_offline_xl_candidate(job_id, **prepared_settings):
     audit_prusa_material_model_gcode(
         output,candidate["model"],printer_ini=candidate["printer"],
         tools=list(prepared_settings["tools"]))
+    # Native multi-head 3MF may retain object-specific layer ranges. Do not
+    # accept a successful CLI exit if the requested Z schedule was ignored
+    # on a particular model. The existing spatial auditor measures actual
+    # moving extrusion within each original object's independent footprint.
+    rows = prepared_settings["rows"]
+    if any(isinstance(row.get("variable_layer_profile"), dict) and
+           row["variable_layer_profile"].get("bands") for row, _ in rows):
+        from .slicer_prusa_native_resolution import parse_prusa_profile
+        from .slicer_prusa_spatial_layers import audit_prusa_multi_object_layer_ranges
+        process_settings = parse_prusa_profile(candidate["process"], "process")
+        try:
+            base_layer_mm = float(process_settings["layer_height"])
+        except (KeyError, TypeError, ValueError, OverflowError) as exc:
+            raise SlicerProfileError(
+                "Prusa multi-head variable layers need a numeric process layer height."
+            ) from exc
+        try:
+            audit_prusa_multi_object_layer_ranges(
+                output, list(rows), bed_width=prepared_settings["bed_width"],
+                bed_depth=prepared_settings["bed_depth"],
+                base_layer_mm=base_layer_mm)
+        except (ValueError, TypeError, OverflowError) as exc:
+            raise SlicerProfileError(
+                "Native Prusa output did not preserve each requested object layer schedule."
+            ) from exc
     return output
 
 
