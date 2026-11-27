@@ -1,3 +1,42 @@
+### 27 November — additional Prusa advanced-feature parity
+
+**Native pinned PrusaSlicer 2.9.7 acceptance passed** for two further
+scoped mixed-feature routes:
+
+- **Two independent models, one Object + local modifier stack.** Model A
+  uses a bounded Object sparse-infill override combined with one box-shaped
+  sparse-infill parameter modifier. A separately placed model B remains
+  unmodified. Four native controls distinguish baseline, Object-only,
+  modifier-only, and combined deposition. The central modifier's sampled
+  10×10 mm volume overlaps the outer 18×18 mm diagnostic ring, so the
+  spatial audit requires central positive-E change, preserved surrounding
+  deposition and, critically, *unchanged extrusion in model B* rather than
+  assuming the partly overlapping ring remains identical. Other arbitrary
+  stacked regions or mixed negative volumes are still unqualified.
+
+- **One model, disjoint manual support and selective fuzzy paint.** A real
+  cantilever's downward support-enforcer faces and exterior fuzzy-wall
+  faces are fingerprinted separately; exact source-face overlap, elevated
+  or rotated geometry, multiple models and other paint channels remain
+  rejected in this mixed route. A four-project genuine CLI fixture measured
+  **1,962 moving support paths** in both support-only and combined projects,
+  and **2,048 vs 2,044 fuzzy exterior-wall paths** respectively. Its plain
+  cantilever naturally has ~40 short external wall segments; the audit
+  correctly compares the fuzzy effect to the same-geometry baseline
+  instead of incorrectly treating every short wall move as texture.
+
+Also corrected the native-tool workbench's Slice warning while an imported
+Prusa printer profile topology is still loading. It now fails closed with
+a useful explanation instead of trying to read fields from a null topology.
+
+These qualify only **offline G-code** on pinned native 2.9.7; unsupported
+multi-tool adhesion, other overlapping paint or modifier combinations,
+hardware toolchange and physical printer start are still independent gates.
+No Creality, Orca or Bambu production runner was changed. PR #199 remains
+draft until the exact latest head passes every workflow and staging checks.
+
+---
+
 ### 27 November — intermittent native Prusa 2.9.7 MMU coordinate defect
 
 The pinned upstream Prusa 2.9.7 runtime has intermittently emitted
