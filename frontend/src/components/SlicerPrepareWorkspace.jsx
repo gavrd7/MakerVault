@@ -70,7 +70,7 @@ export default function SlicerPrepareWorkspace({
   selectedProfiles, workerConfigured, engineCapabilities = {}, printerId,
   processOverrides = {}, onProcessOverridesChange, onSaveCustomProcessProfile,
   flushSettings = null, onFlushSettingsChange,
-  prusaNativeTools = null, onPrusaNativeToolsChange, prusaProfileTopology = null,
+  prusaNativeTools = null, onPrusaNativeToolsChange, onUsePrusaSingleMaterial, prusaProfileTopology = null,
   slotFilamentProfiles = [], onSlotFilamentProfilesChange, filamentProfiles = [], onFilamentProfilesReload, onRememberedProfiles, spools = [],
   processProfiles = [], onSelectProcessProfile, onResetProcessSettings,
   printerDetails, nozzleMm, selectedPlateType = "Native / profile default",
@@ -752,6 +752,22 @@ export default function SlicerPrepareWorkspace({
         !Number.isInteger(tool) || tool < 1 || tool > prusaNativeTools.tool_count) return;
     const ids = new Set(selectedModels.map(row => row.instance_id));
     if (!ids.size) return;
+    const filamentId = prusaNativeTools.filament_profile_ids?.[tool - 1];
+    const matchingProfile = filamentProfiles.find(row => String(row.id) === String(filamentId) &&
+      row.engine === "prusaslicer" && row.engine_version === String(engine || "").split(" ")[1] &&
+      row.kind === "filament");
+    if (!matchingProfile) return;
+    const entirePlateSelected = ids.size === objects.length;
+    const hasPaintedColours = objects.some(row =>
+      (row.colour_paint?.regions || []).length ||
+      Object.keys(row.colour_paint?.faces || {}).length);
+    if (entirePlateSelected && !hasPaintedColours && onUsePrusaSingleMaterial) {
+      onUsePrusaSingleMaterial(matchingProfile.id);
+      setBulkFilamentOpen(false);
+      setFilamentNotice("All " + ids.size + " models now use " + matchingProfile.name +
+        " with ordinary single-material Prusa slicing. Painting and modifier volumes are unchanged.");
+      return;
+    }
     const existing = (prusaNativeTools.model_tools || []).filter(row => !ids.has(row.instance_id));
     onPrusaNativeToolsChange({
       ...prusaNativeTools,
