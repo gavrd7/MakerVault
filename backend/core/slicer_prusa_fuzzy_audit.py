@@ -18,8 +18,8 @@ def audit_prusa_multi_object_fuzzy(data, models, *, bed_width, bed_depth):
         raise ValueError("Prusa selective fuzzy acceptance requires two to 200 source models.")
     painted=[i for i,(item,_raw) in enumerate(models) if isinstance(item,dict)
              and (item.get("fuzzy_skin_paint") or {}).get("regions")]
-    if len(painted)!=1:
-        raise ValueError("Prusa selective fuzzy acceptance needs exactly one painted object.")
+    if not painted:
+        raise ValueError("Prusa selective fuzzy acceptance needs at least one painted object.")
     if any((item.get("support_paint") or {}).get("regions") or
            (item.get("seam_paint") or {}).get("regions") or
            item.get("modifier_volumes") or
@@ -92,11 +92,16 @@ def audit_prusa_multi_object_fuzzy(data, models, *, bed_width, bed_depth):
                         ymin-.1<=middle[1]<=ymax+.1 and
                         max(2.,zmin+.5)<=pos["Z"]<=min(zmax-1.,zmin+20)):
                     counts[i]+=1
-    changed=counts[painted[0]]
-    untouched=sum(n for i,n in enumerate(counts) if i!=painted[0])
-    if changed<80 or untouched>max(5,math.floor(changed*.05)):
-        raise ValueError("Prusa native fuzzy wall effect was not isolated to the painted object.")
-    return {"painted_model_index":painted[0],"painted_short_external_moves":changed,
+    changed=sum(counts[i] for i in painted)
+    untouched=sum(n for i,n in enumerate(counts) if i not in painted)
+    if (any(counts[i]<80 for i in painted) or
+            any(counts[i]>max(5,math.floor(changed*.05)) for i in range(len(models))
+                if i not in painted) or
+            untouched>max(5,math.floor(changed*.05))):
+        raise ValueError("Prusa native fuzzy wall effect was not isolated to the painted objects.")
+    return {"painted_model_index":painted[0] if len(painted)==1 else None,
+            "painted_model_indices":painted,
+            "painted_short_external_moves":changed,
             "unpainted_short_external_moves":untouched,
             "per_model_short_external_moves":counts}
 
