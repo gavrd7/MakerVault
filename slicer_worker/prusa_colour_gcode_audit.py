@@ -17,7 +17,8 @@ from .runner import WorkerError
 
 NS="{http://schemas.microsoft.com/3dmanufacturing/core/2015/02}"
 WORD=re.compile(r"(?:^|\s)([XYZE])\s*([-+]?(?:\d+(?:\.\d*)?|\.\d+)(?:[Ee][-+]?\d+)?)",re.I)
-PAINTED_STATES={"8":1,"0C":2,"1C":3,"2C":4}
+PAINTED_STATES={"8":1,"0C":2,"1C":3,"2C":4,
+                "3C":5,"4C":6,"5C":7}
 
 
 def _wall_regions(project, tool):
@@ -188,7 +189,7 @@ def _two_painted_wall_regions(project, tools):
     must have the matching exact unsplit Prusa TriangleSelector state.
     """
     if (not isinstance(tools,(tuple,list)) or len(tools)!=2 or
-            any(type(t) is not int or not 1<=t<=4 for t in tools) or
+            any(type(t) is not int or not 1<=t<=7 for t in tools) or
             tools[0]==tools[1]):
         raise WorkerError("Prusa multi-swatch requires two distinct native tools.")
     try:
