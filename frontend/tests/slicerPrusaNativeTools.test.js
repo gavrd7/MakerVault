@@ -107,7 +107,7 @@ test("Prusa independent XL and INDX reuse one- or two-wall native painting witho
   assert.match(prepare,/prusaPaintedSlots\.length<=2/);
   assert.doesNotMatch(prepare,/!prusaIndependentTools/);
   assert.match(editor,/without\s+MMU purging/);
-  assert.match(editor,/Math\.min\(value\.tool_count-1,4\)/);
+  assert.match(editor,/Math\.min\(value\.tool_count-1,7\)/);
 });
 
 
