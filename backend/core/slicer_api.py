@@ -1683,6 +1683,30 @@ def _native_parent_ids(rows):
 @require_http_methods(["GET", "POST"])
 def profiles(request):
     if request.method == "GET":
+        # Inspect exactly one owner-owned native printer preset on demand.
+        # Never infer tool capacity from the display name or physical feeder bays.
+        topology_id = request.GET.get("prusa_printer_topology_id")
+        if topology_id is not None:
+            try:
+                profile = SlicerProfile.objects.filter(
+                    owner=request.user, pk=_uuid(topology_id),
+                    engine="prusaslicer", kind="printer"
+                ).first()
+                if profile is None:
+                    return _error("Prusa printer profile was not found.", 404)
+                from .slicer_prusa_native_resolution import resolved_prusa_profile
+                from .slicer_prusa_machine_topology import prusa_machine_topology
+                topology = prusa_machine_topology(resolved_prusa_profile(profile))
+            except (ValueError, TypeError, UnicodeDecodeError, OSError,
+                    SlicerProfileError) as exc:
+                return _error(str(exc) if isinstance(exc, ValueError)
+                              else "Prusa printer topology cannot be inspected.", 422)
+            return JsonResponse({"printer_profile_id": str(profile.pk),
+                                 "topology": {
+                                     "kind": topology["kind"],
+                                     "logical_tool_count": topology["logical_tool_count"],
+                                     "physical_nozzle_count": topology["physical_nozzle_count"],
+                                 }})
         rows = list(SlicerProfile.objects.filter(owner=request.user).select_related(
             "file_asset"
         ).order_by("engine", "kind", "name")[:500])
