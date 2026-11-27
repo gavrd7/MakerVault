@@ -20,13 +20,9 @@ from .slicer_profiles import SlicerProfileError
 # exercises these settings with the native MMU worker; arbitrary user keys
 # and executable directives remain rejected.
 from .slicer_prusa_process_settings import FIELDS as PRUSA_NATIVE_PROCESS_FIELDS
-# Native multi-head deposition audits cover the speed controls, but their
-# model-local spatial proof does not yet distinguish brim/skirt extrusion
-# from neighbouring objects. Keep those two adhesion controls unavailable
-# until a genuine separate spatial native test qualifies them.
-PRUSA_MULTITOOL_PROCESS_KEYS = frozenset(PRUSA_NATIVE_PROCESS_FIELDS) - {
-    "brim_width", "skirt_loops",
-}
+# The native first-layer Skirt/Brim role is audited separately from
+# model-local material deposition. Preserve the common bounded adapter.
+PRUSA_MULTITOOL_PROCESS_KEYS = frozenset(PRUSA_NATIVE_PROCESS_FIELDS)
 
 
 def _virtual_native_tools(job, settings, objects, kind, count, *, single_colour=False):
