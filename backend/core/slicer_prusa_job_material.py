@@ -145,7 +145,7 @@ def prepare_prusa_workbench_material(job, *, settings=None):
             raise SlicerProfileError("Prusa active plate, models and tower must match saved project.")
     forbidden = (("support_paint", "seam_paint", "fuzzy_skin_paint",
                   "negative_volumes")
-                 if kind == "indx" else
+                 if kind in ("indx", "independent_tools") else
                  ("modifier_volumes", "support_paint", "seam_paint",
                   "fuzzy_skin_paint", "variable_layer_profile", "negative_volumes"))
     for row in objects:
