@@ -82,8 +82,12 @@ test("Eight native INDX tools are configurable without MMU purge/tower dependenc
 });
 
 test("MMU, XL and INDX map native modifier and variable layer regions",()=>{
-  assert.match(prepare,/\(object\.modifier_volumes\?\.length \|\| object\.variable_layer_profile\?\.bands\?\.length\) &&/);
-  assert.match(prepare,/prusaSinglePaint\) \|\|/);
+  assert.match(prepare,/prusaSinglePaint && object\.variable_layer_profile\?\.bands\?\.length/);
+  assert.match(prepare,/prusaSinglePaint && object\.modifier_volumes\?\.length/);
+  assert.match(prepare,/object\.modifier_volumes\.length===1/);
+  assert.match(prepare,/object\.modifier_volumes\[0\]\?\.shape==="box"/);
+  assert.match(prepare,/object\.modifier_volumes\[0\]\?\.kind==="modifier"/);
+  assert.match(prepare,/sparse_infill_density/);
   assert.doesNotMatch(prepare,/!prusaIndependentTools/);
   for (const key of ["top_shell_layers","bottom_shell_layers",
                      "outer_wall_speed","inner_wall_speed",
@@ -208,6 +212,7 @@ test("Prusa Slice explains uninspected profile topology without dereferencing nu
 
 test("MMU retains native modifier volumes while known upstream variable-layer failure is gated",()=>{
   assert.match(prepare,/object\.variable_layer_profile\?\.bands\?\.length &&\s*prusaNativeTools\?\.mode==="mmu"/);
-  assert.match(prepare,/\(object\.modifier_volumes\?\.length \|\| object\.variable_layer_profile\?\.bands\?\.length\) &&\s*prusaSinglePaint/);
+  assert.match(prepare,/prusaSinglePaint && object\.variable_layer_profile\?\.bands\?\.length/);
+  assert.match(prepare,/prusaSinglePaint && object\.modifier_volumes\?\.length/);
   assert.doesNotMatch(prepare,/!prusaIndependentTools/);
 });
