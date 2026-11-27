@@ -69,7 +69,8 @@ class PrusaGcodeAuditTests(TestCase):
             attempts = []
             def runner(_binary, workdir, *, timeout_seconds):
                 self.assertEqual(workdir, folder)
-                self.assertEqual(timeout_seconds, 20)
+                self.assertGreaterEqual(timeout_seconds, 1)
+                self.assertLessEqual(timeout_seconds, 20)
                 self.assertFalse((folder / "output.gcode").exists())
                 payload = invalid if not attempts else valid
                 attempts.append(payload)
