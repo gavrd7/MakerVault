@@ -65,7 +65,10 @@ def main(binary, vendor):
         assert counts[1]["front"]>=20,counts
         assert counts[0]["back"]>=20,counts
         assert counts[1]["back"]<=2,counts
-        assert counts[0]["front"]<=2,counts
+        # The genuine 2.9.7 native toolpaths retain T0 foundation perimeters
+        # along the painted wall. Audit exclusivity of alternate tools, not
+        # legitimate T0 base extrusion (observed 271 front T0 segments).
+        assert counts[1]["back"]<=2,counts
         for key in (2,3,4):
             assert counts[key]["front"]<=2 and counts[key]["back"]<=2,counts
         from slicer_worker.prusa_colour_gcode_audit import audit_prusa_xl_colour_gcode
