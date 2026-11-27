@@ -115,6 +115,31 @@ class PrusaProjectDialectTests(TestCase):
             validate_prusa_native_3mf(rewrite(archive, "3D/3dmodel.model", tamper))
 
 
+    def test_three_object_support_paint_admission_retains_one_exact_enforcer(self):
+        from scripts.prusa_generate_support_overhang import cantilever, support_mask
+        raw = cantilever()
+        for painted in range(3):
+            with self.subTest(painted=painted):
+                plate = [
+                    item(x_mm=x, **({"support_paint":support_mask(raw, 0)}
+                                    if i==painted else {}))
+                    for i,x in enumerate((-68,0,68))]
+                self.assertFalse(
+                    validate_prusa_project_admission(plate, {}, "2.9.7"))
+                archive = build_prusa_native_3mf(
+                    [(model,raw) for model in plate],
+                    bed_width=250,bed_depth=210)
+                receipt = validate_prusa_native_3mf(archive)
+                self.assertEqual(receipt["objects"],3)
+                self.assertIn(
+                    "slic3rpe:FdmSupportsPaintingVersion",
+                    receipt["paint_channels"])
+                other = dict(plate[(painted+1)%3])
+                other["process_overrides"] = {"wall_loops":4}
+                plate[(painted+1)%3] = other
+                with self.assertRaises(ValueError):
+                    validate_prusa_project_admission(plate, {}, "2.9.7")
+
     def test_two_object_support_enforcer_roundtrips_but_mixed_edits_fail_closed(self):
         from scripts.prusa_generate_support_overhang import cantilever, support_mask
         model = cantilever()
