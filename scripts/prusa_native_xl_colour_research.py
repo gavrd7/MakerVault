@@ -405,6 +405,12 @@ def main(binary, vendor):
             lines=(work/"output.gcode").read_bytes().decode("utf-8").splitlines()
             counts={tool:{idx:0 for idx in range(4)}
                     for tool in range(5)}
+            # Observe all native positive-E roles and wall-aligned geometry
+            # separately: a misclassified role must never masquerade as
+            # Prusa failing to generate the requested material geometry.
+            native_roles={tool:{} for tool in range(5)}
+            geometric_hits={tool:{idx:0 for idx in range(4)}
+                            for tool in range(5)}
             # Research-only numeric geometry bounds: distinguish an
             # unsupported four-swatch native flow from an audit coordinate
             # mismatch before relaxing any production restrictions.
@@ -463,11 +469,12 @@ def main(binary, vendor):
                         span[2]=min(span[2],y,before[1])
                         span[3]=max(span[3],y,before[1])
                         span[4]+=1
-                    if (active not in counts or "external perimeter" not in role
-                            or amount<=1e-6 or op not in ("G1","G01")
-                            or None in before or x is None or y is None
-                            or abs(x-before[0])+abs(y-before[1])<=1e-7):
+                    if (active not in counts or amount<=1e-6 or
+                            op not in ("G1","G01") or None in before or
+                            x is None or y is None or
+                            abs(x-before[0])+abs(y-before[1])<=1e-7):
                         continue
+                    native_roles[active][role]=native_roles[active].get(role,0)+1
                     for idx,(axis,face_value,tool) in enumerate(sidespec):
                         across=180+face_value
                         p=(x,y)[axis]
@@ -477,8 +484,12 @@ def main(binary, vendor):
                         if (abs(p-across)<=2 and abs(old-across)<=2 and
                                 180-7<=tangent<=180+7 and
                                 180-7<=old_tangent<=180+7):
-                            counts[active][idx]+=1
+                            geometric_hits[active][idx]+=1
+                            if "external perimeter" in role:
+                                counts[active][idx]+=1
             print("FOUR-WALL XL5 NATIVE RESEARCH",counts,
+                  "geometric_hits",geometric_hits,
+                  "moving_e_roles",native_roles,
                   "extents",{tool:(tuple(round(v,2) for v in extent[:4]),
                                    extent[4])
                              for tool,extent in extents.items() if extent[4]},
