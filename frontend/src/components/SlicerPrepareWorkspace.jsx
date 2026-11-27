@@ -1165,7 +1165,8 @@ export default function SlicerPrepareWorkspace({
       "bottom_shell_layers","sparse_infill_density",
       "outer_wall_speed",
       "inner_wall_speed","sparse_infill_speed",
-      "travel_speed","top_surface_speed"
+      "travel_speed","top_surface_speed",
+      "brim_width","skirt_loops"
     ].includes(key)) && !flushSettings &&
     (["xl","indx"].includes(prusaNativeTools.mode) && !primeTower ||
       prusaNativeTools.mode==="mmu" && !!primeTower &&
@@ -1226,7 +1227,8 @@ export default function SlicerPrepareWorkspace({
       "bottom_shell_layers","sparse_infill_density",
       "outer_wall_speed",
       "inner_wall_speed","sparse_infill_speed",
-      "travel_speed","top_surface_speed"
+      "travel_speed","top_surface_speed",
+      "brim_width","skirt_loops"
     ].includes(key)) : [];
   const prusaNativeBlockReason = activeEngine==="prusaslicer" &&
     prusaNativeTools && !prusaNativeReady
