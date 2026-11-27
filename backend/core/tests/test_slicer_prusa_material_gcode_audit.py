@@ -94,6 +94,36 @@ class PrusaNativeToolpathAuditTests(TestCase):
                 audit_prusa_material_model_gcode(
                     forged,project(),printer_ini=PRINTER,tools=[1,2])
 
+    def test_native_process_requires_real_first_layer_adhesion_when_enabled(self):
+        base=toolpaths()
+        printer=PRINTER
+        requested=b"skirts = 2\nbrim_width = 3\n"
+        with self.assertRaisesRegex(WorkerError,"no verified first-layer"):
+            audit_prusa_material_model_gcode(
+                base,project(),printer_ini=printer,tools=[1,2],
+                process_ini=requested)
+        # Ten independent moving positive-E first-layer adhesion strokes,
+        # deliberately in the other model's XY footprint.
+        skirt=(b"G0 Z0.2\n;TYPE:Skirt/Brim\n"
+               b"G0 X160 Y105\n"+
+               b"".join(f"G1 X{160+(n+1)*.1:.2f} Y105 E0.03\n".encode()
+                        for n in range(12))+
+               b";TYPE:External perimeter\nG0 X90 Y105\n")
+        native=base.replace(b"G0 X90 Y105\n",skirt,1)
+        accepted=audit_prusa_material_model_gcode(
+            native,project(),printer_ini=printer,tools=[1,2],
+            process_ini=requested)
+        self.assertGreaterEqual(accepted["native_first_layer_adhesion_moves"][0],10)
+        self.assertEqual(accepted["incorrect_extrusion_moves"],[0,0])
+        for invalid in (
+            b"skirts = 21\n",b"brim_width = 51\n",
+            b"skirts = nan\n",b"skirts = 2.5\n",
+        ):
+            with self.subTest(invalid=invalid),self.assertRaises(WorkerError):
+                audit_prusa_material_model_gcode(
+                    native,project(),printer_ini=printer,tools=[1,2],
+                    process_ini=invalid)
+
     def test_real_tower_audit_requires_both_materials_purging(self):
         from core.slicer_prusa_wipe_tower import add_prusa_native_wipe_tower
         source=add_prusa_native_wipe_tower(
