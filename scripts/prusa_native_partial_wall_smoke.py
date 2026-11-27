@@ -39,7 +39,7 @@ def main(binary, vendor_path):
         settings["temperature"] = str(temp)
         settings["first_layer_temperature"] = str(temp)
         palette.append("".join(
-            f"{key} = {value}\\n" for key, value in sorted(settings.items())
+            f"{key} = {value}\n" for key, value in sorted(settings.items())
         ).encode())
     native_filaments = compile_prusa_filament_palette(printer, palette)
     process = apply_prusa_process_overrides(
