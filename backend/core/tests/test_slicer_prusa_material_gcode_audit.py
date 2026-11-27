@@ -111,3 +111,69 @@ class PrusaNativeToolpathAuditTests(TestCase):
         with self.assertRaises(WorkerError):
             audit_prusa_material_model_gcode(
                 toolpaths(),project(),printer_ini=ini("0.4"),tools=[1,2])
+
+
+class PrusaOfficialIndxCleanerTests(TestCase):
+    """Only verified firmware-cleaner motion may be excluded from model XY."""
+
+    def native(self, *, include_flush=True, swap_cleaner=False, leak=False):
+        lines=["G90","M83","T0","G0 X90 Y105"]
+        lines += [f"G1 X{90+.06*(i+1):.3f} Y105 E.03" for i in range(32)]
+        lines += ["T1"]
+        if swap_cleaner:
+            lines += [";FLUSH_START"]
+        else:
+            lines += ["G12 S90", "G91", ";FLUSH_START"]
+        if include_flush:
+            lines += ["G1 X-0.20 E0", "G1 X0.4 E1.0",
+                      "G1 Y-1.2 E1.0", "G1 X-0.4 E1.0",
+                      "G1 Y1.2 E1.0", "G1 X0.20 E.2"]
+        if not swap_cleaner:
+            lines += [";FLUSH_END","G90","G12 S91"]
+        if leak:
+            lines += ["G0 X90 Y105","G1 X90.5 Y105 E.03"]
+        lines += ["G90","G0 X160 Y105"]
+        lines += [f"G1 X{160+.06*(i+1):.3f} Y105 E.03" for i in range(32)]
+        return ("\n".join(lines)+"\n").encode()
+
+    def qualified(self, data):
+        from unittest.mock import patch
+        with patch(
+            "slicer_worker.prusa_material_gcode_audit._trusted_indx_cleaner_profile",
+            return_value=True
+        ):
+            return audit_prusa_material_model_gcode(
+                data,project(),printer_ini=PRINTER,tools=[1,2])
+
+    def test_verified_cleaner_excludes_only_bounded_toolchange_flush(self):
+        result=self.qualified(self.native())
+        self.assertEqual(result["correct_extrusion_moves"],[32,32])
+        self.assertEqual(result["incorrect_extrusion_moves"],[0,0])
+        self.assertEqual(result["qualified_cleaner_flushes"],1)
+
+    def test_marker_without_exact_profile_never_excludes_material(self):
+        with self.assertRaisesRegex(WorkerError, "Unqualified"):
+            audit_prusa_material_model_gcode(
+                self.native(),project(),printer_ini=PRINTER,tools=[1,2])
+
+    def test_broken_cleaner_missing_flush_and_real_leak_all_fail(self):
+        variants=(
+            self.native(include_flush=False),
+            self.native(swap_cleaner=True),
+            self.native(leak=True),
+            self.native().replace(b"G12 S91", b"G12 S90"),
+            self.native().replace(b"G1 X0.4 E1.0", b"G1 X40 E1.0"),
+        )
+        for data in variants:
+            with self.subTest(tail=data[-50:]),self.assertRaises(WorkerError):
+                self.qualified(data)
+
+    def test_official_cleaner_profile_is_hash_pinned_not_merely_marker_text(self):
+        from slicer_worker.prusa_material_gcode_audit import (
+            _trusted_indx_cleaner_profile, _OFFICIAL_INDX_8T_TOOLCHANGE_SHA256)
+        self.assertEqual(len(_OFFICIAL_INDX_8T_TOOLCHANGE_SHA256),64)
+        forged=(b"bed_shape = 0x0,250x0,250x210,0x210\n"
+                b"nozzle_diameter = 0.4,0.4,0.4,0.4,0.4,0.4,0.4,0.4\n"
+                b"toolchange_gcode = ;FLUSH_START\\nG12 S90\\n;FLUSH_END\\nG12 S91\n")
+        self.assertFalse(_trusted_indx_cleaner_profile(
+            forged,list(range(1,9)),None))
