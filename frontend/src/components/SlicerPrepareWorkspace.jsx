@@ -1160,7 +1160,7 @@ export default function SlicerPrepareWorkspace({
     Object.keys(processOverrides||{}).every(key=>[
       "layer_height","wall_loops","top_shell_layers",
       "bottom_shell_layers","sparse_infill_density",
-      "brim_width","skirt_loops","outer_wall_speed",
+      "outer_wall_speed",
       "inner_wall_speed","sparse_infill_speed",
       "travel_speed","top_surface_speed"
     ].includes(key)) && !flushSettings &&
@@ -1219,7 +1219,7 @@ export default function SlicerPrepareWorkspace({
     prusaNativeTools ? Object.keys(processOverrides||{}).filter(key=>![
       "layer_height","wall_loops","top_shell_layers",
       "bottom_shell_layers","sparse_infill_density",
-      "brim_width","skirt_loops","outer_wall_speed",
+      "outer_wall_speed",
       "inner_wall_speed","sparse_infill_speed",
       "travel_speed","top_surface_speed"
     ].includes(key)) : [];
