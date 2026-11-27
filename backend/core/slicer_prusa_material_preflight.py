@@ -401,11 +401,12 @@ def prepare_prusa_offline_xl_colour_candidate(
     else:
         selected=(next(iter(colour_tool_indices.values())),)
         selection={"tool":selected[0]}
-    validate_prusa_offline_xl_colour_inputs(
+    receipt=validate_prusa_offline_xl_colour_inputs(
         project=project,printer=printer,filament=palette,process=process,
         **selection)
     return {"model":project,"printer":printer,"filament":palette,
-            "process":process,**selection}
+            "process":process, "partial_wall":receipt["partial_wall"],
+            **selection}
 
 
 def slice_prusa_offline_xl_colour_candidate(job_id, **prepared):
@@ -429,6 +430,10 @@ def slice_prusa_offline_xl_colour_candidate(job_id, **prepared):
         audit_prusa_dual_colour_gcode(
             output,candidate["model"],printer_ini=candidate["printer"],
             tools=candidate["tools"],tower=None)
+    elif candidate["partial_wall"]:
+        from slicer_worker.prusa_partial_surface import audit_prusa_partial_wall_gcode
+        audit_prusa_partial_wall_gcode(
+            output, candidate["model"], tool=candidate["tool"])
     else:
         from slicer_worker.prusa_colour_gcode_audit import audit_prusa_xl_colour_gcode
         audit_prusa_xl_colour_gcode(
