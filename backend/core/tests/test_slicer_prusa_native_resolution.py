@@ -311,6 +311,31 @@ class PrusaSingleMaterialAdmissionTests(TestCase):
                 with self.assertRaises(SlicerExecutionError):
                     _validate_plate_execution(job)
 
+    def test_prusa_fifteen_model_painted_seam_is_admitted_per_object(self):
+        from core.slicer_execution import (
+            _validate_plate_execution,SlicerExecutionError)
+        from scripts.prusa_generate_mmu_paint import fixture
+        _raw,_mesh,_states,colour=fixture(include_paint=True)
+        seam={"version":2,"signature":colour["signature"],
+              "regions":[{"slot":0,
+                          "patches":colour["regions"][0]["patches"]}]}
+        positions=[(x,y) for y in (-55,0,55)
+                         for x in (-90,-45,0,45,90)]
+        rows=[{"asset_id":f"seam-{index}","x_mm":x,"y_mm":y,
+               "z_mm":0,"rotation_deg":0,"scale_percent":100,
+               **({"seam_paint":seam} if index in (7,8) else {})}
+              for index,(x,y) in enumerate(positions)]
+        job=SimpleNamespace(
+            engine="prusaslicer",engine_version="2.9.7",
+            settings={"plate_objects":rows},owner=None,
+            printer_profile_id="verified")
+        self.assertTrue(_validate_plate_execution(job))
+        modified=[dict(row) for row in rows]
+        modified[8]["scale_percent"]=150
+        job.settings["plate_objects"]=modified
+        with self.assertRaises(SlicerExecutionError):
+            _validate_plate_execution(job)
+
     def test_prusa_valid_object_overrides_admitted_without_modifiers(self):
         from core.slicer_execution import _validate_plate_execution
         job = SimpleNamespace(engine="prusaslicer", engine_version="2.9.7",
