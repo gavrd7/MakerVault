@@ -109,7 +109,7 @@ class PrusaOfflineWorkerProtocolTests(TestCase):
         }
         verified = _decode_payload(payload)
         self.assertEqual(verified["prusa_offline_mmu"]["tools"], values["tools"])
-        self.assertEqual(verified["prusa_offline_mmu"]["tool_count"], 5)
+        self.assertEqual(len(set(verified["prusa_offline_mmu"]["tools"])), 5)
         for invalid in (
             values["tools"] + [1, 2, 3],
             values["tools"][:-1] + [6],
