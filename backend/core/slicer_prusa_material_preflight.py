@@ -39,7 +39,7 @@ def prepare_prusa_offline_mmu_candidate(
                 p.engine != "prusaslicer" for p in filament_profiles)):
         raise SlicerProfileError("Every Prusa MMU filament preset must be owned and native.")
     if (not isinstance(rows, (tuple, list)) or not isinstance(tools, (tuple, list)) or
-            len(rows) != len(tools) or not 2 <= len(rows) <= 5 or
+            len(rows) != len(tools) or not 2 <= len(rows) <= 12 or
             any(type(tool) is not int for tool in tools) or
             not isinstance(tower_xy, (list, tuple)) or len(tower_xy) != 2):
         raise SlicerProfileError("Prusa MMU models, tools or wipe tower are incomplete.")
