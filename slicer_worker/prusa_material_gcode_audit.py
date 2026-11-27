@@ -132,11 +132,11 @@ def audit_prusa_material_model_gcode(data, project, *, printer_ini, tools, tower
             continue
         op=cmd.split(None,1)[0].upper()
         if op == "G12" and trusted_cleaner:
-            if re.search(r"(?:^|\\s)S90(?:\\s|$)", cmd):
+            if re.search(r"(?:^|\s)S90(?:\s|$)", cmd):
                 if cleaner or flush:
                     raise WorkerError("INDX native cleaner is already active.")
                 cleaner = True
-            elif re.search(r"(?:^|\\s)S91(?:\\s|$)", cmd):
+            elif re.search(r"(?:^|\s)S91(?:\s|$)", cmd):
                 if not cleaner or flush:
                     raise WorkerError("INDX native cleaner was not closed.")
                 cleaner = False
