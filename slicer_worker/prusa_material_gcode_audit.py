@@ -57,7 +57,10 @@ _OFFICIAL_INDX_8T_TOOLCHANGE_SHA256 = (
 
 def _trusted_indx_cleaner_profile(printer_ini, tools, tower):
     """The exact pinned INDX 8T script, never an operator-supplied annotation."""
-    if tower is not None or len(tools) != 8 or set(tools) != set(range(1, 9)):
+    # Cleaner identity belongs to the pinned machine profile, not the
+    # number of objects or whether every available head is selected.
+    if (tower is not None or not isinstance(tools, (list, tuple)) or
+            len(set(tools)) < 2 or any(type(t) is not int or not 1 <= t <= 8 for t in tools)):
         return False
     from .prusa_vendor_profiles import validate_flat_prusa_preset, PrusaPresetError
     try:
