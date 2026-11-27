@@ -53,6 +53,11 @@ def _settings(nodes, kind, allowed):
         elif key == "fill_density":
             _require(re.fullmatch(r"[0-9]{1,3}(?:\.[0-9]{1,4})?%", val) is not None
                      and 0 <= float(val[:-1]) <= 100)
+        elif key in {"external_perimeter_speed", "perimeter_speed",
+                     "infill_speed", "top_solid_infill_speed"}:
+            _require(isinstance(val, str) and
+                     re.fullmatch(r"[0-9]{1,3}(?:\\.[0-9]{1,4})?", val) is not None and
+                     5 <= float(val) <= 350)
         result[key] = val
     return result
 
@@ -166,7 +171,11 @@ def validate_prusa_native_3mf(data):
             metadata = [n for n in cfg if n.tag == "metadata"]
             volumes = [n for n in cfg if n.tag == "volume"]
             _require(len(metadata) + len(volumes) == len(cfg) and 1 <= len(volumes) <= 13)
-            _settings(metadata, "object", {"perimeters", "fill_density", "top_solid_layers", "bottom_solid_layers"})
+            _settings(metadata, "object", {
+                "perimeters", "fill_density", "top_solid_layers",
+                "bottom_solid_layers", "external_perimeter_speed",
+                "perimeter_speed", "infill_speed", "top_solid_infill_speed",
+            })
             regions += len(volumes) - 1
             _require(regions <= 48)
             next_face = 0
