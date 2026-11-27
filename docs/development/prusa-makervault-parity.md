@@ -29,24 +29,22 @@ tests; leave unsafe printer-start blocked until that is proven.
 | Install, uninstall, version and identity | Verified installer and pinned binary, shared worker | Native install/uninstall acceptance exists; ensure UI parity on staging |
 | Profile browse/import and global numeric settings | Native profiles, official catalogue, shared pagination | Import and native overrides covered; verify filament manufacturer search against UX requirement on both layouts |
 | Add/select/transform/disassemble multiple models | Native 3MF, STL bake, shared plate placement | Up to 200 instances under resource budget; manually inspect assembly tree and controls |
-| Primitive shapes, infill modifiers and negative volumes | Native 3MF modifiers and negative bodies | Basic native effects tested; **mixed paint + modifier/negative** is still explicitly rejected |
+| Primitive shapes, infill modifiers and negative volumes | Native 3MF modifiers and negative bodies | Independently proven effects. **One full-wall painted XL/MMU model with exactly one box infill modifier** now uses the same signed native 3MF; genuine XL G-code shows preserved T1 painting and 140.22 -> 218.01 inside-region moving extrusion. Negative+paint and wider modifier combinations remain blocked |
 | Single-material slicing + G-code / thumbnail / preview | Common slice worker and Library | Binary and storage paths covered; confirm full shared UI navigation and preview on staging |
-| Global and per-object settings | Native numeric process + 3MF object config | Bounded speed, walls, shells, infill, brim and skirt audited; other MakerVault object controls need parity review |
-| Colour paint, material mapping and tool selection | Native TriangleSelector, MMU/XL/INDX material adapter | T1–T7 and one/two complete opposite X/Y faces qualified; **arbitrary painted regions, more paint swatches or multiple colour-painted models** blocked |
+| Global and per-object settings | Native numeric process + 3MF object config | Bounded speeds, walls, shells, infill, brim and skirt audited. **Painted native ModelPart now retains Object controls**; one versus five painted wall loops genuinely yielded 0 versus 6,434 internal-perimeter movements |
+| Colour paint, material mapping and tool selection | Native TriangleSelector, MMU/XL/INDX material adapter | Single/dual opposite X/Y faces, independent INDX T1–T7, and **four complete XL5 vertical faces T1–T4** proven in genuine native G-code (130 correct external movements per face; <=1 wrong-colour face movement). Arbitrary split masks and multiple colour-painted models remain unqualified |
 | Printer filament list with >4 tools | Printer-derived native topology | MMU5 / XL5 and eight-head INDX proved in real CLI; verify saved and restored UI state and no extra fixed limit |
 | Support painting | Native painted support and spatial audit | One selected painted model among up to 200 objects qualifies; simultaneous multi-object paint variants remain unqualified |
-| Seam painting | Native facet seam states and G-code spatial audit | Qualified pinned directions only; test broader requested MakerVault seam selections |
-| Fuzzy skin painting | Native facet fuzz, owner geometry and G-code audit | **2–200 objects, including multiple independently painted objects**, now mapped; real fifteen-object one/two-painted native CLI assertions must pass before marking done |
-| Variable layer height | Native layer range 3MF + object-local toolpath audit | **2–200 single-material objects** now mapped; require native fifteen-object one-variable/fourteen-baseline positive-E tests. MMU combinations remain unqualified |
+| Seam painting | Native facet seam states and G-code spatial audit | **15-model true per-object painted seams** proven with two different selected front/back faces: 95 independently correct seam starts on each; unpainted baseline rejected. Broader disjoint arbitrary seam masks still need native verification |
+| Fuzzy skin painting | Native facet fuzz, owner geometry and G-code audit | **2–200 model plate, multiple independently painted models**; genuine fifteen-object native output deposited 2,603/2,625 short external moves on selected models, zero on thirteen plain neighbours |
+| Variable layer height | Native layer range 3MF + object-local toolpath audit | **2–200 single-material objects**: genuine 15-model binary test proves a 0.12mm schedule on the selected model and 0.20mm on fourteen unaffected neighbours. MMU variable-Z native incompatibility remains unqualified |
 | Prime tower, purge and independent heads | MMU directional purge; no tower on XL/INDX | Genuine binary tests for MMU, XL and official INDX exist |
 | Print from slicer and printer start confirmation | Shared submission adapter; PrusaLink API | Offline G-code valid; native Prusa physical toolchange upload/start currently intentionally guarded. Do not present upload as print start confirmation |
 | Mobile and desktop | Shared React components | Required manual visual/interaction pass on actual staging before ready-for-review |
 
 ## High-priority remaining integration gaps
 
-1. Generalize colour painting beyond the existing one/two fully painted
-   walls and beyond a single colour-painted object, proving correct
-   per-region toolpath deposition. Do not fake masks by painting whole walls.
+1. Generalize colour painting beyond the now-verified one/two and XL5 four **complete** vertical painted walls, including arbitrary split face masks and more than one colour-painted model. Audit actual per-region toolpath deposition. Do not fake partial masks by painting whole walls.
 2. Compose MakerVault's independently proven modifier, negative,
    support, seam, fuzzy and variable-layer features in a single native
    project without dropping requested operations; test representative
