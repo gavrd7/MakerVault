@@ -201,6 +201,14 @@ def main(binary, vendor):
         assert counts[1]["front"]>20 and counts[2]["back"]>20, counts
         assert counts[1]["back"]<=2 and counts[2]["front"]<=2, counts
         assert counts[0]["front"]<=2 and counts[0]["back"]<=2, counts
+        from slicer_worker.prusa_colour_gcode_audit import audit_prusa_dual_colour_gcode
+        proof = audit_prusa_dual_colour_gcode(
+            gcode, multi_project, printer_ini=printer, tools=(1,2),
+            tower=(55,150,0,250,210))
+        assert proof["wall_moves"][1]["front"]>20, proof
+        assert proof["wall_moves"][2]["back"]>20, proof
+        print("PASS: independently audited native three-tool painted MMU",
+              proof, flush=True)
         print("PASS: research genuine Prusa MMU T1-front/T2-back multi-swatch",
               counts, "sha256",hashlib.sha256(gcode).hexdigest(),flush=True)
     print("PASS: genuine Prusa 2.9.7 native T1-T4 painted facets with isolated wipe tower",
