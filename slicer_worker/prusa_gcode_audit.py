@@ -85,7 +85,10 @@ def run_prusa_painted_with_numeric_recheck(
             # A failed attempt may leave corrupt or partial output behind.
             # Unlink before running again; never accidentally inspect stale
             # G-code if the native subprocess fails to create a new file.
-            output.unlink(missing_ok=True)
+            try:
+                output.unlink(missing_ok=True)
+            except OSError as exc:
+                raise WorkerError("Prusa temporary output could not be cleared.") from exc
         receipt = runner(binary, workdir, timeout_seconds=timeout_seconds)
         try:
             data = output.read_bytes()
