@@ -736,6 +736,29 @@ jobs:
               /tmp/paint random
           done
 
+      - name: Generate fifteen-model independently painted Prusa seams
+        run: |
+          set -euo pipefail
+          echo "PRUSA_MULTI_SEAMS=$RUNNER_TEMP/prusa-multi-seam" >> "$GITHUB_ENV"
+          PYTHONPATH=backend:. "$RUNNER_TEMP/prusa-backend-venv/bin/python" \
+            scripts/prusa_generate_multi_seam.py \
+            "$RUNNER_TEMP/prusa-multi-seam" "$PRUSA_PAINT_DIR"
+
+      - name: Require genuine Prusa fifteen-model independent seam extrusion
+        run: |
+          set -euo pipefail
+          docker run --rm --network none --user 10001:10001 \
+            -v "$TEST_VOLUME:/opt/engine-store:ro" \
+            -v "$GITHUB_WORKSPACE/scripts:/tmp/scripts:ro" \
+            -v "$GITHUB_WORKSPACE/backend:/tmp/mv-backend:ro" \
+            -v "$PRUSA_MULTI_SEAMS:/tmp/prusa-seams:ro" \
+            -e PYTHONPATH=/tmp:/tmp/mv-backend:/opt/makervault-slicer \
+            --entrypoint python3 prusa-integration:smoke \
+            /tmp/scripts/prusa_native_multi_seam_smoke.py \
+            /opt/engine-store/versions/prusaslicer/2.9.7/bin/prusa-slicer \
+            /opt/engine-store/versions/prusaslicer/2.9.7/resources/profiles/PrusaResearch.ini \
+            /tmp/prusa-seams
+
       - name: Generate same-geometry manual support enforcer controls
         run: |
           set -euo pipefail
