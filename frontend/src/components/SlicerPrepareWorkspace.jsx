@@ -1141,7 +1141,8 @@ export default function SlicerPrepareWorkspace({
   const prusaUnsupportedObjectKeys = activeEngine==="prusaslicer" &&
     prusaNativeTools ? objects.flatMap(object=>
       Object.keys(object.process_overrides||{}).filter(key=>
-        !["wall_loops","sparse_infill_density"].includes(key))) : [];
+        !["wall_loops","sparse_infill_density",
+          "top_shell_layers","bottom_shell_layers"].includes(key))) : [];
   const prusaUnsupportedGlobalKeys = activeEngine==="prusaslicer" &&
     prusaNativeTools ? Object.keys(processOverrides||{}).filter(key=>![
       "layer_height","wall_loops","top_shell_layers",
@@ -1150,7 +1151,7 @@ export default function SlicerPrepareWorkspace({
   const prusaNativeBlockReason = activeEngine==="prusaslicer" &&
     prusaNativeTools && !prusaNativeReady
       ? prusaUnsupportedObjectKeys.length
-        ? "Prusa MMU/XL/INDX supports only Object wall loops and infill density. Unsupported Object keys: " +
+        ? "Prusa MMU/XL/INDX supports Object walls, top/bottom shells and infill density. Unsupported Object keys: " +
           [...new Set(prusaUnsupportedObjectKeys)].join(", ") +
           ". Restore those settings or save the draft."
         : prusaUnsupportedGlobalKeys.length
