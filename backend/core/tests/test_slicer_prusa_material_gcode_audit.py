@@ -100,7 +100,7 @@ class PrusaNativeToolpathAuditTests(TestCase):
     def test_native_process_requires_real_first_layer_adhesion_when_enabled(self):
         base=toolpaths()
         printer=PRINTER
-        requested=b"skirts = 2\nbrim_width = 3\n"
+        requested=b"layer_height = 0.2\nskirts = 2\nbrim_width = 3\n"
         with self.assertRaisesRegex(WorkerError,"no verified first-layer"):
             audit_prusa_material_model_gcode(
                 base,project(),printer_ini=printer,tools=[1,2],
