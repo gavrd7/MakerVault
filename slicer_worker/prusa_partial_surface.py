@@ -224,7 +224,13 @@ def audit_prusa_partial_wall_gcode(data, project, *, tool):
             counts[0]["unpainted"] < 8 or
             len(layers[tool]["painted"]) < 3 or
             len(layers[0]["unpainted"]) < 3 or
-            counts[0]["painted"] > 2 or
+            # Genuine Prusa 2.9.7 can lay a small amount of T0 base
+            # foundation on a T1-painted corner (observed 7 vs 64 T1
+            # selected movements). Do not equate this with T1 leakage into
+            # the unpainted mask. Require T0 in the painted region to stay
+            # below 12.5% of selected T1 deposition, with a two-move
+            # edge/junction allowance for small fixtures.
+            counts[0]["painted"] > max(2, counts[tool]["painted"] // 8) or
             counts[tool]["unpainted"] > 2):
         raise WorkerError(
             "Prusa partial-surface colour deposition did not match signed masks "
