@@ -335,6 +335,29 @@ jobs:
             /opt/engine-store/versions/prusaslicer/2.9.7/bin/prusa-slicer \
             /opt/engine-store/versions/prusaslicer/2.9.7/resources/profiles/PrusaResearch.ini
 
+      - name: Research native XL5 independent-head split-wall deposition
+        id: prusa_xl_partial_surface_research
+        # MMU and XL are different material topologies. A passing MMU test
+        # does not automatically qualify a split mask on independent heads.
+        continue-on-error: true
+        run: |
+          set -euo pipefail
+          docker run --rm --network none --user 10001:10001 \
+            -v "$TEST_VOLUME:/opt/engine-store:ro" \
+            -v "$GITHUB_WORKSPACE/backend:/tmp/mv-backend:ro" \
+            -v "$GITHUB_WORKSPACE/scripts:/tmp/scripts:ro" \
+            -v "$GITHUB_WORKSPACE/scripts/prusa_native_xl_partial_wall_smoke.py:/tmp/xl_partial.py:ro" \
+            -e PYTHONPATH=/tmp:/tmp/mv-backend:/opt/makervault-slicer \
+            --entrypoint python3 prusa-integration:smoke \
+            /tmp/xl_partial.py \
+            /opt/engine-store/versions/prusaslicer/2.9.7/bin/prusa-slicer \
+            /opt/engine-store/versions/prusaslicer/2.9.7/resources/profiles/PrusaResearch.ini
+
+      - name: Report unresolved Prusa XL split-wall painting qualification
+        if: ${{ steps.prusa_xl_partial_surface_research.outcome == 'failure' }}
+        run: |
+          echo "::warning title=Prusa XL split-wall paint::Native XL partial-surface deposition remains unqualified; retain complete-wall admission."
+
       - name: Fetch and inspect Prusa's official INDX 2.5.16 profile bundle
         run: |
           set -euo pipefail
