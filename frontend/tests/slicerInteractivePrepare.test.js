@@ -116,9 +116,9 @@ test("advanced tools are visibly gated pending safe native transformations", () 
   assert.match(scene, /name: "Auto-orient", target: "auto_orient", icon: "orient"/);
   for (const group of ["Quality", "Strength", "Speed", "Supports", "Multifilament", "Others"])
     assert.match(scene, new RegExp('"' + group + '"'));
-  assert.match(scene, /PrusaSlicer 2\.9\.7 supports native per-object wall loops and infill density/);
-  assert.match(scene, /!\["wall_loops", "sparse_infill_density"\]\.includes\(key\)/);
-  assert.match(scene, /verifiedObjectSettings = new Set\(\["wall_loops", "sparse_infill_density"\]\)/);
+  assert.match(scene, /PrusaSlicer supports per-object wall loops, top\/bottom shell layers and infill density/);
+  assert.match(scene, /\["top_shell_layers","bottom_shell_layers"\]\.includes\(key\)/);
+  assert.match(scene, /verifiedObjectSettings = new Set\(/);
   assert.match(scene, /Object settings are not yet verified for slicing|Some Object settings are not yet verified for slicing/);
   assert.match(scene, /process_overrides: changed/);
   assert.match(scene, /Clear object overrides/);
