@@ -1063,14 +1063,16 @@ export default function SlicerPrepareWorkspace({
   const prusaPaintedSlots=[...new Set(objects.flatMap(object=>
     object.colour_paint?.regions?.map(region=>region.slot)||[]))];
   const prusaSinglePaint=activeEngine==="prusaslicer" && objects.length===1 &&
-    prusaPaintedSlots.length===1 && prusaNativeTools?.mode==="mmu" &&
+    prusaPaintedSlots.length>=1 && prusaPaintedSlots.length<=2 &&
+    prusaNativeTools?.mode==="mmu" &&
     prusaNativeTools?.model_tools?.length===1 &&
     prusaNativeTools.model_tools[0].instance_id===objects[0].instance_id &&
     prusaNativeTools.model_tools[0].tool===1 &&
-    prusaNativeTools?.colour_tools?.length===1 &&
-    prusaNativeTools.colour_tools[0].slot===prusaPaintedSlots[0] &&
-    prusaNativeTools.colour_tools[0].tool>=2 &&
-    prusaNativeTools.colour_tools[0].tool<=prusaNativeTools.tool_count;
+    prusaNativeTools?.colour_tools?.length===prusaPaintedSlots.length &&
+    prusaPaintedSlots.every(slot=>prusaNativeTools.colour_tools.some(row=>
+      row.slot===slot && row.tool>=2 && row.tool<=prusaNativeTools.tool_count)) &&
+    new Set(prusaNativeTools.colour_tools.map(row=>row.tool)).size===
+      prusaPaintedSlots.length;
   const prusaIndependentTools = ["xl","indx"].includes(prusaNativeTools?.mode);
   const prusaNativeReady = activeEngine === "prusaslicer" && prusaNativeTools != null &&
     prusaNativeTools.version===1 && prusaNativeTools.filament_profile_ids?.length===prusaNativeTools.tool_count &&
