@@ -647,6 +647,61 @@ class PrusaNativeColourProjectTests(TestCase):
                 rewrite(project, "3D/3dmodel.model", forge),
                 research_colour=True)
 
+    def test_horizontal_partial_brush_retains_signed_top_facets(self):
+        from core.slicer_plate_3mf import _triangles
+        from core.slicer_native_support_paint import _fingerprint
+        from slicer_worker.prusa_top_surface import (
+            inspect_prusa_partial_top, audit_prusa_partial_top_gcode)
+        stl, _, _, original = fixture(include_paint=True)
+        faces=list(_triangles(stl))
+        minimum=[min(p[i] for f in faces for p in f) for i in range(3)]
+        maximum=[max(p[i] for f in faces for p in f) for i in range(3)]
+        origin=((minimum[0]+maximum[0])/2,
+                (minimum[1]+maximum[1])/2,minimum[2])
+        local=[[tuple(p[i]-origin[i] for i in range(3)) for p in face]
+               for face in faces]
+        top=maximum[2]-minimum[2]
+        target=next(i for i,face in enumerate(local)
+                    if all(abs(p[2]-top)<.00001 for p in face))
+        a,b,c=local[target]
+        brush=[list(a), [(a[i]+b[i])/2 for i in range(3)],
+               [(a[i]+c[i])/2 for i in range(3)]]
+        paint={**original,"signature":_fingerprint(local),
+               "regions":[{"slot":1,"patches":[{
+                   "face":target,"polygon":brush}]}]}
+        project=self.candidate(source=stl,settings={"colour_paint":paint})
+        signed=inspect_prusa_partial_top(project,1)
+        self.assertAlmostEqual(signed["painted_area_mm2"],50)
+        self.assertAlmostEqual(signed["unpainted_area_mm2"],350)
+        self.assertTrue(signed["painted"])
+        self.assertTrue(signed["unpainted"])
+        with self.assertRaises(WorkerError):
+            inspect_prusa_partial_top(self.candidate(),1)
+        with self.assertRaises(WorkerError):
+            inspect_prusa_partial_top(project,2)
+        # Synthetic motion is contract proof, not native-binary qualification.
+        commands=["G90","M83","G92 E0"]
+        for tool,kind in ((1,"painted"),(0,"unpainted")):
+            triangle=max(signed[kind],key=lambda t:abs(
+                (t[1][0]-t[0][0])*(t[2][1]-t[0][1])-
+                (t[1][1]-t[0][1])*(t[2][0]-t[0][0])))
+            commands.extend([f"T{tool}",";TYPE:Top solid infill"])
+            for i in range(30):
+                weights=(.2+(i%3)*.05,.3+(i%4)*.02)
+                w=1-weights[0]-weights[1]
+                x=sum(a*v[0] for a,v in zip((*weights,w),triangle))
+                y=sum(a*v[1] for a,v in zip((*weights,w),triangle))
+                commands.extend([
+                    f"G0 X{x-.002:.6f} Y{y:.6f} Z{signed['z_top']:.5f}",
+                    f"G1 X{x+.002:.6f} Y{y:.6f} E.04"])
+        simulated=("\\n".join(commands)+"\\n").encode()
+        actual=audit_prusa_partial_top_gcode(simulated,project,tool=1)
+        self.assertEqual(actual["top_deposition_moves"][1]["painted"],30)
+        self.assertEqual(actual["top_deposition_moves"][0]["unpainted"],30)
+        with self.assertRaises(WorkerError):
+            audit_prusa_partial_top_gcode(
+                simulated.replace(b"T1",b"T0"),project,tool=1)
+
     def test_source_fingerprint_must_match(self):
         stl, *_ = fixture()
         # Change actual facet vertex geometry, not the unused STL normal.
