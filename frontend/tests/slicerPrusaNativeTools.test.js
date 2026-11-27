@@ -78,7 +78,7 @@ test("Eight native INDX tools are configurable without MMU purge/tower dependenc
   assert.match(editor,/profileToolCount \? \[\.\.\.new Set\(\[value\.tool_count, profileToolCount\]\)\]/);
   assert.match(editor,/value\.mode!=="mmu"/);
   assert.match(prepare,/prusaNativeTools\.mode\) && !primeTower/);
-  assert.match(prepare,/objects\.length<=12/);
+  assert.match(prepare,/objects\.length<=200/);
 });
 
 test("MMU, XL and INDX map native modifier and variable layer regions",()=>{
