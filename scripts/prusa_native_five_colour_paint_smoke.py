@@ -158,7 +158,11 @@ def main(binary, vendor):
                         if not math.isfinite(value) or abs(value)>1e9:
                             outliers.append((number,key,len(word),
                                              "nonfinite" if not math.isfinite(value)
-                                             else "out-of-range"))
+                                             else "out-of-range",
+                                             "scientific" if "e" in word.lower()
+                                             else "decimal",
+                                             int(math.log10(abs(value))) if
+                                             math.isfinite(value) and value else None))
                         if len(outliers)>=8: break
                     if len(outliers)>=8: break
                 print("Prusa synthetic MMU colour numeric rejection",
@@ -255,7 +259,11 @@ def main(binary, vendor):
                         invalid.append((lineno,opcode.decode(),axis,
                                         len(number),
                                         "nonfinite" if not math.isfinite(value)
-                                        else "out-of-range"))
+                                        else "out-of-range",
+                                        "scientific" if "e" in number.lower()
+                                        else "decimal",
+                                        int(math.log10(abs(value))) if
+                                        math.isfinite(value) and value else None))
                         if len(invalid)>=8: break
                 if len(invalid)>=8: break
             print("Prusa synthetic dual-swatch numeric audit rejection",
