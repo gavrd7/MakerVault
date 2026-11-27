@@ -4,7 +4,7 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 
 from slicer_worker.prusa_gcode_audit import (audit_prusa_positive_e,
-    run_prusa_painted_with_numeric_recheck)
+    run_prusa_mmu_with_numeric_recheck)
 from slicer_worker.runner import WorkerError
 
 
@@ -76,7 +76,7 @@ class PrusaGcodeAuditTests(TestCase):
                 attempts.append(payload)
                 (folder / "output.gcode").write_bytes(payload)
                 return {"bytes": len(payload)}
-            receipt, gcode = run_prusa_painted_with_numeric_recheck(
+            receipt, gcode = run_prusa_mmu_with_numeric_recheck(
                 runner, Path("native"), folder, timeout_seconds=20,
                 max_bytes=1024*1024)
             self.assertEqual(receipt["bytes"], len(valid))
@@ -96,7 +96,7 @@ class PrusaGcodeAuditTests(TestCase):
                 (folder / "output.gcode").write_bytes(bad)
                 return {"bytes": len(bad)}
             with self.assertRaisesRegex(WorkerError, "invalid coordinates"):
-                run_prusa_painted_with_numeric_recheck(
+                run_prusa_mmu_with_numeric_recheck(
                     runner, Path("native"), folder, timeout_seconds=20,
                     max_bytes=1024*1024)
             self.assertEqual(count, 3)
@@ -113,7 +113,7 @@ class PrusaGcodeAuditTests(TestCase):
                         (folder / "output.gcode").write_bytes(invalid)
                         return {"bytes":len(invalid)}
                     with self.assertRaises(WorkerError):
-                        run_prusa_painted_with_numeric_recheck(
+                        run_prusa_mmu_with_numeric_recheck(
                             runner, Path("native"), folder,
                             timeout_seconds=20, max_bytes=1024*1024)
                     self.assertEqual(len(attempts),1)
@@ -128,7 +128,7 @@ class PrusaGcodeAuditTests(TestCase):
                 (folder / "output.gcode").write_bytes(self.gcode())
                 return {"bytes": len(self.gcode())}
             with self.assertRaisesRegex(WorkerError, "size limit"):
-                run_prusa_painted_with_numeric_recheck(
+                run_prusa_mmu_with_numeric_recheck(
                     runner, Path("native"), folder,
                     timeout_seconds=20, max_bytes=2000)
             self.assertEqual(count,1)
