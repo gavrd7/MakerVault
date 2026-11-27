@@ -181,12 +181,12 @@ def audit_prusa_offline_colour_gcode(data, project, *, printer_ini, tool, tower)
 
 
 def _two_painted_wall_regions(project, tools):
-    """Require two complete disjoint native-painted opposite walls in one 3MF.
+    """Qualify complete opposing native painted walls on either XY axis.
 
-    This deliberately does NOT admit arbitrary patches, side faces or XL.
-    Tool identities come from the independent 3MF validator, not browser
-    swatch labels. All model-facing triangles on the two opposite walls
-    must have the matching exact unsplit Prusa TriangleSelector state.
+    The two selected tools must cover every triangle of opposite outer
+    vertical walls, with no painted triangles anywhere else. Regions are
+    derived from authenticated 3MF vertices, never the browser's swatch order.
+    Returned "front"/"back" are the negative/positive axis walls.
     """
     if (not isinstance(tools,(tuple,list)) or len(tools)!=2 or
             any(type(t) is not int or not 1<=t<=7 for t in tools) or
@@ -206,38 +206,57 @@ def _two_painted_wall_regions(project, tools):
                 any(not all(math.isfinite(v) and abs(v)<2000 for v in p)
                     for p in points)):
             raise ValueError()
-        ylo=min(p[1] for p in points)
-        yhi=max(p[1] for p in points)
-        if yhi-ylo<4:
-            raise ValueError()
-        sides={"front":(ylo,tools[0]),"back":(yhi,tools[1])}
-        coverage={"front":[], "back":[]}
+        face_data=[]
         for face in faces:
             verts=[points[int(face.get(k))] for k in ("v1","v2","v3")]
-            state=face.get(PAINT)
-            side=next((name for name,(y,_tool) in sides.items()
-                       if all(abs(p[1]-y)<.0001 for p in verts)),None)
-            if side is None:
-                if state is not None:
-                    raise ValueError()
+            face_data.append((verts,face.get(PAINT)))
+        states={key:next(name for name,value in PAINTED_STATES.items()
+                         if value==tool)
+                for key,tool in zip(("front","back"),tools)}
+        qualified=[]
+        for axis in (1,0):
+            lo=min(p[axis] for p in points)
+            hi=max(p[axis] for p in points)
+            if hi-lo<=4:
                 continue
-            if state != next(key for key,value in PAINTED_STATES.items()
-                             if value==sides[side][1]):
-                raise ValueError()
-            coverage[side].extend(verts)
-        regions={}
-        for side, vertices in coverage.items():
-            if not vertices:
-                raise ValueError()
-            xs=[p[0] for p in vertices]
-            zs=[p[2] for p in vertices]
-            if max(xs)-min(xs)<3 or max(zs)-min(zs)<3:
-                raise ValueError()
-            y=sides[side][0]
-            regions[side]=(min(xs)-1,max(xs)+1,y-2,y+2)
-        if (regions["front"][3]>=regions["back"][2]):
+            coverage={"front":[],"back":[]}
+            valid=True
+            for verts,state in face_data:
+                side=("front" if all(abs(p[axis]-lo)<.0001 for p in verts)
+                      else "back" if all(abs(p[axis]-hi)<.0001 for p in verts)
+                      else None)
+                if side is None:
+                    if state is not None:
+                        valid=False
+                        break
+                    continue
+                if state != states[side]:
+                    valid=False
+                    break
+                coverage[side].extend(verts)
+            if not valid or not all(coverage.values()):
+                continue
+            tangent=1-axis
+            regions={}
+            for side,verts in coverage.items():
+                ts=[p[tangent] for p in verts]
+                zs=[p[2] for p in verts]
+                if max(ts)-min(ts)<3 or max(zs)-min(zs)<3:
+                    valid=False
+                    break
+                across=lo if side=="front" else hi
+                span=(min(ts)-1,max(ts)+1)
+                plane=(across-2,across+2)
+                regions[side]=(*plane,*span) if axis==0 else (*span,*plane)
+            if not valid:
+                continue
+            if (regions["front"][1]>=regions["back"][0] if axis==0
+                    else regions["front"][3]>=regions["back"][2]):
+                continue
+            qualified.append(regions)
+        if len(qualified)!=1:
             raise ValueError()
-        return regions
+        return qualified[0]
     except (OSError, ValueError, TypeError, IndexError, KeyError,
             StopIteration, zipfile.BadZipFile, OverflowError, AttributeError):
         raise WorkerError("Prusa multi-swatch native facets are not two complete opposite walls.") from None
