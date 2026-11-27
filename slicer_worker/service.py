@@ -310,7 +310,8 @@ def _decode_payload(payload):
                else {"tool":details["tool"]}),tower=details["tower"])
         files["prusa_offline_colour"]={
             **({"tools":receipt["tools"]} if "tools" in receipt
-               else {"tool":receipt["tool"]}),"tower":receipt["tower"]}
+               else {"tool":receipt["tool"]}),"tower":receipt["tower"],
+            "partial_wall":receipt["partial_wall"]}
     if "creality_model_stls" in payload:
         if (payload["engine"] != "crealityprint" or model_format != "stl" or
                 "filament_profiles" not in files):
@@ -528,6 +529,11 @@ class Handler(BaseHTTPRequestHandler):
                         audit_prusa_dual_colour_gcode(
                             data,files["model"],printer_ini=files["printer_profile"],
                             tools=details["tools"],tower=details["tower"])
+                    elif details.get("partial_wall"):
+                        from .prusa_partial_surface import audit_prusa_partial_wall_gcode
+                        audit_prusa_partial_wall_gcode(
+                            data, files["model"], tool=details["tool"],
+                            tower=details["tower"])
                     else:
                         audit_prusa_offline_colour_gcode(
                             data,files["model"],printer_ini=files["printer_profile"],
