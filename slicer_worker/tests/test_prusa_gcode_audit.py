@@ -1,7 +1,10 @@
 """Security and positive-material evidence for the Prusa-only native G-code gate."""
 from unittest import TestCase
+from pathlib import Path
+from tempfile import TemporaryDirectory
 
-from slicer_worker.prusa_gcode_audit import audit_prusa_positive_e
+from slicer_worker.prusa_gcode_audit import (audit_prusa_positive_e,
+    run_prusa_painted_with_numeric_recheck)
 from slicer_worker.runner import WorkerError
 
 
@@ -56,3 +59,75 @@ class PrusaGcodeAuditTests(TestCase):
         with self.assertRaises(WorkerError) as ctx:
             audit_prusa_positive_e(payload)
         self.assertNotIn("private-preset-marker", str(ctx.exception))
+
+
+    def test_painted_mmu_numeric_overflow_retry_discards_corrupt_output(self):
+        invalid = self.gcode().replace(b"Y50", b"Y99999999999999")
+        valid = self.gcode()
+        with TemporaryDirectory() as temporary:
+            folder = Path(temporary)
+            attempts = []
+            def runner(_binary, workdir, *, timeout_seconds):
+                self.assertEqual(workdir, folder)
+                self.assertEqual(timeout_seconds, 20)
+                self.assertFalse((folder / "output.gcode").exists())
+                payload = invalid if not attempts else valid
+                attempts.append(payload)
+                (folder / "output.gcode").write_bytes(payload)
+                return {"bytes": len(payload)}
+            receipt, gcode = run_prusa_painted_with_numeric_recheck(
+                runner, Path("native"), folder, timeout_seconds=20,
+                max_bytes=1024*1024)
+            self.assertEqual(receipt["bytes"], len(valid))
+            self.assertEqual(gcode, valid)
+            self.assertEqual(len(attempts), 2)
+            self.assertEqual(audit_prusa_positive_e(gcode)["positive_e_moves"], 32)
+
+    def test_repeated_native_numeric_overflow_fails_closed_after_three_attempts(self):
+        bad = self.gcode().replace(b"Y50", b"Y99999999999999")
+        with TemporaryDirectory() as temporary:
+            folder = Path(temporary)
+            count = 0
+            def runner(_binary, workdir, *, timeout_seconds):
+                nonlocal count
+                count += 1
+                self.assertFalse((folder / "output.gcode").exists())
+                (folder / "output.gcode").write_bytes(bad)
+                return {"bytes": len(bad)}
+            with self.assertRaisesRegex(WorkerError, "invalid coordinates"):
+                run_prusa_painted_with_numeric_recheck(
+                    runner, Path("native"), folder, timeout_seconds=20,
+                    max_bytes=1024*1024)
+            self.assertEqual(count, 3)
+
+    def test_painted_mmu_does_not_retry_other_unsafe_gcode(self):
+        for invalid in (self.gcode()+b"\\x00", self.gcode()[:100],
+                        self.gcode() + b"\\xff"):
+            with self.subTest(case=len(invalid)):
+                with TemporaryDirectory() as temporary:
+                    folder=Path(temporary)
+                    attempts=[]
+                    def runner(_binary, workdir, *, timeout_seconds):
+                        attempts.append(True)
+                        (folder / "output.gcode").write_bytes(invalid)
+                        return {"bytes":len(invalid)}
+                    with self.assertRaises(WorkerError):
+                        run_prusa_painted_with_numeric_recheck(
+                            runner, Path("native"), folder,
+                            timeout_seconds=20, max_bytes=1024*1024)
+                    self.assertEqual(len(attempts),1)
+
+    def test_painted_mmu_never_retries_oversized_native_output(self):
+        with TemporaryDirectory() as temporary:
+            folder=Path(temporary)
+            count=0
+            def runner(_binary, workdir, *, timeout_seconds):
+                nonlocal count
+                count+=1
+                (folder / "output.gcode").write_bytes(self.gcode())
+                return {"bytes": len(self.gcode())}
+            with self.assertRaisesRegex(WorkerError, "size limit"):
+                run_prusa_painted_with_numeric_recheck(
+                    runner, Path("native"), folder,
+                    timeout_seconds=20, max_bytes=2000)
+            self.assertEqual(count,1)
