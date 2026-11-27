@@ -33,8 +33,8 @@ export default function PrusaNativeToolEditor({
   const profileMode = printerTopology?.kind==="single_nozzle_changer" ? "mmu"
     : printerTopology?.kind==="indx" ? "indx"
     : printerTopology?.kind==="independent_tools" ? "xl" : null;
-  const profileMatches = !profileToolCount ||
-    (value?.tool_count===profileToolCount && (!profileMode || value.mode===profileMode));
+  const profileMatches = !!profileToolCount && !!profileMode &&
+    value?.tool_count===profileToolCount && value.mode===profileMode;
   const profiles=profileChoices.filter(profile=>profile?.kind==="filament" &&
     profile.engine==="prusaslicer" && profile.engine_version===engineVersion);
   const updateTower=(axis,raw)=>{
