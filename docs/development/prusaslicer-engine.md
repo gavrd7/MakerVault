@@ -1,3 +1,20 @@
+### 27 November — INDX owner-profile parser compatibility
+
+Reviewed upstream INDX vendor presets may include native conditional
+values larger than 16 KiB. The owner-bound Prusa parser now applies the
+same 64 KiB **per-value** boundary as the isolated vendor flattener,
+while retaining the 1 MiB total file bound, SHA-256 integrity checks,
+owned-asset requirement, executable/include rejection, exact keys,
+duplicate-key checks and plain-text G-code requirement. Regression tests
+exercise valid extended toolchange fields, tampered stored hashes,
+oversized literals and forbidden executable directives.
+
+This fixes import-to-job parity but cannot prove that the physical INDX
+toolhead changes, heats or extrudes correctly. The pinned genuine 2.9.7
+native smoke remains mandatory.
+
+---
+
 ### 27 November — native XL independent-head regional feature parity
 
 The five-head XL worker/project path now carries the same typed object-local
