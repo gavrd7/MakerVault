@@ -2,7 +2,8 @@
 import unittest
 
 from core.slicer_prusa_seam_audit import (
-    audit_prusa_seam_enforcer_gcode, validate_prusa_front_seam_candidate,
+    audit_prusa_seam_enforcer_gcode, audit_prusa_multi_object_seam_gcode,
+    validate_prusa_front_seam_candidate,
 )
 from core.slicer_prusa_3mf import validate_prusa_project_admission
 from scripts.prusa_generate_mmu_paint import fixture
@@ -52,6 +53,44 @@ class PrusaFrontSeamWorkBenchGateTests(unittest.TestCase):
         row = self.front()
         self.assertEqual(validate_prusa_front_seam_candidate(row)["version"], 2)
         self.assertFalse(validate_prusa_project_admission([row], {}, "2.9.7"))
+
+    def test_multi_object_seam_audits_each_selected_model_not_first_plate_wall(self):
+        mesh,*_=fixture(include_paint=True)
+        models=[]
+        for index,(x,y) in enumerate(
+                (point for ypos in (-55,0,55)
+                 for point in ((x,ypos) for x in (-90,-45,0,45,90)))):
+            item={"asset_id":f"seam-{index}","x_mm":x,"y_mm":y,
+                  "z_mm":0,"rotation_deg":0,"scale_percent":100}
+            if index in (7,8):
+                item["seam_paint"]=self.front()["seam_paint"]
+            models.append((item,mesh))
+        self.assertFalse(validate_prusa_project_admission(
+            [item for item,_ in models],{},"2.9.7"))
+        def output(second_wrong=False):
+            lines=["M83","G90"]
+            for layer in range(1,14):
+                lines.append(";LAYER_CHANGE")
+                for index in (7,8):
+                    cx=125+models[index][0]["x_mm"]
+                    cy=105+models[index][0]["y_mm"]
+                    y=cy+(9.78 if second_wrong and index==8 else -9.78)
+                    lines.extend([f"G0 X{cx-9.78:.2f} Y{y:.2f} Z{layer+.5:.2f}",
+                                  ";TYPE:External perimeter",
+                                  f"G1 X{cx-9.48:.2f} Y{y:.2f} E.03"])
+            return ("\n".join(lines)+"\n").encode()
+        approved=audit_prusa_multi_object_seam_gcode(
+            output(),models,bed_width=250,bed_depth=210)
+        self.assertEqual(approved["painted_model_indices"],[7,8])
+        self.assertEqual(approved["sampled_layers"],{7:13,8:13})
+        self.assertEqual(approved["matching_layers"],{7:13,8:13})
+        with self.assertRaisesRegex(ValueError,"selected face"):
+            audit_prusa_multi_object_seam_gcode(
+                output(second_wrong=True),models,bed_width=250,bed_depth=210)
+        with self.assertRaises(ValueError):
+            audit_prusa_multi_object_seam_gcode(
+                output(),models+[models[0]]*186,
+                bed_width=250,bed_depth=210)
 
     def test_unqualified_seam_face_or_combination_is_rejected(self):
         for change in (
