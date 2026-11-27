@@ -77,6 +77,67 @@ class PrusaNativeColourProjectTests(TestCase):
         with self.assertRaisesRegex(WorkerError,"unqualified painted surface"):
             _wall_regions(result,1)
 
+    def test_arbitrary_partial_triangle_mask_is_preserved_without_painting_neighbours(self):
+        """An actual brush-sized patch must become a split native ModelPart.
+
+        This is a serialization/worker-structure proof, *not* a claim that
+        Prusa's G-code deposits the chosen tool only inside the brush mask.
+        The strict whole-wall motion auditor must still refuse this project.
+        """
+        from core.slicer_plate_3mf import _triangles
+        from core.slicer_native_support_paint import _fingerprint
+        from slicer_worker.prusa_colour_gcode_audit import _wall_regions
+
+        stl, _, _, original = fixture(include_paint=True)
+        faces = list(_triangles(stl))
+        low = [min(p[axis] for face in faces for p in face) for axis in range(3)]
+        high = [max(p[axis] for face in faces for p in face) for axis in range(3)]
+        origin = ((low[0] + high[0]) / 2,
+                  (low[1] + high[1]) / 2, low[2])
+        local = [[tuple(p[axis] - origin[axis] for axis in range(3))
+                  for p in face] for face in faces]
+        target = original["regions"][0]["patches"][0]["face"]
+        a, b, c = local[target]
+        halfway_ab = [(a[axis] + b[axis]) / 2 for axis in range(3)]
+        halfway_ac = [(a[axis] + c[axis]) / 2 for axis in range(3)]
+        partial = {
+            **original,
+            "signature": _fingerprint(local),
+            "regions": [{
+                "slot": 1,
+                "patches": [{
+                    "face": target,
+                    "polygon": [list(a), halfway_ab, halfway_ac],
+                }],
+            }],
+        }
+        project = self.candidate(
+            source=stl, settings={"colour_paint": partial})
+        with zipfile.ZipFile(io.BytesIO(project)) as archive:
+            model = SafeET.fromstring(archive.read("3D/3dmodel.model"))
+            config = SafeET.fromstring(
+                archive.read("Metadata/Slic3r_PE_model.config"))
+        triangles = model.findall(
+            "./" + NS + "resources/" + NS + "object/" + NS +
+            "mesh/" + NS + "triangles/" + NS + "triangle")
+        modelpart = config.find("./object/volume")
+        self.assertEqual(int(modelpart.get("lastid")) + 1, len(triangles))
+        # Clipping divides this original triangle into a painted corner and
+        # remaining plain cells; every other source face stays unpainted.
+        self.assertGreater(len(triangles), len(faces))
+        painted = [face for face in triangles
+                   if face.get("slic3rpe:mmu_segmentation") == "8"]
+        plain = [face for face in triangles
+                 if face.get("slic3rpe:mmu_segmentation") is None]
+        self.assertTrue(painted)
+        self.assertGreaterEqual(len(plain), len(faces) - 1)
+        receipt = validate_prusa_material_candidate(
+            project, printer_ini=ini("0.4,0.4,0.4,0.4,0.4", "1"),
+            colour=True)
+        self.assertEqual(receipt["tools"], (1, 2))
+        with self.assertRaisesRegex(WorkerError, "unqualified painted surface"):
+            _wall_regions(project, 1)
+
     def test_two_distinct_wall_colours_retain_three_independent_native_tools(self):
         from core.slicer_plate_3mf import _triangles
         from core.slicer_native_support_paint import _fingerprint
