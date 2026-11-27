@@ -227,9 +227,16 @@ def validate_prusa_project_admission(plate, settings, version):
         total += len(volumes)
         if total > MAX_TOTAL_MODIFIERS:
             raise ValueError("Prusa native modifier count exceeds the limit.")
+        # The pinned mixed-object spatial fixture separately verifies a
+        # parameter modifier on one model and a process override on another.
+        # The same-model stack, and negative cavities mixed with Object
+        # settings, still need their own native deposition qualification.
         if len(plate) > 1 and volumes and any(model.get("process_overrides")
-                                                for model in plate):
-            raise ValueError("Multi-object native modifiers combined with object settings are unverified.")
+                                                for model in plate) and (
+                overrides or any(v["kind"] == "negative" for v in volumes)):
+            raise ValueError(
+                "Native per-object overrides cannot share a modifier model or "
+                "mix with negative cavities without separate G-code proof.")
         for volume in volumes:
             if volume["id"] in seen:
                 raise ValueError("Duplicate Prusa native volume identity.")
