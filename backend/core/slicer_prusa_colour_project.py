@@ -35,13 +35,24 @@ def build_prusa_colour_candidate(item, source, *, printer_ini, colour_tool_indic
             apply_prusa_process_overrides(BASE,object_settings)
         except (ValueError,TypeError,OverflowError) as exc:
             raise SlicerProfileError("Invalid native Prusa painted Object setting.") from exc
+    from .slicer_modifier_volumes import validate_modifier_volumes
+    try:
+        typed=validate_modifier_volumes(
+            item.get("modifier_volumes") if isinstance(item,dict) else None)
+    except (ValueError,TypeError) as exc:
+        raise SlicerProfileError("Invalid painted native modifier geometry.") from exc
+    if typed and (len(typed)!=1 or typed[0]["kind"]!="modifier" or
+                  typed[0]["shape"]!="box" or
+                  set(typed[0]["settings"])!={"sparse_infill_density"}):
+        raise SlicerProfileError(
+            "This Prusa painted/modifier pairing requires one native box infill region.")
     if (not 2 <= count <= 8 or not isinstance(item, dict)
             or not isinstance(source, bytes)
             or not isinstance(colour_tool_indices, dict)
             or not colour_tool_indices
             or any(type(k) is not int or type(v) is not int or not 1 <= v <= 7 or not v < count
                    for k,v in colour_tool_indices.items())
-            or any(item.get(k) for k in ("modifier_volumes","negative_volumes",
+            or any(item.get(k) for k in ("negative_volumes",
                    "variable_layer_profile","support_paint",
                    "seam_paint","fuzzy_skin_paint","material_slot"))):
         raise SlicerProfileError("Unsupported Prusa native colour candidate.")
@@ -81,9 +92,19 @@ def build_prusa_colour_candidate(item, source, *, printer_ini, colour_tool_indic
                 header.text = "2"
                 root.insert(list(root).index(resources),header)
                 faces = root.findall("./"+m+"resources/"+m+"object/"+m+"mesh/"+m+"triangles/"+m+"triangle")
-                if len(faces) != len(states):
-                    raise SlicerProfileError("Prusa colour facet count changed.")
-                for face,state in zip(faces,states):
+                # The printable ModelPart is first; native typed volumes
+                # append their own triangles after it. Painted source facet
+                # states must never spill onto non-printing modifier meshes.
+                config=SafeET.fromstring(
+                    src.read("Metadata/Slic3r_PE_model.config"))
+                model_part=config.find("./object/volume")
+                if (model_part is None or
+                        model_part.get("firstid")!="0" or
+                        model_part.get("lastid")!=str(len(states)-1) or
+                        (len(faces)>len(states))!=bool(typed) or
+                        len(faces)<len(states)):
+                    raise SlicerProfileError("Prusa painted ModelPart face boundaries changed.")
+                for face,state in zip(faces[:len(states)],states):
                     if state is not None:
                         face.set("slic3rpe:mmu_segmentation",state)
                 data = ET.tostring(root,encoding="utf-8",xml_declaration=True)
