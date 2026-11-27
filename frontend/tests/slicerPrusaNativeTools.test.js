@@ -81,6 +81,8 @@ test("independent XL and INDX heads enable local native modifiers and variable l
   assert.match(prepare,/\(object\.modifier_volumes\?\.length \|\| object\.variable_layer_profile\?\.bands\?\.length\) &&/);
   assert.match(prepare,/!prusaIndependentTools/);
   assert.match(prepare,/"top_shell_layers","bottom_shell_layers"\]\.includes\(key\)/);
+  assert.match(prepare,/Prusa MMU\/XL\/INDX supports Object walls, top\/bottom shells/);
+  assert.match(prepare,/const prusaUnsupportedObjectKeys/);
   assert.match(prepare,/object\.negative_volumes\?\.length/);
   assert.match(prepare,/object\.support_paint\?\.regions\?\.length/);
   assert.match(prepare,/object\.seam_paint\?\.regions\?\.length/);
