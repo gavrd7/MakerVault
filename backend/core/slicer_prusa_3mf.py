@@ -245,7 +245,26 @@ def validate_prusa_project_admission(plate, settings, version):
                 raise ValueError("Prusa negative volumes require independent plate coordinates.")
     if total and any((row.get("variable_layer_profile") or {}).get("bands")
                      for row in plate):
-        raise ValueError("Native Prusa modifier and variable-layer combinations need separate G-code proof.")
+        # Qualification for the combined native 3MF is deliberately narrower
+        # than the independent modifier or layer-height features: one model,
+        # one sparse-infill box modifier, one variable-Z band and no other
+        # mixed editing. The mandatory pinned CLI tests independently prove
+        # the modified region's positive-E deposition and the Z-step schedule.
+        entry = plate[0] if len(plate) == 1 else {}
+        mixed = validate_modifier_volumes(entry.get("modifier_volumes"))
+        bands = (entry.get("variable_layer_profile") or {}).get("bands") or []
+        if not (len(plate) == 1 and total == 1 and len(mixed) == 1
+                and mixed[0]["kind"] == "modifier"
+                and mixed[0]["shape"] == "box"
+                and set(mixed[0]["settings"]) == {"sparse_infill_density"}
+                and len(bands) == 1
+                and not entry.get("process_overrides")
+                and not any((entry.get(k) or {}).get("regions") for k in
+                            ("support_paint", "seam_paint", "fuzzy_skin_paint",
+                             "colour_paint"))):
+            raise ValueError(
+                "Only one independent box infill modifier with one Prusa "
+                "variable-layer band has combined native G-code proof.")
     # Bounded native layer config ranges are a separate, upstream Prusa XML
     # feature, already checked against actual Prusa 2.9.7 Z steps.
     prusa_layer_config_ranges([(row, b"") for row in plate])
