@@ -90,7 +90,7 @@ export default function PrusaNativeToolEditor({
       ? value.model_tools[0]?.tool===1 &&
         value.colour_tools?.length===paintedSlots.length &&
         paintedSlots.every(slot=>value.colour_tools.some(row=>
-          row.slot===slot && row.tool>=2 && row.tool<=Math.min(value.tool_count,5))) &&
+          row.slot===slot && row.tool>=2 && row.tool<=Math.min(value.tool_count,8))) &&
         new Set(value.colour_tools.map(row=>row.tool)).size===paintedSlots.length
       : new Set(value.model_tools.map(row=>row.tool)).size>=2 &&
         !(value.colour_tools||[]).length) &&
@@ -201,15 +201,17 @@ export default function PrusaNativeToolEditor({
         <p className="projectUploadHint">Native Prusa surface colour: MMU accepts
           one front-wall swatch or two distinct complete opposing wall colours
           with an isolated wipe tower. Independent Prusa XL accepts one
-          front-wall swatch with T0 base and a different native head, without
-          MMU purging. Other painted geometry remains unsupported.</p>
+          front-wall swatch with T0 base and independently mapped T1–T7 painted heads (as
+          supported by the selected printer), without MMU purging.
+          Complete opposite-wall swatches are supported; arbitrary painted
+          geometry is not yet qualified.</p>
         {paintedSlots.map(slot=><label key={slot} style={{display:"block",marginBottom:8}}>
           Painted swatch {slot} — native Prusa tool
           <select disabled={disabled} value={(value.colour_tools||[]).find(
               row=>row.slot===slot)?.tool||""}
             onChange={e=>updateColour(slot,e.target.value)}>
             <option value="">Choose a painted tool…</option>
-            {Array.from({length:Math.min(value.tool_count-1,4)},(_,i)=>i+2).map(tool=>
+            {Array.from({length:Math.min(value.tool_count-1,7)},(_,i)=>i+2).map(tool=>
               <option key={tool} value={tool}>T{tool-1} (native tool {tool})</option>)}
           </select>
         </label>)}
