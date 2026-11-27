@@ -433,6 +433,13 @@ test("printer submissions from every slicer engine return to the existing G-code
   assert.match(printerHandler, /onSubmissionDispatched=\{receipt =>/);
   assert.match(printerHandler, /live start is not yet verified/);
   assert.match(printerHandler, /receipt\.request_id/);
+  assert.match(printerHandler, /setPendingPrintStart\(\{/);
+  assert.match(printerHandler, /connectionId: printSelection\.connectionId/);
+  assert.match(workbench, /const \[pendingPrintStart, setPendingPrintStart\] = useState\(null\)/);
+  assert.match(workbench, /encodeURIComponent\(requestId\)/);
+  assert.match(workbench, /const response = await apiFetch/);
+  assert.match(workbench, /setNotice\("Print start verified against the printer's live job/);
+  assert.match(workbench, /The start command was not resent/);
   assert.match(workbench, /<PrinterStartGcodeModal/);
   assert.match(printer, /isConfirmedSubmission\(result\.submission, operation\)/);
   assert.match(printer, /onSubmissionConfirmed\?\.\(updated\)/);
