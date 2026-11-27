@@ -137,7 +137,7 @@ def validate_prusa_native_3mf(data):
             name = header.get("name")
             _require(name in PAINT_HEADERS.values() and name not in declared_paints)
             declared_paints.add(name)
-        _require(not resources.attrib and not build.attrib and 1 <= len(resources) <= 12
+        _require(not resources.attrib and not build.attrib and 1 <= len(resources) <= 200
                  and len(build) == len(resources))
         _require(config.tag == "config" and not config.attrib and len(config) == len(resources))
         count = 0
