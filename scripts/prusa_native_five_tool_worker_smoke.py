@@ -149,15 +149,15 @@ def main(binary,vendor):
               receipt,"sha256",hashlib.sha256(output).hexdigest(),flush=True)
 
         # More objects than MMU bays: each of the five real logical tools
-        # must independently deposit inside two distinct object footprints.
+        # must independently deposit inside three distinct object footprints.
         # Never extrapolate the machine's actual five native material tools.
         repeated_rows=[]
-        for row_index, y_mm in enumerate((-43, 17)):
+        for row_index, y_mm in enumerate((-73, -43, 17)):
             for index, x_mm in enumerate((-90, -45, 0, 45, 90)):
                 obj=item(x_mm=x_mm,y_mm=y_mm)
                 obj["asset_id"]=f"mmu-repeat-{row_index}-{index}"
                 repeated_rows.append((obj,cube(size=8)))
-        repeated_tools=list(range(1,6))*2
+        repeated_tools=list(range(1,6))*3
         repeated_project,_=build_prusa_multitool_candidate(
             repeated_rows,printer_ini=printer,tools=repeated_tools,
             bed_width=250,bed_depth=210)
@@ -167,7 +167,7 @@ def main(binary,vendor):
         from slicer_worker.prusa_material_validation import validate_prusa_material_candidate
         validated=validate_prusa_material_candidate(
             repeated_project,printer_ini=printer,tools=repeated_tools,tower=tower)
-        assert validated["objects"]==10
+        assert validated["objects"]==15
         repeated_payload={**candidate,"model":encode(repeated_project),
                           "prusa_offline_mmu":{"tools":repeated_tools,"tower":tower}}
         assert _decode_payload(repeated_payload)["prusa_offline_mmu"]["tools"]==repeated_tools
@@ -179,11 +179,11 @@ def main(binary,vendor):
         repeated_receipt=audit_prusa_material_model_gcode(
             repeated_gcode,repeated_project,printer_ini=printer,
             tools=repeated_tools,tower=tower)
-        assert len(repeated_receipt["correct_extrusion_moves"])==10
+        assert len(repeated_receipt["correct_extrusion_moves"])==15
         assert min(repeated_receipt["correct_extrusion_moves"])>=20
-        assert repeated_receipt["incorrect_extrusion_moves"]==[0]*10
+        assert repeated_receipt["incorrect_extrusion_moves"]==[0]*15
         assert len(repeated_receipt["tower_extrusion_moves"])==5
-        print("PASS: ten Prusa MMU models repeat five native tools with audited deposition",
+        print("PASS: fifteen Prusa MMU models repeat five native tools with audited deposition",
               repeated_receipt,"sha256",hashlib.sha256(repeated_gcode).hexdigest(),flush=True)
 
         # Diagnose the shared native mapping independently for modifiers,
