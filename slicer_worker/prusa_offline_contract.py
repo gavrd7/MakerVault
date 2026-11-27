@@ -155,3 +155,35 @@ def validate_prusa_offline_colour_inputs(*, project, printer, filament, process,
         _wall_regions(project,tool)
     return {**({"tools":list(selected)} if dual else {"tool":tool}),
             "tower":tower, "offline_only":True}
+
+
+def validate_prusa_offline_xl_colour_inputs(*, project, printer, filament, process, tool):
+    """Strict one-model T0/Tn front-face paint on independent XL toolheads.
+
+    No MMU purge or wipe tower, no INDX profile without native qualification.
+    Worker-supplied bytes are validated independently of owner-side planning.
+    """
+    count, same_nozzle = _qualified_topology(printer)
+    if (same_nozzle or not 2 <= count <= 5 or type(tool) is not int or
+            not 1 <= tool < count):
+        raise WorkerError("Prusa painted XL needs independently configured T0 and one alternate head.")
+    try:
+        material = validate_flat_prusa_preset(filament, kind="filament")
+        settings = validate_flat_prusa_preset(process, kind="print")
+    except PrusaPresetError:
+        raise WorkerError("Prusa painted XL native profiles are invalid.") from None
+    if any(settings.get(key,"0").strip().lower() not in ("0","","false")
+           for key in ("wipe_tower","wipe_into_infill","wipe_into_objects")):
+        raise WorkerError("Prusa XL painting cannot use MMU purging or a wipe tower.")
+    for key in ("temperature","first_layer_temperature"):
+        values=material.get(key,"").split(",")
+        if len(values)!=count or any(not v.isascii() or not v.isdecimal()
+                                     or not 0<=int(v)<=350 for v in values):
+            raise WorkerError("Prusa XL filament temperature vector is invalid.")
+    receipt=validate_prusa_material_candidate(
+        project, printer_ini=printer, colour=True, independent_colour=True)
+    if receipt["objects"]!=1 or receipt["tools"]!=(1,tool+1) or receipt["wipe_tower"]:
+        raise WorkerError("Prusa XL painted model tool mapping changed.")
+    from .prusa_colour_gcode_audit import _wall_regions
+    _wall_regions(project,tool)
+    return {"tool":tool,"offline_only":True,"wipe_tower":False}
