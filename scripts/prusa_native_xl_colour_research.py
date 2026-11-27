@@ -224,6 +224,12 @@ def main(binary, vendor):
             lines=(work/"output.gcode").read_bytes().decode("utf-8").splitlines()
             counts={tool:{idx:0 for idx in range(4)}
                     for tool in range(5)}
+            # Research-only numeric geometry bounds: distinguish an
+            # unsupported four-swatch native flow from an audit coordinate
+            # mismatch before relaxing any production restrictions.
+            extents={tool:[float("inf"),-float("inf"),
+                           float("inf"),-float("inf"),0]
+                     for tool in range(5)}
             active=None
             role=""
             x=y=e=None
@@ -267,6 +273,15 @@ def main(binary, vendor):
                             ) if "E" in values else 0
                     if "E" in values:
                         e=e+values["E"] if relative_e and e is not None else values["E"]
+                    if (active in extents and amount>1e-6 and
+                            op in ("G1","G01") and None not in before and
+                            x is not None and y is not None):
+                        span=extents[active]
+                        span[0]=min(span[0],x,before[0])
+                        span[1]=max(span[1],x,before[0])
+                        span[2]=min(span[2],y,before[1])
+                        span[3]=max(span[3],y,before[1])
+                        span[4]+=1
                     if (active not in counts or "external perimeter" not in role
                             or amount<=1e-6 or op not in ("G1","G01")
                             or None in before or x is None or y is None
@@ -282,7 +297,14 @@ def main(binary, vendor):
                                 180-7<=tangent<=180+7 and
                                 180-7<=old_tangent<=180+7):
                             counts[active][idx]+=1
-            print("FOUR-WALL XL5 NATIVE RESEARCH",counts,flush=True)
+            print("FOUR-WALL XL5 NATIVE RESEARCH",counts,
+                  "extents",{tool:(tuple(round(v,2) for v in extent[:4]),
+                                   extent[4])
+                             for tool,extent in extents.items() if extent[4]},
+                  "role_headers",sum(line.startswith(";TYPE:External perimeter")
+                                     for line in lines),
+                  "gcode_bytes",sum(len(line)+1 for line in lines),
+                  flush=True)
             for idx,(_axis,_plane,tool) in enumerate(sidespec):
                 if counts[tool][idx]<20 or any(
                         counts[other][idx]>2 for other in range(1,5)
