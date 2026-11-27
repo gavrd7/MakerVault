@@ -148,6 +148,46 @@ class PrusaNativeColourProjectTests(TestCase):
             inspect_prusa_partial_wall(self.candidate(), 1)
         with self.assertRaisesRegex(WorkerError, "unqualified painted surface"):
             _wall_regions(project, 1)
+        from slicer_worker.prusa_partial_surface import audit_prusa_partial_wall_gcode
+        # Synthetic motion is only a contract test. Genuine Prusa binary
+        # deposition must separately pass before the worker route is enabled.
+        commands = ["G90", "M83", "G92 E0"]
+        for assigned, kind in ((1, "painted"), (0, "unpainted")):
+            triangles = region[kind]
+            def triangle_area(tri):
+                a, b, c = tri
+                return abs((b[0] - a[0]) * (c[1] - a[1]) -
+                           (b[1] - a[1]) * (c[0] - a[0]))
+            triangle = max(triangles, key=triangle_area)
+            commands.extend([f"T{assigned}", ";TYPE:External perimeter"])
+            for barycentric in ((.2, .3, .5), (.3, .5, .2), (.5, .2, .3)):
+                tangent, z = (
+                    sum(w * vertex[axis] for w, vertex
+                        in zip(barycentric, triangle))
+                    for axis in (0, 1))
+                for _ in range(4):
+                    start = [0.0, 0.0]
+                    end = [0.0, 0.0]
+                    start[region["axis"]] = region["plane"]
+                    end[region["axis"]] = region["plane"]
+                    start[1 - region["axis"]] = tangent - .01
+                    end[1 - region["axis"]] = tangent + .01
+                    commands.append(
+                        f"G0 X{start[0]:.5f} Y{start[1]:.5f} Z{z:.5f}")
+                    commands.append(
+                        f"G1 X{end[0]:.5f} Y{end[1]:.5f} E.02")
+        synthetic = ("\\n".join(commands) + "\\n").encode()
+        audited = audit_prusa_partial_wall_gcode(
+            synthetic, project, tool=1)
+        self.assertEqual(audited["deposition_moves"][1]["painted"], 12)
+        self.assertEqual(audited["deposition_moves"][0]["unpainted"], 12)
+        self.assertTrue(audited["offline_only"])
+        with self.assertRaises(WorkerError):
+            audit_prusa_partial_wall_gcode(
+                synthetic.replace(b"T1", b"T0"), project, tool=1)
+        with self.assertRaises(WorkerError):
+            audit_prusa_partial_wall_gcode(
+                synthetic.replace(b"G1 ", b"G0 "), project, tool=1)
 
     def test_two_distinct_wall_colours_retain_three_independent_native_tools(self):
         from core.slicer_plate_3mf import _triangles
