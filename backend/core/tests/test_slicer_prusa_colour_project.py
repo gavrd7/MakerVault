@@ -545,6 +545,76 @@ class PrusaNativeColourProjectTests(TestCase):
             colour=True)
         self.assertEqual(receipt["tools"], (1, 2))
 
+    def test_research_compound_colour_preserves_all_facet_channels_and_native_volumes(self):
+        """Unqualified research must preserve every requested MakerVault edit.
+
+        This is structural proof only; the regular authenticated colour worker
+        must continue rejecting mixed paint channels pending genuine G-code.
+        """
+        from core.tests.test_slicer_prusa_3mf import volume
+        from slicer_worker.prusa_material_validation import PAINT
+        stl, _, _, colour = fixture(include_paint=True)
+        patch = colour["regions"][0]["patches"][0]
+        def semantic(slot):
+            return {"version": 2, "signature": colour["signature"],
+                    "regions": [{"slot": slot, "patches": [patch]}]}
+        mixed = {
+            "support_paint": semantic(0),
+            "seam_paint": semantic(1),
+            "fuzzy_skin_paint": semantic(0),
+            "process_overrides": {"wall_loops": 4},
+            "modifier_volumes": [
+                volume("modifier", {"sparse_infill_density": 80}),
+                volume("negative"),
+            ],
+        }
+        with self.assertRaises(SlicerProfileError):
+            self.candidate(settings=mixed, source=stl)
+        project = build_prusa_colour_candidate(
+            {"asset_id": "compound-research", "x_mm": 0, "y_mm": 0,
+             "z_mm": 0, "rotation_deg": 0, "scale_percent": 100,
+             "colour_paint": colour, **mixed},
+            stl, printer_ini=ini("0.4,0.4,0.4,0.4,0.4", "0"),
+            colour_tool_indices={1: 1}, bed_width=250, bed_depth=210,
+            research_compound=True)
+        with zipfile.ZipFile(io.BytesIO(project)) as archive:
+            model = SafeET.fromstring(archive.read("3D/3dmodel.model"))
+            config = SafeET.fromstring(
+                archive.read("Metadata/Slic3r_PE_model.config"))
+        headers = {entry.get("name") for entry in model.findall(NS+"metadata")}
+        self.assertTrue({
+            "slic3rpe:MmPaintingVersion",
+            "slic3rpe:FdmSupportsPaintingVersion",
+            "slic3rpe:SeamPaintingVersion",
+            "slic3rpe:FuzzySkinPaintingVersion",
+        }.issubset(headers))
+        model_parts = config.findall("./object/volume")
+        self.assertEqual(len(model_parts), 3)
+        self.assertEqual([item.find("./metadata[@key='volume_type']").get("value")
+                          for item in model_parts],
+                         ["ModelPart", "ParameterModifier", "NegativeVolume"])
+        self.assertEqual(config.find(
+            "./object/metadata[@key='perimeters']").get("value"), "4")
+        faces = model.findall("./"+NS+"resources/"+NS+"object/"+NS+
+                              "mesh/"+NS+"triangles/"+NS+"triangle")
+        endpoint = int(model_parts[0].get("lastid"))
+        prusa = "{http://schemas.slic3r.org/3mf/2017/06}"
+        self.assertTrue(any(
+            face.get(PAINT) == "8" and
+            face.get(prusa+"custom_supports") == "4" and
+            face.get(prusa+"custom_seam") == "8" and
+            face.get(prusa+"fuzzy_skin") == "4"
+            for face in faces[:endpoint+1]))
+        self.assertFalse(any(
+            any(key in face.attrib for key in
+                (PAINT, prusa+"custom_supports", prusa+"custom_seam",
+                 prusa+"fuzzy_skin"))
+            for face in faces[endpoint+1:]))
+        with self.assertRaises(WorkerError):
+            validate_prusa_material_candidate(
+                project, printer_ini=ini("0.4,0.4,0.4,0.4,0.4", "0"),
+                colour=True, independent_colour=True)
+
     def test_source_fingerprint_must_match(self):
         stl, *_ = fixture()
         # Change actual facet vertex geometry, not the unused STL normal.
