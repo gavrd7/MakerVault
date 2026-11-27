@@ -402,7 +402,7 @@ class PrusaOfflineMmuPreflightTests(TestCase):
         self.addCleanup(scope.stop)
         remote.return_value = b"test audited toolpath"
         with patch("core.slicer_prusa_material_preflight.resolved_prusa_profile",
-                   side_effect=assets), patch(
+                   side_effect=assets) as resolved, patch(
                        "slicer_worker.prusa_material_gcode_audit.audit_prusa_material_model_gcode"
                    ) as tools_audit, patch(
                        "core.slicer_prusa_spatial_layers.audit_prusa_multi_object_layer_ranges",
@@ -416,6 +416,7 @@ class PrusaOfflineMmuPreflightTests(TestCase):
             self.assertEqual(layer_audit.call_args.kwargs["bed_width"], 250)
 
             layer_audit.side_effect = ValueError("wrong layer schedule")
+            resolved.side_effect = assets
             with self.assertRaisesRegex(SlicerProfileError,
                                          "did not preserve each requested"):
                 slice_prusa_offline_xl_candidate(uuid.uuid4(), **kwargs)
