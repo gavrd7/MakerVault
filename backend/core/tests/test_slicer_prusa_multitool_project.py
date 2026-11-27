@@ -86,3 +86,54 @@ class PrusaMultiToolCandidateTests(TestCase):
                 self.assertEqual([m["extruder"] for m in metadata],["1","2"])
                 self.assertEqual([m["perimeters"] for m in metadata],["1","5"])
                 self.assertEqual([m["fill_density"] for m in metadata],["15%","35%"])
+
+
+    def test_xl_independent_heads_preserve_local_modifier_negative_and_layer_ranges(self):
+        from core.tests.test_slicer_prusa_3mf import volume
+        from slicer_worker.prusa_material_validation import validate_prusa_material_candidate
+        modified = volume("modifier", {"sparse_infill_density": 80})
+        modified.update(width_mm=3, depth_mm=3, height_mm=5,
+                        x_mm=-35, y_mm=0, z_mm=4)
+        cavity = volume("negative")
+        cavity.update(width_mm=3, depth_mm=3, height_mm=5,
+                      x_mm=35, y_mm=0, z_mm=4)
+        rows = [
+            (item(x_mm=-35, modifier_volumes=[modified],
+                  variable_layer_profile={"version": 1, "bands": [
+                      {"from_mm": 2, "to_mm": 6, "layer_mm": .12}]}), cube()),
+            (item(x_mm=35, modifier_volumes=[cavity]), cube()),
+        ]
+        for count in (2, 5):
+            with self.subTest(xl_heads=count):
+                machine = printer(count, 0)
+                project, topology = build_prusa_multitool_candidate(
+                    rows, printer_ini=machine, tools=[1, count],
+                    bed_width=250, bed_depth=210)
+                self.assertEqual(topology["kind"], "independent_tools")
+                receipt = validate_prusa_material_candidate(
+                    project, printer_ini=machine, tools=[1, count])
+                self.assertEqual(receipt["objects"], 2)
+                self.assertEqual(receipt["tools"], (1, count))
+                with zipfile.ZipFile(io.BytesIO(project)) as archive:
+                    self.assertIn(
+                        "Metadata/Prusa_Slicer_layer_config_ranges.xml",
+                        archive.namelist())
+                    root = SafeET.fromstring(
+                        archive.read("Metadata/Slic3r_PE_model.config"))
+                self.assertEqual(
+                    [[node.get("value") for node in obj.findall("metadata")
+                      if node.get("key") == "extruder"]
+                     for obj in root.findall("object")],
+                    [["1"], [str(count)]])
+                self.assertEqual(
+                    [len(obj.findall("volume")) for obj in root.findall("object")],
+                    [2, 2])
+                with self.assertRaises(WorkerError):
+                    validate_prusa_native_3mf(project)
+
+        # MMU uses a shared nozzle and must not inherit independent-head
+        # admission of mixed local regions or variable-layer schedules.
+        with self.assertRaises(SlicerProfileError):
+            build_prusa_multitool_candidate(
+                rows, printer_ini=printer(5, 1), tools=[1, 5],
+                bed_width=250, bed_depth=210)
