@@ -168,6 +168,99 @@ def main(binary, vendor):
         print("PASS: Prusa native painted XL Object wall loops change deposited "
               "interior perimeters",wall_observations,flush=True)
 
+        # MakerVault feature *composition* research: colour painting and a
+        # parameter modifier on the same real object. The existing exporter
+        # produces each native feature independently; merge their signed
+        # model/config structures and inspect genuinely deposited regional
+        # extrusion before permitting this combination in the live worker.
+        # This is a research-only 3MF; UI and worker admission remain gated.
+        import io
+        import uuid
+        import zipfile
+        from xml.etree import ElementTree as ET
+        from defusedxml import ElementTree as SafeET
+        from core.slicer_prusa_3mf import build_prusa_native_3mf
+        from scripts.prusa_native_regions_smoke import regional_extrusion
+        from slicer_worker.prusa_3mf_validation import validate_prusa_native_3mf
+        ns="{http://schemas.microsoft.com/3dmanufacturing/core/2015/02}"
+        paint_ns="{http://schemas.slic3r.org/3mf/2017/06}mmu_segmentation"
+        typed={
+            "id":str(uuid.uuid4()),"shape":"box","kind":"modifier",
+            "width_mm":10,"depth_mm":10,"height_mm":18,
+            "x_mm":0,"y_mm":0,"z_mm":10,
+            "coordinate_space":"world",
+            "rotation_xyz_deg":[0,0,0],
+            "scale_xyz_percent":[100,100,100],
+            "settings":{"sparse_infill_density":85},
+        }
+        try:
+            colour_only=build_prusa_colour_candidate(
+                row,stl,printer_ini=printer,colour_tool_indices={1:1},
+                bed_width=360,bed_depth=360)
+            typed_only=build_prusa_native_3mf(
+                [({**{k:v for k,v in row.items() if k!="colour_paint"},
+                   "modifier_volumes":[typed]},stl)],
+                bed_width=360,bed_depth=360)
+            with zipfile.ZipFile(io.BytesIO(colour_only)) as c,zipfile.ZipFile(
+                    io.BytesIO(typed_only)) as native:
+                painted_root=SafeET.fromstring(c.read("3D/3dmodel.model"))
+                typed_root=SafeET.fromstring(native.read("3D/3dmodel.model"))
+                typed_config=SafeET.fromstring(
+                    native.read("Metadata/Slic3r_PE_model.config"))
+                paint_faces=painted_root.findall(
+                    "./"+ns+"resources/"+ns+"object/"+ns+"mesh/"+
+                    ns+"triangles/"+ns+"triangle")
+                target_faces=typed_root.findall(
+                    "./"+ns+"resources/"+ns+"object/"+ns+"mesh/"+
+                    ns+"triangles/"+ns+"triangle")
+                printable=typed_config.find("./object/volume")
+                assert len(paint_faces)==int(printable.get("lastid"))+1
+                assert len(target_faces)>len(paint_faces)
+                for idx,source_face in enumerate(paint_faces):
+                    state=source_face.get(paint_ns)
+                    if state is not None:
+                        target_faces[idx].set("slic3rpe:mmu_segmentation",state)
+                native_resources=typed_root.find(ns+"resources")
+                hdr=ET.Element(ns+"metadata",{"name":"slic3rpe:MmPaintingVersion"})
+                hdr.text="2"
+                typed_root.insert(list(typed_root).index(native_resources),hdr)
+                ET.SubElement(printable,"metadata",{
+                    "type":"volume","key":"extruder","value":"1"})
+                composed=io.BytesIO()
+                with zipfile.ZipFile(composed,"w",compression=zipfile.ZIP_DEFLATED) as out:
+                    for name in native.namelist():
+                        data=native.read(name)
+                        if name=="3D/3dmodel.model":
+                            data=ET.tostring(typed_root,encoding="utf-8",
+                                             xml_declaration=True)
+                        elif name=="Metadata/Slic3r_PE_model.config":
+                            data=ET.tostring(typed_config,encoding="utf-8",
+                                             xml_declaration=True)
+                        out.writestr(name,data)
+                mixed=composed.getvalue()
+            (work/"input.3mf").write_bytes(colour_only)
+            (work/"output.gcode").unlink(missing_ok=True)
+            run_prusa(Path(binary),work)
+            reference=(work/"output.gcode").read_bytes()
+            (work/"input.3mf").write_bytes(mixed)
+            (work/"output.gcode").unlink(missing_ok=True)
+            run_prusa(Path(binary),work)
+            combined=(work/"output.gcode").read_bytes()
+            selected=painted_external_walls(combined,center_x=180,center_y=180)
+            base_effect=regional_extrusion(reference,center_x=180,center_y=180)
+            mixed_effect=regional_extrusion(combined,center_x=180,center_y=180)
+            assert selected[1]["front"]>20 and selected[1]["back"]<=2,selected
+            assert mixed_effect[0]>base_effect[0]*1.5,(base_effect,mixed_effect)
+            print("RESEARCH PASS: genuine Prusa painted XL plus native "
+                  "modifier changed model-local deposition",
+                  {"colour":selected,"baseline":base_effect,
+                   "modifier":mixed_effect},flush=True)
+        except (AssertionError,ValueError,WorkerError,RuntimeError,
+                zipfile.BadZipFile) as exc:
+            print("RESEARCH BLOCKED: combined Prusa painted colour plus "
+                  "modifier",type(exc).__name__,str(exc)[:280],flush=True)
+
+
         # The same native facet encoder supports two opposing selected
         # tools. Run this through the *independent-head* worker contract
         # and spatial auditor; it must never inherit an MMU wipe tower.
