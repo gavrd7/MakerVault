@@ -1,3 +1,29 @@
+### 27 November — intermittent native Prusa 2.9.7 MMU coordinate defect
+
+The pinned upstream Prusa 2.9.7 runtime has intermittently emitted
+impossible Y coordinates (observed around **-1.5e9** and **1e13**) in
+ordinary five-model MMU and painted-MMU G-code candidates. These are
+invalid native outputs, **not** legitimate large build plates and not
+a preview limit. MakerVault must never sanitize, clamp or submit them.
+
+Only the **offline MMU multi-model and MMU painted** worker routes have
+bounded regeneration: discard the entire invalid candidate and regenerate
+via a new native CLI process, up to **three total attempts** within the
+original request's aggregate slice timeout and size budget. Each candidate
+must satisfy the strict numeric positive-E audit. After it passes, all
+existing independent material-to-model, painted-wall and wipe-tower audits
+are still mandatory. Malformed UTF-8, unexpected tools, absent extrusion,
+incomplete purge, other invalid G-code, failed CLI launches and exhausted
+time/attempt budgets are not silently retried. The worker does not modify
+any G-code and never enables physical printer submission. XL/INDX and
+other slicer engines are unchanged.
+
+The reviewed native Actions suite independently exercises this guard
+with genuine pinned 2.9.7 binaries; worker unit tests force controlled
+overflow, repeated failure and non-retry unsafe cases.
+
+---
+
 ### 27 November — independently qualified mixed native region features
 
 The native Prusa 2.9.7 acceptance pipeline now requires a controlled
