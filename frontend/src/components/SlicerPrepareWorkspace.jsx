@@ -89,6 +89,7 @@ export default function SlicerPrepareWorkspace({
   const [selectionClearVersion, setSelectionClearVersion] = useState(0);
   const [expandedAssemblies, setExpandedAssemblies] = useState([]);
   const [assemblySelectionOpen, setAssemblySelectionOpen] = useState(false);
+  const [bulkFilamentOpen, setBulkFilamentOpen] = useState(false);
   const [movePlateTarget,setMovePlateTarget]=useState("");
   const [sliceMenuOpen,setSliceMenuOpen]=useState(false);
   const [showAllPlates,setShowAllPlates]=useState(false);
@@ -380,7 +381,9 @@ export default function SlicerPrepareWorkspace({
   // A physical slot selection is an advisory project mapping, independent of
   // the preview colour and of the native slicer's filament preset. Never use it
   // to imply that a multi-material tool change has been configured.
-  const changeModelPreviewFilament = (instanceId, slot) => {
+  const changeModelsPreviewFilament = (instanceIds, slot) => {
+    const ids = new Set(instanceIds);
+    if (!canEdit || busy || !ids.size) return;
     if (!printerId || slot?.id == null) return;
     const hex = validSlotColor(slot);
     const materialSlot = {
@@ -388,13 +391,15 @@ export default function SlicerPrepareWorkspace({
       slot_id: String(slot.id),
       slot_index: Number(slot.slot_index ?? 0),
     };
-    updatePlate(latest.current.map(item => item.instance_id === instanceId
+    updatePlate(latest.current.map(item => ids.has(item.instance_id)
       ? { ...item, ...(hex ? {color:hex} : {}), material_slot:materialSlot } : item));
-    if (hex) onManualColorChange?.(instanceId);
+    if (hex) ids.forEach(id => onManualColorChange?.(id));
     setFilamentPickerId("");
+    setBulkFilamentOpen(false);
     setFilamentNotice("Assigned " + slotName(slot) +
-      " to the project model. Single-slot slicing uses that slot's native filament preset when assigned; multi-slot printing requires verified tool routing.");
+      " to " + ids.size + " project model(s). Single-slot slicing uses that slot's native filament preset when assigned; multi-slot printing requires verified tool routing.");
   };
+  const changeModelPreviewFilament = (instanceId, slot) => changeModelsPreviewFilament([instanceId], slot);
   const clearModelFilament = instanceId => {
     updatePlate(latest.current.map(item => {
       if (item.instance_id !== instanceId) return item;
@@ -741,6 +746,19 @@ export default function SlicerPrepareWorkspace({
     setMeasurementVisible(false);
   };
   const selectedModels = objects.filter(row => validSelection.includes(row.instance_id));
+  const selectableRows = allPlateRows.filter(row => !row.detached);
+  const allSelected = selectableRows.length > 0 && selectableRows.every(row => validSelection.includes(row.instance_id));
+  const toggleSelectAll = () => {
+    if (!canEdit || busy) return;
+    const next = allSelected ? [] : selectableRows.map(row => row.instance_id);
+    setSelectedIds(next);
+    const focus = selectableRows.find(row => row.instance_id === next.at(-1));
+    setSelectedId(focus?.isPlateVolume ? focus.owner_instance_id || "" : focus?.instance_id || "");
+    setSelectedModifierId(focus?.isPlateVolume ? focus.id : null);
+    setScope("objects");
+    setMeasurementVisible(false);
+    setBulkFilamentOpen(false);
+  };
   const selectedRows = allPlateRows.filter(row => validSelection.includes(row.instance_id));
   // Assemblies display as contiguous logical groups regardless of the
   // underlying object order. Individual parts retain their instance IDs
@@ -1930,7 +1948,13 @@ export default function SlicerPrepareWorkspace({
           {assemblySelectionOpen && <div id="slicer-assembly-selection"
             className="slicerAssemblySelectionList" role="group"
             aria-label="Select models and volumes for assembly">
-            <p>Tick the models and volumes to assemble. Ctrl-click also works on desktop.</p>
+            <p>Tick models and volumes for selection actions. Ctrl-click also works on desktop.</p>
+            <label className="slicerAssemblySelectionRow">
+              <input type="checkbox" checked={allSelected}
+                ref={node => { if (node) node.indeterminate = !allSelected && selectableRows.some(row => validSelection.includes(row.instance_id)); }}
+                disabled={!canEdit || busy || !selectableRows.length} onChange={toggleSelectAll} />
+              <span>Select all</span>
+            </label>
             {modelTreeRows.map((row, index) =>
               <label key={row.instance_id} className={"slicerAssemblySelectionRow"+(row.detached?" unavailable":"")}>
                 <input type="checkbox" checked={validSelection.includes(row.instance_id)}
@@ -1946,11 +1970,24 @@ export default function SlicerPrepareWorkspace({
               </label>)}
             <div className="slicerAssemblySelectionFooter">
               <span role="status">{validSelection.length} selected</span>
+              <button type="button" disabled={!canEdit || busy || !selectedModels.length || !liveMaterials.length}
+                aria-expanded={bulkFilamentOpen} onClick={() => setBulkFilamentOpen(current => !current)}>
+                Change filament for selected
+              </button>
               <button type="button" disabled={!validSelection.length}
                 onClick={() => {setSelectedIds([]);setSelectedId("");setSelectedModifierId(null);}}>
                 Clear selection
               </button>
             </div>
+            {bulkFilamentOpen && selectedModels.length > 0 && <div className="slicerModelFilamentChoices">
+              <strong>Assign one loaded slot to {selectedModels.length} selected model(s)</strong>
+              <small>Base filament only; painted colours and modifier volumes are unchanged.</small>
+              {liveMaterials.map(slot => <button type="button" key={slot.id} disabled={!canEdit || busy}
+                onClick={() => changeModelsPreviewFilament(selectedModels.map(model => model.instance_id), slot)}>
+                <span className="slicerLiveMaterialSwatch" style={{backgroundColor:validSlotColor(slot) || "#697b91"}} aria-hidden="true" />
+                <span>{slotName(slot)}</span>
+              </button>)}
+            </div>}
           </div>}
         </div>}
         {selectedModels.length>0 && plates.length>1 && <div className="slicerMoveToPlate">
@@ -2458,8 +2495,7 @@ export default function SlicerPrepareWorkspace({
             <select id="slicer-painted-base-slot" value="" disabled={!canEdit || busy}
               onChange={event => {
                 const slot = liveMaterials.find(row => String(row.id) === event.target.value);
-                if (slot) paintedObjectsWithoutBase.forEach(model =>
-                  changeModelPreviewFilament(model.instance_id, slot));
+                if (slot) changeModelsPreviewFilament(paintedObjectsWithoutBase.map(model => model.instance_id), slot);
               }}>
               <option value="">Choose a CFS slot for the model's unpainted areas</option>
               {liveMaterials.filter(slot => compatibleSlotProfile(slot.id)).map(slot =>
@@ -2469,8 +2505,7 @@ export default function SlicerPrepareWorkspace({
             </select>
             {suggestedBaseSlot && <button type="button"
               disabled={!canEdit || busy}
-              onClick={() => paintedObjectsWithoutBase.forEach(model =>
-                changeModelPreviewFilament(model.instance_id, suggestedBaseSlot))}>
+              onClick={() => changeModelsPreviewFilament(paintedObjectsWithoutBase.map(model => model.instance_id), suggestedBaseSlot)}>
               Use matching base profile: {slotName(suggestedBaseSlot)}
             </button>}
             <small>The base slot selects the main native filament preset when a job is saved.
