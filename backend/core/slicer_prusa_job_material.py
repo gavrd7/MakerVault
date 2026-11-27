@@ -93,8 +93,8 @@ def _virtual_native_tools(job, settings, objects, kind, count, *, single_colour=
     }
     if single_colour:
         result["colour_tool_indices"]=colour_tool_indices
-        if colour_tool is not None:
-            # Preserve the existing single-swatch contract and tests.
+        if colour_tool is not None and expected == "mmu":
+            # Only MMU accepts the legacy single-swatch keyword arguments.
             result["colour_tool"]=colour_tool
             result["colour_slot"]=regions[0]["slot"]
     if expected == "mmu":
