@@ -21,7 +21,7 @@ from slicer_worker.prusa_vendor_profiles import flatten_prusa_vendor_preset, val
 from slicer_worker.prusa_gcode_audit import WORD, audit_prusa_positive_e
 from slicer_worker.prusa_colour_gcode_audit import audit_prusa_offline_colour_gcode
 from slicer_worker.service import _decode_payload
-from slicer_worker.runner import run_prusa
+from slicer_worker.runner import run_prusa, WorkerError
 
 
 def painted_external_walls(data):
