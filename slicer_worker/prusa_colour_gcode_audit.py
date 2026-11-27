@@ -138,16 +138,23 @@ def audit_prusa_offline_colour_gcode(data, project, *, printer_ini, tool, tower)
                 continue
             extruded=values["E"] if relative else values["E"]-e
             e=e+values["E"] if relative else values["E"]
-            if (extruded<=1e-6 or op not in ("G1","G01") or
-                    x is None or y is None or old_x is None or old_y is None or
-                    abs(x-old_x)+abs(y-old_y)<=1e-7):
+            if extruded<=1e-6 or op not in ("G1","G01") or x is None or y is None:
                 continue
             if active not in walls:
                 raise WorkerError("Prusa painted extrusion had no selected native tool.")
+            # Stationary positive-E is *valid purging* at a trusted tower XY,
+            # but is never painted model deposition. Genuine Prusa MMU3
+            # outputs include E-only changes at their wipe tower. Moving
+            # extrusion requires both endpoints inside the tower.
+            stationary=(old_x is not None and old_y is not None and
+                        abs(x-old_x)+abs(y-old_y)<=1e-7)
             if (box[0]<=x<=box[1] and box[2]<=y<=box[3] and
-                    box[0]<=old_x<=box[1] and box[2]<=old_y<=box[3]):
+                    ((old_x is not None and old_y is not None and
+                      box[0]<=old_x<=box[1] and box[2]<=old_y<=box[3])
+                     or stationary)):
                 tower_hits[active]+=1
-            if "external perimeter" not in role:
+            if (old_x is None or old_y is None or stationary or
+                    "external perimeter" not in role):
                 continue
             for name,region in (("front",front),("back",back)):
                 if (region[0]<=x<=region[1] and region[2]<=y<=region[3] and
@@ -305,15 +312,19 @@ def audit_prusa_dual_colour_gcode(data, project, *, printer_ini, tools, tower):
             amount=values["E"] if relative_e else values["E"]-e
             e=e+values["E"] if relative_e else values["E"]
             if (amount<=1e-6 or op not in ("G1","G01") or
-                    active not in selected or None in (x,y,*previous) or
-                    abs(x-previous[0])+abs(y-previous[1])<=1e-7):
+                    active not in selected or x is None or y is None):
                 continue
+            stationary=(None not in previous and
+                        abs(x-previous[0])+abs(y-previous[1])<=1e-7)
             def contained(box):
-                return (box[0]<=x<=box[1] and box[2]<=y<=box[3]
+                return (None not in previous and
+                        box[0]<=x<=box[1] and box[2]<=y<=box[3]
                         and box[0]<=previous[0]<=box[1]
                         and box[2]<=previous[1]<=box[3])
             if contained(tower_box):
                 purge[active]+=1
+            if (None in previous or stationary):
+                continue
             if "external perimeter" in role:
                 for side,box in regions.items():
                     if contained(box):
