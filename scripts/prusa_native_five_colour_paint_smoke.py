@@ -18,7 +18,7 @@ from core.slicer_prusa_wipe_tower import add_prusa_native_wipe_tower
 from scripts.prusa_generate_mmu_paint import fixture
 from slicer_worker.prusa_material_validation import validate_prusa_material_candidate
 from slicer_worker.prusa_vendor_profiles import flatten_prusa_vendor_preset, validate_flat_prusa_preset
-from slicer_worker.prusa_gcode_audit import WORD, audit_prusa_positive_e, run_prusa_painted_with_numeric_recheck
+from slicer_worker.prusa_gcode_audit import WORD, audit_prusa_positive_e, run_prusa_mmu_with_numeric_recheck
 from slicer_worker.prusa_colour_gcode_audit import audit_prusa_offline_colour_gcode
 from slicer_worker.service import _decode_payload
 from slicer_worker.runner import run_prusa, WorkerError
@@ -139,7 +139,7 @@ def main(binary, vendor):
                 (jobdir/name).write_bytes(data)
             (jobdir/"prusa-offline-colour.marker").write_text("v1")
             try:
-                _receipt,raw=run_prusa_painted_with_numeric_recheck(
+                _receipt,raw=run_prusa_mmu_with_numeric_recheck(
                     run_prusa,Path(binary),jobdir,timeout_seconds=300,
                     max_bytes=64*1024*1024)
                 assert audit_prusa_positive_e(raw)["positive_e_moves"]>100
@@ -232,7 +232,7 @@ def main(binary, vendor):
                 ("filament.ini",palette),("process.ini",process)):
             (target/name).write_bytes(data)
         (target/"prusa-offline-colour.marker").write_text("v1")
-        _receipt,gcode = run_prusa_painted_with_numeric_recheck(
+        _receipt,gcode = run_prusa_mmu_with_numeric_recheck(
             run_prusa,Path(binary),target,timeout_seconds=300,
             max_bytes=64*1024*1024)
         counts = painted_external_walls(gcode)
