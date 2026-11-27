@@ -7,6 +7,8 @@ on:
   workflow_dispatch:
   push:
     branches: [feature/slicer-prusa-engine]
+  pull_request:
+    branches: [main]
 
 permissions:
   contents: read
@@ -14,7 +16,7 @@ permissions:
 
 jobs:
   native-install-and-slice:
-    if: ${{ github.event_name == 'workflow_dispatch' || contains(github.event.head_commit.message, '[prusa-package-smoke]') }}
+    if: ${{ github.event_name == 'workflow_dispatch' || (github.event_name == 'pull_request' && github.head_ref == 'feature/slicer-prusa-engine') || contains(github.event.head_commit.message, '[prusa-package-smoke]') }}
     runs-on: ubuntu-24.04
     timeout-minutes: 40
     steps:
