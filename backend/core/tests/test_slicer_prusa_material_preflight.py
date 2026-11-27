@@ -256,6 +256,17 @@ class PrusaOfflineMmuPreflightTests(TestCase):
         self.assertEqual(candidate["tools"],[1,2])
         self.assertNotIn("tower",candidate)
         self.assertIn(b"layer_height = 0.16\n",candidate["process"])
+        # The browser's saved colour IDs do not change when the model
+        # rotates. The owner-scoped preflight must rediscover the opposite
+        # wall ordering from the *baked native* 3MF, not the swatch list.
+        rotated_row={**params["rows"][0][0],"rotation_deg":90}
+        rotated_settings={**params,"rows":[(rotated_row,source)]}
+        with patch("core.slicer_prusa_material_preflight.resolved_prusa_profile",
+                   side_effect=assets):
+            rotated=prepare_prusa_offline_xl_colour_candidate(
+                **rotated_settings)
+        self.assertEqual(rotated["tools"],[2,1])
+        self.assertNotIn("tower",rotated)
         encode=lambda data:base64.b64encode(data).decode("ascii")
         payload={"job_id":str(uuid.uuid4()),"engine":"prusaslicer",
                  "engine_version":"2.9.7","model_format":"3mf",
