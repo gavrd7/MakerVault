@@ -184,6 +184,20 @@ class PrusaNativeColourProjectTests(TestCase):
         self.assertEqual(audited["deposition_moves"][1]["painted"], 20)
         self.assertEqual(audited["deposition_moves"][0]["unpainted"], 20)
         self.assertTrue(audited["offline_only"])
+        # Prusa may deposit a bounded T0 foundation around painted facets;
+        # do not mistake that for an alternate-tool spill. But excessive
+        # T0 material under a selected paint mask is still a failure.
+        cut = commands.index("T0")
+        base_corner = ["T0", ";TYPE:External perimeter",
+                       commands[5], commands[6]]
+        accepted = (commands[:cut] + base_corner * 2 + commands[cut:])
+        proven = audit_prusa_partial_wall_gcode(
+            ("\\n".join(accepted) + "\\n").encode(), project, tool=1)
+        self.assertEqual(proven["deposition_moves"][0]["painted"], 2)
+        rejected = (commands[:cut] + base_corner * 3 + commands[cut:])
+        with self.assertRaises(WorkerError):
+            audit_prusa_partial_wall_gcode(
+                ("\\n".join(rejected) + "\\n").encode(), project, tool=1)
         with self.assertRaises(WorkerError):
             audit_prusa_partial_wall_gcode(
                 synthetic.replace(b"T1", b"T0"), project, tool=1)
