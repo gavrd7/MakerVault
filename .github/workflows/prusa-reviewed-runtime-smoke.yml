@@ -6,7 +6,7 @@ name: PrusaSlicer reviewed bundle + isolated worker acceptance
 on:
   workflow_dispatch:
   push:
-    branches: [feature/slicer-prusa-engine]
+    branches: [feature/slicer-prusa-engine, feature/prusa-makervault-parity]
   pull_request:
     branches: [main]
 
@@ -16,7 +16,7 @@ permissions:
 
 jobs:
   native-install-and-slice:
-    if: ${{ github.event_name == 'workflow_dispatch' || (github.event_name == 'pull_request' && github.head_ref == 'feature/slicer-prusa-engine') || contains(github.event.head_commit.message, '[prusa-package-smoke]') }}
+    if: ${{ github.event_name == 'workflow_dispatch' || (github.event_name == 'pull_request' && (github.head_ref == 'feature/slicer-prusa-engine' || github.head_ref == 'feature/prusa-makervault-parity')) || contains(github.event.head_commit.message, '[prusa-package-smoke]') }}
     runs-on: ubuntu-24.04
     timeout-minutes: 40
     steps:
