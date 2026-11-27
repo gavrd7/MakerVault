@@ -31,6 +31,7 @@ def painted_external_walls(data):
     current = None
     extrusion = 0.0
     relative = False
+    relative_xy = False
     x = y = None
     for line in data.decode("utf-8").splitlines():
         if line.startswith(";TYPE:"):
@@ -42,29 +43,43 @@ def painted_external_walls(data):
         if re.fullmatch(r"T[0-4]", op):
             current = int(op[1:])
             continue
-        if op not in ("G0", "G00", "G1", "G01", "M82", "M83", "G92"):
+        if op not in ("G0", "G00", "G1", "G01", "M82", "M83", "G90", "G91", "G92"):
             continue
         params = {key.upper(): float(value) for key,value in WORD.findall(cmd)}
         if op == "M82":
             relative = False
         elif op == "M83":
             relative = True
+        elif op == "G90":
+            relative_xy = False
+        elif op == "G91":
+            relative_xy = True
         elif op == "G92":
             extrusion = params.get("E", extrusion)
-        elif op in ("G0", "G00", "G1", "G01"):
             x = params.get("X", x)
             y = params.get("Y", y)
+        elif op in ("G0", "G00", "G1", "G01"):
+            previous_x, previous_y = x, y
+            if relative_xy:
+                x = x+params["X"] if x is not None and "X" in params else x
+                y = y+params["Y"] if y is not None and "Y" in params else y
+            else:
+                x = params.get("X", x)
+                y = params.get("Y", y)
             if "E" not in params:
                 continue
             amount = params["E"] if relative else params["E"] - extrusion
             extrusion = extrusion + params["E"] if relative else params["E"]
-            if (amount <= 1e-6 or current not in counts or
-                    "external perimeter" not in role or x is None or y is None or
-                    not 114 <= x <= 136):
+            if (amount <= 1e-6 or op not in ("G1", "G01") or
+                    current not in counts or "external perimeter" not in role or
+                    previous_x is None or previous_y is None or
+                    x is None or y is None or
+                    abs(x-previous_x)+abs(y-previous_y)<=1e-7 or
+                    not 114 <= x <= 136 or not 114 <= previous_x <= 136):
                 continue
-            if 93 <= y <= 97:
+            if 93 <= y <= 97 and 93 <= previous_y <= 97:
                 counts[current]["front"] += 1
-            elif 113 <= y <= 117:
+            elif 113 <= y <= 117 and 113 <= previous_y <= 117:
                 counts[current]["back"] += 1
     return counts
 
