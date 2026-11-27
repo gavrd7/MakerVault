@@ -39,6 +39,22 @@ def main(destination):
         (folder/(name+".3mf")).write_bytes(build_prusa_native_3mf(
             rows,bed_width=250,bed_depth=210))
 
+    # Shared MakerVault placement budget: 15 geometrically separated
+    # objects with the *same* painted front wall on one model and fourteen
+    # smooth neighbours. The native worker must audit actual positive-E.
+    positions=[(x,y) for y in (-55,0,55)
+                     for x in (-90,-45,0,45,90)]
+    fifteen=[]
+    for n,(x,y) in enumerate(positions):
+        obj={"asset_id":f"fuzzy-model-{n}","x_mm":x,"y_mm":y,
+             "z_mm":0,"rotation_deg":0,"scale_percent":100}
+        if n==7:
+            obj["fuzzy_skin_paint"]=paint
+        fifteen.append((obj,source))
+    (folder/"fifteen.3mf").write_bytes(build_prusa_native_3mf(
+        fifteen,bed_width=250,bed_depth=210))
+
+
 
 if __name__=="__main__":
     main(sys.argv[1])
