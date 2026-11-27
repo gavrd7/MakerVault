@@ -1,3 +1,35 @@
+### 27 November — XL native one-swatch paint workbench integration
+
+Genuine pinned 2.9.7 XL five-head front-wall colour painting was
+measured at the actual 360×360 mm XL origin (180,180). The earlier
+250×210 mm MMU coordinates had falsely reported zero XL painted
+perimeters. One T1 painted front wall and the T0 opposite base wall were
+confirmed by positive-E moving external perimeter paths.
+
+MakerVault now has a **separate** XL one-swatch owner-to-worker route:
+one STL model assigned native T0, one fingerprint-checked painted front
+wall assigned T1–T4 under a 2–5 independently headed Prusa XL profile,
+a complete privately owned tool/filament palette, and a native 3MF
+using the exact Prusa TriangleSelector leaf-state dialect. It carries
+**no MMU purge matrix or wipe tower**. The isolated worker independently
+checks the XL machine topology, project face annotations, selected tool
+identity, no MMU purge flags, and native positive extrusion before
+accepting output. A separate G-code auditor requires moving Tn material
+on the front face, moving T0 base material on the back, and disallows
+alternate-tool deposition on the wrong face. Firmware tool change,
+pickup, physical offsets and printer submission remain unverified.
+
+The real binary smoke now uses the same dedicated
+`prusa-offline-xl-colour.marker` as the production worker to prove
+the exact installed native command path. **Release gate:** the
+worker's G-code spatial audit, pinned 2.9.7 native script, full source
+tests and unchanged existing-engine regression checks must all pass
+at the final branch head before marking this route qualified.
+No INDX 8T face-paint or combined multi-object painting admission is
+inferred from this narrower XL case.
+
+---
+
 ### 27 November — two-swatch Prusa MMU native routing and G-code audit
 
 Prusa's first owner-bound **two painted-colour** candidate now flows through
