@@ -175,8 +175,8 @@ def validate_prusa_project_admission(plate, settings, version):
     if not isinstance(settings, dict):
         raise ValueError("Invalid native Prusa plate settings.")
     assert_native_plate_volume_coverage(plate, settings)
-    if not 1 <= len(plate) <= 12 or any(not isinstance(row, dict) for row in plate):
-        raise ValueError("Native Prusa plate requires one to twelve printable objects.")
+    if not 1 <= len(plate) <= 200 or any(not isinstance(row, dict) for row in plate):
+        raise ValueError("Native Prusa plate follows the shared 200-model placement budget.")
     if any(settings.get(key) for key in (
             "multi_material_test", "material_tool_bindings", "slot_filament_profiles",
             "prime_tower")) or settings.get("flush_settings") is not None:
