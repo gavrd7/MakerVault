@@ -66,10 +66,16 @@ def _virtual_native_tools(job, settings, objects, kind, count, *, single_colour=
         paint=objects[0].get("colour_paint") or {}
         regions=paint.get("regions") or []
         colour_rows=config.get("colour_tools",[])
-        if (len(regions)!=1 or len(colour_rows)!=1 or
-                colour_rows[0]["slot"]!=regions[0].get("slot")):
-            raise SlicerProfileError("Assign the painted colour to one explicit native Prusa tool.")
-        colour_tool=colour_rows[0]["tool"]-1
+        slots = [region.get("slot") for region in regions if isinstance(region,dict)]
+        if (not 1<=len(regions)<=2 or len(slots)!=len(regions) or
+                len(set(slots))!=len(slots) or
+                len(colour_rows)!=len(slots) or
+                {row["slot"] for row in colour_rows}!=set(slots) or
+                (len(slots)==2 and len({row["tool"] for row in colour_rows})!=2)):
+            raise SlicerProfileError(
+                "Assign one or two distinct painted Prusa native tools to their exact swatches.")
+        colour_tool_indices = {row["slot"]:row["tool"]-1 for row in colour_rows}
+        colour_tool = colour_tool_indices[slots[0]] if len(slots)==1 else None
     elif len(set(tools)) < 2 or config.get("colour_tools"):
         raise SlicerProfileError("Prusa native tools require two distinct assigned model tools.")
 
@@ -80,8 +86,11 @@ def _virtual_native_tools(job, settings, objects, kind, count, *, single_colour=
         "tools":tools, "bed_width":width, "bed_depth":depth,
     }
     if single_colour:
-        result["colour_tool"]=colour_tool
-        result["colour_slot"]=regions[0]["slot"]
+        result["colour_tool_indices"]=colour_tool_indices
+        if colour_tool is not None:
+            # Preserve the existing single-swatch contract and tests.
+            result["colour_tool"]=colour_tool
+            result["colour_slot"]=regions[0]["slot"]
     if expected == "mmu":
         tower = settings.get("prime_tower")
         matrix = config["purge_matrix"]
