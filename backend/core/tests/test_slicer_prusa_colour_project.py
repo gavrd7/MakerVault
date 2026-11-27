@@ -100,23 +100,28 @@ class PrusaNativeColourProjectTests(TestCase):
             self.candidate(settings={"colour_paint":paint},
                            tool_map={1:1})
 
-    def test_indx_eight_head_native_colour_reuses_the_five_leaf_states(self):
+    def test_indx_eight_head_native_colour_accepts_all_seven_alternate_facets(self):
         printer=ini(",".join(["0.4"]*8),"0")
         stl,_mesh,_states,paint=fixture(include_paint=True)
         row={"asset_id":"indx-eight","x_mm":0,"y_mm":0,"z_mm":0,
              "rotation_deg":0,"scale_percent":100,"colour_paint":paint}
-        for selected in (1,2,3,4):
+        for selected,state in ((1,"8"),(2,"0C"),(3,"1C"),(4,"2C"),
+                               (5,"3C"),(6,"4C"),(7,"5C")):
             with self.subTest(selected=selected):
                 project=build_prusa_colour_candidate(
                     row,stl,printer_ini=printer,
                     colour_tool_indices={1:selected},bed_width=250,bed_depth=210)
+                with zipfile.ZipFile(io.BytesIO(project)) as archive:
+                    self.assertIn(
+                        ('slic3rpe:mmu_segmentation="'+state+'"').encode(),
+                        archive.read("3D/3dmodel.model"))
                 receipt=validate_prusa_material_candidate(
                     project,printer_ini=printer,colour=True,
                     independent_colour=True)
                 self.assertEqual(receipt["tools"],(1,selected+1))
-        # The machine can hold eight heads, but the pinned 2.9.7 painted
-        # facet states have only four distinct alternate-tool encodings.
-        for selected in (0,5,6,7):
+        # More than eight toolheads remain unavailable on this printer,
+        # even though the underlying TriangleSelector supports more states.
+        for selected in (0,8,9):
             with self.subTest(selected=selected),self.assertRaises(SlicerProfileError):
                 build_prusa_colour_candidate(
                     row,stl,printer_ini=printer,
