@@ -404,6 +404,11 @@ def prepare_prusa_offline_xl_colour_candidate(
     receipt=validate_prusa_offline_xl_colour_inputs(
         project=project,printer=printer,filament=palette,process=process,
         **selection)
+    if receipt["partial_wall"] and (
+            topology["kind"] != "independent_tools" or
+            topology["logical_tool_count"] != 5):
+        raise SlicerProfileError(
+            "Prusa split-surface painting has native proof for XL5 only.")
     return {"model":project,"printer":printer,"filament":palette,
             "process":process, "partial_wall":receipt["partial_wall"],
             **selection}
