@@ -1155,8 +1155,14 @@ export default function SlicerPrepareWorkspace({
       object.negative_volumes?.length ||
       (object.variable_layer_profile?.bands?.length &&
         prusaNativeTools?.mode==="mmu") ||
-      ((object.modifier_volumes?.length || object.variable_layer_profile?.bands?.length) &&
-        prusaSinglePaint) ||
+      (prusaSinglePaint && object.variable_layer_profile?.bands?.length) ||
+      (prusaSinglePaint && object.modifier_volumes?.length &&
+        !(object.modifier_volumes.length===1 &&
+          object.modifier_volumes[0]?.shape==="box" &&
+          object.modifier_volumes[0]?.kind==="modifier" &&
+          Object.keys(object.modifier_volumes[0]?.settings||{}).length===1 &&
+          Object.hasOwn(object.modifier_volumes[0]?.settings||{},
+                        "sparse_infill_density"))) ||
       object.support_paint?.regions?.length || object.seam_paint?.regions?.length ||
       object.fuzzy_skin_paint?.regions?.length ||
       (object.colour_paint?.regions?.length && !prusaSinglePaint)) &&
