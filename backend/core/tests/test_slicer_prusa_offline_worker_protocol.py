@@ -84,6 +84,43 @@ class PrusaOfflineWorkerProtocolTests(TestCase):
         self.assertEqual(result["prusa_offline_mmu"]["tools"],[1,2])
         self.assertEqual(result["prusa_offline_mmu"]["tower"],[55,150,0,250,210])
 
+    def test_ten_objects_reuse_five_native_mmu_tools_without_new_material_bays(self):
+        from core.tests.test_slicer_prusa_plate import item, cube
+        from core.slicer_prusa_material_preflight import prepare_prusa_offline_mmu_candidate
+        values, assets = PrusaOfflineMmuPreflightTests().parts()
+        values["rows"] = [
+            (item(x_mm=x, y_mm=y), cube(size=8))
+            for y in (-43, 17) for x in (-90, -45, 0, 45, 90)
+        ]
+        values["tools"] = list(range(1, 6)) * 2
+        with patch("core.slicer_prusa_material_preflight.resolved_prusa_profile",
+                   side_effect=assets):
+            compiled = prepare_prusa_offline_mmu_candidate(**values)
+        payload = {
+            "job_id": str(uuid.uuid4()), "engine": "prusaslicer",
+            "engine_version": "2.9.7", "model_format": "3mf",
+            "model": encoded(compiled["model"]),
+            "printer_profile": encoded(compiled["printer"]),
+            "filament_profile": encoded(compiled["filament"]),
+            "process_profile": encoded(compiled["process"]),
+            "prusa_offline_mmu": {
+                "tools": values["tools"], "tower": list(compiled["tower"]),
+            },
+        }
+        verified = _decode_payload(payload)
+        self.assertEqual(verified["prusa_offline_mmu"]["tools"], values["tools"])
+        self.assertEqual(verified["prusa_offline_mmu"]["tool_count"], 5)
+        for invalid in (
+            values["tools"] + [1, 2, 3],
+            values["tools"][:-1] + [6],
+            values["tools"][:-1] + [True],
+            [1] * 10,
+        ):
+            with self.subTest(invalid=invalid), self.assertRaises(WorkerError):
+                _decode_payload({**payload, "prusa_offline_mmu": {
+                    "tools": invalid, "tower": list(compiled["tower"]),
+                }})
+
     def test_missing_flag_fails_as_untrusted_material_archive(self):
         payload=request()
         payload.pop("prusa_offline_mmu")
