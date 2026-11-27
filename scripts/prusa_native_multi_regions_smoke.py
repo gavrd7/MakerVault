@@ -7,7 +7,7 @@ import sys
 from tempfile import TemporaryDirectory
 from slicer_worker.prusa_vendor_profiles import flatten_prusa_vendor_preset
 
-def main(binary, vendor, baseline, modifier, negative):
+def main(binary, vendor, baseline, modifier, negative, mixed_dir=None):
     sample = runpy.run_path("/tmp/prusa_regions.py")["regional_extrusion"]
     raw = Path(vendor).read_bytes()
     digest = hashlib.sha256(raw).hexdigest()
@@ -40,6 +40,44 @@ def main(binary, vendor, baseline, modifier, negative):
             assert negative[0] < .01 and negative[1] > .1, (
                 "negative did not cut independent object", i, negative)
         print("PASS: both native Prusa 3MF printable objects independently honour their modifiers and negative volumes.")
+
+        if mixed_dir is not None:
+            controls = {}
+            for label in ("mix-baseline", "mix-modifier", "mix-object", "mix-both"):
+                output = work / (label + ".gcode")
+                subprocess.run([
+                    binary, *profiles, "--export-gcode", "--dont-arrange",
+                    "--output", str(output), str(Path(mixed_dir) / (label + ".3mf")),
+                ], cwd=work, check=True, timeout=300)
+                controls[label] = tuple(
+                    sample(output.read_bytes(), center_x=x, center_y=105)
+                    for x in (90, 160))
+                print("Prusa combined native Object/Modifier deposition",
+                      label, controls[label], flush=True)
+            baseline_counts = controls["mix-baseline"]
+            modifier_counts = controls["mix-modifier"]
+            object_counts = controls["mix-object"]
+            mixed_counts = controls["mix-both"]
+            # A modifier changes only model 1's central infill; a distinct
+            # model's process override changes only model 2. Require both
+            # effects to survive simultaneous native 3MF import and slicing.
+            for index, solo in ((0, modifier_counts), (1, object_counts)):
+                if (baseline_counts[index][0] <= .1 or
+                        solo[index][0] <= baseline_counts[index][0] * 1.5 or
+                        mixed_counts[index][0] <= baseline_counts[index][0] * 1.5):
+                    raise AssertionError(
+                        ("Prusa combined Object and modifier effect absent",
+                         index, baseline_counts, solo, mixed_counts))
+                ratio = mixed_counts[index][0] / solo[index][0]
+                if not .7 <= ratio <= 1.3:
+                    raise AssertionError(
+                        ("Prusa combined Object and modifier affected another model",
+                         index, ratio, solo, mixed_counts))
+                if mixed_counts[index][1] <= .1:
+                    raise AssertionError("Prusa combined native project lost outer infill.")
+            print("PASS: Prusa two-object native parameter modifiers and Object settings "
+                  "deposit independently without neighbour contamination.", flush=True)
+
 
 if __name__ == "__main__":
     main(*sys.argv[1:])
