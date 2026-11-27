@@ -162,8 +162,8 @@ def run_remote_job(job_id, engine, version, model, printer_profile, filament_pro
                      native_modifier_project, prusa_placed_stl))):
             raise SlicerWorkerError("Invalid offline Prusa XL worker contract.")
         tools=prusa_offline_xl["tools"]
-        if (not isinstance(tools,(tuple,list)) or not 2<=len(tools)<=5 or
-                any(type(t) is not int or not 1<=t<=5 for t in tools)
+        if (not isinstance(tools,(tuple,list)) or not 2<=len(tools)<=200 or
+                any(type(t) is not int or not 1<=t<=8 for t in tools)
                 or len(set(tools))<2):
             raise SlicerWorkerError("Invalid offline Prusa XL material tool selection.")
         payload["prusa_offline_xl"]={"tools":list(tools)}
@@ -179,7 +179,7 @@ def run_remote_job(job_id, engine, version, model, printer_profile, filament_pro
             raise SlicerWorkerError("Invalid offline Prusa MMU worker contract.")
         tools = prusa_offline_mmu["tools"]
         tower = prusa_offline_mmu["tower"]
-        if (not isinstance(tools, (tuple,list)) or not 2 <= len(tools) <= 5
+        if (not isinstance(tools, (tuple,list)) or not 2 <= len(tools) <= 200
                 or any(type(v) is not int or not 1 <= v <= 5 for v in tools)
                 or len(set(tools)) < 2 or
                 not isinstance(tower, (tuple,list)) or len(tower) != 5
