@@ -1,7 +1,8 @@
 """Bounded Prusa 2.9.7 two-colour project encoder for offline qualification.
 
-The native worker remains single-material. This function deliberately admits
-up to five logical Prusa tools. The full range must pass native toolpath\nqualification before entering the authenticated MMU/XL workbench.
+The worker independently validates the native 3MF against the selected
+MMU/XL/INDX printer topology. Facet painting and object settings share the
+native object config rather than inventing a separate painting UI.
 """
 import io
 import struct
@@ -21,6 +22,19 @@ def build_prusa_colour_candidate(item, source, *, printer_ini, colour_tool_indic
                                  bed_width, bed_depth):
     topology = prusa_machine_topology(printer_ini)
     count = topology["logical_tool_count"]
+    # Object-scoped MakerVault process controls already serialize to native
+    # Prusa 3MF model.config. Validate the exact requested keys and values,
+    # never drop the configuration when adding painted face metadata.
+    from .slicer_prusa_3mf import OBJECT_KEYS, BASE
+    from .slicer_prusa_process_settings import apply_prusa_process_overrides
+    object_settings=item.get("process_overrides") if isinstance(item,dict) else None
+    if object_settings is not None:
+        if not isinstance(object_settings,dict) or set(object_settings)-OBJECT_KEYS:
+            raise SlicerProfileError("Prusa painted model has unsupported Object controls.")
+        try:
+            apply_prusa_process_overrides(BASE,object_settings)
+        except (ValueError,TypeError,OverflowError) as exc:
+            raise SlicerProfileError("Invalid native Prusa painted Object setting.") from exc
     if (not 2 <= count <= 8 or not isinstance(item, dict)
             or not isinstance(source, bytes)
             or not isinstance(colour_tool_indices, dict)
@@ -28,7 +42,7 @@ def build_prusa_colour_candidate(item, source, *, printer_ini, colour_tool_indic
             or any(type(k) is not int or type(v) is not int or not 1 <= v <= 7 or not v < count
                    for k,v in colour_tool_indices.items())
             or any(item.get(k) for k in ("modifier_volumes","negative_volumes",
-                   "process_overrides","variable_layer_profile","support_paint",
+                   "variable_layer_profile","support_paint",
                    "seam_paint","fuzzy_skin_paint","material_slot"))):
         raise SlicerProfileError("Unsupported Prusa native colour candidate.")
     paint = item.get("colour_paint")
