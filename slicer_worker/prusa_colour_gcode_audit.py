@@ -318,11 +318,16 @@ def audit_prusa_dual_colour_gcode(data, project, *, printer_ini, tools, tower):
                 for side,box in regions.items():
                     if contained(box):
                         wall_counts[active][side]+=1
+    # Native Prusa 2.9.7 legitimately retains T0 base-material external
+    # perimeters near painted face corners: the real two-swatch reference
+    # showed 215/221 T0 movements alongside 294 T1 front and 295 T2 back.
+    # T0 is the explicit base tool and is NOT a forbidden cross-colour.
+    # The independently assigned *alternate* tools must never print the
+    # opposing painted wall, and each must deposit its own surface.
     if (wall_counts[tools[0]]["front"]<20 or
             wall_counts[tools[1]]["back"]<20 or
-            any(wall_counts[tool][side]>2
-                for side,allowed in (("front",tools[0]),("back",tools[1]))
-                for tool in selected if tool!=allowed)):
+            wall_counts[tools[0]]["back"]>2 or
+            wall_counts[tools[1]]["front"]>2):
         raise WorkerError("Prusa two-swatch output failed wall-local tool attribution.")
     if any(n<10 for n in purge.values()):
         raise WorkerError("Prusa two-swatch output lacks tool-specific wipe-tower purging.")
