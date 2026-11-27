@@ -1,3 +1,53 @@
+### 27 November — opposing XY walls, rotated native paint and larger support plates
+
+This merge-hardening pass stays within the existing MakerVault workbench,
+owner-scoped native material palette, 3MF encoder, authenticated slicer worker,
+and spatial G-code audits. It does **not** introduce separate engine-specific
+painting controls or relax safeguards for physically starting a printer.
+
+- **Opposing colour walls on both horizontal axes:** The independently
+  validated T1/T2 MMU and XL native two-swatch route now determines the
+  complete negative/positive **X or Y** wall pair from the actual 3MF
+  vertices. It does not infer that a browser paint slot denotes a physical
+  front/back wall. Prusa MMU5 genuine pinned native G-code demonstrated
+  T1/T2 on opposite X faces, with all three required material tools
+  depositing into the native wipe tower. XL5 deposited 369 matching
+  external-perimeter movements per X wall without MMU purging.
+- **Transform-aware orientation:** Genuine XL5 Prusa 2.9.7 accepted a
+  *90-degree rotated* two-colour model and correctly reversed the mesh-derived
+  tool order to (T2,T1). The existing Rotate control may retain swatch
+  identities across this native geometry change; G-code still must pass
+  the independent toolpath audit.
+- **Official INDX 8T:** With the real Prusa CORE One INDX eight-head vendor
+  profile and signed cleaner sequence, a native T5/T7 X-opposing
+  two-colour slice passed (296/295 correct deposited segments, zero
+  alternate-colour cross-wall segments). The previous genuine Y-opposing
+  and standalone T5/T6/T7 cases remain required.
+- **Fail-closed incomplete wall masks:** Single-colour spatial admission now
+  requires every original triangle on the selected vertical exterior wall
+  to carry the expected Prusa TriangleSelector state. A partially painted
+  wall cannot acquire a false full-wall positive-E acceptance certificate.
+- **15 support-painted objects, not an artificial twelve:** Native support
+  painting and its model-local audit now use MakerVault's **200-instance**
+  admission budget with all existing geometry, G-code and source limits
+  preserved. A pinned genuine PrusaSlicer run with fifteen independent
+  cantilevers and a single painted support enforcer deposited **264 genuine
+  support moves** on its selected model and **zero on fourteen plain
+  neighbours**. The mandatory real-binary run is
+  [46041293719](https://github.com/gavrd7/MakerVault/actions/runs/46041293719).
+- **Still unqualified:** A deliberate four-independent-painted-wall XL5
+  native experiment did not show reliable separation of surface colours
+  under PrusaSlicer 2.9.7. The existing one/two-wall admission remains
+  intact. Arbitrary paint masks, broader same-object paint/modifier/support
+  combinations, the observed upstream MMU variable-height CLI failure, and
+  physical tool-dock/print-start verification remain separately guarded.
+
+The current merge decision must be based on CI for the exact branch head,
+plus desktop/mobile staging inspection and the above explicit remaining
+hardware-specific limits—not merely on a successful native CLI exit.
+
+---
+
 ### 27 November — full eight-head INDX native facet palette
 
 The existing Prusa 3MF TriangleSelector encoder, worker preflight,
