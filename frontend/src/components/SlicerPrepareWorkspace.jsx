@@ -1226,10 +1226,12 @@ export default function SlicerPrepareWorkspace({
   const prusaNativeBlockReason = activeEngine==="prusaslicer" &&
     prusaNativeTools && !prusaNativeReady
       ? !prusaTopologyMatches
-        ? "The selected Prusa printer profile reports " +
-          prusaProfileTopology.logical_tool_count + " native tools (" +
-          prusaProfileTopology.kind.replaceAll("_", " ") +
-          "), which does not match this draft. Use Match native printer profile in the materials panel."
+        ? !prusaProfileTopology
+          ? "The selected Prusa printer profile topology has not been inspected yet. Select an imported native printer profile and wait for its verified tool count before slicing."
+          : "The selected Prusa printer profile reports " +
+            prusaProfileTopology.logical_tool_count + " native tools (" +
+            String(prusaProfileTopology.kind || "unknown").replaceAll("_", " ") +
+            "), which does not match this draft. Use Match native printer profile in the materials panel."
         : prusaUnsupportedObjectKeys.length
         ? "Prusa MMU/XL/INDX supports Object walls, top/bottom shells and infill density. Unsupported Object keys: " +
           [...new Set(prusaUnsupportedObjectKeys)].join(", ") +
