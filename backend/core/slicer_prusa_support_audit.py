@@ -15,11 +15,11 @@ WORD = re.compile(r"(?:^|\s)([XYZE])\s*([-+]?(?:\d+(?:\.\d*)?|\.\d+)(?:[Ee][-+]?
 ROLES = frozenset(("support material", "support material interface"))
 
 
-def validate_prusa_two_support_plate(plate):
+def validate_prusa_multi_support_plate(plate):
     """Restrict the new acceptance route to exactly one painted and one plain object."""
-    if not isinstance(plate, list) or len(plate) != 2 or any(
+    if not isinstance(plate, list) or not 2 <= len(plate) <= 12 or any(
             not isinstance(row, dict) for row in plate):
-        raise ValueError("Prusa independent support painting requires two objects.")
+        raise ValueError("Prusa independent support painting requires two to twelve objects.")
     painted = [
         i for i, row in enumerate(plate)
         if (row.get("support_paint") or {}).get("regions")
@@ -53,24 +53,26 @@ def validate_prusa_two_support_plate(plate):
     return painted[0]
 
 
-def audit_prusa_two_object_support(data, models, *, bed_width, bed_depth):
+def audit_prusa_multi_object_support(data, models, *, bed_width, bed_depth):
     """Prove deposited support only in the painted object and not its neighbour."""
     if not isinstance(data, bytes) or not 0 < len(data) <= 90 * 1024 * 1024:
         raise ValueError("Invalid Prusa two-object support G-code.")
-    if not isinstance(models, list) or len(models) != 2:
-        raise ValueError("Prusa two-object support audit requires two models.")
-    selected = validate_prusa_two_support_plate([item for item, _ in models])
+    if not isinstance(models, list) or not 2 <= len(models) <= 12:
+        raise ValueError("Prusa two-object support audit requires two to twelve models.")
+    selected = validate_prusa_multi_support_plate([item for item, _ in models])
     bounds = [_bounds(source, bed_width, bed_depth) for source in models]
-    a, b = bounds
-    if min(a[1], b[1]) > max(a[0], b[0]) + .01 and min(a[3], b[3]) > max(a[2], b[2]) + .01:
-        raise ValueError("Prusa painted support object regions overlap.")
+    for index, a in enumerate(bounds):
+        for b in bounds[index+1:]:
+            if (min(a[1], b[1]) > max(a[0], b[0]) + .01 and
+                    min(a[3], b[3]) > max(a[2], b[2]) + .01):
+                raise ValueError("Prusa painted support object regions overlap.")
     x = y = None
     e = 0.
     relative_e = relative_xy = False
     role = ""
-    counts = [0, 0]
-    deposited_e = [0., 0.]
-    stationary = [0, 0]
+    counts = [0] * len(bounds)
+    deposited_e = [0.] * len(bounds)
+    stationary = [0] * len(bounds)
     outside = 0
     for index, raw_line in enumerate(io.BytesIO(data)):
         if index >= 2_000_000 or len(raw_line) > 16384:
@@ -138,13 +140,28 @@ def audit_prusa_two_object_support(data, models, *, bed_width, bed_depth):
                         abs(x-old_x)+abs(y-old_y) > 1e-7):
                     outside += 1
     if (counts[selected] < 2 or deposited_e[selected] <= .01
-            or counts[1-selected] != 0):
+            or any(count for i, count in enumerate(counts) if i != selected)):
         raise ValueError("Prusa two-object support paths were not isolated to the enforcer.")
     return {
         "painted_model_index": selected,
         "painted_support_moves": counts[selected],
         "painted_support_e_mm": round(deposited_e[selected], 3),
-        "unpainted_support_moves": counts[1-selected],
+        "unpainted_support_moves": sum(count for i,count in enumerate(counts) if i != selected),
         "stationary_recovery_moves": stationary,
         "outside_support_moves": outside,
     }
+
+
+def validate_prusa_two_support_plate(plate):
+    """Compatibility wrapper; the existing two-object contract stays strict."""
+    if not isinstance(plate, list) or len(plate) != 2:
+        raise ValueError("Prusa two-object support painting requires two objects.")
+    return validate_prusa_multi_support_plate(plate)
+
+
+def audit_prusa_two_object_support(data, models, *, bed_width, bed_depth):
+    """Compatibility wrapper for existing single-painted/two-model jobs."""
+    if not isinstance(models, list) or len(models) != 2:
+        raise ValueError("Prusa two-object support audit requires two models.")
+    return audit_prusa_multi_object_support(
+        data, models, bed_width=bed_width, bed_depth=bed_depth)
