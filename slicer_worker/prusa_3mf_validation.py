@@ -48,6 +48,8 @@ def _settings(nodes, kind, allowed):
             _require(val in {"ModelPart", "ParameterModifier", "NegativeVolume"})
         elif key == "perimeters":
             _require(1 <= _integer(val, 12) <= 12)
+        elif key in {"top_solid_layers", "bottom_solid_layers"}:
+            _require(0 <= _integer(val, 20) <= 20)
         elif key == "fill_density":
             _require(re.fullmatch(r"[0-9]{1,3}(?:\.[0-9]{1,4})?%", val) is not None
                      and 0 <= float(val[:-1]) <= 100)
@@ -164,7 +166,7 @@ def validate_prusa_native_3mf(data):
             metadata = [n for n in cfg if n.tag == "metadata"]
             volumes = [n for n in cfg if n.tag == "volume"]
             _require(len(metadata) + len(volumes) == len(cfg) and 1 <= len(volumes) <= 13)
-            _settings(metadata, "object", {"perimeters", "fill_density"})
+            _settings(metadata, "object", {"perimeters", "fill_density", "top_solid_layers", "bottom_solid_layers"})
             regions += len(volumes) - 1
             _require(regions <= 48)
             next_face = 0
@@ -181,7 +183,7 @@ def validate_prusa_native_3mf(data):
                        for axis in ("v1", "v2", "v3")}
                 _require(min(ids) == next_vertex and len(ids) == max(ids)-min(ids)+1)
                 next_vertex = max(ids)+1
-                values = _settings(vol, "volume", {"volume_type", "perimeters", "fill_density"})
+                values = _settings(vol, "volume", {"volume_type", "perimeters", "fill_density", "top_solid_layers", "bottom_solid_layers"})
                 role = values.pop("volume_type", None)
                 _require((n == 0 and role == "ModelPart" and not values) or
                          (n > 0 and role == "NegativeVolume" and not values) or
