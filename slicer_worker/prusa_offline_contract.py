@@ -94,16 +94,27 @@ def validate_prusa_offline_xl_inputs(*, project, printer, filament, process, too
 
 
 def validate_prusa_offline_colour_inputs(*, project, printer, filament, process,
-                                        tool, tower):
-    """One owner-compiled MMU-painted model; only a single alternate front tool.
+                                        tool=None, tools=None, tower):
+    """Owner-compiled MMU-painted model with one or two bounded wall swatches.
 
     The worker accepts neither unverified multi-facet mixes nor physical
     printer upload. Exact native 3MF geometry and G-code attribution are
     independently audited after the CLI returns.
     """
     count, changer=_qualified_topology(printer)
-    if (not changer or not 2<=count<=5 or type(tool) is not int or
-            not 1<=tool<count or not isinstance(tower,list) or len(tower)!=5 or
+    dual=tools is not None
+    if dual:
+        if (tool is not None or not isinstance(tools,list) or len(tools)!=2 or
+                any(type(v) is not int or not 1<=v<count for v in tools) or
+                len(set(tools))!=2):
+            raise WorkerError("Prusa two-swatch MMU requires exactly two distinct tools.")
+        selected=tuple(tools)
+    else:
+        if type(tool) is not int or not 1<=tool<count:
+            raise WorkerError("Prusa offline painted native tool is invalid.")
+        selected=(tool,)
+    if (not changer or not 2<=count<=5 or
+            not isinstance(tower,list) or len(tower)!=5 or
             any(type(x) not in (int,float) or not math.isfinite(x) for x in tower)):
         raise WorkerError("Prusa offline painted MMU tool and tower are invalid.")
     try:
@@ -134,8 +145,13 @@ def validate_prusa_offline_colour_inputs(*, project, printer, filament, process,
             raise WorkerError("Prusa offline painted purge entry is invalid.")
     receipt=validate_prusa_material_candidate(
         project,printer_ini=printer,colour=True,tower=tower)
-    if receipt["objects"]!=1 or receipt["tools"]!=(1,tool+1):
+    if receipt["objects"]!=1 or receipt["tools"]!=tuple(sorted((1, *(v+1 for v in selected)))):
         raise WorkerError("Prusa offline painted native tool selection changed.")
-    from .prusa_colour_gcode_audit import _wall_regions
-    _wall_regions(project,tool)
-    return {"tool":tool, "tower":tower, "offline_only":True}
+    if dual:
+        from .prusa_colour_gcode_audit import _two_painted_wall_regions
+        _two_painted_wall_regions(project,selected)
+    else:
+        from .prusa_colour_gcode_audit import _wall_regions
+        _wall_regions(project,tool)
+    return {**({"tools":list(selected)} if dual else {"tool":tool}),
+            "tower":tower, "offline_only":True}
