@@ -199,11 +199,9 @@ def prepare_prusa_workbench_material(job, *, settings=None):
     if settings.get("prusa_native_tools") is not None:
         selected_kind, plan = _virtual_native_tools(
             job, settings, objects, kind, count, single_colour=single_colour)
-        if single_colour:
-            if overrides:
-                raise SlicerProfileError("Prusa colour painting cannot combine global settings.")
-            return ("colour" if selected_kind=="mmu" else "xl_colour"),plan
         plan["process_overrides"] = overrides
+        if single_colour:
+            return ("colour" if selected_kind=="mmu" else "xl_colour"),plan
         return selected_kind, plan
     if single_colour:
         raise SlicerProfileError("Select independent Prusa native palette tools for painted MMU.")
