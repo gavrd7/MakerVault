@@ -150,6 +150,17 @@ class PrusaMultiToolCandidateTests(TestCase):
                  if meta.get("key") == "extruder")
             for entry in obj.findall("object")], ["1", "5"])
 
+        from core.slicer_prusa_wipe_tower import add_prusa_native_wipe_tower
+        mmu_tower = add_prusa_native_wipe_tower(
+            mmu_project, x_mm=55, y_mm=150, rotation_deg=0,
+            bed_width=250, bed_depth=210)
+        receipt = validate_prusa_material_candidate(
+            mmu_tower, printer_ini=printer(5, 1), tools=[1, 5],
+            tower=(55, 150, 0, 250, 210))
+        self.assertEqual(receipt["objects"], 2)
+        self.assertEqual(receipt["tools"], (1, 5))
+        self.assertTrue(receipt["wipe_tower"])
+
 
     def test_independent_native_object_shell_layers_reach_3mf_and_worker(self):
         from slicer_worker.prusa_material_validation import validate_prusa_material_candidate
