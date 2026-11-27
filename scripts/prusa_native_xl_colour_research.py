@@ -53,9 +53,9 @@ def main(binary, vendor):
             ("input.3mf",project),("printer.ini",printer),
             ("filament.ini",palette),("process.ini",process)):
             (work/name).write_bytes(data)
-        # A standalone research runner uses a marker for the candidate
-        # dialect; production never accepts this independent-head payload.
-        (work/"prusa-offline-colour.marker").write_text("v1")
+        # Exercise the same dedicated XL marker as the authenticated worker.
+        # The service independently admits and audits the 3MF before writing it.
+        (work/"prusa-offline-xl-colour.marker").write_text("v1")
         run_prusa(Path(binary),work)
         output=(work/"output.gcode").read_bytes()
         counts=painted_external_walls(output,center_x=180,center_y=180)
