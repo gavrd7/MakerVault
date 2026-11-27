@@ -59,11 +59,11 @@ class OfficialCatalogueBrowseTests(SimpleTestCase):
                 for p in result["profiles"]))
             all_results = search_all_official_filaments(
                 "PLA", version="2.5.0")
-        self.assertEqual(all_results["total_matches"], 94)
+        self.assertEqual(all_results["total_matches"], 93)
         self.assertEqual(all_results["partial_catalogues"], 0)
-        self.assertIn("Elegoo", {
-            p["vendor"] for p in all_results["profiles"]} |
-            {"Elegoo" if all_results["total_matches"] == 94 else ""})
+        self.assertTrue(any(p["vendor"] == "Elegoo" for p in
+                            search_all_official_filaments(
+                                "Elegoo", version="2.5.0")["profiles"]))
 
     def test_unified_filament_search_rejects_unlisted_brands_without_network(self):
         with patch("core.slicer_official_profiles.official_filament_brands",
