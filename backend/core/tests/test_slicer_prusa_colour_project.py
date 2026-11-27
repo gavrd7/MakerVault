@@ -134,6 +134,18 @@ class PrusaNativeColourProjectTests(TestCase):
             project, printer_ini=ini("0.4,0.4,0.4,0.4,0.4", "1"),
             colour=True)
         self.assertEqual(receipt["tools"], (1, 2))
+        from slicer_worker.prusa_partial_surface import inspect_prusa_partial_wall
+        region = inspect_prusa_partial_wall(project, 1)
+        self.assertEqual(region["tool"], 1)
+        self.assertEqual(region["axis"], 1)
+        self.assertGreater(region["painted_area_mm2"], 0)
+        self.assertGreater(region["unpainted_area_mm2"], region["painted_area_mm2"])
+        self.assertTrue(region["painted"])
+        self.assertTrue(region["unpainted"])
+        with self.assertRaises(WorkerError):
+            inspect_prusa_partial_wall(project, 2)
+        with self.assertRaises(WorkerError):
+            inspect_prusa_partial_wall(self.candidate(), 1)
         with self.assertRaisesRegex(WorkerError, "unqualified painted surface"):
             _wall_regions(project, 1)
 
