@@ -38,12 +38,12 @@ def native_capabilities(engine, version):
     if engine == "prusaslicer" and version == "2.9.7":
         result["colour_paint"] = {
             "status": "test_only",
-            "reason": ("Native Prusa 2.9.7 MMU painted front-face toolpaths are "
-                       "available for offline testing with one upright model, "
-                       "T0 base, exactly one painted T1–T4 swatch, explicit "
-                       "owned filament palette and complete wipe-tower purge. "
-                       "Other faces, mixed edits, XL facet painting and printer "
-                       "submission are not qualified."),
+            "reason": ("Prusa 2.9.7 MMU native front-wall paint has passed independent "
+                       "T1–T4 single-swatch and T1-front/T2-back two-swatch "
+                       "G-code deposition audits with a T0 base and native wipe "
+                       "tower. Unsupported masks, arbitrary mixed edits, XL/INDX "
+                       "surface paint and physical printer submission remain "
+                       "separate qualification gates."),
         }
         result["seam_paint"] = {
             "status": "test_only",
@@ -54,11 +54,12 @@ def native_capabilities(engine, version):
         }
         result["support_paint"] = {
             "status": "verified",
-            "reason": ("Native Prusa 2.9.7 support enforcer and blocker masks "
-                       "passed genuine, same-geometry CLI support-path comparisons. "
-                       "Limited to one upright, unscaled, single-material model "
-                       "without mixed native extensions; manual enforcer slices "
-                       "must generate real support extrusion."),
+            "reason": ("Prusa 2.9.7 native support enforcer and blocker masks passed "
+                       "genuine worker G-code audits, including three separated "
+                       "single-material models with one painted support enforcer "
+                       "and zero support deposited in unpainted neighbours. "
+                       "Combined multi-tool or other mixed-extension support "
+                       "painting is not yet qualified."),
         }
         result["fuzzy_skin_paint"] = {
             "status": "verified",
