@@ -641,8 +641,7 @@ class PrusaNativeColourProjectTests(TestCase):
         def forge(root):
             faces = root.findall("./"+NS+"resources/"+NS+"object/"+NS+
                                  "mesh/"+NS+"triangles/"+NS+"triangle")
-            faces[endpoint+1].set(
-                "slic3rpe:mmu_segmentation", "8")
+            faces[endpoint+1].set(PAINT, "8")
         with self.assertRaises(WorkerError):
             validate_prusa_native_3mf(
                 rewrite(project, "3D/3dmodel.model", forge),
