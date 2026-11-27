@@ -466,6 +466,43 @@ class PrusaNativeColourProjectTests(TestCase):
                 with self.assertRaises(SlicerProfileError):
                     self.candidate(settings={"modifier_volumes":[bad]})
 
+    def test_painted_object_settings_and_typed_modifier_preserve_both_native_scopes(self):
+        """Combining existing MakerVault Object and region controls must not drop either."""
+        from core.tests.test_slicer_prusa_3mf import volume
+        from slicer_worker.prusa_material_validation import PAINT
+        project = self.candidate(settings={
+            "process_overrides": {"wall_loops": 4, "outer_wall_speed": 36},
+            "modifier_volumes": [volume(
+                "modifier", {"sparse_infill_density": 85})],
+        })
+        with zipfile.ZipFile(io.BytesIO(project)) as archive:
+            config = SafeET.fromstring(
+                archive.read("Metadata/Slic3r_PE_model.config"))
+            model = SafeET.fromstring(archive.read("3D/3dmodel.model"))
+        scoped = {
+            n.get("key"): n.get("value")
+            for n in config.findall("./object/metadata")}
+        self.assertEqual(scoped["perimeters"], "4")
+        self.assertEqual(scoped["external_perimeter_speed"], "36")
+        volumes = config.findall("./object/volume")
+        self.assertEqual(len(volumes), 2)
+        region_settings = {n.get("key"): n.get("value")
+                           for n in volumes[1].findall("./metadata")}
+        self.assertEqual(region_settings["volume_type"], "ParameterModifier")
+        self.assertEqual(region_settings["fill_density"], "85%")
+        triangles = model.findall(
+            "./" + NS + "resources/" + NS + "object/" + NS +
+            "mesh/" + NS + "triangles/" + NS + "triangle")
+        model_end = int(volumes[0].get("lastid"))
+        self.assertTrue(any(PAINT in face.attrib
+                            for face in triangles[:model_end + 1]))
+        self.assertFalse(any(PAINT in face.attrib
+                             for face in triangles[model_end + 1:]))
+        receipt = validate_prusa_material_candidate(
+            project, printer_ini=ini("0.4,0.4,0.4,0.4,0.4", "1"),
+            colour=True)
+        self.assertEqual(receipt["tools"], (1, 2))
+
     def test_source_fingerprint_must_match(self):
         stl, *_ = fixture()
         # Change actual facet vertex geometry, not the unused STL normal.
