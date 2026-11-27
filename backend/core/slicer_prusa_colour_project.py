@@ -25,7 +25,7 @@ def build_prusa_colour_candidate(item, source, *, printer_ini, colour_tool_indic
             or not isinstance(source, bytes)
             or not isinstance(colour_tool_indices, dict)
             or not colour_tool_indices
-            or any(type(k) is not int or type(v) is not int or not 1 <= v <= 4 or not v < count
+            or any(type(k) is not int or type(v) is not int or not 1 <= v <= 7 or not v < count
                    for k,v in colour_tool_indices.items())
             or any(item.get(k) for k in ("modifier_volumes","negative_volumes",
                    "process_overrides","variable_layer_profile","support_paint",
@@ -43,7 +43,7 @@ def build_prusa_colour_candidate(item, source, *, printer_ini, colour_tool_indic
         raw.extend(struct.pack("<12fH",0,0,0,
                    *(float(n) for vertex in triangle for n in vertex),0))
         state = tags.get("paint_color")
-        accepted = {"4", "8", "0C", "1C", "2C"}
+        accepted = {"4", "8", "0C", "1C", "2C", "3C", "4C", "5C"}
         if state is not None and state not in accepted:
             raise SlicerProfileError("Unqualified Prusa native colour state.")
         states.append(state)
