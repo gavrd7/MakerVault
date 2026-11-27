@@ -178,7 +178,7 @@ class PrusaNativeColourProjectTests(TestCase):
                         f"G0 X{start[0]:.5f} Y{start[1]:.5f} Z{z:.5f}")
                     commands.append(
                         f"G1 X{end[0]:.5f} Y{end[1]:.5f} E.02")
-        synthetic = ("\\n".join(commands) + "\\n").encode()
+        synthetic = ("\n".join(commands) + "\n").encode()
         audited = audit_prusa_partial_wall_gcode(
             synthetic, project, tool=1)
         self.assertEqual(audited["deposition_moves"][1]["painted"], 20)
