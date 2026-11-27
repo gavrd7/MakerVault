@@ -108,7 +108,8 @@ def audit_prusa_four_wall_gcode(data,project,*,printer_ini,tools):
     counts={tool:{side:0 for side in SIDES} for tool in (0,*tools)}
     role=""
     active=None
-    x=y=e=None
+    x=y=None
+    e=0.
     relative_e=relative_xy=False
     bounds=source
     for raw in io.BytesIO(data):
