@@ -327,6 +327,7 @@ class SlicerWorkerClientTests(SimpleTestCase):
         contracts = (
             ("prusa_offline_colour", {"tools": [1, 2], "tower": [55,150,0,250,210]}),
             ("prusa_offline_xl_colour", {"tool": 4}),
+            ("prusa_offline_xl_colour", {"tools": [1, 2]}),
         )
         for field, metadata in contracts:
             with self.subTest(field=field):
