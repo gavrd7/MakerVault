@@ -45,7 +45,8 @@ def _qualified_topology(printer_ini):
     return len(nozzles), same_nozzle
 
 
-def validate_prusa_material_candidate(data, *, printer_ini, tools=None, colour=False, tower=None):
+def validate_prusa_material_candidate(data, *, printer_ini, tools=None, colour=False, tower=None,
+                                      independent_colour=False):
     if not isinstance(data, bytes) or not 0 < len(data) <= 32*1024*1024:
         _refuse()
     logical_count, changer = _qualified_topology(printer_ini)
@@ -58,8 +59,12 @@ def validate_prusa_material_candidate(data, *, printer_ini, tools=None, colour=F
                 or not 5 <= x <= width - 65 or not 5 <= y <= depth - 45
                 or not -360 <= rotation <= 360):
             _refuse()
+    if independent_colour and (not colour or tower is not None):
+        _refuse()
     if colour:
-        if tools is not None or not changer or logical_count < 2:
+        if (tools is not None or logical_count < 2 or
+                changer == independent_colour or
+                (independent_colour and logical_count > 5)):
             _refuse()
     elif (not isinstance(tools,(tuple,list)) or not 2 <= len(tools) <= 12
           or len(set(tools)) < 2 or any(type(t) is not int or
