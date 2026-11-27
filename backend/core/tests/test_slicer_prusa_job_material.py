@@ -499,18 +499,16 @@ class PrusaVirtualToolDraftTests(TestCase):
         job.settings["plate_objects"] = job.settings["plate_objects"][:1]
         job.settings["plate_objects"][0]["colour_paint"] = dual
         config = job.settings["prusa_native_tools"]
-        config.update(mode="xl", purge_matrix=None,
+        from uuid import UUID
+        third_id = "33333333-3333-4333-8333-333333333333"
+        filaments.append(profile("filament", UUID(third_id)))
+        config.update(mode="xl", tool_count=3, purge_matrix=None,
+                      filament_profile_ids=[*config["filament_profile_ids"], third_id],
                       model_tools=config["model_tools"][:1],
-                      colour_tools=[{"slot":1,"tool":2},{"slot":2,"tool":1+1}])
-        # Use distinct native tools, never duplicate T1 between swatches.
-        config["colour_tools"][1]["tool"] = 3
+                      colour_tools=[{"slot":1,"tool":2},{"slot":2,"tool":3}])
         job.settings.pop("prime_tower")
         PrusaWorkbenchMaterialTests.resolve(
             self, job, filaments, ini("0.4,0.4,0.4", "0"))
-        # Three native head slots need three owned filament profiles.
-        # The native tool editor will reject an incomplete palette.
-        config["tool_count"] = 3
-        config["filament_profile_ids"].append(str(filaments[0].pk))
         with patch("core.slicer_prusa_job_material.slice_prusa_offline_xl_colour_candidate",
                    return_value=b"audited-dual-xl") as worker:
             result=slice_prusa_workbench_material(
