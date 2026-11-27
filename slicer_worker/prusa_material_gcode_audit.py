@@ -228,7 +228,7 @@ def audit_prusa_material_model_gcode(data, project, *, printer_ini, tools, tower
     if trusted_cleaner and (flush or cleaner or flush_blocks < 1):
         raise WorkerError("Official INDX cleaner sequence did not complete.")
     if (used!={tool-1 for tool in tools} or any(
-            good<20 or bad>max(2,int(good*.01))
+            good<20 or bad>(0 if trusted_cleaner else max(2,int(good*.01)))
             for good,bad in zip(correct,incorrect))):
         raise WorkerError("Native Prusa material toolpaths do not match the assigned model tools.")
     if tower is not None and any(count<20 for count in tower_hits.values()):
