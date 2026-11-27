@@ -149,6 +149,57 @@ class PrusaOfflineMmuPreflightTests(TestCase):
         with self.assertRaises(WorkerError):
             _decode_payload({**payload,"prusa_offline_xl":{"tools":[1,2]}})
 
+    def test_two_painted_mmu_walls_bind_explicit_tools_and_worker_bytes(self):
+        from core.slicer_prusa_material_preflight import prepare_prusa_offline_colour_candidate
+        from core.slicer_plate_3mf import _triangles
+        from core.slicer_native_support_paint import _fingerprint
+        from scripts.prusa_generate_mmu_paint import fixture
+        from slicer_worker.service import _decode_payload
+        import base64
+        source, _mesh, _states, paint = fixture(include_paint=True)
+        triangles = list(_triangles(source))
+        lo = [min(p[a] for tri in triangles for p in tri) for a in range(3)]
+        hi = [max(p[a] for tri in triangles for p in tri) for a in range(3)]
+        centre = ((lo[0]+hi[0])/2,(lo[1]+hi[1])/2,lo[2])
+        local = [[tuple(p[a]-centre[a] for a in range(3)) for p in tri]
+                 for tri in triangles]
+        back = [{"face":i,"polygon":[list(p) for p in tri]}
+                for i,tri in enumerate(local)
+                if all(abs(p[1]-10)<1e-5 for p in tri)]
+        self.assertEqual(len(back),2)
+        paint = {**paint, "signature":_fingerprint(local),
+                 "palette":[*paint["palette"],{"color":"#fadd4d","label":"rear"}],
+                 "regions":[*paint["regions"],{"slot":2,"patches":back}]}
+        values,assets = self.parts()
+        settings = {key:values[key] for key in (
+            "owner_id","printer_profile","process_profile","filament_profiles",
+            "purge_matrix","tower_xy","bed_width","bed_depth")}
+        settings.update(rows=[({"asset_id":"two-swatch","x_mm":0,"y_mm":0,
+                               "z_mm":0,"rotation_deg":0,"scale_percent":100,
+                               "colour_paint":paint},source)],tools=[1],
+                        colour_tool_indices={2:2,1:1})
+        with patch("core.slicer_prusa_material_preflight.resolved_prusa_profile",
+                   side_effect=assets):
+            candidate=prepare_prusa_offline_colour_candidate(**settings)
+        self.assertEqual(candidate["tools"],(1,2))
+        self.assertNotIn("tool",candidate)
+        encode=lambda value:base64.b64encode(value).decode("ascii")
+        payload={
+            "job_id":str(uuid.uuid4()),"engine":"prusaslicer",
+            "engine_version":"2.9.7","model_format":"3mf",
+            "model":encode(candidate["model"]),
+            "printer_profile":encode(candidate["printer"]),
+            "filament_profile":encode(candidate["filament"]),
+            "process_profile":encode(candidate["process"]),
+            "prusa_offline_colour":{"tools":[1,2],"tower":list(candidate["tower"])},
+        }
+        checked=_decode_payload(payload)
+        self.assertEqual(checked["prusa_offline_colour"]["tools"],[1,2])
+        for wrong in ([1,1],[2,1],[1,5],[True,2]):
+            with self.subTest(wrong=wrong),self.assertRaises(WorkerError):
+                _decode_payload({**payload,"prusa_offline_colour":{
+                    "tools":wrong,"tower":list(candidate["tower"])}})
+
     def test_painted_mmu_refuses_foreign_preset_before_reading_any_file(self):
         from core.slicer_prusa_material_preflight import prepare_prusa_offline_colour_candidate
         from scripts.prusa_generate_mmu_paint import fixture
