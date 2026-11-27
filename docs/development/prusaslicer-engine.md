@@ -1,3 +1,26 @@
+### 27 November — independently painted support on larger plates
+
+The earlier spatial bug was stationary positive-E recovery misclassified
+as support deposited onto a second object. The reviewed Prusa 2.9.7
+two-object left/right fixtures now use moving G1 XY segments with both
+endpoints inside the trusted STL footprint. The same audit is extended
+to **2–12 independent objects**, with exactly one painted enforcer and
+strictly zero deposited support movements within every other model.
+Pairwise-overlapping XY footprints, multi-painted objects, any other
+advanced paint/modifier edits, and non-upright/non-unscaled source objects
+remain blocked. The existing two-object methods are compatibility wrappers.
+
+Ordinary Prusa single-material job admission uses the extended check
+before queueing and again after native G-code is produced. No Creality,
+Orca or Bambu worker path is affected. A **real Prusa 2.9.7**
+three-object cantilever fixture has been added to the mandatory
+reviewed-runtime smoke; only that native toolpath result, not the unit
+tests alone, can qualify this feature for release. This does not enable
+multi-head/MMU combined support paint or multiple simultaneously painted
+support enforcers.
+
+---
+
 ### 27 November — two-swatch MMU3 native colour qualification
 
 Upstream 2.9.7 native 3MF uses `slic3rpe:mmu_segmentation` and
