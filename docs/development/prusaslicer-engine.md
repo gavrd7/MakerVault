@@ -1,3 +1,37 @@
+### 27 November — mapping-first merge pass and genuine MMU compatibility boundary
+
+This pass adopts the standing [engine-adapter strategy](slicer-engine-adapter-strategy.md):
+MakerVault's existing controls are translated into each engine's native
+configuration, rather than recreated as a new feature or locked behind
+unbounded combination-specific experiments.
+
+- **Native per-Object speed controls:** Existing Prusa numeric mappings
+  now preserve explicit external/internal wall, sparse-infill and top-solid
+  speeds at Object scope in the native 3MF. The isolated worker accepts only
+  bounded native values, rejects forged speed metadata and does not apply
+  validation-scaffold defaults to unmodified Objects.
+- **MMU native parameter modifiers:** The same typed native 3MF volumes
+  already used for XL/INDX now pass genuine pinned Prusa 2.9.7 MMU
+  multi-tool slicing. The native acceptance verified all five model/tool
+  assignments, zero incorrect-tool deposition and wipe tower extrusion.
+  There is no separate MMU implementation of modifier geometry.
+- **MMU per-object variable-layer exception:** An independent upstream
+  CLI comparison established that the pinned 2.9.7 MMU path returns **no
+  G-code** for both layer-only and layer-plus-modifier projects. These
+  specific MMU variable-layer combinations are rejected before execution,
+  while the working XL/INDX variable-layer routes remain enabled.
+  Reassess this targeted restriction if a future upstream engine version
+  fixes the failure; it is not a general ban on combining native features.
+- **Future engines:** Follow the same map/round-trip/representative-native-
+  test process. Avoid artificial tool counts, UI-only restrictions or
+  recreation of native slicing functionality. Printer-start safety still
+  requires separate hardware evidence.
+
+This is a merge-readiness pass, not a replacement architecture. All
+previously released engine execution paths remain unchanged.
+
+---
+
 ### 27 November — additional Prusa advanced-feature parity
 
 **Native pinned PrusaSlicer 2.9.7 acceptance passed** for two further
