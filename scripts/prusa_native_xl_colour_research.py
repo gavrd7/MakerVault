@@ -14,7 +14,7 @@ from scripts.prusa_generate_mmu_paint import fixture
 from scripts.prusa_native_five_colour_paint_smoke import painted_external_walls
 from slicer_worker.prusa_vendor_profiles import (
     flatten_prusa_vendor_preset, validate_flat_prusa_preset)
-from slicer_worker.runner import run_prusa
+from slicer_worker.runner import run_prusa, WorkerError
 
 
 def main(binary, vendor):
@@ -256,7 +256,7 @@ def main(binary, vendor):
                     raise AssertionError("Native XL four-wall tool attribution not isolated")
             print("RESEARCH PASS: genuine Prusa XL5 four independently painted walls",
                   counts,flush=True)
-        except (AssertionError,ValueError,RuntimeError) as exc:
+        except (AssertionError,ValueError,RuntimeError,WorkerError) as exc:
             print("RESEARCH BLOCKED: native XL5 four-wall mapping",
                   type(exc).__name__,str(exc)[:320],flush=True)
 
