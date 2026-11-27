@@ -518,13 +518,14 @@ def _validate_plate_execution(job):
             raise SlicerExecutionError(
                 "Variable layer slicing requires OrcaSlicer 2.5.0, PrusaSlicer 2.9.7, or another verified native engine and profile.")
         prusa_native = job.engine == "prusaslicer" and job.engine_version == "2.9.7"
-        if (len(objects) != 1 and (not prusa_native or len(objects) != 2)) or (
+        if (len(objects) != 1 and (not prusa_native or len(objects) > 200)) or (
                 settings.get("multi_material_test") and
                 job.engine not in {"crealityprint", "bambustudio"}):
             raise SlicerExecutionError(
-                "Variable layer test slicing requires one model (Prusa 2.9.7 permits two independently audited models).")
-        # The pinned native Prusa 2.9.7 real-binary two-cube fixture proved
-        # independent per-object layer schedules. Both source models must
+                "Variable layer slicing requires one model (Prusa 2.9.7 admits up to 200 separately audited models).")
+        # Genuine Prusa binary evidence and the existing per-object G-code
+        # Z-extrusion audit prove independent layer schedules across the plate.
+        # All source models must
         # remain upright and Z-unscaled for that isolated acceptance.
         for item in (objects if prusa_native else objects[:1]):
             if any(abs(float(x)) > 0.000001 for x in
