@@ -227,15 +227,18 @@ class PrusaPaintedWallMotionTests(TestCase):
             with self.subTest(mode=mode), self.assertRaises(WorkerError):
                 self.checked(self.source(**mode))
 
-    def test_stationary_tower_recovery_cannot_qualify_purging(self):
+    def test_genuine_stationary_purge_at_tower_is_valid_but_not_at_model(self):
         data = self.source()
-        # Keep valid wall extrusion; replace the moving wipe paths with
-        # stationary positive-E commands in both tool sections.
+        # Prusa MMU3 legitimately purges at a stationary tower XY. Model
+        # paint still requires *moving* deposition on the selected wall.
         import re
         data = re.sub(rb"G1 X\d+(?:\.\d+)? Y155 E0\.03",
                       b"G1 E0.03", data)
-        with self.assertRaisesRegex(WorkerError, "tower purging"):
-            self.checked(data)
+        observed=self.checked(data)
+        self.assertGreaterEqual(observed["tower_extrusion_moves"][0],10)
+        self.assertGreaterEqual(observed["tower_extrusion_moves"][1],10)
+        with self.assertRaises(WorkerError):
+            self.checked(data.replace(b"G0 X55 Y155",b"G0 X155 Y155"))
 
 
 class PrusaDualColourResearchTests(TestCase):
@@ -292,12 +295,14 @@ class PrusaDualColourResearchTests(TestCase):
         self.assertEqual(result["wall_moves"][2]["front"],0)
 
     def test_wrong_tool_or_cross_wall_paths_fail_closed(self):
-        for variant in ({"crossing":True},{"wrong_tool":True},
-                        {"stationary_tower":True}):
+        for variant in ({"crossing":True},{"wrong_tool":True}):
             with self.subTest(variant=variant),self.assertRaises(WorkerError):
                 self.audit(self.gcode(**variant))
         with self.assertRaises(WorkerError):
             self.audit(self.gcode().replace(b"T2",b"T7"))
+        stationary=self.audit(self.gcode(stationary_tower=True))
+        self.assertTrue(all(value>=10 for value
+                            in stationary["tower_extrusion_moves"].values()))
 
     def test_non_distinct_and_unqualified_tool_assignments_rejected(self):
         from slicer_worker.prusa_colour_gcode_audit import _two_painted_wall_regions
