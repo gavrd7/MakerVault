@@ -758,6 +758,26 @@ jobs:
             enforced=/tmp/support-models/enforced.3mf \
             blocked=/tmp/support-models/blocked.3mf
 
+      - name: Generate disjoint native Prusa support and fuzzy skin controls
+        run: |
+          set -euo pipefail
+          echo "PRUSA_SUPPORT_FUZZY_DIR=$RUNNER_TEMP/prusa-support-fuzzy" >> "$GITHUB_ENV"
+          PYTHONPATH=backend:. "$RUNNER_TEMP/prusa-backend-venv/bin/python" \
+            scripts/prusa_generate_support_fuzzy_combined.py "$RUNNER_TEMP/prusa-support-fuzzy"
+
+      - name: Require simultaneous native Prusa painted support and fuzzy G-code effects
+        run: |
+          set -euo pipefail
+          docker run --rm --network none --user 10001:10001 \
+            -v "$TEST_VOLUME:/opt/engine-store:ro" \
+            -v "$GITHUB_WORKSPACE/scripts/prusa_native_support_fuzzy_combined_smoke.py:/tmp/support_fuzzy.py:ro" \
+            -v "$PRUSA_SUPPORT_FUZZY_DIR:/tmp/support-fuzzy:ro" \
+            --entrypoint python3 prusa-integration:smoke \
+            /tmp/support_fuzzy.py \
+            /opt/engine-store/versions/prusaslicer/2.9.7/bin/prusa-slicer \
+            /opt/engine-store/versions/prusaslicer/2.9.7/resources/profiles/PrusaResearch.ini \
+            /tmp/support-fuzzy
+
       - name: Prepare independent Prusa painted-support two-model fixtures
         run: |
           set -euo pipefail
