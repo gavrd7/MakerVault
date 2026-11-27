@@ -70,11 +70,11 @@ class PrusaProjectDialectTests(TestCase):
         # mixtures remain gated pending separate native proof.
         self.assertTrue(validate_prusa_project_admission(
             [left, right], {}, "2.9.7"))
-        with self.assertRaisesRegex(ValueError, "share a modifier model"):
+        with self.assertRaisesRegex(ValueError, "two-model plate"):
             validate_prusa_project_admission([
                 {**left, "process_overrides": {"wall_loops": 4}}, right
             ], {}, "2.9.7")
-        with self.assertRaisesRegex(ValueError, "negative cavities"):
+        with self.assertRaisesRegex(ValueError, "two-model plate"):
             validate_prusa_project_admission([
                 {**left, "modifier_volumes": [
                     {**volume("negative"), "x_mm": -35}
@@ -83,6 +83,10 @@ class PrusaProjectDialectTests(TestCase):
         receipt = validate_prusa_native_3mf(archive)
         self.assertEqual(receipt["objects"], 2)
         self.assertEqual(receipt["regions"], 1)
+        with self.assertRaisesRegex(ValueError, "two-model plate"):
+            validate_prusa_project_admission([
+                left, right, item(x_mm=80)
+            ], {}, "2.9.7")
         with zipfile.ZipFile(io.BytesIO(archive)) as package:
             metadata = SafeET.fromstring(package.read(
                 "Metadata/Slic3r_PE_model.config"))
