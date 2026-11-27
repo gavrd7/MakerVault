@@ -1094,7 +1094,7 @@ export default function SlicerPrepareWorkspace({
              "top_shell_layers","bottom_shell_layers"].includes(key)))) ||
       object.negative_volumes?.length ||
       ((object.modifier_volumes?.length || object.variable_layer_profile?.bands?.length) &&
-        !prusaIndependentTools) ||
+        (!prusaIndependentTools || prusaSinglePaint)) ||
       object.support_paint?.regions?.length || object.seam_paint?.regions?.length ||
       object.fuzzy_skin_paint?.regions?.length ||
       (object.colour_paint?.regions?.length && !prusaSinglePaint)) &&
