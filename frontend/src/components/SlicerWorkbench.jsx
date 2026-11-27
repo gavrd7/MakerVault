@@ -2123,31 +2123,8 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
             <input aria-label="Official profile engine version"
               value={form.engine_version || ""} readOnly />
           </label>
-          <label>Manufacturer / upstream catalogue
-            <select value={officialVendor} disabled={officialBusy || !officialVendors.length} onChange={e => {
-              setOfficialVendor(e.target.value);setOfficialBrand("");setOfficialResults(null);
-            }}>
-              {officialVendors.map(vendor => <option key={vendor.id} value={vendor.id}>{vendor.label}</option>)}
-              {!officialVendors.length && <option value="">No catalogue loaded</option>}
-            </select>
-          </label>
-          {form.engine==="orcaslicer" && importKind==="filament" &&
-            officialVendor==="OrcaFilamentLibrary" && <label>Filament manufacturer
-              <select aria-label="Filament manufacturer" value={officialBrand}
-                onChange={e=>{setOfficialBrand(e.target.value);setOfficialResults(null);}}>
-                <option value="">All manufacturers</option>
-                {officialBrands.map(brand=><option key={brand} value={brand}>{brand}</option>)}
-              </select>
-            </label>}
-          <label>Printer model
-            <select value={officialModel} disabled={officialModelsBusy || !officialVendor || officialVendor==="OrcaFilamentLibrary"}
-              onChange={e => { setOfficialModel(e.target.value); setOfficialResults(null); }}>
-              <option value="">All models / generic profiles</option>
-              {officialModels.map(model => <option key={model} value={model}>{model}</option>)}
-            </select>
-          </label>
           <label>Profile type
-            <select value={importKind} disabled={officialBusy} onChange={e => {
+            <select aria-label="Profile type" value={importKind} disabled={officialBusy} onChange={e => {
                 const kind=e.target.value;
                 setImportKind(kind);setOfficialResults(null);setOfficialImportNotice("");setOfficialBrand("");
                 setOfficialQuery("");setOfficialModel("");setOfficialManualModel("");
@@ -2162,17 +2139,61 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
               <option value="process">Process</option>
             </select>
           </label>
-          <label className="full">Manual printer/model search (optional)
+          {importKind === "filament" ? (
+            <label>Filament manufacturer
+              {form.engine === "orcaslicer" ? (
+                <select aria-label="Filament manufacturer" value={officialBrand}
+                  disabled={officialBusy || !officialVendors.length}
+                  onChange={e=>{setOfficialBrand(e.target.value);setOfficialResults(null);}}>
+                  <option value="">All manufacturers</option>
+                  {officialBrands.map(brand=><option key={brand} value={brand}>{brand}</option>)}
+                </select>
+              ) : (
+                <select aria-label="Filament manufacturer" value={officialVendor}
+                  disabled={officialBusy || !officialVendors.length}
+                  onChange={e=>{setOfficialVendor(e.target.value);setOfficialResults(null);}}>
+                  {officialVendors.map(vendor=><option key={vendor.id} value={vendor.id}>{vendor.label}</option>)}
+                  {!officialVendors.length && <option value="">No manufacturers loaded</option>}
+                </select>
+              )}
+            </label>
+          ) : (
+            <>
+              <label>Manufacturer / upstream catalogue
+                <select value={officialVendor} disabled={officialBusy || !officialVendors.length} onChange={e => {
+                  setOfficialVendor(e.target.value);setOfficialBrand("");setOfficialResults(null);
+                }}>
+                  {officialVendors.filter(vendor=>vendor.id!=="OrcaFilamentLibrary").map(vendor =>
+                    <option key={vendor.id} value={vendor.id}>{vendor.label}</option>)}
+                  {!officialVendors.length && <option value="">No catalogue loaded</option>}
+                </select>
+              </label>
+              <label>Printer model
+                <select value={officialModel} disabled={officialModelsBusy || !officialVendor}
+                  onChange={e => { setOfficialModel(e.target.value); setOfficialResults(null); }}>
+                  <option value="">All models / generic profiles</option>
+                  {officialModels.map(model => <option key={model} value={model}>{model}</option>)}
+                </select>
+              </label>
+            </>
+          )}
+          <label className="full">{importKind==="filament"
+            ? "Filter filament profiles by printer/model name (optional)"
+            : "Manual printer/model search (optional)"}
             <input value={officialManualModel} maxLength="80"
               onChange={e => { setOfficialManualModel(e.target.value); setOfficialResults(null); }}
               placeholder="Type a model, e.g. K1, instead of selecting it above" />
-            <small>Typing here overrides the printer-model dropdown. Search terms match anywhere in the official profile name.</small>
+            <small>{importKind==="filament"
+              ? "Optional text search across the selected filament manufacturer's native preset names."
+              : "Typing here overrides the printer-model dropdown. Search terms match anywhere in the official profile name."}</small>
           </label>
           <label className="full">Search official presets (optional)
             <input value={officialQuery} maxLength="80" onChange={e => setOfficialQuery(e.target.value)} placeholder="e.g. PLA or 0.20mm Standard" />
           </label>
           <div className="full settingsActions">
-            <button type="submit" disabled={officialBusy || !officialVendor || !officialVendors.length}>
+            <button type="submit" disabled={officialBusy || !officialVendors.length ||
+                (form.engine==="orcaslicer" && importKind==="filament"
+                  ? !officialSourceInfo : !officialVendor)}>
               {officialBusy ? "Searching…" : "Search official profiles"}
             </button>
           </div>
