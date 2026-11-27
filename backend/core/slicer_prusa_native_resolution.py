@@ -11,6 +11,11 @@ import re
 from .slicer_profiles import SlicerProfileError
 
 MAX_BYTES = 1024 * 1024
+# The reviewed PrusaResearch INDX vendor update contains larger conditional
+# printer literals than the bundled 2.9.7 catalogue. Match the separate
+# worker-side vendor limit while retaining the 1 MiB total, key, count,
+# executable-directive and exact digest restrictions.
+MAX_NATIVE_VALUE = 65536
 KEY = re.compile(r"[A-Za-z_][A-Za-z0-9_]*\Z")
 REQUIRED = {
     "printer": {"nozzle_diameter", "bed_shape"},
@@ -59,7 +64,7 @@ def parse_prusa_profile(raw, kind):
             raise SlicerProfileError("Prusa profile must be a flattened native INI.")
         key, _, val = line.partition("=")
         key, val = key.strip(), val.strip()
-        if (not KEY.fullmatch(key) or len(val) > 16384
+        if (not KEY.fullmatch(key) or len(val) > MAX_NATIVE_VALUE
                 or key in settings or len(settings) >= 400):
             raise SlicerProfileError("Prusa native profile contains invalid settings.")
         if key == "inherits":
