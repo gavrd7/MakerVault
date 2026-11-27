@@ -21,6 +21,7 @@ from slicer_worker.prusa_vendor_profiles import (
 from slicer_worker.service import _decode_payload
 from slicer_worker.runner import run_prusa
 from slicer_worker.prusa_material_gcode_audit import audit_prusa_material_model_gcode
+from slicer_worker.prusa_gcode_audit import run_prusa_mmu_with_numeric_recheck
 
 
 def main(binary,vendor):
@@ -101,8 +102,9 @@ def main(binary,vendor):
                           ("filament.ini",palette),("process.ini",process)):
             (work/name).write_bytes(data)
         (work/"prusa-offline-mmu.marker").write_text("v1")
-        run_prusa(Path(binary),work)
-        output=(work/"output.gcode").read_bytes()
+        _receipt,output=run_prusa_mmu_with_numeric_recheck(
+            run_prusa,Path(binary),work,timeout_seconds=300,
+            max_bytes=64*1024*1024)
         # Native fixture diagnostics only. Never emit user G-code in the
         # production worker, but identify an out-of-range generator value.
         from slicer_worker.prusa_gcode_audit import WORD
@@ -171,8 +173,9 @@ def main(binary,vendor):
         assert _decode_payload(repeated_payload)["prusa_offline_mmu"]["tools"]==repeated_tools
         (work/"input.3mf").write_bytes(repeated_project)
         (work/"output.gcode").unlink()
-        run_prusa(Path(binary),work)
-        repeated_gcode=(work/"output.gcode").read_bytes()
+        _receipt,repeated_gcode=run_prusa_mmu_with_numeric_recheck(
+            run_prusa,Path(binary),work,timeout_seconds=300,
+            max_bytes=64*1024*1024)
         repeated_receipt=audit_prusa_material_model_gcode(
             repeated_gcode,repeated_project,printer_ini=printer,
             tools=repeated_tools,tower=tower)
