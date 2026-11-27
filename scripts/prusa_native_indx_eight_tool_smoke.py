@@ -482,6 +482,40 @@ def main(binary, vendor, official=None):
             print("PASS: genuine official INDX opposite T5/T7 native paint",
                   pair_receipt,flush=True)
 
+            # Real official INDX T5/T7 on X-opposing walls too. Preserve
+            # genuine vendor G12 cleaner sequences and the original
+            # independent-head no-wipe-tower contract.
+            xregions=[]
+            for slot,side in ((1,-10),(2,10)):
+                patches=[{"face":i,"polygon":[list(v) for v in face]}
+                         for i,face in enumerate(local)
+                         if all(abs(v[0]-side)<.00001 for v in face)]
+                assert len(patches)==2,("Missing official INDX X face",slot)
+                xregions.append({"slot":slot,"patches":patches})
+            xpaint={**dual,"regions":xregions}
+            xproject=build_prusa_colour_candidate(
+                {**row,"colour_paint":xpaint},stl,printer_ini=selected,
+                colour_tool_indices={1:5,2:7},bed_width=250,bed_depth=210)
+            validate_prusa_offline_xl_colour_inputs(
+                project=xproject,printer=selected,filament=palette,
+                process=process,tools=[5,7])
+            payload["prusa_offline_xl_colour"]={"tools":[5,7]}
+            payload["model"]=encode(xproject)
+            _decode_payload(payload)
+            (folder/"input.3mf").write_bytes(xproject)
+            (folder/"output.gcode").unlink(missing_ok=True)
+            run_prusa(Path(binary),folder)
+            xgcode=(folder/"output.gcode").read_bytes()
+            xproof=audit_prusa_dual_colour_gcode(
+                xgcode,xproject,printer_ini=selected,tools=(5,7),tower=None)
+            assert xproof["wall_moves"][5]["front"]>=20,xproof
+            assert xproof["wall_moves"][7]["back"]>=20,xproof
+            assert xproof["wall_moves"][5]["back"]<=2,xproof
+            assert xproof["wall_moves"][7]["front"]<=2,xproof
+            assert not xproof["wipe_tower"],xproof
+            print("PASS: official INDX T5/T7 X-opposing native walls",
+                  xproof,flush=True)
+
 
 
 
