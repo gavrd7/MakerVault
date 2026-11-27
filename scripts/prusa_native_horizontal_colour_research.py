@@ -166,6 +166,13 @@ def main(binary, vendor):
                 "Native partial top-skin colour deposition not demonstrated")
         if counts[1]["top_other"]>max(10,counts[1]["painted"]//4):
             raise AssertionError("Alternate tool leaked beyond top-skin brush")
+        from slicer_worker.prusa_top_surface import (
+            inspect_prusa_partial_top, audit_prusa_partial_top_gcode)
+        signed = inspect_prusa_partial_top(project, 1)
+        assert signed["painted_area_mm2"] > .01
+        rigorous = audit_prusa_partial_top_gcode(data, project, tool=1)
+        print("PASS: horizontal signed top-surface audit", rigorous,
+              flush=True)
         print("PASS: horizontal partial brush native colour feasibility",
               flush=True)
 
