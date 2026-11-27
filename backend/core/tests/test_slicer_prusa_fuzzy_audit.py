@@ -102,6 +102,32 @@ class PrusaTwoObjectFuzzyAuditTests(TestCase):
                 gcode,sources+[sources[0]]*186,
                 bed_width=250,bed_depth=210)
 
+    def test_two_independent_fuzzy_models_on_fifteen_instance_plate(self):
+        painted=models()[0][0]["fuzzy_skin_paint"]
+        positions=[(x,y) for y in (-55,0,55)
+                         for x in (-90,-45,0,45,90)]
+        sources=[(item(x_mm=x,y_mm=y,
+                       **({"fuzzy_skin_paint":painted} if n in (7,8) else {})),
+                  cube())
+                 for n,(x,y) in enumerate(positions)]
+        lines=["M83","G90",";TYPE:External perimeter"]
+        for n in range(120):
+            z=4+n*.1
+            for center in (125,170):
+                lines.extend([f"G0 X{center} Y95 Z{z:.3f}",
+                              f"G1 X{center+.3:.3f} Y95 E.03"])
+        output=("\n".join(lines)+"\n").encode()
+        passed=audit_prusa_multi_object_fuzzy(
+            output,sources,bed_width=250,bed_depth=210)
+        self.assertEqual(passed["painted_model_indices"],[7,8])
+        self.assertEqual(passed["painted_short_external_moves"],240)
+        self.assertEqual(passed["unpainted_short_external_moves"],0)
+        wrong=[(dict(row),mesh) for row,mesh in sources]
+        wrong[8][0].pop("fuzzy_skin_paint")
+        with self.assertRaisesRegex(ValueError,"not isolated"):
+            audit_prusa_multi_object_fuzzy(
+                output,wrong,bed_width=250,bed_depth=210)
+
     def test_non_external_wall_roles_cannot_qualify_fuzzy_skin(self):
         raw=gcode().replace(b";TYPE:External perimeter",
                             b";TYPE:Unsupported external perimeter")
