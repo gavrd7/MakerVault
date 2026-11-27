@@ -77,6 +77,47 @@ def main(binary, vendor):
         print("PASS: genuine independent XL5 T1-front/T0-back paint",
               counts,receipt,"sha256",hashlib.sha256(output).hexdigest(),
               flush=True)
+        # The same native facet encoder supports two opposing selected
+        # tools. Run this through the *independent-head* worker contract
+        # and spatial auditor; it must never inherit an MMU wipe tower.
+        from core.slicer_plate_3mf import _triangles
+        from core.slicer_native_support_paint import _fingerprint
+        from slicer_worker.prusa_offline_contract import validate_prusa_offline_xl_colour_inputs
+        from slicer_worker.prusa_colour_gcode_audit import audit_prusa_dual_colour_gcode
+        triangles=list(_triangles(stl))
+        lower=[min(p[a] for face in triangles for p in face) for a in range(3)]
+        upper=[max(p[a] for face in triangles for p in face) for a in range(3)]
+        origin=((lower[0]+upper[0])/2,(lower[1]+upper[1])/2,lower[2])
+        local=[[tuple(v[a]-origin[a] for a in range(3)) for v in face]
+               for face in triangles]
+        back=[{"face":i,"polygon":[list(v) for v in face]}
+              for i,face in enumerate(local)
+              if all(abs(v[1]-10)<.00001 for v in face)]
+        assert len(back)==2, "Expected the two rear wall triangles"
+        multi={**paint, "signature":_fingerprint(local),
+               "palette":[*paint["palette"],
+                          {"color":"#fadd4d","label":"XL T2 back"}],
+               "regions":[*paint["regions"],{"slot":2,"patches":back}]}
+        dual_project=build_prusa_colour_candidate(
+            {**row,"colour_paint":multi},stl,printer_ini=printer,
+            colour_tool_indices={1:1,2:2},bed_width=360,bed_depth=360)
+        approved=validate_prusa_offline_xl_colour_inputs(
+            project=dual_project,printer=printer,filament=palette,
+            process=process,tools=[1,2])
+        assert approved["tools"]==[1,2] and not approved["wipe_tower"],approved
+        (work/"input.3mf").write_bytes(dual_project)
+        (work/"output.gcode").unlink()
+        run_prusa(Path(binary),work)
+        dual_output=(work/"output.gcode").read_bytes()
+        dual_receipt=audit_prusa_dual_colour_gcode(
+            dual_output,dual_project,printer_ini=printer,tools=[1,2],tower=None)
+        assert dual_receipt["wall_moves"][1]["front"]>=20,dual_receipt
+        assert dual_receipt["wall_moves"][2]["back"]>=20,dual_receipt
+        assert not dual_receipt["tower_extrusion_moves"],dual_receipt
+        assert dual_receipt["wipe_tower"] is False,dual_receipt
+        print("PASS: genuine independent XL5 dual painted walls T1/T2",
+              dual_receipt,"sha256",hashlib.sha256(dual_output).hexdigest(),
+              flush=True)
 
 
 if __name__=="__main__":
