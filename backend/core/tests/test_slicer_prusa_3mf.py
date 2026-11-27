@@ -55,6 +55,29 @@ class PrusaProjectDialectTests(TestCase):
                 self.assertEqual(receipt["objects"], len(plate))
                 self.assertEqual(receipt["regions"], 0)
 
+    def test_mixed_native_modifier_and_object_setting_are_serialized_independently(self):
+        # Export is capable of the mixed dialect. Slice admission stays a
+        # separate native qualification gate until the pinned CLI deposition
+        # fixture proves both effects remain local to their own object.
+        left = item(x_mm=-35, modifier_volumes=[
+            {**volume("modifier", {"sparse_infill_density": 80}), "x_mm": -35}])
+        right = item(x_mm=35, process_overrides={"sparse_infill_density": 80})
+        archive = build_prusa_native_3mf([
+            (left, cube()), (right, cube())],
+            bed_width=250, bed_depth=210)
+        receipt = validate_prusa_native_3mf(archive)
+        self.assertEqual(receipt["objects"], 2)
+        self.assertEqual(receipt["regions"], 1)
+        with zipfile.ZipFile(io.BytesIO(archive)) as package:
+            metadata = SafeET.fromstring(package.read(
+                "Metadata/Slic3r_PE_model.config"))
+        objects = metadata.findall("object")
+        self.assertEqual(len(objects), 2)
+        self.assertTrue(any(entry.get("value") == "80%" for entry in
+            objects[1].findall("metadata")))
+        self.assertEqual(len(objects[0].findall("volume")), 2)
+        self.assertEqual(len(objects[1].findall("volume")), 1)
+
     def test_qualified_modifier_and_negative_volumes_roundtrip(self):
         for kind, settings in (("modifier", {"sparse_infill_density": 80}),
                                ("negative", {})):
