@@ -131,12 +131,24 @@ class PrusaMultiToolCandidateTests(TestCase):
                 with self.assertRaises(WorkerError):
                     validate_prusa_native_3mf(project)
 
-        # MMU uses a shared nozzle and must not inherit independent-head
-        # admission of mixed local regions or variable-layer schedules.
-        with self.assertRaises(SlicerProfileError):
-            build_prusa_multitool_candidate(
-                rows, printer_ini=printer(5, 1), tools=[1, 5],
-                bed_width=250, bed_depth=210)
+        # MMU and independent heads use the same upstream typed native
+        # Object/Volume/layer-range project dialect. Its MMU-specific wipe
+        # tower and material routing are checked separately by the worker.
+        mmu_project, mmu_topology = build_prusa_multitool_candidate(
+            rows, printer_ini=printer(5, 1), tools=[1, 5],
+            bed_width=250, bed_depth=210)
+        self.assertEqual(mmu_topology["kind"], "single_nozzle_changer")
+        with zipfile.ZipFile(io.BytesIO(mmu_project)) as archive:
+            self.assertIn("Metadata/Prusa_Slicer_layer_config_ranges.xml",
+                          archive.namelist())
+            obj = SafeET.fromstring(
+                archive.read("Metadata/Slic3r_PE_model.config"))
+        self.assertEqual([len(entry.findall("volume"))
+                          for entry in obj.findall("object")], [2, 2])
+        self.assertEqual([
+            next(meta.get("value") for meta in entry.findall("metadata")
+                 if meta.get("key") == "extruder")
+            for entry in obj.findall("object")], ["1", "5"])
 
 
     def test_independent_native_object_shell_layers_reach_3mf_and_worker(self):
