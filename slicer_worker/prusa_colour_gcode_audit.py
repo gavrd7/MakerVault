@@ -61,6 +61,18 @@ def _wall_regions(project, tool):
             for plane, opposite in ((lo,hi),(hi,lo)):
                 if not all(abs(p[axis]-plane)<=.0001 for p in painted):
                     continue
+                # One painted wall currently means the *complete* native
+                # exterior mesh wall. An arbitrary subset of that wall
+                # cannot be qualified by a rectangular XY G-code footprint:
+                # an unpainted hole could otherwise pass the loose counter.
+                exact=next(state for state,native_tool in PAINTED_STATES.items()
+                           if native_tool==tool)
+                for face in triangles:
+                    corners=[points[int(face.get(index))]
+                             for index in ("v1","v2","v3")]
+                    if (all(abs(p[axis]-plane)<=.0001 for p in corners)
+                            and face.get(PAINT)!=exact):
+                        raise ValueError()
                 ts=[p[tangent] for p in painted]
                 zs=[p[2] for p in painted]
                 if max(ts)-min(ts)<3 or max(zs)-min(zs)<3:
