@@ -49,16 +49,20 @@ def main(folder):
         "scale_xyz_percent": [100, 100, 100],
         "settings": {"sparse_infill_density": 80},
     }
-    for label, with_modifier, with_object in (
-        ("mix-baseline", False, False),
-        ("mix-modifier", True, False),
-        ("mix-object", False, True),
-        ("mix-both", True, True),
+    for label, with_modifier, with_object, with_negative in (
+        ("mix-baseline", False, False, False),
+        ("mix-modifier", True, False, False),
+        ("mix-object", False, True, False),
+        ("mix-both", True, True, False),
+        ("mix-negative-object", False, True, True),
     ):
         left = {**base, "x_mm": first_x}
         right = {**base, "x_mm": second_x}
         if with_modifier:
             left["modifier_volumes"] = [modifier]
+        if with_negative:
+            left["modifier_volumes"] = [{**modifier, "kind": "negative",
+                                        "settings": {}}]
         if with_object:
             right["process_overrides"] = {"sparse_infill_density": 80}
         archive = build_prusa_native_3mf(
