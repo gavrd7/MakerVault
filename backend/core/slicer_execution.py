@@ -449,25 +449,34 @@ def _validate_plate_execution(job):
                 (job.engine == "crealityprint" and job.engine_version.startswith("7.3.") and
                  settings.get("multi_material_test") is True)):
             raise SlicerExecutionError("Native seam painting test requires PrusaSlicer 2.9.7, OrcaSlicer 2.5.0, or a verified native Creality/Bambu engine.")
-        if len(objects) != 1 or (settings.get("multi_material_test") and job.engine not in {"crealityprint", "bambustudio"}):
-            raise SlicerExecutionError("Seam painting test requires one model (Creality: one two-colour CFS model).")
-        item = objects[0]
+        prusa_multi_seam = (job.engine == "prusaslicer" and
+                            job.engine_version == "2.9.7" and
+                            2 <= len(objects) <= 200)
+        if ((len(objects) != 1 and not prusa_multi_seam) or
+                (settings.get("multi_material_test") and
+                 job.engine not in {"crealityprint", "bambustudio"})):
+            raise SlicerExecutionError(
+                "Seam painting requires one model (Prusa supports independent multi-model seam audit).")
         if job.engine == "prusaslicer":
             from .slicer_prusa_seam_audit import prusa_qualified_seam_direction
-            try:
-                prusa_qualified_seam_direction(item)
-            except ValueError as exc:
-                raise SlicerExecutionError(str(exc)) from exc
-        if item.get("process_overrides"):
-            raise SlicerExecutionError("Seam painting with per-object overrides is not yet verified.")
-        if (any(abs(float(value)) > 0.000001 for value in
-                item.get("rotation_xyz_deg", [0, 0]))
-                or abs(float(item.get("z_mm", 0))) > 0.000001):
-            raise SlicerExecutionError("Seam painting test requires an upright, non-elevated model.")
-        if (abs(float(item.get("scale_percent", 100)) - 100) > 0.000001 or
-               any(abs(float(value) - 100) > 0.000001 for value in
-                   item.get("scale_xyz_percent", [item.get("scale_percent", 100)] * 3))):
-            raise SlicerExecutionError("Seam painting test requires an unscaled model.")
+        for item in (objects if prusa_multi_seam else objects[:1]):
+            if not (item.get("seam_paint") or {}).get("regions"):
+                continue
+            if job.engine == "prusaslicer":
+                try:
+                    prusa_qualified_seam_direction(item)
+                except ValueError as exc:
+                    raise SlicerExecutionError(str(exc)) from exc
+            if item.get("process_overrides"):
+                raise SlicerExecutionError("Seam painting with per-object overrides is not yet verified.")
+            if (any(abs(float(value)) > 0.000001 for value in
+                    item.get("rotation_xyz_deg", [0, 0]))
+                    or abs(float(item.get("z_mm", 0))) > 0.000001):
+                raise SlicerExecutionError("Seam painting requires an upright, non-elevated model.")
+            if (abs(float(item.get("scale_percent", 100)) - 100) > 0.000001 or
+                   any(abs(float(value) - 100) > 0.000001 for value in
+                       item.get("scale_xyz_percent", [item.get("scale_percent", 100)] * 3))):
+                raise SlicerExecutionError("Seam painting requires an unscaled model.")
     if any(isinstance(item, dict) and isinstance(item.get("fuzzy_skin_paint"), dict)
            and item["fuzzy_skin_paint"].get("regions") for item in objects):
         # Orca 2.5 saves painted fuzzy regions in paint_fuzzy_skin and uses
@@ -969,11 +978,14 @@ def process_queued_job(job_id):
                 from .slicer_prusa_process_settings import enable_prusa_painted_support
                 profiles[2] = enable_prusa_painted_support(
                     profiles[2], enforcers_only=len(source_models) >= 2)
-            if plate and len(plate) == 1 and (plate[0].get("seam_paint") or {}).get("regions"):
+            if plate and any((row.get("seam_paint") or {}).get("regions")
+                             for row in plate):
                 from .slicer_prusa_seam_audit import prusa_qualified_seam_direction
                 from .slicer_prusa_process_settings import qualify_prusa_seam_process
-                _paint, direction = prusa_qualified_seam_direction(plate[0])
-                if direction != "front":
+                directions = [
+                    prusa_qualified_seam_direction(row)[1]
+                    for row in plate if (row.get("seam_paint") or {}).get("regions")]
+                if len(plate)>1 or any(direction!="front" for direction in directions):
                     profiles[2] = qualify_prusa_seam_process(profiles[2], "random")
         if job.engine == "orcaslicer":
             stage = "checking native printer/process compatibility"
@@ -1322,17 +1334,22 @@ def process_queued_job(job_id):
                     engine_name + " did not produce the requested variable layer "
                     "heights. The generated G-code has not been approved or stored."
                 ) from exc
-        if (job.engine == "prusaslicer" and plate and len(plate) == 1
-                and (plate[0].get("seam_paint") or {}).get("regions")):
-            stage = "auditing native Prusa selected vertical seam placement"
-            from .slicer_prusa_seam_audit import audit_prusa_seam_enforcer_gcode
+        if (job.engine == "prusaslicer" and plate and
+                any((row.get("seam_paint") or {}).get("regions") for row in plate)):
+            stage = "auditing independent native Prusa selected seams"
+            from .slicer_prusa_seam_audit import (
+                audit_prusa_seam_enforcer_gcode, audit_prusa_multi_object_seam_gcode)
             width, depth = trusted_plate_dimensions(job.printer_profile)
             try:
-                audit_prusa_seam_enforcer_gcode(
-                    output, plate[0], bed_width=width, bed_depth=depth)
+                if len(plate)==1:
+                    audit_prusa_seam_enforcer_gcode(
+                        output,plate[0],bed_width=width,bed_depth=depth)
+                else:
+                    audit_prusa_multi_object_seam_gcode(
+                        output,source_models,bed_width=width,bed_depth=depth)
             except ValueError as exc:
                 raise SlicerExecutionError(
-                    "Prusa native seam did not follow the painted vertical-face enforcer.") from exc
+                    "Prusa native seam did not follow every painted model's selected face.") from exc
         if job.engine == "prusaslicer":
             painted_enforcers = any(
                 any(region.get("slot") == 0 for region in
