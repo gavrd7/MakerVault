@@ -324,6 +324,27 @@ def main(binary, vendor, official=None):
                 raise AssertionError("Actual official INDX 8T native material attribution failed.")
             print("PASS: actual official Prusa CORE One INDX 8T profile "
                   "slices all eight tool identities",observed_official,flush=True)
+            # Require the *official* firmware-cleaner INDX printer preset
+            # to preserve brim/skirt roles and every model's own filament.
+            # This is a genuine offline binary test, not a physical pickup.
+            (folder/"input.3mf").write_bytes(official_project)
+            (folder/"process.ini").write_bytes(adhesion_process)
+            (folder/"output.gcode").unlink(missing_ok=True)
+            try:
+                run_prusa(Path(binary),folder)
+                official_adhesion=(folder/"output.gcode").read_bytes()
+                official_role=audit_prusa_material_model_gcode(
+                    official_adhesion,official_project,printer_ini=selected,
+                    tools=tools,process_ini=adhesion_process)
+                assert official_role["incorrect_extrusion_moves"]==[0]*8,official_role
+                assert min(official_role["correct_extrusion_moves"])>=20,official_role
+                assert sum(official_role["native_first_layer_adhesion_moves"].values())>=10
+                print("PASS: official INDX native cleaner and brim/skirt "
+                      "preserve all eight model materials",official_role,flush=True)
+            finally:
+                (folder/"process.ini").write_bytes(process)
+                (folder/"output.gcode").unlink(missing_ok=True)
+
             # Same eight-head official printer/palette, no invented printer
             # scripts: apply MakerVault's existing native facet encoder and
             # independent worker colour audits to T1 (and T1/T2). Higher
