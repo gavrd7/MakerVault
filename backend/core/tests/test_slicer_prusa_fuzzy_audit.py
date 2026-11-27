@@ -1,7 +1,8 @@
 """Real extrusion roles, not imported paint tags, qualify Prusa fuzzy skin."""
 from unittest import TestCase
 
-from core.slicer_prusa_fuzzy_audit import audit_prusa_two_object_fuzzy
+from core.slicer_prusa_fuzzy_audit import (audit_prusa_two_object_fuzzy,
+    audit_prusa_multi_object_fuzzy)
 from core.tests.test_slicer_prusa_plate import cube, item
 
 
@@ -67,6 +68,39 @@ class PrusaTwoObjectFuzzyAuditTests(TestCase):
             bed_width=250,bed_depth=210)
         self.assertEqual(result["painted_short_external_moves"],120)
         self.assertEqual(result["unpainted_short_external_moves"],0)
+
+    def test_fifteen_model_fuzzy_is_isolated_to_selected_model(self):
+        painted=models()[0][0]["fuzzy_skin_paint"]
+        positions=[(x,y) for y in (-55,0,55)
+                         for x in (-90,-45,0,45,90)]
+        sources=[(item(x_mm=x,y_mm=y,
+                       **({"fuzzy_skin_paint":painted} if n==7 else {})),
+                  cube())
+                 for n,(x,y) in enumerate(positions)]
+        lines=["M83","G90",";TYPE:External perimeter"]
+        for n in range(120):
+            z=4+n*.1
+            lines.extend([f"G0 X125 Y95 Z{z:.3f}",
+                          f"G1 X{125.3+n*.00001:.4f} Y95 E.03"])
+        gcode=("\n".join(lines)+"\n").encode()
+        result=audit_prusa_multi_object_fuzzy(
+            gcode,sources,bed_width=250,bed_depth=210)
+        self.assertEqual(result["painted_model_index"],7)
+        self.assertEqual(result["painted_short_external_moves"],120)
+        self.assertEqual(result["unpainted_short_external_moves"],0)
+        self.assertEqual(len(result["per_model_short_external_moves"]),15)
+        # Real moving external-wall extrusion inside a different model's
+        # footprint must not be mistaken for harmless stationary E recovery.
+        leaked=(gcode+b"G0 X80 Y40 Z6\n"+
+                b"".join(f"G1 X{80+.03*i:.2f} Y40 E.03\n".encode()
+                         for i in range(1,12)))
+        with self.assertRaisesRegex(ValueError,"not isolated"):
+            audit_prusa_multi_object_fuzzy(
+                leaked,sources,bed_width=250,bed_depth=210)
+        with self.assertRaises(ValueError):
+            audit_prusa_multi_object_fuzzy(
+                gcode,sources+[sources[0]]*186,
+                bed_width=250,bed_depth=210)
 
     def test_non_external_wall_roles_cannot_qualify_fuzzy_skin(self):
         raw=gcode().replace(b";TYPE:External perimeter",
