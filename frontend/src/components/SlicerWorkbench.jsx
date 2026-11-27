@@ -159,6 +159,7 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
   const [mayCancel, setMayCancel] = useState(false);
   const [mayDeleteDraft, setMayDeleteDraft] = useState(false);
   const [printSelection, setPrintSelection] = useState(null);
+  const [pendingPrintStart, setPendingPrintStart] = useState(null);
   const [previewFile, setPreviewFile] = useState(null);
   const projectFileRef=useRef(null);
   const [projectName,setProjectName]=useState("MakerVault project");
@@ -341,6 +342,52 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
+  useEffect(() => {
+    if (!pendingPrintStart) return undefined;
+    let active = true;
+    let reading = false;
+    let checks = 0;
+    const {printerId, connectionId, requestId} = pendingPrintStart;
+    const check = async () => {
+      if (!active || reading) return;
+      if (++checks > 48) {
+        setPendingPrintStart(null);
+        setNotice("Print-start confirmation is still unavailable. Check the printer's live job. " +
+          "Request ID: " + requestId + ". The start command was not resent.");
+        return;
+      }
+      reading = true;
+      try {
+        // Read only the existing journal; the backend will poll printer
+        // telemetry at a bounded rate. Never issue another print command.
+        const response = await apiFetch("/api/printing/printers/" +
+          encodeURIComponent(printerId) + "/connections/" +
+          encodeURIComponent(connectionId) + "/gcode/submissions/" +
+          encodeURIComponent(requestId) + "/");
+        if (!active) return;
+        const receipt = response?.submission;
+        if (!receipt || String(receipt.request_id) !== String(requestId)) return;
+        if (receipt.status === "started" &&
+            !/awaiting .*verif|without acknowledgement|awaiting live job|commands dispatched|not acknowledge|unknown outcome/i.test(receipt.message || "")) {
+          setPendingPrintStart(null);
+          setNotice("Print start verified against the printer's live job for " +
+            (receipt.remote_path || "the submitted file") + ".");
+        } else if (receipt.status === "rejected" || receipt.status === "failed") {
+          setPendingPrintStart(null);
+          setError(receipt.message || "Printer did not confirm the print start.");
+        }
+      } catch (_error) {
+        // Transient telemetry/HTTP failures are neither acceptance nor proof
+        // that a print failed. Retain the existing request for later checks.
+      } finally {
+        reading = false;
+      }
+    };
+    void check();
+    const timer = window.setInterval(check, 2500);
+    return () => { active = false; window.clearInterval(timer); };
+  }, [pendingPrintStart]);
+
 
   const stlFiles = useMemo(() => {
     const visible = files.filter(file => file.category === "mesh" && /\.stl$/i.test(file.filename || file.name || ""));
@@ -2535,6 +2582,11 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
           // NOT a verified print. Keep its status and request ID visible in
           // the preview; never retry a print-start automatically.
           setPrintSelection(null);
+          setPendingPrintStart({
+            requestId: receipt.request_id,
+            printerId: printSelection.printer.id,
+            connectionId: printSelection.connectionId,
+          });
           setNotice("Print command sent; live start is not yet verified. " +
             "Check the printer display. Request ID: " + receipt.request_id +
             ". Do not resend unless its status is independently resolved.");
