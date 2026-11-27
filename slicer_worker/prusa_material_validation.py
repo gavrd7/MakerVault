@@ -133,7 +133,24 @@ def validate_prusa_material_candidate(data, *, printer_ini, tools=None, colour=F
             if marked<1 or len(selected)<2:
                 _refuse()
             volumes=objects[0].findall("volume")
-            if len(volumes)!=1:
+            if not 1<=len(volumes)<=2:
+                _refuse()
+            if len(volumes)==2:
+                # The only qualified same-object paint + native parameter
+                # modifier uses a single box infill region. The authoring
+                # adapter additionally validates shape and location; the
+                # isolated worker independently restricts type and setting
+                # rather than trusting a caller-supplied feature flag.
+                meta={node.get("key"):node.get("value")
+                      for node in volumes[1].findall("metadata")}
+                if (len(meta)!=2 or
+                        meta.get("volume_type")!="ParameterModifier" or
+                        "fill_density" not in meta):
+                    _refuse()
+            model_part_end=int(volumes[0].get("lastid","-1"))
+            if (not 0<=model_part_end<len(facets) or
+                    any(PAINT in face.attrib
+                        for face in facets[model_part_end+1:])):
                 _refuse()
             extras=[n for n in volumes[0] if n.tag=="metadata" and n.get("key")=="extruder"]
             if len(extras)!=1 or extras[0].attrib!={"type":"volume","key":"extruder","value":"1"}:
@@ -155,8 +172,9 @@ def validate_prusa_material_candidate(data, *, printer_ini, tools=None, colour=F
             for part in sorted(parts):
                 dest.writestr(part,parts[part])
         receipt=validate_prusa_native_3mf(out.getvalue())
-        if colour and (receipt["objects"]!=1 or receipt["regions"]!=0
-                       or receipt["paint_channels"] or receipt["layer_ranges"]):
+        if colour and (receipt["objects"]!=1 or
+                       receipt["regions"] not in (0,1) or
+                       receipt["paint_channels"] or receipt["layer_ranges"]):
             _refuse()
         # Typed 3MF volumes and object layer ranges are native Prusa
         # constructs for MMU as well as independent toolheads. Keep the
