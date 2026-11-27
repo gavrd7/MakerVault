@@ -100,6 +100,28 @@ class PrusaNativeColourProjectTests(TestCase):
             self.candidate(settings={"colour_paint":paint},
                            tool_map={1:1})
 
+    def test_indx_eight_head_native_colour_reuses_the_five_leaf_states(self):
+        printer=ini(",".join(["0.4"]*8),"0")
+        stl,_mesh,_states,paint=fixture(include_paint=True)
+        row={"asset_id":"indx-eight","x_mm":0,"y_mm":0,"z_mm":0,
+             "rotation_deg":0,"scale_percent":100,"colour_paint":paint}
+        for selected in (1,2,3,4):
+            with self.subTest(selected=selected):
+                project=build_prusa_colour_candidate(
+                    row,stl,printer_ini=printer,
+                    colour_tool_indices={1:selected},bed_width=250,bed_depth=210)
+                receipt=validate_prusa_material_candidate(
+                    project,printer_ini=printer,colour=True,
+                    independent_colour=True)
+                self.assertEqual(receipt["tools"],(1,selected+1))
+        # The machine can hold eight heads, but the pinned 2.9.7 painted
+        # facet states have only four distinct alternate-tool encodings.
+        for selected in (0,5,6,7):
+            with self.subTest(selected=selected),self.assertRaises(SlicerProfileError):
+                build_prusa_colour_candidate(
+                    row,stl,printer_ini=printer,
+                    colour_tool_indices={1:selected},bed_width=250,bed_depth=210)
+
     def test_painted_tools_outside_native_printer_capacity_are_blocked(self):
         candidate = self.candidate(tool_map={1:4})
         for count in (2,3,4):
