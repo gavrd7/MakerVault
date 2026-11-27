@@ -1116,8 +1116,8 @@ export default function SlicerPrepareWorkspace({
     object.colour_paint?.regions?.map(region=>region.slot)||[]))];
   const prusaSinglePaint=activeEngine==="prusaslicer" && objects.length===1 &&
     prusaPaintedSlots.length>=1 &&
-    ((prusaNativeTools?.mode==="mmu" && prusaPaintedSlots.length<=2) ||
-     (prusaNativeTools?.mode==="xl" && prusaPaintedSlots.length===1)) &&
+    (["mmu","xl"].includes(prusaNativeTools?.mode) &&
+     prusaPaintedSlots.length<=2) &&
     prusaNativeTools?.model_tools?.length===1 &&
     prusaNativeTools.model_tools[0].instance_id===objects[0].instance_id &&
     prusaNativeTools.model_tools[0].tool===1 &&
