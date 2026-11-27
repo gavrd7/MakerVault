@@ -100,7 +100,7 @@ def run_remote_job(job_id, engine, version, model, printer_profile, filament_pro
                    creality_model_stls=None, creality_tool_ids=None,
                    creality_native_project=False, native_modifier_project=False, prusa_placed_stl=False,
                    prusa_offline_mmu=None, prusa_offline_xl=None,
-                   prusa_offline_colour=None):
+                   prusa_offline_colour=None, prusa_offline_xl_colour=None):
     if model_format not in {"stl", "3mf"}:
         raise SlicerWorkerError("Unsupported slicer input format.")
     if type(timeout_seconds) is not int or not 1 <= timeout_seconds <= 900:
@@ -151,6 +151,9 @@ def run_remote_job(job_id, engine, version, model, printer_profile, filament_pro
     if orca_streamed_plate:
         payload["orca_streamed_plate"] = True
         payload["orca_streamed_sha256"] = hashlib.sha256(model).hexdigest()
+    if sum(value is not None for value in (prusa_offline_mmu, prusa_offline_xl,
+            prusa_offline_colour, prusa_offline_xl_colour)) > 1:
+        raise SlicerWorkerError("Conflicting native Prusa worker contracts.")
     if prusa_offline_xl is not None:
         if (engine != "prusaslicer" or version != "2.9.7" or
                 model_format != "3mf" or not isinstance(prusa_offline_xl, dict)
@@ -187,23 +190,39 @@ def run_remote_job(job_id, engine, version, model, printer_profile, filament_pro
                        for v in tower)):
             raise SlicerWorkerError("Invalid offline Prusa MMU material and tower mapping.")
         payload["prusa_offline_mmu"] = {"tools": list(tools), "tower": list(tower)}
-    if prusa_offline_colour is not None:
-        if (engine!="prusaslicer" or version!="2.9.7" or
-                model_format!="3mf" or not isinstance(prusa_offline_colour,dict)
-                or set(prusa_offline_colour)!={"tool","tower"}
-                or prusa_offline_mmu is not None or prusa_offline_xl is not None
-                or any((filament_profiles is not None, creality_model_stls is not None,
-                        creality_tool_ids is not None, creality_native_project,
-                        native_modifier_project, prusa_placed_stl))):
+    for field, details, independent in (
+            ("prusa_offline_colour", prusa_offline_colour, False),
+            ("prusa_offline_xl_colour", prusa_offline_xl_colour, True)):
+        if details is None:
+            continue
+        required = set() if independent else {"tower"}
+        if (engine != "prusaslicer" or version != "2.9.7" or
+                model_format != "3mf" or not isinstance(details, dict) or
+                set(details) not in (required | {"tool"}, required | {"tools"}) or
+                any((filament_profiles is not None, creality_model_stls is not None,
+                     creality_tool_ids is not None, creality_native_project,
+                     native_modifier_project, prusa_placed_stl, creality_placed_stl))):
             raise SlicerWorkerError("Invalid offline Prusa colour worker contract.")
-        tool=prusa_offline_colour["tool"]
-        tower=prusa_offline_colour["tower"]
-        if (type(tool) is not int or not 1<=tool<=4 or
-                not isinstance(tower,(tuple,list)) or len(tower)!=5 or
-                any(type(v) not in (int,float) or not math.isfinite(v)
-                    for v in tower)):
-            raise SlicerWorkerError("Invalid offline Prusa painted tool or tower.")
-        payload["prusa_offline_colour"]={"tool":tool,"tower":list(tower)}
+        selection = {}
+        if "tools" in details:
+            tools = details["tools"]
+            if (not isinstance(tools, (tuple, list)) or len(tools) != 2 or
+                    any(type(t) is not int or not 1 <= t <= 4 for t in tools) or
+                    len(set(tools)) != 2 or independent):
+                raise SlicerWorkerError("Invalid offline Prusa painted tools.")
+            selection["tools"] = list(tools)
+        else:
+            tool = details["tool"]
+            if type(tool) is not int or not 1 <= tool <= 4:
+                raise SlicerWorkerError("Invalid offline Prusa painted tool.")
+            selection["tool"] = tool
+        if not independent:
+            tower = details["tower"]
+            if (not isinstance(tower, (tuple, list)) or len(tower) != 5 or
+                    any(type(v) not in (int, float) or not math.isfinite(v) for v in tower)):
+                raise SlicerWorkerError("Invalid offline Prusa painted tower.")
+            selection["tower"] = list(tower)
+        payload[field] = selection
     if creality_placed_stl:
         if (creality_placed_stl is not True or engine != "crealityprint"
                 or version != "7.3.1" or model_format != "stl"
