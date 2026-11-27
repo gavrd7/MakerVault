@@ -2201,10 +2201,12 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
         <div className="full settingsActions slicerOfficialImportAlternative"><button type="button" onClick={() => { setProfileModal("import"); setOfficialError(""); }}>Import native profile file instead</button></div>
         {officialError && <p className="integrationError" role="alert">{officialError}</p>}
         {officialImportNotice && <p role="status" className="slicerProfileImportNotice">{officialImportNotice}</p>}
-        {form.engine==="orcaslicer" && officialVendor==="OrcaFilamentLibrary" &&
-          <p className="slicerPlateHint">Native filament manufacturer presets are imported
+        {form.engine==="orcaslicer" && importKind==="filament" &&
+          <p className="slicerPlateHint">Native filament presets from every available official Orca manufacturer catalogue are imported
             from the selected OrcaSlicer release. Preset dependencies are checked automatically.</p>}
         {officialResults && <div className="printingStack" role="region" aria-label="Official profile search results">
+          {officialResults.partial_catalogues > 0 &&
+            <p role="status">Some upstream manufacturer catalogues could not be retrieved. Results may be incomplete; retry the search later.</p>}
           <p>{officialResults.total_matches} matching official presets in {officialResults.vendor} · showing {officialResults.profiles.length ? (officialResults.page - 1) * officialResults.page_size + 1 : 0}–{(officialResults.page - 1) * officialResults.page_size + officialResults.profiles.length} · original upstream release {officialResults.ref}{officialResults.printer_model_filter ? " · filtered for " + officialResults.printer_model_filter + " (name-based, not verified compatibility)" : ""}</p>
           {officialResults.total_pages > 1 && <nav className="slicerProfileNavigation" aria-label="Official profile pages">
             <button type="button" onClick={() => navigateOfficialProfiles(1)}
@@ -2217,10 +2219,10 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
             <button type="button" onClick={() => navigateOfficialProfiles(officialResults.total_pages)}
               disabled={officialBusy || officialResults.page >= officialResults.total_pages} aria-label="Last page">Last »</button>
           </nav>}
-          {officialResults.profiles.map(candidate => <div className="cameraSourceRow slicerOfficialProfileRow" key={candidate.sub_path + "::" + candidate.name}>
+          {officialResults.profiles.map(candidate => <div className="cameraSourceRow slicerOfficialProfileRow" key={(candidate.vendor || officialVendor) + "::" + candidate.sub_path + "::" + candidate.name}>
             <div className="cameraSourceIdentity">
               <strong>{candidate.name}</strong>
-              <small>{candidate.sub_path}</small>
+              <small>{candidate.vendor && candidate.vendor + " · "}{candidate.sub_path}</small>
             </div>
             <div className="cameraSourceActions">
               <button type="button" onClick={() => importOfficialProfile(candidate)} disabled={!canPrepare || officialBusy}>
@@ -2246,7 +2248,7 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
             <button type="button" onClick={() => navigateOfficialProfiles(officialResults.total_pages)}
               disabled={officialBusy || officialResults.page >= officialResults.total_pages} aria-label="Last page">Last »</button>
           </nav>}
-          {!officialResults.profiles.length && <p>No matching presets. Try fewer manual search terms or select All models to browse the complete manufacturer catalogue.</p>}
+          {!officialResults.profiles.length && <p>No matching presets. Try fewer search terms, choose All manufacturers, or select another printer catalogue.</p>}
         </div>}
       </div>
 
