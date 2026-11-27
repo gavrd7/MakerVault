@@ -150,7 +150,7 @@ def audit_prusa_partial_wall_gcode(data, project, *, tool):
     position = [None, None, None]
     extruder = 0.0
     relative_e = relative_xyz = False
-    number = re.compile(r"(?:^|\\s)([XYZE])\\s*([-+]?(?:\\d+(?:\\.\\d*)?|\\.\\d+)(?:[Ee][-+]?\\d+)?)", re.I)
+    number = re.compile(r"(?:^|\s)([XYZE])\s*([-+]?(?:\d+(?:\.\d*)?|\.\d+)(?:[Ee][-+]?\d+)?)", re.I)
     for index, raw in enumerate(io.BytesIO(data)):
         if index >= 2_000_000 or len(raw) > 16384:
             raise WorkerError("Prusa partial-mask G-code exceeds audit limits.")
