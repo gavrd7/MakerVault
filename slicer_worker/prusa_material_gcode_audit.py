@@ -191,12 +191,14 @@ def audit_prusa_material_model_gcode(data, project, *, printer_ini, tools, tower
                 # The official INDX cleaner emits short, local movements
                 # in G91/M83; exclude ONLY these, not arbitrary deposited
                 # extrusion outside the explicitly fenced cleaner window.
-                if (op not in ("G1","G01") or not relative or not relative_xy or
-                        previous_x is None or previous_y is None or
-                        x is None or y is None or
-                        not 0 <= amount <= 80 or
-                        not 0 < abs(x-previous_x)+abs(y-previous_y) <= 2):
-                    raise WorkerError("Unexpected native INDX purge movement.")
+                if op not in ("G1","G01") or not relative or not relative_xy:
+                    raise WorkerError("Official INDX purge mode is inconsistent.")
+                if None in (previous_x,previous_y,x,y):
+                    raise WorkerError("Official INDX purge has no known XY origin.")
+                if not 0 <= amount <= 80:
+                    raise WorkerError("Official INDX purge exceeds extrusion bounds.")
+                if not 0 < abs(x-previous_x)+abs(y-previous_y) <= 2:
+                    raise WorkerError("Official INDX purge exceeds XY movement bounds.")
                 flush_moves += 1
                 if flush_moves > 8:
                     raise WorkerError("INDX native purge has too many strokes.")
