@@ -901,3 +901,10 @@ test("the shared bulk filament picker routes Prusa through native tools rather t
   assert.match(prepare, /Native T\{index\}/);
   assert.match(prepare, /!profile\}/);
 });
+
+test("filament pickers scroll for larger reported palettes on desktop and mobile", () => {
+  const css = fs.readFileSync(path.resolve(root, "../styles.css"), "utf8");
+  assert.match(css, /\.slicerModelFilamentChoices\s*\{[^}]*max-height:min\(48vh,440px\)/s);
+  assert.match(css, /\.slicerModelFilamentChoices\s*\{[^}]*overflow-y:auto/s);
+  assert.match(css, /\.slicerModelFilamentChoices>button\s*\{[^}]*flex-shrink:0/s);
+});
