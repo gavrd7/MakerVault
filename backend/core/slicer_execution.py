@@ -487,10 +487,10 @@ def _validate_plate_execution(job):
                  job.engine not in {"crealityprint", "bambustudio"})):
             raise SlicerExecutionError(
                 "Selective fuzzy skin requires one model (Prusa 2.9.7 allows up to 200 independently audited models).")
-        if prusa_multi_fuzzy and sum(bool((row.get("fuzzy_skin_paint") or {}).get("regions"))
-                                for row in objects) != 1:
+        if prusa_multi_fuzzy and not any((row.get("fuzzy_skin_paint") or {}).get("regions")
+                                     for row in objects):
             raise SlicerExecutionError(
-                "Prusa 2.9.7 multi-model fuzzy skin requires exactly one painted model.")
+                "Prusa 2.9.7 multi-model fuzzy skin requires at least one painted model.")
         for item in (objects if prusa_multi_fuzzy else objects[:1]):
             if item.get("process_overrides"):
                 raise SlicerExecutionError(
