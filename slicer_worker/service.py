@@ -494,9 +494,10 @@ class Handler(BaseHTTPRequestHandler):
                           "prusaslicer": run_prusa,
                           "bambustudio": run_bambu}[current["engine"]]
                 if (current["engine"] == "prusaslicer" and
-                        files.get("prusa_offline_colour")):
-                    from .prusa_gcode_audit import run_prusa_painted_with_numeric_recheck
-                    receipt, data = run_prusa_painted_with_numeric_recheck(
+                        (files.get("prusa_offline_mmu") or
+                         files.get("prusa_offline_colour"))):
+                    from .prusa_gcode_audit import run_prusa_mmu_with_numeric_recheck
+                    receipt, data = run_prusa_mmu_with_numeric_recheck(
                         runner, current["binary"], workdir,
                         timeout_seconds=files["slice_timeout_seconds"],
                         max_bytes=gcode_output_budget())
