@@ -98,6 +98,20 @@ def main(binary, vendor):
                 max_bytes=64 * 1024 * 1024)
             positive = audit_prusa_positive_e(data)
             assert positive["positive_e_moves"] > 100
+            if volumes:
+                from slicer_worker.modifier_gcode_audit import (
+                    modifier_bounds, audit_modifier_positive_e)
+                geometry, kinds, meshes = modifier_bounds(
+                    project, "prusaslicer", include_meshes=True)
+                assert len(geometry) == len(volumes)
+                assert len(kinds) == len(meshes) == len(volumes)
+                region_proof = audit_modifier_positive_e(
+                    data, project, "prusaslicer")
+                assert region_proof["modifier_count"] == len(volumes)
+                assert region_proof["negative_volume_count"] == sum(
+                    part["kind"] == "negative" for part in volumes)
+                print("Prusa native per-job volume audit", label,
+                      region_proof, flush=True)
             walls = painted_external_walls(data)
             assert walls[1]["front"] >= 20, (label, walls)
             assert walls[1]["back"] <= 2, (label, walls)
