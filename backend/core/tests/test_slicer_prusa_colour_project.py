@@ -273,11 +273,33 @@ class PrusaNativeColourProjectTests(TestCase):
                     with self.assertRaises((SlicerProfileError,ValueError)):
                         self.candidate(tool_map=mapping)
         for field,value in (("modifier_volumes",[{"id":"unsafe"}]),
-                            ("process_overrides",{"wall_loops":3}),
+                            ("process_overrides",{"travel_speed":100}),
                             ("support_paint",{"regions":[{"slot":0}]}),
                             ("material_slot",1)):
             with self.subTest(field=field),self.assertRaises(SlicerProfileError):
                 self.candidate(settings={field:value})
+
+    def test_painted_model_preserves_native_object_settings_for_worker(self):
+        from core.slicer_prusa_3mf import OBJECT_KEYS
+        printer=ini("0.4,0.4,0.4,0.4,0.4","1")
+        overrides={"wall_loops":5,"top_shell_layers":4,
+                   "sparse_infill_density":35,"outer_wall_speed":48}
+        project=self.candidate(settings={"process_overrides":overrides})
+        with zipfile.ZipFile(io.BytesIO(project)) as archive:
+            config=SafeET.fromstring(archive.read("Metadata/Slic3r_PE_model.config"))
+        keys={node.get("key"):node.get("value") for node in
+              config.findall("./object/metadata")}
+        self.assertEqual(keys["perimeters"],"5")
+        self.assertEqual(keys["top_solid_layers"],"4")
+        self.assertEqual(keys["fill_density"],"35%")
+        self.assertEqual(keys["external_perimeter_speed"],"48")
+        self.assertEqual(validate_prusa_material_candidate(
+            project,printer_ini=printer,colour=True)["tools"],(1,2))
+        self.assertIn("wall_loops",OBJECT_KEYS)
+        for bad in ({"travel_speed":120},{"wall_loops":True},
+                    {"wall_loops":500},{"sparse_infill_density":"65"}):
+            with self.subTest(bad=bad),self.assertRaises(SlicerProfileError):
+                self.candidate(settings={"process_overrides":bad})
 
     def test_source_fingerprint_must_match(self):
         stl, *_ = fixture()
