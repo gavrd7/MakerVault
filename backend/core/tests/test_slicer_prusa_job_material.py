@@ -171,9 +171,6 @@ class PrusaWorkbenchMaterialTests(TestCase):
         from core.tests.test_slicer_prusa_3mf import volume
         mmu.settings["plate_objects"][0]["modifier_volumes"] = [
             volume("modifier", {"sparse_infill_density": 80})]
-        mmu.settings["plate_objects"][1]["variable_layer_profile"] = {
-            "version": 1, "bands": [
-                {"from_mm": 2, "to_mm": 6, "layer_mm": .12}]}
         kind, plan = prepare_prusa_workbench_material(mmu)
         self.assertEqual(kind, "mmu")
         with patch("core.slicer_prusa_job_material.slice_prusa_offline_mmu_candidate",
@@ -184,7 +181,12 @@ class PrusaWorkbenchMaterialTests(TestCase):
                              b"audited-native")
         routed = worker.call_args.kwargs["rows"]
         self.assertEqual(routed[0][0]["modifier_volumes"][0]["kind"], "modifier")
-        self.assertEqual(routed[1][0]["variable_layer_profile"]["bands"][0]["layer_mm"], .12)
+        self.assertFalse(routed[1][0].get("variable_layer_profile"))
+        mmu.settings["plate_objects"][1]["variable_layer_profile"] = {
+            "version": 1, "bands": [
+                {"from_mm": 2, "to_mm": 6, "layer_mm": .12}]}
+        with self.assertRaisesRegex(SlicerProfileError, "unqualified edits"):
+            prepare_prusa_workbench_material(mmu)
 
     def test_multi_tool_global_overrides_refuse_unqualified_controls(self):
         for value in (
