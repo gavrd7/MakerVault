@@ -1,3 +1,45 @@
+### 27 November — shared bulk material selection and native-profile-driven Prusa tools
+
+The shared **Select models** panel now has Select all (including an indeterminate
+partial-selection state) and a single bulk Change filament action. It edits
+only printable models, leaving detached/assembled modifier volumes, negative
+volumes and surface painting unchanged. Physical feeder selections remain
+advisory model-to-bay mappings; they are not invented native extruder IDs.
+The batch is a single undoable plate operation. The Prusa-specific branch of
+the same selection action instead updates the owner-bound native
+`model_tools` mapping, once, preserving all unselected model assignments.
+A native filament profile must already be associated with the selected tool.
+
+The interactive painting palette now lists all observed printer materials,
+without silently truncating at 64 entries. Shared draft material-slot and
+explicit logical-tool mappings can store more than sixteen entries; the
+draft API has an independent 1024-row **resource safeguard**, not a printer
+capacity declaration. This does **not** remove engine-specific native
+palette, 3MF paint encoding, G-code attribution or physical submission
+limits. Native slice admission must still validate the exact selected
+printer profile, available logical tools and approved capabilities.
+
+For the Prusa editor, `GET /api/printing/slicer/profiles/
+?prusa_printer_topology_id=<owned-profile-UUID>` inspects an owner-owned,
+resolved **Prusa printer INI** and returns its logical tool count,
+single-nozzle/MMU vs independent-head/INDX type and physical nozzle count.
+No model-name lookup or physical feeder slot guess is used. New native-tool
+drafts initialise from that profile when available; older drafts show their
+actual saved count even if it mismatches, and offer explicit reconciliation.
+The main Slice readiness guard rejects a profile mismatch before submitting
+the job. This profile inspector does **not** authorise actual printer start,
+pickup, docking or new unreviewed native tool counts.
+
+**Merge gates remain:** all checks must pass at the exact PR HEAD, including
+the reviewed pinned Prusa 2.9.7 worker smoke, full frontend/backend, Orca and
+combined-worker isolation. Desktop/mobile staging and physical-device
+acceptance remain separate. The source still rejects unqualified arbitrary
+paint masks and mixed geometry/tool combinations instead of silently
+discarding them. Do not enable physical dispatch merely by removing an
+offline-only flag. Keep the PR in draft until these are resolved.
+
+---
+
 ### 27 November — XL native one-swatch paint workbench integration
 
 Genuine pinned 2.9.7 XL five-head front-wall colour painting was
