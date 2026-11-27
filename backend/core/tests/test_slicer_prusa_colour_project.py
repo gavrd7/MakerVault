@@ -125,10 +125,9 @@ class PrusaNativeColourProjectTests(TestCase):
         # Clipping divides this original triangle into a painted corner and
         # remaining plain cells; every other source face stays unpainted.
         self.assertGreater(len(triangles), len(faces))
-        painted = [face for face in triangles
-                   if face.get("slic3rpe:mmu_segmentation") == "8"]
-        plain = [face for face in triangles
-                 if face.get("slic3rpe:mmu_segmentation") is None]
+        from slicer_worker.prusa_material_validation import PAINT
+        painted = [face for face in triangles if face.get(PAINT) == "8"]
+        plain = [face for face in triangles if face.get(PAINT) is None]
         self.assertTrue(painted)
         self.assertGreaterEqual(len(plain), len(faces) - 1)
         receipt = validate_prusa_material_candidate(
