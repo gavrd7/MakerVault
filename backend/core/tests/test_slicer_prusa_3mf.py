@@ -222,6 +222,49 @@ class PrusaProjectDialectTests(TestCase):
             validate_prusa_native_3mf(rewrite(archive, "3D/3dmodel.model", tamper))
 
 
+    def test_disjoint_native_support_and_fuzzy_paint_qualify_as_one_model(self):
+        from core.slicer_plate_3mf import _triangles
+        from core.slicer_native_support_paint import _fingerprint
+        from scripts.prusa_generate_support_overhang import cantilever, support_mask
+        raw = cantilever()
+        triangles = list(_triangles(raw))
+        lowest = [min(vertex[i] for face in triangles for vertex in face)
+                  for i in range(3)]
+        highest = [max(vertex[i] for face in triangles for vertex in face)
+                   for i in range(3)]
+        centre = ((lowest[0] + highest[0])/2,
+                  (lowest[1] + highest[1])/2, lowest[2])
+        local = [[tuple(vertex[i]-centre[i] for i in range(3))
+                  for vertex in face] for face in triangles]
+        front = [index for index, face in enumerate(triangles)
+                 if all(abs(vertex[1]-lowest[1])<1e-5 for vertex in face)
+                 and max(vertex[2] for vertex in face) -
+                     min(vertex[2] for vertex in face) > 3]
+        self.assertGreaterEqual(len(front), 2)
+        fuzzy = {"version": 2, "signature": _fingerprint(local),
+                 "regions": [{"slot": 0, "patches": [
+                     {"face": index, "polygon": [list(v) for v in local[index]]}
+                     for index in front]}]}
+        support = support_mask(raw)
+        row = item(support_paint=support, fuzzy_skin_paint=fuzzy)
+        self.assertFalse(validate_prusa_project_admission(
+            [row], {}, "2.9.7"))
+        archive = build_prusa_native_3mf([(row, raw)],
+                                         bed_width=250, bed_depth=210)
+        receipt = validate_prusa_native_3mf(archive)
+        self.assertIn("slic3rpe:FdmSupportsPaintingVersion",
+                      receipt["paint_channels"])
+        self.assertIn("slic3rpe:FuzzySkinPaintingVersion",
+                      receipt["paint_channels"])
+        shared = {**row, "fuzzy_skin_paint": support}
+        with self.assertRaisesRegex(ValueError, "share source faces"):
+            validate_prusa_project_admission([shared], {}, "2.9.7")
+        rotated = {**row, "rotation_deg": 45}
+        with self.assertRaisesRegex(ValueError, "upright unscaled"):
+            validate_prusa_project_admission([rotated], {}, "2.9.7")
+        with self.assertRaisesRegex(ValueError, "painted facets"):
+            validate_prusa_project_admission([row, item(x_mm=50)], {}, "2.9.7")
+
     def test_three_object_support_paint_admission_retains_one_exact_enforcer(self):
         from scripts.prusa_generate_support_overhang import cantilever, support_mask
         raw = cantilever()
