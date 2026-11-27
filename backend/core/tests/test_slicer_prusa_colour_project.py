@@ -341,13 +341,13 @@ class PrusaDualColourResearchTests(TestCase):
     def test_official_indx_cleaner_excludes_only_signed_bounded_flush_strokes(self):
         from unittest.mock import patch
         native=self.gcode()
-        insert=(b"T2\\n;TYPE:External perimeter\\nG0 X115 Y95\\n"
-                b"G12 S90\\nG91\\n;FLUSH_START\\n"
-                b"G1 X-0.2 E0\\nG1 X0.4 E1\\nG1 Y-1.2 E1\\n"
-                b"G1 X-0.4 E1\\nG1 Y1.2 E1\\nG1 X0.2 E.2\\n"
-                b";FLUSH_END\\nG90\\nG12 S91\\nG0 X115 Y115")
+        insert=(b"T2\n;TYPE:External perimeter\nG0 X115 Y95\n"
+                b"G12 S90\nG91\n;FLUSH_START\n"
+                b"G1 X-0.2 E0\nG1 X0.4 E1\nG1 Y-1.2 E1\n"
+                b"G1 X-0.4 E1\nG1 Y1.2 E1\nG1 X0.2 E.2\n"
+                b";FLUSH_END\nG90\nG12 S91\nG0 X115 Y115")
         native=native.replace(
-            b"T2\\n;TYPE:External perimeter\\nG0 X115 Y115",insert)
+            b"T2\n;TYPE:External perimeter\nG0 X115 Y115",insert)
         self.assertIn(b";FLUSH_START",native)
         with self.assertRaises(WorkerError):
             self.audit(native)
