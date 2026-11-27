@@ -335,11 +335,10 @@ jobs:
             /opt/engine-store/versions/prusaslicer/2.9.7/bin/prusa-slicer \
             /opt/engine-store/versions/prusaslicer/2.9.7/resources/profiles/PrusaResearch.ini
 
-      - name: Research native XL5 independent-head split-wall deposition
+      - name: Require native XL5 independent-head split-wall deposition
         id: prusa_xl_partial_surface_research
-        # MMU and XL are different material topologies. A passing MMU test
-        # does not automatically qualify a split mask on independent heads.
-        continue-on-error: true
+        # Required now that the authenticated XL adapter permits independently
+        # qualified single-tool split masks; MMU remains separately audited.
         run: |
           set -euo pipefail
           docker run --rm --network none --user 10001:10001 \
