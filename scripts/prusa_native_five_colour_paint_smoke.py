@@ -134,6 +134,60 @@ def main(binary, vendor):
             assert walls[tool]["back"]<=max(2,walls[0]["back"]//100),walls
             print(f"PASS: genuine Prusa MMU facet T{tool} painted front / T0 back",
                   walls,"sha256",hashlib.sha256(raw).hexdigest(),flush=True)
+        # Research a genuine THREE-tool painted object, not just one
+        # alternate painted swatch. Two complete opposing vertical faces
+        # map to different MMU tools; positive-E on the wrong wall is a
+        # failure even if all three T commands appear in the G-code.
+        from core.slicer_plate_3mf import _triangles
+        from core.slicer_native_support_paint import _fingerprint
+        triangles = list(_triangles(stl))
+        lower = [min(p[a] for face in triangles for p in face) for a in range(3)]
+        upper = [max(p[a] for face in triangles for p in face) for a in range(3)]
+        origin = ((lower[0]+upper[0])/2, (lower[1]+upper[1])/2, lower[2])
+        local = [[tuple(v[a]-origin[a] for a in range(3)) for v in face]
+                 for face in triangles]
+        by_side = {}
+        for slot, ordinate in ((1, -10), (2, 10)):
+            patches = [
+                {"face": index,
+                 "polygon": [list(v) for v in face]}
+                for index, face in enumerate(local)
+                if all(abs(v[1]-ordinate)<.00001 for v in face)]
+            assert len(patches)==2, ("Missing painted wall", slot)
+            by_side[slot] = patches
+        multi = {**paint, "signature": _fingerprint(local),
+                 "palette": [
+                     {"color":"#ff8000","label":"base T0"},
+                     {"color":"#3ec0ff","label":"front T1"},
+                     {"color":"#fadd4d","label":"back T2"}],
+                 "regions":[{"slot":slot,"patches":by_side[slot]}
+                            for slot in (1,2)]}
+        multi_project = build_prusa_colour_candidate(
+            {**row, "colour_paint":multi}, stl,
+            printer_ini=printer, colour_tool_indices={1:1, 2:2},
+            bed_width=250, bed_depth=210)
+        multi_project = add_prusa_native_wipe_tower(
+            multi_project, x_mm=55, y_mm=150, rotation_deg=0,
+            bed_width=250, bed_depth=210)
+        receipt = validate_prusa_material_candidate(
+            multi_project, printer_ini=printer, colour=True,
+            tower=(55,150,0,250,210))
+        assert receipt["tools"]==(1,2,3), receipt
+        target = work/"native-two-painted-walls"
+        target.mkdir()
+        for name, data in (
+                ("input.3mf",multi_project),("printer.ini",printer),
+                ("filament.ini",palette),("process.ini",process)):
+            (target/name).write_bytes(data)
+        (target/"prusa-offline-colour.marker").write_text("v1")
+        run_prusa(Path(binary),target)
+        gcode = (target/"output.gcode").read_bytes()
+        counts = painted_external_walls(gcode)
+        assert counts[1]["front"]>20 and counts[2]["back"]>20, counts
+        assert counts[1]["back"]<=2 and counts[2]["front"]<=2, counts
+        assert counts[0]["front"]<=2 and counts[0]["back"]<=2, counts
+        print("PASS: research genuine Prusa MMU T1-front/T2-back multi-swatch",
+              counts, "sha256",hashlib.sha256(gcode).hexdigest(),flush=True)
     print("PASS: genuine Prusa 2.9.7 native T1-T4 painted facets with isolated wipe tower",
           flush=True)
 
