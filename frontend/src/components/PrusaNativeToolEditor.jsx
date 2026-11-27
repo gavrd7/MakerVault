@@ -84,7 +84,7 @@ export default function PrusaNativeToolEditor({
     !models.some(model=>model.instance_id===row.instance_id));
   const status=value?(
     profileMatches && value.filament_profile_ids.every(Boolean) &&
-    ((models.length>=2 && models.length<=12) || singleColour) &&
+    ((models.length>=2 && models.length<=200) || singleColour) &&
     value.model_tools.length===models.length &&
     models.every(row=>value.model_tools.some(item=>item.instance_id===row.instance_id)) &&
     (singleColour
