@@ -103,15 +103,18 @@ export default function PrusaNativeToolEditor({
     style={{minWidth:0,padding:12,border:"1px solid var(--border-color, #60708044)",borderRadius:10}}>
     <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:12,flexWrap:"wrap"}}>
       <strong>Prusa MMU / XL / INDX native materials</strong>
-      {!value?<button type="button" disabled={disabled}
-        onClick={()=>onChange?.(fresh(profileMode || "mmu",
-          profileMode && profileToolCount ? profileToolCount : 2, primaryProfileId))}>
+      {!value?<button type="button" disabled={disabled || !profileMode || !profileToolCount}
+        onClick={()=>onChange?.(fresh(profileMode, profileToolCount, primaryProfileId))}>
         Configure native tools
       </button>:<button type="button" disabled={disabled}
         onClick={()=>{onChange?.(null);onPrimeTowerChange?.(null);}}>
         Clear native tools
       </button>}
     </div>
+    {!profileMode && <p className="projectUploadHint" role="status">
+      Select an imported, inspectable native Prusa printer profile first; native
+      tool capacity is read from that profile rather than guessed from a model name.
+    </p>}
     <p className="projectUploadHint">Assign actual Prusa native extruders to models, independently of loaded
       printer bays. This produces offline preview/Library G-code only; physical MMU loading,
       INDX docking and printer submission require matching native firmware and hardware.</p>
@@ -131,7 +134,7 @@ export default function PrusaNativeToolEditor({
       </div>}
       <div style={{display:"flex",gap:12,flexWrap:"wrap"}}>
         <label>Toolchanger architecture
-          <select value={value.mode} disabled={disabled}
+          <select value={value.mode} disabled={disabled || !!profileMode}
             onChange={e=>{
               const mode=e.target.value;
               const count=mode==="indx"?value.tool_count:Math.min(value.tool_count,5);
@@ -148,7 +151,7 @@ export default function PrusaNativeToolEditor({
           </select>
         </label>
         <label>Native logical tools
-          <select value={value.tool_count} disabled={disabled}
+          <select value={value.tool_count} disabled={disabled || !!profileToolCount}
             onChange={e=>{
               const count=Number(e.target.value);
               onChange?.({...value,tool_count:count,
@@ -158,7 +161,7 @@ export default function PrusaNativeToolEditor({
                 purge_matrix:value.mode==="mmu"?matrixFor(count):null});
             }}>
             {(profileToolCount ? [...new Set([value.tool_count, profileToolCount])] :
-              value.mode==="indx"?[2,3,4,5,6,7,8]:[2,3,4,5]).map(count=><option key={count} value={count}>
+              [value.tool_count]).map(count=><option key={count} value={count}>
                 {count}{profileToolCount && count!==profileToolCount ? " (draft; profile mismatch)" : ""}
               </option>)}
           </select>
