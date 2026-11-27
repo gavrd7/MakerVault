@@ -300,7 +300,9 @@ class PrusaOfflineMmuPreflightTests(TestCase):
         values,assets=self.parts()
         source,_model,_states,paint=fixture(include_paint=True)
         row={"asset_id":"painted-model","x_mm":0,"y_mm":0,"z_mm":0,
-             "rotation_deg":0,"scale_percent":100,"colour_paint":paint}
+             "rotation_deg":0,"scale_percent":100,"colour_paint":paint,
+             "process_overrides":{"wall_loops":5,
+                                  "sparse_infill_density":35}}
         colour={key:values[key] for key in (
             "owner_id","printer_profile","process_profile","filament_profiles",
             "purge_matrix","tower_xy","bed_width","bed_depth")}
@@ -319,6 +321,14 @@ class PrusaOfflineMmuPreflightTests(TestCase):
             tower=candidate["tower"])
         self.assertEqual(receipt["tools"],(1,3))
         self.assertTrue(receipt["wipe_tower"])
+        from defusedxml import ElementTree as SafeET
+        with zipfile.ZipFile(io.BytesIO(candidate["model"])) as zipped:
+            xml=SafeET.fromstring(
+                zipped.read("Metadata/Slic3r_PE_model.config"))
+        settings={node.get("key"):node.get("value")
+                  for node in xml.findall("./object/metadata")}
+        self.assertEqual(settings["perimeters"],"5")
+        self.assertEqual(settings["fill_density"],"35%")
         from slicer_worker.service import _decode_payload
         import base64
         encode=lambda value:base64.b64encode(value).decode("ascii")
