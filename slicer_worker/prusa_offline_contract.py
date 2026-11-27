@@ -151,10 +151,11 @@ def validate_prusa_offline_colour_inputs(*, project, printer, filament, process,
         from .prusa_colour_gcode_audit import _two_painted_wall_regions
         _two_painted_wall_regions(project,selected)
     else:
-        from .prusa_colour_gcode_audit import _wall_regions
-        _wall_regions(project,tool)
+        from .prusa_partial_surface import qualified_prusa_single_colour_mode
+        mode = qualified_prusa_single_colour_mode(project, tool)
     return {**({"tools":list(selected)} if dual else {"tool":tool}),
-            "tower":tower, "offline_only":True}
+            "tower":tower, "offline_only":True,
+            "partial_wall": (not dual and mode == "split_wall")}
 
 
 def validate_prusa_offline_xl_colour_inputs(*, project, printer, filament, process,
