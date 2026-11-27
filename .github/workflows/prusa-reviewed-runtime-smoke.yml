@@ -622,7 +622,7 @@ jobs:
             /tmp/multi.py \
             /opt/engine-store/versions/prusaslicer/2.9.7/bin/prusa-slicer \
             /opt/engine-store/versions/prusaslicer/2.9.7/resources/profiles/PrusaResearch.ini \
-            /tmp/fixtures/baseline.3mf /tmp/fixtures/modifier.3mf /tmp/fixtures/negative.3mf
+            /tmp/fixtures/baseline.3mf /tmp/fixtures/modifier.3mf /tmp/fixtures/negative.3mf /tmp/fixtures
 
       - name: Generate precise Prusa support seam and fuzzy paint fixtures
         run: |
