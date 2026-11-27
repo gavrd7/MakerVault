@@ -42,8 +42,8 @@ def native_capabilities(engine, version):
                        "T1–T4 single-swatch and T1-front/T2-back two-swatch "
                        "G-code deposition audits with a T0 base and native wipe "
                        "tower. Unsupported masks, arbitrary mixed edits, XL/INDX "
-                       "surface paint and physical printer submission remain "
-                       "separate qualification gates."),
+                       "surface paint and physical printer submission remain blocked; offline "
+                       "G-code qualification does not permit printer start."),
         }
         result["seam_paint"] = {
             "status": "test_only",
