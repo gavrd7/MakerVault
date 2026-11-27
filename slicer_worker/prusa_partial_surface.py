@@ -227,7 +227,12 @@ def audit_prusa_partial_wall_gcode(data, project, *, tool):
             counts[0]["painted"] > 2 or
             counts[tool]["unpainted"] > 2):
         raise WorkerError(
-            "Prusa partial-surface colour deposition did not match signed masks.")
+            "Prusa partial-surface colour deposition did not match signed masks "
+            "(selected painted=%d, base unpainted=%d, selected other=%d, "
+            "base painted=%d, painted layers=%d, unpainted layers=%d)." % (
+                counts[tool]["painted"], counts[0]["unpainted"],
+                counts[tool]["unpainted"], counts[0]["painted"],
+                len(layers[tool]["painted"]), len(layers[0]["unpainted"])))
     return {
         "tool": tool,
         "deposition_moves": counts,
