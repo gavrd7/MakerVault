@@ -161,6 +161,26 @@ class PrusaSingleMaterialAdmissionTests(TestCase):
         )
         self.assertTrue(_validate_plate_execution(job))
 
+    def test_multi_object_plain_prusa_plate_uses_shared_placement_budget(self):
+        from core.slicer_execution import _validate_plate_execution, SlicerExecutionError
+        from unittest.mock import patch
+        models = [{
+            "instance_id": str(index), "asset_id": "source", "x_mm": index,
+            "y_mm": 0, "z_mm": 0, "rotation_deg": 0, "scale_percent": 100,
+            "rotation_xyz_deg": [0, 0],
+            "scale_xyz_percent": [100, 100, 100],
+        } for index in range(20)]
+        job = SimpleNamespace(
+            engine="prusaslicer", engine_version="2.9.7",
+            settings={"plate_objects": models}, owner=None,
+            printer_profile_id="native-printer", printer_id=None,
+            filament_profile_id=None,
+        )
+        self.assertTrue(_validate_plate_execution(job))
+        job.settings = {"plate_objects": models * 11}
+        with self.assertRaisesRegex(SlicerExecutionError, "1–200"):
+            _validate_plate_execution(job)
+
     def test_unmodified_visual_stl_without_printer_profile_stays_blocked(self):
         from core.slicer_execution import _validate_plate_execution, SlicerExecutionError
         job = SimpleNamespace(
