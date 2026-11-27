@@ -1,0 +1,1274 @@
+### 27 November — opposing XY walls, rotated native paint and larger support plates
+
+This merge-hardening pass stays within the existing MakerVault workbench,
+owner-scoped native material palette, 3MF encoder, authenticated slicer worker,
+and spatial G-code audits. It does **not** introduce separate engine-specific
+painting controls or relax safeguards for physically starting a printer.
+
+- **Opposing colour walls on both horizontal axes:** The independently
+  validated T1/T2 MMU and XL native two-swatch route now determines the
+  complete negative/positive **X or Y** wall pair from the actual 3MF
+  vertices. It does not infer that a browser paint slot denotes a physical
+  front/back wall. Prusa MMU5 genuine pinned native G-code demonstrated
+  T1/T2 on opposite X faces, with all three required material tools
+  depositing into the native wipe tower. XL5 deposited 369 matching
+  external-perimeter movements per X wall without MMU purging.
+- **Transform-aware orientation:** Genuine XL5 Prusa 2.9.7 accepted a
+  *90-degree rotated* two-colour model and correctly reversed the mesh-derived
+  tool order to (T2,T1). The existing Rotate control may retain swatch
+  identities across this native geometry change; G-code still must pass
+  the independent toolpath audit.
+- **Official INDX 8T:** With the real Prusa CORE One INDX eight-head vendor
+  profile and signed cleaner sequence, a native T5/T7 X-opposing
+  two-colour slice passed (296/295 correct deposited segments, zero
+  alternate-colour cross-wall segments). The previous genuine Y-opposing
+  and standalone T5/T6/T7 cases remain required.
+- **Fail-closed incomplete wall masks:** Single-colour spatial admission now
+  requires every original triangle on the selected vertical exterior wall
+  to carry the expected Prusa TriangleSelector state. A partially painted
+  wall cannot acquire a false full-wall positive-E acceptance certificate.
+- **15 support-painted objects, not an artificial twelve:** Native support
+  painting and its model-local audit now use MakerVault's **200-instance**
+  admission budget with all existing geometry, G-code and source limits
+  preserved. A pinned genuine PrusaSlicer run with fifteen independent
+  cantilevers and a single painted support enforcer deposited **264 genuine
+  support moves** on its selected model and **zero on fourteen plain
+  neighbours**. The mandatory real-binary run is
+  [46041293719](https://github.com/gavrd7/MakerVault/actions/runs/46041293719).
+- **Still unqualified:** A deliberate four-independent-painted-wall XL5
+  native experiment did not show reliable separation of surface colours
+  under PrusaSlicer 2.9.7. The existing one/two-wall admission remains
+  intact. Arbitrary paint masks, broader same-object paint/modifier/support
+  combinations, the observed upstream MMU variable-height CLI failure, and
+  physical tool-dock/print-start verification remain separately guarded.
+
+The current merge decision must be based on CI for the exact branch head,
+plus desktop/mobile staging inspection and the above explicit remaining
+hardware-specific limits—not merely on a successful native CLI exit.
+
+---
+
+### 27 November — full eight-head INDX native facet palette
+
+The existing Prusa 3MF TriangleSelector encoder, worker preflight,
+owner-scoped material mapper and shared desktop/mobile tool selector now
+support **native T5, T6 and T7 facet painting** in addition to T1–T4.
+All paint tool choices are constrained by the *actual inspected printer
+topology*: a five-head XL or five-tool MMU retains its five physical
+material entries; an eight-head INDX may select any of T1–T7 for the
+qualified one-wall or opposing-two-wall paint workflow.
+
+- **Prusa native encoding:** Existing unsplit leaf states `3C`, `4C`
+  and `5C` map exactly to T5, T6 and T7; the worker's independently
+  parsed state map, owner fingerprint validation and bounded native 3MF
+  metadata retain the same protections as the first five tools.
+- **Genuine native research:** With the pinned 2.9.7 binary and the
+  official Prusa CORE One INDX 8T printer profile, each newly mapped
+  head deposited **294 external-perimeter movements** on its assigned
+  front wall, zero on the opposing wall and none on any other alternate
+  head. T0 deposited the unpainted rear wall. The mandatory real-binary
+  acceptance now additionally sends the *normal MakerVault-generated*
+  projects through authenticated worker checks for T5, T6, T7 and an
+  opposing T5/T7 pair; no research-only byte substitution is required.
+- **Limitations:** Native G-code geometry is qualified offline. Arbitrary
+  face masks and cross-object painting combinations remain guarded.
+  Hardware dock/pickup and print-start behaviour are not asserted by
+  these tests. This change does not alter the existing three engines.
+
+---
+
+### 27 November — native first-layer adhesion across multiple Prusa tools
+
+The same owner-scoped native numeric process adapter used for independent
+single-material slicing now maps **brim width** and **skirt loops** on MMU,
+XL and INDX workbench plates. This is not a fork of MakerVault's process UI.
+
+- **Spatial material audit:** Moving positive-E G-code with native
+  `TYPE:Skirt/Brim` is attributed to first-layer adhesion rather than a
+  neighbouring model's tool. The auditor tracks actual tool, XY, Z,
+  extrusion and role, admits the adhesion role only at Z between 0 and
+  1.0 mm, and keeps regular model deposition checks intact. Genuine
+  Prusa MMU5 first-layer research confirmed that removing these native
+  role movements from model-material attribution changes previously
+  observed wrong-tool hits (8/8/8/9 on neighbouring models) to **zero**.
+- **Native-effect enforcement:** Both the isolated worker and owner-side
+  post-return audit reparse the actual native process INI. If `skirts` or
+  `brim_width` requests adhesion, at least ten actual moving positive-E
+  first-layer adhesion segments must appear. Unsupported, nonfinite and
+  oversized numeric settings still fail closed.
+- **Genuine pinned 2.9.7 runs:** MMU5 generated real first-layer skirt
+  and brim extrusion while retaining 5/5 model tool attribution and
+  native wipe-tower purging. An eight-head independent-tool fixture
+  also generated adhesion paths with zero incorrect model extrusion.
+  The official firmware-cleaner INDX 8T preset has its own additional
+  real-binary acceptance fixture to distinguish firmware cleaner strokes
+  from first-layer adhesion and model walls.
+- **Scope:** These global native controls work across multiple
+  tool-assigned models, not independently configured per-object brims.
+  Neither successful offline G-code nor official firmware-cleaner
+  qualification proves physical machine/tool pickup safety. Native MMU
+  variable-height incompatibility and unverified mixed painting/mask
+  combinations remain guarded.
+
+---
+
+### 27 November — XL/INDX native painted-head parity and shared plate reconciliation
+
+This is a continuation of the existing **mapping-first** adapter strategy, not
+a new slicer feature framework. MakerVault's saved swatches, owned filaments,
+global numeric settings, tool assignments, responsive editor, 3MF encoder and
+authenticated worker are used for all machine topologies.
+
+- **XL five-head and official INDX eight-head:** The normal offline native
+  workbench admits a single T0-base model with either one painted vertical
+  wall or **two complete opposite painted walls** assigned to distinct native
+  alternate tools. Both paths use Prusa's genuine
+  `slic3rpe:mmu_segmentation` 3MF metadata. The independent-head contract
+  never synthesizes a single-nozzle MMU tower or purge matrix.
+- **Real native toolpaths qualified:** Pinned PrusaSlicer 2.9.7 reviewed
+  acceptance **46028914092** passed XL five-head T1-front/T2-back
+  deposition and the **official Prusa CORE One INDX 8T profile** with
+  T0–T7 correctly assigned to eight independent models, native negative
+  volumes/modifiers, and single- and two-wall T1/T2 painting. The selected
+  alternate tool does not deposit on the opposite painted wall; genuine T0
+  foundation extrusion is not misclassified as a wrong material.
+- **Official INDX firmware cleaner:** Reuse the *existing hash-pinned
+  official toolchange script identity* in the colour G-code auditor. Only
+  strict G12 S90/S91, relative-XY, bounded positive-E cleaner strokes
+  fenced by trusted native markers may be excluded from painted-wall
+  deposition. Malformed, oversized or forged cleaner movements fail closed.
+  This fixes five false T2 front-wall hits without accepting actual
+  wrong-tool extrusion.
+- **Materials and instances are separate capabilities:** Native model/tool
+  mapping, frontend, 3MF exporter and worker validation now follow the
+  shared **200-model-instance** plate budget (still subject to geometric
+  source, output and memory limits). Actual physical tool count comes from
+  the selected Prusa printer profile. Pinned 2.9.7 colour facet states map
+  **T0 base plus T1–T7 painting** when the imported independent
+  eight-head INDX printer profile declares all eight tools. MMU5 and XL5
+  still derive their smaller available ranges from native printer topology. The reviewed binary also tested fifteen models reusing five
+  native MMU material tools.
+- **Painted process overrides:** The same bounded native Prusa process
+  numeric schema used by the rest of MakerVault is applied to painted MMU
+  and XL/INDX slices. Imported owner profiles stay immutable.
+- **Outstanding correctness boundaries:** Arbitrary painted facet masks,
+  combined per-object paint/modifier/layer edits, and physical native
+  MMU/XL/INDX print start are *not* qualified by these successful offline
+  G-code tests. The existing PrusaLink file API is not proof of machine
+  docking, pickup, firmware or safe physical execution. MMU variable-Z
+  combinations still fail the genuine pinned CLI. Brim/skirt first-layer
+  deposition is now role-aware and positively audited on MMU and INDX,
+  as recorded above; the earlier footprint-only false hits are resolved.
+
+The legacy chronological notes below describe earlier gates at the time
+they were written; this newest acceptance is authoritative for the
+current branch. Existing Creality, Orca and Bambu execution routes have
+not been changed by these Prusa-specific mappings.
+
+---
+
+### 27 November — mapping-first merge pass and genuine MMU compatibility boundary
+
+This pass adopts the standing [engine-adapter strategy](slicer-engine-adapter-strategy.md):
+MakerVault's existing controls are translated into each engine's native
+configuration, rather than recreated as a new feature or locked behind
+unbounded combination-specific experiments.
+
+- **Native per-Object speed controls:** Existing Prusa numeric mappings
+  now preserve explicit external/internal wall, sparse-infill and top-solid
+  speeds at Object scope in the native 3MF. The isolated worker accepts only
+  bounded native values, rejects forged speed metadata and does not apply
+  validation-scaffold defaults to unmodified Objects.
+- **MMU native parameter modifiers:** The same typed native 3MF volumes
+  already used for XL/INDX now pass genuine pinned Prusa 2.9.7 MMU
+  multi-tool slicing. The native acceptance verified all five model/tool
+  assignments, zero incorrect-tool deposition and wipe tower extrusion.
+  There is no separate MMU implementation of modifier geometry.
+- **MMU per-object variable-layer exception:** An independent upstream
+  CLI comparison established that the pinned 2.9.7 MMU path returns **no
+  G-code** for both layer-only and layer-plus-modifier projects. These
+  specific MMU variable-layer combinations are rejected before execution,
+  while the working XL/INDX variable-layer routes remain enabled.
+  Reassess this targeted restriction if a future upstream engine version
+  fixes the failure; it is not a general ban on combining native features.
+- **Future engines:** Follow the same map/round-trip/representative-native-
+  test process. Avoid artificial tool counts, UI-only restrictions or
+  recreation of native slicing functionality. Printer-start safety still
+  requires separate hardware evidence.
+
+This is a merge-readiness pass, not a replacement architecture. All
+previously released engine execution paths remain unchanged.
+
+---
+
+### 27 November — additional Prusa advanced-feature parity
+
+**Native pinned PrusaSlicer 2.9.7 acceptance passed** for two further
+scoped mixed-feature routes:
+
+- **Two independent models, one Object + local modifier stack.** Model A
+  uses a bounded Object sparse-infill override combined with one box-shaped
+  sparse-infill parameter modifier. A separately placed model B remains
+  unmodified. Four native controls distinguish baseline, Object-only,
+  modifier-only, and combined deposition. The central modifier's sampled
+  10×10 mm volume overlaps the outer 18×18 mm diagnostic ring, so the
+  spatial audit requires central positive-E change, preserved surrounding
+  deposition and, critically, *unchanged extrusion in model B* rather than
+  assuming the partly overlapping ring remains identical. Other arbitrary
+  stacked regions or mixed negative volumes are still unqualified.
+
+- **One model, disjoint manual support and selective fuzzy paint.** A real
+  cantilever's downward support-enforcer faces and exterior fuzzy-wall
+  faces are fingerprinted separately; exact source-face overlap, elevated
+  or rotated geometry, multiple models and other paint channels remain
+  rejected in this mixed route. A four-project genuine CLI fixture measured
+  **1,962 moving support paths** in both support-only and combined projects,
+  and **2,048 vs 2,044 fuzzy exterior-wall paths** respectively. Its plain
+  cantilever naturally has ~40 short external wall segments; the audit
+  correctly compares the fuzzy effect to the same-geometry baseline
+  instead of incorrectly treating every short wall move as texture.
+
+Also corrected the native-tool workbench's Slice warning while an imported
+Prusa printer profile topology is still loading. It now fails closed with
+a useful explanation instead of trying to read fields from a null topology.
+
+These qualify only **offline G-code** on pinned native 2.9.7; unsupported
+multi-tool adhesion, other overlapping paint or modifier combinations,
+hardware toolchange and physical printer start are still independent gates.
+No Creality, Orca or Bambu production runner was changed. PR #199 remains
+draft until the exact latest head passes every workflow and staging checks.
+
+---
+
+### 27 November — intermittent native Prusa 2.9.7 MMU coordinate defect
+
+The pinned upstream Prusa 2.9.7 runtime has intermittently emitted
+impossible Y coordinates (observed around **-1.5e9** and **1e13**) in
+ordinary five-model MMU and painted-MMU G-code candidates. These are
+invalid native outputs, **not** legitimate large build plates and not
+a preview limit. MakerVault must never sanitize, clamp or submit them.
+
+Only the **offline MMU multi-model and MMU painted** worker routes have
+bounded regeneration: discard the entire invalid candidate and regenerate
+via a new native CLI process, up to **three total attempts** within the
+original request's aggregate slice timeout and size budget. Each candidate
+must satisfy the strict numeric positive-E audit. After it passes, all
+existing independent material-to-model, painted-wall and wipe-tower audits
+are still mandatory. Malformed UTF-8, unexpected tools, absent extrusion,
+incomplete purge, other invalid G-code, failed CLI launches and exhausted
+time/attempt budgets are not silently retried. The worker does not modify
+any G-code and never enables physical printer submission. XL/INDX and
+other slicer engines are unchanged.
+
+The reviewed native Actions suite independently exercises this guard
+with genuine pinned 2.9.7 binaries; worker unit tests force controlled
+overflow, repeated failure and non-retry unsafe cases.
+
+---
+
+### 27 November — independently qualified mixed native region features
+
+The native Prusa 2.9.7 acceptance pipeline now requires a controlled
+four-project test for combined **parameter modifier on model A** and
+**per-object sparse infill on model B**. It compares baseline, each feature
+alone and both together, measuring moving positive-E deposition in each
+object's own central XY footprint. Both effects must independently change
+their intended object and leave the unmodified neighbour unaffected. The native matrix additionally
+requires a **negative box cavity** on model A to remove all interior
+deposition while a separate sparse-infill Object override still changes
+model B's extrusion.
+
+The corresponding offline-native 3MF admission is restricted to exactly
+two independently placed printable models: one box-shaped sparse-infill
+parameter modifier **or negative cavity**, and a separate Object
+sparse-infill override. This is not a blanket approval for an arbitrary
+number of regions, same-model stacks, overlapping paint or material tool
+changes. Those remain subject to specific native acceptance.
+
+A second mandatory pinned-CLI test now combines **one variable-layer band**
+with **one box-shaped sparse-infill modifier on a single model**. Its
+post-slice G-code audit must establish both real Z-step spacing and a
+separately measured change in positive extrusion in the modifier footprint,
+while the outer object still deposits material. Until that native test
+is green on the exact branch head, do not treat the combined capability as
+qualified. More complex overlapping paint, modifier and layer combinations
+remain gated.
+
+**Hardware note:** Offline Prusa G-code audits are distinct from PrusaLink
+upload and real printer-start acceptance. This work does not waive firmware
+pickup/docking evidence, matching tool profiles or fresh idle telemetry.
+
+---
+
+### 27 November — repeated native MMU tools and non-guessed printer capacity
+
+A Prusa MMU advertises native logical filament tools separately from
+the number of models on the build plate. The authenticated MMU owner
+preflight now accepts **up to twelve independently placed STL models**
+while preserving the actual native printer profile's MMU tool count.
+Multiple models may explicitly map to the same native tool, while the
+multi-material route still requires at least two genuinely selected
+native tools and complete filament/purge profile ownership.
+
+The pinned 2.9.7 runtime acceptance now adds a **ten-model plate using
+five actual MMU tools twice**, verifies the owner-bound request and typed
+3MF project, then requires moving positive-E deposition under the
+assigned tool in *each* model footprint, no cross-model tool
+contamination, and native wipe-tower extrusion. This does not invent
+more MMU slots or authorise physical printer start. Exact-head green
+native CI is required before treating it as qualified.
+
+The native Prusa editor no longer invents two-to-eight tool choices in
+the absence of a selected native printer profile. New MMU/XL/INDX
+configurations require the actual owner-inspected profile topology and
+tool count. Saved older drafts remain visible for reconciliation, but
+an unknown or mismatched profile cannot qualify native Slice.
+
+---
+
+### 27 November — Prusa parity follow-up: native process, larger plates and bulk single material
+
+Native Prusa MMU/XL process editing now accepts the full bounded numeric
+process-field map already implemented for the single-material engine:
+global layer height, walls, shells and infill as well as
+external/internal wall speed, sparse infill speed, travel speed and top
+surface speed. The genuine pinned MMU five-tool worker smoke applies these
+settings before slicing and audits per-object native deposition. A first
+attempt that also enabled brim and skirt failed the independent wrong-tool
+spatial audit. Brim and skirt therefore remain blocked on *multi-tool*
+Prusa slices pending separately qualified native handling of adhesion
+geometry; they remain available where the single-material process route
+has already been validated. Unrecognised/executable settings are rejected,
+and a missing native profile key is not silently ignored.
+
+Ordinary *single-material* Prusa plates use the shared engine-neutral
+200-instance placement budget rather than the obsolete 12-instance
+scheduling limit. More complex multi-tool and painted-support fixtures
+remain independently bounded by their own reviewed native auditors.
+
+Prusa's Select models bulk filament picker now distinguishes two cases.
+A partial selection updates only those native per-model tool assignments.
+Selecting **all printable models** and choosing one imported Prusa filament
+switches to the ordinary single-material profile and clears the now
+unneeded virtual multi-tool configuration and wipe tower. This avoids
+leaving an all-one-tool project blocked by the multi-tool distinct-extruder
+audit. If the plate contains colour-painted facets, the change remains a
+native assignment rather than silently removing the painted palette.
+The original worker/owner binding and printer-submission safeguards are
+unchanged.
+
+Native tool mode is required to agree exactly with the owner-resolved
+printer profile (MMU vs independent heads vs INDX). A user-supplied
+INDX label cannot override an XL-style profile merely because it has more
+than one nozzle. The full reported material picker remains scrollable on
+small screens without truncating available materials.
+
+Four-face seam support is available under the existing fingerprinted,
+upright, single-model acceptance path; the native reviewed workflow has
+an explicit repeated four-direction G-code qualification gate. Arbitrary
+seam blockers, mixed geometry edits and physical printer transfer remain
+separate, not silently unlocked.
+
+**Acceptance still pending:** exact-head CI and real pinned-runtime outcome
+for this follow-up; desktop/mobile staging; unsupported mixed advanced
+features; physical printer pickup/start evidence. No production deployment
+or changed Orca, Creality or Bambu worker runner.
+
+---
+
+### 27 November — shared bulk material selection and native-profile-driven Prusa tools
+
+The shared **Select models** panel now has Select all (including an indeterminate
+partial-selection state) and a single bulk Change filament action. It edits
+only printable models, leaving detached/assembled modifier volumes, negative
+volumes and surface painting unchanged. Physical feeder selections remain
+advisory model-to-bay mappings; they are not invented native extruder IDs.
+The batch is a single undoable plate operation. The Prusa-specific branch of
+the same selection action instead updates the owner-bound native
+`model_tools` mapping, once, preserving all unselected model assignments.
+A native filament profile must already be associated with the selected tool.
+
+The interactive painting palette now lists all observed printer materials,
+without silently truncating at 64 entries. Shared draft material-slot and
+explicit logical-tool mappings can store more than sixteen entries; the
+draft API has an independent 1024-row **resource safeguard**, not a printer
+capacity declaration. This does **not** remove engine-specific native
+palette, 3MF paint encoding, G-code attribution or physical submission
+limits. Native slice admission must still validate the exact selected
+printer profile, available logical tools and approved capabilities.
+
+For the Prusa editor, `GET /api/printing/slicer/profiles/
+?prusa_printer_topology_id=<owned-profile-UUID>` inspects an owner-owned,
+resolved **Prusa printer INI** and returns its logical tool count,
+single-nozzle/MMU vs independent-head/INDX type and physical nozzle count.
+No model-name lookup or physical feeder slot guess is used. New native-tool
+drafts initialise from that profile when available; older drafts show their
+actual saved count even if it mismatches, and offer explicit reconciliation.
+The main Slice readiness guard rejects a profile mismatch before submitting
+the job. This profile inspector does **not** authorise actual printer start,
+pickup, docking or new unreviewed native tool counts.
+
+**Merge gates remain:** all checks must pass at the exact PR HEAD, including
+the reviewed pinned Prusa 2.9.7 worker smoke, full frontend/backend, Orca and
+combined-worker isolation. Desktop/mobile staging and physical-device
+acceptance remain separate. The source still rejects unqualified arbitrary
+paint masks and mixed geometry/tool combinations instead of silently
+discarding them. Do not enable physical dispatch merely by removing an
+offline-only flag. Keep the PR in draft until these are resolved.
+
+---
+
+### 27 November — XL native one-swatch paint workbench integration
+
+Genuine pinned 2.9.7 XL five-head front-wall colour painting was
+measured at the actual 360×360 mm XL origin (180,180). The earlier
+250×210 mm MMU coordinates had falsely reported zero XL painted
+perimeters. One T1 painted front wall and the T0 opposite base wall were
+confirmed by positive-E moving external perimeter paths.
+
+MakerVault now has a **separate** XL one-swatch owner-to-worker route:
+one STL model assigned native T0, one fingerprint-checked painted front
+wall assigned T1–T4 under a 2–5 independently headed Prusa XL profile,
+a complete privately owned tool/filament palette, and a native 3MF
+using the exact Prusa TriangleSelector leaf-state dialect. It carries
+**no MMU purge matrix or wipe tower**. The isolated worker independently
+checks the XL machine topology, project face annotations, selected tool
+identity, no MMU purge flags, and native positive extrusion before
+accepting output. A separate G-code auditor requires moving Tn material
+on the front face, moving T0 base material on the back, and disallows
+alternate-tool deposition on the wrong face. Firmware tool change,
+pickup, physical offsets and printer submission remain unverified.
+
+The real binary smoke now uses the same dedicated
+`prusa-offline-xl-colour.marker` as the production worker to prove
+the exact installed native command path. **Release gate:** the
+worker's G-code spatial audit, pinned 2.9.7 native script, full source
+tests and unchanged existing-engine regression checks must all pass
+at the final branch head before marking this route qualified.
+No INDX 8T face-paint or combined multi-object painting admission is
+inferred from this narrower XL case.
+
+---
+
+### 27 November — two-swatch Prusa MMU native routing and G-code audit
+
+Prusa's first owner-bound **two painted-colour** candidate now flows through
+the standard workbench and its authenticated isolated worker. The qualified
+input is intentionally narrow: exactly one upright model, T0 base material,
+two distinct native tools painting **complete opposing front and back walls**,
+a fully selected owned MMU filament palette, explicit directional purge
+matrix and separate native wipe tower. Painted palette slot numbers are not
+assumed to mean front/back; the owner 3MF is checked to derive the actual
+face-tool order. Single-swatch MMU remains backwards-compatible.
+
+The worker independently revalidates the typed, bounded 3MF and palette
+assignment before running Prusa 2.9.7. Its distinct two-swatch post-slice
+auditor requires moving positive-E extrusion with both segment endpoints
+inside the correct model wall, prohibits wrong-tool deposition on either
+painted wall, and requires isolated positive-E moving purge paths for
+T0, T1 and T2. Relative XY/E, coordinate resets and stationary recovery
+are interpreted, not counted as material evidence. Unsupported paint
+patterns, partial facets, other painted faces, duplicate selected native
+tools, MMU/XL topology substitution and mixed paint/edit combinations
+are refused. Existing single-swatch worker requests are unchanged.
+
+**Release gate:** this does not independently prove physical printing or
+purge adequacy. The pinned headless Prusa 2.9.7 multi-swatch native smoke
+must pass on the branch head, alongside standard frontend/backend/container
+CI, before the new route is accepted as native parity. XL/INDX face-paint
+deposition still needs a separate independently audited worker contract.
+
+---
+
+### 27 November — independently painted support on larger plates
+
+The earlier spatial bug was stationary positive-E recovery misclassified
+as support deposited onto a second object. The reviewed Prusa 2.9.7
+two-object left/right fixtures now use moving G1 XY segments with both
+endpoints inside the trusted STL footprint. The same audit is extended
+to **2–12 independent objects**, with exactly one painted enforcer and
+strictly zero deposited support movements within every other model.
+Pairwise-overlapping XY footprints, multi-painted objects, any other
+advanced paint/modifier edits, and non-upright/non-unscaled source objects
+remain blocked. The existing two-object methods are compatibility wrappers.
+
+Ordinary Prusa single-material job admission uses the extended check
+before queueing and again after native G-code is produced. No Creality,
+Orca or Bambu worker path is affected. A **real Prusa 2.9.7**
+three-object cantilever fixture has been added to the mandatory
+reviewed-runtime smoke; only that native toolpath result, not the unit
+tests alone, can qualify this feature for release. This does not enable
+multi-head/MMU combined support paint or multiple simultaneously painted
+support enforcers.
+
+---
+
+### 27 November — two-swatch MMU3 native colour qualification
+
+Upstream 2.9.7 native 3MF uses `slic3rpe:mmu_segmentation` and
+`slic3rpe:MmPaintingVersion`. The existing MakerVault exporter
+already maps distinct face-region slots to T1–T4 native leaf states.
+The owner-bound and isolated worker still admit only **one** alternate
+painted tool, because real spatial G-code attribution is qualified for
+one selected front face at a time.
+
+The reviewed runtime smoke now includes a *research-only* three-tool
+case with T1 painted on the front wall and T2 on the opposite wall.
+It requires actual **moving** external perimeter extrusion under the
+correct tool on each wall, rejects stationary E-only recovery and
+cross-wall paths, and rejects all wrong-tool front/back deposition.
+Unit tests verify native per-face segmentation encodes T1 and T2
+separately and rejects incomplete mappings.
+
+If the native smoke succeeds, the next step is extending independent
+worker-side paint audit, purge and owner-bound routing to multiple
+explicit swatches. Until then multi-swatch MMU, XL and INDX colour
+painting remain **not admitted**, and no printer output is authorised
+by this research.
+
+---
+
+### 27 November — INDX owner-profile parser compatibility
+
+Reviewed upstream INDX vendor presets may include native conditional
+values larger than 16 KiB. The owner-bound Prusa parser now applies the
+same 64 KiB **per-value** boundary as the isolated vendor flattener,
+while retaining the 1 MiB total file bound, SHA-256 integrity checks,
+owned-asset requirement, executable/include rejection, exact keys,
+duplicate-key checks and plain-text G-code requirement. Regression tests
+exercise valid extended toolchange fields, tampered stored hashes,
+oversized literals and forbidden executable directives.
+
+This fixes import-to-job parity but cannot prove that the physical INDX
+toolhead changes, heats or extrudes correctly. The pinned genuine 2.9.7
+native smoke remains mandatory.
+
+---
+
+### 27 November — native XL independent-head regional feature parity
+
+The five-head XL worker/project path now carries the same typed object-local
+parameter modifiers, negative/cavity volumes, and native variable-layer
+schedules already supported in the INDX independent-head candidate. The
+multi-tool builder retains them in Prusa's scoped 3MF volumes/range XML
+instead of dropping edits; the isolated worker validates that dialect for
+2–8 independent heads, while the shared-nozzle MMU still rejects these
+unqualified mixed features. Ordinary owner-bound workbench routing preserves
+the edits and submits only audited offline G-code.
+
+Tests verify a five-head native project with a modifier on one model, cavity
+on a second, variable layers on a third, and independent extruder metadata.
+The pinned 2.9.7 native acceptance script now requires all five real
+toolpaths to remain model-local and separately measures object-local Z
+schedules, not merely metadata or a changed G-code hash.
+
+**Acceptance gate:** the real binary smoke and exact-head CI must pass
+before this can be counted as native feature parity. Printer hardware
+toolhead pickup, docking, offsets and physical start remain unverified.
+General multi-tool painting and two-object support-isolation remain open.
+
+---
+
+### Pinned INDX profile importer compatibility (26 November 2026)
+
+The owner-facing official INDX printer import now applies the same narrowly
+scoped PrusaSlicer 2.9.7 `toolchange_gcode` variable substitution that was
+previously available only in the separate native qualification script:
+`filament_retract_length_toolchange` becomes
+`retract_length_toolchange`. Unexpected occurrences outside that exact
+printer toolchange field are rejected instead of being silently changed.
+Source vendor identity and the pinned 2.9.7 runtime are unchanged.
+
+This is an import-compatibility fix, **not** proof of physical INDX pickup,
+calibration, printer submission or mixed painting. The required pinned
+reviewed-runtime smoke must still establish actual official INDX 8T
+model/tool attribution, MMU and XL regression behaviour before PR #199
+may be considered merge-ready.
+
+---
+
+### Prusa native MMU purge versus INDX model deposition
+
+The native material audit now distinguishes two legitimate kinds of
+extrusion. At a verified **MMU wipe-tower XY footprint**, positive-E
+purging may be stationary (a real purge event). At a printable model
+footprint, positive-E only qualifies the assigned tool when it
+actually deposits a moving G1/G01 XY segment. Thus INDX toolchange
+recovery at a prior model is excluded without removing valid MMU
+purging. Existing MMU five-tool native smoke plus real official
+INDX 8T toolpath qualification must pass together.
+
+---
+
+### Official INDX G-code spatial mismatch remeasurement
+
+Although the official INDX 8T printer profile now passes real native
+2.9.7 parsing and export with the strictly scoped toolchange
+placeholder substitution, its generated G-code has not yet passed
+the model-local moving-material audit. The research-only diagnostic
+now separately counts E-only stationary recovery, true XY-moving
+per-model/T0–T7 segments and a bounded sample of any cross-tool
+paths. Production continues to reject files unless each assigned
+tool is independently proven to deposit only on the corresponding
+model. These findings determine whether the issue is an audit
+false positive or a genuine toolchange mismatch.
+
+---
+
+### Native material deposition audit — stationary toolchange recovery
+
+The official CORE One INDX 8T profile demonstrated 1,042 genuinely
+deposited extrusion movements per model with eight independently
+selected tools, plus approximately 79 **E-only toolchange recovery
+commands** at the previous model XY before nozzle travel. The earlier
+material audit counted those stationary E movements as deposited
+geometry and therefore reported false wrong-tool leakage.
+
+The Prusa material audit now counts only positively extruding,
+**moving XY G1/G01 segments** with both endpoints within an
+independently verified model footprint; it handles G90/G91,
+M82/M83 and G92 resets. Stationary priming and traversing
+extrusion segments do not qualify model material or tower deposition.
+Existing MMU/XL behaviour must pass the same stricter tests,
+along with actual official INDX 8T native G-code and independent
+model-tool attribution.
+
+---
+
+### Official INDX 8T spatial tool identity diagnosis
+
+The one-variable 2.9.7 toolchange compatibility mapping successfully
+compiled the complete official INDX 8T printer G-code. The real generated
+G-code is subject to the same strict independent-model and material
+identity audit as other Prusa engine configurations. A temporary
+synthetic-only diagnostic counts actual moving positive-E segments
+by model footprint and active T0–T7; no audit thresholds are relaxed
+in the worker. Official INDX profile qualification remains open
+until these model/tool results match the owner-specified assignments.
+
+---
+
+### INDX 2.9.7 placeholder compatibility research
+
+The official INDX 2.5.16 vendor preset contains a
+`filament_retract_length_toolchange[next_extruder]` placeholder in its
+native `toolchange_gcode`, which is undefined in pinned 2.9.7
+(`retract_length_toolchange` is the corresponding 2.9.7 native option).
+A controlled, temporary 8T native CLI candidate is comparing the exact
+Prusa-provided toolchange script after substituting only that variable
+name, without omitting docking, heating, extrusion or motion commands.
+This does **not** qualify the modified preset until the pinned 2.9.7
+real-G-code worker and spatial T0–T7 attribution both pass.
+
+---
+
+### Official INDX 8T native CLI compatibility diagnosis
+
+The official INDX vendor bundle has passed immutable-source and
+strict vendor-inheritance validation; the real 2.9.7 CLI still needs
+to demonstrate that its exact printer start/toolchange profile can
+slice the eight-tool fixture. A controlled research-only retry
+captures bounded CLI diagnostics on error without exposing user jobs
+or weakening worker output acceptance. Full INDX printer-preset
+support cannot be claimed until this step passes.
+
+---
+
+### Exact official INDX vendor parsing exception
+
+The signed vendor-update bundle at `2.5.16` contains one
+upstream native option typo, `top solid_infill_speed`.
+The owner-bound importer and isolated vendor flattener map that **one
+literal** to the canonical Prusa option `top_solid_infill_speed`,
+reject unknown other whitespace-containing keys, and still reject
+duplicates after normalisation. No generic forgiving parsing is
+introduced. A full native 2.9.7 8-tool official machine-preset slice
+must pass on the resulting file before merge.
+
+---
+
+### Official vendor literal compatibility
+
+Prusa's current 2.5.16 INDX vendor update carries longer native
+printer conditional strings than the older bundled 2.9.7 catalogue.
+The bounded owner-import parser and isolated worker vendor parser now
+permit native literal option values up to 64 KiB, while retaining their
+UTF-8, control-byte, script-key, section-count and total-profile size
+checks. The official file remains pinned by immutable Git object ID;
+the real 8T profile import and native slicing must both pass the
+reviewed-runtime test before any release.
+
+---
+
+### Eight-tool native scratch isolation
+
+Each real 8T fixture candidate (plain, modified/cavity/variable-layer,
+then official CORE One INDX 8T) is sliced with a fresh output target.
+The isolated worker intentionally rejects reusing an existing
+`output.gcode` so stale output can never be mistaken for a successful
+second slice. The acceptance harness clears only its own synthetic
+output between fixture cases and performs a full worker result audit
+after each one.
+
+---
+
+### Five-tool MMU regression alongside INDX
+
+The INDX extension does not change the native five-tool MMU firmware or
+purge matrix. Because a late reviewed-runtime test reported an abnormal
+native G-code coordinate in the existing five-tool MMU smoke, its
+synthetic CLI harness now logs only bounded numeric outliers to
+distinguish a genuine native generator issue from a parser problem.
+The strict production material audit remains unchanged. Successful
+T0–T7 slicing alone cannot replace the pre-existing MMU regression.
+
+---
+
+### INDX independent per-object variable layers
+
+The eight-tool native path also preserves independently configured
+variable-layer ranges alongside typed parameter modifiers and negative
+volumes. The owner-bound 3MF builder serialises the existing,
+upstream-supported `Metadata/Prusa_Slicer_layer_config_ranges.xml`.
+The independent worker strips only material-tool annotations for its
+separate strict XML check; exact layer range IDs, interval ordering and
+native layer settings remain validated. A genuine pinned 2.9.7
+eight-tool CLI test must prove every model still deposits using the
+assigned tool in this combined project. Unknown or invalid layer ranges
+are not silently omitted.
+
+---
+
+### Qualification checkpoint — official 8T and native spatial regions
+
+The full INDX acceptance must pass after the latest per-tool 3MF
+adapter changes, including all eight native deposition tools,
+model-local modifier and negative-volume geometry, actual official
+CORE One INDX 8T printer-preset slicing, the audited worker protocol,
+and existing Orca and general MakerVault regressions. A failed CLI
+or worker validation is a release blocker, not a testing-only toggle.
+
+---
+
+### INDX native modifiers and negative volumes
+
+Owner-bound 6–8-tool INDX slices now admit typed model-local
+Prusa parameter modifiers and independent negative volumes. The
+existing native 3MF dialect validator still verifies contiguous typed
+mesh/vertex ranges, settings and no arbitrary metadata. The material
+validator verifies those volumes **after stripping only the explicit
+T0–T7 object tool annotations** and uses spatial per-model G-code
+attribution on the sliced result. This does not automatically permit
+complex combined support/colour/seam paint or unknown tool pickup
+scripts. A required native 2.9.7 qualification slices an 8-tool
+modifier-plus-cavity project and compares G-code against plain models.
+
+---
+
+### Real official INDX profile native end-to-end acceptance
+
+The pinned vendor-update source contains named
+`Prusa CORE One INDX 8T HF0.4 nozzle` and
+`Prusa CORE One INDX 4T HF0.4 nozzle` profiles, plus
+0.25/0.6/0.8 mm variants. The reviewed CI verifies the
+vendor file's actual Git object ID before using that 8T preset.
+The eight-tool acceptance now runs three distinct native checks:
+eight model/tool depositions using a synthetic independent-head
+control, eight-tool modified/cavity 3MF native slicing, and real
+eight-tool slicing using the official INDX printer profile with
+its exact machine G-code. Slicing and spatial output attribution
+are observable without hardware; firmware tool pickup/heating
+remain physical acceptance criteria.
+
+---
+
+### Official INDX updated profile source integrity
+
+The INDX wizard imports from Prusa's separately maintained, immutable
+`PrusaResearch/2.5.16.ini` vendor-update release at commit
+`058c542282d5a512dcc73fc8be9288fc253ddcfd`, distinct from
+the pinned 2.9.7 slicer executable profile catalogue. The vendor's index
+declares minimum PrusaSlicer version 2.9.6. The native CI downloads this
+bundle at that exact commit and verifies Git blob
+`1aad47dce4b3967c73b38bc996e1ac947c8a23d4` before
+inspecting its published INDX printer presets. This permits browsing and
+importing official device settings rather than synthesising undocumented
+INDX heat-control and docking commands.
+
+---
+
+### INDX eight-tool native research requalification
+
+The reviewed pinned 2.9.7 CLI test normalises the official XL independent
+printer preset's binary-G-code default to text only in an ephemeral fixture,
+then verifies eight tool-specific model footprints, T0–T7 identity and no
+cross-model deposition. The same exact worker-side independent-material
+validation is used in production with the owner's selected profiles. Eight
+tool selection is not evidence of physical pickup, dock calibration, heater
+control or firmware compatibility; importing a matching official updated
+INDX printer preset remains necessary.
+
+---
+
+## 26 November — INDX eight-tool independent material route
+
+A four-to-eight-tool `indx` architecture is now available in the normal
+Prusa virtual-tool editor, while Prusa MMU remains limited to its native
+two-to-five logical tools. INDX uses **independent native tool identities**,
+not an MMU single-filament-path switcher. The owner-supplied native printer
+profile, especially any machine-specific tool pickup, heating and firmware
+G-code, remains authoritative; MakerVault does not invent docking or firmware
+sequences. The project compiler preserves explicit T0–T7-to-object assignments,
+compiles eight ordered filament temperature vectors and uses the authenticated
+offline independent-head worker with a strict model-local G-code audit.
+No purge/wipe tower is fabricated for INDX.
+
+The pinned PrusaSlicer 2.9.7 acceptance workflow includes a required
+real eight-tool T0–T7 G-code smoke test, constructed from a reviewed Prusa
+independent-head printer preset in a temporary test scope. It proves slicing
+and tool-index deposition only, **not physical INDX tool exchange**. Native
+firmware/profile compatibility and on-device printing cannot be guaranteed
+without actual printer hardware. Remain explicit about this distinction in
+release notes and guidance.
+
+---
+
+### Seam start-position audit correction
+
+The original first-wall spatial research classified the *endpoint* of the
+first deposited external-wall segment. That can be a false positive if a
+segment crosses into the painted patch from elsewhere. Both the production
+Prusa-only seam audit and the research diagnostic now measure the **XY
+origin of the first positively extruding external wall segment** and require
+real XY movement. The four-direction qualification is pending the new
+**required two-repeat native 2.9.7 comparison** using this stricter test.
+No directional expansion should be marked ready if it fails.
+
+---
+
+## 26 November — qualified four-face seam direction candidate
+
+Real pinned PrusaSlicer **2.9.7** research on the same cube and process
+profile showed that `seam_position=random` let painted seam enforcers direct
+first external-wall starts to **front, back, left and right**. For each face,
+the unpainted baseline failed the same region-specific G-code audit;
+the painted case showed **94 matching starts from 95 measured layers**.
+Other tested modes (`nearest`, `aligned`, `rear`) either failed spatial
+qualification or coincided with the unpainted baseline on some faces.
+
+The backend now recognises one fingerprint-checked, upright, unscaled,
+vertical face per single-model slice; the default front mode remains
+supported. Back/left/right automatically use `seam_position=random` in a
+**temporary resolved Prusa process profile**, leaving saved presets unchanged.
+G-code is rejected if independent native first-wall starts do not follow the
+chosen polygon. Multi-object seam paints and mixing seam with support, fuzzy,
+colour, modifiers, arbitrary object overrides or layer bands remain blocked.
+
+These newly expanded directions are **not merge-qualified** until the
+new *required* real-binary reviewed-runtime workflow proves all four
+directions against baseline in **two independent runs**, with the ordinary
+Prusa worker contract, general CI and existing engine regressions green.
+Desktop/mobile staging acceptance is still necessary.
+
+---
+
+### Two-object support enforcers with automatic-support presets
+
+The two-object support route applies `support_material = 1` and
+`support_material_auto = 0` to the **temporary, resolved process settings
+for that slice only**, even when the saved process profile requested automatic
+supports. This is intentional: genuine native 2.9.7 support isolation was
+qualified with manual painted enforcers, not unrestricted automatic support
+generation. Single-object support painting still preserves the saved
+automatic/manual setting. No imported preset or printer configuration is
+mutated. This must be separately regression-tested with automatic supports
+present in the native source process file.
+
+The additional normal queued workbench admission test checks that this route
+is Prusa 2.9.7-only and rejects a second painted object, scaling and mixed
+object edits. The native runtime requires bidirectional painted-vs-unpainted
+support isolation. Desktop/mobile staging remains an independent pre-merge gate.
+
+---
+
+## 26 November — two-object Prusa native support leakage was stationary E recovery
+
+The pinned real PrusaSlicer 2.9.7 run [45890113131](https://github.com/gavrd7/MakerVault/actions/runs/45890113131) demonstrated that the previous 59 “neighbour support moves” were **stationary extruder recovery events**, not deposited support. The native baseline produced zero deposited supports in either region; a left-only painted enforcer produced **2,174 moving support paths left / zero right**; the reverse right-only candidate produced **zero left / 2,174 right**. Research with the earlier unqualified classifier incorrectly rejected the zero-leak baseline. The research gate now recognises this as proof of isolation, rather than a blocker.
+
+A narrowly scoped execution route now admits **exactly two independent, upright, unscaled, single-material native Prusa objects with exactly one support-painted enforcer**. No second painted model, modifier, variable layers, colour, fuzzy, seam or object process edits are allowed in this route. The native project's normal owner-bound facet validation still applies. After genuine native slicing, a new independent backend spatial auditor counts only **moving positive-E native support segments inside each verified object XY footprint**, excludes G92 resets and stationary recovery, and rejects jobs if the neighbour has **any** deposited support segment or the painted model lacks at least two deposited paths with more than 0.01 mm positive E. Failed G-code cannot be saved. The dedicated Prusa contract covers negative and positive examples; reviewed-runtime CI now contains a **mandatory genuine Prusa 2.9.7 two-model both-direction G-code acceptance** rather than relying on synthetic samples.
+
+**Status:** this is qualified only after the required exact-head worker, native CLI, general CI and Orca/container regression workflows pass. No physical printer upload/start is authorised, and all other blocked mixed editing combinations stay closed. The separate experimental SupportBlocker-volume tests remain research-only. The strict footprint audit counted 264 moving support segments inside the selected painted model in each native direction, zero in the neighbour; other support segments beyond both model footprints are reported separately. The additional seam placement research did not qualify the `nearest` mode; alternative directions remain gated.
+
+---
+
+### Pinned native two-object SupportBlocker-volume experiment
+
+A separate candidate 3MF now appends an upstream-supported `SupportBlocker`
+volume to the unpainted neighbouring object's resource, with a closed 12-face
+box enclosing its XY footprint and full support Z range. This differs from
+previous failed experiments with object-local `support_material` toggles
+and per-facet blocker flags. The research harness tests both this volume
+alone and volume plus object-local support-off. Unit tests assert unchanged
+painted-object triangles, bounded right-only blocker geometry and correctly
+indexed Prusa volume metadata.
+
+**Not production-enabled:** even a valid native 3MF import does not prove the
+painted object's generated supports are isolated. Only a genuine 2.9.7 G-code
+comparison showing retained positive support under the painted left object,
+zero significant positive support under the right and no unintended neighbour
+extrusion can qualify this. Until that evidence exists, the two-object
+support paint admission remains blocked.
+
+---
+
+## 26 November — native deposition audit hardening and exact-head regression gates
+
+The Prusa-only support, front-seam, MMU colour-wall and two-model fuzzy-skin
+audits now distinguish **actual moving positive-E toolpaths** from stationary
+retraction recovery / priming. They track absolute versus relative XY (and Z
+for fuzzy-skin work), honour G92 resets and require explicit native extrusion
+roles; the MMU two-colour research audit additionally requires both endpoints
+of a counted external-wall segment within the independently verified region.
+Regression fixtures cover relative modes, invalid role labels and
+non-depositing commands.
+
+The dedicated `prusa-worker-contract` CI workflow now explicitly runs seam
+and fuzzy spatial suites alongside the existing colour and support suites.
+This strengthens the quality gate but **does not** qualify any new painted
+direction, multi-object support, multi-swatch MMU, combined modifier/painter
+workflow, INDX toolhead mechanism or printer submission. The known upstream
+neighbour-support leakage and all existing admission blocks remain in place.
+
+The reviewed permanent Prusa 2.9.7 runtime smoke is required to check these
+stricter invariants against genuine generated G-code. Pass/fail results must
+be recorded against the exact current PR head; simulated fixture tests alone
+are insufficient. Never merge while CI or required native qualification
+is incomplete.
+
+---
+
+## 26 November — scoped Prusa native painting, authenticated MMU colour worker and front seam
+
+**Scope: draft PR #199, offline G-code/Library only; no printer approval, deployment or released-engine changes.**
+
+- **Native colour facets / T0–T4:** The pinned real PrusaSlicer 2.9.7 [five-tool colour acceptance #45749579160](https://github.com/gavrd7/MakerVault/actions/runs/45749579160) passed genuine one-model MMU3 front-wall painting with each selected **T1, T2, T3 and T4**, T0 on the opposite wall, independent model-local positive-E wall evidence and native wipe-tower purge. The last research pass also used the authenticated worker's bounded prusa_offline_colour request decoder and isolated runner. A native-only 3MF checker accepts precisely five leaf-state encodings, refusing invalid, recursive, or printer-out-of-range painted-tool values.
+- **Workbench:** the normal owner-bound Prusa model/material adapter and responsive tool editor now support a **single upright MMU-painted model** with native base T0, exactly one painted swatch explicitly mapped to T1–T4, an imported 2–5-tool printer/palette, one owner-owned filament preset per logical tool, complete directional MMU purge volumes and a native 3MF wipe tower. The separately authenticated worker independently validates project/profile/tower, real painted-wall extrusion by selected tool, unaffected opposite wall, and both selected tools' purge deposition; the owner-side adapter re-audits before returning G-code. Incomplete/mismatched drafts can be saved, not sliced. **Other faces, multi-model facet painting, multiple swatches, XL painted facets and combinations with modifiers/negative volumes/support/seam/layer ranges are still blocked.**
+- **Native seam:** the proven **upright one-object front (negative-Y) seam enforcer** can now use the existing native Prusa 3MF exporter and G-code-first spatial audit of external perimeter starts. Back, left and right seam directions remain unqualified (the old research run showed unchanged baseline or wrong placement), as do seam blockers and mixed edits. A required isolated native front-seam worker acceptance (painted-vs-baseline) is added to the pinned workflow and must be green before merge. A valid 3MF or tool-selection comment alone never qualifies this feature.
+- **Offline output safety:** Prusa painted and variable-layer G-code receives prusa_offline_native=true and printer_submission_verified=false even for single-material painted jobs. It is not compared as physically compatible with the user's registered Creality printer; printer upload/print start remains unconditionally rejected, including the Creality supervised-test exception. Source ownership, imported profiles, private paint assets and G-code motion/firmware command checks remain enforced.
+- **Remaining proof:** final exact-head Django, Vite, worker and Orca regression CI, plus genuine pinned front-seam test, then staging desktop/mobile job/save/reopen/preview testing. The two-object support-enforcer fixture still demonstrates **59 unwanted support moves in the adjacent model** for one direction; retain its existing fail-closed admission until it is resolved. The six-to-eight-tool INDX mechanism and physical MMU/XL toolchanges are not qualified.
+
+---
+
+## 26 November — independent sparse-infill verification (additional native qualification)
+
+The previous genuine MMU5 and XL5 acceptance run proved native Object **wall loops** with real per-model spatial internal perimeter counts: first cube (1 wall) **0** internal-perimeter moves; second otherwise identical cube (5 walls) **800** moves, with zero wrong-tool extrusion across all five models. To avoid treating UI import of `fill_density` as proof that distinct **sparse infill** settings work, the pinned 2.9.7 worker acceptance now additionally compares two identical cubes (models 2 and 3, both 3 walls) at **10% versus 55% sparse infill**, measuring positive-E internal-infill paths inside each model's own native-tool bounding box. The audit must pass for **both MMU3 and independent XL** before this is considered independently qualified.
+
+The workbench currently admits only native Object `wall_loops` and `sparse_infill_density`; all other combinations remain forbidden. If this new independent audit fails, restore the safe gate on Object infill until the native dialect is proven. Preserve draft mode and forbid physical printer submission.
+
+---
+
+## 26 November — qualified per-object Prusa MMU/XL wall and infill settings
+
+**Qualified on real native PrusaSlicer 2.9.7** at [reviewed runtime run 45746535217](https://github.com/gavrd7/MakerVault/actions/runs/45746535217): both five-logical-tool MMU3 and five-independent-head Prusa XL generated G-code that passed the existing wrong-tool deposition and MMU wipe tower audits **and** a new independent spatial wall-count comparison. The fixture used otherwise identical adjacent STL cubes with explicitly different native per-object `perimeters` (1 versus 5) and `fill_density` (15% versus 35%). The native acceptance for both mandatory five-tool cases passed.
+
+This permits two additional controls in the normal **offline** Prusa MMU/XL workbench: **Object wall loops** and **Object sparse infill density**. The importer validates bounded numbers against Prusa's native process schema; the native 3MF exporter writes exact per-object `perimeters` and `fill_density` metadata, while the independent worker validator requires the matching native model/tool bindings. Reject every other per-object setting and any combination with unqualified paint, seam, support, variable layers, modifiers or negative volumes. The global Prusa process settings remain a separate, owner-scoped subset.
+
+**Not a physical print qualification**: there is still no Prusa printer hardware validation, MMU filament loading, XL tool pickup, firmware/tool offsets, or approval to upload or start a print; all generated multi-tool assets retain `prusa_offline_native=true` and `printer_submission_verified=false`. PR #199 remains draft until end-to-end staging and remaining feature cases pass.
+
+---
+
+## 26 November — research: native object-local wall/infill with MMU and XL (not yet enabled)
+
+The native Prusa 2.9.7 project builder and strict material-project validator already understand two bounded object-local fields: `perimeters` and `fill_density`. A new research fixture combines **one-wall** and **five-wall** equal-size cubes with independent MMU3 virtual tools or XL independent heads, while retaining native 3MF tool metadata. The pinned real native CLI acceptance must also demonstrate substantially different **spatial internal-perimeter extrusion counts** before the normal workbench gate can be loosened. The worker's existing audit separately requires correct tool-local positive extrusion and MMU wipe tower deposition. Unsupported per-object controls, modifiers, painting and layer schedules are still rejected.
+
+**Research only at this stage:** the authenticated normal MMU/XL workbench remains intentionally unable to submit object-specific process overrides. A successful XML import alone will not qualify independent model behaviour. Printer start and upload remain blocked.
+
+---
+
+## 26 November — qualified Prusa MMU/XL global process controls and safe native routing
+
+This draft iteration extends the normal owner-bound Prusa MMU3 and XL workbench jobs with **global** layer height, wall loops, top and bottom solid shell counts, and sparse infill density. The job adapter accepts exactly those native 2.9.7 keys and rejects unsupported global/any per-object advanced edit instead of silently ignoring it. Original imported profiles remain immutable; only a job-local flattened native Prusa process copy changes. The approved MMU purge-matrix compiler runs *after* the numeric overrides, preserving wipe-tower mode and source/destination filament identity. XL independently rejects MMU tower/purge.
+
+The existing physical-slot-to-native-tool adapter also now removes physical printer bay metadata *only after* owner/printer/native-tool mapping has been validated, avoiding an otherwise unavoidable mismatch with Prusa's strict project XML dialect. Virtual native-tool assignments need no physical printer bays and are preserved as before.
+
+Added backend tests for MMU/XL override correctness and unsafe values; workbench owner binding and physical-slot translation; offline Library G-code tagging, download safety, and rejection of unsafe firmware commands. The pinned genuine Prusa 2.9.7 five-MMU-tool and five-independent-XL-head scripts now exercise the same native numeric override function before asserting correct model-local material deposition; running them **does not qualify physical printer tool pickup, purge adequacy or safe print submission**. Future expansions must continue to require actual native G-code checks and unchanged Orca/Creality/Bambu regression workflows.
+
+**Gate**: full exact-head GitHub CI, genuine reviewed runtime native acceptance and desktop/mobile staging verification before any merge. Keep the pull request draft and printer start/upload guarded.
+
+---
+
+## 26 November — Prusa MMU/XL ordinary workbench and Library integration (draft review)
+
+- Prusa-only application adapter `backend/core/slicer_prusa_job_material.py` joins **explicit owner-bound native profiles, model-to-tool choices, MMU directional purge and wipe tower** to the already verified authenticated offline Prusa 2.9.7 worker. `backend/core/slicer_execution.py` now admits the matching multi-tool SliceJob, validates private imported STLs, executes the bounded MMU or independent XL worker, re-audits the actual per-model deposited toolpaths (and MMU tower per tool) and stores text G-code with normal MakerVault job status, optional Library save and preview warmup.
+- New `settings.prusa_native_tools` **version 1** supports virtual tool selection without a Prusa printer: MMU vs XL; 2–5 native logical tools; ordered imported filament profiles; explicit instance-ID-based one-based tool mapping; and a complete 1–1000 mm³ per-direction MMU purge matrix. MMU requires a saved wipe tower XY; XL disallows MMU purging. Incomplete selections remain editable in saved drafts but are **not sliceable**. The native printer profile must independently match the selected mechanism and tool count, and each filament preset must belong to the job owner and exact Prusa release. Six-to-eight-tool INDX remains unqualified. Physical feeder-slot metadata is never silently interpreted as native Prusa tool identity.
+- Added responsive `PrusaNativeToolEditor.jsx` in the interactive workbench, storing/restoring tool selections in ordinary draft JSON, enabling Slice only for complete, compatible selections. Existing legacy Orca/Creality/Bambu slot-mapping expressions are preserved. Added backend API/owner/preflight and frontend regression tests; verify **latest commit** full CI before claiming all green.
+- **Offline preview, download and Library only:** the generated asset is tagged `prusa_offline_native=true`, `printer_submission_verified=false`, and `multi_material_test=true`. G-code is still validated for bounded text, extrusion/motion and unsafe commands, but not falsely compared against the registered *physical* Creality printer because Prusa print transfer is not authorised. `printer_gcode_submission.py` explicitly rejects its upload or start, including attempts to exploit the Creality K2 supervised exception. No physical MMU swap, XL tool pickup, firmware calibration or printer compatibility is claimed.
+- **Not general Prusa parity yet:** colour-facet painting in a multi-material workbench job, spatially reliable directional seam painting, two-model painted support isolation, unsupported mixed modifiers/variable-layer with MMU/XL, INDX 8-tool native support, staging browser/mobile testing and physical printer submission remain gated. Keep PR #199 **draft/unmerged** and leave three released engines untouched. A prior pinned native 2.9.7 full acceptance run proved the offline **five-head XL**, but this newly connected *ordinary SliceJob* path needs exact-head Django/CI and staging browser validation.
+
+---
+
+## Five-head XL temperature-vector native research — 26 November 2026
+
+- The new five-head XL native smoke emits a bounded diagnostic of actual `M104`/`M109` heater commands and any explicit tool/temperature values. It retains the already-required spatial T0–T4 positive-extrusion acceptance unchanged.
+- The five distinct filament configurations are 205/210/215/220/225°C, but profile vectors alone are **not** evidence that the slicer emits matching executable per-tool heater commands. The diagnostic must be evaluated from the newest exact-head native run before promoting multi-head thermal compatibility.
+- No printer heat control is sent, no physical toolchange is attempted, and no ordinary workbench or released-engine behaviour changes.
+
+---
+
+## Five-head XL native acceptance achieved — 26 November 2026
+
+- Pinned genuine PrusaSlicer 2.9.7 [native run 45733816173](https://github.com/gavrd7/MakerVault/actions/runs/45733816173) completed the `Research five independent XL toolheads` step **successfully**, and the failure-warning step was skipped. This test uses the official five-head XL native preset, five spatially distinct objects, explicit T0–T4 assignments and a material-to-model positive-extrusion audit. The real worker logged **1,042 correct model-local positive-E moves for each of T0–T4**, **zero wrong-tool moves**, no MMU wipe-tower moves and output SHA256 `0718a53aeea540d566ebdae858530c896b454d8667fa4401b98a1875b44c2a4e`. This is **offline G-code qualification only**; physical pickup, head offsets, firmware and print delivery remain unverified.
+- First attempt [run 45733586266](https://github.com/gavrd7/MakerVault/actions/runs/45733586266) failed because the official XL 5T profile defaults to binary G-code. The research fixture converts only that flattened trusted profile to `binary_gcode=0`, preserving MakerVault's bounded text-G-code validation and not touching the vendored source or any released engine.
+- Commit `c13bf4e` promotes the five-head XL native acceptance to **required** in the opt-in pinned-runtime workflow; it will now fail the workflow on regressions instead of emitting a research warning. Recheck that promotion's own exact-head native run before claiming a full post-promotion pass.
+- Prusa INDX-scale six-to-eight logical tools remain `unqualified_toolchanger`, have no assumed physical hotend count, and cannot enter the current native palette or offline XL worker route. All ordinary multi-material workbench/Library/printer paths remain disabled pending full parity.
+
+---
+
+## Five-head XL native qualification work — 26 November 2026
+
+- PR #199 now includes `scripts/prusa_native_five_head_xl_smoke.py`, a distinct pinned PrusaSlicer 2.9.7 five-physical-head fixture using the upstream `Original Prusa XL - 5T 0.4 nozzle` preset, explicit tools 1–5, five model-local deposition audits, per-tool temperatures, and **no MMU purge or wipe tower**. This does **not** claim a successful five-head native run yet.
+- `.github/workflows/prusa-reviewed-runtime-smoke.yml` executes that fixture in the existing isolated native-runtime acceptance workflow as **research-only / nonblocking** until exact-run proof. Malformed worker requests (a single selected tool, mismatched model/tool count, out-of-range tools, MMU-only tower metadata and conflicting MMU flags) must fail before launching the native binary. Reusing one XL head across multiple models is valid when at least two distinct heads are selected; do not mistakenly reject that configuration.
+- `backend/core/tests/test_slicer_prusa_material_preflight.py` independently tests owner-scoped five-head preparation, nonsequential explicit model tool order `[5,3,1,2,4]` and absence of MMU tower metadata. The test is ordinary CI and does not require a Prusa printer.
+- The initial XL script had an indentation error detected by MakerVault CI in run `45731840298`; corrected by commit `96bc837`. Subsequent commits add request-negative tests and backend five-head coverage. Recheck **all exact-head CI and the actual native workflow** rather than treating earlier passes as current.
+- Do not conflate XL five independent hotends with MMU five logical materials or INDX up to eight passive nozzle tools. Do not activate XL five-head production slicing, INDX, printer submission or physical pickup claims until independently qualified. Existing Creality, Orca and Bambu pathways are deliberately untouched.
+
+---
+
+## 26 November 2026 — Multi-toolhead topology: XL versus CORE One INDX
+
+- Prusa XL: supports native **1, 2 or 5 complete independent toolheads**. The offline two-tool XL native 2.9.7 G-code contract has passed, while a genuine five-tool **XL** runtime fixture and physical head pickup remain separate acceptance gates. Do not confuse the proven five-*material* MMU test with five independent XL toolheads.
+- Prusa CORE One INDX: supports up to **eight interchangeable passive nozzle tools** with an induction-heated Smart Head. This differs physically from both MMU (one nozzle, five incoming filaments) and XL (multiple complete independent hotends); tool count alone does **not** identify the physical pickup/heater mechanism. Native 2.9.7 INDX profile availability, G-code dialect, firmware requirements, offsets and actual tool pickup require explicit verification before admission.
+- `backend/core/slicer_prusa_machine_topology.py` now safely parses six to eight logical tool entries as `unqualified_toolchanger` with `physical_nozzle_count=None` (not a claim of six to eight independent hotends), and exposes `requires_new_toolchanger_qualification=True`; MMU remains capped at five. This does **not** enable INDX slicing: the scoped backend offline preparation, worker native profile validator and authenticated MMU/XL protocols **remain capped at five** until a dedicated INDX profile and native acceptance path are implemented. Build the future INDX implementation around explicit toolchange mechanism/capabilities rather than assuming eight physically independent complete hotends.
+- Sources: official Prusa CORE One INDX product/technology documentation and XL product guidance; ensure pins/availability are checked live before future work.
+
+---
+
+## 26 November 2026 — genuine five-slot MMU acceptance
+
+- [Pinned native PrusaSlicer 2.9.7 acceptance run 45730410372](https://github.com/gavrd7/MakerVault/actions/runs/45730410372) **passed** a genuine five-object, five-virtual-tool MMU G-code slice using the new offline worker protocol. Independent model-local audit measured **1,044 correct positive extrusion moves for each of T0, T1, T2, T3, T4**, **zero wrong-material moves on all five models**, and independently identified wipe-tower extrusion for every tool (**1,895 / 2,093 / 2,080 / 1,097 / 1,045 moves**). Selected tools and native purge settings were also validated before executing the pinned binary.
+- This test has now been promoted from exploratory to a **required** step in the expensive native acceptance workflow, alongside already-required two-material MMU and two-tool XL offline worker tests. These are evidence for *native G-code generation only*, **not physical printer firmware, MMU loading reliability, toolhead pickup, print submission, or successful physical printing**.
+- The ordinary MakerVault workbench/Library/print submission pipeline still does not invoke these offline MMU/XL research helpers. Keep PR #199 draft until remaining feature parity and safe printer integration are finished.
+
+---
+
+## 26 November 2026 — authenticated offline MMU/XL slicing work
+
+- PR #199 remains **draft**. Prusa 2.9.7 genuine [pinned runtime acceptance #45730061299](https://github.com/gavrd7/MakerVault/actions/runs/45730061299) passed both independent offline worker paths: MMU two-material candidate emitted **3,922 correct T0 + 3,922 correct T1 model moves**, **zero wrong-material moves** and **3,334 T0 + 3,325 T1 true wipe-tower extrusion moves**; the independent two-head Prusa XL candidate emitted **3,921 correct positive-E moves on each toolhead**, with **zero wrong-tool model moves**. This validates executable native CLI toolpaths, **not** physical print/swap, tool-offset calibration or upload.
+- `slicer_worker/prusa_offline_contract.py` performs independent fail-closed worker-side checks of native topology, ordered material temperature vectors, model/tool metadata and MMU purge matrix/tower parameters. The authenticated `/v1/slice` protocol has mutually exclusive `prusa_offline_mmu` and `prusa_offline_xl` candidate modes, backed by distinct worker markers and post-slice positive-E model-local G-code auditing. MMU additionally requires actual per-tool tower extrusion; XL forbids unqualified MMU tower/model flushing. The stable single-material and released Orca/Creality/Bambu execution paths were not loosened.
+- Backend `slice_prusa_offline_mmu_candidate` / `slice_prusa_offline_xl_candidate` helpers resolve every private profile against the selected owner, generate a bounded project/palette and call the authenticated worker through a restricted transport flag. They independently re-audit returned G-code. These helpers are deliberately **not** connected to the regular SliceJob admission, workbench slice action, Library saves, or printer submission. No staging or production changes.
+- `python3-defusedxml` added to combined slicer image for hardened XML parsing. New worker/client/preflight/security/unit regressions added; final current-head CI must be queried separately. The proven native XL two-head acceptance has been promoted from optional to required in the pinned runtime workflow.
+- Remaining feature-parity work: normal workbench/Library integration of qualified offline paths, five-head/five-slot real job acceptance and broader filament vector controls, unresolved two-model painted-support leakage and seam-paint directionality, full UI/mobile parity and printer-specific physical compatibility (no Prusa hardware available). Keep fail-closed gates and PR draft until this work is complete.
+
+---
+
+## Prusa MMU genuine native qualification — 25 November 2026, follow-up
+
+- Complete pinned native 2.9.7 [run 45721946986](https://github.com/gavrd7/MakerVault/actions/runs/45721946986) **passed**: isolated model-tool validator, correct 3MF tool assignments, application-generated native MMU colour faceting with T1 on 392 painted external wall moves and T0 on 234 opposite-wall moves, native independent logical temperature vectors producing real `M104 S205` and `M104 S220` commands, 80 vs 220 mm³ purge matrix changing actual tower extrusion (18,464.88→24,415.57 E mm) and tower XY relocation by 130.64 mm. Genuine nozzle heating or physical printing has not been tested.
+- Added independent `slicer_worker/prusa_material_gcode_audit.py` to audit assigned T0/T1 positive-E model deposition against actual generated 3MF mesh footprints, rejecting wrong-tool model extrusion and ambiguous overlap. Added targeted tests; the new opt-in full native workflow must be checked for this exact implementation before production use.
+- Research-only multi-material project validation now optionally checks exact Prusa native per-bed wipe tower metadata, rejecting off-bed or forged positions. **None of these new research paths are called from the authenticated production worker yet**. Original Orca, Creality and Bambu worker contracts remain unchanged. Finish full Prusa parity before merging PR #199.
+- Known native negative evidence still retained: general directional seam painting and two-object painted support isolation are not qualified, so do not enable them merely because the native CLI produced a file. Physical MMU/XL printer submission remains unverified and disabled.
+
+---
+
+## 25 November 2026 — Prusa MMU/XL palette, purge and colour qualification follow-up
+
+- PR #199 remains **draft**; finish full engine parity before merge. No staging/production deploy and no changes to other existing slicer execution paths. No Prusa hardware exists for physical qualification.
+- Added research-only owner-scoped **Prusa filament palette compiler**, deriving native ordered per-tool `temperature` and `first_layer_temperature` vectors from independently resolved, digest-checked private filament assets. Differing other filament settings are refused, not quietly flattened. Corresponding tests cover owner checks and MMU/XL logical tool counts.
+- Added strictly bounded directional native `wiping_volumes_matrix` compiler with explicit zero diagonal, maximum 1000 mm³ transition and immutable user process profile; no user purge settings enter the production worker. The pinned real CLI smoke now compares different purge matrices by actual positive extruder movement in the tower, which must be confirmed in the workflow logs before claiming semantic acceptance.
+- Added application-native **two-colour Prusa MMU painted 3MF candidate exporter** using fingerprint-checked facet geometry, exact `slic3rpe:mmu_segmentation` and `MmPaintingVersion` tags, and explicit T0/T1 assignment. The previously isolated research fixture now uses this same exporter and a separate spatial G-code wall deposition audit. Unlike the existing exporter it is still **not wired into authenticated production admission**.
+- Added **research-only independent candidate validator** in the worker source tree. It strips only explicitly validated MMU model/volume assignments or painted facets and then runs the existing strict single-material 3MF verifier over the rest; it requires an explicit native printer topology and rejects wrong tool count, malformed XML, executable metadata and arbitrary project parts. The normal worker continues to reject unqualified MMU/XL projects. No multicolour printer submission is authorised.
+- Standard CI for the previous baseline was green. Subsequent passes have additional tests (material candidate tamper, topology, colour geometry, painted-wall deposition); check the **exact latest branch head's** CI before claiming green. The genuine pinned native runtime workflow remains a separate opt-in acceptance and no physical device checks have happened.
+- Outstanding gates: verify the new colour candidate and purge matrices with genuine 2.9.7 CLI and authenticated isolated worker, broaden only independently proven filament settings, five-tool MMU/XL handling, per-surface colour and support/seam correctness, complete UI parity, print submission compatibility and regression/staging verification.
+
+---
+
+## Ongoing full-parity development — native evidence and guarded routes (25 November 2026)
+
+- **Do not merge PR #199 until Prusa reaches the requested feature parity**. All three released slicers must remain unchanged. The user has no physical Prusa printer and does not need to intervene during routine source development.
+- Native **MMU painted colour tool assignment** verified on real 2.9.7 G-code: T1 extruded 392 movements on a painted wall while T0 retained 234 on the unpainted opposite wall; the unpainted control emitted no T1 extrusion. Other MMU3 two-object and XL 2-tool physical-extruder research also demonstrated T0/T1 region assignments. Native topology must distinguish one physical MMU nozzle from multiple XL hotends. Hardware/purge sufficiency and safe individual filament preset routing remain unverified; therefore multi-material production printing stays blocked.
+- Native 2.9.7 **wipe-tower placement** is in `Metadata/Prusa_Slicer_wipe_tower_information.xml`, not the obsolete `wipe_tower_x`/`wipe_tower_y` INI keys (removed upstream 2.9.0). Real [run 45697810338](https://github.com/gavrd7/MakerVault/actions/runs/45697810338) successfully moved **7,259** positive-E MMU tower moves from median X=64.18 to X=194.82 (**130.64 mm shift**) while keeping median Y=152.00 and both T0/T1 tower deposition. Introduced bounded `slicer_prusa_wipe_tower.py` project serializer plus structural/tamper tests; native CLI retest with this exact helper is pending. Do not enable printer transfer.
+- Prusa **two-object selective fuzzy skin** was genuinely proven on [run 45697810338](https://github.com/gavrd7/MakerVault/actions/runs/45697810338): baseline 0/0 short external wall movements, left-painted **2590/0**, right-painted **0/2650**. Now admitted in the Prusa-only backend for exactly two upright, unscaled models, only one painted, without modifiers/extra painting/multimaterial. `slicer_prusa_fuzzy_audit.py` refuses storing G-code without a strong model-local texture effect and clean neighbour. Integration unit tests are added; latest full CI must pass.
+- Prusa **two-model variable layer heights** from an earlier real native independent Z acceptance are now admitted for exactly two upright unscaled models; `slicer_prusa_spatial_layers.py` verifies actual per-object positive-extrusion Z schedules instead of global layer markers before storing G-code. Unsupported combinations remain rejected.
+- **Two-model manual support painting remains blocked**. In [run 45697810338](https://github.com/gavrd7/MakerVault/actions/runs/45697810338), the left-enforced test extruded 2243 support moves in the intended object **plus 59 inside the unpainted right object**, at Z 0.8–19.0 mm, while the opposite right-enforced control showed 2302/0. This is meaningful cross-object contamination, not merely a changed hash, so production support paint is still single-object only.
+- **Seam painting remains blocked**. Across four full-wall real-binary candidate directions, only front-wall enforcers spatially matched first external wall starts with the baseline rejected; other directions either failed or were indistinguishable from baseline. A native 3MF paint annotation alone is not proof.
+- Native Prusa six-shape (`box`, `cone`, `cylinder`, `disc`, `sphere`, `torus`) modifier/negative-volume geometric + deposition fixture matrix is now queued for real CLI research. Its inner region test must distinguish removed deposition from newly created cavity walls; some shapes may remain unqualified.
+- Existing single-material profile/CLI path, strict worker 3MF validator, other engines and released main unchanged. **No staging or production deployment.** Confirm latest exact-head standard five workflows plus tagged real native smoke before review.
+
+---
+
+## Latest parity pass — native topology, modern official imports and XL offline qualification
+
+- Modern official Prusa MK4/MK4S/CORE One profiles can default to Prusa binary G-code. A hash-pinned **official-only**, owner-saved candidate import now explicitly converts `binary_gcode=1` to `0` while retaining all native printer geometry, settings and upstream source provenance. This is not an arbitrary override of unknown user files; arbitrary binary G-code profiles continue to be rejected by the worker and by owned native profile resolution. New regression tests cover permitted boolean values and unsafe values.
+- Added independent Prusa machine-topology parsing from native `nozzle_diameter` / `single_extruder_multi_material`, and bounded explicit tool assignments. It does not conflate an MMU single-nozzle changer's five logical slots with an XL's two/five independent physical hotends. Neither tool classification nor upstream presets independently authorizes printer submission.
+- Pinned actual Prusa 2.9.7 vendor source enumerated 48 XL candidates, including `Original Prusa XL - 2T 0.4 nozzle` and `Original Prusa XL - 5T 0.4 nozzle`. Source-only inventory and a real CLI two-tool XL acceptance added to the same opt-in pinned binary workflow as the already-qualified MK3S MMU3 T0/T1 spatial deposition. **These new native XL and modern text-profile checks require reviewing the latest workflow log before claiming success.**
+- A previous native run's MK4S fixture was diagnosed and repaired: the research script's synthetic INI and STL padding accidentally contained double-escaped newline/zero bytes, not valid native input. The fixture now uses proper text INI lines and exact 80-byte STL header. A research failure never relaxes the production worker's input checks.
+- Existing verified support/fuzzy, modifiers/negative volumes, per-object Z ranges and owner-scoped native single-filament execution remain preserved. Prusa seam and MMU colour are still gated pending complete *spatial* G-code semantic proof and palette/prime-tower controls. No physical Prusa machine available.
+- User explicitly requests **full feature parity before merge**; PR #199 remains draft, with no staging or production changes.
+
+---
+
+## 25 November — continuing parity, native multi-tool and modern machine work
+
+- User decision: **do not merge or release** PR #199 until Prusa's intended feature set is substantially completed. Preserve Orca, Creality and Bambu behaviour, no staging/production change without explicit coordination.
+- **Native multi-model layer height** accepted against Prusa 2.9.7 real binary [run 45693671415](https://github.com/gavrd7/MakerVault/actions/runs/45693671415): one object 0.12mm (82 steps) and neighbour 0.20mm (50), independently audited before G-code storage. Native two-parent modifiers/cavities also passed real spatial G-code checks earlier.
+- **Research-only MMU3 multi-model material assignment:** pinned original MK3S MMU3 five-nozzle native printer profile produced tool T0 and T1 (51 changes each) in three candidate object/volume assignment formats. Separate spatial tool deposition auditor now requires the correct model/tool pairing, not just toolchange headers. Colour-painted 3MF import uses Prusa's literal `slic3rpe:mmu_segmentation` and leaf state `8` for `Extruder2`/T1; an actual front-surface T1 effect was observed in a pinned real job, but additional required painting/prime tower, purge, and owner-scoped material profile safety are not yet qualified, so user multicolour remains blocked.
+- **Prusa seam:** native geometry import and a spatial enforcer-start G-code audit have been implemented and are being tested; no broad seam capability should be promoted without native spatial evidence on multiple orientations. Concurrent active PR commits may be newer than this note.
+- **Modern Prusa 32-bit MMU/XL presets:** original official MK4/MK4S/CORE One vendor profiles often set `binary_gcode=1`, which the text-only MakerVault worker correctly rejects. Official pinned Prusa import now safely flattens inheritance then converts `binary_gcode=1` to `0` in the **imported candidate only**, preserving the upstream hash/provenance and preventing binary G-code from entering the bounded auditing/preview route. Import regression tests for legitimate flags, rejects malformed flags. Separate pinned native MK4S MMU3 text output fixture introduced; results must be read before claiming executable compatibility.
+- Independent XL printer nozzle-vector inventory included in the read-only pinned vendor source diagnostics (no false assumption that XL multi-tool = MMU logical changer). No XL printer hardware is available.
+- Next: confirm current latest-head general CI and genuine native acceptance, resolve seam/MMU candidate gaps, qualify independent XL logical/physical tool handling, verify painter/preview mobile and stored drafts. Keep PR in draft.
+
+---
+
+## Prusa seam and MMU native research continuation — 25 November 2026
+
+- Genuine Prusa 2.9.7 seam enforcer evidence: [run 45693338338](https://github.com/gavrd7/MakerVault/actions/runs/45693338338) changed first external perimeter start from x=115.22 (baseline, 69 measured layers) to x=134.78 (painted enforcer, 69 measured layers). A new bounded Prusa-only checker `slicer_prusa_seam_audit.py` verifies first positive-E external-perimeter starts against the *actual painted triangle polygon* and refuses a false baseline. Research test workflow runs the pinned binary and identical geometry; production seam admission is still blocked until the positive/negative native audit is green.
+- Genuine MMU two-model colour routing already verified with 5-virtual-extruder MK3S MMU3 profiles: each tool deposits on its own intended cube, with native tool changes and wipe tower comments. The **first painted MMU facet variant failed** [run 45694139487](https://github.com/gavrd7/MakerVault/actions/runs/45694139487): G-code remained entirely T0, so the worker stays blocked for Prusa MMU painting.
+- Source inspection at immutable upstream `src/libslic3r/Format/3mf.cpp` confirmed Prusa's XML parser reads the **literal** `slic3rpe:mmu_segmentation` attribute; ElementTree's `ns1:mmu_segmentation` substitution is not accepted. `TriangleSelector.cpp` states encode the second logical tool (state 1) as leaf nibble `4`, whereas Orca's reused helper encoded it as `8`. Research fixture now uses the correct prefix and state and restores the namespace declaration after XML round-trip, with a structural test. **Native semantic retest pending**; no normal tool mapping, purge validation or MMU print dispatch is enabled.
+- PR #199 remains draft for full-feature parity, and the three production engines' implementations are unchanged.
+
+---
+
+## 25 November — verified native support and selective fuzzy skin; MMU research underway
+
+- Exact 2.9.7 source-pinned genuine CLI [run 45691151637](https://github.com/gavrd7/MakerVault/actions/runs/45691151637): **manual painted support enforcer** on same-geometry cantilever generated 1,704 native support-material and 601 interface extrusion moves; unpainted geometry-control generated none. The painted **support blocker** altered native auto-support composition from 1,694 material/617 interface moves to 2,274 material/47 interface; it did not silently disappear.
+- Exact 2.9.7 native CLI [run 45691151637](https://github.com/gavrd7/MakerVault/actions/runs/45691151637): selectively painted **fuzzy skin** generated 1,188 short external-wall moves in the painted surface sampling band, **0** on the opposite wall and **0** in baseline; toolpath motion and extrusion changed. No claim of hardware finish/texture validation.
+- Full authenticated HTTP Prusa worker [run 45692515197](https://github.com/gavrd7/MakerVault/actions/runs/45692515197) produced native positive-E G-code from support-enforced, support-blocked and fuzzy project fixtures; the public Prusa worker still validates strict XML, exact edition, bounded triangle attributes and allowed states. This establishes binary import, not printer-connection safety.
+- Production Prusa admission and UI capabilities now allow **support facet enforcers/blockers** and **selective fuzzy facet painting** individually for one upright unscaled non-elevated single-material model, with no unverified combined per-object operations. `enable_prusa_painted_support` preserves the original owner-scoped process INI and the existing auto/manual choice while enabling native support generation in the isolated execution copy. Native support enforcers must show actual positive-E support G-code before a job can be stored. No changes to existing Bambu/Creality/Orca execution gates.
+- Native **seam painting** remains blocked, because the initial genuine same-geometry facet comparisons did not change G-code; a separate labelled enforcer sample and per-layer spatial seam-start auditor have been added to continue evaluation. Colour/MMU, flush/prime tower, independent XL tools, and mixed-feature combinations remain blocked pending genuine source-specific acceptance.
+- Prusa Research pinned 2.9.7 vendor inventory confirmed 43 MMU candidates, including a complete 5-logical-extruder `Original Prusa i3 MK3S & MK3S+ MMU3` with `single_extruder_multi_material=1`, five 0.4mm native nozzles. Many newer 32-bit MMU3 profile candidates fail strict native preset resolution and **are not approved or silently substituted**. Research-only 3MF object/volume extruder variants are being compared with actual G-code before enabling multi-material execution.
+- PR #199 remains draft and unmerged; no staging, production, printer or install changes. Full CI and existing-engine regressions must be rechecked on the latest branch head after all tests complete.
+
+---
+
+## 25 November — next parity pass, independently verified real CLI features
+
+- **Native Prusa variable layers:** upstream `Metadata/Prusa_Slicer_layer_config_ranges.xml` (not Orca's XML file), exact allowed `layer_height` ranges, separate capped worker parser and actual G-code Z-step audit. Real Prusa 2.9.7 run `45688693485` PASS: identical cube baseline **0.20 mm** (50 interior steps), native range **0.12 mm** (82 interior steps), with independent extrusion audit. Now admitted for single upright, non-elevated, unscaled objects without mixed region settings; UI advertises only pinned 2.9.7 capability.
+- **Two-model modifiers and negative volumes:** independent Prusa meshes/volume assignments each preserve per-parent position and the native 3MF `ParameterModifier`/`NegativeVolume` tags. Real Prusa 2.9.7 acceptance run `45689884377` PASS: both cubes baseline **33.075** sampled interior E, each 80% modifier **200.751**, each negative region **0.0**, surrounding deposition remains. Two-model per-parent volumes admitted; cross-model/world-spanning *implicit* region propagation and mixed multi-object object-settings or variable heights remain guarded. All six upstream primitive geometries now have exporter/worker structural tests.
+- **Support/seam/fuzzy painting foundations:** exporter uses exact Prusa `slic3rpe:custom_supports`, `slic3rpe:custom_seam` and `slic3rpe:fuzzy_skin` triangle attributes with corresponding `*PaintingVersion=2` metadata (not Orca field names). Existing exact STL facet fingerprint/clipped-patch validation is reused; the independent worker rejects unknown metadata, invalid states, cross-volume IDs, malformed ranges. Real binary project import for baseline/support/seam/fuzzy/combined passed run `45689884377`. **Semantic support and fuzzy effects and spatial seam placement are not yet qualified, so UI/production admission still block all three modes.**
+- Pinned reviewed runtime (Prusa 2.9.7) and released Orca, Creality, Bambu images remain unchanged. No new Prusa hardware validation, printer upload, staging deployment, main merge or release. PR #199 remains draft, with user preference to finish feature parity before merge.
+- Next: inspect latest `[prusa-package-smoke]` full-wall painted G-code comparisons, strengthen genuine support/seam/fuzzy toolpath audits, then implement and qualify native MMU and independent toolhead material routing, printer/filament config parity and desktop/mobile tests.
+
+---
+
+## Scope decision — complete Prusa feature parity before PR #199 merge (25 November 2026)
+
+- User explicitly prefers retaining **one draft PR #199** until PrusaSlicer reaches parity with the three installed engines. Do **not** split off an initial single-material release or recommend merging the partial engine.
+- Next sequence: (1) finish CI and native 3MF/worker confidence, (2) independent multi-model volumes and object modifiers, (3) native support/seam/fuzzy painting and variable-layer ranges, (4) native MMU multi-material/tool assignment, filament swaps, prime tower, purge and colour painting, (5) independent toolhead Prusa XL where upstream native profiles permit, (6) UI parity on desktop/mobile, installer, save/reopen drafts, preview/print flow, (7) automated real-binary regression across supported printers and all three existing engines.
+- Each Prusa capability must have real 2.9.7 G-code semantic acceptance, not just 3MF acceptance. No Prusa hardware is owned; mark physical validation as unavailable rather than claiming it. Unsupported features must remain fail-closed until proven.
+- All work remains Prusa-only on `feature/slicer-prusa-engine`; maintain one draft PR and preserve current released engine behaviour. No main merge, deployment or release until comprehensive parity and regression review.
+
+---
+
+## 25 November 2026 — current PR #199 handover (supersedes earlier dated notes below)
+
+- Branch: `feature/slicer-prusa-engine`, PR [#199](https://github.com/gavrd7/MakerVault/pull/199), **draft/unmerged**. Production and staging are unchanged.
+- Pinned single-material PrusaSlicer **2.9.7** still uses the immutable reviewed headless Linux AMD64 runtime and public permanent runtime release. Native INI owner-scoped printer/filament/process profiles, manual process changes, private custom profiles, and bounded native placed STL slicing have independently passed tests. Earlier three slicer engines retain their execution paths.
+- **Prusa-specific 3MF** exporter `backend/core/slicer_prusa_3mf.py` encodes separate objects, independent wall/infill overrides, typed `ParameterModifier` and `NegativeVolume` mesh ranges. Validated single-parent modifier/negative volume test routes preserve the model's actual world transform. Single-material multi-object + per-object infill is also supported. Multi-model **modifiers**, painting, variable layers, MMU/XL, elevated geometry, other object settings and mixed feature combinations remain blocked pending independent real native proof.
+- **Complete worker route added**: `backend/core/slicer_execution.py` selects native project input only when object settings or qualified volume features require it. `slicer_worker/prusa_3mf_validation.py` independently rejects arbitrary archives, metadata, executable keys, malformed object IDs, mismatched contiguous mesh ranges and unqualified feature combinations. `slicer_worker/service.py` and `runner.py` accept only the exact Prusa 2.9.7 native 3MF dialect; original binary/hash/authenticated worker isolation unchanged.
+- **Real binary acceptance succeeded** at [run 45685304442](https://github.com/gavrd7/MakerVault/actions/runs/45685304442). Its new full authenticated HTTP roundtrip passed a two-object native 3MF (11,973 positive-E moves), modifier (9,379), and negative volume (9,191). Independent real G-code audits verified a 15%/60% infill distinction, modifier regional deposition **33.08 → 200.75** and negative volume cavity deposition **33.08 → 0**, without destroying surrounding extrusion. **No actual Prusa hardware** is owned/tested; this validates native G-code, not physical print reliability.
+- Regression issue discovered and corrected: old worker tests expected all Prusa 3MF requests to be forbidden; generic Orca/Creality/Bambu modifier admission also excluded Prusa. Now tests exercise the approved protocol, distinct Prusa admission and source-exporter-to-worker validation with tampered archives. New exact UI per-object controls expose only `wall_loops` and `sparse_infill_density` for Prusa; all seven binary-qualified options remain available globally.
+- For final merge review, confirm latest-head MakerVault CI, worker contract, Prusa worker contract, Orca real-binary regression and combined container-isolation checks **all pass**, then stage test: import all three Prusa presets, save/reopen draft, choose a custom global process profile, slice one cube and two differently configured objects, add a modifier/negative volume, check toolpath and preview/download on desktop/mobile. Do not enable production print dispatch for MMU/XL or unverified features. Do not merge or deploy automatically.
+- Workflows: `.github/workflows/prusa-reviewed-runtime-smoke.yml` is an expensive **opt-in** run triggered by a push commit with `[prusa-package-smoke]`; the temporary upstream build artifact expires 2 December, after which use the permanent release workflow. Browser/user staging checks remain pending.
+
+---
+
+# PrusaSlicer 2.9.7 integration — draft PR #199
+
+**Status (25 November 2026):** PR #199 is reconciled with released v1.7.2 and remains **DRAFT**. The genuine source-built PrusaSlicer 2.9.7 binary, resource package, and exact-hash native installer have passed a real Docker-based, nonproduction worker slicing acceptance. The exact reviewed Prusa runtime is now permanently published as a **separate** GitHub release, but PR #199 remains unmerged and has not been deployed to staging/production. GitHub's latest MakerVault **application** release remains **v1.7.2**. Existing OrcaSlicer, Creality Print and Bambu Studio executables and runners are untouched.
+
+## 25 November 2026 — native single-material positioned plates, real-binary acceptance
+
+- PrusaSlicer 2.9.7 now admits **one to twelve verified STLs on one single-material plate**, with native X/Y placement, 3-axis rotation and uniform/nonuniform scale. The Prusa-only `backend/core/slicer_prusa_plate.py` bakes exactly the MakerVault preview transform and bottom contact into a **streamed, size-capped binary STL**. The existing Orca, Creality and Bambu 3MF/runners remain unchanged.
+- `trusted_plate_dimensions` now reads **origin-rectangular flat Prusa INI `bed_shape`** and refuses irregular/excluded beds for the new placement route. Source STLs remain owner-scoped and hash-checked, and combined plates are collision-checked before dispatch.
+- Added an exact Prusa-only `prusa_placed_stl: true` authenticated worker contract, producing a fixed `--dont-arrange` native CLI switch. Other engines' worker payloads and command signatures remain unchanged. A plain untouched STL retains its original, previously validated direct path.
+- **Real pinned executable acceptance PASSED** in [GitHub Actions run 45531867189](https://github.com/gavrd7/MakerVault/actions/runs/45531867189): imported the exact Prusa runtime alongside Orca, sliced **two separately positioned 20-mm cubes**, and independently checked actual positive-E G-code extrusion around X=80–100mm and X=150–170mm. No hardware, cloud printing or live machine was used.
+- Offline tests cover placement, rotation, nonuniform scaling, 3D rotations resting on bed, size limits, unsafe worker flag injection, native bed polygons and unsupported per-object settings.
+- **Still intentionally excluded:** raised/stacked models, alternate material assignments, painting, modifiers, native Prusa 3MF, per-object/global process edits, support painting, variable layer height, MMU/XL multicolour or tool change. Real-binary sliced G-code is *not* hardware print verification.
+- The branch remains **draft PR #199**, with no merge, production deployment or printer submission. Rebuild both local staging images before testing new placed-plate behaviour; the installed Prusa 2.9.7 runtime archive does not change.
+
+## 25 November 2026 — genuine CLI and isolated installer acceptance (current)
+
+- **Pinned real upstream build successful:** [GitHub Actions run 45509961312](https://github.com/gavrd7/MakerVault/actions/runs/45509961312) compiled exact PrusaSlicer 2.9.7 Linux AMD64 source (`450d70dd81c9b8990bc6bc8e690e31f82ddceb11`), verified headless CLI and native official Prusa profile bundle, and generated **208,936 bytes of genuine G-code with 3,737 positive-E extrusion moves** for a 20mm cube using real MK2S / Generic PLA / 0.20mm NORMAL presets. The earlier `--version` probe failed because Prusa's CLI does not support that flag; `--help`, pinned Git SHA and real slicing are used instead. Binary SHA-256: `4488d5b6ed97c818c4c19bef58b51704726e7a20407a8eda986bc88b3b13aa18`.
+- **Verified exact package:** archival tar `prusa-2.9.7-headless-linux-amd64.tar.gz`, size **96,094,489 bytes**, SHA-256 `963eb81fd972d50c5f8fe54c3adb6dce2eab39c9ab223534b917eae76973d913`. Contains native executable, pinned `PrusaResearch.ini` vendor resources and upstream `LICENSE` with review-only per-file SHA manifest. GitHub Actions artifact ID **14977758244** expires **2 December 2026**. Never treat this short-lived artifact as a production installer source.
+- **Implemented fixed-source native installer** (Prusa-only additions to `slicer_worker/engine_installer_service.py` and new `slicer_worker/prusa_runtime_install.py`): approved release discovery requires an exact **permanent public GitHub release tag**, asset size, browser URL and GitHub's published SHA-256. The download is independently pinned to the exact archived tar digest. An isolated, bounded tar reader rejects traversal/symlinks/devices/duplicates/extra files and verifies every file's manifest digest, known CLI/vendor hashes, source identity, and AMD64 ELF machine. The staged CLI is probed, installed atomically to `versions/prusaslicer/2.9.7`, made worker-readable, and activated without removing existing engines. Existing AppImage installer paths remain unchanged. Reinstall/uninstall use the existing version lifecycle.
+- **Genuine combined-container runtime acceptance**: [run 45522066883](https://github.com/gavrd7/MakerVault/actions/runs/45522066883) **passed** exact tar download/check, Docker build of the unchanged generic slicer image, installer activation alongside reviewed Orca, unprivileged UID 10001 engine SHA checks, and real native Prusa cube slicing. Follow-up [run 45522293738](https://github.com/gavrd7/MakerVault/actions/runs/45522293738) additionally checks uninstall/reinstall preserving Orca, **pending at last documentation edit**. Full latest-head CI must be checked.
+- **Permanent distribution requires a separate explicit promotion:** `.github/workflows/publish-prusa-runtime.yml` has a confirmation-gated manual workflow to promote **only** the already-verified archive to GitHub release tag `prusa-runtime-v2.9.7-450d70d`, asset `prusa-2.9.7-headless-linux-amd64.tar.gz`. The normal MakerVault v* release and GHCR publishing are unaffected. GitHub generally requires workflow dispatch files to be present on the default branch; publish only after that workflow is available or via another reviewed explicit mechanism. **No permanent runtime release has been published or server installed as part of PR development.**
+- The existing UI engine selection/installation system already consumes the authenticated release catalogue and worker health. Prusa's advanced 3MF, transformed/multiple-model plates, MMU/XL, painting and modifiers are still **not** supported by verified native Prusa execution; fail closed rather than silently downgrading user designs. Verify actual profile/search selection and desktop/mobile end-to-end staging after a stable engine release is available.
+
+### Verified permanent distribution (25 November)
+
+- The explicit, Prusa-only promotion [run 45522711141](https://github.com/gavrd7/MakerVault/actions/runs/45522711141) passed the exact artifact SHA, all 1,179 native resource files, ELF, source identity and real native cube slicing again and **published** [`prusa-runtime-v2.9.7-450d70d`](https://github.com/gavrd7/MakerVault/releases/tag/prusa-runtime-v2.9.7-450d70d) with permanent archive size **96,094,489 bytes** and digest `963eb81fd972d50c5f8fe54c3adb6dce2eab39c9ab223534b917eae76973d913` (confirmed independently from GitHub Release API). This is not a MakerVault application release or staging deployment.
+- Standalone runtime initially appeared as GitHub's latest release; repaired metadata so **v1.7.2** again remains the latest MakerVault application release (confirmed via API). Promotion workflow now sets `--latest=false` for future Prusa runtime assets.
+- [Run 45522464723](https://github.com/gavrd7/MakerVault/actions/runs/45522464723) **passed** exact archive import, owner-independent worker UID check, genuine HTTP `/health` + authenticated `/v1/slice` with Prusa official presets and positive G-code auditing, refusal of unauthorised requests, and uninstall/reinstall preserving OrcaSlicer.
+- Added `.github/workflows/prusa-released-runtime-smoke.yml` to exercise **real public release catalogue metadata, HTTPS asset retrieval and hash-pinned normal installer flow**, followed by isolated real cube worker slicing; a first run failed due a Python fixture quoting typo and was corrected in commit `5d65e289`. The corrected [run 45523043140](https://github.com/gavrd7/MakerVault/actions/runs/45523043140) **PASSED**: real public GitHub release metadata, remote HTTPS download, independent exact asset SHA, installer activation preserving Orca, and genuine unprivileged Prusa STL-to-G-code slicing.
+- Prusa-only scheduling safeguard rejects unverified global process overrides, multi-material requests and transformed/multi-model 3MF execution rather than ignoring controls; specific backend regression tests added. Existing three engine branches remain unchanged.
+
+### Remaining gates before review and merge
+
+1. Confirm the latest combined-container **uninstall/reinstall** workflow and full ordinary CI/regressions at final PR head.
+2. Publish the exact reviewed archive through the explicit standalone runtime promotion workflow, and prove normal installer **catalogue download, digest checking, activation and restart** through authenticated MakerVault UI (the candidate CI intentionally injected the same tar into the isolated installer without publishing).
+3. Validate owner-scoped native preset search/import and single-material STL slicing from the actual MakerVault frontend on desktop and mobile, printer/build-plate handling, output download, errors and active job behaviour on staging. Avoid enabling unsupported Prusa 3MF or advanced features.
+4. Review license/supply-chain publication metadata and regression evidence for all three released engines. Keep PR #199 draft, `main`, production and staging unchanged until the verified merge gates are met.
+
+---
+
+## 24 November follow-up: true native compiler and smoke qualification
+
+- Previous genuine source-build run [45477598819](https://github.com/gavrd7/MakerVault/actions/runs/45477598819) **failed** in wxWidgets: CMake selected GTK2 (`DEP_WX_GTK3=OFF`) while the runner installed only `libgtk-3-dev`; `gtk/gtk.h` was missing. Isolated branch commit `465aa7f` now selects GTK3 (`DEP_WX_GTK3=ON`) without changing any released engine or native upstream source. Real compiler run [45501899820](https://github.com/gavrd7/MakerVault/actions/runs/45501899820) was still building dependencies at last inspection; its eventual result must be read before any approval.
+- Discovered a separate deterministic final-step failure: the candidate workflow referred to `$GITHUB_WORKSPACE/scripts/prusa_real_binary_smoke.py` without checking out MakerVault. Commit `919a5da` adds read-only `actions/checkout@v4` before upstream clone. **The in-flight older SHA build does not contain this follow-up change**; retest the final head with an explicitly tagged build once compilation is proven.
+- The five regular CI workflows passed on `465aa7f`: MakerVault CI, worker contract, Prusa contract, combined isolation, Orca real-binary smoke. They must all be rechecked on the final head. Neither source compilation nor actual single-material runtime is approved from these passes alone.
+- Runtime admission remains disabled. No Prusa installer, worker activation, native 3MF, MMU/XL, painting, or modifiers should be advertised as implemented until separately demonstrated; staging/production and all working engines remain untouched.
+
+### Candidate packaging safety (additional commits)
+
+- Added `scripts/prusa_candidate_manifest.py` (`8164a11`): review-only bounded manifest of exact SHA-256 checksums of the Prusa binary, native vendor resources and licence. Includes exact `version_2.9.7` source commit provenance; rejects symlinks, special files, missing profile bundle, invalid ELF and oversized candidate payloads. Its `install_approved` property is deliberately `false`.
+- Updated only the Prusa candidate workflow (`412335e`) to include upstream `LICENSE` and generated `review-manifest.json` inside the separate archive **after** a genuine CLI smoke; no automatic installer, GHCR publication or active-engine entry. Added tests (`780ef43`) and included them in focused Prusa workflow (`d62dbeb`).
+- These are packaging safeguards, **not evidence of completed upstream compilation or installer/runtime acceptance**. Check the ongoing pinned build and re-run from the final PR head after it completes. Existing engines remain unchanged.
+
+## Implemented on the isolated Prusa branch
+
+- Prusa-only **native INI** parser and flattening of exact named `[printer:...]`, `[filament:...]`, `[print:...]` upstream sections; supports official `;`-delimited **ordered multiple inheritance**, shared ancestor DAGs, and hard-fails on cycles, missing parents, wrong preset kind, excessive depth and size, unsafe directives, or nonempty post-processing commands.
+- `slicer_worker/runner.py` validates real bounded STL geometry and all three **flattened** native Prusa CLI profiles, including FFF constraints and text G-code. It retains fixed command-line arguments, timeout, input/output size limits and scrubbed failures. Only `prusaslicer` has the new explicit **3MF fail-closed** worker guard; 3MF, MMU/XL, painting and modifier support are **not claimed**.
+- Prusa candidate-only official catalogue now targets **`version_2.9.7`** and exposes individual printer/filament/print presets, not just printer-model artwork. `backend/core/slicer_api.py` imports owner-scoped, flat `.ini` files without approving execution. Independent official profile source and version identity are retained.
+- Automated Prusa contract test: strict regression tests plus download of the authentic `PrusaResearch.ini` by **immutable upstream source commit SHA** `450d70dd81c9b8990bc6bc8e690e31f82ddceb11`; tests flattened MK2S, Generic PLA and 0.20mm NORMAL settings. This tests native profile parsing, **not real slicing**.
+- Dedicated `prusa-pinned-headless-candidate.yml` compiles exact tagged upstream Linux/amd64 PrusaSlicer headlessly and independently verifies version, packaged resource layout, and real G-code extrusion from a 20mm cube with the authentic flattened profiles. The candidate is an isolated short-lived review artifact; it cannot be installed through MakerVault or automatically published to GHCR.
+- Upstream source build discovered a dead GMP **6.2.1** URL (`gmplib.org` returned HTTP 404). The isolated candidate workflow substitutes the official `ftp.gnu.org` download URL while preserving upstream's exact required SHA256 `eae9326beb4158c386e39a356818031bd28f3124cf915f8c5b1dc4c7a36b4d7c`; no source hash or source code is modified beyond that reviewed dependency URL.
+- All new tests/guards target Prusa; existing engines keep their binary, profiles, active volumes, and request formats.
+
+## Explicit remaining release and merge gates
+
+1. **Run and pass** the pinned Linux AMD64 source build, real `--version`/`--help`, true native INI + STL slice, positive-extrusion G-code and packaged binary checksum; investigate any further upstream dependency 404/compile errors. Do not infer actual acceptance from CI fixture-only checks.
+2. Verify production worker image architecture and isolated runtime packaging/license compliance; bind an installable immutable SHA256 build and native executable to the existing administrator-only installer catalogue, with uninstall/reinstall and health-check tests. No automatic engine admission.
+3. Confirm exact-version, owner-resolved Prusa profile selection/compatibility, printer presets and genuine real slicer output versus baseline, including print area/motion and unsafe script/macro handling. Native 3MF/multicolour/negative regions remain disabled unless independently accepted.
+4. Add bounded production G-code safety audit and install lifecycle tests, owner-scoped HTTP contract and end-to-end desktop/mobile UI/staging validation.
+5. Require full latest-head main CI, Prusa contract, existing three-engine regression workflows and a successful real source-binary smoke; then submit for review. **Do not merge solely on mocked commands, archived toolchain artifacts or vendor metadata.**
+
+---
+
+## Version and Linux distribution (23 November 2026)
+
+- Upstream stable release: `prusa3d/PrusaSlicer` tag `version_2.9.7`, published 2 November 2026.
+- Its GitHub stable release includes Windows and macOS assets but **no official Linux AppImage**. Linux distribution is Flatpak. Do not falsely label a third-party binary "official", invent an AppImage URL, or relax the authenticated and version-pinned installer contract.
+- Candidate Linux paths to evaluate: reproducible headless source build of the exact tagged upstream source within the isolated slicer build, with a digest/manifest and architecture-specific tests; or an explicitly pinned trusted Flatpak runtime safely extracted/packaged into the worker image. These require independent supply-chain and licensing review.
+- PrusaSlicer 3.x is presently prerelease; do not select a 3.x alpha as the stable engine without distinct qualification.
+
+## Existing foundations
+
+The repository already includes `prusaslicer` in the worker's approved engine-key schema and contains a restricted `run_prusa` CLI adapter based on native INI presets (`--load` printer/filament/process, `--export-gcode`, `--output`). This does **not** make the engine installable or production-ready.
+
+The first branch hardens native INI binary NUL rejection, adds security regression tests and a focused CI job. These tests do not execute a real PrusaSlicer binary.
+
+## Original qualification plan (historical)
+
+1. Pin and independently verify a licensed Linux/amd64 PrusaSlicer **2.9.7** runtime. Run `--help`, `--version`, plain STL + three full native INI presets in a restricted worker; record actual positive-E G-code and model positioning.
+2. Build owner-resolved native Prusa profile discovery/import and profile inheritance flattening (machine, print/process, filament), preserving original provenance and without allowing arbitrary scripts, network endpoints or external file paths.
+3. Validate genuine Prusa 3MF projects using **Prusa** metadata/part semantics, not Orca/Bambu/Creality assumptions. Verify printer plate, object tools, infill/per-object settings, support, seams, brim, cooling and variable layers against the real CLI. Fail closed for unsupported features.
+4. Establish single-material slicing before optional multi-material, colour painting or modifiers. Prusa's MMU/XL tool paths and single-nozzle changer semantics must be independently verified; passing Orca/Bambu G-code does not establish Prusa parity.
+5. Add deterministic and bounded production result audit; ensure printer/tool ownership, worker isolation, G-code safety, uninstall/reinstall and architecture compatibility. Only then introduce catalogue/installer admission, normal UI selection and release docs.
+6. Reconcile this feature with released v1.7.2 main (completed). Re-run all real binaries plus the three existing engines' regression suite. Never couple unfinished Prusa engine admission to PR #196.
+
+## Safety invariants
+
+No uploaded binary executes from a request; no unapproved version/digest, untrusted script or network target is allowed. The worker must not silently drop features or modifier volumes. No server or printer deployment occurs from this planning branch. No `main` changes or release publication until the gates above are demonstrably green.
+
+> Source-build CI control: the pinned headless runtime workflow may also run from an explicitly marked branch push (`[prusa-build]`). Ordinary PR commits do not rebuild upstream dependencies, and the release/installer paths remain disabled.

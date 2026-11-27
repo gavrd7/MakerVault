@@ -44,6 +44,167 @@ class OfficialProfileApiTests(TestCase):
         self.assertEqual(response.json()["engine_version"], "2.4.2")
         self.assertEqual(fetch.call_args.args, ("K2", "printer", "Creality"))
 
+    def test_unified_filament_manufacturers_include_printer_brands(self):
+        self.client.force_login(self.user)
+        with patch("core.slicer_api.all_official_filament_manufacturers",
+                   return_value=["3D-Fuel", "Creality", "Elegoo", "eSUN"]) as brands:
+            response = self.client.get(self.url, {
+                "engine": "orcaslicer", "version": "2.5.0",
+                "brands": "1", "unified_filaments": "1"})
+        self.assertEqual(response.status_code, 200, response.content)
+        self.assertIn("Creality", response.json()["brands"])
+        self.assertIn("Elegoo", response.json()["brands"])
+        brands.assert_called_once_with("2.5.0")
+
+    def test_unified_orca_filament_results_preserve_native_catalogue_vendor(self):
+        self.client.force_login(self.user)
+        def lookup(query, *, brand, version, printer_model=None, offset=0):
+            self.assertEqual((query, brand, version), ("PLA", "Creality", "2.5.0"))
+            self.assertIsNone(printer_model)
+            return {
+                "engine": "orcaslicer", "vendor": "Creality",
+                "kind": "filament", "ref": "v2.5.0",
+                "total_matches": 52, "profiles": [{
+                    "name": "Creality PLA", "sub_path": "filament/PLA.json",
+                    "vendor": "Creality",
+                }] if offset == 40 else [{
+                    "name": "Creality Library PLA",
+                    "sub_path": "filament/Creality/PLA.json",
+                    "vendor": "OrcaFilamentLibrary",
+                }]
+            }
+        with patch("core.slicer_api.search_all_official_filaments",
+                   side_effect=lookup) as search:
+            first = self.client.get(self.url, {
+                "engine": "orcaslicer", "version": "2.5.0",
+                "kind": "filament", "brand": "Creality",
+                "q": "PLA", "unified_filaments": "1"})
+            second = self.client.get(self.url, {
+                "engine": "orcaslicer", "version": "2.5.0",
+                "kind": "filament", "brand": "Creality",
+                "q": "PLA", "unified_filaments": "1", "page": 2})
+        self.assertEqual(first.status_code, 200, first.content)
+        self.assertEqual(second.status_code, 200, second.content)
+        self.assertEqual(first.json()["total_pages"], 2)
+        self.assertEqual(first.json()["profiles"][0]["vendor"], "OrcaFilamentLibrary")
+        self.assertEqual(second.json()["profiles"][0]["vendor"], "Creality")
+        self.assertEqual(search.call_count, 2)
+        self.assertEqual(search.call_args.kwargs["offset"], 40)
+
+    def test_search_pages_preserve_all_filters_and_reject_invalid_page(self):
+        self.client.force_login(self.user)
+        matches = [{"name": f"Preset {i}", "sub_path": f"filament/preset-{i}.json"}
+                   for i in range(95)]
+
+        def fake_search(query, kind, vendor, *, printer_model=None, offset=0):
+            self.assertEqual((query, kind, vendor), ("PLA", "filament", "Creality"))
+            self.assertEqual(printer_model, None)
+            return {
+                "engine": "crealityprint", "vendor": vendor,
+                "profiles": matches[offset:offset + 40], "total_matches": len(matches),
+            }
+
+        with patch("core.slicer_api.search_creality_profiles", side_effect=fake_search) as search:
+            for page, expected, length in ((1, "Preset 0", 40),
+                                           (2, "Preset 40", 40),
+                                           (3, "Preset 80", 15)):
+                response = self.client.get(self.url, {
+                    "engine": "crealityprint", "version": "7.3.1",
+                    "vendor": "Creality", "kind": "filament", "q": "PLA", "page": page,
+                })
+                self.assertEqual(response.status_code, 200, response.content)
+                payload = response.json()
+                self.assertEqual(payload["page"], page)
+                self.assertEqual(payload["page_size"], 40)
+                self.assertEqual(payload["total_pages"], 3)
+                self.assertEqual(payload["total_matches"], 95)
+                self.assertEqual(len(payload["profiles"]), length)
+                self.assertEqual(payload["profiles"][0]["name"], expected)
+            self.assertEqual(search.call_count, 3)
+
+        for invalid in ("0", "-1", "1.5", "abcd", "10001", "999999999"):
+            response = self.client.get(self.url, {
+                "engine": "crealityprint", "version": "7.3.1", "page": invalid,
+            })
+            self.assertEqual(response.status_code, 400, invalid)
+
+    def test_second_page_reaches_each_engine_without_changing_profile_kind(self):
+        self.client.force_login(self.user)
+        engines = (
+            ("orcaslicer", "2.5.0", "Creality", "search_official_profiles"),
+            ("crealityprint", "7.3.1", "Creality", "search_creality_profiles"),
+            ("bambustudio", "02.09.01.70", "BBL", "search_bambu_native_profiles"),
+            ("prusaslicer", "2.9.7", "PrusaResearch", "search_prusa_profiles"),
+            ("snapmakerorca", "2.4.1", "Snapmaker", "search_snapmaker_profiles"),
+        )
+        for engine, version, vendor, searcher in engines:
+            with self.subTest(engine=engine):
+                with patch("core.slicer_api." + searcher, return_value={
+                    "engine": engine, "vendor": vendor, "kind": "process",
+                    "profiles": [{"name": "Second page", "sub_path": "preset.json"}],
+                    "total_matches": 41,
+                }) as mocked:
+                    response = self.client.get(self.url, {
+                        "engine": engine, "version": version, "vendor": vendor,
+                        "kind": "process", "page": "2",
+                    })
+                self.assertEqual(response.status_code, 200, response.content)
+                self.assertEqual(response.json()["page"], 2)
+                self.assertEqual(response.json()["total_pages"], 2)
+                self.assertEqual(mocked.call_args.kwargs["offset"], 40)
+
+    def test_prusa_imports_flat_native_ini_only_as_owner_candidate(self):
+        self.client.force_login(self.user)
+        selection = {
+            "engine": "prusaslicer", "engine_version": "2.9.7",
+            "vendor": "PrusaResearch", "kind": "printer",
+            "name": "Original Prusa MK4S", "sub_path": "PrusaResearch.ini",
+        }
+        native = (b"bed_shape = 0x0,250x0,250x210,0x210\n"
+                  b"nozzle_diameter = 0.4\nprinter_technology = FFF\n")
+        with patch("core.slicer_api.fetch_prusa_profile", return_value=native) as fetch:
+            response = self.post(selection)
+        self.assertEqual(response.status_code, 201, response.content)
+        fetch.assert_called_once_with(
+            "printer", "Original Prusa MK4S", "PrusaResearch.ini",
+            "PrusaResearch")
+        self.assertFalse(response.json()["execution_available"])
+        profile = SlicerProfile.objects.get(pk=response.json()["profile"]["id"])
+        self.assertEqual(profile.engine, "prusaslicer")
+        self.assertEqual(profile.engine_version, "2.9.7")
+        self.assertEqual(profile.status, "candidate")
+        self.assertEqual(profile.file_asset.owner, self.user)
+        self.assertIn("PrusaSlicer@version_2.9.7", profile.provenance)
+        with profile.file_asset.file.open("rb") as stream:
+            self.assertEqual(stream.read(), native)
+        self.addCleanup(lambda file=profile.file_asset.file: file.delete(save=False))
+        with patch("core.slicer_api.fetch_prusa_profile", return_value=native):
+            duplicate = self.post(selection)
+        self.assertEqual(duplicate.status_code, 200, duplicate.content)
+        self.assertEqual(duplicate.json()["imported_profiles"], [])
+
+    def test_prusa_process_import_allows_only_empty_post_processing(self):
+        self.client.force_login(self.user)
+        selection = {
+            "engine": "prusaslicer", "engine_version": "2.9.7",
+            "vendor": "PrusaResearch", "kind": "process",
+            "name": "0.20mm NORMAL", "sub_path": "PrusaResearch.ini",
+        }
+        flat = b"layer_height = 0.2\nfill_density = 15%\npost_process = \n"
+        with patch("core.slicer_api.fetch_prusa_profile", return_value=flat):
+            allowed = self.post(selection)
+        self.assertEqual(allowed.status_code, 201, allowed.content)
+        p = SlicerProfile.objects.get(pk=allowed.json()["profile"]["id"])
+        self.assertEqual(p.status, "candidate")
+        self.addCleanup(lambda file=p.file_asset.file: file.delete(save=False))
+        evil = {**selection, "name": "Unsafe 0.20mm"}
+        with patch("core.slicer_api.fetch_prusa_profile",
+                   return_value=flat.replace(b"post_process = ",
+                                             b"post_process = FORBIDDEN_EXECUTION")):
+            rejected = self.post(evil)
+        self.assertEqual(rejected.status_code, 400, rejected.content)
+        self.assertFalse(SlicerProfile.objects.filter(name="Unsafe 0.20mm").exists())
+
     def test_any_pinned_orca_vendor_is_available_without_download(self):
         self.client.force_login(self.user)
         with patch("core.slicer_api.search_official_profiles") as search:
@@ -335,7 +496,7 @@ class OfficialProfileApiTests(TestCase):
             "orcaslicer": ("2.4.2", "v2.4.2"),
             "crealityprint": ("7.3.1", "v7.3.1"),
             "bambustudio": ("02.09.01.70", "v02.09.01.70"),
-            "prusaslicer": ("2.9.6", "version_2.9.6"),
+            "prusaslicer": ("2.9.7", "version_2.9.7"),
             "snapmakerorca": ("2.4.1", "v2.4.1"),
         }
         for engine, (version, ref) in supported.items():

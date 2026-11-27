@@ -1,0 +1,128 @@
+name: PrusaSlicer pinned Linux headless runtime candidate
+
+# Explicitly opt-in: compiling upstream dependencies is resource intensive.
+# This does NOT install, publish, or enable a new MakerVault slicing engine.
+on:
+  workflow_dispatch:
+  # Allow a single explicitly tagged branch commit to start real upstream
+  # compilation. Ordinary PR commits never launch expensive source builds.
+  push:
+    branches:
+      - feature/slicer-prusa-engine
+
+permissions:
+  contents: read
+
+jobs:
+  verify-prusa-source-and-cli:
+    if: ${{ github.event_name == 'workflow_dispatch' || contains(github.event.head_commit.message, '[prusa-build]') }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    steps:
+      # The real-binary smoke script is part of this reviewed MakerVault commit,
+      # not Prusa's upstream source tree. Without checkout it is absent.
+      - name: Check out MakerVault acceptance harness
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Install tagged Prusa source build prerequisites
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            git build-essential autoconf automake libtool cmake ninja-build \
+            pkg-config libglu1-mesa-dev libgtk-3-dev libdbus-1-dev \
+            libwebkit2gtk-4.1-dev texinfo
+
+      - name: Fetch exact upstream 2.9.7 source commit
+        shell: bash
+        run: |
+          set -euo pipefail
+          git clone --depth 1 --single-branch --branch version_2.9.7 \
+            https://github.com/prusa3d/PrusaSlicer.git upstream-prusa
+          cd upstream-prusa
+          actual="$(git rev-parse HEAD)"
+          test "$actual" = "450d70dd81c9b8990bc6bc8e690e31f82ddceb11"
+          echo "Pinned PrusaSlicer version_2.9.7 source: $actual" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Use official GNU mirror for vanished upstream GMP URL
+        working-directory: upstream-prusa
+        run: |
+          set -euo pipefail
+          file='deps/+GMP/GMP.cmake'
+          # Only change the download host for this exact upstream dependency.
+          # The original upstream SHA-256 remains unchanged and CMake checks
+          # it before extracting/compiling anything from the replacement URL.
+          grep -Fq 'URL https://gmplib.org/download/gmp/gmp-6.2.1.tar.bz2' "$file"
+          grep -Fq 'URL_HASH SHA256=eae9326beb4158c386e39a356818031bd28f3124cf915f8c5b1dc4c7a36b4d7c' "$file"
+          sed -i 's@https://gmplib.org/download/gmp/gmp-6.2.1.tar.bz2@https://ftp.gnu.org/gnu/gmp/gmp-6.2.1.tar.bz2@' "$file"
+          grep -Fq 'URL https://ftp.gnu.org/gnu/gmp/gmp-6.2.1.tar.bz2' "$file"
+          echo "GMP mirror changed to GNU FTP; original pinned SHA-256 is unchanged." >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Build pinned upstream dependencies
+        working-directory: upstream-prusa
+        run: |
+          set -euo pipefail
+          # Ubuntu 24.04 supplies GTK3 headers, not the GTK2 headers selected by OFF.
+          # Keep this upstream dependency option scoped to the isolated Prusa build.
+          cmake -S deps -B deps/build -DDEP_WX_GTK3=ON
+          cmake --build deps/build --parallel 2
+
+      - name: Compile headless PrusaSlicer CLI
+        working-directory: upstream-prusa
+        run: |
+          set -euo pipefail
+          cmake -S . -B build \
+            -DSLIC3R_STATIC=ON \
+            -DSLIC3R_GUI=OFF \
+            -DSLIC3R_PCH=OFF \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_PREFIX_PATH="$PWD/deps/build/destdir/usr/local"
+          cmake --build build --parallel 2 --target PrusaSlicer
+          test -x build/src/prusa-slicer
+
+      - name: Verify pinned CLI, resources and runtime dependencies
+        working-directory: upstream-prusa
+        run: |
+          set -euo pipefail
+          test -d resources
+          build/src/prusa-slicer --help > /tmp/prusa-help.txt
+          # PrusaSlicer 2.9.7's headless CLI does not support --version.
+          # Source identity is strictly pinned by git rev-parse above; assess
+          # this actual binary by its help and genuine positive-extrusion slice.
+          grep -F -- '--export-gcode' /tmp/prusa-help.txt
+          sha256sum build/src/prusa-slicer | tee /tmp/prusa-binary-sha.txt
+          echo "PrusaSlicer binary built from exact tagged source; NOT production approved." >> "$GITHUB_STEP_SUMMARY"
+          cat /tmp/prusa-binary-sha.txt >> "$GITHUB_STEP_SUMMARY"
+          echo "CLI help passed; genuine project G-code acceptance still required." >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Archive isolated runtime candidate for review
+        working-directory: upstream-prusa
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/prusa-candidate/bin
+          cp build/src/prusa-slicer /tmp/prusa-candidate/bin/prusa-slicer
+          cp -a resources /tmp/prusa-candidate/resources
+          cp LICENSE /tmp/prusa-candidate/LICENSE
+          # Validate the relocatable layout rather than only the build-tree CLI.
+          /tmp/prusa-candidate/bin/prusa-slicer --help > /tmp/prusa-packaged-help.txt
+          grep -F -- '--export-gcode' /tmp/prusa-packaged-help.txt
+          PYTHONPATH="$GITHUB_WORKSPACE" python3 \
+            "$GITHUB_WORKSPACE/scripts/prusa_real_binary_smoke.py" \
+            --binary /tmp/prusa-candidate/bin/prusa-slicer \
+            --vendor "$PWD/resources/profiles/PrusaResearch.ini"
+          # Record source identity, exact file hashes and licensing evidence.
+          # This deliberately does NOT mark the candidate install-approved.
+          python3 "$GITHUB_WORKSPACE/scripts/prusa_candidate_manifest.py" \
+            --root /tmp/prusa-candidate \
+            --output /tmp/prusa-candidate/review-manifest.json
+          tar -C /tmp -czf "$GITHUB_WORKSPACE/prusa-2.9.7-headless-linux-amd64.tar.gz" prusa-candidate
+          sha256sum "$GITHUB_WORKSPACE/prusa-2.9.7-headless-linux-amd64.tar.gz" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload candidate artifact (not installable from MakerVault UI)
+        uses: actions/upload-artifact@v4
+        with:
+          name: prusa-2.9.7-headless-linux-amd64-candidate
+          path: prusa-2.9.7-headless-linux-amd64.tar.gz
+          if-no-files-found: error
+          retention-days: 7

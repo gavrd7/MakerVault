@@ -35,6 +35,58 @@ def native_capabilities(engine, version):
                   "these annotations. Try the OrcaSlicer editor for draft "
                   "work; native slicing is still pending.")
     result = {key: {"status": state, "reason": reason} for key in FEATURES}
+    if engine == "prusaslicer" and version == "2.9.7":
+        result["colour_paint"] = {
+            "status": "test_only",
+            "reason": ("Prusa 2.9.7 MMU native front-wall paint has passed independent "
+                       "T1–T4 single-swatch and T1-front/T2-back two-swatch "
+                       "G-code deposition audits with a T0 base and native wipe "
+                       "tower. Unsupported masks, arbitrary mixed edits, XL/INDX "
+                       "surface paint and physical printer submission remain blocked; offline "
+                       "G-code qualification does not permit printer start."),
+        }
+        result["seam_paint"] = {
+            "status": "test_only",
+            "reason": ("Prusa 2.9.7 supports one fingerprinted upright vertical "
+                       "seam enforcer on the front, back, left or right face "
+                       "for offline native slicing. Non-front directions use "
+                       "a temporary random native seam process and require "
+                       "per-face moving-extrusion spatial G-code auditing. "
+                       "Multiple patches, seam blockers and unqualified "
+                       "mixed edits remain blocked; physical printer start "
+                       "is not established by a native CLI slice."),
+        }
+        result["support_paint"] = {
+            "status": "verified",
+            "reason": ("Prusa 2.9.7 native support enforcer and blocker masks passed "
+                       "genuine worker G-code audits, including three separated "
+                       "single-material models with one painted support enforcer "
+                       "and zero support deposited in unpainted neighbours. "
+                       "One upright single-material model may combine a manual "
+                       "support enforcer with selective fuzzy paint on entirely "
+                       "different source faces: genuine native 2.9.7 G-code "
+                       "independently verified both effects. Combined multi-tool "
+                       "or arbitrary mixed-extension support remains unqualified."),
+        }
+        result["fuzzy_skin_paint"] = {
+            "status": "verified",
+            "reason": ("Native Prusa 2.9.7 selectively altered external walls without "
+                       "changing the unpainted neighbour in a genuine two-object "
+                       "G-code comparison. Supports one or two upright unscaled "
+                       "single-material models, exactly one painted in two-model "
+                       "jobs. A single upright model additionally supports "
+                       "non-overlapping manual support enforcers and selective "
+                       "fuzzy exterior facets under the audited native combination. "
+                       "Other overlapping or mixed-native edits remain unqualified."),
+        }
+        result["variable_layer_profile"] = {
+            "status": "verified",
+            "reason": ("PrusaSlicer 2.9.7 native per-object ranges passed real-binary "
+                       "G-code Z-step acceptance, including two independent "
+                       "models retaining separate layer schedules. Currently up "
+                       "to two upright, unscaled, non-elevated single-material "
+                       "models without unqualified native combinations."),
+        }
     if engine == "crealityprint" and version.startswith("7.3."):
         result["colour_paint"] = {
             "status": "test_only",

@@ -139,7 +139,9 @@ test("official source and matching release controls use equal height without cap
 
 test("official catalogue filters are truly optional across engines", () => {
   assert.match(setup, /if \(q\.length > 80\) throw new Error/);
-  assert.match(setup, /disabled=\{officialBusy \|\| !officialVendor \|\| !officialVendors\.length\}/);
+  assert.match(setup, /disabled=\{officialBusy \|\| !officialVendors\.length \|\|/);
+  assert.match(setup, /form\.engine==="orcaslicer" && importKind==="filament"/);
+  assert.match(setup, /\? !officialSourceInfo : !officialVendor/);
   assert.doesNotMatch(setup, /join\(" "\)\.length < 2/);
 });
 
