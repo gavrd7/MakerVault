@@ -48,9 +48,12 @@ test("Interactive slicer blocks incomplete Prusa mapping but keeps draft saving 
 });
 
 test("Prusa MMU/XL/INDX admits verified native Object wall, shell and infill controls",()=>{
-  assert.match(prepare,/"top_shell_layers","bottom_shell_layers"\]\.includes\(key\)/);
+  for (const key of ["top_shell_layers","bottom_shell_layers",
+                     "outer_wall_speed","inner_wall_speed",
+                     "sparse_infill_speed","top_surface_speed"])
+    assert.match(prepare,new RegExp('"' + key + '"'));
   assert.match(prepare,/prusaUnsupportedObjectKeys/);
-  assert.match(prepare,/Prusa MMU\/XL\/INDX supports Object walls, top\/bottom shells and infill density/);
+  assert.match(prepare,/Prusa MMU\/XL\/INDX maps Object walls, shells, infill density and native perimeter\/infill\/top-surface speeds/);
   assert.match(prepare,/prusaNativeReady/);
   assert.match(prepare,/prusaMaterialRoutingPending/);
 });
@@ -82,8 +85,11 @@ test("independent XL and INDX heads enable local native modifiers and variable l
   assert.match(prepare,/const prusaIndependentTools = \["xl","indx"\]\.includes\(prusaNativeTools\?\.mode\)/);
   assert.match(prepare,/\(object\.modifier_volumes\?\.length \|\| object\.variable_layer_profile\?\.bands\?\.length\) &&/);
   assert.match(prepare,/!prusaIndependentTools/);
-  assert.match(prepare,/"top_shell_layers","bottom_shell_layers"\]\.includes\(key\)/);
-  assert.match(prepare,/Prusa MMU\/XL\/INDX supports Object walls, top\/bottom shells/);
+  for (const key of ["top_shell_layers","bottom_shell_layers",
+                     "outer_wall_speed","inner_wall_speed",
+                     "sparse_infill_speed","top_surface_speed"])
+    assert.match(prepare,new RegExp('"' + key + '"'));
+  assert.match(prepare,/Prusa MMU\/XL\/INDX maps Object walls, shells/);
   assert.match(prepare,/const prusaUnsupportedObjectKeys/);
   assert.match(prepare,/String\(engine \|\| ""\)\.split\(" "\)\[0\] === "prusaslicer"/);
   assert.match(prepare,/const verifiedObjectSettings = new Set/);
