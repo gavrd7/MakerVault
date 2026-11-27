@@ -301,6 +301,43 @@ class PrusaNativeColourProjectTests(TestCase):
             with self.subTest(bad=bad),self.assertRaises(SlicerProfileError):
                 self.candidate(settings={"process_overrides":bad})
 
+    def test_native_colour_and_single_infill_modifier_share_one_validated_modelpart(self):
+        from core.tests.test_slicer_prusa_3mf import volume, rewrite
+        from slicer_worker.prusa_material_validation import PAINT
+        modifier=volume("modifier",{"sparse_infill_density":85})
+        source=self.candidate(settings={"modifier_volumes":[modifier]})
+        printer=ini("0.4,0.4,0.4,0.4,0.4","1")
+        result=validate_prusa_material_candidate(
+            source,printer_ini=printer,colour=True)
+        self.assertEqual(result["objects"],1)
+        self.assertEqual(result["tools"],(1,2))
+        with zipfile.ZipFile(io.BytesIO(source)) as archive:
+            config=SafeET.fromstring(archive.read("Metadata/Slic3r_PE_model.config"))
+            model=SafeET.fromstring(archive.read("3D/3dmodel.model"))
+        volumes=config.findall("./object/volume")
+        self.assertEqual(len(volumes),2)
+        self.assertEqual(
+            {meta.get("key"):meta.get("value") for meta in volumes[1]},
+            {"volume_type":"ParameterModifier","fill_density":"85%"})
+        faces=model.findall("./"+NS+"resources/"+NS+"object/"+
+                            NS+"mesh/"+NS+"triangles/"+NS+"triangle")
+        first_count=int(volumes[0].get("lastid"))+1
+        self.assertGreater(len(faces),first_count)
+        self.assertTrue(any(PAINT in face.attrib for face in faces[:first_count]))
+        self.assertFalse(any(PAINT in face.attrib for face in faces[first_count:]))
+        def forge(root):
+            faces=root.findall("./"+NS+"resources/"+NS+"object/"+
+                               NS+"mesh/"+NS+"triangles/"+NS+"triangle")
+            faces[first_count].set("slic3rpe:mmu_segmentation","8")
+        with self.assertRaises(WorkerError):
+            validate_prusa_material_candidate(
+                rewrite(source,"3D/3dmodel.model",forge),
+                printer_ini=printer,colour=True)
+        for bad in (volume("negative"),volume("modifier",{"wall_loops":5})):
+            with self.subTest(kind=bad["kind"],settings=bad["settings"]):
+                with self.assertRaises(SlicerProfileError):
+                    self.candidate(settings={"modifier_volumes":[bad]})
+
     def test_source_fingerprint_must_match(self):
         stl, *_ = fixture()
         # Change actual facet vertex geometry, not the unused STL normal.
