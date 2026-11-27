@@ -1066,6 +1066,7 @@ export default function SlicerPrepareWorkspace({
     prusaNativeTools.colour_tools[0].slot===prusaPaintedSlots[0] &&
     prusaNativeTools.colour_tools[0].tool>=2 &&
     prusaNativeTools.colour_tools[0].tool<=prusaNativeTools.tool_count;
+  const prusaIndependentTools = ["xl","indx"].includes(prusaNativeTools?.mode);
   const prusaNativeReady = activeEngine === "prusaslicer" && prusaNativeTools != null &&
     prusaNativeTools.version===1 && prusaNativeTools.filament_profile_ids?.length===prusaNativeTools.tool_count &&
     prusaNativeTools.filament_profile_ids.every(id=>filamentProfiles.some(profile=>
@@ -1082,11 +1083,12 @@ export default function SlicerPrepareWorkspace({
          Array.isArray(object.process_overrides) ||
          Object.keys(object.process_overrides).some(key=>
            !["wall_loops","sparse_infill_density"].includes(key)))) ||
-      object.modifier_volumes?.length ||
+      object.negative_volumes?.length ||
+      ((object.modifier_volumes?.length || object.variable_layer_profile?.bands?.length) &&
+        !prusaIndependentTools) ||
       object.support_paint?.regions?.length || object.seam_paint?.regions?.length ||
       object.fuzzy_skin_paint?.regions?.length ||
-      (object.colour_paint?.regions?.length && !prusaSinglePaint) ||
-      object.variable_layer_profile?.bands?.length) &&
+      (object.colour_paint?.regions?.length && !prusaSinglePaint)) &&
     Object.keys(processOverrides||{}).every(key=>[
       "layer_height","wall_loops","top_shell_layers",
       "bottom_shell_layers","sparse_infill_density"
