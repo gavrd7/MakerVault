@@ -137,3 +137,40 @@ class PrusaMultiToolCandidateTests(TestCase):
             build_prusa_multitool_candidate(
                 rows, printer_ini=printer(5, 1), tools=[1, 5],
                 bed_width=250, bed_depth=210)
+
+
+    def test_independent_native_object_shell_layers_reach_3mf_and_worker(self):
+        from slicer_worker.prusa_material_validation import validate_prusa_material_candidate
+        rows = [
+            (item(x_mm=-35, process_overrides={
+                "top_shell_layers": 0, "bottom_shell_layers": 1}), cube()),
+            (item(x_mm=35, process_overrides={
+                "top_shell_layers": 8, "bottom_shell_layers": 7}), cube()),
+        ]
+        for changer, count in ((1, 2), (0, 5), (0, 8)):
+            with self.subTest(changer=changer, heads=count):
+                raw = printer(count, changer)
+                project, topology = build_prusa_multitool_candidate(
+                    rows, printer_ini=raw, tools=[1, count],
+                    bed_width=250, bed_depth=210)
+                checked = validate_prusa_material_candidate(
+                    project, printer_ini=raw, tools=[1, count])
+                self.assertEqual(checked["tools"], (1, count))
+                with zipfile.ZipFile(io.BytesIO(project)) as archive:
+                    root = SafeET.fromstring(
+                        archive.read("Metadata/Slic3r_PE_model.config"))
+                self.assertEqual([
+                    {m.get("key"): m.get("value") for m in obj.findall("metadata")}
+                    for obj in root.findall("object")],
+                    [{"top_solid_layers": "0", "bottom_solid_layers": "1",
+                      "extruder": "1"},
+                     {"top_solid_layers": "8", "bottom_solid_layers": "7",
+                      "extruder": str(count)}])
+        for value in (-1, 21, 1.5, True, "5"):
+            with self.subTest(invalid_shell=value):
+                bad = [(item(x_mm=-35, process_overrides={
+                    "top_shell_layers": value}), cube()), rows[1]]
+                with self.assertRaises((SlicerProfileError, ValueError)):
+                    build_prusa_multitool_candidate(
+                        bad, printer_ini=printer(5, 0), tools=[1, 2],
+                        bed_width=250, bed_depth=210)
