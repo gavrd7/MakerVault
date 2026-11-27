@@ -65,6 +65,21 @@ class PrusaProjectDialectTests(TestCase):
         archive = build_prusa_native_3mf([
             (left, cube()), (right, cube())],
             bed_width=250, bed_depth=210)
+        # The qualified combination is independent: modifier on model one,
+        # bounded object setting on model two. Same-model stacks and cavity
+        # mixtures remain gated pending separate native proof.
+        self.assertTrue(validate_prusa_project_admission(
+            [left, right], {}, "2.9.7"))
+        with self.assertRaisesRegex(ValueError, "share a modifier model"):
+            validate_prusa_project_admission([
+                {**left, "process_overrides": {"wall_loops": 4}}, right
+            ], {}, "2.9.7")
+        with self.assertRaisesRegex(ValueError, "negative cavities"):
+            validate_prusa_project_admission([
+                {**left, "modifier_volumes": [
+                    {**volume("negative"), "x_mm": -35}
+                ]}, right
+            ], {}, "2.9.7")
         receipt = validate_prusa_native_3mf(archive)
         self.assertEqual(receipt["objects"], 2)
         self.assertEqual(receipt["regions"], 1)
