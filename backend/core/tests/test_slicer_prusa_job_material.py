@@ -488,6 +488,36 @@ class PrusaVirtualToolDraftTests(TestCase):
         self.assertEqual(kind,"xl")
         self.assertNotIn("purge_matrix",result)
 
+    def test_indx_eight_head_painted_workbench_keeps_all_native_filaments(self):
+        from uuid import UUID
+        from scripts.prusa_generate_mmu_paint import fixture as painted_fixture
+        job,filaments,_ = self.config()
+        source,_mesh,_states,paint=painted_fixture(include_paint=True)
+        for digit in range(3,9):
+            ident=f"{digit}"*8+"-"+f"{digit}"*4+"-4"+f"{digit}"*3+"-8"+f"{digit}"*3+"-"+f"{digit}"*12
+            filaments.append(profile("filament",UUID(ident)))
+        job.settings["plate_objects"]=job.settings["plate_objects"][:1]
+        job.settings["plate_objects"][0]["colour_paint"]=paint
+        config=job.settings["prusa_native_tools"]
+        config.update(mode="indx",tool_count=8,purge_matrix=None,
+                      filament_profile_ids=[str(p.pk) for p in filaments],
+                      model_tools=config["model_tools"][:1],
+                      colour_tools=[{"slot":1,"tool":2}])
+        job.settings.pop("prime_tower")
+        PrusaWorkbenchMaterialTests.resolve(
+            self,job,filaments,ini(",".join(["0.4"]*8),"0"))
+        mode,plan=prepare_prusa_workbench_material(job)
+        self.assertEqual(mode,"xl_colour")
+        self.assertEqual(len(plan["filament_profiles"]),8)
+        self.assertEqual(plan["colour_tool_indices"],{1:1})
+        with patch("core.slicer_prusa_job_material.slice_prusa_offline_xl_colour_candidate",
+                   return_value=b"audited-indx-paint") as worker:
+            result=slice_prusa_workbench_material(
+                job,[(dict(job.settings["plate_objects"][0]),source)])
+        self.assertEqual(result,b"audited-indx-paint")
+        self.assertEqual(worker.call_args.kwargs["filament_profiles"],filaments)
+        self.assertNotIn("tower_xy",worker.call_args.kwargs)
+
     def test_painted_xl_two_wall_workbench_dispatch(self):
         from scripts.prusa_generate_mmu_paint import fixture as painted_fixture
         job, filaments, _ = self.config()
