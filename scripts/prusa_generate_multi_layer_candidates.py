@@ -22,6 +22,18 @@ def main(destination):
         raw = build_prusa_native_3mf([
             (left, source), (right, source)], bed_width=250, bed_depth=210)
         (root/(label + ".3mf")).write_bytes(raw)
+    positions=[(x,y) for y in (-55,0,55)
+                     for x in (-90,-45,0,45,90)]
+    fifteen=[]
+    for n,(x,y) in enumerate(positions):
+        obj={**base,"asset_id":f"variable-model-{n}",
+             "x_mm":x,"y_mm":y}
+        if n==7:
+            obj["variable_layer_profile"]=layers
+        fifteen.append((obj,source))
+    (root/"fifteen-variable.3mf").write_bytes(build_prusa_native_3mf(
+        fifteen,bed_width=250,bed_depth=210))
+
 
 if __name__ == "__main__":
     main(sys.argv[1])
