@@ -206,7 +206,7 @@ def validate_prusa_project_admission(plate, settings, version):
                 (row.get("fuzzy_skin_paint") or {}).get("faces")):
             raise ValueError("Prusa requires fingerprinted native facet regions.")
         if support or fuzzy:
-            two_fuzzy = len(plate) == 2 and bool(fuzzy) and not support and (
+            multi_fuzzy = 2 <= len(plate) <= 200 and bool(fuzzy) and not support and (
                 sum(bool((entry.get("fuzzy_skin_paint") or {}).get("regions"))
                     for entry in plate) == 1)
             multi_support = 2 <= len(plate) <= 200 and bool(support) and not fuzzy and (
@@ -215,16 +215,16 @@ def validate_prusa_project_admission(plate, settings, version):
             if multi_support:
                 from .slicer_prusa_support_audit import validate_prusa_multi_support_plate
                 validate_prusa_multi_support_plate(plate)
-            if ((len(plate) != 1 and not two_fuzzy and not multi_support) or overrides or
+            if ((len(plate) != 1 and not multi_fuzzy and not multi_support) or overrides or
                     row.get("modifier_volumes") or
                     (row.get("variable_layer_profile") or {}).get("bands")):
                 raise ValueError("Prusa painted facets with other object extensions are not yet verified.")
-            if two_fuzzy and any(other.get("process_overrides") or
+            if multi_fuzzy and any(other.get("process_overrides") or
                                  other.get("modifier_volumes") or
                                  (other.get("support_paint") or {}).get("regions") or
                                  (other.get("variable_layer_profile") or {}).get("bands")
                                  for other in plate):
-                raise ValueError("Prusa two-object fuzzy skin cannot combine other regional extensions.")
+                raise ValueError("Prusa multi-object fuzzy skin cannot combine other regional extensions.")
             if support and fuzzy:
                 # The native support/fuzzy fixture requires distinct painted
                 # source triangles: a manual enforcer on a cantilever underside
