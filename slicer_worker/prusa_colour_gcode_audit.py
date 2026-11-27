@@ -36,10 +36,6 @@ def _wall_regions(project, tool):
                 any(not all(math.isfinite(x) and abs(x)<2000 for x in row)
                     for row in points)):
             raise ValueError()
-        minimum_y=min(p[1] for p in points)
-        maximum_y=max(p[1] for p in points)
-        if maximum_y-minimum_y < 4:
-            raise ValueError()
         painted=[]
         for triangle in triangles:
             state=triangle.get(PAINT)
@@ -52,16 +48,28 @@ def _wall_regions(project, tool):
                 painted.append(points[index])
         if not painted:
             raise ValueError()
-        front_y=painted[0][1]
-        if (abs(front_y-minimum_y)>.25 or
-                any(abs(p[1]-front_y)>.25 for p in painted)):
-            raise ValueError()
-        xs=[p[0] for p in painted]
-        zs=[p[2] for p in painted]
-        if max(xs)-min(xs)<3 or max(zs)-min(zs)<3:
-            raise ValueError()
-        return ((min(xs)-1,max(xs)+1,front_y-2,front_y+2),
-                (min(xs)-1,max(xs)+1,maximum_y-2,maximum_y+2))
+        # The native encoder already preserves facet positions. Derive
+        # the painted vertical wall from those positions, not a fixed
+        # front-facing fixture. Retain the opposite-wall deposition proof.
+        for axis in (0, 1):
+            tangent=1-axis
+            lo=min(p[axis] for p in points)
+            hi=max(p[axis] for p in points)
+            if hi-lo<=4:
+                continue
+            for plane, opposite in ((lo,hi),(hi,lo)):
+                if not all(abs(p[axis]-plane)<=.0001 for p in painted):
+                    continue
+                ts=[p[tangent] for p in painted]
+                zs=[p[2] for p in painted]
+                if max(ts)-min(ts)<3 or max(zs)-min(zs)<3:
+                    continue
+                def region(value):
+                    along=(min(ts)-1,max(ts)+1)
+                    across=(value-2,value+2)
+                    return (*across,*along) if axis==0 else (*along,*across)
+                return region(plane),region(opposite)
+        raise ValueError()
     except (OSError,ValueError,TypeError,IndexError,KeyError,zipfile.BadZipFile,
             OverflowError,AttributeError):
         raise WorkerError("Prusa native colour has an unqualified painted surface.") from None
