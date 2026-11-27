@@ -1,3 +1,34 @@
+### 27 November — independently qualified mixed native region features
+
+The native Prusa 2.9.7 acceptance pipeline now requires a controlled
+four-project test for combined **parameter modifier on model A** and
+**per-object sparse infill on model B**. It compares baseline, each feature
+alone and both together, measuring moving positive-E deposition in each
+object's own central XY footprint. Both effects must independently change
+their intended object and leave the unmodified neighbour unaffected.
+
+The corresponding offline-native 3MF admission is restricted to exactly
+two independently placed printable models, one box-shaped sparse-infill
+parameter modifier and a separate Object sparse-infill override. This is
+not a blanket approval for an arbitrary number of regions, same-object
+stacks, negative cavities combined with Object overrides, or material
+tool changes. Those remain subject to specific native acceptance.
+
+A second mandatory pinned-CLI test now combines **one variable-layer band**
+with **one box-shaped sparse-infill modifier on a single model**. Its
+post-slice G-code audit must establish both real Z-step spacing and a
+separately measured change in positive extrusion in the modifier footprint,
+while the outer object still deposits material. Until that native test
+is green on the exact branch head, do not treat the combined capability as
+qualified. More complex overlapping paint, modifier and layer combinations
+remain gated.
+
+**Hardware note:** Offline Prusa G-code audits are distinct from PrusaLink
+upload and real printer-start acceptance. This work does not waive firmware
+pickup/docking evidence, matching tool profiles or fresh idle telemetry.
+
+---
+
 ### 27 November — repeated native MMU tools and non-guessed printer capacity
 
 A Prusa MMU advertises native logical filament tools separately from
