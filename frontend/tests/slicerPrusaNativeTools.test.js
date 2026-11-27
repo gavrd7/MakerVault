@@ -47,10 +47,10 @@ test("Interactive slicer blocks incomplete Prusa mapping but keeps draft saving 
   assert.match(workbench,/prusaNativeOffline && mode==="all"/);
 });
 
-test("Prusa MMU/XL allows only spatially qualified Object wall/infill controls",()=>{
-  assert.match(prepare,/\["wall_loops","sparse_infill_density"\]\.includes\(key\)/);
+test("Prusa MMU/XL/INDX admits verified native Object wall, shell and infill controls",()=>{
+  assert.match(prepare,/"top_shell_layers","bottom_shell_layers"\]\.includes\(key\)/);
   assert.match(prepare,/prusaUnsupportedObjectKeys/);
-  assert.match(prepare,/Prusa MMU\/XL\/INDX supports only Object wall loops and infill density/);
+  assert.match(prepare,/Prusa MMU\/XL\/INDX supports Object walls, top\/bottom shells and infill density/);
   assert.match(prepare,/prusaNativeReady/);
   assert.match(prepare,/prusaMaterialRoutingPending/);
 });
