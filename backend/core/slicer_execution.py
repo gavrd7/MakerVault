@@ -480,18 +480,18 @@ def _validate_plate_execution(job):
                  settings.get("multi_material_test") is True)):
             raise SlicerExecutionError(
                 "Native fuzzy skin painting test requires OrcaSlicer 2.5.0 or Creality Print 7.3.x CFS test mode.")
-        prusa_two_fuzzy = (job.engine == "prusaslicer" and
-                           job.engine_version == "2.9.7" and len(objects) == 2)
-        if ((len(objects) != 1 and not prusa_two_fuzzy) or
+        prusa_multi_fuzzy = (job.engine == "prusaslicer" and
+                            job.engine_version == "2.9.7" and 2 <= len(objects) <= 200)
+        if ((len(objects) != 1 and not prusa_multi_fuzzy) or
                 (settings.get("multi_material_test") and
                  job.engine not in {"crealityprint", "bambustudio"})):
             raise SlicerExecutionError(
-                "Selective fuzzy skin requires one model (Prusa 2.9.7 allows two independently audited models).")
-        if prusa_two_fuzzy and sum(bool((row.get("fuzzy_skin_paint") or {}).get("regions"))
+                "Selective fuzzy skin requires one model (Prusa 2.9.7 allows up to 200 independently audited models).")
+        if prusa_multi_fuzzy and sum(bool((row.get("fuzzy_skin_paint") or {}).get("regions"))
                                 for row in objects) != 1:
             raise SlicerExecutionError(
-                "Prusa 2.9.7 two-model fuzzy skin requires exactly one painted model.")
-        for item in (objects if prusa_two_fuzzy else objects[:1]):
+                "Prusa 2.9.7 multi-model fuzzy skin requires exactly one painted model.")
+        for item in (objects if prusa_multi_fuzzy else objects[:1]):
             if item.get("process_overrides"):
                 raise SlicerExecutionError(
                     "Fuzzy skin painting with per-object overrides is not verified.")
@@ -1353,18 +1353,18 @@ def process_queued_job(job_id):
                     raise SlicerExecutionError(
                         "Prusa native painted support enforcers produced no verified support paths."
                     ) from exc
-        if (job.engine == "prusaslicer" and plate and len(plate) == 2 and
+        if (job.engine == "prusaslicer" and plate and 2 <= len(plate) <= 200 and
                 any((row.get("fuzzy_skin_paint") or {}).get("regions")
                     for row in plate)):
             stage = "auditing independent native Prusa fuzzy skin toolpaths"
-            from .slicer_prusa_fuzzy_audit import audit_prusa_two_object_fuzzy
+            from .slicer_prusa_fuzzy_audit import audit_prusa_multi_object_fuzzy
             width, depth = trusted_plate_dimensions(job.printer_profile)
             try:
-                audit_prusa_two_object_fuzzy(
+                audit_prusa_multi_object_fuzzy(
                     output, source_models, bed_width=width, bed_depth=depth)
             except ValueError as exc:
                 raise SlicerExecutionError(
-                    "Prusa two-object fuzzy skin G-code did not preserve "
+                    "Prusa multi-object fuzzy skin G-code did not preserve "
                     "the selected painted model and smooth neighbour."
                 ) from exc
         stage = "validating and storing generated G-code"
