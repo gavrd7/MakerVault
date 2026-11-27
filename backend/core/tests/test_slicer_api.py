@@ -881,9 +881,22 @@ class SliceJobApiTests(TestCase):
         saved = SliceJob.objects.get(pk=result.json()["job"]["id"]).settings
         self.assertEqual(saved["material_tool_bindings"], routing)
         self.assertEqual(saved["material_topology"], "single_nozzle_changer")
+        # Draft mappings reflect explicit reported/capability data rather than
+        # a legacy sixteen-tool UI ceiling. Native slice validation stays separate.
+        extended = [{"slot_id": f"reported-bay-{index}", "tool_index": index}
+                    for index in range(20)]
+        accepted = self.post({**self.payload, "settings": {
+            "plate_objects": [instance],
+            "material_tool_bindings": extended,
+            "material_topology": "single_nozzle_changer",
+        }})
+        self.assertEqual(accepted.status_code, 201, accepted.content)
+        self.assertEqual(SliceJob.objects.get(pk=accepted.json()["job"]["id"]).settings[
+            "material_tool_bindings"], extended)
         for invalid in (
             [{"slot_id": "bay-4", "tool_index": True}],
-            [{"slot_id": "bay-4", "tool_index": 17}],
+            [{"slot_id": "bay-4", "tool_index": -1}],
+            [{"slot_id": "bay-4", "tool_index": 1024}],
             [{"slot_id": "bay-4", "tool_index": 0},
              {"slot_id": "bay-1", "tool_index": 0}],
             [{"slot_id": "bay-4", "tool_index": 0, "commands": "T3"}],
