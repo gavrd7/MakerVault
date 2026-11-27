@@ -282,6 +282,19 @@ class SlicerWorkerClientTests(SimpleTestCase):
         self.assertEqual(sent["prusa_offline_mmu"],
                          {"tools":[1,2],"tower":[55,150,0,250,210]})
         self.assertNotIn("filament_profiles",sent)
+        # Model count is independent of the number of native material tools.
+        repeated = [1, 2, 3, 4, 5] * 3
+        run_remote_job(uuid.uuid4(), "prusaslicer", "2.9.7", b"project",
+                       b"printer", b"filament", b"process", model_format="3mf",
+                       prusa_offline_mmu={"tools": repeated, "tower": [55,150,0,250,210]})
+        sent = json.loads(session.return_value.post.call_args.kwargs["data"])
+        self.assertEqual(sent["prusa_offline_mmu"]["tools"], repeated)
+        independent = list(range(1, 9)) * 2
+        run_remote_job(uuid.uuid4(), "prusaslicer", "2.9.7", b"project",
+                       b"printer", b"filament", b"process", model_format="3mf",
+                       prusa_offline_xl={"tools": independent})
+        sent = json.loads(session.return_value.post.call_args.kwargs["data"])
+        self.assertEqual(sent["prusa_offline_xl"]["tools"], independent)
         for change in (
             {"engine":"orcaslicer"},
             {"version":"2.9.6"},
