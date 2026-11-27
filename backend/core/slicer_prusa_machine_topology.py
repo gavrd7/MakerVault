@@ -47,8 +47,8 @@ def validate_prusa_model_tool_order(printer_ini, tool_indices):
     zero-filled default; preserve user-specific native tool assignments.
     """
     topology = prusa_machine_topology(printer_ini)
-    if not isinstance(tool_indices, (list, tuple)) or not 1 <= len(tool_indices) <= 12:
-        raise ValueError("Prusa tool assignment requires one to twelve models.")
+    if not isinstance(tool_indices, (list, tuple)) or not 1 <= len(tool_indices) <= 200:
+        raise ValueError("Prusa tool assignment requires one to 200 models.")
     seen = set()
     for tool in tool_indices:
         if type(tool) is not int or not 1 <= tool <= topology["logical_tool_count"]:
