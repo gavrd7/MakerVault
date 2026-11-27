@@ -1082,7 +1082,8 @@ export default function SlicerPrepareWorkspace({
         (typeof object.process_overrides !== "object" ||
          Array.isArray(object.process_overrides) ||
          Object.keys(object.process_overrides).some(key=>
-           !["wall_loops","sparse_infill_density"].includes(key)))) ||
+           !["wall_loops","sparse_infill_density",
+             "top_shell_layers","bottom_shell_layers"].includes(key)))) ||
       object.negative_volumes?.length ||
       ((object.modifier_volumes?.length || object.variable_layer_profile?.bands?.length) &&
         !prusaIndependentTools) ||
