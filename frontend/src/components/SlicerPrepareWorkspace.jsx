@@ -1153,6 +1153,8 @@ export default function SlicerPrepareWorkspace({
              "outer_wall_speed","inner_wall_speed",
              "sparse_infill_speed","top_surface_speed"].includes(key)))) ||
       object.negative_volumes?.length ||
+      (object.variable_layer_profile?.bands?.length &&
+        prusaNativeTools?.mode==="mmu") ||
       ((object.modifier_volumes?.length || object.variable_layer_profile?.bands?.length) &&
         prusaSinglePaint) ||
       object.support_paint?.regions?.length || object.seam_paint?.regions?.length ||
