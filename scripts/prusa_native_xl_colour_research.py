@@ -260,6 +260,39 @@ def main(binary, vendor):
             print("RESEARCH BLOCKED: combined Prusa painted colour plus "
                   "modifier",type(exc).__name__,str(exc)[:280],flush=True)
 
+        # Required acceptance: use the production MakerVault project builder,
+        # authenticated worker preflight and strict painted-wall G-code audit.
+        from slicer_worker.prusa_offline_contract import (
+            validate_prusa_offline_xl_colour_inputs)
+        from slicer_worker.prusa_colour_gcode_audit import (
+            audit_prusa_xl_colour_gcode)
+        production=build_prusa_colour_candidate(
+            {**row,"modifier_volumes":[typed]},stl,printer_ini=printer,
+            colour_tool_indices={1:1},bed_width=360,bed_depth=360)
+        approved=validate_prusa_offline_xl_colour_inputs(
+            project=production,printer=printer,filament=palette,
+            process=process,tool=1)
+        assert approved["tool"]==1 and not approved["wipe_tower"],approved
+        (work/"input.3mf").write_bytes(colour_only)
+        (work/"output.gcode").unlink(missing_ok=True)
+        run_prusa(Path(binary),work)
+        clean_gcode=(work/"output.gcode").read_bytes()
+        (work/"input.3mf").write_bytes(production)
+        (work/"output.gcode").unlink(missing_ok=True)
+        run_prusa(Path(binary),work)
+        modified_gcode=(work/"output.gcode").read_bytes()
+        proof=audit_prusa_xl_colour_gcode(
+            modified_gcode,production,printer_ini=printer,tool=1)
+        unchanged=regional_extrusion(clean_gcode,center_x=180,center_y=180)
+        changed=regional_extrusion(modified_gcode,center_x=180,center_y=180)
+        assert changed[0]>unchanged[0]*1.5,(unchanged,changed)
+        assert proof["painted_wall_moves"][1]["front"]>=20,proof
+        assert proof["painted_wall_moves"][1]["back"]<=2,proof
+        print("PASS: authenticated MakerVault XL colour and native infill "
+              "modifier both affect genuine deposited G-code",
+              {"base":unchanged,"modifier":changed,"paint":proof},flush=True)
+
+
 
         # The same native facet encoder supports two opposing selected
         # tools. Run this through the *independent-head* worker contract
