@@ -121,7 +121,7 @@ class PrusaPaintedWallMotionTests(TestCase):
         # Keep valid wall extrusion; replace the moving wipe paths with
         # stationary positive-E commands in both tool sections.
         import re
-        data = re.sub(rb"G1 X5[5-9](?:\\.\\d+)? Y155 E0\\.03",
+        data = re.sub(rb"G1 X\\d+(?:\\.\\d+)? Y155 E0\\.03",
                       b"G1 E0.03", data)
         with self.assertRaisesRegex(WorkerError, "tower purging"):
             self.checked(data)
