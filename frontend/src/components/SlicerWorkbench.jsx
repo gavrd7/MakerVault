@@ -2523,14 +2523,21 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
         initialAction={printSelection.action === "upload" ? "upload" : "print"}
         onChanged={refresh}
         onSubmissionConfirmed={receipt => {
-          // The child only reports a confirmed upload or verified print start.
-          // A dispatched-but-unverified Creality command must remain visible.
+          // Close only the printer action dialog. Keep the completed slice
+          // and its G-code preview available, regardless of slicer engine.
           setPrintSelection(null);
-          setPreviewJobId(null);
-          setShowDrafts(false);
           setNotice(receipt.status === "uploaded"
             ? "Sliced G-code uploaded and confirmed on the printer."
-            : "Print start confirmed. Returned to the slicer workspace.");
+            : "Print start confirmed by the printer.");
+        }}
+        onSubmissionDispatched={receipt => {
+          // Creality's unacknowledged native start is a recorded dispatch,
+          // NOT a verified print. Keep its status and request ID visible in
+          // the preview; never retry a print-start automatically.
+          setPrintSelection(null);
+          setNotice("Print command sent; live start is not yet verified. " +
+            "Check the printer display. Request ID: " + receipt.request_id +
+            ". Do not resend unless its status is independently resolved.");
         }}
         onClose={() => setPrintSelection(null)}
       /> : null;
