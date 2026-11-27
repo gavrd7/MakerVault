@@ -227,10 +227,10 @@ def validate_prusa_project_admission(plate, settings, version):
         total += len(volumes)
         if total > MAX_TOTAL_MODIFIERS:
             raise ValueError("Prusa native modifier count exceeds the limit.")
-        # The pinned mixed-object spatial fixture separately verifies a
-        # parameter modifier on one model and a process override on another.
-        # The same-model stack, and negative cavities mixed with Object
-        # settings, still need their own native deposition qualification.
+        # The pinned mixed-object spatial fixture separately verifies
+        # either a parameter modifier or a negative cavity on one model,
+        # alongside an independent process override on the other.
+        # Same-model stacks remain unqualified.
         if len(plate) > 1 and volumes and any(model.get("process_overrides")
                                                 for model in plate):
             other = next((model for model in plate if model is not row), {})
@@ -238,9 +238,12 @@ def validate_prusa_project_admission(plate, settings, version):
             # one box infill modifier on the first object and a separate,
             # independently verified sparse-infill Object override.
             if not (len(plate) == 2 and len(volumes) == 1
-                    and not overrides and volumes[0]["kind"] == "modifier"
+                    and not overrides
+                    and volumes[0]["kind"] in ("modifier", "negative")
                     and volumes[0]["shape"] == "box"
-                    and set(volumes[0]["settings"]) == {"sparse_infill_density"}
+                    and (set(volumes[0]["settings"]) ==
+                         ({"sparse_infill_density"} if
+                          volumes[0]["kind"] == "modifier" else set()))
                     and set(other.get("process_overrides") or {})
                         == {"sparse_infill_density"}
                     and not other.get("modifier_volumes")):
