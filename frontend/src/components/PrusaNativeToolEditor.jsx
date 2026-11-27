@@ -19,6 +19,7 @@ const safeNumber = raw => {
 
 export default function PrusaNativeToolEditor({
   value, onChange, models=[], selectedModelIds=[], profileChoices=[], primaryProfileId="",
+  printerTopology=null,
   engineVersion="2.9.7", primeTower, onPrimeTowerChange, disabled=false,
 }) {
   const [towerX,setTowerX]=useState(primeTower?.x==null?"":String(primeTower.x));
@@ -27,6 +28,13 @@ export default function PrusaNativeToolEditor({
     setTowerX(primeTower?.x==null?"":String(primeTower.x));
     setTowerY(primeTower?.y==null?"":String(primeTower.y));
   },[primeTower?.x,primeTower?.y]);
+  const profileToolCount = Number.isInteger(printerTopology?.logical_tool_count)
+    ? printerTopology.logical_tool_count : null;
+  const profileMode = printerTopology?.kind==="single_nozzle_changer" ? "mmu"
+    : printerTopology?.kind==="indx" ? "indx"
+    : printerTopology?.kind==="independent_tools" ? "xl" : null;
+  const profileMatches = !profileToolCount ||
+    (value?.tool_count===profileToolCount && (!profileMode || value.mode===profileMode));
   const profiles=profileChoices.filter(profile=>profile?.kind==="filament" &&
     profile.engine==="prusaslicer" && profile.engine_version===engineVersion);
   const updateTower=(axis,raw)=>{
@@ -75,7 +83,7 @@ export default function PrusaNativeToolEditor({
   const obsoleteToolMappings=(value?.model_tools||[]).filter(row=>
     !models.some(model=>model.instance_id===row.instance_id));
   const status=value?(
-    value.filament_profile_ids.every(Boolean) &&
+    profileMatches && value.filament_profile_ids.every(Boolean) &&
     ((models.length>=2 && models.length<=12) || singleColour) &&
     value.model_tools.length===models.length &&
     models.every(row=>value.model_tools.some(item=>item.instance_id===row.instance_id)) &&
@@ -107,6 +115,19 @@ export default function PrusaNativeToolEditor({
       printer bays. This produces offline preview/Library G-code only; physical MMU loading,
       INDX docking and printer submission require matching native firmware and hardware.</p>
     {value && <>
+      {profileToolCount && <div className="projectUploadHint" role="status">
+        Native printer profile reports {profileToolCount} logical tool(s) ({printerTopology.kind.replaceAll("_"," ")}).
+        {!profileMatches && <button type="button" disabled={disabled || !profileMode}
+          onClick={() => {
+            const count = profileToolCount;
+            onChange?.({...value,mode:profileMode,tool_count:count,
+              filament_profile_ids:Array.from({length:count},(_,i)=>value.filament_profile_ids[i]||""),
+              model_tools:value.model_tools.filter(row=>row.tool<=count),
+              colour_tools:(value.colour_tools||[]).filter(row=>row.tool<=count),
+              purge_matrix:profileMode==="mmu"?matrixFor(count):null});
+            if(profileMode!=="mmu")onPrimeTowerChange?.(null);
+          }}>Match native printer profile</button>}
+      </div>}
       <div style={{display:"flex",gap:12,flexWrap:"wrap"}}>
         <label>Toolchanger architecture
           <select value={value.mode} disabled={disabled}
@@ -135,7 +156,8 @@ export default function PrusaNativeToolEditor({
                 colour_tools:(value.colour_tools||[]).filter(row=>row.tool<=count),
                 purge_matrix:value.mode==="mmu"?matrixFor(count):null});
             }}>
-            {(value.mode==="indx"?[2,3,4,5,6,7,8]:[2,3,4,5]).map(count=><option key={count} value={count}>{count}</option>)}
+            {(profileToolCount ? [profileToolCount] :
+              value.mode==="indx"?[2,3,4,5,6,7,8]:[2,3,4,5]).map(count=><option key={count} value={count}>{count}</option>)}
           </select>
         </label>
       </div>
