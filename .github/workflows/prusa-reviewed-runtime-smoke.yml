@@ -357,11 +357,10 @@ jobs:
         run: |
           echo "::warning title=Prusa XL split-wall paint::Native XL partial-surface deposition remains unqualified; retain complete-wall admission."
 
-      - name: Research Prusa XL5 horizontal split top-surface colour deposition
+      - name: Require Prusa XL5 horizontal split top-surface colour deposition
         id: prusa_horizontal_surface_research
-        # Vertical split-wall proof cannot certify horizontal/curved surfaces.
-        # Gather genuine T0/T1 top-skin deposition before extending admission.
-        continue-on-error: true
+        # Mandatory pinned genuine output: normal XL5 offline submission now
+        # admits signed partial top masks and audits real top-skin extrusion.
         run: |
           set -euo pipefail
           docker run --rm --network none --user 10001:10001 \
