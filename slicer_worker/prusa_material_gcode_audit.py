@@ -179,6 +179,11 @@ def audit_prusa_material_model_gcode(data, project, *, printer_ini, tools, tower
                 x=params.get("X",x)
                 y=params.get("Y",y)
             if "E" not in params:
+                if (flush and (op not in ("G1","G01") or not relative_xy
+                        or previous_x is None or previous_y is None or
+                        x is None or y is None or "Z" in params or
+                        abs(x-previous_x)+abs(y-previous_y)>2)):
+                    raise WorkerError("Unexpected INDX purge travel.")
                 continue
             amount=params["E"] if relative else params["E"]-e
             e=e+params["E"] if relative else params["E"]
@@ -189,7 +194,7 @@ def audit_prusa_material_model_gcode(data, project, *, printer_ini, tools, tower
                 if (op not in ("G1","G01") or not relative or not relative_xy or
                         previous_x is None or previous_y is None or
                         x is None or y is None or
-                        not 0 < amount <= 80 or
+                        not 0 <= amount <= 80 or
                         not 0 < abs(x-previous_x)+abs(y-previous_y) <= 2):
                     raise WorkerError("Unexpected native INDX purge movement.")
                 flush_moves += 1
