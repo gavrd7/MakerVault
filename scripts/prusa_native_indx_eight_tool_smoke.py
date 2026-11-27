@@ -368,8 +368,17 @@ def main(binary, vendor, official=None):
             (folder/"output.gcode").unlink(missing_ok=True)
             run_prusa(Path(binary),folder)
             dual_gcode=(folder/"output.gcode").read_bytes()
-            dual_receipt=audit_prusa_dual_colour_gcode(
-                dual_gcode,two,printer_ini=selected,tools=(1,2),tower=None)
+            try:
+                dual_receipt=audit_prusa_dual_colour_gcode(
+                    dual_gcode,two,printer_ini=selected,tools=(1,2),tower=None)
+            except WorkerError:
+                from scripts.prusa_native_five_colour_paint_smoke import painted_external_walls
+                counts=painted_external_walls(
+                    dual_gcode,center_x=125,center_y=105)
+                # Synthetic pinned-vendor fixture only: numeric counts,
+                # no private native G-code or toolchange scripts in logs.
+                print("OFFICIAL INDX dual native wall counts",counts,flush=True)
+                raise
             assert dual_receipt["wall_moves"][1]["front"]>=20,dual_receipt
             assert dual_receipt["wall_moves"][2]["back"]>=20,dual_receipt
             assert not dual_receipt["wipe_tower"],dual_receipt
