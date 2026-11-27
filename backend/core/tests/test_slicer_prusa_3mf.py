@@ -55,6 +55,42 @@ class PrusaProjectDialectTests(TestCase):
                 self.assertEqual(receipt["objects"], len(plate))
                 self.assertEqual(receipt["regions"], 0)
 
+    def test_native_prusa_object_speed_mappings_preserve_explicit_scope(self):
+        left = item(x_mm=-35, process_overrides={
+            "outer_wall_speed": 21, "inner_wall_speed": 35,
+            "sparse_infill_speed": 47, "top_surface_speed": 19,
+        })
+        right = item(x_mm=35)
+        self.assertFalse(validate_prusa_project_admission(
+            [left, right], {}, "2.9.7"))
+        archive = build_prusa_native_3mf([
+            (left, cube()), (right, cube())],
+            bed_width=250, bed_depth=210)
+        receipt = validate_prusa_native_3mf(archive)
+        self.assertEqual(receipt["objects"], 2)
+        with zipfile.ZipFile(io.BytesIO(archive)) as zipped:
+            root = SafeET.fromstring(zipped.read(
+                "Metadata/Slic3r_PE_model.config"))
+        objects = root.findall("object")
+        self.assertEqual(len(objects), 2)
+        metadata = {node.get("key"): node.get("value")
+                    for node in objects[0].findall("metadata")}
+        self.assertEqual(metadata, {
+            "external_perimeter_speed": "21",
+            "perimeter_speed": "35",
+            "infill_speed": "47",
+            "top_solid_infill_speed": "19",
+        })
+        self.assertEqual(objects[1].findall("metadata"), [])
+        with self.assertRaises(ValueError):
+            validate_prusa_project_admission([
+                {**left, "process_overrides": {"travel_speed": 100}},
+                right], {}, "2.9.7")
+        with self.assertRaises(ValueError):
+            validate_prusa_project_admission([
+                {**left, "process_overrides": {"inner_wall_speed": True}},
+                right], {}, "2.9.7")
+
     def test_mixed_native_modifier_and_object_setting_are_serialized_independently(self):
         # Export is capable of the mixed dialect. Slice admission stays a
         # separate native qualification gate until the pinned CLI deposition
