@@ -1,4 +1,4 @@
-"""Prusa 2.9.7 two-object selective fuzzy skin extrusion acceptance.
+"""Prusa 2.9.7 multi-object selective fuzzy skin extrusion acceptance.
 
 A syntactically valid 3MF facet flag does not prove native surface texture.
 Check real short positive-E external-wall movements independently in the
@@ -12,10 +12,10 @@ from .slicer_prusa_spatial_layers import _bounds
 _WORD=re.compile(r"(?:^|\s)([XYZE])\s*([-+]?(?:\d+(?:\.\d*)?|\.\d+)(?:[Ee][-+]?\d+)?)",re.I)
 
 
-def audit_prusa_two_object_fuzzy(data, models, *, bed_width, bed_depth):
+def audit_prusa_multi_object_fuzzy(data, models, *, bed_width, bed_depth):
     if (not isinstance(data,bytes) or not 0<len(data)<=90*1024*1024 or
-            not isinstance(models,list) or len(models)!=2):
-        raise ValueError("Prusa selective fuzzy acceptance requires two source models.")
+            not isinstance(models,list) or not 2<=len(models)<=200):
+        raise ValueError("Prusa selective fuzzy acceptance requires two to 200 source models.")
     painted=[i for i,(item,_raw) in enumerate(models) if isinstance(item,dict)
              and (item.get("fuzzy_skin_paint") or {}).get("regions")]
     if len(painted)!=1:
@@ -25,11 +25,13 @@ def audit_prusa_two_object_fuzzy(data, models, *, bed_width, bed_depth):
            item.get("modifier_volumes") or
            (item.get("variable_layer_profile") or {}).get("bands")
            for item,_raw in models):
-        raise ValueError("Prusa two-object fuzzy with other native features is unqualified.")
+        raise ValueError("Prusa multi-object fuzzy with other native features is unqualified.")
     limits=[_bounds(source,bed_width,bed_depth) for source in models]
-    a,b=limits
-    if min(a[1],b[1])>max(a[0],b[0])+.01 and min(a[3],b[3])>max(a[2],b[2])+.01:
-        raise ValueError("Overlapping model footprints cannot prove regional fuzzy skin.")
+    for index,a in enumerate(limits):
+        for b in limits[index+1:]:
+            if (min(a[1],b[1])>max(a[0],b[0])+.01 and
+                    min(a[3],b[3])>max(a[2],b[2])+.01):
+                raise ValueError("Overlapping model footprints cannot prove regional fuzzy skin.")
     try:
         lines=data.decode("utf-8").splitlines()
     except UnicodeDecodeError:
@@ -39,7 +41,7 @@ def audit_prusa_two_object_fuzzy(data, models, *, bed_width, bed_depth):
     relative=False
     relative_xyz=False
     role=""
-    counts=[0,0]
+    counts=[0]*len(models)
     for idx,line in enumerate(lines):
         if idx>=2_000_000 or len(line)>16384:
             raise ValueError("Prusa fuzzy toolpath audit exceeds input limits.")
@@ -91,8 +93,17 @@ def audit_prusa_two_object_fuzzy(data, models, *, bed_width, bed_depth):
                         max(2.,zmin+.5)<=pos["Z"]<=min(zmax-1.,zmin+20)):
                     counts[i]+=1
     changed=counts[painted[0]]
-    untouched=counts[1-painted[0]]
+    untouched=sum(n for i,n in enumerate(counts) if i!=painted[0])
     if changed<80 or untouched>max(5,math.floor(changed*.05)):
         raise ValueError("Prusa native fuzzy wall effect was not isolated to the painted object.")
     return {"painted_model_index":painted[0],"painted_short_external_moves":changed,
-            "unpainted_short_external_moves":untouched}
+            "unpainted_short_external_moves":untouched,
+            "per_model_short_external_moves":counts}
+
+
+def audit_prusa_two_object_fuzzy(data, models, *, bed_width, bed_depth):
+    """Backward-compatible strict two-object wrapper for older fixtures."""
+    if not isinstance(models,list) or len(models)!=2:
+        raise ValueError("Prusa two-object fuzzy audit requires two models.")
+    return audit_prusa_multi_object_fuzzy(
+        data,models,bed_width=bed_width,bed_depth=bed_depth)
