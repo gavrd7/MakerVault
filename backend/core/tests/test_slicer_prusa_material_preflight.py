@@ -481,6 +481,50 @@ class PrusaOfflineMmuPreflightTests(TestCase):
         audit.assert_called_once_with(
             output, candidate["model"], tool=1, tower=candidate["tower"])
 
+        # The identical signed split-wall mask also qualifies the real XL5
+        # independent-head path, but without MMU wipe-tower requirements.
+        from core.slicer_prusa_material_preflight import (
+            prepare_prusa_offline_xl_colour_candidate,
+            slice_prusa_offline_xl_colour_candidate)
+        assets[0] = ini("0.4,0.4,0.4,0.4,0.4", "0")
+        xl = {key: colour[key] for key in (
+            "owner_id", "printer_profile", "process_profile",
+            "filament_profiles", "bed_width", "bed_depth", "rows", "tools")}
+        xl["colour_tool_indices"] = {1: 1}
+        with patch("core.slicer_prusa_material_preflight.resolved_prusa_profile",
+                   side_effect=assets):
+            selected_xl = prepare_prusa_offline_xl_colour_candidate(**xl)
+        self.assertTrue(selected_xl["partial_wall"])
+        xl_request = {
+            **request, "model": base64.b64encode(
+                selected_xl["model"]).decode(),
+            "printer_profile": base64.b64encode(
+                selected_xl["printer"]).decode(),
+            "filament_profile": base64.b64encode(
+                selected_xl["filament"]).decode(),
+            "process_profile": base64.b64encode(
+                selected_xl["process"]).decode(),
+        }
+        xl_request.pop("prusa_offline_colour")
+        xl_request["prusa_offline_xl_colour"] = {"tool": 1}
+        self.assertEqual(_decode_payload(xl_request)[
+            "prusa_offline_xl_colour"], {"tool": 1, "partial_wall": True})
+        with self.assertRaises(WorkerError):
+            _decode_payload({**xl_request,
+                             "prusa_offline_xl_colour": {
+                                 "tool": 1, "partial_wall": True}})
+        remote, context = self.offline_worker_stub()
+        remote.return_value = b"audited XL G-code"
+        with context, patch(
+            "core.slicer_prusa_material_preflight.prepare_prusa_offline_xl_colour_candidate",
+            return_value=selected_xl), patch(
+            "slicer_worker.prusa_partial_surface.audit_prusa_partial_wall_gcode"
+        ) as xl_audit:
+            output = slice_prusa_offline_xl_colour_candidate(
+                str(uuid.uuid4()), **xl)
+        xl_audit.assert_called_once_with(
+            output, selected_xl["model"], tool=1)
+
     def test_two_painted_mmu_walls_bind_explicit_tools_and_worker_bytes(self):
         from core.slicer_prusa_material_preflight import prepare_prusa_offline_colour_candidate
         from core.slicer_plate_3mf import _triangles
