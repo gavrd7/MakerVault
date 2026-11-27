@@ -143,7 +143,7 @@ class PrusaWorkbenchMaterialTests(TestCase):
                 self.assertEqual(run.call_args.kwargs["process_overrides"],
                                  job.settings["process_overrides"])
 
-    def test_xl_advanced_local_geometry_is_forwarded_only_to_independent_heads(self):
+    def test_native_advanced_geometry_is_forwarded_to_mmu_xl_and_indx(self):
         for mode, count in (("xl", 2), ("xl", 5), ("xl", 8)):
             with self.subTest(mode=mode, count=count):
                 job, filaments, raw = fixture(mode, count)
@@ -168,10 +168,23 @@ class PrusaWorkbenchMaterialTests(TestCase):
                 self.assertIn("variable_layer_profile", received[1][0])
         mmu, filaments, raw = fixture("mmu")
         self.resolve(mmu, filaments, raw)
-        mmu.settings["plate_objects"][0]["modifier_volumes"] = [{
-            "id": "not-qualified", "kind": "modifier"}]
-        with self.assertRaises(SlicerProfileError):
-            prepare_prusa_workbench_material(mmu)
+        from core.tests.test_slicer_prusa_3mf import volume
+        mmu.settings["plate_objects"][0]["modifier_volumes"] = [
+            volume("modifier", {"sparse_infill_density": 80})]
+        mmu.settings["plate_objects"][1]["variable_layer_profile"] = {
+            "version": 1, "bands": [
+                {"from_mm": 2, "to_mm": 6, "layer_mm": .12}]}
+        kind, plan = prepare_prusa_workbench_material(mmu)
+        self.assertEqual(kind, "mmu")
+        with patch("core.slicer_prusa_job_material.slice_prusa_offline_mmu_candidate",
+                   return_value=b"audited-native") as worker:
+            self.assertEqual(slice_prusa_workbench_material(
+                mmu, [(dict(row), b"STL")
+                      for row in mmu.settings["plate_objects"]]),
+                             b"audited-native")
+        routed = worker.call_args.kwargs["rows"]
+        self.assertEqual(routed[0][0]["modifier_volumes"][0]["kind"], "modifier")
+        self.assertEqual(routed[1][0]["variable_layer_profile"]["bands"][0]["layer_mm"], .12)
 
     def test_multi_tool_global_overrides_refuse_unqualified_controls(self):
         for value in (
