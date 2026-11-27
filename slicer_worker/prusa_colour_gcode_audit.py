@@ -271,6 +271,10 @@ def audit_prusa_dual_colour_gcode(data, project, *, printer_ini, tools, tower=No
     x=y=None
     e=0.
     relative_e=relative_xy=False
+    from .prusa_material_gcode_audit import _trusted_indx_cleaner_profile
+    trusted_cleaner=_trusted_indx_cleaner_profile(printer_ini,list(tools),tower)
+    cleaner=flush=False
+    flush_moves=flush_blocks=0
     for index,raw in enumerate(io.BytesIO(data)):
         if index>=2000000 or len(raw)>16384:
             raise WorkerError("Prusa two-swatch G-code exceeds audit limits.")
@@ -280,11 +284,37 @@ def audit_prusa_dual_colour_gcode(data, project, *, printer_ini, tools, tower=No
             raise WorkerError("Prusa two-swatch G-code must be UTF-8.") from None
         if line.startswith(";TYPE:"):
             role=line.partition(":")[2].strip().lower()
+        if line in (";FLUSH_START",";FLUSH_END"):
+            if not trusted_cleaner or not cleaner:
+                raise WorkerError("Unqualified Prusa native cleaner marker.")
+            if line==";FLUSH_START":
+                if flush or not relative_xy or active is None:
+                    raise WorkerError("Invalid native INDX cleaner sequence.")
+                flush=True
+                flush_moves=0
+            else:
+                if not flush or not 3<=flush_moves<=8:
+                    raise WorkerError("Incomplete native INDX cleaner sequence.")
+                flush=False
+                flush_blocks+=1
+            continue
         cmd=line.split(";",1)[0].strip()
         if not cmd:
             continue
         op=cmd.split(None,1)[0].upper()
+        if op=="G12" and trusted_cleaner:
+            if re.search(r"(?:^|\\s)S90(?:\\s|$)",cmd):
+                if cleaner or flush:
+                    raise WorkerError("Native INDX cleaner was already active.")
+                cleaner=True
+            elif re.search(r"(?:^|\\s)S91(?:\\s|$)",cmd):
+                if not cleaner or flush:
+                    raise WorkerError("Native INDX cleaner did not close.")
+                cleaner=False
+            continue
         if op.startswith("T") and op[1:].isdigit():
+            if flush:
+                raise WorkerError("Native INDX tool changed inside cleaner motion.")
             active=int(op[1:])
             if active not in selected:
                 raise WorkerError("Unassigned tool appeared in Prusa two-swatch output.")
@@ -294,6 +324,8 @@ def audit_prusa_dual_colour_gcode(data, project, *, printer_ini, tools, tower=No
         values={k.upper():float(v) for k,v in WORD.findall(cmd)}
         if any(not math.isfinite(v) or abs(v)>1e9 for v in values.values()):
             raise WorkerError("Invalid Prusa two-swatch motion.")
+        if flush and op in ("G90","G92","M82"):
+            raise WorkerError("INDX native cleaner changed coordinate mode.")
         if op=="M82":
             relative_e=False
         elif op=="M83":
@@ -317,9 +349,23 @@ def audit_prusa_dual_colour_gcode(data, project, *, printer_ini, tools, tower=No
                 x=values.get("X",x)
                 y=values.get("Y",y)
             if "E" not in values:
+                if flush and (op not in ("G1","G01") or not relative_xy or
+                              "Z" in values or abs(values.get("X",0))+
+                              abs(values.get("Y",0))>2):
+                    raise WorkerError("Unexpected native INDX cleaner travel.")
                 continue
             amount=values["E"] if relative_e else values["E"]-e
             e=e+values["E"] if relative_e else values["E"]
+            if flush:
+                distance=abs(values.get("X",0))+abs(values.get("Y",0))
+                if (op not in ("G1","G01") or not relative_e or not relative_xy
+                        or "Z" in values or not 0<=amount<=80
+                        or not 0<distance<=2):
+                    raise WorkerError("Unqualified native INDX cleaner extrusion.")
+                flush_moves+=1
+                if flush_moves>8:
+                    raise WorkerError("Native INDX cleaner exceeds bounded strokes.")
+                continue
             if (amount<=1e-6 or op not in ("G1","G01") or
                     active not in selected or x is None or y is None):
                 continue
@@ -338,6 +384,8 @@ def audit_prusa_dual_colour_gcode(data, project, *, printer_ini, tools, tower=No
                 for side,box in regions.items():
                     if contained(box):
                         wall_counts[active][side]+=1
+    if trusted_cleaner and (cleaner or flush or flush_blocks<1):
+        raise WorkerError("Official INDX cleaner sequence was incomplete.")
     # Native Prusa 2.9.7 legitimately retains T0 base-material external
     # perimeters near painted face corners: the real two-swatch reference
     # showed 215/221 T0 movements alongside 294 T1 front and 295 T2 back.
