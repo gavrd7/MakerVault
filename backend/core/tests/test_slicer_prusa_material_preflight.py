@@ -174,8 +174,8 @@ class PrusaOfflineMmuPreflightTests(TestCase):
         assets[0]=ini(",".join(["0.4"]*8),"0")
         values["filament_profiles"]=[profile("filament") for _ in range(8)]
         assets=assets[:2]+[
-            (b"filament_diameter = 1.75\\ntemperature = 210\\n"
-             b"first_layer_temperature = 210\\n") for _ in range(8)]
+            (b"filament_diameter = 1.75\ntemperature = 210\n"
+             b"first_layer_temperature = 210\n") for _ in range(8)]
         settings={key:values[key] for key in (
             "owner_id","printer_profile","process_profile","filament_profiles",
             "bed_width","bed_depth")}
@@ -236,7 +236,7 @@ class PrusaOfflineMmuPreflightTests(TestCase):
             candidate=prepare_prusa_offline_xl_colour_candidate(**params)
         self.assertEqual(candidate["tools"],[1,2])
         self.assertNotIn("tower",candidate)
-        self.assertIn(b"layer_height = 0.16\\n",candidate["process"])
+        self.assertIn(b"layer_height = 0.16\n",candidate["process"])
         encode=lambda data:base64.b64encode(data).decode("ascii")
         payload={"job_id":str(uuid.uuid4()),"engine":"prusaslicer",
                  "engine_version":"2.9.7","model_format":"3mf",
