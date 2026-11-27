@@ -61,8 +61,7 @@ def build_prusa_colour_candidate(item, source, *, printer_ini, colour_tool_indic
             or any(type(k) is not int or type(v) is not int or not 1 <= v <= 7 or not v < count
                    for k,v in colour_tool_indices.items())
             or any(item.get(k) for k in ("negative_volumes",
-                   "variable_layer_profile","support_paint",
-                   "material_slot")) or
+                   "variable_layer_profile", "material_slot")) or
             any(item.get(k) for k in ("support_paint","seam_paint","fuzzy_skin_paint")
                 if k not in channels)):
         raise SlicerProfileError("Unsupported Prusa native colour candidate.")
