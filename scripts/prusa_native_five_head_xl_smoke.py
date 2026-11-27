@@ -195,6 +195,14 @@ def main(binary,vendor):
         assert mixed_receipt["incorrect_extrusion_moves"] == [0]*5
         assert min(mixed_receipt["correct_extrusion_moves"]) >= 20
         assert hashlib.sha256(output).digest() != hashlib.sha256(mixed).digest()
+        # An edited layer schedule must be independently visible in G-code
+        # deposited over its own model, not merely in the 3MF metadata.
+        from core.slicer_prusa_spatial_layers import audit_prusa_multi_object_layer_ranges
+        schedules = audit_prusa_multi_object_layer_ranges(
+            mixed, modified, bed_width=360, bed_depth=360, base_layer_mm=.16)
+        assert any(r["object"] == 3 and abs(r["target_layer_mm"]-.12)<1e-6
+                   for r in schedules), schedules
+        print("PASS: native XL per-object layer schedules", schedules, flush=True)
         print("PASS: native XL five-tool modifier/cavity/variable-layer mix",
               mixed_receipt, "sha256", hashlib.sha256(mixed).hexdigest(),
               flush=True)
