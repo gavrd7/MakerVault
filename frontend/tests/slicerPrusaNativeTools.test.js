@@ -161,3 +161,12 @@ test("selecting every Prusa model to one filament switches to verified single-ma
   assert.match(workbench,/setPrimeTower\(null\)/);
   assert.match(prepare,/const existing = \(prusaNativeTools\.model_tools \|\| \[\]\)\.filter/);
 });
+
+
+test("Prusa colour-paint guidance names the native MMU/XL route and profile-derived tools",()=>{
+  assert.match(prepare,/Prusa native colour painting needs a selected MMU or XL printer profile/);
+  assert.match(prepare,/owned filament preset for each reported tool/);
+  assert.match(prepare,/Prusa virtual tools use native extruder assignments from the selected printer profile/);
+  assert.match(prepare,/one qualified painted MMU\/XL model with T0 base/);
+  assert.doesNotMatch(prepare,/Prusa virtual tools use explicit native T0–T7 assignments/);
+});
