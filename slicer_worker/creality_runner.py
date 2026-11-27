@@ -137,13 +137,12 @@ def creality_command(binary: Path, workdir: Path):
         raise WorkerError("Verified Creality Print executable is unavailable.")
     is_project = (workdir / "input.3mf").exists()
     placed = workdir / "creality-placed-stl.marker"
-    model = _regular_file(
-        workdir, "input.3mf" if is_project else "input.stl", model_input_budget())
-    native_project = (workdir / "creality-native-project.marker").exists()
-    native_modifiers = (workdir / "native-modifier-project.marker").exists()
     if placed.is_symlink() or (placed.exists() and
             (not placed.is_file() or placed.read_bytes() != b"v1")):
         raise WorkerError("Invalid Creality placed-STL marker.")
+    model = _regular_file(workdir, "input.3mf" if is_project else "input.stl", model_input_budget())
+    native_project = (workdir / "creality-native-project.marker").exists()
+    native_modifiers = (workdir / "native-modifier-project.marker").exists()
     if placed.exists() and (is_project or native_project or native_modifiers or
                             (workdir / "creality-material-map.json").exists()):
         raise WorkerError("Creality placed-STL cannot activate native project or material mapping.")
@@ -158,7 +157,7 @@ def creality_command(binary: Path, workdir: Path):
         validate_worker_3mf(model.read_bytes())
     else:
         try:
-            validate_stl(model.read_bytes(), max_triangles=1_500_000 if placed.exists() else 500_000)
+            validate_stl(model.read_bytes())
         except StlValidationError as exc:
             raise WorkerError("Input STL failed structural validation.") from exc
     profiles = [
@@ -213,12 +212,7 @@ def creality_command(binary: Path, workdir: Path):
             raise WorkerError("Invalid native Creality multi-STL filament assignment.") from exc
         command.extend(material_args)
     else:
-        command.extend(["--load-filaments", str(profiles[1])])
-        # The installed Creality Print 7.3.1 binary rejects --arrange 0
-        # with CLI_INVALID_PARAMS. Keep the proven native STL invocation.
-        # Do not assume that the native slicer preserves the baked XY layout:
-        # the resulting G-code requires a placement acceptance check.
-        command.append(str(model))
+        command.extend(["--load-filaments", str(profiles[1]), str(model)])
     return command
 
 

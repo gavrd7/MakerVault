@@ -4310,14 +4310,6 @@ a:focus-visible,
   font-size:.76rem;text-align:center;white-space:normal;color:#c6d6ea}
 .slicerModelFilamentChoices{display:flex;flex-direction:column;gap:5px;padding:9px;
   background:#0c1219;border:1px solid #435365;border-radius:9px;margin-bottom:10px;min-width:0}
-.slicerModelFilamentChoices{
-  max-height:min(48vh,440px);
-  overflow-y:auto;
-  overscroll-behavior:contain;
-}
-.slicerModelFilamentChoices>button{
-  flex-shrink:0;
-}
 .slicerModelFilamentChoices>strong{font-size:.75rem;color:#b4c2d4;line-height:1.4}
 .slicerPrepareTree .slicerModelFilamentChoices>button{display:flex;align-items:center;gap:8px;min-width:0;
   width:100%;padding:7px 5px;margin:0;text-align:left;border:0;background:transparent;

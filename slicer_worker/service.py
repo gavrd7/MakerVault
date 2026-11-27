@@ -80,8 +80,9 @@ def _decode_payload(payload):
         "model", "printer_profile", "filament_profile", "process_profile",
     }
     if not isinstance(payload, dict) or not expected.issubset(payload) or (
-            set(payload) - expected - {"model_format", "filament_profiles", "creality_model_stls", "creality_tool_ids", "creality_native_project", "native_modifier_project", "prusa_placed_stl", "creality_placed_stl", "creality_model_raw_sha256", "prusa_offline_mmu", "prusa_offline_xl", "prusa_offline_colour", "prusa_offline_xl_colour",
-                "orca_streamed_plate", "orca_streamed_sha256", "slice_timeout_seconds"}):
+            set(payload) - expected - {"model_format", "filament_profiles", "creality_model_stls", "creality_tool_ids", "creality_native_project", "native_modifier_project",
+                "orca_streamed_plate", "orca_streamed_sha256", "slice_timeout_seconds",
+                "creality_placed_stl", "creality_model_raw_sha256"}):
         raise WorkerError("Invalid slicing job payload.")
     try:
         uuid.UUID(str(payload["job_id"]))
@@ -92,81 +93,6 @@ def _decode_payload(payload):
     model_format = payload.get("model_format", "stl")
     if model_format not in {"stl", "3mf"}:
         raise WorkerError("Unsupported model input format.")
-    if payload["engine"] == "prusaslicer" and model_format == "3mf" and (
-            payload["engine_version"] != "2.9.7" or any(key in payload for key in (
-                "filament_profiles", "creality_model_stls", "creality_tool_ids",
-                "creality_native_project", "native_modifier_project", "prusa_placed_stl"))):
-        raise WorkerError("Invalid native Prusa project execution contract.")
-    if "prusa_offline_xl" in payload:
-        metadata = payload["prusa_offline_xl"]
-        if (payload["engine"] != "prusaslicer" or
-                payload["engine_version"] != "2.9.7" or model_format != "3mf"
-                or not isinstance(metadata, dict) or set(metadata) != {"tools"}
-                or "prusa_offline_mmu" in payload
-                or "prusa_offline_colour" in payload
-                or any(key in payload for key in (
-                    "filament_profiles", "creality_model_stls", "creality_tool_ids",
-                    "creality_native_project", "native_modifier_project", "prusa_placed_stl"))):
-            raise WorkerError("Invalid Prusa offline XL execution contract.")
-    if "prusa_offline_mmu" in payload:
-        metadata = payload["prusa_offline_mmu"]
-        if (payload["engine"] != "prusaslicer" or
-                payload["engine_version"] != "2.9.7" or model_format != "3mf"
-                or "prusa_offline_xl" in payload
-                or "prusa_offline_colour" in payload
-                or not isinstance(metadata, dict)
-                or set(metadata) != {"tools", "tower"}
-                or any(key in payload for key in (
-                    "filament_profiles", "creality_model_stls", "creality_tool_ids",
-                    "creality_native_project", "native_modifier_project", "prusa_placed_stl"))):
-            raise WorkerError("Invalid Prusa offline MMU execution contract.")
-    if "prusa_offline_xl_colour" in payload:
-        metadata=payload["prusa_offline_xl_colour"]
-        if (payload["engine"]!="prusaslicer" or
-                payload["engine_version"]!="2.9.7" or model_format!="3mf" or
-                not isinstance(metadata,dict) or set(metadata) not in ({"tool"},{"tools"}) or
-                any(key in payload for key in (
-                    "prusa_offline_mmu","prusa_offline_xl","prusa_offline_colour",
-                    "filament_profiles","creality_model_stls","creality_tool_ids",
-                    "creality_native_project","native_modifier_project",
-                    "prusa_placed_stl"))):
-            raise WorkerError("Invalid offline Prusa XL colour contract.")
-    if "prusa_offline_colour" in payload:
-        metadata=payload["prusa_offline_colour"]
-        if (payload["engine"]!="prusaslicer" or
-                payload["engine_version"]!="2.9.7" or model_format!="3mf" or
-                not isinstance(metadata,dict) or set(metadata) not in
-                ({"tool","tower"},{"tools","tower"}) or
-                any(key in payload for key in (
-                    "prusa_offline_mmu","prusa_offline_xl","filament_profiles",
-                    "creality_model_stls","creality_tool_ids",
-                    "creality_native_project","native_modifier_project",
-                    "prusa_placed_stl"))):
-            raise WorkerError("Invalid offline Prusa colour execution contract.")
-    if ("creality_model_raw_sha256" in payload) != ("creality_placed_stl" in payload):
-        raise WorkerError("Missing authenticated Creality placed STL digest.")
-    digest = payload.get("creality_model_raw_sha256")
-    if digest is not None and (not isinstance(digest, str) or len(digest) != 64
-                              or any(c not in "0123456789abcdef" for c in digest)):
-        raise WorkerError("Invalid Creality placed STL digest.")
-    if "creality_placed_stl" in payload and (
-            payload["creality_placed_stl"] is not True or
-            payload["engine"] != "crealityprint" or
-            payload["engine_version"] != "7.3.1" or model_format != "stl" or
-            any(key in payload for key in (
-                "filament_profiles", "creality_model_stls", "creality_tool_ids",
-                "creality_native_project", "native_modifier_project",
-                "prusa_placed_stl", "prusa_offline_mmu", "prusa_offline_xl",
-                "prusa_offline_colour"))):
-        raise WorkerError("Invalid Creality placed-STL execution contract.")
-    if "prusa_placed_stl" in payload and (
-            payload["prusa_placed_stl"] is not True or
-            payload["engine"] != "prusaslicer" or
-            payload["engine_version"] != "2.9.7" or model_format != "stl" or
-            any(key in payload for key in (
-                "filament_profiles", "creality_model_stls", "creality_tool_ids",
-                "creality_native_project", "native_modifier_project"))):
-        raise WorkerError("Invalid Prusa placed-STL execution contract.")
     if ("creality_model_raw_sha256" in payload) != ("creality_placed_stl" in payload):
         raise WorkerError("Missing authenticated Creality placed STL digest.")
     creality_digest = payload.get("creality_model_raw_sha256")
@@ -223,22 +149,20 @@ def _decode_payload(payload):
             raise WorkerError("Invalid slicing input size.")
         files[key] = raw
     if payload.get("creality_placed_stl") is True:
-        from .stl_validation import validate_stl
-        # This optional contract is only ever activated by the authenticated
-        # Creality 7.3.1 single-material placed-plate request. Decompress
-        # strictly to the maximum representable bounded binary STL, and
-        # reject trailing streams and mismatched source digests.
-        limit = min(84 + 50 * 1_500_000, model_input_budget())
+        # Bound decompression on the worker's local headroom, then bind
+        # the expanded geometry to the exact authenticated source digest.
+        limit = model_input_budget()
         try:
-            stream = zlib.decompressobj()
-            original = stream.decompress(files["model"], limit + 1)
+            decoder = zlib.decompressobj()
+            original = decoder.decompress(files["model"], limit + 1)
         except zlib.error as exc:
             raise WorkerError("Invalid Creality placed STL compression.") from exc
-        if (not stream.eof or stream.unconsumed_tail or stream.unused_data
-                or len(original) > limit or len(original) < 84
-                or hashlib.sha256(original).hexdigest() != digest):
+        if (len(original) < 84 or len(original) > limit
+                or not decoder.eof or decoder.unconsumed_tail or decoder.unused_data
+                or hashlib.sha256(original).hexdigest() != creality_digest):
             raise WorkerError("Creality placed STL integrity or expansion check failed.")
-        validate_stl(original, max_triangles=1_500_000)
+        from .stl_validation import validate_stl
+        validate_stl(original)
         files["model"] = original
         files["creality_placed_stl"] = True
     if streamed:
@@ -247,8 +171,6 @@ def _decode_payload(payload):
         from .streamed_orca_validation import validate_streamed_orca_3mf
         validate_streamed_orca_3mf(files["model"])
         files["orca_streamed_plate"] = True
-    if payload.get("prusa_placed_stl") is True:
-        files["prusa_placed_stl"] = True
     if "filament_profiles" in payload:
         palette = payload["filament_profiles"]
         if (not ((payload["engine"] in {"orcaslicer", "bambustudio"} and model_format == "3mf") or
@@ -273,44 +195,6 @@ def _decode_payload(payload):
         if decoded[0] != files["filament_profile"]:
             raise WorkerError("Native filament palette does not match its first preset.")
         files["filament_profiles"] = decoded
-    if "prusa_offline_mmu" in payload:
-        from .prusa_offline_contract import validate_prusa_offline_mmu_inputs
-        details = payload["prusa_offline_mmu"]
-        receipt = validate_prusa_offline_mmu_inputs(
-            project=files["model"], printer=files["printer_profile"],
-            filament=files["filament_profile"], process=files["process_profile"],
-            tools=details["tools"], tower=details["tower"])
-        files["prusa_offline_mmu"] = {
-            "tools": list(receipt["tools"]), "tower": details["tower"]}
-    if "prusa_offline_xl" in payload:
-        from .prusa_offline_contract import validate_prusa_offline_xl_inputs
-        details = payload["prusa_offline_xl"]
-        receipt = validate_prusa_offline_xl_inputs(
-            project=files["model"], printer=files["printer_profile"],
-            filament=files["filament_profile"], process=files["process_profile"],
-            tools=details["tools"])
-        files["prusa_offline_xl"] = {"tools": list(receipt["tools"])}
-    if "prusa_offline_xl_colour" in payload:
-        from .prusa_offline_contract import validate_prusa_offline_xl_colour_inputs
-        details=payload["prusa_offline_xl_colour"]
-        receipt=validate_prusa_offline_xl_colour_inputs(
-            project=files["model"],printer=files["printer_profile"],
-            filament=files["filament_profile"],process=files["process_profile"],
-            **({"tools":details["tools"]} if "tools" in details
-               else {"tool":details["tool"]}))
-        files["prusa_offline_xl_colour"]={
-            "tools":receipt["tools"]} if "tools" in receipt else {"tool":receipt["tool"]}
-    if "prusa_offline_colour" in payload:
-        from .prusa_offline_contract import validate_prusa_offline_colour_inputs
-        details=payload["prusa_offline_colour"]
-        receipt=validate_prusa_offline_colour_inputs(
-            project=files["model"],printer=files["printer_profile"],
-            filament=files["filament_profile"],process=files["process_profile"],
-            **({"tools":details["tools"]} if "tools" in details
-               else {"tool":details["tool"]}),tower=details["tower"])
-        files["prusa_offline_colour"]={
-            **({"tools":receipt["tools"]} if "tools" in receipt
-               else {"tool":receipt["tool"]}),"tower":receipt["tower"]}
     if "creality_model_stls" in payload:
         if (payload["engine"] != "crealityprint" or model_format != "stl" or
                 "filament_profiles" not in files):
@@ -368,11 +252,6 @@ def _decode_payload(payload):
         from .creality_project_validation import validate_creality_project
         validate_creality_project(files["model"], native_tool_count=2)
         files["creality_native_project"] = True
-    elif model_format == "3mf" and payload["engine"] == "prusaslicer":
-        if not (files.get("prusa_offline_mmu") or files.get("prusa_offline_xl") or files.get("prusa_offline_colour") or
-                files.get("prusa_offline_xl_colour")):
-            from .prusa_3mf_validation import validate_prusa_native_3mf
-            validate_prusa_native_3mf(files["model"])
     elif model_format == "3mf" and not files.get("native_modifier_project") and not streamed:
         options = {"native_tool_count": len(files["filament_profiles"])
                    if "filament_profiles" in files else None}
@@ -472,17 +351,6 @@ class Handler(BaseHTTPRequestHandler):
                     (workdir / "creality-placed-stl.marker").write_text("v1")
                 if files.get("orca_streamed_plate"):
                     (workdir / "orca-streamed-plate.marker").write_text("v1")
-                if files.get("prusa_placed_stl"):
-                    (workdir / "prusa-placed-stl.marker").write_text("v1")
-                if files.get("prusa_offline_mmu"):
-                    (workdir / "prusa-offline-mmu.marker").write_text("v1")
-                if files.get("prusa_offline_xl"):
-                    (workdir / "prusa-offline-xl.marker").write_text("v1")
-                if files.get("prusa_offline_colour"):
-                    (workdir / "prusa-offline-colour.marker").write_text("v1")
-                if files.get("prusa_offline_xl_colour"):
-                    (workdir / "prusa-offline-xl-colour.marker").write_text("v1")
-
                 if "creality_model_stls" in files:
                     for index, raw in enumerate(files["creality_model_stls"]):
                         (workdir / ("input-" + str(index) + ".stl")).write_bytes(raw)
@@ -495,61 +363,12 @@ class Handler(BaseHTTPRequestHandler):
                           "crealityprint": run_creality,
                           "prusaslicer": run_prusa,
                           "bambustudio": run_bambu}[current["engine"]]
-                if (current["engine"] == "prusaslicer" and
-                        (files.get("prusa_offline_mmu") or
-                         files.get("prusa_offline_colour"))):
-                    from .prusa_gcode_audit import run_prusa_mmu_with_numeric_recheck
-                    receipt, data = run_prusa_mmu_with_numeric_recheck(
-                        runner, current["binary"], workdir,
-                        timeout_seconds=files["slice_timeout_seconds"],
-                        max_bytes=gcode_output_budget())
-                else:
-                    receipt = runner(current["binary"], workdir,
-                                     timeout_seconds=files["slice_timeout_seconds"])
-                    data = (workdir / "output.gcode").read_bytes()
-                    if not data or len(data) > gcode_output_budget():
-                        raise WorkerError("Generated G-code exceeded the output size limit.")
+                receipt = runner(current["binary"], workdir,
+                                 timeout_seconds=files["slice_timeout_seconds"])
                 stage = "validating generated G-code"
-                if current["engine"] == "prusaslicer":
-                    from .prusa_gcode_audit import audit_prusa_positive_e
-                    audit_prusa_positive_e(data)
-                if files.get("prusa_offline_mmu"):
-                    from .prusa_material_gcode_audit import audit_prusa_material_model_gcode
-                    details = files["prusa_offline_mmu"]
-                    audit_prusa_material_model_gcode(
-                        data, files["model"], printer_ini=files["printer_profile"],
-                        tools=details["tools"], tower=details["tower"],
-                        process_ini=files["process_profile"])
-                if files.get("prusa_offline_colour"):
-                    from .prusa_colour_gcode_audit import audit_prusa_offline_colour_gcode
-                    details=files["prusa_offline_colour"]
-                    if "tools" in details:
-                        from .prusa_colour_gcode_audit import audit_prusa_dual_colour_gcode
-                        audit_prusa_dual_colour_gcode(
-                            data,files["model"],printer_ini=files["printer_profile"],
-                            tools=details["tools"],tower=details["tower"])
-                    else:
-                        audit_prusa_offline_colour_gcode(
-                            data,files["model"],printer_ini=files["printer_profile"],
-                            tool=details["tool"],tower=details["tower"])
-                if files.get("prusa_offline_xl_colour"):
-                    details=files["prusa_offline_xl_colour"]
-                    if "tools" in details:
-                        from .prusa_colour_gcode_audit import audit_prusa_dual_colour_gcode
-                        audit_prusa_dual_colour_gcode(
-                            data,files["model"],printer_ini=files["printer_profile"],
-                            tools=details["tools"],tower=None)
-                    else:
-                        from .prusa_colour_gcode_audit import audit_prusa_xl_colour_gcode
-                        audit_prusa_xl_colour_gcode(
-                            data,files["model"],printer_ini=files["printer_profile"],
-                            tool=details["tool"])
-                if files.get("prusa_offline_xl"):
-                    from .prusa_material_gcode_audit import audit_prusa_material_model_gcode
-                    audit_prusa_material_model_gcode(
-                        data, files["model"], printer_ini=files["printer_profile"],
-                        tools=files["prusa_offline_xl"]["tools"],
-                        process_ini=files["process_profile"])
+                data = (workdir / "output.gcode").read_bytes()
+                if not data or len(data) > gcode_output_budget():
+                    raise WorkerError("Generated G-code exceeded the output size limit.")
                 if files.get("native_modifier_project"):
                     # A successful native CLI exit is not proof that every
                     # requested region was used in the generated toolpaths.

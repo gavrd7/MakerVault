@@ -3,7 +3,7 @@ import { apiFetch } from "../api";
 import { findSlicedRequirement } from "../utils/gcodeMapping";
 import { Modal } from "./Common";
 
-export default function PrinterStartGcodeModal({ printer, connection, canEdit, onConfigureMoonraker, onClose, onChanged, onSubmissionConfirmed, onSubmissionDispatched, initialAsset = null, initialAction = "upload" }) {
+export default function PrinterStartGcodeModal({ printer, connection, canEdit, onConfigureMoonraker, onClose, onChanged, onSubmissionConfirmed, initialAsset = null, initialAction = "upload" }) {
   const [source, setSource] = useState("makervault");
   const [action, setAction] = useState(initialAction === "print" ? "print" : "upload");
   const [files, setFiles] = useState([]);
@@ -321,15 +321,6 @@ export default function PrinterStartGcodeModal({ printer, connection, canEdit, o
       try { await onChanged?.(); } catch (_refreshError) { /* Submission receipt is authoritative. */ }
       if (isConfirmedSubmission(result.submission, operation)) {
         onSubmissionConfirmed?.(result.submission);
-      } else if (operation === "print" && result.submission?.request_id &&
-          (["unknown", "started"].includes(result.submission.status)) &&
-          (result.submission.message?.includes("mapping and print-start commands dispatched") ||
-           result.submission.message?.startsWith("Awaiting native Creality start verification") ||
-           result.submission.message?.startsWith("Print-start sent without acknowledgement; awaiting live job verification") ||
-           result.submission.message?.startsWith("Print-start command accepted; awaiting live job verification"))) {
-        // A K2 may report a dispatch before its live telemetry proves a start.
-        // The caller may return to the preview, but must label this as unverified.
-        onSubmissionDispatched?.(result.submission);
       }
     } catch (err) { setError(err.message); setTransferStage("Submission failed or could not be verified."); }
     finally { window.clearInterval(statusTimer); setBusy(false); }

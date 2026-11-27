@@ -58,9 +58,7 @@ class InstallerTests(unittest.TestCase):
                           return_value=io.BytesIO(json.dumps(release()).encode())) as request:
             self.assertEqual(installer.release_catalogue(), installer.release_catalogue())
             # Orca, Creality and Bambu now participate in normal catalogue refresh.
-            # In addition to the three existing engine providers, the
-            # separately pinned Prusa runtime has one fixed release lookup.
-            self.assertEqual(request.call_count, 4)
+            self.assertEqual(request.call_count, 3)
 
     def test_bambu_is_listed_normally_with_verified_upstream_digest(self):
         from io import BytesIO
