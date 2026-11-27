@@ -145,7 +145,8 @@ def slice_prusa_offline_mmu_candidate(job_id, **prepared_settings):
     # material-to-object relationship, but transport returns arbitrary bytes.
     audit_prusa_material_model_gcode(
         output,candidate["model"],printer_ini=candidate["printer"],
-        tools=list(prepared_settings["tools"]),tower=list(candidate["tower"]))
+        tools=list(prepared_settings["tools"]),tower=list(candidate["tower"]),
+        process_ini=candidate["process"])
     # MMU modifier meshes are audited by the ordinary typed-volume project
     # validator and the independent native material-deposition guard above.
     # Per-Object layer-height ranges remain disabled for this pinned MMU
@@ -166,7 +167,7 @@ def slice_prusa_offline_xl_candidate(job_id, **prepared_settings):
         prusa_offline_xl={"tools":list(prepared_settings["tools"])})
     audit_prusa_material_model_gcode(
         output,candidate["model"],printer_ini=candidate["printer"],
-        tools=list(prepared_settings["tools"]))
+        tools=list(prepared_settings["tools"]),process_ini=candidate["process"])
     # Native multi-head 3MF may retain object-specific layer ranges. Do not
     # accept a successful CLI exit if the requested Z schedule was ignored
     # on a particular model. The existing spatial auditor measures actual
