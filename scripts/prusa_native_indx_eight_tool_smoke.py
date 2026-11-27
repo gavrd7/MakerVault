@@ -113,6 +113,28 @@ def main(binary, vendor, official=None):
         print("PASS: pinned Prusa 2.9.7 independently deposited T0-T7 on eight models",
               observed,"sha256",hashlib.sha256(gcode).hexdigest(),flush=True)
 
+        # Genuine independent eight-head brim/skirt acceptance. Use the
+        # common native numeric process adapter and confirm the requested
+        # first-layer role has positive moving extrusion; model attribution
+        # must remain exact for all eight independent heads.
+        from core.slicer_prusa_process_settings import apply_prusa_process_overrides
+        adhesion_process=apply_prusa_process_overrides(
+            process,{"brim_width":3,"skirt_loops":2})
+        (folder/"process.ini").write_bytes(adhesion_process)
+        (folder/"output.gcode").unlink(missing_ok=True)
+        run_prusa(Path(binary),folder)
+        adhesion_gcode=(folder/"output.gcode").read_bytes()
+        adhesion_audit=audit_prusa_material_model_gcode(
+            adhesion_gcode,project,printer_ini=printer,tools=tools,
+            process_ini=adhesion_process)
+        assert adhesion_audit["incorrect_extrusion_moves"]==[0]*8,adhesion_audit
+        assert min(adhesion_audit["correct_extrusion_moves"])>=20,adhesion_audit
+        assert sum(adhesion_audit["native_first_layer_adhesion_moves"].values())>=10
+        print("PASS: genuine eight-head Prusa independent native brim/skirt "
+              "with strict model/tool attribution",adhesion_audit,flush=True)
+        (folder/"process.ini").write_bytes(process)
+        (folder/"output.gcode").unlink(missing_ok=True)
+
         # Validate modifier/infill and negative-volume combinations through
         # the actual eight-tool worker, not just 3MF metadata acceptance.
         modifier=volume("modifier",{"sparse_infill_density":80})
