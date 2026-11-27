@@ -57,6 +57,38 @@ def main(binary, vendor, folder):
             print("PASS: pinned native Prusa two-object painted support isolation",
                   side, result, flush=True)
 
+        # Production now has an independent N-object support auditor. Verify
+        # the actual 2.9.7 CLI can generate a three-model plate with support
+        # on one cantilever without introducing paths in either neighbour.
+        from core.slicer_prusa_3mf import build_prusa_native_3mf
+        from core.slicer_prusa_support_audit import audit_prusa_multi_object_support
+        models = []
+        for index, x in enumerate((-68, 0, 68)):
+            row = {"asset_id": "three-support-" + str(index),
+                   "x_mm": x, "y_mm": 0, "z_mm": 0,
+                   "rotation_deg": 0, "scale_percent": 100}
+            if index == 1:
+                row["support_paint"] = support_mask(raw_model, 0)
+            models.append((row, raw_model))
+        project = build_prusa_native_3mf(
+            models, bed_width=250, bed_depth=210)
+        from core.slicer_prusa_3mf import validate_prusa_project_admission
+        assert validate_prusa_project_admission(
+            [row for row, _ in models], {}, "2.9.7") is False
+        with open(root/"three-model.3mf", "wb") as target:
+            target.write(project)
+        output = root/"three-model.gcode"
+        subprocess.run(
+            [binary, *native, "--export-gcode", "--dont-arrange",
+             "--output", str(output), str(root/"three-model.3mf")],
+            cwd=root, check=True, timeout=300)
+        checked = audit_prusa_multi_object_support(
+            output.read_bytes(), models, bed_width=250, bed_depth=210)
+        assert checked["painted_model_index"] == 1, checked
+        assert checked["unpainted_support_moves"] == 0, checked
+        print("PASS: real Prusa three-model painted-support isolation",
+              checked, flush=True)
+
 
 if __name__ == "__main__":
     main(*sys.argv[1:])
