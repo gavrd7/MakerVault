@@ -50,7 +50,7 @@ def main(binary, vendor):
         selected = {**material, "temperature": str(temp),
                     "first_layer_temperature": str(temp)}
         filaments.append("".join(
-            f"{key} = {value}\\n" for key, value in sorted(selected.items())
+            f"{key} = {value}\n" for key, value in sorted(selected.items())
         ).encode())
     palette = compile_prusa_filament_palette(printer, filaments)
     process = apply_prusa_process_overrides(
