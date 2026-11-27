@@ -465,6 +465,29 @@ jobs:
         run: |
           echo "::warning title=Prusa split-surface painting::Genuine native partial-mask deposition remains unqualified; keep whole-wall-only admission."
 
+      - name: Research genuine Prusa painted modifier and negative-volume composition
+        id: prusa_colour_compound_research
+        # Output must prove isolated tool selection plus both regional effects.
+        # This never authorises mixed editing or physical printer submission.
+        continue-on-error: true
+        run: |
+          set -euo pipefail
+          docker run --rm --network none --user 10001:10001 \
+            -v "$TEST_VOLUME:/opt/engine-store:ro" \
+            -v "$GITHUB_WORKSPACE/backend:/tmp/mv-backend:ro" \
+            -v "$GITHUB_WORKSPACE/scripts:/tmp/scripts:ro" \
+            -v "$GITHUB_WORKSPACE/scripts/prusa_native_colour_composition_smoke.py:/tmp/compound_colour.py:ro" \
+            -e PYTHONPATH=/tmp:/tmp/mv-backend:/opt/makervault-slicer \
+            --entrypoint python3 prusa-integration:smoke \
+            /tmp/compound_colour.py \
+            /opt/engine-store/versions/prusaslicer/2.9.7/bin/prusa-slicer \
+            /opt/engine-store/versions/prusaslicer/2.9.7/resources/profiles/PrusaResearch.ini
+
+      - name: Report unresolved Prusa painted negative-volume composition
+        if: ${{ steps.prusa_colour_compound_research.outcome == 'failure' }}
+        run: |
+          echo "::warning title=Prusa combined colour and volume research::Native painted modifier plus cavity regional effects remain unqualified; production mixed-editing gate stays in place."
+
       - name: Record Prusa MMU painting research limitation
         if: ${{ steps.prusa_mmu_colour_research.outcome == 'failure' }}
         run: |
