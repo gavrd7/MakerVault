@@ -628,6 +628,25 @@ class PrusaNativeColourProjectTests(TestCase):
             validate_prusa_material_candidate(
                 project, printer_ini=ini("0.4,0.4,0.4,0.4,0.4", "0"),
                 colour=True, independent_colour=True)
+        from slicer_worker.prusa_3mf_validation import validate_prusa_native_3mf
+        native_receipt = validate_prusa_native_3mf(
+            project, research_colour=True)
+        self.assertEqual(native_receipt["regions"], 2)
+        self.assertEqual(len(native_receipt["paint_channels"]), 4)
+        # Standard single-material 3MF admission must not become an implicit
+        # route for multi-tool G-code or unsafe printer submissions.
+        with self.assertRaises(WorkerError):
+            validate_prusa_native_3mf(project)
+        from core.tests.test_slicer_prusa_3mf import rewrite
+        def forge(root):
+            faces = root.findall("./"+NS+"resources/"+NS+"object/"+NS+
+                                 "mesh/"+NS+"triangles/"+NS+"triangle")
+            faces[endpoint+1].set(
+                "slic3rpe:mmu_segmentation", "8")
+        with self.assertRaises(WorkerError):
+            validate_prusa_native_3mf(
+                rewrite(project, "3D/3dmodel.model", forge),
+                research_colour=True)
 
     def test_source_fingerprint_must_match(self):
         stl, *_ = fixture()
