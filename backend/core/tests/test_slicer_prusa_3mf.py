@@ -117,10 +117,24 @@ class PrusaProjectDialectTests(TestCase):
         self.assertEqual(receipt["objects"], 1)
         self.assertEqual(receipt["regions"], 1)
         self.assertGreaterEqual(receipt["layer_ranges"], 1)
-        # A parseable 3MF is not evidence that the native G-code preserves
-        # both changes. This gate stays closed until pinned CLI acceptance.
-        with self.assertRaisesRegex(ValueError, "separate G-code proof"):
-            validate_prusa_project_admission([model], {}, "2.9.7")
+        # This narrowly qualified combination is independently audited
+        # against real pinned 2.9.7 G-code, not merely an importable 3MF.
+        self.assertTrue(validate_prusa_project_admission(
+            [model], {}, "2.9.7"))
+        with self.assertRaisesRegex(ValueError, "combined native G-code proof"):
+            validate_prusa_project_admission([
+                {**model, "process_overrides": {"wall_loops": 4}}
+            ], {}, "2.9.7")
+        with self.assertRaisesRegex(ValueError, "combined native G-code proof"):
+            validate_prusa_project_admission([
+                {**model, "modifier_volumes": [
+                    volume("negative")
+                ]}
+            ], {}, "2.9.7")
+        with self.assertRaisesRegex(ValueError, "combined native G-code proof"):
+            validate_prusa_project_admission([
+                model, item(x_mm=45)
+            ], {}, "2.9.7")
 
     def test_all_shared_primitive_region_meshes_remain_native_prusa_volumes(self):
         from core.slicer_modifier_volumes import PRIMITIVE_SHAPES
