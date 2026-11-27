@@ -97,7 +97,8 @@ def main(binary, vendor_path):
         _, gcode = run_prusa_mmu_with_numeric_recheck(
             run_prusa, Path(binary), work, timeout_seconds=300,
             max_bytes=64 * 1024 * 1024)
-        proof = audit_prusa_partial_wall_gcode(gcode, project, tool=1)
+        proof = audit_prusa_partial_wall_gcode(
+            gcode, project, tool=1, tower=(55, 150, 0, 250, 210))
         print("PASS: genuine Prusa 2.9.7 split-wall deposited colour",
               proof, "sha256", hashlib.sha256(gcode).hexdigest(),
               flush=True)
