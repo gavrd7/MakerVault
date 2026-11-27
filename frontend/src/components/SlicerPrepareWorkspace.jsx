@@ -1022,7 +1022,8 @@ export default function SlicerPrepareWorkspace({
   const nativeMultiMaterialBaseReady =
     assignedSlots.length === objects.length &&
     assignedSlots.every(slot => String(slot.printer_id) === String(printerId)) &&
-    requiredMultiSlots.length >= 2 && requiredMultiSlots.length <= 16 &&
+    requiredMultiSlots.length >= 2 &&
+    requiredMultiSlots.every(slotId => liveMaterials.some(slot => String(slot.id) === slotId)) &&
     requiredMultiSlots.every(compatibleSlotProfile);
   const crealityTwoStlReady = activeEngine === "crealityprint" &&
     objects.length === 2 && requiredMultiSlots.length === 2 &&
@@ -1050,7 +1051,7 @@ export default function SlicerPrepareWorkspace({
     && assignedSlots.length === objects.length
     && assignedSlots.every(slot => String(slot.printer_id) === String(printerId))
     && requiredMultiSlots.length >= 2
-    && requiredMultiSlots.length <= 16
+    && requiredMultiSlots.every(slotId => liveMaterials.some(slot => String(slot.id) === slotId))
     && requiredMultiSlots.every(compatibleSlotProfile)
     && objects.every(item => (item.colour_paint?.regions || []).every(region => {
       const swatch = item.colour_paint?.palette?.[region.slot];
@@ -1459,7 +1460,8 @@ export default function SlicerPrepareWorkspace({
   const paintPalette = (() => {
     const saved = objects.find(item => item.instance_id === selectedId)?.colour_paint?.palette;
     if (Array.isArray(saved) && saved.length) return saved;
-    const loaded = [...liveMaterials].sort((a, b) => Number(a.slot_index ?? 0) - Number(b.slot_index ?? 0)).slice(0, 64);
+    // Show every reported material. Native slicing capabilities are checked separately.
+    const loaded = [...liveMaterials].sort((a, b) => Number(a.slot_index ?? 0) - Number(b.slot_index ?? 0));
     return loaded.length ? loaded.map(slot => ({
       color: validSlotColor(slot) || "#8c80d9",
       label: slotName(slot),
