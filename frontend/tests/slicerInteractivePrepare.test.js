@@ -117,7 +117,7 @@ test("advanced tools are visibly gated pending safe native transformations", () 
   for (const group of ["Quality", "Strength", "Speed", "Supports", "Multifilament", "Others"])
     assert.match(scene, new RegExp('"' + group + '"'));
   assert.match(scene, /PrusaSlicer supports per-object wall loops, top\/bottom shell layers and infill density/);
-  assert.match(scene, /\["top_shell_layers","bottom_shell_layers"\]\.includes\(key\)/);
+  assert.match(scene, /"top_shell_layers",\s*"bottom_shell_layers"/);
   assert.match(scene, /verifiedObjectSettings = new Set\(/);
   assert.match(scene, /Object settings are not yet verified for slicing|Some Object settings are not yet verified for slicing/);
   assert.match(scene, /process_overrides: changed/);
