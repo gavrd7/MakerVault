@@ -89,7 +89,12 @@ def main(binary, vendor, folder):
             if kind == "print":
                 # Support enforcers only: never let automatic supports mask
                 # unrelated paint-region leakage.
-                data += b"\nsupport_material = 1\nsupport_material_auto = 0\n"
+                options = [line for line in data.decode("utf-8").splitlines()
+                           if line.split("=", 1)[0].strip() not in
+                           {"support_material", "support_material_auto"}]
+                data = ("\\n".join(options + [
+                    "support_material = 1", "support_material_auto = 0"
+                ]) + "\\n").encode("utf-8")
             path = work / (kind + ".ini")
             path.write_bytes(data)
             arguments.extend(["--load", str(path)])
