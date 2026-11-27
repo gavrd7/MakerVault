@@ -1,9 +1,11 @@
-"""Spatial G-code acceptance for two separate Prusa support-painted objects.
+"""Spatial G-code acceptance for separate Prusa support-painted objects.
 
 Native Prusa 2.9.7 research proved that apparent support leakage was
 stationary E recovery, not support deposition. Never infer isolation from
 positive E alone: each counted path must actually move within one model's
-trusted independently baked XY footprint.
+trusted independently baked XY footprint. One and only one source model
+may own painted enforcers; all other independent objects must have zero
+moving support deposition inside their own geometry.
 """
 import io
 import math
@@ -16,7 +18,7 @@ ROLES = frozenset(("support material", "support material interface"))
 
 
 def validate_prusa_multi_support_plate(plate):
-    """Restrict the new acceptance route to exactly one painted and one plain object."""
+    """Require one painted source and one to eleven separate plain objects."""
     if not isinstance(plate, list) or not 2 <= len(plate) <= 12 or any(
             not isinstance(row, dict) for row in plate):
         raise ValueError("Prusa independent support painting requires two to twelve objects.")
@@ -54,7 +56,7 @@ def validate_prusa_multi_support_plate(plate):
 
 
 def audit_prusa_multi_object_support(data, models, *, bed_width, bed_depth):
-    """Prove deposited support only in the painted object and not its neighbour."""
+    """Prove deposited support only in the painted object, never neighbours."""
     if not isinstance(data, bytes) or not 0 < len(data) <= 90 * 1024 * 1024:
         raise ValueError("Invalid Prusa two-object support G-code.")
     if not isinstance(models, list) or not 2 <= len(models) <= 12:
