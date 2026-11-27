@@ -209,7 +209,7 @@ def validate_prusa_project_admission(plate, settings, version):
             two_fuzzy = len(plate) == 2 and bool(fuzzy) and not support and (
                 sum(bool((entry.get("fuzzy_skin_paint") or {}).get("regions"))
                     for entry in plate) == 1)
-            multi_support = 2 <= len(plate) <= 12 and bool(support) and not fuzzy and (
+            multi_support = 2 <= len(plate) <= 200 and bool(support) and not fuzzy and (
                 sum(bool((entry.get("support_paint") or {}).get("regions"))
                     for entry in plate) == 1)
             if multi_support:
