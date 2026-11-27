@@ -3,6 +3,7 @@ from unittest import TestCase
 
 from core.slicer_prusa_support_audit import (
     audit_prusa_two_object_support, validate_prusa_two_support_plate,
+    audit_prusa_multi_object_support, validate_prusa_multi_support_plate,
 )
 from core.tests.test_slicer_prusa_plate import item, cube
 
@@ -102,3 +103,66 @@ class PrusaTwoObjectSupportTests(TestCase):
         with self.assertRaisesRegex(ValueError, "overlap"):
             audit_prusa_two_object_support(
                 native_paths(), placed, bed_width=250, bed_depth=210)
+
+
+class PrusaMultiObjectSupportTests(TestCase):
+    def models(self, painted=1):
+        example = sources(paint=0)[0][0]["support_paint"]
+        return [(item(x_mm=x, **({"support_paint": example}
+                                  if n == painted else {})), cube())
+                for n, x in enumerate((-55, 0, 55))]
+
+    def gcode(self, painted=1, leaked=None):
+        centers = (70, 125, 180)
+        lines = ["G90", "M83", ";TYPE:Support material",
+                 f"G0 X{centers[painted]} Y105"]
+        lines.extend(
+            f"G1 X{centers[painted]+.05*(n+1):.3f} Y105 E.03"
+            for n in range(60))
+        for other in range(3):
+            if other == painted:
+                continue
+            lines.append(f"G0 X{centers[other]} Y105")
+            lines.extend(["G1 E.03"]*20)
+            if other == leaked:
+                lines.append(f"G1 X{centers[other]+.3} Y105 E.03")
+        return ("\n".join(lines)+"\n").encode()
+
+    def test_three_disjoint_models_only_one_support_enforcer(self):
+        for painted in range(3):
+            with self.subTest(painted=painted):
+                rows = self.models(painted)
+                self.assertEqual(validate_prusa_multi_support_plate(
+                    [r for r,_ in rows]), painted)
+                out = audit_prusa_multi_object_support(
+                    self.gcode(painted), rows, bed_width=250, bed_depth=210)
+                self.assertEqual(out["painted_model_index"], painted)
+                self.assertEqual(out["painted_support_moves"],60)
+                self.assertEqual(out["unpainted_support_moves"],0)
+                self.assertEqual(sum(out["stationary_recovery_moves"]),40)
+                with self.assertRaisesRegex(ValueError, "not isolated"):
+                    audit_prusa_multi_object_support(
+                        self.gcode(painted, leaked=(painted+1)%3),
+                        rows, bed_width=250, bed_depth=210)
+                with self.assertRaises(ValueError):
+                    audit_prusa_two_object_support(
+                        self.gcode(painted), rows,
+                        bed_width=250, bed_depth=210)
+
+    def test_multi_object_support_scope_rejects_ambiguous_plates(self):
+        plain = self.models()
+        with self.assertRaises(ValueError):
+            validate_prusa_multi_support_plate(
+                [r for r,_ in plain[:1]])
+        with self.assertRaises(ValueError):
+            validate_prusa_multi_support_plate(
+                [r for r,_ in plain]*5)
+        twice = self.models()
+        twice[0][0]["support_paint"] = twice[1][0]["support_paint"]
+        with self.assertRaises(ValueError):
+            validate_prusa_multi_support_plate([r for r,_ in twice])
+        crowded = self.models()
+        crowded[2] = (item(x_mm=1), cube())
+        with self.assertRaisesRegex(ValueError, "overlap"):
+            audit_prusa_multi_object_support(
+                self.gcode(), crowded, bed_width=250, bed_depth=210)
