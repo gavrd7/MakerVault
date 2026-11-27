@@ -55,6 +55,17 @@ class PrusaProjectDialectTests(TestCase):
                 self.assertEqual(receipt["objects"], len(plate))
                 self.assertEqual(receipt["regions"], 0)
 
+    def test_shared_plate_accepts_more_than_twelve_simple_native_prusa_models(self):
+        rows=[(item(x_mm=x,y_mm=y),cube(size=8))
+              for y in (-70,0,70) for x in (-90,-45,0,45,90)]
+        self.assertFalse(validate_prusa_project_admission(
+            [row for row,_ in rows],{},"2.9.7"))
+        built=build_prusa_native_3mf(rows,bed_width=250,bed_depth=210)
+        self.assertEqual(validate_prusa_native_3mf(built)["objects"],15)
+        with self.assertRaisesRegex(ValueError,"200-model"):
+            validate_prusa_project_admission(
+                [rows[0][0]]*201,{},"2.9.7")
+
     def test_native_prusa_object_speed_mappings_preserve_explicit_scope(self):
         left = item(x_mm=-35, process_overrides={
             "outer_wall_speed": 21, "inner_wall_speed": 35,
