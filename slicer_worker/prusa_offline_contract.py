@@ -15,7 +15,7 @@ def validate_prusa_offline_mmu_inputs(*, project, printer, filament, process,
     count, same_nozzle = _qualified_topology(printer)
     if not same_nozzle or not 2 <= count <= 5:
         raise WorkerError("Prusa offline MMU requires an explicit changer machine.")
-    if (not isinstance(tools, list) or not 2 <= len(tools) <= 5
+    if (not isinstance(tools, list) or not 2 <= len(tools) <= 12
             or any(type(t) is not int or not 1 <= t <= count for t in tools)
             or len(set(tools)) < 2):
         raise WorkerError("Prusa offline MMU model tool selection is invalid.")
