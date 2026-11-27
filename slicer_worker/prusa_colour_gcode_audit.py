@@ -343,3 +343,93 @@ def audit_prusa_dual_colour_gcode(data, project, *, printer_ini, tools, tower):
     if any(n<10 for n in purge.values()):
         raise WorkerError("Prusa two-swatch output lacks tool-specific wipe-tower purging.")
     return {"wall_moves":wall_counts,"tower_extrusion_moves":purge}
+
+
+def audit_prusa_xl_colour_gcode(data, project, *, printer_ini, tool):
+    """Prove real model-local native XL Tn front-wall and T0 rear deposition.
+
+    No tower or shared nozzle: an independent head may not inherit MMU purge
+    admission. Native painted 3MF, machine identity and exact opposite wall
+    geometry are checked before interpreting any emitted G-code movements.
+    """
+    receipt=validate_prusa_material_candidate(
+        project,printer_ini=printer_ini,colour=True,independent_colour=True)
+    if receipt["tools"]!=(1,tool+1) or receipt["wipe_tower"]:
+        raise WorkerError("Native XL painted tool identity changed.")
+    front, back = _wall_regions(project, tool)
+    if not isinstance(data,bytes) or not 0<len(data)<=90*1024*1024:
+        raise WorkerError("Invalid native Prusa XL colour output.")
+    counts={0:{"front":0,"back":0},tool:{"front":0,"back":0}}
+    role=""
+    active=None
+    x=y=None
+    e=0.
+    relative_e=relative_xy=False
+    try:
+        lines=data.decode("utf-8").splitlines()
+    except UnicodeDecodeError:
+        raise WorkerError("Prusa XL colour output must be UTF-8.") from None
+    if len(lines)>2000000:
+        raise WorkerError("Prusa XL colour toolpaths exceed auditing limits.")
+    for line in lines:
+        if len(line)>16384:
+            raise WorkerError("Prusa XL colour G-code line exceeds audit limit.")
+        if line.startswith(";TYPE:"):
+            role=line.partition(":")[2].strip().lower()
+        cmd=line.split(";",1)[0].strip()
+        if not cmd:
+            continue
+        op=cmd.split(None,1)[0].upper()
+        if op.startswith("T") and op[1:].isdigit():
+            active=int(op[1:])
+            if active not in counts:
+                raise WorkerError("Unassigned native XL painted tool was selected.")
+            continue
+        if op not in ("M82","M83","G90","G91","G92","G0","G00","G1","G01"):
+            continue
+        values={k.upper():float(v) for k,v in WORD.findall(cmd)}
+        if any(not math.isfinite(v) or abs(v)>1e9 for v in values.values()):
+            raise WorkerError("Invalid native Prusa XL colour coordinates.")
+        if op=="M82":
+            relative_e=False
+        elif op=="M83":
+            relative_e=True
+        elif op=="G90":
+            relative_xy=False
+        elif op=="G91":
+            relative_xy=True
+        elif op=="G92":
+            e=values.get("E",e)
+            x=values.get("X",x)
+            y=values.get("Y",y)
+        else:
+            previous=(x,y)
+            if relative_xy:
+                x=x+values["X"] if x is not None and "X" in values else (
+                    None if "X" in values else x)
+                y=y+values["Y"] if y is not None and "Y" in values else (
+                    None if "Y" in values else y)
+            else:
+                x=values.get("X",x)
+                y=values.get("Y",y)
+            if "E" not in values:
+                continue
+            amount=values["E"] if relative_e else values["E"]-e
+            e=e+values["E"] if relative_e else values["E"]
+            if (op not in ("G1","G01") or amount<=1e-6 or
+                    None in (x,y,*previous) or
+                    abs(x-previous[0])+abs(y-previous[1])<=1e-7):
+                continue
+            if active not in counts:
+                raise WorkerError("Native XL material was deposited before selecting a tool.")
+            if role!="external perimeter":
+                continue
+            for side,box in (("front",front),("back",back)):
+                if (box[0]<=x<=box[1] and box[2]<=y<=box[3] and
+                        box[0]<=previous[0]<=box[1] and
+                        box[2]<=previous[1]<=box[3]):
+                    counts[active][side]+=1
+    if (counts[tool]["front"]<20 or counts[0]["back"]<20 or
+            counts[tool]["back"]>max(2,counts[0]["back"]//100)):
+        raise WorkerError("Native Prusa XL painted wall tool attribution failed.")
+    return {"painted_wall_moves":counts,"wipe_tower":False}
