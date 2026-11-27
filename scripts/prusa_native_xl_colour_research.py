@@ -543,6 +543,20 @@ def main(binary, vendor):
                     raise AssertionError("Native XL four-wall tool attribution not isolated")
             print("RESEARCH PASS: genuine Prusa XL5 four independently painted walls",
                   counts,flush=True)
+            from slicer_worker.prusa_four_wall_audit import (
+                four_painted_wall_regions,audit_prusa_four_wall_gcode)
+            walls=four_painted_wall_regions(four)
+            assert tuple(walls["tools"][name] for name in
+                         ("x_min","x_max","y_min","y_max"))==(1,2,3,4),walls
+            confirmed=audit_prusa_four_wall_gcode(
+                (work/"output.gcode").read_bytes(),four,
+                printer_ini=printer,tools=[1,2,3,4])
+            assert all(confirmed["wall_moves"][tool][side]>=20
+                       for side,tool in walls["tools"].items()),confirmed
+            print("PASS: genuine Prusa XL5 four independent complete painted "
+                  "walls verified by strict worker source and positive-E audit",
+                  confirmed,flush=True)
+
         except (AssertionError,ValueError,RuntimeError,WorkerError) as exc:
             print("RESEARCH BLOCKED: native XL5 four-wall mapping",
                   type(exc).__name__,str(exc)[:320],flush=True)
