@@ -186,50 +186,66 @@ def main(binary,vendor):
         print("PASS: ten Prusa MMU models repeat five native tools with audited deposition",
               repeated_receipt,"sha256",hashlib.sha256(repeated_gcode).hexdigest(),flush=True)
 
-        # Mapping-first parity: use the SAME native 3MF modifier and
-        # variable-layer representation with an MMU printer profile. This
-        # must preserve real native tool deposition *and* object Z schedules.
+        # Diagnose the shared native mapping independently for modifiers,
+        # variable-layer ranges and their composition. A missing native
+        # output is a genuine compatibility failure, not a feature lock.
         from core.tests.test_slicer_prusa_3mf import volume
         from core.slicer_prusa_spatial_layers import audit_prusa_multi_object_layer_ranges
-        region_rows=[]
-        for index,(model,source) in enumerate(rows):
-            mapped=dict(model)
-            if index==0:
-                shape=volume("modifier", {"sparse_infill_density":80})
-                shape.update(x_mm=-90,y_mm=0,z_mm=4,
-                             width_mm=3,depth_mm=3,height_mm=5)
-                mapped["modifier_volumes"]=[shape]
-            if index==1:
-                mapped["variable_layer_profile"]={"version":1,"bands":[
-                    {"from_mm":2,"to_mm":6,"layer_mm":.12}]}
-            region_rows.append((mapped,source))
-        native_project,_=build_prusa_multitool_candidate(
-            region_rows,printer_ini=printer,tools=tools,
-            bed_width=250,bed_depth=210)
-        native_project=add_prusa_native_wipe_tower(
-            native_project,x_mm=55,y_mm=150,rotation_deg=0,
-            bed_width=250,bed_depth=210)
+        from slicer_worker.runner import WorkerError
         from slicer_worker.prusa_material_validation import validate_prusa_material_candidate
-        native_receipt=validate_prusa_material_candidate(
-            native_project,printer_ini=printer,tools=tools,tower=tower)
-        assert native_receipt["objects"]==5
-        (work/"input.3mf").write_bytes(native_project)
-        (work/"output.gcode").unlink()
-        _receipt,native_gcode=run_prusa_mmu_with_numeric_recheck(
-            run_prusa,Path(binary),work,timeout_seconds=300,
-            max_bytes=64*1024*1024)
-        regional_tools=audit_prusa_material_model_gcode(
-            native_gcode,native_project,printer_ini=printer,
-            tools=tools,tower=tower)
-        assert regional_tools["incorrect_extrusion_moves"]==[0]*5
-        layer_receipt=audit_prusa_multi_object_layer_ranges(
-            native_gcode,region_rows,bed_width=250,bed_depth=210,
-            base_layer_mm=.16)
-        assert any(row["object"]==2 and row["target_layer_mm"]==.12
-                   for row in layer_receipt),layer_receipt
-        print("PASS: native Prusa MMU shared modifier and variable-layer mappings",
-              regional_tools,layer_receipt,flush=True)
-
+        failures=[]
+        for label,with_modifier,with_layers in (
+            ("modifier",True,False),("layers",False,True),
+            ("both",True,True),
+        ):
+            region_rows=[]
+            for index,(model,source) in enumerate(rows):
+                mapped=dict(model)
+                if index==0 and with_modifier:
+                    shape=volume("modifier", {"sparse_infill_density":80})
+                    shape.update(x_mm=-90,y_mm=0,z_mm=4,
+                                 width_mm=3,depth_mm=3,height_mm=5)
+                    mapped["modifier_volumes"]=[shape]
+                if index==1 and with_layers:
+                    mapped["variable_layer_profile"]={"version":1,"bands":[
+                        {"from_mm":2,"to_mm":6,"layer_mm":.12}]}
+                region_rows.append((mapped,source))
+            try:
+                candidate,_=build_prusa_multitool_candidate(
+                    region_rows,printer_ini=printer,tools=tools,
+                    bed_width=250,bed_depth=210)
+                candidate=add_prusa_native_wipe_tower(
+                    candidate,x_mm=55,y_mm=150,rotation_deg=0,
+                    bed_width=250,bed_depth=210)
+                native_receipt=validate_prusa_material_candidate(
+                    candidate,printer_ini=printer,tools=tools,tower=tower)
+                assert native_receipt["objects"]==5
+                (work/"input.3mf").write_bytes(candidate)
+                (work/"output.gcode").unlink(missing_ok=True)
+                _receipt,generated=run_prusa_mmu_with_numeric_recheck(
+                    run_prusa,Path(binary),work,timeout_seconds=300,
+                    max_bytes=64*1024*1024)
+                material=audit_prusa_material_model_gcode(
+                    generated,candidate,printer_ini=printer,
+                    tools=tools,tower=tower)
+                assert material["incorrect_extrusion_moves"]==[0]*5
+                layers=None
+                if with_layers:
+                    layers=audit_prusa_multi_object_layer_ranges(
+                        generated,region_rows,bed_width=250,bed_depth=210,
+                        base_layer_mm=.16)
+                    assert any(row["object"]==2 and
+                               row["target_layer_mm"]==.12
+                               for row in layers),layers
+                print("PASS: native Prusa MMU mapping",label,material,layers,
+                      flush=True)
+            except (WorkerError,ValueError,AssertionError) as exc:
+                failures.append((label,type(exc).__name__,str(exc)))
+                print("NATIVE MMU MAPPING BLOCKER",failures[-1],flush=True)
+        if failures:
+            raise AssertionError(
+                "Some Prusa MMU native mapping combinations need compatibility fixes: "
+                +repr(failures))
 
 if __name__=="__main__":
     main(*sys.argv[1:])
