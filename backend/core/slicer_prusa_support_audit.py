@@ -18,10 +18,10 @@ ROLES = frozenset(("support material", "support material interface"))
 
 
 def validate_prusa_multi_support_plate(plate):
-    """Require one painted source and one to eleven separate plain objects."""
-    if not isinstance(plate, list) or not 2 <= len(plate) <= 12 or any(
+    """Require one painted source and up to 199 separate plain objects."""
+    if not isinstance(plate, list) or not 2 <= len(plate) <= 200 or any(
             not isinstance(row, dict) for row in plate):
-        raise ValueError("Prusa independent support painting requires two to twelve objects.")
+        raise ValueError("Prusa independent support painting follows the shared two-to-200 object budget.")
     painted = [
         i for i, row in enumerate(plate)
         if (row.get("support_paint") or {}).get("regions")
@@ -59,8 +59,8 @@ def audit_prusa_multi_object_support(data, models, *, bed_width, bed_depth):
     """Prove deposited support only in the painted object, never neighbours."""
     if not isinstance(data, bytes) or not 0 < len(data) <= 90 * 1024 * 1024:
         raise ValueError("Invalid Prusa two-object support G-code.")
-    if not isinstance(models, list) or not 2 <= len(models) <= 12:
-        raise ValueError("Prusa two-object support audit requires two to twelve models.")
+    if not isinstance(models, list) or not 2 <= len(models) <= 200:
+        raise ValueError("Prusa multi-object support audit requires two to 200 models.")
     selected = validate_prusa_multi_support_plate([item for item, _ in models])
     bounds = [_bounds(source, bed_width, bed_depth) for source in models]
     for index, a in enumerate(bounds):
