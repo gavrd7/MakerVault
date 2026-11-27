@@ -170,11 +170,11 @@ def validate_prusa_offline_xl_colour_inputs(*, project, printer, filament, proce
         raise WorkerError("Prusa painted XL/INDX needs independent native heads.")
     if tools is not None:
         if (tool is not None or not isinstance(tools, list) or len(tools) != 2
-                or any(type(t) is not int or not 1 <= t <= 4 or t >= count
+                or any(type(t) is not int or not 1 <= t <= 7 or t >= count
                        for t in tools) or len(set(tools)) != 2):
             raise WorkerError("Prusa painted XL needs two distinct native wall tools.")
         selected = tuple(tools)
-    elif type(tool) is int and 1 <= tool <= 4 and tool < count:
+    elif type(tool) is int and 1 <= tool <= 7 and tool < count:
         selected = (tool,)
     else:
         raise WorkerError("Prusa painted XL needs one valid alternate native head.")
