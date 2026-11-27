@@ -198,7 +198,8 @@ def slice_prusa_offline_xl_candidate(job_id, **prepared_settings):
 def prepare_prusa_offline_colour_candidate(
     *, owner_id, printer_profile, process_profile, filament_profiles,
     rows, tools, purge_matrix, tower_xy, bed_width, bed_depth,
-    colour_slot=None, colour_tool=None, colour_tool_indices=None
+    colour_slot=None, colour_tool=None, colour_tool_indices=None,
+    process_overrides=None
 ):
     """Compile exactly one fingerprinted MMU front-painted STL with private profiles."""
     if (type(owner_id) is not int or owner_id<1 or
@@ -241,7 +242,9 @@ def prepare_prusa_offline_colour_candidate(
             any(tool>=topology["logical_tool_count"] for tool in colour_tool_indices.values()) or
             len(filament_profiles)!=topology["logical_tool_count"]):
         raise SlicerProfileError("Prusa native painting requires a qualified MMU tool palette.")
-    process=resolved_prusa_profile(process_profile)
+    process=apply_prusa_process_overrides(
+        resolved_prusa_profile(process_profile),
+        {} if process_overrides is None else process_overrides)
     filaments=[resolved_prusa_profile(profile) for profile in filament_profiles]
     palette=compile_prusa_filament_palette(printer,filaments)
     native_process=compile_prusa_purge_matrix(printer,process,purge_matrix)
@@ -313,6 +316,7 @@ def slice_prusa_offline_colour_candidate(job_id, **prepared):
 def prepare_prusa_offline_xl_colour_candidate(
     *, owner_id, printer_profile, process_profile, filament_profiles,
     rows, tools, bed_width, bed_depth, colour_tool_indices,
+    process_overrides=None,
 ):
     """Owner-scoped XL front facet paint, no MMU purge or printer dispatch."""
     from .slicer_prusa_colour_project import build_prusa_colour_candidate
@@ -346,7 +350,9 @@ def prepare_prusa_offline_xl_colour_candidate(
             selected>=topology["logical_tool_count"] or
             len(filament_profiles)!=topology["logical_tool_count"]):
         raise SlicerProfileError("Prusa XL needs a matching independent-head printer palette.")
-    process=resolved_prusa_profile(process_profile)
+    process=apply_prusa_process_overrides(
+        resolved_prusa_profile(process_profile),
+        {} if process_overrides is None else process_overrides)
     filaments=[resolved_prusa_profile(profile) for profile in filament_profiles]
     palette=compile_prusa_filament_palette(printer,filaments)
     project=build_prusa_colour_candidate(
