@@ -101,6 +101,45 @@ class PrusaOfflineMmuPreflightTests(TestCase):
                     with self.assertRaises(ValueError):
                         prepare_prusa_offline_mmu_candidate(**values)
 
+    def test_front_painted_xl_owner_profiles_and_worker_contract(self):
+        from core.slicer_prusa_material_preflight import (
+            prepare_prusa_offline_xl_colour_candidate)
+        from scripts.prusa_generate_mmu_paint import fixture
+        from slicer_worker.service import _decode_payload
+        import base64
+        source, _mesh, _states, paint=fixture(include_paint=True)
+        values,assets=self.parts()
+        assets[0]=ini("0.4,0.4,0.4,0.4,0.4","0")
+        row={"asset_id":"native-xl-front","x_mm":0,"y_mm":0,"z_mm":0,
+             "rotation_deg":0,"scale_percent":100,"colour_paint":paint}
+        params={key:values[key] for key in (
+            "owner_id","printer_profile","process_profile",
+            "filament_profiles","bed_width","bed_depth")}
+        params.update(rows=[(row,source)],tools=[1],colour_tool_indices={1:1})
+        with patch("core.slicer_prusa_material_preflight.resolved_prusa_profile",
+                   side_effect=assets):
+            prepared=prepare_prusa_offline_xl_colour_candidate(**params)
+        self.assertEqual(prepared["tool"],1)
+        self.assertNotIn("tower",prepared)
+        self.assertNotIn("wipe_tower = 1",prepared["process"].decode())
+        encode=lambda data:base64.b64encode(data).decode("ascii")
+        request={"job_id":str(uuid.uuid4()),"engine":"prusaslicer",
+                 "engine_version":"2.9.7","model_format":"3mf",
+                 "model":encode(prepared["model"]),
+                 "printer_profile":encode(prepared["printer"]),
+                 "filament_profile":encode(prepared["filament"]),
+                 "process_profile":encode(prepared["process"]),
+                 "prusa_offline_xl_colour":{"tool":1}}
+        self.assertEqual(
+            _decode_payload(request)["prusa_offline_xl_colour"],{"tool":1})
+        for invalid in ({"tool":True},{"tool":5},{"tool":0},
+                        {"tool":1,"tower":[55,150,0,250,210]}):
+            with self.subTest(invalid=invalid),self.assertRaises(WorkerError):
+                _decode_payload({**request,"prusa_offline_xl_colour":invalid})
+        with self.assertRaises(WorkerError):
+            _decode_payload({**request,"prusa_offline_mmu":{
+                "tools":[1,2],"tower":[55,150,0,250,210]}})
+
     def test_single_front_painted_mmu_owns_tool_palette_tower_and_surface(self):
         from core.slicer_prusa_material_preflight import prepare_prusa_offline_colour_candidate
         from scripts.prusa_generate_mmu_paint import fixture
