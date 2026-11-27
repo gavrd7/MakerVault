@@ -133,3 +133,9 @@ test("Prusa Slice readiness refuses native-profile mismatch before sending the j
   assert.match(prepare,/prusaTopologyMatches &&/);
   assert.match(prepare,/Use Match native printer profile in the materials panel/);
 });
+
+test("new Prusa native-tool drafts inherit the chosen printer profile topology",()=>{
+  assert.match(editor,/fresh\(profileMode \|\| "mmu",/);
+  assert.match(editor,/profileMode && profileToolCount \? profileToolCount : 2/);
+  assert.match(editor,/const profileMode = printerTopology\?\.kind==="single_nozzle_changer"/);
+});
