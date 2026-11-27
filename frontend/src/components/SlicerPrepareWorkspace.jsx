@@ -1237,7 +1237,7 @@ export default function SlicerPrepareWorkspace({
             String(prusaProfileTopology.kind || "unknown").replaceAll("_", " ") +
             "), which does not match this draft. Use Match native printer profile in the materials panel."
         : prusaUnsupportedObjectKeys.length
-        ? "Prusa MMU/XL/INDX supports Object walls, top/bottom shells and infill density. Unsupported Object keys: " +
+        ? "Prusa MMU/XL/INDX maps Object walls, shells, infill density and native perimeter/infill/top-surface speeds. Unsupported Object keys: " +
           [...new Set(prusaUnsupportedObjectKeys)].join(", ") +
           ". Restore those settings or save the draft."
         : prusaUnsupportedGlobalKeys.length
