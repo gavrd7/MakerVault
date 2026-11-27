@@ -534,7 +534,12 @@ class Handler(BaseHTTPRequestHandler):
                             tool=details["tool"],tower=details["tower"])
                 if files.get("prusa_offline_xl_colour"):
                     details=files["prusa_offline_xl_colour"]
-                    if "tools" in details:
+                    if "tools" in details and len(details["tools"])==4:
+                        from .prusa_four_wall_audit import audit_prusa_four_wall_gcode
+                        audit_prusa_four_wall_gcode(
+                            data,files["model"],printer_ini=files["printer_profile"],
+                            tools=details["tools"])
+                    elif "tools" in details:
                         from .prusa_colour_gcode_audit import audit_prusa_dual_colour_gcode
                         audit_prusa_dual_colour_gcode(
                             data,files["model"],printer_ini=files["printer_profile"],
