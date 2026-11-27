@@ -122,5 +122,6 @@ test("Prusa native tool capacity is retrieved from an owner-scoped resolved prin
   assert.match(editor,/const profileMode = printerTopology\?\.kind/);
   assert.match(editor,/Match native printer profile/);
   assert.match(editor,/profileMatches && value\.filament_profile_ids\.every\(Boolean\)/);
-  assert.match(editor,/profileToolCount \? \[profileToolCount\]/);
+  assert.match(editor,/profileToolCount \? \[\.\.\.new Set\(\[value\.tool_count, profileToolCount\]\)\]/);
+  assert.match(editor,/draft; profile mismatch/);
 });
