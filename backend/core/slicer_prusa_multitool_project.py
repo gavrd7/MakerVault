@@ -24,12 +24,12 @@ def build_prusa_multitool_candidate(rows, *, printer_ini, tools,
         raise SlicerProfileError(str(exc)) from exc
     if len(rows) != len(tools):
         raise SlicerProfileError("Native Prusa tool count does not match printable objects.")
-    allow_indx_regions = topology["kind"] == "indx"
+    allow_independent_regions = topology["kind"] in ("indx", "independent_tools")
     for item, _source in rows:
         forbidden = (
             "colour_paint", "support_paint", "seam_paint", "fuzzy_skin_paint",
             "negative_volumes", "material_slot",
-        ) if allow_indx_regions else (
+        ) if allow_independent_regions else (
             "modifier_volumes", "colour_paint",
             "support_paint", "seam_paint", "fuzzy_skin_paint",
             "variable_layer_profile", "negative_volumes", "material_slot",
