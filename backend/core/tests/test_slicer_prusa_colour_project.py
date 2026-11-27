@@ -194,7 +194,7 @@ class PrusaPaintedWallMotionTests(TestCase):
             lines += [";TYPE:Wipe tower", "G0 X55 Y155"]
             for n in range(12):
                 lines.append(f"G1 X{55+(n+1)*.5:.2f} Y155 E0.03")
-        return ("\\n".join(lines)+"\\n").encode()
+        return ("\n".join(lines)+"\n").encode()
 
     def checked(self, data):
         from unittest.mock import patch
