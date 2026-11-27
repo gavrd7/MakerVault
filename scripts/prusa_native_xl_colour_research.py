@@ -122,6 +122,44 @@ def main(binary, vendor):
               dual_receipt,"sha256",hashlib.sha256(dual_output).hexdigest(),
               flush=True)
 
+        # A second genuine binary project proves the same native 3MF and
+        # authenticated toolpath auditor work on the X-min/X-max walls.
+        # Opposite wall direction comes from source mesh geometry, never
+        # from hardcoded Y-facing swatch coordinates.
+        xnegative=[{"face":i,"polygon":[list(v) for v in face]}
+                   for i,face in enumerate(local)
+                   if all(abs(v[0]+10)<.00001 for v in face)]
+        xpositive=[{"face":i,"polygon":[list(v) for v in face]}
+                   for i,face in enumerate(local)
+                   if all(abs(v[0]-10)<.00001 for v in face)]
+        assert len(xnegative)==len(xpositive)==2
+        xpaint={**paint,"signature":_fingerprint(local),
+                "regions":[{"slot":1,"patches":xnegative},
+                           {"slot":2,"patches":xpositive}],
+                "palette":[*paint["palette"],
+                           {"color":"#fadd4d","label":"XL T2 right"}]}
+        xproject=build_prusa_colour_candidate(
+            {**row,"colour_paint":xpaint},stl,printer_ini=printer,
+            colour_tool_indices={1:1,2:2},bed_width=360,bed_depth=360)
+        xreceipt=validate_prusa_offline_xl_colour_inputs(
+            project=xproject,printer=printer,filament=palette,
+            process=process,tools=[1,2])
+        assert xreceipt["tools"]==[1,2] and not xreceipt["wipe_tower"]
+        (work/"input.3mf").write_bytes(xproject)
+        (work/"output.gcode").unlink(missing_ok=True)
+        run_prusa(Path(binary),work)
+        xoutput=(work/"output.gcode").read_bytes()
+        xproof=audit_prusa_dual_colour_gcode(
+            xoutput,xproject,printer_ini=printer,tools=[1,2],tower=None)
+        assert xproof["wall_moves"][1]["front"]>=20,xproof
+        assert xproof["wall_moves"][2]["back"]>=20,xproof
+        assert xproof["wall_moves"][1]["back"]<=2,xproof
+        assert xproof["wall_moves"][2]["front"]<=2,xproof
+        assert not xproof["wipe_tower"],xproof
+        print("PASS: genuine independent XL5 X-opposing dual painted walls",
+              xproof,"sha256",hashlib.sha256(xoutput).hexdigest(),flush=True)
+
+
 
 if __name__=="__main__":
     main(*sys.argv[1:])
