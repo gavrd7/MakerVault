@@ -242,7 +242,7 @@ def _two_painted_wall_regions(project, tools):
         raise WorkerError("Prusa multi-swatch native facets are not two complete opposite walls.") from None
 
 
-def audit_prusa_dual_colour_gcode(data, project, *, printer_ini, tools, tower):
+def audit_prusa_dual_colour_gcode(data, project, *, printer_ini, tools, tower=None):
     """Research-only 2-swatch MMU candidate: exact T1/T2 walls + T0 purge.
 
     This is NOT wired to production job admission. Success requires genuine
@@ -251,20 +251,21 @@ def audit_prusa_dual_colour_gcode(data, project, *, printer_ini, tools, tower):
     """
     regions=_two_painted_wall_regions(project,tools)
     receipt=validate_prusa_material_candidate(
-        project, printer_ini=printer_ini, colour=True, tower=tower)
+        project, printer_ini=printer_ini, colour=True, tower=tower,
+        independent_colour=tower is None)
     expected=tuple(sorted((1,tools[0]+1,tools[1]+1)))
     if receipt["tools"]!=expected:
         raise WorkerError("Native Prusa two-swatch tool attribution changed.")
     if not isinstance(data,bytes) or not 0<len(data)<=90*1024*1024:
         raise WorkerError("Invalid Prusa two-swatch output.")
-    if (not isinstance(tower,(tuple,list)) or len(tower)!=5 or
+    if tower is not None and (not isinstance(tower,(tuple,list)) or len(tower)!=5 or
             any(type(v) not in (int,float) or not math.isfinite(v) for v in tower)):
         raise WorkerError("Invalid Prusa multi-swatch purge geometry.")
-    tx,ty=tower[:2]
-    tower_box=(tx-6,tx+65,ty-12,ty+45)
+    tower_box=((tower[0]-6,tower[0]+65,tower[1]-12,tower[1]+45)
+               if tower is not None else None)
     selected={0,*tools}
     wall_counts={tool:{"front":0,"back":0} for tool in selected}
-    purge={tool:0 for tool in selected}
+    purge={tool:0 for tool in selected} if tower is not None else {}
     role=""
     active=None
     x=y=None
@@ -329,7 +330,7 @@ def audit_prusa_dual_colour_gcode(data, project, *, printer_ini, tools, tower):
                         box[0]<=x<=box[1] and box[2]<=y<=box[3]
                         and box[0]<=previous[0]<=box[1]
                         and box[2]<=previous[1]<=box[3])
-            if contained(tower_box):
+            if tower_box is not None and contained(tower_box):
                 purge[active]+=1
             if (None in previous or stationary):
                 continue
@@ -348,9 +349,10 @@ def audit_prusa_dual_colour_gcode(data, project, *, printer_ini, tools, tower):
             wall_counts[tools[0]]["back"]>2 or
             wall_counts[tools[1]]["front"]>2):
         raise WorkerError("Prusa two-swatch output failed wall-local tool attribution.")
-    if any(n<10 for n in purge.values()):
+    if tower is not None and any(n<10 for n in purge.values()):
         raise WorkerError("Prusa two-swatch output lacks tool-specific wipe-tower purging.")
-    return {"wall_moves":wall_counts,"tower_extrusion_moves":purge}
+    return {"wall_moves":wall_counts,"tower_extrusion_moves":purge,
+            "wipe_tower":tower is not None}
 
 
 def audit_prusa_xl_colour_gcode(data, project, *, printer_ini, tool):
