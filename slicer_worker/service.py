@@ -301,7 +301,8 @@ def _decode_payload(payload):
         files["prusa_offline_xl_colour"]={
             "tools":receipt["tools"]} if "tools" in receipt else {
                 "tool":receipt["tool"],
-                "partial_wall":receipt["partial_wall"]}
+                "partial_wall":receipt["partial_wall"],
+                "partial_top":receipt["partial_top"]}
     if "prusa_offline_colour" in payload:
         from .prusa_offline_contract import validate_prusa_offline_colour_inputs
         details=payload["prusa_offline_colour"]
@@ -555,6 +556,10 @@ class Handler(BaseHTTPRequestHandler):
                     elif details.get("partial_wall"):
                         from .prusa_partial_surface import audit_prusa_partial_wall_gcode
                         audit_prusa_partial_wall_gcode(
+                            data, files["model"], tool=details["tool"])
+                    elif details.get("partial_top"):
+                        from .prusa_top_surface import audit_prusa_partial_top_gcode
+                        audit_prusa_partial_top_gcode(
                             data, files["model"], tool=details["tool"])
                     else:
                         from .prusa_colour_gcode_audit import audit_prusa_xl_colour_gcode
