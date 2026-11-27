@@ -1,3 +1,38 @@
+### 27 November — native first-layer adhesion across multiple Prusa tools
+
+The same owner-scoped native numeric process adapter used for independent
+single-material slicing now maps **brim width** and **skirt loops** on MMU,
+XL and INDX workbench plates. This is not a fork of MakerVault's process UI.
+
+- **Spatial material audit:** Moving positive-E G-code with native
+  `TYPE:Skirt/Brim` is attributed to first-layer adhesion rather than a
+  neighbouring model's tool. The auditor tracks actual tool, XY, Z,
+  extrusion and role, admits the adhesion role only at Z between 0 and
+  1.0 mm, and keeps regular model deposition checks intact. Genuine
+  Prusa MMU5 first-layer research confirmed that removing these native
+  role movements from model-material attribution changes previously
+  observed wrong-tool hits (8/8/8/9 on neighbouring models) to **zero**.
+- **Native-effect enforcement:** Both the isolated worker and owner-side
+  post-return audit reparse the actual native process INI. If `skirts` or
+  `brim_width` requests adhesion, at least ten actual moving positive-E
+  first-layer adhesion segments must appear. Unsupported, nonfinite and
+  oversized numeric settings still fail closed.
+- **Genuine pinned 2.9.7 runs:** MMU5 generated real first-layer skirt
+  and brim extrusion while retaining 5/5 model tool attribution and
+  native wipe-tower purging. An eight-head independent-tool fixture
+  also generated adhesion paths with zero incorrect model extrusion.
+  The official firmware-cleaner INDX 8T preset has its own additional
+  real-binary acceptance fixture to distinguish firmware cleaner strokes
+  from first-layer adhesion and model walls.
+- **Scope:** These global native controls work across multiple
+  tool-assigned models, not independently configured per-object brims.
+  Neither successful offline G-code nor official firmware-cleaner
+  qualification proves physical machine/tool pickup safety. Native MMU
+  variable-height incompatibility and unverified mixed painting/mask
+  combinations remain guarded.
+
+---
+
 ### 27 November — XL/INDX native painted-head parity and shared plate reconciliation
 
 This is a continuation of the existing **mapping-first** adapter strategy, not
