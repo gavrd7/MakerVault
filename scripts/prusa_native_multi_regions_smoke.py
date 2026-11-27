@@ -58,6 +58,15 @@ def main(binary, vendor, baseline, modifier, negative, mixed_dir=None):
             modifier_counts = controls["mix-modifier"]
             object_counts = controls["mix-object"]
             mixed_counts = controls["mix-both"]
+            # Independently check the *unmodified* neighbouring model in
+            # both single-feature controls. It must keep baseline extrusion.
+            for index, solo in ((1, modifier_counts), (0, object_counts)):
+                baseline_inside = baseline_counts[index][0]
+                if baseline_inside <= .1 or not .7 <= (
+                        solo[index][0] / baseline_inside) <= 1.3:
+                    raise AssertionError(
+                        ("Prusa native regional feature contaminated neighbour",
+                         index, solo, baseline_counts))
             # A modifier changes only model 1's central infill; a distinct
             # model's process override changes only model 2. Require both
             # effects to survive simultaneous native 3MF import and slicing.
