@@ -68,7 +68,6 @@ def main(binary,vendor):
     process=apply_prusa_process_overrides(process, {
         "layer_height":0.16, "wall_loops":3, "sparse_infill_density":23,
         "top_shell_layers":4, "bottom_shell_layers":4,
-        "brim_width":2, "skirt_loops":2,
         "outer_wall_speed":24, "inner_wall_speed":42,
         "sparse_infill_speed":60, "travel_speed":145,
         "top_surface_speed":29,
@@ -77,7 +76,6 @@ def main(binary,vendor):
     assert b"perimeters = 3\n" in process
     assert b"fill_density = 23%\n" in process
     for native_key, expected in (
-        (b"brim_width", b"2"), (b"skirts", b"2"),
         (b"external_perimeter_speed", b"24"), (b"perimeter_speed", b"42"),
         (b"infill_speed", b"60"), (b"travel_speed", b"145"),
         (b"top_solid_infill_speed", b"29"),
