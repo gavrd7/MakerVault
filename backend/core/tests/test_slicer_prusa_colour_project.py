@@ -124,6 +124,23 @@ class PrusaNativeColourProjectTests(TestCase):
                         output.getvalue(),
                         printer_ini=ini("0.4,0.4,0.4,0.4,0.4", "1"), colour=True)
 
+    def test_multi_swatch_research_counts_only_moving_matching_wall_paths(self):
+        from scripts.prusa_native_five_colour_paint_smoke import painted_external_walls
+        commands = [
+            "M82", "G92 E0", "T1",
+            "G0 X120 Y95", "G1 X121 Y95 E0.5",
+            "G1 E0.6",  # stationary recovery is never wall deposition
+            "T2", "G0 X120 Y115", "G1 X121 Y115 E1.0",
+            "G1 X121 Y95 E1.3",  # crosses two regions: neither endpoint pair qualifies
+            "T0", "G0 X120 Y115", "G1 E1.7",
+        ]
+        encoded = (";TYPE:External perimeter\n" +
+                   "\n".join(commands) + "\n").encode()
+        counts = painted_external_walls(encoded)
+        self.assertEqual(counts[1], {"front":1, "back":0})
+        self.assertEqual(counts[2], {"front":0, "back":1})
+        self.assertEqual(counts[0], {"front":0, "back":0})
+
     def test_invalid_tool_mapping_and_mixed_features_refused(self):
         for mapping in ({1:5},{1:True},{True:1},{}, {1:0}, {1:-1}, {1:"2"}):
             with self.subTest(mapping=mapping):
