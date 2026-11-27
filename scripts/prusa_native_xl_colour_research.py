@@ -481,9 +481,15 @@ def main(binary, vendor):
                         old=before[axis]
                         tangent=(x,y)[1-axis]
                         old_tangent=before[1-axis]
-                        if (abs(p-across)<=2 and abs(old-across)<=2 and
-                                180-7<=tangent<=180+7 and
-                                180-7<=old_tangent<=180+7):
+                        # Full native exterior perimeter segments may
+                        # span the *entire* face in one XY G1. A narrow
+                        # midpoint strip requiring both endpoints inside
+                        # incorrectly reports zero deposited walls.
+                        if (abs(p-across)<=3.5 and abs(old-across)<=3.5 and
+                                180-11.5<=tangent<=180+11.5 and
+                                180-11.5<=old_tangent<=180+11.5 and
+                                abs(p-old)<=.8 and
+                                abs(tangent-old_tangent)>.5):
                             geometric_hits[active][idx]+=1
                             if "external perimeter" in role:
                                 counts[active][idx]+=1
