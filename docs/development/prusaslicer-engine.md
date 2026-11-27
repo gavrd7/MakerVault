@@ -1,3 +1,27 @@
+### 27 November — native XL independent-head regional feature parity
+
+The five-head XL worker/project path now carries the same typed object-local
+parameter modifiers, negative/cavity volumes, and native variable-layer
+schedules already supported in the INDX independent-head candidate. The
+multi-tool builder retains them in Prusa's scoped 3MF volumes/range XML
+instead of dropping edits; the isolated worker validates that dialect for
+2–8 independent heads, while the shared-nozzle MMU still rejects these
+unqualified mixed features. Ordinary owner-bound workbench routing preserves
+the edits and submits only audited offline G-code.
+
+Tests verify a five-head native project with a modifier on one model, cavity
+on a second, variable layers on a third, and independent extruder metadata.
+The pinned 2.9.7 native acceptance script now requires all five real
+toolpaths to remain model-local and separately measures object-local Z
+schedules, not merely metadata or a changed G-code hash.
+
+**Acceptance gate:** the real binary smoke and exact-head CI must pass
+before this can be counted as native feature parity. Printer hardware
+toolhead pickup, docking, offsets and physical start remain unverified.
+General multi-tool painting and two-object support-isolation remain open.
+
+---
+
 ### Pinned INDX profile importer compatibility (26 November 2026)
 
 The owner-facing official INDX printer import now applies the same narrowly
