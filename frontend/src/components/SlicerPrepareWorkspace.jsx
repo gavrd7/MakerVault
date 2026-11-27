@@ -1123,7 +1123,7 @@ export default function SlicerPrepareWorkspace({
     prusaNativeTools.model_tools[0].tool===1 &&
     prusaNativeTools?.colour_tools?.length===prusaPaintedSlots.length &&
     prusaPaintedSlots.every(slot=>prusaNativeTools.colour_tools.some(row=>
-      row.slot===slot && row.tool>=2 && row.tool<=Math.min(prusaNativeTools.tool_count,5))) &&
+      row.slot===slot && row.tool>=2 && row.tool<=Math.min(prusaNativeTools.tool_count,8))) &&
     new Set(prusaNativeTools.colour_tools.map(row=>row.tool)).size===
       prusaPaintedSlots.length;
   const prusaProfileMode = prusaProfileTopology?.kind==="single_nozzle_changer" ? "mmu"
