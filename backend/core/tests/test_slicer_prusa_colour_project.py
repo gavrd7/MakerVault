@@ -694,7 +694,7 @@ class PrusaNativeColourProjectTests(TestCase):
                 commands.extend([
                     f"G0 X{x-.002:.6f} Y{y:.6f} Z{signed['z_top']:.5f}",
                     f"G1 X{x+.002:.6f} Y{y:.6f} E.04"])
-        simulated=("\\n".join(commands)+"\\n").encode()
+        simulated=("\n".join(commands)+"\n").encode()
         actual=audit_prusa_partial_top_gcode(simulated,project,tool=1)
         self.assertEqual(actual["top_deposition_moves"][1]["painted"],30)
         self.assertEqual(actual["top_deposition_moves"][0]["unpainted"],30)
