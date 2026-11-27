@@ -30,7 +30,7 @@ _RELEASES = {
         "02.09.01.70": ("bambulab/BambuStudio", "v02.09.01.70"),
     },
     "prusaslicer": {
-        "2.9.7": ("prusa3d/PrusaSlicer", "version_2.9.7"),
+        "2.9.6": ("prusa3d/PrusaSlicer", "version_2.9.6"),
     },
     "snapmakerorca": {
         "2.4.1": ("Snapmaker/OrcaSlicer", "v2.4.1"),

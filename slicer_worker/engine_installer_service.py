@@ -33,21 +33,12 @@ from .engine_store_admin import (
 from .engine_store_lifecycle import installed_versions, activate_installed, uninstall_engine, preserve_active_identities, IDENTITY
 from .engine_registry import SUPPORTED as INSTALLED_ENGINE_TYPES, BAMBU_VERSION, BAMBU_RUNTIME_SHA256
 from .engine_store_permissions import make_runtime_worker_readable
-from .prusa_runtime_install import (
-    VERSION as PRUSA_VERSION, RELEASE_TAG as PRUSA_RELEASE_TAG,
-    ASSET_NAME as PRUSA_ASSET, ARCHIVE_SHA256 as PRUSA_ARCHIVE_SHA256,
-    ASSET_SIZE as PRUSA_ASSET_SIZE, BINARY_SHA256 as PRUSA_BINARY_SHA256,
-    sha256 as prusa_sha256, unpack_reviewed_prusa,
-)
 
 STORE = Path(os.environ.get("SLICER_ENGINE_STORE", "/opt/engine-store"))
 TOKEN = os.environ.get("SLICER_INSTALLER_TOKEN", "")
 SUPPORTED = {"crealityprint": "CrealityOfficial/CrealityPrint",
              "orcaslicer": "OrcaSlicer/OrcaSlicer"}
 SUPPORTED["bambustudio"] = "bambulab/BambuStudio"
-# Prusa is separately packaged by MakerVault from the exact tagged upstream
-# source. Only an immutable, SHA-pinned MakerVault release asset is admitted.
-SUPPORTED["prusaslicer"] = "gavrd7/MakerVault"
 BAMBU_APPIMAGE_SHA256 = "668dabb1be53c758189ed6bc89935285dea5e0af46216546b1bafd6882e9aff0"
 BAMBU_ASSET = "BambuStudio_ubu24-v02.09.01.70-20261103183404.AppImage"
 
@@ -163,45 +154,6 @@ def release_catalogue():
             return list(RELEASE_CACHE["items"])
     releases = []
     for engine, repo in SUPPORTED.items():
-        if engine == "prusaslicer":
-            # The temporary Actions artifact is deliberately NOT an install
-            # source. A separately approved permanent GitHub release must
-            # exist, contain exactly the reviewed tar SHA, and have the
-            # expected asset name/size/URL before the UI offers Prusa.
-            url = f"https://api.github.com/repos/{repo}/releases/tags/{PRUSA_RELEASE_TAG}"
-            try:
-                with _request(url) as response:
-                    raw = response.read(2 * 1024 * 1024 + 1)
-                if len(raw) > 2 * 1024 * 1024:
-                    continue
-                doc = json.loads(raw)
-            except (OSError, ValueError, urllib.error.URLError):
-                continue
-            if (not isinstance(doc, dict) or doc.get("draft") or doc.get("prerelease")
-                    or doc.get("tag_name") != PRUSA_RELEASE_TAG):
-                continue
-            expected_url = (f"https://github.com/{repo}/releases/download/"
-                            f"{PRUSA_RELEASE_TAG}/{PRUSA_ASSET}")
-            assets = [a for a in doc.get("assets", [])
-                      if isinstance(a, dict) and a.get("name") == PRUSA_ASSET]
-            if len(assets) != 1:
-                continue
-            asset = assets[0]
-            if (asset.get("digest") != "sha256:" + PRUSA_ARCHIVE_SHA256
-                    or asset.get("browser_download_url") != expected_url
-                    or type(asset.get("size")) is not int
-                    or asset["size"] != PRUSA_ASSET_SIZE):
-                continue
-            releases.append({
-                "engine": "prusaslicer", "version": PRUSA_VERSION,
-                "bundle_sha256": PRUSA_ARCHIVE_SHA256,
-                "bundle_url": expected_url,
-                "binary_sha256": PRUSA_BINARY_SHA256,
-                "architecture": "linux/amd64",
-                "notes": "MakerVault-verified source-pinned PrusaSlicer 2.9.7",
-                "asset_size": PRUSA_ASSET_SIZE,
-            })
-            continue
         if engine == "bambustudio":
             tag = "v" + BAMBU_VERSION
             url = f"https://api.github.com/repos/{repo}/releases/tags/{tag}"
@@ -348,10 +300,6 @@ def _write_operation(op_id, **changes):
 
 def _install(op_id, release):
     engine, version = release["engine"], release["version"]
-    if engine == "prusaslicer":
-        # Separate, tar-verified native CLI path. Existing AppImage engines
-        # never enter this branch and retain their exact original code.
-        return _install_reviewed_prusa(op_id, release)
     base = STORE / "versions" / engine
     target = base / version
     stage = None
@@ -503,98 +451,8 @@ def _install(op_id, release):
             shutil.rmtree(stage, ignore_errors=True)
 
 
-def _install_reviewed_prusa(op_id, release):
-    """Install the exact reviewed Prusa source artifact, preserving other engines."""
-    engine, version = "prusaslicer", PRUSA_VERSION
-    base = STORE / "versions" / engine
-    target = base / version
-    stage = None
-    archive_path = None
-    try:
-        if (release.get("version") != version
-                or release.get("bundle_sha256") != PRUSA_ARCHIVE_SHA256
-                or release.get("binary_sha256") != PRUSA_BINARY_SHA256
-                or release.get("asset_size") != PRUSA_ASSET_SIZE
-                or release.get("bundle_url") != (
-                    "https://github.com/gavrd7/MakerVault/releases/download/"
-                    + PRUSA_RELEASE_TAG + "/" + PRUSA_ASSET)):
-            raise ValueError("Prusa release identity is not approved.")
-        _write_operation(op_id, status="downloading", progress=2,
-                         message="Downloading approved Prusa native runtime")
-        if any(p.is_symlink() for p in (STORE, STORE / "versions", base, target)):
-            raise ValueError("Unsafe Prusa engine store path.")
-        base.mkdir(parents=True, exist_ok=True)
-        if target.exists():
-            raise ValueError("PrusaSlicer version is already installed.")
-        # Keep downloaded tar outside the extracted stage, so every staged
-        # file is subject to the manifest's exact-content verification.
-        with tempfile.NamedTemporaryFile(prefix=".prusa-source-", suffix=".tar.gz",
-                                         dir=base, delete=False) as temporary:
-            archive_path = Path(temporary.name)
-        archive_path.unlink()
-        _download(release, archive_path, lambda n: _write_operation(op_id, progress=n))
-        _write_operation(op_id, status="verifying", progress=70,
-                         message="Checking Prusa native package and profile checksums")
-        stage = Path(tempfile.mkdtemp(prefix=".prusa-stage-", dir=base))
-        binary = unpack_reviewed_prusa(archive_path, stage)
-        _write_operation(op_id, status="staged", progress=85,
-                         message="Checking isolated Prusa CLI compatibility")
-        # The exact binary already passed an authentic 3,737-extrusion cube
-        # in the pinned GitHub acceptance run. Probe packaged CLI here without
-        # a UI, network, shell, arbitrary input or developer-supplied script.
-        try:
-            probe = subprocess.run([str(binary), "--help"], cwd=stage,
-                env={"HOME": str(stage), "TMPDIR": str(stage),
-                     "PATH": "/usr/bin:/bin", "LANG": "C.UTF-8"},
-                stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
-                stderr=subprocess.DEVNULL, timeout=30, check=False)
-        except (OSError, subprocess.TimeoutExpired) as exc:
-            raise ValueError("Prusa native CLI could not complete its headless check.") from exc
-        if probe.returncode != 0:
-            raise ValueError("Prusa native CLI failed its headless check.")
-        binary_hash = prusa_sha256(binary)
-        if binary_hash != PRUSA_BINARY_SHA256:
-            raise ValueError("Prusa native runtime digest changed after verification.")
-        (stage / IDENTITY).write_text(json.dumps({
-            "engine": engine, "version": version,
-            "binary": str(target / "bin" / "prusa-slicer"),
-            "binary_sha256": binary_hash,
-        }, separators=(",", ":")), encoding="utf-8")
-        make_runtime_worker_readable(stage, required_executables=("bin/prusa-slicer",))
-        stage.chmod(0o755)
-        os.rename(stage, target)
-        stage = None
-        _write_operation(op_id, status="activating", progress=94,
-                         message="Activating verified Prusa runtime")
-        current = _manifest(STORE)
-        if current["engines"]:
-            preserve_active_identities(STORE)
-            (STORE / "previous.json").write_text(
-                json.dumps(current, separators=(",", ":")), encoding="utf-8")
-        _write(STORE, {"schema_version": 1, "engines": {
-            **current["engines"], engine: {
-                "binary": str(target / "bin" / "prusa-slicer"),
-                "version": version, "binary_sha256": binary_hash,
-            },
-        }})
-        _write_operation(op_id, status="completed", progress=100,
-                         message="PrusaSlicer installed and activated",
-                         binary_sha256=binary_hash)
-    except Exception as exc:
-        reason = str(exc) if isinstance(exc, ValueError) else (
-            "Prusa installation could not complete safely (" + type(exc).__name__ + ").")
-        LOGGER.error("Prusa runtime installation failed: %s", reason[:180])
-        _write_operation(op_id, status="failed", progress=0, message=reason[:180])
-    finally:
-        if stage is not None:
-            shutil.rmtree(stage, ignore_errors=True)
-        if archive_path is not None:
-            archive_path.unlink(missing_ok=True)
-
-
 def start_install(engine, version, digest):
     version_ok = (version == BAMBU_VERSION if engine == "bambustudio"
-                  else version == PRUSA_VERSION if engine == "prusaslicer"
                   else isinstance(version, str) and bool(VERSION.fullmatch(version)))
     if engine not in SUPPORTED or not version_ok or not isinstance(digest, str) or not HEX.fullmatch(digest):
         raise ValueError("Unknown engine release.")

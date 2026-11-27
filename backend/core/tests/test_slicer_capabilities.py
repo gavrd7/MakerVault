@@ -34,20 +34,6 @@ class SlicerCapabilityTests(SimpleTestCase):
                 item["status"] == "unverified"
                 for item in native_capabilities(engine, "2.5.0").values()))
 
-    def test_pinned_prusa_verified_features_and_restricted_offline_painting(self):
-        caps = native_capabilities("prusaslicer", "2.9.7")
-        self.assertEqual(caps["variable_layer_profile"]["status"], "verified")
-        self.assertEqual(caps["colour_paint"]["status"], "test_only")
-        self.assertEqual(caps["seam_paint"]["status"], "test_only")
-        self.assertIn("T1–T4", caps["colour_paint"]["reason"])
-        self.assertIn("front, back, left or right", caps["seam_paint"]["reason"])
-        self.assertIn("offline", caps["seam_paint"]["reason"])
-        self.assertIn("offline", caps["colour_paint"]["reason"])
-        self.assertTrue(all(caps[name]["status"] == "verified" for name in (
-            "support_paint", "fuzzy_skin_paint")))
-        self.assertEqual(native_capabilities("prusaslicer", "2.9.6")["variable_layer_profile"]["status"],
-                         "unverified")
-
     def test_creality_colour_paint_experimental_only_on_native_73(self):
         caps = native_capabilities("crealityprint", "7.3.1")
         self.assertEqual(caps["colour_paint"]["status"], "test_only")

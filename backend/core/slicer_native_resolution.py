@@ -14,9 +14,6 @@ MAX_PARENT_DEPTH = 12
 
 
 def resolved_native_profile(profile, *, depth=0, seen=None):
-    if profile.engine == "prusaslicer":
-        from .slicer_prusa_native_resolution import resolved_prusa_profile
-        return resolved_prusa_profile(profile)
     if profile.engine == "bambustudio":
         from .slicer_bambu_native_resolution import resolved_bambu_profile
         return resolved_bambu_profile(profile)

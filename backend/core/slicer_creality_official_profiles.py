@@ -68,7 +68,7 @@ def official_catalogue_models(vendor="Creality"):
     return models_from_machines(_entries("printer", vendor))
 
 
-def search_creality_profiles(query, kind, vendor="Creality", printer_model=None, *, offset=0):
+def search_creality_profiles(query, kind, vendor="Creality", printer_model=None):
     if vendor not in VENDORS or not isinstance(query, str) or len(query.strip()) > 80:
         raise OfficialProfileError("Choose an upstream manufacturer catalogue; search terms must be 80 characters or fewer.")
     term = query.strip().casefold()
@@ -79,7 +79,7 @@ def search_creality_profiles(query, kind, vendor="Creality", printer_model=None,
         "engine": ENGINE, "engine_version": ENGINE_VERSION,
         "vendor": vendor, "kind": kind,
         "source": SOURCE, "ref": REF,
-        "profiles": [{"name": name, "sub_path": path} for name, path in matches[offset:offset + 40]],
+        "profiles": [{"name": name, "sub_path": path} for name, path in matches[:40]],
         "total_matches": len(matches),
         "import_status": "candidate_only",
     }

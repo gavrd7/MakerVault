@@ -16,11 +16,6 @@ def trusted_plate_dimensions(profile):
     if profile.kind != "printer":
         raise SlicerProfileError("A native machine profile is required.")
     raw = resolved_native_profile(profile)
-    if profile.engine == "prusaslicer":
-        # Prusa native FFF presets are bounded, flattened INI files rather
-        # than Orca-compatible JSON. Accept only origin-rectangular beds.
-        from .slicer_prusa_plate import prusa_native_bed_dimensions
-        return prusa_native_bed_dimensions(raw)
     record = json.loads(raw)
     values = record.get("printable_area")
     if profile.engine == "crealityprint" and isinstance(values, str):

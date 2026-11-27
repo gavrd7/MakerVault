@@ -22,7 +22,7 @@ class ExactOfficialCatalogueReleaseTests(SimpleTestCase):
                 "02.09.01.70": ("bambulab/BambuStudio", "v02.09.01.70"),
             },
             "prusaslicer": {
-                "2.9.7": ("prusa3d/PrusaSlicer", "version_2.9.7"),
+                "2.9.6": ("prusa3d/PrusaSlicer", "version_2.9.6"),
             },
             "snapmakerorca": {
                 "2.4.1": ("Snapmaker/OrcaSlicer", "v2.4.1"),
@@ -56,7 +56,7 @@ class ExactOfficialCatalogueReleaseTests(SimpleTestCase):
     def test_unselected_release_defaults_only_to_reviewed_version(self):
         self.assertEqual(default_catalogue_version("crealityprint"), "7.3.1")
         self.assertEqual(default_catalogue_version("bambustudio"), "02.09.01.70")
-        self.assertEqual(default_catalogue_version("prusaslicer"), "2.9.7")
+        self.assertEqual(default_catalogue_version("prusaslicer"), "2.9.6")
         self.assertEqual(default_catalogue_version("snapmakerorca"), "2.4.1")
         self.assertEqual(default_catalogue_version("orcaslicer"), "2.4.2")
         with self.assertRaises(OfficialProfileError):

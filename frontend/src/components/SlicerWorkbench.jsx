@@ -121,20 +121,6 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
   const [engines, setEngines] = useState([]);
   const [jobs, setJobs] = useState([]);
   const [profiles, setProfiles] = useState([]);
-  const [prusaProfileTopology, setPrusaProfileTopology] = useState(null);
-  useEffect(() => {
-    let cancelled = false;
-    setPrusaProfileTopology(null);
-    if (form.engine !== "prusaslicer" || !form.printer_profile_id) return;
-    apiFetch("/api/printing/slicer/profiles/?prusa_printer_topology_id=" +
-      encodeURIComponent(form.printer_profile_id))
-      .then(response => {
-        if (!cancelled && String(response.printer_profile_id) === String(form.printer_profile_id))
-          setPrusaProfileTopology(response.topology || null);
-      })
-      .catch(() => { if (!cancelled) setPrusaProfileTopology(null); });
-    return () => { cancelled = true; };
-  }, [form.engine, form.printer_profile_id]);
   const [profileModal, setProfileModal] = useState("");
   const [managingSavedProfiles, setManagingSavedProfiles] = useState(false);
   const [profileRemoveError, setProfileRemoveError] = useState("");
@@ -164,7 +150,6 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
   const [customBed, setCustomBed] = useState({ enabled: false, x: "220", y: "220" });
   const [flushSettings, setFlushSettings] = useState(null);
   const [slotFilamentProfiles,setSlotFilamentProfiles] = useState([]);
-  const [prusaNativeTools,setPrusaNativeTools] = useState(null);
   const [profileLineages, setProfileLineages] = useState({});
   const [workerConfigured, setWorkerConfigured] = useState(false);
   const [workerDeploymentEnabled, setWorkerDeploymentEnabled] = useState(false);
@@ -173,7 +158,6 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
   const [mayCancel, setMayCancel] = useState(false);
   const [mayDeleteDraft, setMayDeleteDraft] = useState(false);
   const [printSelection, setPrintSelection] = useState(null);
-  const [pendingPrintStart, setPendingPrintStart] = useState(null);
   const [previewFile, setPreviewFile] = useState(null);
   const projectFileRef=useRef(null);
   const [projectName,setProjectName]=useState("MakerVault project");
@@ -340,7 +324,6 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
   const [officialVendors, setOfficialVendors] = useState([]);
   const [officialSourceInfo, setOfficialSourceInfo] = useState(null);
   const [officialResults, setOfficialResults] = useState(null);
-  const [officialSearchParams, setOfficialSearchParams] = useState("");
   const [materialProfileMatches, setMaterialProfileMatches] = useState(null);
   const [officialBusy, setOfficialBusy] = useState(false);
   const [officialError, setOfficialError] = useState("");
@@ -356,52 +339,6 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
-  useEffect(() => {
-    if (!pendingPrintStart) return undefined;
-    let active = true;
-    let reading = false;
-    let checks = 0;
-    const {printerId, connectionId, requestId} = pendingPrintStart;
-    const check = async () => {
-      if (!active || reading) return;
-      if (++checks > 48) {
-        setPendingPrintStart(null);
-        setNotice("Print-start confirmation is still unavailable. Check the printer's live job. " +
-          "Request ID: " + requestId + ". The start command was not resent.");
-        return;
-      }
-      reading = true;
-      try {
-        // Read only the existing journal; the backend will poll printer
-        // telemetry at a bounded rate. Never issue another print command.
-        const response = await apiFetch("/api/printing/printers/" +
-          encodeURIComponent(printerId) + "/connections/" +
-          encodeURIComponent(connectionId) + "/gcode/submissions/" +
-          encodeURIComponent(requestId) + "/");
-        if (!active) return;
-        const receipt = response?.submission;
-        if (!receipt || String(receipt.request_id) !== String(requestId)) return;
-        if (receipt.status === "started" &&
-            !/awaiting .*verif|without acknowledgement|awaiting live job|commands dispatched|not acknowledge|unknown outcome/i.test(receipt.message || "")) {
-          setPendingPrintStart(null);
-          setNotice("Print start verified against the printer's live job for " +
-            (receipt.remote_path || "the submitted file") + ".");
-        } else if (receipt.status === "rejected" || receipt.status === "failed") {
-          setPendingPrintStart(null);
-          setError(receipt.message || "Printer did not confirm the print start.");
-        }
-      } catch (_error) {
-        // Transient telemetry/HTTP failures are neither acceptance nor proof
-        // that a print failed. Retain the existing request for later checks.
-      } finally {
-        reading = false;
-      }
-    };
-    void check();
-    const timer = window.setInterval(check, 2500);
-    return () => { active = false; window.clearInterval(timer); };
-  }, [pendingPrintStart]);
-
 
   const stlFiles = useMemo(() => {
     const visible = files.filter(file => file.category === "mesh" && /\.stl$/i.test(file.filename || file.name || ""));
@@ -418,7 +355,7 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
     const hasWork = projectPlates.some(plate =>
       plate.objects.length || (plate.volumes || []).length) ||
       Object.keys(processOverrides).length > 0 || flushSettings !== null ||
-      slotFilamentProfiles.length > 0 || prusaNativeTools !== null;
+      slotFilamentProfiles.length > 0;
     if (hasWork && !window.confirm(
       "Start a new empty slicer project? Unsaved models, volumes and settings in this workspace will be discarded. Saved drafts, files and profiles are not deleted.")) return;
     plateLocalAssets.forEach(asset => {
@@ -432,7 +369,6 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
     setProcessOverrides({});
     setFlushSettings(null);
     setSlotFilamentProfiles([]);
-    setPrusaNativeTools(null);
     setCustomBed({enabled:false,x:"220",y:"220"});
     setPlateValidation(null);
     setWorkspaceEpoch(epoch => epoch + 1);
@@ -746,7 +682,6 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
     setProcessOverrides(job.settings?.process_overrides || {});
     setFlushSettings(job.settings?.flush_settings || null);
     setSlotFilamentProfiles(job.settings?.slot_filament_profiles || []);
-    setPrusaNativeTools(job.settings?.prusa_native_tools || null);
     userChosePlateRef.current = !!job.plate && job.plate !== "default";
     setEditorOpen(true);
     setForm(current => ({
@@ -996,13 +931,8 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
     if (busy || loading || !canPrepare) return;
     const exportingProject=mode==="project"||mode==="export-project";
     const sliceNow = !["draft","project","export-project","native-material"].includes(mode);
-    const prusaNativeOffline = form.engine==="prusaslicer" && prusaNativeTools !== null;
     const offlineMultiMaterial = sliceNow && mode !== "all" &&
-      (plateNeedsMultiMaterial(plateObjects) || prusaNativeOffline);
-    if(prusaNativeOffline && mode==="all"){
-      setError("Slice the selected Prusa native-tool plate first. Each plate needs separate explicit tool assignments.");
-      return;
-    }
+      plateNeedsMultiMaterial(plateObjects);
     const crealityMaterialTest = offlineMultiMaterial && form.engine==="crealityprint";
     if (crealityMaterialTest) {
       const singlePainted = plateObjects.length === 1 &&
@@ -1087,8 +1017,7 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
               save_gcode_to_library:false,
               ...(flushSettings ? {flush_settings:flushSettings} : {}),
               ...(slotFilamentProfiles.length ? {slot_filament_profiles:slotFilamentProfiles} : {}),
-              ...(prusaNativeOffline ? {prusa_native_tools:prusaNativeTools,multi_material_test:true} : {}),
-              ...(["orcaslicer","prusaslicer"].includes(form.engine)?{process_overrides:processOverrides}:{}),
+              ...(form.engine==="orcaslicer"?{process_overrides:processOverrides}:{}),
             },
           };
           // Each plate is independently checked and admitted by the server.
@@ -1135,11 +1064,9 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
             ...(primeTower?{prime_tower:primeTower}:{}),
             save_gcode_to_library: saveOutput, workflow,
             ...(offlineMultiMaterial ? {multi_material_test:true} : {}),
-            ...(prusaNativeOffline && !offlineMultiMaterial ? {multi_material_test:true} : {}),
             ...(flushSettings ? { flush_settings: flushSettings } : {}),
-            ...(slotFilamentProfiles.length && !prusaNativeOffline ? {slot_filament_profiles:slotFilamentProfiles} : {}),
-            ...(prusaNativeOffline ? {prusa_native_tools:prusaNativeTools} : {}),
-            ...(["orcaslicer", "prusaslicer"].includes(form.engine) ? { process_overrides: processOverrides } : {}) },
+            ...(slotFilamentProfiles.length ? {slot_filament_profiles:slotFilamentProfiles} : {}),
+            ...(form.engine === "orcaslicer" ? { process_overrides: processOverrides } : {}) },
         },
       });
       savedJob = job;
@@ -1206,8 +1133,7 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
   // Catalogue models come from the pinned upstream index, never a guessed
   // printer list. Changing manufacturer or engine invalidates old results.
   useEffect(() => {
-    if (profileModal !== "search" || !officialVendor || importKind === "filament")
-      return undefined;
+    if (profileModal !== "search" || !officialVendor) return undefined;
     let active = true;
     setOfficialModelsBusy(true);
     setOfficialModels([]);
@@ -1229,16 +1155,15 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
       }
     }).finally(() => { if (active) setOfficialModelsBusy(false); });
     return () => { active = false; };
-  }, [profileModal, officialVendor, officialProfileVersion, form.engine, importKind,
-      selectedPrinter?.id, selectedPrinter?.model, selectedPrinter?.name]);
+  }, [profileModal, officialVendor, officialProfileVersion, form.engine, selectedPrinter?.id, selectedPrinter?.model, selectedPrinter?.name]);
   useEffect(() => {
     if (profileModal !== "search" || form.engine !== "orcaslicer" ||
-        importKind !== "filament") {
+        officialVendor !== "OrcaFilamentLibrary" || importKind !== "filament") {
       setOfficialBrands([]);setOfficialBrand("");return undefined;
     }
     let active = true;
     apiFetch("/api/printing/slicer/official-profiles/?" + new URLSearchParams({
-      engine:form.engine,version:officialProfileVersion,brands:"1",unified_filaments:"1",
+      engine:form.engine,version:officialProfileVersion,vendor:officialVendor,brands:"1",
     })).then(result=>{if(active)setOfficialBrands(result.brands||[]);})
       .catch(err=>{if(active)setOfficialError(err.message||"Could not load filament manufacturers.");});
     return ()=>{active=false;};
@@ -1256,36 +1181,13 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
       if (q.length > 80) throw new Error("Search terms must not exceed 80 characters.");
       const params = new URLSearchParams({q, kind:importKind,vendor:officialVendor,
         engine:form.engine,version:officialProfileVersion});
-      if (form.engine==="orcaslicer" && importKind==="filament") {
-        params.set("unified_filaments","1");
-        if (officialBrand) params.set("brand",officialBrand);
-      }
-      if (importKind!=="filament" && !officialManualModel.trim() && officialModel)
-        params.set("model", officialModel);
+      if(officialBrand && importKind==="filament" && officialVendor==="OrcaFilamentLibrary")
+        params.set("brand",officialBrand);
+      if (!officialManualModel.trim() && officialModel) params.set("model", officialModel);
       const result = await apiFetch("/api/printing/slicer/official-profiles/?" + params.toString());
       setOfficialResults(result);
-      setOfficialSearchParams(params.toString());
     } catch (err) {
       setOfficialError(err.message || "Official profile search is unavailable. You can still import a local file.");
-    } finally {
-      setOfficialBusy(false);
-    }
-  }
-
-  async function navigateOfficialProfiles(page) {
-    if (!officialResults || !officialSearchParams || officialBusy ||
-        page < 1 || page > officialResults.total_pages || page === officialResults.page) return;
-    setOfficialBusy(true);
-    setOfficialError("");
-    try {
-      // Keep every search filter exactly as submitted, regardless of changes
-      // to the form since the last search. Only the server-side page changes.
-      const params = new URLSearchParams(officialSearchParams);
-      params.set("page", String(page));
-      const result = await apiFetch("/api/printing/slicer/official-profiles/?" + params.toString());
-      setOfficialResults(result);
-    } catch (err) {
-      setOfficialError(err.message || "Could not load that page of official presets.");
     } finally {
       setOfficialBusy(false);
     }
@@ -1311,14 +1213,14 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
 
   async function importOfficialProfile(candidate, asDefault = false) {
     setOfficialError(""); setOfficialBusy(true);
-    setOfficialImportTarget(candidate.sub_path + "::" + candidate.name);
+    setOfficialImportTarget(candidate.sub_path);
     try {
       if (!form.engine_version || officialProfileVersion !== form.engine_version)
         throw new Error("Selected slicer release changed; reopen official search before importing a native profile.");
       const result = await apiFetch("/api/printing/slicer/official-profiles/", {
         method: "POST",
         body: {
-          kind: importKind, vendor: candidate.vendor || officialVendor, engine: form.engine,
+          kind: importKind, vendor: officialVendor, engine: form.engine,
           engine_version: form.engine_version,
           name: candidate.name, sub_path: candidate.sub_path,
         },
@@ -1379,7 +1281,7 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
   }
 
   async function saveInteractiveProcessProfile(name) {
-    if (!canPrepare || busy || loading || !["orcaslicer", "crealityprint", "bambustudio", "prusaslicer"].includes(form.engine) ||
+    if (!canPrepare || busy || loading || !["orcaslicer", "crealityprint", "bambustudio"].includes(form.engine) ||
         !form.process_profile_id || !Object.keys(processOverrides).length) {
       throw new Error("Choose an installed engine process profile and change a supported setting first.");
     }
@@ -1516,9 +1418,7 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
   }
 
   function openOfficialSearch(kind = materialHint ? "filament" : form.printer_id ? "printer" : "process") {
-    // All Prusa native printer, filament and process presets are discoverable.
-    // Preserve the requested type instead of silently reopening printer search.
-    setImportKind(kind);
+    setImportKind(form.engine === "prusaslicer" ? "printer" : kind);
     setOfficialVendor("");
     // The catalogue must always follow the exact selected slicer release.
     // Never replace an unsupported installed version with a nearby preset.
@@ -1713,13 +1613,6 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
       processOverrides={processOverrides} onProcessOverridesChange={setProcessOverrides}
       flushSettings={flushSettings} onFlushSettingsChange={setFlushSettings}
       slotFilamentProfiles={slotFilamentProfiles} onSlotFilamentProfilesChange={setSlotFilamentProfiles}
-      prusaNativeTools={prusaNativeTools} onPrusaNativeToolsChange={setPrusaNativeTools}
-      onUsePrusaSingleMaterial={profileId => {
-        selectNativeProfile("filament", profileId);
-        setPrusaNativeTools(null);
-        setPrimeTower(null);
-      }}
-      prusaProfileTopology={prusaProfileTopology}
       filamentProfiles={slotFilamentChoices} spools={spools}
       onRememberedProfiles={remembered => {
         setProfiles(current => {
@@ -1786,7 +1679,6 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
               userChosePlateRef.current=false;
               setFlushSettings(null);
               setSlotFilamentProfiles([]);
-              setPrusaNativeTools(null);
               setForm(current => ({
                 ...current, engine: key,
                 plate: key !== current.engine ? "default" : current.plate,
@@ -1818,7 +1710,7 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
                 issues.map(item => item.label).join(", ") +
                 ". Your edits will be preserved. Change version anyway?"
               )) return;
-              setFlushSettings(null);setSlotFilamentProfiles([]);setPrusaNativeTools(null);
+              setFlushSettings(null);setSlotFilamentProfiles([]);
               update("engine_version",version);
             }}>
             <option value="">Choose a slicer version</option>
@@ -2123,77 +2015,54 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
             <input aria-label="Official profile engine version"
               value={form.engine_version || ""} readOnly />
           </label>
+          <label>Manufacturer / upstream catalogue
+            <select value={officialVendor} disabled={officialBusy || !officialVendors.length} onChange={e => {
+              setOfficialVendor(e.target.value);setOfficialBrand("");setOfficialResults(null);
+            }}>
+              {officialVendors.map(vendor => <option key={vendor.id} value={vendor.id}>{vendor.label}</option>)}
+              {!officialVendors.length && <option value="">No catalogue loaded</option>}
+            </select>
+          </label>
+          {form.engine==="orcaslicer" && importKind==="filament" &&
+            officialVendor==="OrcaFilamentLibrary" && <label>Filament manufacturer
+              <select aria-label="Filament manufacturer" value={officialBrand}
+                onChange={e=>{setOfficialBrand(e.target.value);setOfficialResults(null);}}>
+                <option value="">All manufacturers</option>
+                {officialBrands.map(brand=><option key={brand} value={brand}>{brand}</option>)}
+              </select>
+            </label>}
+          <label>Printer model
+            <select value={officialModel} disabled={officialModelsBusy || !officialVendor || officialVendor==="OrcaFilamentLibrary"}
+              onChange={e => { setOfficialModel(e.target.value); setOfficialResults(null); }}>
+              <option value="">All models / generic profiles</option>
+              {officialModels.map(model => <option key={model} value={model}>{model}</option>)}
+            </select>
+          </label>
           <label>Profile type
-            <select aria-label="Profile type" value={importKind} disabled={officialBusy} onChange={e => {
+            <select value={importKind} disabled={officialBusy} onChange={e => {
                 const kind=e.target.value;
                 setImportKind(kind);setOfficialResults(null);setOfficialImportNotice("");setOfficialBrand("");
-                setOfficialQuery("");setOfficialModel("");setOfficialManualModel("");
+                setOfficialQuery("");
                 if(form.engine==="orcaslicer" && kind==="filament" &&
                     officialVendors.some(v=>v.id==="OrcaFilamentLibrary"))
                   setOfficialVendor("OrcaFilamentLibrary");
-                else
-                  setOfficialVendor(suggestOfficialVendor(selectedPrinter,officialVendors));
               }}>
               <option value="printer">Printer / machine</option>
               <option value="filament">Filament</option>
               <option value="process">Process</option>
             </select>
           </label>
-          {importKind === "filament" ? (
-            <label>Filament manufacturer
-              {form.engine === "orcaslicer" ? (
-                <select aria-label="Filament manufacturer" value={officialBrand}
-                  disabled={officialBusy || !officialVendors.length}
-                  onChange={e=>{setOfficialBrand(e.target.value);setOfficialResults(null);}}>
-                  <option value="">All manufacturers</option>
-                  {officialBrands.map(brand=><option key={brand} value={brand}>{brand}</option>)}
-                </select>
-              ) : (
-                <select aria-label="Filament manufacturer" value={officialVendor}
-                  disabled={officialBusy || !officialVendors.length}
-                  onChange={e=>{setOfficialVendor(e.target.value);setOfficialResults(null);}}>
-                  {officialVendors.map(vendor=><option key={vendor.id} value={vendor.id}>{vendor.label}</option>)}
-                  {!officialVendors.length && <option value="">No manufacturers loaded</option>}
-                </select>
-              )}
-            </label>
-          ) : (
-            <>
-              <label>Manufacturer / upstream catalogue
-                <select value={officialVendor} disabled={officialBusy || !officialVendors.length} onChange={e => {
-                  setOfficialVendor(e.target.value);setOfficialBrand("");setOfficialResults(null);
-                }}>
-                  {officialVendors.filter(vendor=>vendor.id!=="OrcaFilamentLibrary").map(vendor =>
-                    <option key={vendor.id} value={vendor.id}>{vendor.label}</option>)}
-                  {!officialVendors.length && <option value="">No catalogue loaded</option>}
-                </select>
-              </label>
-              <label>Printer model
-                <select value={officialModel} disabled={officialModelsBusy || !officialVendor}
-                  onChange={e => { setOfficialModel(e.target.value); setOfficialResults(null); }}>
-                  <option value="">All models / generic profiles</option>
-                  {officialModels.map(model => <option key={model} value={model}>{model}</option>)}
-                </select>
-              </label>
-            </>
-          )}
-          <label className="full">{importKind==="filament"
-            ? "Filter filament profiles by printer/model name (optional)"
-            : "Manual printer/model search (optional)"}
+          <label className="full">Manual printer/model search (optional)
             <input value={officialManualModel} maxLength="80"
               onChange={e => { setOfficialManualModel(e.target.value); setOfficialResults(null); }}
               placeholder="Type a model, e.g. K1, instead of selecting it above" />
-            <small>{importKind==="filament"
-              ? "Optional text search across the selected filament manufacturer's native preset names."
-              : "Typing here overrides the printer-model dropdown. Search terms match anywhere in the official profile name."}</small>
+            <small>Typing here overrides the printer-model dropdown. Search terms match anywhere in the official profile name.</small>
           </label>
           <label className="full">Search official presets (optional)
             <input value={officialQuery} maxLength="80" onChange={e => setOfficialQuery(e.target.value)} placeholder="e.g. PLA or 0.20mm Standard" />
           </label>
           <div className="full settingsActions">
-            <button type="submit" disabled={officialBusy || !officialVendors.length ||
-                (form.engine==="orcaslicer" && importKind==="filament"
-                  ? !officialSourceInfo : !officialVendor)}>
+            <button type="submit" disabled={officialBusy || !officialVendor || !officialVendors.length}>
               {officialBusy ? "Searching…" : "Search official profiles"}
             </button>
           </div>
@@ -2201,28 +2070,15 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
         <div className="full settingsActions slicerOfficialImportAlternative"><button type="button" onClick={() => { setProfileModal("import"); setOfficialError(""); }}>Import native profile file instead</button></div>
         {officialError && <p className="integrationError" role="alert">{officialError}</p>}
         {officialImportNotice && <p role="status" className="slicerProfileImportNotice">{officialImportNotice}</p>}
-        {form.engine==="orcaslicer" && importKind==="filament" &&
-          <p className="slicerPlateHint">Native filament presets from every available official Orca manufacturer catalogue are imported
+        {form.engine==="orcaslicer" && officialVendor==="OrcaFilamentLibrary" &&
+          <p className="slicerPlateHint">Native filament manufacturer presets are imported
             from the selected OrcaSlicer release. Preset dependencies are checked automatically.</p>}
         {officialResults && <div className="printingStack" role="region" aria-label="Official profile search results">
-          {officialResults.partial_catalogues > 0 &&
-            <p role="status">Some upstream manufacturer catalogues could not be retrieved. Results may be incomplete; retry the search later.</p>}
-          <p>{officialResults.total_matches} matching official presets in {officialResults.vendor} · showing {officialResults.profiles.length ? (officialResults.page - 1) * officialResults.page_size + 1 : 0}–{(officialResults.page - 1) * officialResults.page_size + officialResults.profiles.length} · original upstream release {officialResults.ref}{officialResults.printer_model_filter ? " · filtered for " + officialResults.printer_model_filter + " (name-based, not verified compatibility)" : ""}</p>
-          {officialResults.total_pages > 1 && <nav className="slicerProfileNavigation" aria-label="Official profile pages">
-            <button type="button" onClick={() => navigateOfficialProfiles(1)}
-              disabled={officialBusy || officialResults.page <= 1} aria-label="First page">« First</button>
-            <button type="button" onClick={() => navigateOfficialProfiles(officialResults.page - 1)}
-              disabled={officialBusy || officialResults.page <= 1} aria-label="Previous page">‹ Previous</button>
-            <span aria-live="polite">Page {officialResults.page} of {officialResults.total_pages}</span>
-            <button type="button" onClick={() => navigateOfficialProfiles(officialResults.page + 1)}
-              disabled={officialBusy || officialResults.page >= officialResults.total_pages} aria-label="Next page">Next ›</button>
-            <button type="button" onClick={() => navigateOfficialProfiles(officialResults.total_pages)}
-              disabled={officialBusy || officialResults.page >= officialResults.total_pages} aria-label="Last page">Last »</button>
-          </nav>}
-          {officialResults.profiles.map(candidate => <div className="cameraSourceRow slicerOfficialProfileRow" key={(candidate.vendor || officialVendor) + "::" + candidate.sub_path + "::" + candidate.name}>
+          <p>{officialResults.total_matches} matching official presets in {officialResults.vendor} · showing up to {officialResults.profiles.length} · original upstream release {officialResults.ref}{officialResults.printer_model_filter ? " · filtered for " + officialResults.printer_model_filter + " (name-based, not verified compatibility)" : ""}</p>
+          {officialResults.profiles.map(candidate => <div className="cameraSourceRow slicerOfficialProfileRow" key={candidate.sub_path}>
             <div className="cameraSourceIdentity">
               <strong>{candidate.name}</strong>
-              <small>{candidate.vendor && candidate.vendor + " · "}{candidate.sub_path}</small>
+              <small>{candidate.sub_path}</small>
             </div>
             <div className="cameraSourceActions">
               <button type="button" onClick={() => importOfficialProfile(candidate)} disabled={!canPrepare || officialBusy}>
@@ -2232,23 +2088,12 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
                 Import &amp; set default
               </button>
             </div>
-            {officialImportTarget === candidate.sub_path + "::" + candidate.name && officialError &&
+            {officialImportTarget === candidate.sub_path && officialError &&
               <p className="integrationError" role="alert">{officialError}</p>}
-            {officialImportTarget === candidate.sub_path + "::" + candidate.name && !officialError && officialImportNotice &&
+            {officialImportTarget === candidate.sub_path && !officialError && officialImportNotice &&
               <p role="status" className="slicerProfileImportNotice">{officialImportNotice}</p>}
           </div>)}
-          {officialResults.total_pages > 1 && <nav className="slicerProfileNavigation" aria-label="Official profile pages">
-            <button type="button" onClick={() => navigateOfficialProfiles(1)}
-              disabled={officialBusy || officialResults.page <= 1} aria-label="First page">« First</button>
-            <button type="button" onClick={() => navigateOfficialProfiles(officialResults.page - 1)}
-              disabled={officialBusy || officialResults.page <= 1} aria-label="Previous page">‹ Previous</button>
-            <span aria-live="polite">Page {officialResults.page} of {officialResults.total_pages}</span>
-            <button type="button" onClick={() => navigateOfficialProfiles(officialResults.page + 1)}
-              disabled={officialBusy || officialResults.page >= officialResults.total_pages} aria-label="Next page">Next ›</button>
-            <button type="button" onClick={() => navigateOfficialProfiles(officialResults.total_pages)}
-              disabled={officialBusy || officialResults.page >= officialResults.total_pages} aria-label="Last page">Last »</button>
-          </nav>}
-          {!officialResults.profiles.length && <p>No matching presets. Try fewer search terms, choose All manufacturers, or select another printer catalogue.</p>}
+          {!officialResults.profiles.length && <p>No matching presets. Try fewer manual search terms or select All models to browse the complete manufacturer catalogue.</p>}
         </div>}
       </div>
 
@@ -2620,26 +2465,14 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
         initialAction={printSelection.action === "upload" ? "upload" : "print"}
         onChanged={refresh}
         onSubmissionConfirmed={receipt => {
-          // Close only the printer action dialog. Keep the completed slice
-          // and its G-code preview available, regardless of slicer engine.
+          // The child only reports a confirmed upload or verified print start.
+          // A dispatched-but-unverified Creality command must remain visible.
           setPrintSelection(null);
+          setPreviewJobId(null);
+          setShowDrafts(false);
           setNotice(receipt.status === "uploaded"
             ? "Sliced G-code uploaded and confirmed on the printer."
-            : "Print start confirmed by the printer.");
-        }}
-        onSubmissionDispatched={receipt => {
-          // Creality's unacknowledged native start is a recorded dispatch,
-          // NOT a verified print. Keep its status and request ID visible in
-          // the preview; never retry a print-start automatically.
-          setPrintSelection(null);
-          setPendingPrintStart({
-            requestId: receipt.request_id,
-            printerId: printSelection.printer.id,
-            connectionId: printSelection.connectionId,
-          });
-          setNotice("Print command sent; live start is not yet verified. " +
-            "Check the printer display. Request ID: " + receipt.request_id +
-            ". Do not resend unless its status is independently resolved.");
+            : "Print start confirmed. Returned to the slicer workspace.");
         }}
         onClose={() => setPrintSelection(null)}
       /> : null;

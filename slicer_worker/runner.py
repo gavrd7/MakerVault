@@ -10,9 +10,6 @@ import os
 import signal
 import subprocess
 
-from .prusa_vendor_profiles import PrusaPresetError, validate_flat_prusa_preset
-from .stl_validation import StlValidationError, validate_stl
-
 
 MAX_GCODE_BYTES = 64 * 1024 * 1024
 MAX_MODEL_BYTES = 32 * 1024 * 1024
@@ -48,64 +45,26 @@ def prusa_command(binary: Path, workdir: Path) -> list[str]:
     """The verified worker image provides the executable, never a browser."""
     if binary.is_symlink() or not binary.is_file() or not os.access(binary, os.X_OK):
         raise WorkerError("Pinned PrusaSlicer executable is unavailable.")
-    project = workdir / "input.3mf"
-    offline = workdir / "prusa-offline-mmu.marker"
-    xl = workdir / "prusa-offline-xl.marker"
-    colour = workdir / "prusa-offline-colour.marker"
-    xl_colour = workdir / "prusa-offline-xl-colour.marker"
-    if sum(marker.exists() for marker in (offline,xl,colour,xl_colour)) > 1:
-        raise WorkerError("Conflicting native Prusa offline tool contracts.")
-    for marker in (offline, xl, colour, xl_colour):
-        if marker.is_symlink() or (marker.exists() and
-                (not marker.is_file() or marker.read_bytes() != b"v1")):
-            raise WorkerError("Invalid native Prusa offline marker.")
-    if project.exists() or project.is_symlink():
-        model = _regular_file(workdir, "input.3mf", MAX_MODEL_BYTES)
-        if not (offline.exists() or xl.exists() or colour.exists() or xl_colour.exists()):
-            from .prusa_3mf_validation import validate_prusa_native_3mf
-            validate_prusa_native_3mf(model.read_bytes())
-        # The service performed the independent MMU 3MF/profile validation
-        # before creating this literal v1 marker. A standalone runner cannot
-        # bypass it: the worker-only native contract is checked again in the
-        # service and audited against actual post-slice toolpaths.
-        if (workdir / "input.stl").exists():
-            raise WorkerError("Ambiguous Prusa input geometry.")
-    else:
-        if offline.exists() or xl.exists() or colour.exists() or xl_colour.exists():
-            raise WorkerError("Prusa offline material slicing requires native 3MF input.")
-        model = _regular_file(workdir, "input.stl", MAX_MODEL_BYTES)
-        try:
-            validate_stl(model.read_bytes())
-        except StlValidationError:
-            raise WorkerError("Prusa STL model is invalid.") from None
+    model = _regular_file(workdir, "input.stl", MAX_MODEL_BYTES)
     profiles = [
         _regular_file(workdir, name, MAX_PROFILE_BYTES)
         for name in ("printer.ini", "filament.ini", "process.ini")
     ]
-    for kind, profile in zip(("printer", "filament", "print"), profiles):
-        # Real Prusa vendor bundles contain named sections + inheritance.
-        # Only fully resolved, bounded flat settings may reach the native CLI.
+    for profile in profiles:
+        # Native profiles can include arbitrary post-processing scripts.
+        # Reject execution hooks before launching any slicer.
         data = profile.read_bytes()
-        if b"\x00" in data:
+        if b"\\x00" in data:
             raise WorkerError("Native profile contains binary data.")
-        try:
-            validate_flat_prusa_preset(data, kind=kind)
-        except PrusaPresetError as exc:
-            # Validator messages are fixed literals; never expose profile text.
-            raise WorkerError(str(exc)) from None
+        for line in data.decode("utf-8", "replace").splitlines():
+            key = line.partition("=")[0].strip().lower()
+            if key in {"post_process", "post_process_scripts"}:
+                raise WorkerError("Post-processing scripts are forbidden.")
     output = _output_path(workdir)
-    # A marker is written only after the authenticated worker validated the
-    # Prusa-only placed-STL request. This is a fixed native flag, never a
-    # user-controlled command argument.
-    placed = workdir / "prusa-placed-stl.marker"
-    if placed.is_symlink():
-        raise WorkerError("Invalid placed-STL marker.")
-    if placed.exists() and (not placed.is_file() or placed.read_bytes() != b"v1"):
-        raise WorkerError("Invalid placed-STL marker.")
     return [
         str(binary), "--load", str(profiles[0]), "--load", str(profiles[1]),
         "--load", str(profiles[2]), "--export-gcode", "--output", str(output),
-        *(["--dont-arrange"] if placed.exists() or model.suffix == ".3mf" else []), str(model),
+        str(model),
     ]
 
 

@@ -92,74 +92,6 @@ class SliceJobApiTests(TestCase):
         self.assertIs(job.settings.get("multi_material_test"), True)
         self.assertEqual(len(job.settings["plate_objects"]), 1)
 
-    def test_prusa_native_profile_topology_is_owner_scoped_and_not_guessed(self):
-        from unittest.mock import patch
-        profile = SlicerProfile.objects.create(
-            owner=self.owner, file_asset=self.input_asset, engine="prusaslicer",
-            engine_version="2.9.7", kind="printer", name="Native eight-tool fixture",
-            content_sha256="0" * 64,
-        )
-        url = "/api/printing/slicer/profiles/?prusa_printer_topology_id=" + str(profile.pk)
-        self.client.force_login(self.other)
-        self.assertEqual(self.client.get(url).status_code, 404)
-        self.client.force_login(self.owner)
-        with (patch("core.slicer_prusa_native_resolution.resolved_prusa_profile",
-                    return_value=b"native-profile") as resolved,
-              patch("core.slicer_prusa_machine_topology.prusa_machine_topology",
-                    return_value={"kind": "indx", "logical_tool_count": 8,
-                                  "physical_nozzle_count": 8}) as inspected):
-            response = self.client.get(url)
-        self.assertEqual(response.status_code, 200, response.content)
-        self.assertEqual(response.json()["printer_profile_id"], str(profile.pk))
-        self.assertEqual(response.json()["topology"]["logical_tool_count"], 8)
-        self.assertEqual(response.json()["topology"]["kind"], "indx")
-        resolved.assert_called_once()
-        inspected.assert_called_once_with(b"native-profile")
-        self.assertEqual(self.client.get(
-            "/api/printing/slicer/profiles/?prusa_printer_topology_id=invalid"
-        ).status_code, 422)
-
-    def test_prusa_native_tool_draft_roundtrips_without_live_printer_slots(self):
-        """Saving virtual MMU/XL mappings never implies any printer connection."""
-        from core.slicer_api import _draft_plate_settings
-        identifiers = [str(uuid.uuid4()) for _ in range(2)]
-        filament_ids = [str(uuid.uuid4()) for _ in range(2)]
-        objects = [{
-            "instance_id": identity, "asset_id": str(self.input_asset.pk),
-            "x_mm": -30 + index * 60, "y_mm": 0,
-            "rotation_deg": 0, "scale_percent": 100, "color": "#abcdef",
-        } for index, identity in enumerate(identifiers)]
-        config = {
-            "version": 1, "mode": "mmu", "tool_count": 2,
-            "filament_profile_ids": filament_ids,
-            "model_tools": [
-                {"instance_id": identity, "tool": index + 1}
-                for index, identity in enumerate(identifiers)],
-            "purge_matrix": [[0, 80], [90, 0]],
-        }
-        settings = {
-            "plate_objects": objects, "plate_label": "Prusa MMU",
-            "multi_material_test": True, "prusa_native_tools": config,
-            "prime_tower": {"x": 55, "y": 150},
-            "plates": [{"id": "plate-1", "name": "Prusa MMU",
-                        "objects": objects, "prime_tower": {"x": 55, "y": 150}}],
-            "active_plate_id": "plate-1",
-        }
-        checked = _draft_plate_settings(self.owner, self.input_asset, settings)
-        self.assertEqual(checked["prusa_native_tools"], config)
-        self.client.force_login(self.owner)
-        response = self.post({**self.payload, "engine_version": "2.9.7",
-                              "settings": settings})
-        self.assertEqual(response.status_code, 201, response.content)
-        saved = SliceJob.objects.get(pk=response.json()["job"]["id"])
-        self.assertEqual(saved.settings["prusa_native_tools"], config)
-        self.assertTrue(saved.settings["multi_material_test"])
-        self.assertFalse(saved.settings.get("material_tool_bindings"))
-        self.assertFalse(saved.settings.get("slot_filament_profiles"))
-        forbidden = self.post({**self.payload, "engine": "orcaslicer",
-                               "engine_version": "2.5.0", "settings": settings})
-        self.assertEqual(forbidden.status_code, 400)
-
     def test_native_volume_ids_cannot_collide_with_models_or_other_volumes(self):
         from core.slicer_api import _draft_plate_settings
         first_id, second_id = str(uuid.uuid4()), str(uuid.uuid4())
@@ -908,22 +840,9 @@ class SliceJobApiTests(TestCase):
         saved = SliceJob.objects.get(pk=result.json()["job"]["id"]).settings
         self.assertEqual(saved["material_tool_bindings"], routing)
         self.assertEqual(saved["material_topology"], "single_nozzle_changer")
-        # Draft mappings reflect explicit reported/capability data rather than
-        # a legacy sixteen-tool UI ceiling. Native slice validation stays separate.
-        extended = [{"slot_id": f"reported-bay-{index}", "tool_index": index}
-                    for index in range(20)]
-        accepted = self.post({**self.payload, "settings": {
-            "plate_objects": [instance],
-            "material_tool_bindings": extended,
-            "material_topology": "single_nozzle_changer",
-        }})
-        self.assertEqual(accepted.status_code, 201, accepted.content)
-        self.assertEqual(SliceJob.objects.get(pk=accepted.json()["job"]["id"]).settings[
-            "material_tool_bindings"], extended)
         for invalid in (
             [{"slot_id": "bay-4", "tool_index": True}],
-            [{"slot_id": "bay-4", "tool_index": -1}],
-            [{"slot_id": "bay-4", "tool_index": 1024}],
+            [{"slot_id": "bay-4", "tool_index": 17}],
             [{"slot_id": "bay-4", "tool_index": 0},
              {"slot_id": "bay-1", "tool_index": 0}],
             [{"slot_id": "bay-4", "tool_index": 0, "commands": "T3"}],
@@ -946,7 +865,7 @@ class SliceJobApiTests(TestCase):
         response = self.post({**self.payload, "settings": {"plate_objects": [obj]}})
         self.assertEqual(response.status_code, 400, response.content)
 
-    def test_visual_multi_stl_plate_requires_native_profiles_before_slicing(self):
+    def test_visual_multi_stl_plate_is_saved_but_never_slicable(self):
         from core.slicer_execution import SlicerExecutionError, validate_scheduling
         self.client.force_login(self.owner)
         second = FileAsset.objects.create(
@@ -967,7 +886,7 @@ class SliceJobApiTests(TestCase):
         self.assertEqual(len(row.settings["plate_objects"]), 2)
         self.assertEqual(row.settings["plate_objects"][1]["rotation_deg"], 90.0)
         self.assertFalse(result.json()["job"]["can_slice"])
-        with self.assertRaisesRegex(SlicerExecutionError, "native printer profile"):
+        with self.assertRaisesRegex(SlicerExecutionError, "does not yet support native build-plate slicing"):
             validate_scheduling(row, {"prusaslicer": {"enabled": True, "verified": True}})
         self.assertEqual(self.client.post(f"{self.url}{row.pk}/start/").status_code, 409)
 
