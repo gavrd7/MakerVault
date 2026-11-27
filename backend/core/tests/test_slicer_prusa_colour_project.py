@@ -62,6 +62,41 @@ class PrusaNativeColourProjectTests(TestCase):
                 self.assertEqual(receipt["tools"], (1, selected+1))
                 self.assertGreater(receipt["colour_facets"], 0)
 
+    def test_two_distinct_wall_colours_retain_three_independent_native_tools(self):
+        from core.slicer_plate_3mf import _triangles
+        from core.slicer_native_support_paint import _fingerprint
+        stl, _painted, _states, existing = fixture(include_paint=True)
+        faces = list(_triangles(stl))
+        minimum = [min(v[a] for face in faces for v in face) for a in range(3)]
+        maximum = [max(v[a] for face in faces for v in face) for a in range(3)]
+        origin = ((minimum[0]+maximum[0])/2,
+                  (minimum[1]+maximum[1])/2, minimum[2])
+        local = [[tuple(v[a]-origin[a] for a in range(3)) for v in face]
+                 for face in faces]
+        back = [{"face":i, "polygon":[list(v) for v in face]}
+                for i,face in enumerate(local)
+                if all(abs(v[1]-10)<.00001 for v in face)]
+        self.assertEqual(len(back),2)
+        paint = {**existing, "signature":_fingerprint(local),
+                 "palette":[*existing["palette"],
+                            {"color":"#fadd4d","label":"T2"}],
+                 "regions":[*existing["regions"],
+                            {"slot":2,"patches":back}]}
+        project = self.candidate(settings={"colour_paint":paint},
+                                 tool_map={1:1,2:2})
+        with zipfile.ZipFile(io.BytesIO(project)) as z:
+            raw = z.read("3D/3dmodel.model")
+        self.assertIn(b'slic3rpe:mmu_segmentation="8"',raw)
+        self.assertIn(b'slic3rpe:mmu_segmentation="0C"',raw)
+        receipt = validate_prusa_material_candidate(
+            project, printer_ini=ini("0.4,0.4,0.4,0.4,0.4","1"),
+            colour=True)
+        self.assertEqual(receipt["tools"],(1,2,3))
+        self.assertGreater(receipt["colour_facets"],3)
+        with self.assertRaises(SlicerProfileError):
+            self.candidate(settings={"colour_paint":paint},
+                           tool_map={1:1})
+
     def test_painted_tools_outside_native_printer_capacity_are_blocked(self):
         candidate = self.candidate(tool_map={1:4})
         for count in (2,3,4):
