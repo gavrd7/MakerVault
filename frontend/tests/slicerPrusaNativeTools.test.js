@@ -91,7 +91,7 @@ test("independent XL and INDX heads enable local native modifiers and variable l
   assert.match(prepare,/object\.support_paint\?\.regions\?\.length/);
   assert.match(prepare,/object\.seam_paint\?\.regions\?\.length/);
   assert.match(prepare,/object\.fuzzy_skin_paint\?\.regions\?\.length/);
-  assert.match(editor,/value\.mode==="indx"/);
+  assert.match(editor,/printerTopology\?\.kind==="indx" \? "indx"/);
   assert.match(editor,/Prusa XL/);
 });
 
