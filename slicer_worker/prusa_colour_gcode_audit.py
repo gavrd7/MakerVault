@@ -162,3 +162,168 @@ def audit_prusa_offline_colour_gcode(data, project, *, printer_ini, tool, tower)
     if any(n<10 for n in tower_hits.values()):
         raise WorkerError("Prusa painted G-code lacks native tool-specific tower purging.")
     return {"painted_wall_moves":walls,"tower_extrusion_moves":tower_hits}
+
+
+def _two_painted_wall_regions(project, tools):
+    """Require two complete disjoint native-painted opposite walls in one 3MF.
+
+    This deliberately does NOT admit arbitrary patches, side faces or XL.
+    Tool identities come from the independent 3MF validator, not browser
+    swatch labels. All model-facing triangles on the two opposite walls
+    must have the matching exact unsplit Prusa TriangleSelector state.
+    """
+    if (not isinstance(tools,(tuple,list)) or len(tools)!=2 or
+            any(type(t) is not int or not 1<=t<=4 for t in tools) or
+            tools[0]==tools[1]):
+        raise WorkerError("Prusa multi-swatch requires two distinct native tools.")
+    try:
+        with zipfile.ZipFile(io.BytesIO(project)) as archive:
+            root=SafeET.fromstring(archive.read(MODEL))
+        objects=root.findall("./"+NS+"resources/"+NS+"object")
+        if len(objects)!=1:
+            raise ValueError()
+        obj=objects[0]
+        vertices=obj.findall("./"+NS+"mesh/"+NS+"vertices/"+NS+"vertex")
+        faces=obj.findall("./"+NS+"mesh/"+NS+"triangles/"+NS+"triangle")
+        points=[tuple(float(v.get(a)) for a in ("x","y","z")) for v in vertices]
+        if (not 3<=len(points)<=1500000 or not 4<=len(faces)<=500000 or
+                any(not all(math.isfinite(v) and abs(v)<2000 for v in p)
+                    for p in points)):
+            raise ValueError()
+        ylo=min(p[1] for p in points)
+        yhi=max(p[1] for p in points)
+        if yhi-ylo<4:
+            raise ValueError()
+        sides={"front":(ylo,tools[0]),"back":(yhi,tools[1])}
+        coverage={"front":[], "back":[]}
+        for face in faces:
+            verts=[points[int(face.get(k))] for k in ("v1","v2","v3")]
+            state=face.get(PAINT)
+            side=next((name for name,(y,_tool) in sides.items()
+                       if all(abs(p[1]-y)<.0001 for p in verts)),None)
+            if side is None:
+                if state is not None:
+                    raise ValueError()
+                continue
+            if state != next(key for key,value in PAINTED_STATES.items()
+                             if value==sides[side][1]):
+                raise ValueError()
+            coverage[side].extend(verts)
+        regions={}
+        for side, vertices in coverage.items():
+            if not vertices:
+                raise ValueError()
+            xs=[p[0] for p in vertices]
+            zs=[p[2] for p in vertices]
+            if max(xs)-min(xs)<3 or max(zs)-min(zs)<3:
+                raise ValueError()
+            y=sides[side][0]
+            regions[side]=(min(xs)-1,max(xs)+1,y-2,y+2)
+        if (regions["front"][3]>=regions["back"][2]):
+            raise ValueError()
+        return regions
+    except (OSError, ValueError, TypeError, IndexError, KeyError,
+            StopIteration, zipfile.BadZipFile, OverflowError, AttributeError):
+        raise WorkerError("Prusa multi-swatch native facets are not two complete opposite walls.") from None
+
+
+def audit_prusa_dual_colour_gcode(data, project, *, printer_ini, tools, tower):
+    """Research-only 2-swatch MMU candidate: exact T1/T2 walls + T0 purge.
+
+    This is NOT wired to production job admission. Success requires genuine
+    moving extrusions on each assigned wall and isolated purge movements from
+    all three tools, never merely a CLI exit or a selected T command.
+    """
+    regions=_two_painted_wall_regions(project,tools)
+    receipt=validate_prusa_material_candidate(
+        project, printer_ini=printer_ini, colour=True, tower=tower)
+    expected=tuple(sorted((1,tools[0]+1,tools[1]+1)))
+    if receipt["tools"]!=expected:
+        raise WorkerError("Native Prusa two-swatch tool attribution changed.")
+    if not isinstance(data,bytes) or not 0<len(data)<=90*1024*1024:
+        raise WorkerError("Invalid Prusa two-swatch output.")
+    if (not isinstance(tower,(tuple,list)) or len(tower)!=5 or
+            any(type(v) not in (int,float) or not math.isfinite(v) for v in tower)):
+        raise WorkerError("Invalid Prusa multi-swatch purge geometry.")
+    tx,ty=tower[:2]
+    tower_box=(tx-6,tx+65,ty-12,ty+45)
+    selected={0,*tools}
+    wall_counts={tool:{"front":0,"back":0} for tool in selected}
+    purge={tool:0 for tool in selected}
+    role=""
+    active=None
+    x=y=None
+    e=0.
+    relative_e=relative_xy=False
+    for index,raw in enumerate(io.BytesIO(data)):
+        if index>=2000000 or len(raw)>16384:
+            raise WorkerError("Prusa two-swatch G-code exceeds audit limits.")
+        try:
+            line=raw.decode("utf-8").strip()
+        except UnicodeDecodeError:
+            raise WorkerError("Prusa two-swatch G-code must be UTF-8.") from None
+        if line.startswith(";TYPE:"):
+            role=line.partition(":")[2].strip().lower()
+        cmd=line.split(";",1)[0].strip()
+        if not cmd:
+            continue
+        op=cmd.split(None,1)[0].upper()
+        if op.startswith("T") and op[1:].isdigit():
+            active=int(op[1:])
+            if active not in selected:
+                raise WorkerError("Unassigned tool appeared in Prusa two-swatch output.")
+            continue
+        if op not in ("M82","M83","G90","G91","G92","G0","G00","G1","G01"):
+            continue
+        values={k.upper():float(v) for k,v in WORD.findall(cmd)}
+        if any(not math.isfinite(v) or abs(v)>1e9 for v in values.values()):
+            raise WorkerError("Invalid Prusa two-swatch motion.")
+        if op=="M82":
+            relative_e=False
+        elif op=="M83":
+            relative_e=True
+        elif op=="G90":
+            relative_xy=False
+        elif op=="G91":
+            relative_xy=True
+        elif op=="G92":
+            e=values.get("E",e)
+            x=values.get("X",x)
+            y=values.get("Y",y)
+        else:
+            previous=(x,y)
+            if relative_xy:
+                x=x+values["X"] if x is not None and "X" in values else (
+                    None if "X" in values else x)
+                y=y+values["Y"] if y is not None and "Y" in values else (
+                    None if "Y" in values else y)
+            else:
+                x=values.get("X",x)
+                y=values.get("Y",y)
+            if "E" not in values:
+                continue
+            amount=values["E"] if relative_e else values["E"]-e
+            e=e+values["E"] if relative_e else values["E"]
+            if (amount<=1e-6 or op not in ("G1","G01") or
+                    active not in selected or None in (x,y,*previous) or
+                    abs(x-previous[0])+abs(y-previous[1])<=1e-7):
+                continue
+            def contained(box):
+                return (box[0]<=x<=box[1] and box[2]<=y<=box[3]
+                        and box[0]<=previous[0]<=box[1]
+                        and box[2]<=previous[1]<=box[3])
+            if contained(tower_box):
+                purge[active]+=1
+            if "external perimeter" in role:
+                for side,box in regions.items():
+                    if contained(box):
+                        wall_counts[active][side]+=1
+    if (wall_counts[tools[0]]["front"]<20 or
+            wall_counts[tools[1]]["back"]<20 or
+            any(wall_counts[tool][side]>2
+                for side,allowed in (("front",tools[0]),("back",tools[1]))
+                for tool in selected if tool!=allowed)):
+        raise WorkerError("Prusa two-swatch output failed wall-local tool attribution.")
+    if any(n<10 for n in purge.values()):
+        raise WorkerError("Prusa two-swatch output lacks tool-specific wipe-tower purging.")
+    return {"wall_moves":wall_counts,"tower_extrusion_moves":purge}
