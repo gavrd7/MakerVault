@@ -197,7 +197,7 @@ def validate_prusa_offline_xl_colour_inputs(*, project, printer, filament, proce
         project, printer_ini=printer, colour=True, independent_colour=True)
     expected=tuple(sorted((1, *(t+1 for t in selected))))
     if receipt["objects"]!=1 or receipt["tools"]!=expected or receipt["wipe_tower"]:
-        raise WorkerError("Prusa XL painted model tool mapping changed.")
+        raise WorkerError("Prusa XL painted model tool mapping changed: native="+repr(receipt["tools"])+" expected="+repr(expected))
     if len(selected)==4:
         from .prusa_four_wall_audit import four_painted_wall_regions
         walls=four_painted_wall_regions(project)
