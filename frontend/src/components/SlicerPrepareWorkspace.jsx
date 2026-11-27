@@ -944,9 +944,14 @@ export default function SlicerPrepareWorkspace({
     : !projectHasModels ? "Add a model to at least one build plate first."
     : !profilesReady ? "Missing native " + missingNativeProfiles.join(", ") + (missingNativeProfiles.length === 1 ? " profile" : " profiles") + ". Choose the matching profiles in Slicer setup."
     : "";
-  // Matches the bounded keys proven by the pinned Orca 2.5.0 real-binary
-  // two-object G-code fixture. Object edits outside this set remain draft-only.
-  const verifiedObjectSettings = new Set(["wall_loops", "sparse_infill_density"]);
+  // Preserve Orca's existing object-setting gate. Prusa independently
+  // qualifies native shell metadata and must not be blocked by Orca's smaller
+  // object-key set; neither engine inherits the other's verification.
+  const verifiedObjectSettings = new Set(
+    String(engine || "").split(" ")[0] === "prusaslicer"
+      ? ["wall_loops", "sparse_infill_density",
+         "top_shell_layers", "bottom_shell_layers"]
+      : ["wall_loops", "sparse_infill_density"]);
   const objectSettingsPending = objects.some(item =>
     Object.keys(item.process_overrides || {}).some(key => !verifiedObjectSettings.has(key))
   );
