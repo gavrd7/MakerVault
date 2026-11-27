@@ -21,11 +21,11 @@ def build_prusa_colour_candidate(item, source, *, printer_ini, colour_tool_indic
                                  bed_width, bed_depth):
     topology = prusa_machine_topology(printer_ini)
     count = topology["logical_tool_count"]
-    if (not 2 <= count <= 5 or not isinstance(item, dict)
+    if (not 2 <= count <= 8 or not isinstance(item, dict)
             or not isinstance(source, bytes)
             or not isinstance(colour_tool_indices, dict)
             or not colour_tool_indices
-            or any(type(k) is not int or type(v) is not int or not 0 <= v < count
+            or any(type(k) is not int or type(v) is not int or not 1 <= v <= 4 or not v < count
                    for k,v in colour_tool_indices.items())
             or any(item.get(k) for k in ("modifier_volumes","negative_volumes",
                    "process_overrides","variable_layer_profile","support_paint",
