@@ -259,21 +259,7 @@ def prepare_prusa_offline_colour_candidate(
         bed_width=bed_width,bed_depth=bed_depth)
     tower=(tower_xy[0],tower_xy[1],0,bed_width,bed_depth)
     from slicer_worker.prusa_offline_contract import validate_prusa_offline_colour_inputs
-    if len(colour_tool_indices)==4:
-        from slicer_worker.prusa_four_wall_audit import four_painted_wall_regions
-        from slicer_worker.runner import WorkerError
-        try:
-            walls=four_painted_wall_regions(project)
-        except WorkerError as exc:
-            raise SlicerProfileError("Prusa XL requires four complete independently painted exterior walls.") from exc
-        selected=tuple(walls["tools"][side]
-                       for side in ("x_min","x_max","y_min","y_max"))
-        if (set(selected)!=set(colour_tool_indices.values()) or
-                topology["kind"]!="independent_tools" or
-                topology["logical_tool_count"]!=5):
-            raise SlicerProfileError("Four painted walls require the verified five-head Prusa XL printer.")
-        selection={"tools":list(selected)}
-    elif len(colour_tool_indices)==2:
+    if len(colour_tool_indices)==2:
         from slicer_worker.prusa_colour_gcode_audit import _two_painted_wall_regions
         from slicer_worker.runner import WorkerError
         # Browser palette slots are not front/back directions. Derive and
@@ -375,7 +361,21 @@ def prepare_prusa_offline_xl_colour_candidate(
     project=build_prusa_colour_candidate(
         row,raw,printer_ini=printer,colour_tool_indices=colour_tool_indices,
         bed_width=bed_width,bed_depth=bed_depth)
-    if len(colour_tool_indices)==2:
+    if len(colour_tool_indices)==4:
+        from slicer_worker.prusa_four_wall_audit import four_painted_wall_regions
+        from slicer_worker.runner import WorkerError
+        try:
+            walls=four_painted_wall_regions(project)
+        except WorkerError as exc:
+            raise SlicerProfileError("Prusa XL requires four complete painted exterior walls.") from exc
+        selected=tuple(walls["tools"][side] for side in
+                       ("x_min","x_max","y_min","y_max"))
+        if (set(selected)!=set(colour_tool_indices.values()) or
+                topology["kind"]!="independent_tools" or
+                topology["logical_tool_count"]!=5):
+            raise SlicerProfileError("Four painted walls require the qualified native XL5 printer.")
+        selection={"tools":list(selected)}
+    elif len(colour_tool_indices)==2:
         from slicer_worker.prusa_colour_gcode_audit import _two_painted_wall_regions
         from slicer_worker.runner import WorkerError
         # Browser palette order is not native wall order; resolve from the
