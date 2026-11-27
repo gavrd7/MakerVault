@@ -42,6 +42,31 @@ tests; leave unsafe printer-start blocked until that is proven.
 | Print from slicer and printer start confirmation | Shared submission adapter; PrusaLink API | Offline G-code valid; native Prusa physical toolchange upload/start currently intentionally guarded. Do not present upload as print start confirmation |
 | Mobile and desktop | Shared React components | Required manual visual/interaction pass on actual staging before ready-for-review |
 
+## Split-surface development checkpoint — 27 November 2026
+
+- The existing MakerVault fingerprinted polygon splitter produces actual
+  mixed painted/unpainted Prusa ModelPart triangles for sub-face brush masks.
+  Worker-side `inspect_prusa_partial_wall` reads the native 3MF, rejects
+  mismatched tools, full-wall false positives, ambiguous/nonvertical masks
+  and paint on nonprinting modifier triangles.
+- Research-only `audit_prusa_partial_wall_gcode` tracks native T commands,
+  XY/XYZ coordinate modes, E mode, G92 resets, extrusion roles and Z height.
+  It compares real positive-E perimeter paths against the **signed triangular
+  painted and unpainted subregions**. Synthetic success and negative-motion
+  tests do not count as genuine native Prusa acceptance.
+- Painted Object settings + one typed infill modifier now have an explicit
+  combined 3MF structural regression, in addition to the existing genuine
+  painted+modifier and painted+Object slice proofs. This is **not** proof
+  for multiple modifiers, negative cutters or every combined paint channel.
+- The production/offline colour admission gate is unchanged: do not accept
+  arbitrary partial masks until a pinned PrusaSlicer 2.9.7 fixture produces
+  passing actual G-code audits, including tool leakage at the split boundary.
+  The new audit currently covers an axis-aligned vertical split wall, **not**
+  arbitrary slanted/curved geometry or multiple painted objects.
+
+Desktop/mobile staging interaction and real printer-start ACK remain outstanding;
+no physical dispatch changes are authorised by the research path.
+
 ## High-priority remaining integration gaps
 
 1. Generalize colour painting beyond the now-verified one/two and XL5 four **complete** vertical painted walls, including arbitrary split face masks and more than one colour-painted model. Audit actual per-region toolpath deposition. Do not fake partial masks by painting whole walls.
