@@ -137,7 +137,34 @@ def main(binary, vendor):
             (jobdir/"prusa-offline-colour.marker").write_text("v1")
             run_prusa(Path(binary),jobdir)
             raw=(jobdir/"output.gcode").read_bytes()
-            assert audit_prusa_positive_e(raw)["positive_e_moves"]>100
+            try:
+                assert audit_prusa_positive_e(raw)["positive_e_moves"]>100
+            except WorkerError:
+                # Synthetic, non-user 2.9.7 fixture: record only bounded
+                # offending numeric coordinate metadata, never G-code or
+                # private preset contents, to distinguish genuine native
+                # overflow from a spatial-audit parser false positive.
+                from slicer_worker.prusa_gcode_audit import WORD
+                import math
+                outliers=[]
+                for number,line in enumerate(raw.splitlines()):
+                    cmd=line.split(b";",1)[0].strip()
+                    if not cmd: continue
+                    opcode=cmd.split(None,1)[0].upper()
+                    if opcode not in (b"G0",b"G00",b"G1",b"G01"): continue
+                    for key,word in WORD.findall(cmd.decode("utf-8","replace")):
+                        try: value=float(word)
+                        except ValueError: continue
+                        if not math.isfinite(value) or abs(value)>1e9:
+                            outliers.append((number,key,len(word),
+                                             "nonfinite" if not math.isfinite(value)
+                                             else "out-of-range"))
+                        if len(outliers)>=8: break
+                    if len(outliers)>=8: break
+                print("Prusa synthetic MMU colour numeric rejection",
+                      "native tool",tool,"outlier categories",outliers,
+                      flush=True)
+                raise
             independent=audit_prusa_offline_colour_gcode(
                 raw,project,printer_ini=printer,tool=tool,
                 tower=(55,150,0,250,210))
