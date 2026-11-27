@@ -104,7 +104,8 @@ export default function PrusaNativeToolEditor({
     <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:12,flexWrap:"wrap"}}>
       <strong>Prusa MMU / XL / INDX native materials</strong>
       {!value?<button type="button" disabled={disabled}
-        onClick={()=>onChange?.(fresh("mmu",2,primaryProfileId))}>
+        onClick={()=>onChange?.(fresh(profileMode || "mmu",
+          profileMode && profileToolCount ? profileToolCount : 2, primaryProfileId))}>
         Configure native tools
       </button>:<button type="button" disabled={disabled}
         onClick={()=>{onChange?.(null);onPrimeTowerChange?.(null);}}>
