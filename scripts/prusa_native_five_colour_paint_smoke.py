@@ -18,7 +18,7 @@ from core.slicer_prusa_wipe_tower import add_prusa_native_wipe_tower
 from scripts.prusa_generate_mmu_paint import fixture
 from slicer_worker.prusa_material_validation import validate_prusa_material_candidate
 from slicer_worker.prusa_vendor_profiles import flatten_prusa_vendor_preset, validate_flat_prusa_preset
-from slicer_worker.prusa_gcode_audit import WORD, audit_prusa_positive_e
+from slicer_worker.prusa_gcode_audit import WORD, audit_prusa_positive_e, run_prusa_painted_with_numeric_recheck
 from slicer_worker.prusa_colour_gcode_audit import audit_prusa_offline_colour_gcode
 from slicer_worker.service import _decode_payload
 from slicer_worker.runner import run_prusa, WorkerError
@@ -138,11 +138,14 @@ def main(binary, vendor):
                               ("filament.ini",palette),("process.ini",process)):
                 (jobdir/name).write_bytes(data)
             (jobdir/"prusa-offline-colour.marker").write_text("v1")
-            run_prusa(Path(binary),jobdir)
-            raw=(jobdir/"output.gcode").read_bytes()
             try:
+                _receipt,raw=run_prusa_painted_with_numeric_recheck(
+                    run_prusa,Path(binary),jobdir,timeout_seconds=300,
+                    max_bytes=64*1024*1024)
                 assert audit_prusa_positive_e(raw)["positive_e_moves"]>100
             except WorkerError:
+                output=jobdir/"output.gcode"
+                raw=output.read_bytes() if output.exists() else b""
                 # Synthetic, non-user 2.9.7 fixture: record only bounded
                 # offending numeric coordinate metadata, never G-code or
                 # private preset contents, to distinguish genuine native
@@ -229,8 +232,9 @@ def main(binary, vendor):
                 ("filament.ini",palette),("process.ini",process)):
             (target/name).write_bytes(data)
         (target/"prusa-offline-colour.marker").write_text("v1")
-        run_prusa(Path(binary),target)
-        gcode = (target/"output.gcode").read_bytes()
+        _receipt,gcode = run_prusa_painted_with_numeric_recheck(
+            run_prusa,Path(binary),target,timeout_seconds=300,
+            max_bytes=64*1024*1024)
         counts = painted_external_walls(gcode)
         assert counts[1]["front"]>20 and counts[2]["back"]>20, counts
         assert counts[1]["back"]<=2 and counts[2]["front"]<=2, counts
