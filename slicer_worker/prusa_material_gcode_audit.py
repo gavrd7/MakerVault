@@ -74,7 +74,8 @@ def _trusted_indx_cleaner_profile(printer_ini, tools, tower):
             == _OFFICIAL_INDX_8T_TOOLCHANGE_SHA256)
 
 
-def audit_prusa_material_model_gcode(data, project, *, printer_ini, tools, tower=None):
+def audit_prusa_material_model_gcode(data, project, *, printer_ini, tools, tower=None,
+                                     process_ini=None):
     validate_prusa_material_candidate(project,printer_ini=printer_ini,tools=tools,tower=tower)
     bounds=_bounds(project,len(tools))
     if not isinstance(data,bytes) or not 0<len(data)<=90*1024*1024:
@@ -252,6 +253,20 @@ def audit_prusa_material_model_gcode(data, project, *, printer_ini, tools, tower
                         correct[index]+=1
                     else:
                         incorrect[index]+=1
+    if process_ini is not None:
+        from .prusa_vendor_profiles import validate_flat_prusa_preset, PrusaPresetError
+        try:
+            native=validate_flat_prusa_preset(process_ini,kind="print")
+            brim=float(native.get("brim_width","0"))
+            skirts=float(native.get("skirts","0"))
+        except (PrusaPresetError,ValueError,TypeError):
+            raise WorkerError("Native Prusa adhesion process profile is invalid.") from None
+        if (not math.isfinite(brim) or not math.isfinite(skirts)
+                or not 0<=brim<=50 or not 0<=skirts<=20
+                or not skirts.is_integer()):
+            raise WorkerError("Native Prusa adhesion settings exceed supported bounds.")
+        if (brim>0 or skirts>0) and sum(adhesion.values())<10:
+            raise WorkerError("Native Prusa adhesion settings generated no verified first-layer extrusion.")
     if trusted_cleaner and (flush or cleaner or flush_blocks < 1):
         raise WorkerError("Official INDX cleaner sequence did not complete.")
     if (used!={tool-1 for tool in tools} or any(
