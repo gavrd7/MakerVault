@@ -1,3 +1,28 @@
+### 27 November — two-swatch MMU3 native colour qualification
+
+Upstream 2.9.7 native 3MF uses `slic3rpe:mmu_segmentation` and
+`slic3rpe:MmPaintingVersion`. The existing MakerVault exporter
+already maps distinct face-region slots to T1–T4 native leaf states.
+The owner-bound and isolated worker still admit only **one** alternate
+painted tool, because real spatial G-code attribution is qualified for
+one selected front face at a time.
+
+The reviewed runtime smoke now includes a *research-only* three-tool
+case with T1 painted on the front wall and T2 on the opposite wall.
+It requires actual **moving** external perimeter extrusion under the
+correct tool on each wall, rejects stationary E-only recovery and
+cross-wall paths, and rejects all wrong-tool front/back deposition.
+Unit tests verify native per-face segmentation encodes T1 and T2
+separately and rejects incomplete mappings.
+
+If the native smoke succeeds, the next step is extending independent
+worker-side paint audit, purge and owner-bound routing to multiple
+explicit swatches. Until then multi-swatch MMU, XL and INDX colour
+painting remain **not admitted**, and no printer output is authorised
+by this research.
+
+---
+
 ### 27 November — INDX owner-profile parser compatibility
 
 Reviewed upstream INDX vendor presets may include native conditional
