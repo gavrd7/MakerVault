@@ -1291,7 +1291,7 @@ export default function SlicerPrepareWorkspace({
           </select>
           <small>Object overrides inherit Global values unless changed.
             {String(engine || "").split(" ")[0] === "prusaslicer"
-              ? "PrusaSlicer 2.9.7 supports native per-object wall loops and infill density. Other print settings remain available at Global scope."
+              ? "PrusaSlicer supports per-object wall loops, top/bottom shell layers and infill density. Other print settings remain available at Global scope."
               : "Wall loops and sparse infill density are verified per-object controls. Other Object settings can be saved in drafts but remain unavailable for slicing until verified."}</small>
 
           <div className="slicerModifierDrafts" aria-label="Regional volume settings">
