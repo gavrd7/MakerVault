@@ -166,7 +166,8 @@ def prepare_prusa_workbench_material(job, *, settings=None):
             local = {}
         if not isinstance(local, dict) or set(local) - OBJECT_KEYS:
             raise SlicerProfileError(
-                "Prusa MMU/XL supports only Object wall loops and infill density.")
+                "Prusa multi-tool Object settings must use qualified native wall, "
+                "shell or infill controls.")
         try:
             apply_prusa_process_overrides(BASE, local)
         except (ValueError, TypeError, OverflowError) as exc:
