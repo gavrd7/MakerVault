@@ -120,7 +120,8 @@ def validate_prusa_material_candidate(data, *, printer_ini, tools=None, colour=F
             # Verified fixed Prusa TriangleSelector leaf-state encoding.
             # No caller-controlled recursive/split nibble streams are trusted:
             # those require a separate bounds and extrusion audit.
-            states={"4":1, "8":2, "0C":3, "1C":4, "2C":5}
+            states={"4":1, "8":2, "0C":3, "1C":4, "2C":5,
+                    "3C":6, "4C":7, "5C":8}
             for face in facets:
                 if PAINT in face.attrib:
                     value=face.attrib.pop(PAINT)
