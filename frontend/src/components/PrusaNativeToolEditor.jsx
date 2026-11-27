@@ -54,7 +54,8 @@ export default function PrusaNativeToolEditor({
   };
   const paintedSlots=[...new Set(models.flatMap(model=>
     model.colour_paint?.regions?.map(region=>region.slot)||[]))];
-  const singleColour=models.length===1 && paintedSlots.length===1 && value?.mode==="mmu";
+  const singleColour=models.length===1 && paintedSlots.length>=1 &&
+    paintedSlots.length<=2 && value?.mode==="mmu";
   const editMatrix=(source,target,raw)=>{
     const matrix=value.purge_matrix.map(row=>[...row]);
     matrix[source][target]=safeNumber(raw);
@@ -69,9 +70,10 @@ export default function PrusaNativeToolEditor({
     models.every(row=>value.model_tools.some(item=>item.instance_id===row.instance_id)) &&
     (singleColour
       ? value.model_tools[0]?.tool===1 &&
-        value.colour_tools?.length===1 &&
-        value.colour_tools[0].slot===paintedSlots[0] &&
-        value.colour_tools[0].tool>=2 && value.colour_tools[0].tool<=value.tool_count
+        value.colour_tools?.length===paintedSlots.length &&
+        paintedSlots.every(slot=>value.colour_tools.some(row=>
+          row.slot===slot && row.tool>=2 && row.tool<=value.tool_count)) &&
+        new Set(value.colour_tools.map(row=>row.tool)).size===paintedSlots.length
       : new Set(value.model_tools.map(row=>row.tool)).size>=2 &&
         !(value.colour_tools||[]).length) &&
     (value.mode!=="mmu" ||
@@ -152,9 +154,10 @@ export default function PrusaNativeToolEditor({
       </div>
       {paintedSlots.length>0 && <div style={{marginTop:10}}>
         <p className="projectUploadHint">Native Prusa surface colour: the verified offline
-          MMU route currently accepts one upright model painted on its front face,
-          with base extruder T0 and one different painted native tool. Other paint
-          directions and combined tools can be saved but cannot yet be sliced.</p>
+          MMU route accepts one upright model with base T0 and one front-wall
+          swatch, or two different tools painted on complete opposing front/back
+          walls. The worker checks real wall extrusion and isolated wipe-tower
+          purging before storing G-code; other painted geometry remains unsupported.</p>
         {paintedSlots.map(slot=><label key={slot} style={{display:"block",marginBottom:8}}>
           Painted swatch {slot} — native Prusa tool
           <select disabled={disabled} value={(value.colour_tools||[]).find(
