@@ -99,6 +99,23 @@ class PrusaNativeColourProjectTests(TestCase):
         with self.assertRaises((SlicerProfileError, ValueError)):
             self.candidate(settings={"colour_paint":paint},
                            tool_map={1:1})
+        # The same exact native two-wall mesh encoding and independent
+        # worker source check must bind T5/T7 on an eight-head profile.
+        eight=ini(",".join(["0.4"]*8),"0")
+        high=build_prusa_colour_candidate(
+            {"asset_id":"indx-two-wall","x_mm":0,"y_mm":0,"z_mm":0,
+             "rotation_deg":0,"scale_percent":100,"colour_paint":paint},
+            stl,printer_ini=eight,colour_tool_indices={1:5,2:7},
+            bed_width=250,bed_depth=210)
+        with zipfile.ZipFile(io.BytesIO(high)) as z:
+            high_xml=z.read("3D/3dmodel.model")
+        self.assertIn(b'slic3rpe:mmu_segmentation="3C"',high_xml)
+        self.assertIn(b'slic3rpe:mmu_segmentation="5C"',high_xml)
+        high_receipt=validate_prusa_material_candidate(
+            high,printer_ini=eight,colour=True,independent_colour=True)
+        self.assertEqual(high_receipt["tools"],(1,6,8))
+        self.assertLess(_two_painted_wall_regions(high,(5,7))["front"][3],
+                        _two_painted_wall_regions(high,(5,7))["back"][2])
 
     def test_indx_eight_head_native_colour_accepts_all_seven_alternate_facets(self):
         printer=ini(",".join(["0.4"]*8),"0")
