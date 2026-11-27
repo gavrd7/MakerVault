@@ -165,7 +165,8 @@ class PrusaOfflineMmuPreflightTests(TestCase):
                  "process_profile":encode(prepared["process"]),
                  "prusa_offline_xl_colour":{"tool":1}}
         self.assertEqual(
-            _decode_payload(request)["prusa_offline_xl_colour"],{"tool":1})
+            _decode_payload(request)["prusa_offline_xl_colour"],
+            {"tool":1,"partial_wall":False})
         for invalid in ({"tool":True},{"tool":5},{"tool":0},
                         {"tool":1,"tower":[55,150,0,250,210]}):
             with self.subTest(invalid=invalid),self.assertRaises(WorkerError):
@@ -208,7 +209,7 @@ class PrusaOfflineMmuPreflightTests(TestCase):
                  "process_profile":encode(result["process"]),
                  "prusa_offline_xl_colour":{"tool":1}}
         self.assertEqual(_decode_payload(payload)["prusa_offline_xl_colour"],
-                         {"tool":1})
+                         {"tool":1,"partial_wall":False})
         for alternate in (5,6,7):
             with self.subTest(native_tool=alternate):
                 settings["colour_tool_indices"]={1:alternate}
@@ -221,7 +222,7 @@ class PrusaOfflineMmuPreflightTests(TestCase):
                          "prusa_offline_xl_colour":{"tool":alternate}}
                 self.assertEqual(
                     _decode_payload(request)["prusa_offline_xl_colour"],
-                    {"tool":alternate})
+                    {"tool":alternate,"partial_wall":False})
         for invalid in (8,True,-1):
             with self.subTest(invalid=invalid),self.assertRaises(SlicerProfileError):
                 settings["colour_tool_indices"]={1:invalid}
