@@ -72,7 +72,7 @@ test("Prusa painted MMU draft binds swatches to explicit T1-T4 native tools",()=
 
 test("Eight native INDX tools are configurable without MMU purge/tower dependencies",()=>{
   assert.match(editor,/<option value="indx">Bondtech INDX/);
-  assert.match(editor,/\[2,3,4,5,6,7,8\]/);
+  assert.match(editor,/profileToolCount \? \[\.\.\.new Set\(\[value\.tool_count, profileToolCount\]\)\]/);
   assert.match(editor,/value\.mode!=="mmu"/);
   assert.match(prepare,/prusaNativeTools\.mode\) && !primeTower/);
   assert.match(prepare,/objects\.length<=12/);
@@ -135,8 +135,8 @@ test("Prusa Slice readiness refuses native-profile mismatch before sending the j
 });
 
 test("new Prusa native-tool drafts inherit the chosen printer profile topology",()=>{
-  assert.match(editor,/fresh\(profileMode \|\| "mmu",/);
-  assert.match(editor,/profileMode && profileToolCount \? profileToolCount : 2/);
+  assert.match(editor,/fresh\(profileMode, profileToolCount, primaryProfileId\)/);
+  assert.match(editor,/disabled=\{disabled \|\| !profileMode \|\| !profileToolCount\}/);
   assert.match(editor,/const profileMode = printerTopology\?\.kind==="single_nozzle_changer"/);
 });
 
@@ -172,4 +172,12 @@ test("Prusa colour-paint guidance names the native MMU/XL route and profile-deri
   assert.match(prepare,/Prusa virtual tools use native extruder assignments from the selected printer profile/);
   assert.match(prepare,/one qualified painted MMU\/XL model with T0 base/);
   assert.doesNotMatch(prepare,/Prusa virtual tools use explicit native T0–T7 assignments/);
+});
+
+test("Prusa tool configurator does not invent MMU, XL or INDX capacity",()=>{
+  assert.match(editor,/Select an imported, inspectable native Prusa printer profile first/);
+  assert.match(editor,/fresh\(profileMode, profileToolCount, primaryProfileId\)/);
+  assert.match(editor,/disabled=\{disabled \|\| !!profileMode\}/);
+  assert.match(editor,/disabled=\{disabled \|\| !!profileToolCount\}/);
+  assert.doesNotMatch(editor,/value\.mode==="indx"\?\[2,3,4,5,6,7,8\]/);
 });
