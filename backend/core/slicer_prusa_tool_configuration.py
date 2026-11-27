@@ -34,7 +34,7 @@ def validate_prusa_native_tools(raw):
         else:
             raise SlicerProfileError("Invalid Prusa filament profile selection.")
     rows = raw["model_tools"]
-    if not isinstance(rows, list) or len(rows) > 12:
+    if not isinstance(rows, list) or len(rows) > 200:
         raise SlicerProfileError("Invalid Prusa per-model tool assignments.")
     selected = []
     seen = set()
