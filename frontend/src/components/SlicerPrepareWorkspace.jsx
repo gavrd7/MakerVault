@@ -70,7 +70,7 @@ export default function SlicerPrepareWorkspace({
   selectedProfiles, workerConfigured, engineCapabilities = {}, printerId,
   processOverrides = {}, onProcessOverridesChange, onSaveCustomProcessProfile,
   flushSettings = null, onFlushSettingsChange,
-  prusaNativeTools = null, onPrusaNativeToolsChange,
+  prusaNativeTools = null, onPrusaNativeToolsChange, prusaProfileTopology = null,
   slotFilamentProfiles = [], onSlotFilamentProfilesChange, filamentProfiles = [], onFilamentProfilesReload, onRememberedProfiles, spools = [],
   processProfiles = [], onSelectProcessProfile, onResetProcessSettings,
   printerDetails, nozzleMm, selectedPlateType = "Native / profile default",
@@ -2327,6 +2327,7 @@ export default function SlicerPrepareWorkspace({
             onChange={onFlushSettingsChange} disabled={!canEdit || busy} />
           {activeEngine==="prusaslicer" && <PrusaNativeToolEditor
             value={prusaNativeTools} onChange={onPrusaNativeToolsChange}
+            printerTopology={prusaProfileTopology}
             models={objects.map(object=>({...object,label:itemName(object)}))}
             selectedModelIds={selectedModels.map(model => model.instance_id)}
             profileChoices={filamentProfiles} primaryProfileId={selectedProfiles?.filament_id}
