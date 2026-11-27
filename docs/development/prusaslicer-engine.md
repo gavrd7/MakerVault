@@ -5,14 +5,17 @@ four-project test for combined **parameter modifier on model A** and
 **per-object sparse infill on model B**. It compares baseline, each feature
 alone and both together, measuring moving positive-E deposition in each
 object's own central XY footprint. Both effects must independently change
-their intended object and leave the unmodified neighbour unaffected.
+their intended object and leave the unmodified neighbour unaffected. The native matrix additionally
+requires a **negative box cavity** on model A to remove all interior
+deposition while a separate sparse-infill Object override still changes
+model B's extrusion.
 
 The corresponding offline-native 3MF admission is restricted to exactly
-two independently placed printable models, one box-shaped sparse-infill
-parameter modifier and a separate Object sparse-infill override. This is
-not a blanket approval for an arbitrary number of regions, same-object
-stacks, negative cavities combined with Object overrides, or material
-tool changes. Those remain subject to specific native acceptance.
+two independently placed printable models: one box-shaped sparse-infill
+parameter modifier **or negative cavity**, and a separate Object
+sparse-infill override. This is not a blanket approval for an arbitrary
+number of regions, same-model stacks, overlapping paint or material tool
+changes. Those remain subject to specific native acceptance.
 
 A second mandatory pinned-CLI test now combines **one variable-layer band**
 with **one box-shaped sparse-infill modifier on a single model**. Its
