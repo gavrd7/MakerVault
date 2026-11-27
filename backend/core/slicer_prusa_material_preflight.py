@@ -259,7 +259,21 @@ def prepare_prusa_offline_colour_candidate(
         bed_width=bed_width,bed_depth=bed_depth)
     tower=(tower_xy[0],tower_xy[1],0,bed_width,bed_depth)
     from slicer_worker.prusa_offline_contract import validate_prusa_offline_colour_inputs
-    if len(colour_tool_indices)==2:
+    if len(colour_tool_indices)==4:
+        from slicer_worker.prusa_four_wall_audit import four_painted_wall_regions
+        from slicer_worker.runner import WorkerError
+        try:
+            walls=four_painted_wall_regions(project)
+        except WorkerError as exc:
+            raise SlicerProfileError("Prusa XL requires four complete independently painted exterior walls.") from exc
+        selected=tuple(walls["tools"][side]
+                       for side in ("x_min","x_max","y_min","y_max"))
+        if (set(selected)!=set(colour_tool_indices.values()) or
+                topology["kind"]!="independent_tools" or
+                topology["logical_tool_count"]!=5):
+            raise SlicerProfileError("Four painted walls require the verified five-head Prusa XL printer.")
+        selection={"tools":list(selected)}
+    elif len(colour_tool_indices)==2:
         from slicer_worker.prusa_colour_gcode_audit import _two_painted_wall_regions
         from slicer_worker.runner import WorkerError
         # Browser palette slots are not front/back directions. Derive and
@@ -326,7 +340,7 @@ def prepare_prusa_offline_xl_colour_candidate(
             not isinstance(rows,(list,tuple)) or len(rows)!=1 or
             not isinstance(tools,(list,tuple)) or list(tools)!=[1] or
             not isinstance(colour_tool_indices,dict) or
-            not 1 <= len(colour_tool_indices) <= 2 or
+            len(colour_tool_indices) not in (1,2,4) or
             any(type(slot) is not int or not 0<=slot<16 or
                 type(tool) is not int or not 1<=tool<=7
                 for slot,tool in colour_tool_indices.items()) or
@@ -399,7 +413,12 @@ def slice_prusa_offline_xl_colour_candidate(job_id, **prepared):
         candidate["model"],candidate["printer"],candidate["filament"],
         candidate["process"],model_format="3mf",
         prusa_offline_xl_colour=selection)
-    if "tools" in candidate:
+    if "tools" in candidate and len(candidate["tools"])==4:
+        from slicer_worker.prusa_four_wall_audit import audit_prusa_four_wall_gcode
+        audit_prusa_four_wall_gcode(
+            output,candidate["model"],printer_ini=candidate["printer"],
+            tools=candidate["tools"])
+    elif "tools" in candidate:
         from slicer_worker.prusa_colour_gcode_audit import audit_prusa_dual_colour_gcode
         audit_prusa_dual_colour_gcode(
             output,candidate["model"],printer_ini=candidate["printer"],
