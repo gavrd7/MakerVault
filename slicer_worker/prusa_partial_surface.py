@@ -273,17 +273,24 @@ def audit_prusa_partial_wall_gcode(data, project, *, tool, tower=None):
 
 
 def qualified_prusa_single_colour_mode(project, tool):
-    """Determine the only signed 3MF paint mode available to offline MMU.
+    """Classify a signed source mask, never a browser-supplied feature flag.
 
-    Existing complete-wall approval stays unchanged. A split wall is admitted
-    only when the independent source-mesh inspector proves one unambiguous,
-    partly painted vertical exterior face; other masks fail closed.
+    Native worker admission separately limits material topologies: MMU may
+    use complete/split vertical walls; genuine XL5 additionally supports a
+    partially painted horizontal top. Angled, curved and other masks fail.
     """
     from .prusa_colour_gcode_audit import _wall_regions
 
     try:
         _wall_regions(project, tool)
+        return "complete_wall"
     except WorkerError:
+        pass
+    try:
         inspect_prusa_partial_wall(project, tool)
         return "split_wall"
-    return "complete_wall"
+    except WorkerError:
+        pass
+    from .prusa_top_surface import inspect_prusa_partial_top
+    inspect_prusa_partial_top(project, tool)
+    return "split_top"
