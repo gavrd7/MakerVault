@@ -208,7 +208,7 @@ def run_remote_job(job_id, engine, version, model, printer_profile, filament_pro
             tools = details["tools"]
             if (not isinstance(tools, (tuple, list)) or len(tools) != 2 or
                     any(type(t) is not int or not 1 <= t <= 4 for t in tools) or
-                    len(set(tools)) != 2 or independent):
+                    len(set(tools)) != 2):
                 raise SlicerWorkerError("Invalid offline Prusa painted tools.")
             selection["tools"] = list(tools)
         else:
