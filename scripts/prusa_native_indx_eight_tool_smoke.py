@@ -428,47 +428,59 @@ def main(binary, vendor, official=None):
             print("PASS: actual official eight-head INDX native opposing T1/T2 paint",
                   dual_receipt,flush=True)
 
-            # Research the exact native 2.9.7 leaf-state encoding of T5–T7,
-            # beyond the five currently admitted facet states. The encoder,
-            # validator and UI remain gated until *both* real deposition and
-            # strict post-slice attribution pass. This does not authorize
-            # physical printing or silently widen live painter selection.
-            from scripts.prusa_native_five_colour_paint_smoke import painted_external_walls
-            t4=build_prusa_colour_candidate(
-                row,stl,printer_ini=selected,colour_tool_indices={1:4},
-                bed_width=250,bed_depth=210)
+            # Mandatory native qualification for the actual owner/worker
+            # eight-head paint flow. Prusa 2.9.7 maps T5/T6/T7 to the
+            # verified exact leaf states 3C/4C/5C. Do not bypass the
+            # independently checked 3MF, owner palette or spatial auditor.
             for tool,state in ((5,b"3C"),(6,b"4C"),(7,b"5C")):
-                try:
-                    sink=io.BytesIO()
-                    with zipfile.ZipFile(io.BytesIO(t4)) as z, zipfile.ZipFile(
-                            sink,"w",compression=zipfile.ZIP_DEFLATED) as out:
-                        for part in z.namelist():
-                            raw=z.read(part)
-                            if part=="3D/3dmodel.model":
-                                old=b'slic3rpe:mmu_segmentation="2C"'
-                                assert old in raw,"Pinned native T4 facet state changed"
-                                raw=raw.replace(old,b'slic3rpe:mmu_segmentation="'+state+b'"')
-                            out.writestr(part,raw)
-                    (folder/"input.3mf").write_bytes(sink.getvalue())
-                    (folder/"output.gcode").unlink(missing_ok=True)
-                    run_prusa(Path(binary),folder)
-                    output=(folder/"output.gcode").read_bytes()
-                    observed=painted_external_walls(
-                        output,center_x=125,center_y=105,tool_count=8)
-                    if (observed[tool]["front"]<20 or
-                            observed[tool]["back"]>2 or
-                            observed[0]["back"]<20 or
-                            any(observed[other]["front"]>2 or
-                                observed[other]["back"]>2
-                                for other in (1,2,3,4,5,6,7) if other!=tool)):
-                        raise AssertionError("Native extra-tool surface was not isolated: "+repr(observed))
-                    print("RESEARCH PASS: native INDX painted-facet T"+str(tool),
-                          state.decode(),observed,flush=True)
-                except (WorkerError,AssertionError) as exc:
-                    print("RESEARCH BLOCKED: pinned native painted-facet T"+
-                          str(tool),type(exc).__name__,str(exc)[:300],flush=True)
+                painted=build_prusa_colour_candidate(
+                    row,stl,printer_ini=selected,colour_tool_indices={1:tool},
+                    bed_width=250,bed_depth=210)
+                with zipfile.ZipFile(io.BytesIO(painted)) as source:
+                    assert b'slic3rpe:mmu_segmentation="'+state+b'"' in (
+                        source.read("3D/3dmodel.model"))
+                validate_prusa_offline_xl_colour_inputs(
+                    project=painted,printer=selected,filament=palette,
+                    process=process,tool=tool)
+                payload["prusa_offline_xl_colour"]={"tool":tool}
+                payload["model"]=encode(painted)
+                _decode_payload(payload)
+                (folder/"input.3mf").write_bytes(painted)
+                (folder/"output.gcode").unlink(missing_ok=True)
+                run_prusa(Path(binary),folder)
+                output=(folder/"output.gcode").read_bytes()
+                receipt=audit_prusa_xl_colour_gcode(
+                    output,painted,printer_ini=selected,tool=tool)
+                assert receipt["painted_wall_moves"][tool]["front"]>=20,receipt
+                assert receipt["painted_wall_moves"][tool]["back"]<=2,receipt
+                assert receipt["painted_wall_moves"][0]["back"]>=20,receipt
+                assert receipt["wipe_tower"] is False,receipt
+                print("PASS: genuine official INDX native T"+str(tool)+
+                      " painted facets and worker audit",receipt,flush=True)
 
-
+            opposite=build_prusa_colour_candidate(
+                {**row,"colour_paint":dual},stl,printer_ini=selected,
+                colour_tool_indices={1:5,2:7},bed_width=250,bed_depth=210)
+            validate_prusa_offline_xl_colour_inputs(
+                project=opposite,printer=selected,filament=palette,
+                process=process,tools=[5,7])
+            payload["prusa_offline_xl_colour"]={"tools":[5,7]}
+            payload["model"]=encode(opposite)
+            _decode_payload(payload)
+            (folder/"input.3mf").write_bytes(opposite)
+            (folder/"output.gcode").unlink(missing_ok=True)
+            run_prusa(Path(binary),folder)
+            pair_output=(folder/"output.gcode").read_bytes()
+            pair_receipt=audit_prusa_dual_colour_gcode(
+                pair_output,opposite,printer_ini=selected,
+                tools=(5,7),tower=None)
+            assert pair_receipt["wall_moves"][5]["front"]>=20,pair_receipt
+            assert pair_receipt["wall_moves"][7]["back"]>=20,pair_receipt
+            assert pair_receipt["wall_moves"][5]["back"]<=2,pair_receipt
+            assert pair_receipt["wall_moves"][7]["front"]<=2,pair_receipt
+            assert not pair_receipt["wipe_tower"],pair_receipt
+            print("PASS: genuine official INDX opposite T5/T7 native paint",
+                  pair_receipt,flush=True)
 
 
 
