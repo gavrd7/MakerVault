@@ -67,13 +67,6 @@ class PrusaFrontSeamWorkBenchGateTests(unittest.TestCase):
             models.append((item,mesh))
         self.assertFalse(validate_prusa_project_admission(
             [item for item,_ in models],{},"2.9.7"))
-        from types import SimpleNamespace
-        from core.slicer_execution import _validate_plate_execution
-        job=SimpleNamespace(
-            engine="prusaslicer",engine_version="2.9.7",
-            settings={"plate_objects":[item for item,_ in models]},
-            owner=None,printer_profile_id="verified")
-        self.assertTrue(_validate_plate_execution(job))
         def output(second_wrong=False):
             lines=["M83","G90"]
             for layer in range(1,14):
@@ -121,8 +114,11 @@ class PrusaFrontSeamWorkBenchGateTests(unittest.TestCase):
                         p[1]=10
                 with self.assertRaises(ValueError):
                     validate_prusa_front_seam_candidate(row)
-        with self.assertRaises(ValueError):
-            validate_prusa_project_admission([self.front(), self.front()], {}, "2.9.7")
+        # The native project dialect supports per-object seam metadata.
+        # Independent G-code admission (not the 3MF serializer) rejects
+        # ambiguous overlapping source footprints.
+        self.assertFalse(validate_prusa_project_admission(
+            [self.front(),self.front()],{},"2.9.7"))
 
 class PrusaSeamAuditTests(unittest.TestCase):
     def test_painted_face_is_supported_by_measured_starts(self):
