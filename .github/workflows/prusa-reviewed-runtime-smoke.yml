@@ -442,6 +442,29 @@ jobs:
             /opt/engine-store/versions/prusaslicer/2.9.7/resources/profiles/PrusaResearch.ini \
             /tmp/mmu-colour/baseline.3mf /tmp/mmu-colour/colour.3mf
 
+      - name: Research genuine Prusa split-surface colour deposition
+        id: prusa_partial_surface_research
+        # Keep the established full-wall route unchanged until this test
+        # passes with native output; never certify a synthetic audit alone.
+        continue-on-error: true
+        run: |
+          set -euo pipefail
+          docker run --rm --network none --user 10001:10001 \
+            -v "$TEST_VOLUME:/opt/engine-store:ro" \
+            -v "$GITHUB_WORKSPACE/backend:/tmp/mv-backend:ro" \
+            -v "$GITHUB_WORKSPACE/scripts:/tmp/scripts:ro" \
+            -v "$GITHUB_WORKSPACE/scripts/prusa_native_partial_wall_smoke.py:/tmp/partial_wall.py:ro" \
+            -e PYTHONPATH=/tmp:/tmp/mv-backend:/opt/makervault-slicer \
+            --entrypoint python3 prusa-integration:smoke \
+            /tmp/partial_wall.py \
+            /opt/engine-store/versions/prusaslicer/2.9.7/bin/prusa-slicer \
+            /opt/engine-store/versions/prusaslicer/2.9.7/resources/profiles/PrusaResearch.ini
+
+      - name: Report unresolved Prusa split-surface colour qualification
+        if: ${{ steps.prusa_partial_surface_research.outcome == 'failure' }}
+        run: |
+          echo "::warning title=Prusa split-surface painting::Genuine native partial-mask deposition remains unqualified; keep whole-wall-only admission."
+
       - name: Record Prusa MMU painting research limitation
         if: ${{ steps.prusa_mmu_colour_research.outcome == 'failure' }}
         run: |
