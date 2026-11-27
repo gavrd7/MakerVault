@@ -1,3 +1,29 @@
+### 27 November — repeated native MMU tools and non-guessed printer capacity
+
+A Prusa MMU advertises native logical filament tools separately from
+the number of models on the build plate. The authenticated MMU owner
+preflight now accepts **up to twelve independently placed STL models**
+while preserving the actual native printer profile's MMU tool count.
+Multiple models may explicitly map to the same native tool, while the
+multi-material route still requires at least two genuinely selected
+native tools and complete filament/purge profile ownership.
+
+The pinned 2.9.7 runtime acceptance now adds a **ten-model plate using
+five actual MMU tools twice**, verifies the owner-bound request and typed
+3MF project, then requires moving positive-E deposition under the
+assigned tool in *each* model footprint, no cross-model tool
+contamination, and native wipe-tower extrusion. This does not invent
+more MMU slots or authorise physical printer start. Exact-head green
+native CI is required before treating it as qualified.
+
+The native Prusa editor no longer invents two-to-eight tool choices in
+the absence of a selected native printer profile. New MMU/XL/INDX
+configurations require the actual owner-inspected profile topology and
+tool count. Saved older drafts remain visible for reconciliation, but
+an unknown or mismatched profile cannot qualify native Slice.
+
+---
+
 ### 27 November — Prusa parity follow-up: native process, larger plates and bulk single material
 
 Native Prusa MMU/XL process editing now accepts the full bounded numeric
