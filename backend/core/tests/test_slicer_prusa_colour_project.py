@@ -127,6 +127,18 @@ class PrusaNativeColourProjectTests(TestCase):
                         output.getvalue(),
                         printer_ini=ini("0.4,0.4,0.4,0.4,0.4", "1"), colour=True)
 
+    def test_painted_wall_research_uses_actual_printer_bed_center(self):
+        from scripts.prusa_native_five_colour_paint_smoke import painted_external_walls
+        native = (b"G90\nM83\nT1\n;TYPE:External perimeter\n"
+                  b"G0 X170 Y170\nG1 X171 Y170 E.1\n"
+                  b"T0\n;TYPE:External perimeter\n"
+                  b"G0 X170 Y190\nG1 X171 Y190 E.1\n")
+        self.assertEqual(painted_external_walls(native)[1]["front"],0)
+        xl=painted_external_walls(native,center_x=180,center_y=180)
+        self.assertEqual(xl[1]["front"],1)
+        self.assertEqual(xl[0]["back"],1)
+        self.assertEqual(xl[1]["back"],0)
+
     def test_multi_swatch_research_counts_only_moving_matching_wall_paths(self):
         from scripts.prusa_native_five_colour_paint_smoke import painted_external_walls
         commands = [
