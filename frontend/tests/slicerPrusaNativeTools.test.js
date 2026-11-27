@@ -184,6 +184,14 @@ test("selecting every Prusa model to one filament switches to verified single-ma
 });
 
 
+test("Shared Prusa colour help differentiates native split walls from unqualified geometries",()=>{
+  assert.match(editor,/MMU supports one painted swatch on a vertical wall/);
+  assert.match(editor,/independently audited/);
+  assert.match(editor,/XL5 independently supports a split vertical/);
+  assert.match(editor,/curved or angled faces/);
+  assert.match(editor,/multiple\s+painted objects/);
+});
+
 test("Prusa colour-paint guidance names the native MMU/XL route and profile-derived tools",()=>{
   assert.match(prepare,/Prusa native colour painting needs a selected MMU or XL printer profile/);
   assert.match(prepare,/owned filament preset for each reported tool/);
