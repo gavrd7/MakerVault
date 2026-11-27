@@ -132,6 +132,62 @@ class PrusaNativeColourProjectTests(TestCase):
         self.assertLess(_two_painted_wall_regions(high,(5,7))["front"][3],
                         _two_painted_wall_regions(high,(5,7))["back"][2])
 
+    def test_four_complete_XY_walls_are_signed_to_distinct_native_heads(self):
+        from core.slicer_plate_3mf import _triangles
+        from core.slicer_native_support_paint import _fingerprint
+        from slicer_worker.prusa_four_wall_audit import (
+            four_painted_wall_regions,audit_prusa_four_wall_gcode)
+        stl,_,_,existing=fixture(include_paint=True)
+        faces=list(_triangles(stl))
+        minimum=[min(p[i] for f in faces for p in f) for i in range(3)]
+        maximum=[max(p[i] for f in faces for p in f) for i in range(3)]
+        pivot=((minimum[0]+maximum[0])/2,
+               (minimum[1]+maximum[1])/2,minimum[2])
+        local=[[tuple(p[a]-pivot[a] for a in range(3)) for p in f]
+               for f in faces]
+        regs=[]
+        for axis,coordinate,slot in ((0,-10,1),(0,10,2),
+                                     (1,-10,3),(1,10,4)):
+            patches=[{"face":index,"polygon":[list(p) for p in f]}
+                     for index,f in enumerate(local)
+                     if all(abs(p[axis]-coordinate)<.00001 for p in f)]
+            self.assertEqual(len(patches),2)
+            regs.append({"slot":slot,"patches":patches})
+        paint={**existing,"signature":_fingerprint(local),
+               "palette":[{"color":"#808080","label":"base"}]+[
+                   {"color":f"#{tool*0x202020:06X}","label":f"T{tool}"}
+                   for tool in range(1,5)],
+               "regions":regs}
+        project=build_prusa_colour_candidate(
+            {"asset_id":"four-vertical","x_mm":0,"y_mm":0,"z_mm":0,
+             "rotation_deg":0,"scale_percent":100,"colour_paint":paint},
+            stl,printer_ini=ini("0.4,0.4,0.4,0.4,0.4","0"),
+            colour_tool_indices={i:i for i in range(1,5)},
+            bed_width=250,bed_depth=210)
+        approved=four_painted_wall_regions(project)
+        self.assertEqual(approved["tools"],{
+            "x_min":1,"x_max":2,"y_min":3,"y_max":4})
+        with self.assertRaisesRegex(WorkerError,"deposi|four-wall"):
+            audit_prusa_four_wall_gcode(
+                b"M83\nT1\nG0 X115 Y105\nG1 X115 Y106 E1\n",
+                project,printer_ini=ini("0.4,0.4,0.4,0.4,0.4","0"),
+                tools=[1,2,3,4])
+        with self.assertRaises(WorkerError):
+            audit_prusa_four_wall_gcode(
+                b"",project,printer_ini=ini("0.4,0.4,0.4,0.4","0"),
+                tools=[2,1,3,4])
+        incomplete={**paint,"regions":[*paint["regions"][:3],
+            {**paint["regions"][3],
+             "patches":paint["regions"][3]["patches"][:1]}]}
+        partial=build_prusa_colour_candidate(
+            {"asset_id":"four-vertical","x_mm":0,"y_mm":0,"z_mm":0,
+             "rotation_deg":0,"scale_percent":100,"colour_paint":incomplete},
+            stl,printer_ini=ini("0.4,0.4,0.4,0.4,0.4","0"),
+            colour_tool_indices={i:i for i in range(1,5)},
+            bed_width=250,bed_depth=210)
+        with self.assertRaises(WorkerError):
+            four_painted_wall_regions(partial)
+
     def test_opposing_x_axis_colour_walls_use_same_native_worker_contract(self):
         from core.slicer_plate_3mf import _triangles
         from core.slicer_native_support_paint import _fingerprint
