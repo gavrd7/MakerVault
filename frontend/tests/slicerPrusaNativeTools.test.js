@@ -189,3 +189,9 @@ test("native Prusa Slice stays blocked until its inspected printer topology is a
   assert.match(editor,/const profileMatches = !!profileToolCount && !!profileMode/);
   assert.match(editor,/profileMatches && value\.filament_profile_ids\.every\(Boolean\)/);
 });
+
+test("Prusa Slice explains uninspected profile topology without dereferencing null",()=>{
+  assert.match(prepare,/!prusaProfileTopology\s*\? "The selected Prusa printer profile topology has not been inspected yet/);
+  assert.match(prepare,/String\(prusaProfileTopology\.kind \|\| "unknown"\)\.replaceAll/);
+  assert.match(prepare,/const prusaTopologyMatches = !!prusaProfileTopology/);
+});
