@@ -286,6 +286,7 @@ def prepare_prusa_offline_colour_candidate(
             tool=selected[0],tower=list(tower))
     return {"model":project,"printer":printer,"filament":palette,
             "process":native_process,"tower":tower,"tools":selected,
+            "partial_wall":receipt.get("partial_wall", False),
             **({"tool":selected[0]} if len(selected)==1 else {})}
 
 
@@ -307,6 +308,11 @@ def slice_prusa_offline_colour_candidate(job_id, **prepared):
         audit_prusa_dual_colour_gcode(
             output,candidate["model"],printer_ini=candidate["printer"],
             tools=candidate["tools"],tower=candidate["tower"])
+    elif candidate["partial_wall"]:
+        from slicer_worker.prusa_partial_surface import audit_prusa_partial_wall_gcode
+        audit_prusa_partial_wall_gcode(
+            output, candidate["model"], tool=candidate["tool"],
+            tower=candidate["tower"])
     else:
         audit_prusa_offline_colour_gcode(
             output,candidate["model"],printer_ini=candidate["printer"],
