@@ -237,19 +237,25 @@ def validate_prusa_project_admission(plate, settings, version):
             # Keep this scope aligned with the two-object spatial acceptance:
             # one box infill modifier on the first object and a separate,
             # independently verified sparse-infill Object override.
-            if not (len(plate) == 2 and len(volumes) == 1
-                    and not overrides
-                    and volumes[0]["kind"] in ("modifier", "negative")
-                    and volumes[0]["shape"] == "box"
-                    and (set(volumes[0]["settings"]) ==
-                         ({"sparse_infill_density"} if
-                          volumes[0]["kind"] == "modifier" else set()))
-                    and set(other.get("process_overrides") or {})
-                        == {"sparse_infill_density"}
-                    and not other.get("modifier_volumes")):
+            scoped_box = (len(plate) == 2 and len(volumes) == 1
+                          and volumes[0]["shape"] == "box"
+                          and not other.get("modifier_volumes"))
+            separate_models = (not overrides and
+                               volumes[0]["kind"] in ("modifier", "negative")
+                               and set(volumes[0]["settings"]) ==
+                               ({"sparse_infill_density"} if
+                                volumes[0]["kind"] == "modifier" else set())
+                               and set(other.get("process_overrides") or {})
+                                   == {"sparse_infill_density"})
+            stacked_model = (volumes[0]["kind"] == "modifier"
+                             and set(volumes[0]["settings"]) ==
+                                 {"sparse_infill_density"}
+                             and set(overrides) == {"sparse_infill_density"}
+                             and not other.get("process_overrides"))
+            if not (scoped_box and (separate_models or stacked_model)):
                 raise ValueError(
                     "Prusa mixed Object settings and modifiers need one "
-                    "independent box infill region on a two-model plate.")
+                    "qualified box infill region on a two-model plate.")
         for volume in volumes:
             if volume["id"] in seen:
                 raise ValueError("Duplicate Prusa native volume identity.")
