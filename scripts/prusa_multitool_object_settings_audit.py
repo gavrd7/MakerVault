@@ -26,6 +26,7 @@ def count_native_object_deposition(gcode, project, tools):
     e_absolute = True
     internal = [0]*len(boxes)
     sparse_infill = [0]*len(boxes)
+    top_solid_infill = [0]*len(boxes)
     for line_number, text in enumerate(source.splitlines(),1):
         if line_number > 2_000_000 or len(text)>16384:
             raise ValueError("Native toolpath exceeds object-settings audit limits.")
@@ -71,10 +72,13 @@ def count_native_object_deposition(gcode, project, tools):
                         and ymin-.15<=y<=ymax+.15):
                     if "perimeter" in role and "external" not in role:
                         internal[index]+=1
+                    if "top solid infill" in role:
+                        top_solid_infill[index]+=1
                     if "infill" in role and not any(
                             excluded in role for excluded in ("solid","top","bottom","bridge")):
                         sparse_infill[index]+=1
-    return {"internal":internal, "sparse_infill":sparse_infill}
+    return {"internal":internal, "sparse_infill":sparse_infill,
+            "top_solid_infill":top_solid_infill}
 
 
 def count_internal_perimeters(gcode, project, tools):
