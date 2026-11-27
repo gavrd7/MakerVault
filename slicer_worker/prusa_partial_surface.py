@@ -270,3 +270,20 @@ def audit_prusa_partial_wall_gcode(data, project, *, tool, tower=None):
         "unpainted_layers": len(layers[0]["unpainted"]),
         "offline_only": True,
     }
+
+
+def qualified_prusa_single_colour_mode(project, tool):
+    """Determine the only signed 3MF paint mode available to offline MMU.
+
+    Existing complete-wall approval stays unchanged. A split wall is admitted
+    only when the independent source-mesh inspector proves one unambiguous,
+    partly painted vertical exterior face; other masks fail closed.
+    """
+    from .prusa_colour_gcode_audit import _wall_regions
+
+    try:
+        _wall_regions(project, tool)
+    except WorkerError:
+        inspect_prusa_partial_wall(project, tool)
+        return "split_wall"
+    return "complete_wall"
