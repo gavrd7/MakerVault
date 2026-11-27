@@ -40,8 +40,8 @@ BASE = (b"layer_height = 0.2\nperimeters = 2\nfill_density = 15%\n"
 
 
 def build_prusa_native_3mf(rows, *, bed_width, bed_depth):
-    if not isinstance(rows, list) or not 1 <= len(rows) <= 12:
-        raise SlicerProfileError("Prusa native project requires one to twelve objects.")
+    if not isinstance(rows, list) or not 1 <= len(rows) <= 200:
+        raise SlicerProfileError("Prusa native project requires one to 200 objects.")
     ET.register_namespace("", NS)
     model = ET.Element(f"{{{NS}}}model", {"unit": "millimeter", "xmlns:slic3rpe": "http://schemas.slic3r.org/3mf/2017/06"})
     ET.SubElement(model, f"{{{NS}}}metadata", {"name": "slic3rpe:Version3mf"}).text = "1"
