@@ -1111,7 +1111,14 @@ export default function SlicerPrepareWorkspace({
     new Set(prusaNativeTools.colour_tools.map(row=>row.tool)).size===
       prusaPaintedSlots.length;
   const prusaIndependentTools = ["xl","indx"].includes(prusaNativeTools?.mode);
+  const prusaProfileMode = prusaProfileTopology?.kind==="single_nozzle_changer" ? "mmu"
+    : prusaProfileTopology?.kind==="indx" ? "indx"
+    : prusaProfileTopology?.kind==="independent_tools" ? "xl" : null;
+  const prusaTopologyMatches = !prusaProfileTopology || (
+    prusaNativeTools?.tool_count===prusaProfileTopology.logical_tool_count &&
+    !!prusaProfileMode && prusaNativeTools.mode===prusaProfileMode);
   const prusaNativeReady = activeEngine === "prusaslicer" && prusaNativeTools != null &&
+    prusaTopologyMatches &&
     prusaNativeTools.version===1 && prusaNativeTools.filament_profile_ids?.length===prusaNativeTools.tool_count &&
     prusaNativeTools.filament_profile_ids.every(id=>filamentProfiles.some(profile=>
       String(profile.id)===String(id) && profile.engine==="prusaslicer" &&
@@ -1194,7 +1201,12 @@ export default function SlicerPrepareWorkspace({
     ].includes(key)) : [];
   const prusaNativeBlockReason = activeEngine==="prusaslicer" &&
     prusaNativeTools && !prusaNativeReady
-      ? prusaUnsupportedObjectKeys.length
+      ? !prusaTopologyMatches
+        ? "The selected Prusa printer profile reports " +
+          prusaProfileTopology.logical_tool_count + " native tools (" +
+          prusaProfileTopology.kind.replaceAll("_", " ") +
+          "), which does not match this draft. Use Match native printer profile in the materials panel."
+        : prusaUnsupportedObjectKeys.length
         ? "Prusa MMU/XL/INDX supports Object walls, top/bottom shells and infill density. Unsupported Object keys: " +
           [...new Set(prusaUnsupportedObjectKeys)].join(", ") +
           ". Restore those settings or save the draft."
