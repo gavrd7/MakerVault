@@ -1709,6 +1709,11 @@ export default function SlicerWorkbench({ files = [], printers = [], spools = []
       flushSettings={flushSettings} onFlushSettingsChange={setFlushSettings}
       slotFilamentProfiles={slotFilamentProfiles} onSlotFilamentProfilesChange={setSlotFilamentProfiles}
       prusaNativeTools={prusaNativeTools} onPrusaNativeToolsChange={setPrusaNativeTools}
+      onUsePrusaSingleMaterial={profileId => {
+        selectNativeProfile("filament", profileId);
+        setPrusaNativeTools(null);
+        setPrimeTower(null);
+      }}
       prusaProfileTopology={prusaProfileTopology}
       filamentProfiles={slotFilamentChoices} spools={spools}
       onRememberedProfiles={remembered => {
