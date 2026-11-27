@@ -33,5 +33,38 @@ def main(folder):
         (out / (name + ".3mf")).write_bytes(build_prusa_native_3mf(
             models, bed_width=250, bed_depth=210))
 
+
+    # Mixed feature parity: an independently placed parameter modifier on
+    # the first model and a native Object infill override on the second.
+    # Single-feature controls let the runtime prove neither feature leaks
+    # across object boundaries.
+    first_x, second_x = -35, 35
+    modifier = {
+        "id": "d973b9bb-f114-4e92-b8d9-aa0c988c6626",
+        "shape": "box", "kind": "modifier",
+        "width_mm": 10, "depth_mm": 10, "height_mm": 22,
+        "x_mm": first_x, "y_mm": 0, "z_mm": 10,
+        "coordinate_space": "world",
+        "rotation_xyz_deg": [0, 0, 0],
+        "scale_xyz_percent": [100, 100, 100],
+        "settings": {"sparse_infill_density": 80},
+    }
+    for label, with_modifier, with_object in (
+        ("mix-baseline", False, False),
+        ("mix-modifier", True, False),
+        ("mix-object", False, True),
+        ("mix-both", True, True),
+    ):
+        left = {**base, "x_mm": first_x}
+        right = {**base, "x_mm": second_x}
+        if with_modifier:
+            left["modifier_volumes"] = [modifier]
+        if with_object:
+            right["process_overrides"] = {"sparse_infill_density": 80}
+        archive = build_prusa_native_3mf(
+            [(left, cube_stl()), (right, cube_stl())],
+            bed_width=250, bed_depth=210)
+        (out / (label + ".3mf")).write_bytes(archive)
+
 if __name__ == "__main__":
     main(sys.argv[1])
