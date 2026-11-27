@@ -1,3 +1,49 @@
+### 27 November — Prusa parity follow-up: native process, larger plates and bulk single material
+
+Native Prusa MMU/XL process editing now accepts the full bounded numeric
+process-field map already implemented for the single-material engine:
+global layer height, walls, shells and infill as well as brim, skirts,
+external/internal wall speed, sparse infill speed, travel speed and top
+surface speed. The genuine pinned MMU five-tool worker smoke applies these
+settings before slicing and still audits the resulting per-object native
+deposition. Unrecognised or executable process settings are rejected; a
+missing native profile key is an error, not an ignored override.
+
+Ordinary *single-material* Prusa plates use the shared engine-neutral
+200-instance placement budget rather than the obsolete 12-instance
+scheduling limit. More complex multi-tool and painted-support fixtures
+remain independently bounded by their own reviewed native auditors.
+
+Prusa's Select models bulk filament picker now distinguishes two cases.
+A partial selection updates only those native per-model tool assignments.
+Selecting **all printable models** and choosing one imported Prusa filament
+switches to the ordinary single-material profile and clears the now
+unneeded virtual multi-tool configuration and wipe tower. This avoids
+leaving an all-one-tool project blocked by the multi-tool distinct-extruder
+audit. If the plate contains colour-painted facets, the change remains a
+native assignment rather than silently removing the painted palette.
+The original worker/owner binding and printer-submission safeguards are
+unchanged.
+
+Native tool mode is required to agree exactly with the owner-resolved
+printer profile (MMU vs independent heads vs INDX). A user-supplied
+INDX label cannot override an XL-style profile merely because it has more
+than one nozzle. The full reported material picker remains scrollable on
+small screens without truncating available materials.
+
+Four-face seam support is available under the existing fingerprinted,
+upright, single-model acceptance path; the native reviewed workflow has
+an explicit repeated four-direction G-code qualification gate. Arbitrary
+seam blockers, mixed geometry edits and physical printer transfer remain
+separate, not silently unlocked.
+
+**Acceptance still pending:** exact-head CI and real pinned-runtime outcome
+for this follow-up; desktop/mobile staging; unsupported mixed advanced
+features; physical printer pickup/start evidence. No production deployment
+or changed Orca, Creality or Bambu worker runner.
+
+---
+
 ### 27 November — shared bulk material selection and native-profile-driven Prusa tools
 
 The shared **Select models** panel now has Select all (including an indeterminate
