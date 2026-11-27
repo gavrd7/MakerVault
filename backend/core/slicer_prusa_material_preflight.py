@@ -146,25 +146,11 @@ def slice_prusa_offline_mmu_candidate(job_id, **prepared_settings):
     audit_prusa_material_model_gcode(
         output,candidate["model"],printer_ini=candidate["printer"],
         tools=list(prepared_settings["tools"]),tower=list(candidate["tower"]))
-    # MMU tool routing and object-specific variable-Z ranges are independent
-    # Prusa-native 3MF features. Verify both the tool attribution above and
-    # the actual per-object Z-step schedule when one was requested.
-    rows = prepared_settings["rows"]
-    if any(isinstance(row.get("variable_layer_profile"), dict) and
-           row["variable_layer_profile"].get("bands") for row, _ in rows):
-        from .slicer_prusa_native_resolution import parse_prusa_profile
-        from .slicer_prusa_spatial_layers import audit_prusa_multi_object_layer_ranges
-        process_settings = parse_prusa_profile(candidate["process"], "process")
-        try:
-            base_layer_mm = float(process_settings["layer_height"])
-            audit_prusa_multi_object_layer_ranges(
-                output, list(rows), bed_width=prepared_settings["bed_width"],
-                bed_depth=prepared_settings["bed_depth"],
-                base_layer_mm=base_layer_mm)
-        except (KeyError, ValueError, TypeError, OverflowError) as exc:
-            raise SlicerProfileError(
-                "Prusa MMU output did not preserve the requested native object layer schedule."
-            ) from exc
+    # MMU modifier meshes are audited by the ordinary typed-volume project
+    # validator and the independent native material-deposition guard above.
+    # Per-Object layer-height ranges remain disabled for this pinned MMU
+    # runtime after its genuine CLI produced no G-code for either
+    # layer-only or layer-plus-modifier input.
     return output
 
 
