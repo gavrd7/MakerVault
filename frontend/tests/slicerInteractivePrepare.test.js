@@ -880,7 +880,7 @@ test("shared model selection offers select all and atomic bulk filament mapping"
   assert.match(prepare, /const ids = new Set\(instanceIds\)/);
   assert.match(prepare, /ids\.has\(item\.instance_id\)/);
   assert.match(prepare, /changeModelsPreviewFilament\(selectedModels\.map\(model => model\.instance_id\), slot\)/);
-  assert.match(prepare, /Base filament only; painted colours and modifier volumes are unchanged/);
+  assert.match(prepare, /Base material only; painted colours and modifier volumes remain unchanged/);
 });
 
 test("printer-supplied palette is not truncated by legacy 16 or 64 material UI limits", () => {
@@ -889,4 +889,15 @@ test("printer-supplied palette is not truncated by legacy 16 or 64 material UI l
   assert.doesNotMatch(prepare, /liveMaterials\]\.sort\([^\n]*\)\.slice\(0, 64\)/);
   assert.doesNotMatch(prepare, /requiredMultiSlots\.length <= 16/);
   assert.match(prepare, /requiredMultiSlots\.every\(slotId => liveMaterials\.some/);
+});
+
+test("the shared bulk filament picker routes Prusa through native tools rather than feeder slots", () => {
+  const prepare = read("SlicerPrepareWorkspace.jsx");
+  assert.match(prepare, /const bulkPrusaNative = String\(engine \|\| ""\)/);
+  assert.match(prepare, /const changeSelectedPrusaNativeTool = tool =>/);
+  assert.match(prepare, /onPrusaNativeToolsChange\(\{/);
+  assert.match(prepare, /model_tools: \[\.\.\.existing, \.\.\.selectedModels\.map/);
+  assert.match(prepare, /bulkPrusaNative \? Array\.from/);
+  assert.match(prepare, /Native T\{index\}/);
+  assert.match(prepare, /!profile\}/);
 });
