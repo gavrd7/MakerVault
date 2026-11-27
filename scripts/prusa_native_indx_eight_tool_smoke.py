@@ -302,6 +302,80 @@ def main(binary, vendor, official=None):
                 raise AssertionError("Actual official INDX 8T native material attribution failed.")
             print("PASS: actual official Prusa CORE One INDX 8T profile "
                   "slices all eight tool identities",observed_official,flush=True)
+            # Same eight-head official printer/palette, no invented printer
+            # scripts: apply MakerVault's existing native facet encoder and
+            # independent worker colour audits to T1 (and T1/T2). Higher
+            # heads still remain available for whole-model tool assignment.
+            from scripts.prusa_generate_mmu_paint import fixture as painted_fixture
+            from core.slicer_prusa_colour_project import build_prusa_colour_candidate
+            from slicer_worker.prusa_offline_contract import validate_prusa_offline_xl_colour_inputs
+            from slicer_worker.prusa_colour_gcode_audit import (
+                audit_prusa_xl_colour_gcode, audit_prusa_dual_colour_gcode)
+            stl,_mesh,_states,paint=painted_fixture(include_paint=True)
+            row={"asset_id":"official-indx-paint","x_mm":0,"y_mm":0,
+                 "z_mm":0,"rotation_deg":0,"scale_percent":100,
+                 "colour_paint":paint}
+            (folder/"prusa-offline-xl.marker").unlink(missing_ok=True)
+            (folder/"prusa-offline-xl-colour.marker").write_text("v1")
+            coloured=build_prusa_colour_candidate(
+                row,stl,printer_ini=selected,colour_tool_indices={1:1},
+                bed_width=250,bed_depth=210)
+            validate_prusa_offline_xl_colour_inputs(
+                project=coloured,printer=selected,filament=palette,
+                process=process,tool=1)
+            payload.pop("prusa_offline_xl")
+            payload["prusa_offline_xl_colour"]={"tool":1}
+            payload["model"]=encode(coloured)
+            _decode_payload(payload)
+            (folder/"input.3mf").write_bytes(coloured)
+            (folder/"output.gcode").unlink(missing_ok=True)
+            run_prusa(Path(binary),folder)
+            face_gcode=(folder/"output.gcode").read_bytes()
+            face_receipt=audit_prusa_xl_colour_gcode(
+                face_gcode,coloured,printer_ini=selected,tool=1)
+            assert face_receipt["painted_wall_moves"][1]["front"]>=20,face_receipt
+            assert face_receipt["painted_wall_moves"][0]["back"]>=20,face_receipt
+            assert not face_receipt["wipe_tower"],face_receipt
+            print("PASS: actual official eight-head INDX native T1 face paint",
+                  face_receipt,flush=True)
+
+            from core.slicer_plate_3mf import _triangles
+            from core.slicer_native_support_paint import _fingerprint
+            triangles=list(_triangles(stl))
+            lo=[min(p[a] for tri in triangles for p in tri) for a in range(3)]
+            hi=[max(p[a] for tri in triangles for p in tri) for a in range(3)]
+            origin=((lo[0]+hi[0])/2,(lo[1]+hi[1])/2,lo[2])
+            local=[[tuple(p[a]-origin[a] for a in range(3)) for p in tri]
+                   for tri in triangles]
+            back=[{"face":i,"polygon":[list(p) for p in tri]}
+                  for i,tri in enumerate(local)
+                  if all(abs(p[1]-10)<.00001 for p in tri)]
+            assert len(back)==2, "INDX native rear wall is incomplete"
+            dual={**paint,"signature":_fingerprint(local),
+                  "palette":[*paint["palette"],
+                             {"color":"#fadd4d","label":"INDX T2"}],
+                  "regions":[*paint["regions"],{"slot":2,"patches":back}]}
+            two=build_prusa_colour_candidate(
+                {**row,"colour_paint":dual},stl,printer_ini=selected,
+                colour_tool_indices={1:1,2:2},bed_width=250,bed_depth=210)
+            validate_prusa_offline_xl_colour_inputs(
+                project=two,printer=selected,filament=palette,
+                process=process,tools=[1,2])
+            payload["prusa_offline_xl_colour"]={"tools":[1,2]}
+            payload["model"]=encode(two)
+            _decode_payload(payload)
+            (folder/"input.3mf").write_bytes(two)
+            (folder/"output.gcode").unlink(missing_ok=True)
+            run_prusa(Path(binary),folder)
+            dual_gcode=(folder/"output.gcode").read_bytes()
+            dual_receipt=audit_prusa_dual_colour_gcode(
+                dual_gcode,two,printer_ini=selected,tools=(1,2),tower=None)
+            assert dual_receipt["wall_moves"][1]["front"]>=20,dual_receipt
+            assert dual_receipt["wall_moves"][2]["back"]>=20,dual_receipt
+            assert not dual_receipt["wipe_tower"],dual_receipt
+            print("PASS: actual official eight-head INDX native opposing T1/T2 paint",
+                  dual_receipt,flush=True)
+
 
 
 
