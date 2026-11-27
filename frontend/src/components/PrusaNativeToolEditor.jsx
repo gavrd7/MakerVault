@@ -18,7 +18,7 @@ const safeNumber = raw => {
 };
 
 export default function PrusaNativeToolEditor({
-  value, onChange, models=[], profileChoices=[], primaryProfileId="",
+  value, onChange, models=[], selectedModelIds=[], profileChoices=[], primaryProfileId="",
   engineVersion="2.9.7", primeTower, onPrimeTowerChange, disabled=false,
 }) {
   const [towerX,setTowerX]=useState(primeTower?.x==null?"":String(primeTower.x));
@@ -46,6 +46,16 @@ export default function PrusaNativeToolEditor({
     const existing=(value.model_tools||[]).filter(row=>row.instance_id!==instanceId);
     onChange?.({...value,model_tools:tool?[
       ...existing,{instance_id:instanceId,tool:Number(tool)}]:existing});
+  };
+  const updateSelectedModels = tool => {
+    if (!value || disabled || !tool) return;
+    const ids = new Set(selectedModelIds);
+    const existing = (value.model_tools || []).filter(row => !ids.has(row.instance_id));
+    onChange?.({...value, model_tools: [
+      ...existing, ...models.filter(row => ids.has(row.instance_id)).map(row => ({
+        instance_id: row.instance_id, tool: Number(tool),
+      })),
+    ]});
   };
   const updateColour=(slot,tool)=>{
     const others=(value.colour_tools||[]).filter(row=>row.slot!==slot);
@@ -141,6 +151,13 @@ export default function PrusaNativeToolEditor({
           </select>
         </label>)}
       </div>
+      <label style={{display:"block",marginTop:10}}>Change native filament for {selectedModelIds.filter(id => models.some(model => model.instance_id === id)).length} selected models
+        <select value="" disabled={disabled || !selectedModelIds.some(id => models.some(model => model.instance_id === id))}
+          onChange={event => updateSelectedModels(event.target.value)}>
+          <option value="">Choose a native tool…</option>
+          {Array.from({length:value.tool_count},(_,i)=><option key={i+1} value={i+1}>T{i} — {profiles.find(profile => profile.id === value.filament_profile_ids[i])?.name || "Unassigned filament profile"}</option>)}
+        </select>
+      </label>
       <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(200px,1fr))",gap:10,marginTop:10}}>
         {models.map((model,index)=><label key={model.instance_id}>
           {model.label||"Model "+(index+1)} — native extruder
