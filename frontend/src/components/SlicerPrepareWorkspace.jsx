@@ -1189,8 +1189,10 @@ export default function SlicerPrepareWorkspace({
     (activeEngine==="prusaslicer" && prusaSinglePaint && prusaNativeReady);
   const hasPaintedColours = usedNativeFeatures([{objects}]).includes("colour_paint");
   const paintingRoutingNotice = hasPaintedColours && !paintedNativeReady
-    ? !(activeEngine === "orcaslicer" && activeEngineVersion === "2.5.0") && activeEngine !== "crealityprint"
-      ? "Native multi-colour slicing currently requires OrcaSlicer 2.5.0 or Creality Print."
+    ? activeEngine === "prusaslicer"
+      ? "Prusa native colour painting needs a selected MMU or XL printer profile, an owned filament preset for each reported tool, an exact painted-swatch mapping and qualified native paint geometry. Check Prusa native tools."
+      : !(activeEngine === "orcaslicer" && activeEngineVersion === "2.5.0") && activeEngine !== "crealityprint"
+      ? "Native multi-colour slicing is not verified for this engine and version."
       : paintedObjectsWithoutBase.length
         ? "The loaded CFS slots have profiles, but the painted model has no base filament slot. Assign its base filament; this is separate from choosing native profiles for loaded slots."
         : incompletePaintSlot
@@ -1237,9 +1239,9 @@ export default function SlicerPrepareWorkspace({
           prusaUnsupportedGlobalKeys.join(", ") +
           ". Restore them to the imported native process defaults or save this draft."
         : objects.some(row=>row.material_slot)
-        ? "Prusa virtual tools use explicit native T0–T7 assignments, not printer filament bays. Clear the models' physical slot assignments."
+        ? "Prusa virtual tools use native extruder assignments from the selected printer profile, not physical filament bays. Clear the models' physical slot assignments."
         : (objects.length<2 || objects.length>12) && !prusaSinglePaint
-        ? "Prusa MMU/XL/INDX requires two to twelve tool-assigned models, or one painted MMU model with T0 base."
+        ? "Prusa MMU/XL/INDX requires two to twelve tool-assigned models, or one qualified painted MMU/XL model with T0 base."
         : "Complete the Prusa native tool editor, assign all model tools and owned filament presets, and specify an MMU tower and purge matrix when required."
       : "";
   const sliceBlockReason = draftBlockReason ||
