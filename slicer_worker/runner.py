@@ -52,15 +52,16 @@ def prusa_command(binary: Path, workdir: Path) -> list[str]:
     offline = workdir / "prusa-offline-mmu.marker"
     xl = workdir / "prusa-offline-xl.marker"
     colour = workdir / "prusa-offline-colour.marker"
-    if sum(marker.exists() for marker in (offline,xl,colour)) > 1:
+    xl_colour = workdir / "prusa-offline-xl-colour.marker"
+    if sum(marker.exists() for marker in (offline,xl,colour,xl_colour)) > 1:
         raise WorkerError("Conflicting native Prusa offline tool contracts.")
-    for marker in (offline, xl, colour):
+    for marker in (offline, xl, colour, xl_colour):
         if marker.is_symlink() or (marker.exists() and
                 (not marker.is_file() or marker.read_bytes() != b"v1")):
             raise WorkerError("Invalid native Prusa offline marker.")
     if project.exists() or project.is_symlink():
         model = _regular_file(workdir, "input.3mf", MAX_MODEL_BYTES)
-        if not (offline.exists() or xl.exists() or colour.exists()):
+        if not (offline.exists() or xl.exists() or colour.exists() or xl_colour.exists()):
             from .prusa_3mf_validation import validate_prusa_native_3mf
             validate_prusa_native_3mf(model.read_bytes())
         # The service performed the independent MMU 3MF/profile validation
@@ -70,7 +71,7 @@ def prusa_command(binary: Path, workdir: Path) -> list[str]:
         if (workdir / "input.stl").exists():
             raise WorkerError("Ambiguous Prusa input geometry.")
     else:
-        if offline.exists() or xl.exists() or colour.exists():
+        if offline.exists() or xl.exists() or colour.exists() or xl_colour.exists():
             raise WorkerError("Prusa offline material slicing requires native 3MF input.")
         model = _regular_file(workdir, "input.stl", MAX_MODEL_BYTES)
         try:
