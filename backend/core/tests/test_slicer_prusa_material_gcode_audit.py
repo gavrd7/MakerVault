@@ -151,6 +151,17 @@ class PrusaOfficialIndxCleanerTests(TestCase):
         self.assertEqual(result["incorrect_extrusion_moves"],[0,0])
         self.assertEqual(result["qualified_cleaner_flushes"],1)
 
+    def test_first_native_flush_can_precede_absolute_xy_without_inventing_position(self):
+        raw=self.native()
+        prefix=(b"T0\nG12 S90\nG91\n;FLUSH_START\n"
+                b"G1 X-0.2 E0\nG1 X0.4 E1\nG1 Y-1.2 E1\n"
+                b"G1 X-0.4 E1\nG1 Y1.2 E1\nG1 X0.2 E.2\n"
+                b";FLUSH_END\nG90\nG12 S91\nG0 X90 Y105")
+        self.assertIn(b"T0\nG0 X90 Y105",raw)
+        checked=self.qualified(raw.replace(b"T0\nG0 X90 Y105",prefix))
+        self.assertEqual(checked["qualified_cleaner_flushes"],2)
+        self.assertEqual(checked["incorrect_extrusion_moves"],[0,0])
+
     def test_marker_without_exact_profile_never_excludes_material(self):
         with self.assertRaisesRegex(WorkerError, "Unqualified"):
             audit_prusa_material_model_gcode(
