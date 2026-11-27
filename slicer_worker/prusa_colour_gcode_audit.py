@@ -87,6 +87,7 @@ def audit_prusa_offline_colour_gcode(data, project, *, printer_ini, tool, tower)
     active=None
     e=0.0
     relative=False
+    relative_xy=False
     x=y=None
     walls={0:{"front":0,"back":0},tool:{"front":0,"back":0}}
     tower_hits={0:0,tool:0}
@@ -106,7 +107,7 @@ def audit_prusa_offline_colour_gcode(data, project, *, printer_ini, tool, tower)
             if active not in walls:
                 raise WorkerError("Prusa painted output selected an unexpected tool.")
             continue
-        if op not in ("M82","M83","G92","G0","G00","G1","G01"):
+        if op not in ("M82","M83","G90","G91","G92","G0","G00","G1","G01"):
             continue
         values={k.upper():float(v) for k,v in WORD.findall(cmd)}
         if any(not math.isfinite(v) or abs(v)>1e9 for v in values.values()):
@@ -115,25 +116,43 @@ def audit_prusa_offline_colour_gcode(data, project, *, printer_ini, tool, tower)
             relative=False
         elif op=="M83":
             relative=True
+        elif op=="G90":
+            relative_xy=False
+        elif op=="G91":
+            relative_xy=True
         elif op=="G92":
             e=values.get("E",e)
-        else:
             x=values.get("X",x)
             y=values.get("Y",y)
+        else:
+            old_x,old_y=x,y
+            if relative_xy:
+                x=x+values["X"] if x is not None and "X" in values else (
+                    None if "X" in values else x)
+                y=y+values["Y"] if y is not None and "Y" in values else (
+                    None if "Y" in values else y)
+            else:
+                x=values.get("X",x)
+                y=values.get("Y",y)
             if "E" not in values:
                 continue
             extruded=values["E"] if relative else values["E"]-e
             e=e+values["E"] if relative else values["E"]
-            if extruded<=1e-6 or op not in ("G1","G01") or x is None or y is None:
+            if (extruded<=1e-6 or op not in ("G1","G01") or
+                    x is None or y is None or old_x is None or old_y is None or
+                    abs(x-old_x)+abs(y-old_y)<=1e-7):
                 continue
             if active not in walls:
                 raise WorkerError("Prusa painted extrusion had no selected native tool.")
-            if box[0]<=x<=box[1] and box[2]<=y<=box[3]:
+            if (box[0]<=x<=box[1] and box[2]<=y<=box[3] and
+                    box[0]<=old_x<=box[1] and box[2]<=old_y<=box[3]):
                 tower_hits[active]+=1
             if "external perimeter" not in role:
                 continue
             for name,region in (("front",front),("back",back)):
-                if region[0]<=x<=region[1] and region[2]<=y<=region[3]:
+                if (region[0]<=x<=region[1] and region[2]<=y<=region[3] and
+                        region[0]<=old_x<=region[1] and
+                        region[2]<=old_y<=region[3]):
                     walls[active][name]+=1
     if (walls[tool]["front"]<20 or walls[0]["back"]<20 or
             walls[tool]["back"]>max(2,walls[0]["back"]//100)):
