@@ -179,3 +179,122 @@ def audit_prusa_seam_enforcer_gcode(data, item, *, bed_width, bed_depth):
     if sampled < 5 or matching < 5 or matching < math.ceil(.75*sampled):
         raise ValueError("Native Prusa seam did not follow the enforcer region.")
     return {"sampled_layers": sampled, "matching_layers": matching}
+
+
+def audit_prusa_multi_object_seam_gcode(data, sources, *, bed_width, bed_depth):
+    """Validate a *separate* real external-wall seam for each painted object.
+
+    Prusa interleaves objects inside each layer. A global first-perimeter
+    check can accidentally certify one painted object using a different
+    model's seam. Attribute moving positive-E external perimeter starts to
+    individual disjoint source mesh footprints, then demand the matching
+    user-painted face on every selected object.
+    """
+    from .slicer_prusa_spatial_layers import _bounds
+
+    if (not isinstance(data,bytes) or not 0<len(data)<=90*1024*1024 or
+            not isinstance(sources,list) or not 2<=len(sources)<=200):
+        raise ValueError("Invalid multi-object native Prusa seam audit.")
+    bounds=[_bounds(source,bed_width,bed_depth) for source in sources]
+    for index,a in enumerate(bounds):
+        for b in bounds[index+1:]:
+            if (min(a[1],b[1])>max(a[0],b[0])+.01 and
+                    min(a[3],b[3])>max(a[2],b[2])+.01):
+                raise ValueError("Overlapping native models cannot verify independent seams.")
+    painted={}
+    for index,(item,_raw) in enumerate(sources):
+        if not (item.get("seam_paint") or {}).get("regions"):
+            continue
+        prusa_qualified_seam_direction(item)
+        patches=item["seam_paint"]["regions"][0]["patches"]
+        vertices=[tuple(float(v) for v in p)
+                  for patch in patches for p in patch["polygon"]]
+        center_x=bed_width/2+float(item.get("x_mm",0))
+        center_y=bed_depth/2+float(item.get("y_mm",0))
+        bx=(min(p[0] for p in vertices)+center_x-.8,
+            max(p[0] for p in vertices)+center_x+.8)
+        by=(min(p[1] for p in vertices)+center_y-.8,
+            max(p[1] for p in vertices)+center_y+.8)
+        zlo=min(p[2] for p in vertices)+.5
+        zhi=max(p[2] for p in vertices)-.5
+        painted[index]=(bx,by,zlo,zhi)
+    if not painted:
+        raise ValueError("No Prusa painted seam selected.")
+    try:
+        lines=data.decode("utf-8").splitlines()
+    except UnicodeDecodeError:
+        raise ValueError("Prusa multi-object seam G-code is not UTF-8.") from None
+    pos={"X":None,"Y":None,"Z":None}
+    e=0.
+    relative_e=relative_xy=False
+    role=""
+    captured=set()
+    sampled={index:0 for index in painted}
+    matching={index:0 for index in painted}
+    for n,raw in enumerate(lines):
+        if n>=2_000_000 or len(raw)>16384:
+            raise ValueError("Prusa multi-object seam G-code exceeds limits.")
+        line=raw.strip()
+        if line==";LAYER_CHANGE":
+            captured.clear()
+        if line.startswith(";TYPE:"):
+            role=line.partition(":")[2].strip().lower()
+        instruction=line.split(";",1)[0].strip()
+        if not instruction:
+            continue
+        op=instruction.split(None,1)[0].upper()
+        if op not in ("G0","G00","G1","G01","G90","G91","G92","M82","M83"):
+            continue
+        fields={k.upper():float(v) for k,v in WORD.findall(instruction)}
+        if any(not math.isfinite(v) or abs(v)>1e9 for v in fields.values()):
+            raise ValueError("Invalid native Prusa seam motion.")
+        if op=="M82":
+            relative_e=False
+        elif op=="M83":
+            relative_e=True
+        elif op=="G90":
+            relative_xy=False
+        elif op=="G91":
+            relative_xy=True
+        elif op=="G92":
+            e=fields.get("E",e)
+            pos.update({k:v for k,v in fields.items() if k in pos})
+        else:
+            previous=pos.copy()
+            for axis in pos:
+                if axis in fields:
+                    pos[axis]=(pos[axis]+fields[axis]
+                               if relative_xy and pos[axis] is not None
+                               else None if relative_xy else fields[axis])
+            if "E" not in fields:
+                continue
+            deposited=fields["E"] if relative_e else fields["E"]-e
+            e=e+fields["E"] if relative_e else fields["E"]
+            if (op not in ("G1","G01") or deposited<=1e-6 or
+                    role!="external perimeter" or
+                    any(previous[k] is None or pos[k] is None
+                        for k in ("X","Y","Z")) or
+                    abs(pos["X"]-previous["X"])+abs(pos["Y"]-previous["Y"])<=1e-7):
+                continue
+            for index,(xmin,xmax,ymin,ymax,_minz,_maxz) in enumerate(bounds):
+                if (index in captured or not
+                        (xmin-.1<=previous["X"]<=xmax+.1 and
+                         ymin-.1<=previous["Y"]<=ymax+.1 and
+                         xmin-.1<=pos["X"]<=xmax+.1 and
+                         ymin-.1<=pos["Y"]<=ymax+.1)):
+                    continue
+                captured.add(index)
+                if index not in painted:
+                    break
+                (bx0,bx1),(by0,by1),zlo,zhi=painted[index]
+                if zlo<=pos["Z"]<=zhi:
+                    sampled[index]+=1
+                    if bx0<=previous["X"]<=bx1 and by0<=previous["Y"]<=by1:
+                        matching[index]+=1
+                break
+    if any(sampled[index]<5 or matching[index]<5 or
+           matching[index]<math.ceil(.75*sampled[index])
+           for index in painted):
+        raise ValueError("Native Prusa multi-object seam missed a painted model's selected face.")
+    return {"painted_model_indices":sorted(painted),
+            "sampled_layers":sampled,"matching_layers":matching}
