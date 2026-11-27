@@ -101,8 +101,8 @@ class PrusaGcodeAuditTests(TestCase):
             self.assertEqual(count, 3)
 
     def test_painted_mmu_does_not_retry_other_unsafe_gcode(self):
-        for invalid in (self.gcode()+b"\\x00", self.gcode()[:100],
-                        self.gcode() + b"\\xff"):
+        for invalid in (self.gcode()+b"\x00", self.gcode()[:100],
+                        self.gcode() + b"\xff"):
             with self.subTest(case=len(invalid)):
                 with TemporaryDirectory() as temporary:
                     folder=Path(temporary)
