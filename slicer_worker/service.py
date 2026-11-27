@@ -518,7 +518,8 @@ class Handler(BaseHTTPRequestHandler):
                     details = files["prusa_offline_mmu"]
                     audit_prusa_material_model_gcode(
                         data, files["model"], printer_ini=files["printer_profile"],
-                        tools=details["tools"], tower=details["tower"])
+                        tools=details["tools"], tower=details["tower"],
+                        process_ini=files["process_profile"])
                 if files.get("prusa_offline_colour"):
                     from .prusa_colour_gcode_audit import audit_prusa_offline_colour_gcode
                     details=files["prusa_offline_colour"]
@@ -547,7 +548,8 @@ class Handler(BaseHTTPRequestHandler):
                     from .prusa_material_gcode_audit import audit_prusa_material_model_gcode
                     audit_prusa_material_model_gcode(
                         data, files["model"], printer_ini=files["printer_profile"],
-                        tools=files["prusa_offline_xl"]["tools"])
+                        tools=files["prusa_offline_xl"]["tools"],
+                        process_ini=files["process_profile"])
                 if files.get("native_modifier_project"):
                     # A successful native CLI exit is not proof that every
                     # requested region was used in the generated toolpaths.
