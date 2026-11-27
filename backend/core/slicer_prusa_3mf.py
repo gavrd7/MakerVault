@@ -20,9 +20,11 @@ from .slicer_profiles import SlicerProfileError
 from .slicer_prusa_layer_ranges import prusa_layer_config_ranges, PATH as LAYER_RANGES_PATH
 from .slicer_prusa_paint import native_prusa_painted_stl, HEADERS as PAINT_HEADERS
 
-OBJECT_KEYS = frozenset({"wall_loops", "sparse_infill_density"})
+OBJECT_KEYS = frozenset({"wall_loops", "sparse_infill_density",
+                         "top_shell_layers", "bottom_shell_layers"})
 CONFIG_PATH = "Metadata/Slic3r_PE_model.config"
-BASE = b"layer_height = 0.2\nperimeters = 2\nfill_density = 15%\n"
+BASE = (b"layer_height = 0.2\nperimeters = 2\nfill_density = 15%\n"
+        b"top_solid_layers = 3\nbottom_solid_layers = 3\n")
 
 
 def build_prusa_native_3mf(rows, *, bed_width, bed_depth):
