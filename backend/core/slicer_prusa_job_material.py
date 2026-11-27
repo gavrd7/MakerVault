@@ -29,9 +29,9 @@ def _virtual_native_tools(job, settings, objects, kind, count, *, single_colour=
     config = validate_prusa_native_tools(settings["prusa_native_tools"])
     expected = ("mmu" if kind == "single_nozzle_changer" else
                 "indx" if kind == "indx" else "xl")
-    accepted_modes = ({expected} if expected == "mmu" else
-                      {"xl", "indx"} if kind == "independent_tools" else {"indx"})
-    if config["mode"] not in accepted_modes or config["tool_count"] != count:
+    # The resolved native printer profile is authoritative. Do not accept an
+    # INDX-labelled draft merely because an XL-style profile has several heads.
+    if config["mode"] != expected or config["tool_count"] != count:
         raise SlicerProfileError("Native Prusa profile and selected tool architecture disagree.")
     if (settings.get("material_tool_bindings") or settings.get("slot_filament_profiles")
             or settings.get("flush_settings")
