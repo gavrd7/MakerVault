@@ -1150,7 +1150,9 @@ export default function SlicerPrepareWorkspace({
          Array.isArray(object.process_overrides) ||
          Object.keys(object.process_overrides).some(key=>
            !["wall_loops","sparse_infill_density",
-             "top_shell_layers","bottom_shell_layers"].includes(key)))) ||
+             "top_shell_layers","bottom_shell_layers",
+             "outer_wall_speed","inner_wall_speed",
+             "sparse_infill_speed","top_surface_speed"].includes(key)))) ||
       object.negative_volumes?.length ||
       ((object.modifier_volumes?.length || object.variable_layer_profile?.bands?.length) &&
         (!prusaIndependentTools || prusaSinglePaint)) ||
@@ -1214,7 +1216,9 @@ export default function SlicerPrepareWorkspace({
     prusaNativeTools ? objects.flatMap(object=>
       Object.keys(object.process_overrides||{}).filter(key=>
         !["wall_loops","sparse_infill_density",
-          "top_shell_layers","bottom_shell_layers"].includes(key))) : [];
+          "top_shell_layers","bottom_shell_layers",
+             "outer_wall_speed","inner_wall_speed",
+             "sparse_infill_speed","top_surface_speed"].includes(key))) : [];
   const prusaUnsupportedGlobalKeys = activeEngine==="prusaslicer" &&
     prusaNativeTools ? Object.keys(processOverrides||{}).filter(key=>![
       "layer_height","wall_loops","top_shell_layers",
