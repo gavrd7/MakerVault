@@ -1155,7 +1155,7 @@ export default function SlicerPrepareWorkspace({
              "sparse_infill_speed","top_surface_speed"].includes(key)))) ||
       object.negative_volumes?.length ||
       ((object.modifier_volumes?.length || object.variable_layer_profile?.bands?.length) &&
-        (!prusaIndependentTools || prusaSinglePaint)) ||
+        prusaSinglePaint) ||
       object.support_paint?.regions?.length || object.seam_paint?.regions?.length ||
       object.fuzzy_skin_paint?.regions?.length ||
       (object.colour_paint?.regions?.length && !prusaSinglePaint)) &&
