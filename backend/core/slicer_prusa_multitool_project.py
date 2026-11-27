@@ -30,9 +30,12 @@ def build_prusa_multitool_candidate(rows, *, printer_ini, tools,
             "colour_paint", "support_paint", "seam_paint", "fuzzy_skin_paint",
             "negative_volumes", "material_slot",
         ) if allow_independent_regions else (
-            "modifier_volumes", "colour_paint",
-            "support_paint", "seam_paint", "fuzzy_skin_paint",
-            "variable_layer_profile", "negative_volumes", "material_slot",
+            # Prusa's typed 3MF parameter/negative volumes and object layer
+            # ranges are engine-native for MMU as well as independent heads.
+            # Only unsupported painting and legacy region representations
+            # remain gated here; the native worker validates exact volumes.
+            "colour_paint", "support_paint", "seam_paint",
+            "fuzzy_skin_paint", "negative_volumes", "material_slot",
         )
         if not isinstance(item, dict) or any(item.get(key) for key in forbidden):
             raise SlicerProfileError("Prusa multi-tool candidate cannot discard advanced edits.")
