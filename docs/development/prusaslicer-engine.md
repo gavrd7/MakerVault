@@ -1,3 +1,60 @@
+### 27 November — XL/INDX native painted-head parity and shared plate reconciliation
+
+This is a continuation of the existing **mapping-first** adapter strategy, not
+a new slicer feature framework. MakerVault's saved swatches, owned filaments,
+global numeric settings, tool assignments, responsive editor, 3MF encoder and
+authenticated worker are used for all machine topologies.
+
+- **XL five-head and official INDX eight-head:** The normal offline native
+  workbench admits a single T0-base model with either one painted vertical
+  wall or **two complete opposite painted walls** assigned to distinct native
+  alternate tools. Both paths use Prusa's genuine
+  `slic3rpe:mmu_segmentation` 3MF metadata. The independent-head contract
+  never synthesizes a single-nozzle MMU tower or purge matrix.
+- **Real native toolpaths qualified:** Pinned PrusaSlicer 2.9.7 reviewed
+  acceptance **46028914092** passed XL five-head T1-front/T2-back
+  deposition and the **official Prusa CORE One INDX 8T profile** with
+  T0–T7 correctly assigned to eight independent models, native negative
+  volumes/modifiers, and single- and two-wall T1/T2 painting. The selected
+  alternate tool does not deposit on the opposite painted wall; genuine T0
+  foundation extrusion is not misclassified as a wrong material.
+- **Official INDX firmware cleaner:** Reuse the *existing hash-pinned
+  official toolchange script identity* in the colour G-code auditor. Only
+  strict G12 S90/S91, relative-XY, bounded positive-E cleaner strokes
+  fenced by trusted native markers may be excluded from painted-wall
+  deposition. Malformed, oversized or forged cleaner movements fail closed.
+  This fixes five false T2 front-wall hits without accepting actual
+  wrong-tool extrusion.
+- **Materials and instances are separate capabilities:** Native model/tool
+  mapping, frontend, 3MF exporter and worker validation now follow the
+  shared **200-model-instance** plate budget (still subject to geometric
+  source, output and memory limits). Actual physical tool count comes from
+  the selected Prusa printer profile. Pinned 2.9.7 colour facet states map
+  **T0 base plus T1–T4 painting**; on an eight-head INDX, T5–T7 remain
+  available for *whole-model* extruder assignment, not unverified facet
+  states. The reviewed binary also tested fifteen models reusing five
+  native MMU material tools.
+- **Painted process overrides:** The same bounded native Prusa process
+  numeric schema used by the rest of MakerVault is applied to painted MMU
+  and XL/INDX slices. Imported owner profiles stay immutable.
+- **Outstanding correctness boundaries:** Arbitrary painted facet masks,
+  combined per-object paint/modifier/layer edits, and physical native
+  MMU/XL/INDX print start are *not* qualified by these successful offline
+  G-code tests. The existing PrusaLink file API is not proof of machine
+  docking, pickup, firmware or safe physical execution. MMU variable-Z
+  combinations still fail the genuine pinned CLI. The native MMU brim/skirt
+  research generated G-code, but its five-model audit observed nonzero
+  wrong-tool spatial footprint hits (8,8,8,9 on models two to five);
+  maintain the current adhesion gate until a role-aware, per-tool
+  spatial audit verifies the actual first-layer deposition.
+
+The legacy chronological notes below describe earlier gates at the time
+they were written; this newest acceptance is authoritative for the
+current branch. Existing Creality, Orca and Bambu execution routes have
+not been changed by these Prusa-specific mappings.
+
+---
+
 ### 27 November — mapping-first merge pass and genuine MMU compatibility boundary
 
 This pass adopts the standing [engine-adapter strategy](slicer-engine-adapter-strategy.md):
