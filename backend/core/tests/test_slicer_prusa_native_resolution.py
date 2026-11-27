@@ -46,6 +46,28 @@ class PrusaPrivateNativeProfileTests(TestCase):
         with self.assertRaisesRegex(SlicerProfileError, "changed"):
             resolved_native_profile(p)
 
+    def test_official_indx_extended_literals_preserve_owner_digest_and_limits(self):
+        from core.slicer_prusa_native_resolution import (
+            parse_prusa_profile, MAX_NATIVE_VALUE)
+        value = "{next_extruder}" + " " * 20000 + "G1 E0"
+        native = PRINTER + ("toolchange_gcode = " + value + "\n").encode()
+        self.assertEqual(
+            parse_prusa_profile(resolved_native_profile(profile(native)), "printer")[
+                "toolchange_gcode"], value)
+        for bad in (
+            PRINTER + ("toolchange_gcode = " + "x"*(MAX_NATIVE_VALUE+1) + "\n").encode(),
+            PRINTER + ("post_process = " + "x"*20000 + "\n").encode(),
+            PRINTER + ("include = " + "x"*20000 + "\n").encode(),
+        ):
+            with self.subTest(kind=bad.split(b" = ")[-2][-20:]):
+                with self.assertRaises(SlicerProfileError):
+                    resolved_native_profile(profile(bad))
+        # The trust check is performed on the exact bytes even for long values.
+        altered = profile(native)
+        altered.content_sha256 = "0"*64
+        with self.assertRaisesRegex(SlicerProfileError, "changed"):
+            resolved_native_profile(altered)
+
     def test_unresolved_vendor_sections_and_script_directives_refused(self):
         bad = (
             b"[printer:MK4S]\n" + PRINTER,
