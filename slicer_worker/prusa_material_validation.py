@@ -63,8 +63,7 @@ def validate_prusa_material_candidate(data, *, printer_ini, tools=None, colour=F
         _refuse()
     if colour:
         if (tools is not None or logical_count < 2 or
-                changer == independent_colour or
-                (independent_colour and logical_count > 5)):
+                changer == independent_colour):
             _refuse()
     elif (not isinstance(tools,(tuple,list)) or not 2 <= len(tools) <= 200
           or len(set(tools)) < 2 or any(type(t) is not int or
