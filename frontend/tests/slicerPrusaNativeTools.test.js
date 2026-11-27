@@ -122,13 +122,14 @@ test("Prusa native tool capacity is retrieved from an owner-scoped resolved prin
   assert.match(editor,/const profileMode = printerTopology\?\.kind/);
   assert.match(editor,/Match native printer profile/);
   assert.match(editor,/profileMatches && value\.filament_profile_ids\.every\(Boolean\)/);
+  assert.match(editor,/const profileMatches = !!profileToolCount && !!profileMode/);
   assert.match(editor,/profileToolCount \? \[\.\.\.new Set\(\[value\.tool_count, profileToolCount\]\)\]/);
   assert.match(editor,/draft; profile mismatch/);
 });
 
 test("Prusa Slice readiness refuses native-profile mismatch before sending the job",()=>{
   assert.match(prepare,/const prusaProfileMode = prusaProfileTopology\?\.kind/);
-  assert.match(prepare,/const prusaTopologyMatches = !prusaProfileTopology/);
+  assert.match(prepare,/const prusaTopologyMatches = !!prusaProfileTopology/);
   assert.match(prepare,/prusaNativeTools\?\.tool_count===prusaProfileTopology\.logical_tool_count/);
   assert.match(prepare,/prusaTopologyMatches &&/);
   assert.match(prepare,/Use Match native printer profile in the materials panel/);
@@ -180,4 +181,11 @@ test("Prusa tool configurator does not invent MMU, XL or INDX capacity",()=>{
   assert.match(editor,/disabled=\{disabled \|\| !!profileMode\}/);
   assert.match(editor,/disabled=\{disabled \|\| !!profileToolCount\}/);
   assert.doesNotMatch(editor,/value\.mode==="indx"\?\[2,3,4,5,6,7,8\]/);
+});
+
+test("native Prusa Slice stays blocked until its inspected printer topology is available",()=>{
+  assert.match(prepare,/const prusaTopologyMatches = !!prusaProfileTopology &&/);
+  assert.match(prepare,/prusaTopologyMatches &&/);
+  assert.match(editor,/const profileMatches = !!profileToolCount && !!profileMode/);
+  assert.match(editor,/profileMatches && value\.filament_profile_ids\.every\(Boolean\)/);
 });
