@@ -346,8 +346,8 @@ def prepare_prusa_offline_xl_colour_candidate(
         raise SlicerProfileError("Prusa XL painted model source is invalid.")
     printer=resolved_prusa_profile(printer_profile)
     topology=prusa_machine_topology(printer)
-    if (topology["kind"]!="independent_tools" or
-            not 2<=topology["logical_tool_count"]<=5 or
+    if (topology["kind"] not in ("independent_tools","indx") or
+            not 2<=topology["logical_tool_count"]<=8 or
             any(tool>=topology["logical_tool_count"]
                 for tool in colour_tool_indices.values()) or
             len(filament_profiles)!=topology["logical_tool_count"]):
