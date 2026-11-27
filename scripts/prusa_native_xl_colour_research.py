@@ -159,6 +159,108 @@ def main(binary, vendor):
         print("PASS: genuine independent XL5 X-opposing dual painted walls",
               xproof,"sha256",hashlib.sha256(xoutput).hexdigest(),flush=True)
 
+        # Four-sided native painting feasibility (base T0 plus T1..T4):
+        # do not authorize the workbench until independent spatial G-code
+        # evidence establishes that no alternate colour prints another wall.
+        # This experiment uses the same fingerprinted MakerVault colour
+        # editor regions and 3MF encoder; only the output audit is research.
+        from slicer_worker.prusa_colour_gcode_audit import WORD
+        import re
+        sidespec=((0,-10,1),(0,10,2),(1,-10,3),(1,10,4))
+        regions=[]
+        colours=[{"color":"#ff8000","label":"XL base T0"}]
+        for axis,face_value,tool in sidespec:
+            patches=[{"face":i,"polygon":[list(v) for v in face]}
+                     for i,face in enumerate(local)
+                     if all(abs(v[axis]-face_value)<.00001 for v in face)]
+            assert len(patches)==2,("Missing native side",axis,face_value)
+            regions.append({"slot":tool,"patches":patches})
+            colours.append({"color":("#"+format(tool*0x202020, "06X")),
+                            "label":"XL wall T"+str(tool)})
+        fourpaint={**paint,"signature":_fingerprint(local),
+                   "palette":colours,"regions":regions}
+        four=build_prusa_colour_candidate(
+            {**row,"colour_paint":fourpaint},stl,printer_ini=printer,
+            colour_tool_indices={t:t for t in range(1,5)},
+            bed_width=360,bed_depth=360)
+        (work/"input.3mf").write_bytes(four)
+        (work/"output.gcode").unlink(missing_ok=True)
+        try:
+            run_prusa(Path(binary),work)
+            lines=(work/"output.gcode").read_bytes().decode("utf-8").splitlines()
+            counts={tool:{idx:0 for idx in range(4)}
+                    for tool in range(5)}
+            active=None
+            role=""
+            x=y=e=None
+            relative_e=relative_xy=False
+            for line in lines:
+                if line.startswith(";TYPE:"):
+                    role=line.partition(":")[2].strip().lower()
+                cmd=line.split(";",1)[0].strip()
+                if not cmd:
+                    continue
+                op=cmd.split(None,1)[0].upper()
+                if op.startswith("T") and op[1:].isdigit():
+                    active=int(op[1:])
+                    continue
+                if op not in ("M82","M83","G90","G91","G92",
+                              "G0","G00","G1","G01"):
+                    continue
+                values={key.upper():float(num) for key,num in WORD.findall(cmd)}
+                if op=="M82":
+                    relative_e=False
+                elif op=="M83":
+                    relative_e=True
+                elif op=="G90":
+                    relative_xy=False
+                elif op=="G91":
+                    relative_xy=True
+                elif op=="G92":
+                    e=values.get("E",e)
+                    x=values.get("X",x)
+                    y=values.get("Y",y)
+                else:
+                    before=(x,y)
+                    if relative_xy:
+                        x=x+values["X"] if x is not None and "X" in values else x
+                        y=y+values["Y"] if y is not None and "Y" in values else y
+                    else:
+                        x=values.get("X",x)
+                        y=values.get("Y",y)
+                    amount=(values["E"] if relative_e else
+                            values["E"]-e if e is not None else 0
+                            ) if "E" in values else 0
+                    if "E" in values:
+                        e=e+values["E"] if relative_e and e is not None else values["E"]
+                    if (active not in counts or "external perimeter" not in role
+                            or amount<=1e-6 or op not in ("G1","G01")
+                            or None in before or x is None or y is None
+                            or abs(x-before[0])+abs(y-before[1])<=1e-7):
+                        continue
+                    for idx,(axis,face_value,tool) in enumerate(sidespec):
+                        across=180+face_value
+                        p=(x,y)[axis]
+                        old=before[axis]
+                        tangent=(x,y)[1-axis]
+                        old_tangent=before[1-axis]
+                        if (abs(p-across)<=2 and abs(old-across)<=2 and
+                                180-7<=tangent<=180+7 and
+                                180-7<=old_tangent<=180+7):
+                            counts[active][idx]+=1
+            print("FOUR-WALL XL5 NATIVE RESEARCH",counts,flush=True)
+            for idx,(_axis,_plane,tool) in enumerate(sidespec):
+                if counts[tool][idx]<20 or any(
+                        counts[other][idx]>2 for other in range(1,5)
+                        if other!=tool):
+                    raise AssertionError("Native XL four-wall tool attribution not isolated")
+            print("RESEARCH PASS: genuine Prusa XL5 four independently painted walls",
+                  counts,flush=True)
+        except (AssertionError,ValueError,RuntimeError) as exc:
+            print("RESEARCH BLOCKED: native XL5 four-wall mapping",
+                  type(exc).__name__,str(exc)[:320],flush=True)
+
+
 
 
 if __name__=="__main__":
