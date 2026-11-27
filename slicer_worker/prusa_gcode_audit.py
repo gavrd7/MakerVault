@@ -64,3 +64,41 @@ def audit_prusa_positive_e(data: bytes) -> dict[str, int]:
     if positive < 1:
         raise WorkerError("Prusa native G-code contains insufficient real extrusion.")
     return {"positive_e_moves": positive, "z_moves": layers}
+
+
+def run_prusa_painted_with_numeric_recheck(
+        runner, binary, workdir, *, timeout_seconds, max_bytes):
+    """Bounded offline-only recovery from intermittent native coordinate overflow.
+
+    The pinned Prusa 2.9.7 MMU painted-facet route has intermittently emitted
+    Y coordinates around 1e13. Never repair or sanitize those bytes. Discard
+    the entire file, invoke a new isolated native CLI process at most twice,
+    and require the original strict numeric audit on every candidate.
+    Downstream spatial/tool/purge audits remain independently mandatory.
+    No unpainted engine or hardware submission uses this helper.
+    """
+    if not isinstance(max_bytes, int) or max_bytes < 2000:
+        raise WorkerError("Invalid Prusa G-code output budget.")
+    output = workdir / "output.gcode"
+    for attempt in range(3):
+        if attempt:
+            # A failed attempt may leave corrupt or partial output behind.
+            # Unlink before running again; never accidentally inspect stale
+            # G-code if the native subprocess fails to create a new file.
+            output.unlink(missing_ok=True)
+        receipt = runner(binary, workdir, timeout_seconds=timeout_seconds)
+        try:
+            data = output.read_bytes()
+        except OSError as exc:
+            raise WorkerError("Native Prusa output could not be read.") from exc
+        if not data or len(data) > max_bytes:
+            raise WorkerError("Generated G-code exceeded the output size limit.")
+        try:
+            audit_prusa_positive_e(data)
+        except WorkerError as exc:
+            if (str(exc) == "Prusa native G-code contains invalid coordinates."
+                    and attempt < 2):
+                continue
+            raise
+        return receipt, data
+    raise WorkerError("Prusa native G-code coordinates could not be verified.")
