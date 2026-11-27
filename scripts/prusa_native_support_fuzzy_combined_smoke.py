@@ -115,8 +115,13 @@ def main(binary, vendor, folder):
                 both[0] > support[0] * 1.4):
             raise AssertionError(("Combined support deposition unqualified",
                                   receipts))
-        if (base[1] > 10 or support[1] > 10 or
-                fuzzy[1] < 30 or both[1] < fuzzy[1] * .65):
+        # This cantilever has legitimate short external wall segments even
+        # without fuzzy paint (~40). Require the added painted texture to
+        # dominate the same-geometry plain and support-only controls rather
+        # than treating every short segment as a fuzzy-skin artefact.
+        if (fuzzy[1] < max(30, base[1] * 5)
+                or support[1] > max(10, base[1] * 1.5)
+                or both[1] < fuzzy[1] * .65):
             raise AssertionError(("Combined fuzzy front-wall unqualified",
                                   receipts))
         print("PASS: native Prusa support and selective fuzzy skin coexist "
