@@ -90,7 +90,7 @@ export default function PrusaNativeToolEditor({
       ? value.model_tools[0]?.tool===1 &&
         value.colour_tools?.length===paintedSlots.length &&
         paintedSlots.every(slot=>value.colour_tools.some(row=>
-          row.slot===slot && row.tool>=2 && row.tool<=value.tool_count)) &&
+          row.slot===slot && row.tool>=2 && row.tool<=Math.min(value.tool_count,5))) &&
         new Set(value.colour_tools.map(row=>row.tool)).size===paintedSlots.length
       : new Set(value.model_tools.map(row=>row.tool)).size>=2 &&
         !(value.colour_tools||[]).length) &&
@@ -209,7 +209,7 @@ export default function PrusaNativeToolEditor({
               row=>row.slot===slot)?.tool||""}
             onChange={e=>updateColour(slot,e.target.value)}>
             <option value="">Choose a painted tool…</option>
-            {Array.from({length:value.tool_count-1},(_,i)=>i+2).map(tool=>
+            {Array.from({length:Math.min(value.tool_count-1,4)},(_,i)=>i+2).map(tool=>
               <option key={tool} value={tool}>T{tool-1} (native tool {tool})</option>)}
           </select>
         </label>)}
