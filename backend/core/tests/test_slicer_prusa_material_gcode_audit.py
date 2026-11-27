@@ -87,7 +87,10 @@ class PrusaNativeToolpathAuditTests(TestCase):
         self.assertEqual(result["native_first_layer_adhesion_moves"],{0:1,1:0})
         for forged in (
             native.replace(b"G0 Z0.2",b"G0 Z2.5"),
-            native.replace(b";TYPE:Skirt/Brim",b";TYPE:External perimeter"),
+            native.replace(b";TYPE:Skirt/Brim",b";TYPE:External perimeter").replace(
+                b"G1 X160.1 Y105 E0.1",
+                b"".join(f"G1 X{160+(i+1)*.1:.2f} Y105 E0.1\n".encode()
+                         for i in range(8)).rstrip()),
             native.replace(b";TYPE:Skirt/Brim",b";TYPE:Skirt/Brim\nT9"),
         ):
             with self.subTest(raw=forged[:140]),self.assertRaises(WorkerError):
