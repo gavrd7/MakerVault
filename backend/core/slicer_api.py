@@ -268,11 +268,14 @@ def _draft_plate_settings(user, input_asset, settings):
     tower_field = {"prime_tower": prime_tower} if prime_tower is not None else {}
     process_overrides = validate_process_overrides(settings.get("process_overrides"))
     flush_settings = validate_flush_settings(settings.get("flush_settings"))
+    # The 1024-row bounds below protect request/storage resources; they do not
+    # define a physical printer material limit. Actual engine and printer tool
+    # capabilities must be verified independently before slicing or dispatch.
     # Independent per-bay filament presets are draft annotations only until
     # the engine's verified native tool routing is available. Never synthesize
     # a different tool/profile from a physical bay number.
     raw_slot_profiles = settings.get("slot_filament_profiles", [])
-    if not isinstance(raw_slot_profiles, list) or len(raw_slot_profiles) > 16:
+    if not isinstance(raw_slot_profiles, list) or len(raw_slot_profiles) > 1024:
         raise ValueError("Invalid per-slot filament profile assignments.")
     slot_profiles, seen_slots = [], set()
     for entry in raw_slot_profiles:
@@ -293,7 +296,7 @@ def _draft_plate_settings(user, input_asset, settings):
     # order. Persisted for multi-material preflight only; physical printer
     # changeover remains a separate gated capability.
     raw_bindings = settings.get("material_tool_bindings", [])
-    if not isinstance(raw_bindings, list) or len(raw_bindings) > 16:
+    if not isinstance(raw_bindings, list) or len(raw_bindings) > 1024:
         raise ValueError("Invalid native tool binding list.")
     bindings, used_slots, used_tools = [], set(), set()
     for entry in raw_bindings:
@@ -303,7 +306,7 @@ def _draft_plate_settings(user, input_asset, settings):
         if (not isinstance(slot_id, str) or not 1 <= len(slot_id) <= 128 or
                 any(ord(ch) < 33 or ord(ch) > 126 for ch in slot_id)
                 or slot_id in used_slots or isinstance(tool, bool)
-                or not isinstance(tool, int) or not 0 <= tool <= 15 or tool in used_tools):
+                or not isinstance(tool, int) or not 0 <= tool < 1024 or tool in used_tools):
             raise ValueError("Slot and logical tool assignments must be unique and bounded.")
         used_slots.add(slot_id)
         used_tools.add(tool)
