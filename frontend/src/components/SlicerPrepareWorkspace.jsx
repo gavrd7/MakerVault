@@ -1139,7 +1139,7 @@ export default function SlicerPrepareWorkspace({
       String(profile.id)===String(id) && profile.engine==="prusaslicer" &&
       profile.engine_version===activeEngineVersion && profile.kind==="filament")) &&
     prusaNativeTools.filament_profile_ids.includes(selectedProfiles?.filament_id) &&
-    ((objects.length>=2 && objects.length<=12) || prusaSinglePaint) &&
+    ((objects.length>=2 && objects.length<=200) || prusaSinglePaint) &&
     prusaNativeTools.model_tools?.length===objects.length &&
     objects.every(object=>prusaNativeTools.model_tools?.some(row=>row.instance_id===object.instance_id)) &&
     (prusaSinglePaint || new Set(prusaNativeTools.model_tools.map(row=>row.tool)).size>=2) &&
@@ -1247,8 +1247,8 @@ export default function SlicerPrepareWorkspace({
           ". Restore them to the imported native process defaults or save this draft."
         : objects.some(row=>row.material_slot)
         ? "Prusa virtual tools use native extruder assignments from the selected printer profile, not physical filament bays. Clear the models' physical slot assignments."
-        : (objects.length<2 || objects.length>12) && !prusaSinglePaint
-        ? "Prusa MMU/XL/INDX requires two to twelve tool-assigned models, or one qualified painted MMU/XL model with T0 base."
+        : (objects.length<2 || objects.length>200) && !prusaSinglePaint
+        ? "Prusa MMU/XL/INDX requires two to 200 tool-assigned models, or one qualified painted MMU/XL model with T0 base."
         : "Complete the Prusa native tool editor, assign all model tools and owned filament presets, and specify an MMU tower and purge matrix when required."
       : "";
   const sliceBlockReason = draftBlockReason ||
