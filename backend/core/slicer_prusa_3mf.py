@@ -30,8 +30,13 @@ OBJECT_KEYS = frozenset({
 })
 assert OBJECT_KEYS.issubset(FIELDS)
 CONFIG_PATH = "Metadata/Slic3r_PE_model.config"
+# Validation-only process scaffold for Object/Volume metadata. The exporter
+# serializes *only* explicitly requested keys into the native 3MF; these
+# scaffolding numbers never override a user's imported process profile.
 BASE = (b"layer_height = 0.2\nperimeters = 2\nfill_density = 15%\n"
-        b"top_solid_layers = 3\nbottom_solid_layers = 3\n")
+        b"top_solid_layers = 3\nbottom_solid_layers = 3\n"
+        b"external_perimeter_speed = 40\nperimeter_speed = 55\n"
+        b"infill_speed = 75\ntop_solid_infill_speed = 35\n")
 
 
 def build_prusa_native_3mf(rows, *, bed_width, bed_depth):
