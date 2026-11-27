@@ -164,6 +164,43 @@ class PrusaOfflineMmuPreflightTests(TestCase):
             _decode_payload({**request,"prusa_offline_mmu":{
                 "tools":[1,2],"tower":[55,150,0,250,210]}})
 
+    def test_indx_eight_head_printer_reuses_native_independent_paint(self):
+        from core.slicer_prusa_material_preflight import prepare_prusa_offline_xl_colour_candidate
+        from scripts.prusa_generate_mmu_paint import fixture
+        from slicer_worker.service import _decode_payload
+        import base64
+        stl,_mesh,_states,paint=fixture(include_paint=True)
+        values,assets=self.parts()
+        assets[0]=ini(",".join(["0.4"]*8),"0")
+        values["filament_profiles"]=[profile("filament") for _ in range(8)]
+        assets=assets[:2]+[
+            (b"filament_diameter = 1.75\\ntemperature = 210\\n"
+             b"first_layer_temperature = 210\\n") for _ in range(8)]
+        settings={key:values[key] for key in (
+            "owner_id","printer_profile","process_profile","filament_profiles",
+            "bed_width","bed_depth")}
+        settings.update(
+            rows=[({"asset_id":"indx-paint","x_mm":0,"y_mm":0,"z_mm":0,
+                    "rotation_deg":0,"scale_percent":100,"colour_paint":paint},stl)],
+            tools=[1],colour_tool_indices={1:1})
+        with patch("core.slicer_prusa_material_preflight.resolved_prusa_profile",
+                   side_effect=assets):
+            result=prepare_prusa_offline_xl_colour_candidate(**settings)
+        self.assertEqual(result["tool"],1)
+        self.assertNotIn("tower",result)
+        self.assertEqual(len(result["filament_profiles"]) if
+                         isinstance(result["filament"],list) else 8,8)
+        encode=lambda data:base64.b64encode(data).decode("ascii")
+        payload={"job_id":str(uuid.uuid4()),"engine":"prusaslicer",
+                 "engine_version":"2.9.7","model_format":"3mf",
+                 "model":encode(result["model"]),
+                 "printer_profile":encode(result["printer"]),
+                 "filament_profile":encode(result["filament"]),
+                 "process_profile":encode(result["process"]),
+                 "prusa_offline_xl_colour":{"tool":1}}
+        self.assertEqual(_decode_payload(payload)["prusa_offline_xl_colour"],
+                         {"tool":1})
+
     def test_xl_two_painted_walls_use_native_independent_head_contract(self):
         from core.slicer_prusa_material_preflight import prepare_prusa_offline_xl_colour_candidate
         from core.slicer_plate_3mf import _triangles
