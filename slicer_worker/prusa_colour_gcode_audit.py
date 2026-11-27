@@ -303,11 +303,11 @@ def audit_prusa_dual_colour_gcode(data, project, *, printer_ini, tools, tower=No
             continue
         op=cmd.split(None,1)[0].upper()
         if op=="G12" and trusted_cleaner:
-            if re.search(r"(?:^|\\s)S90(?:\\s|$)",cmd):
+            if re.search(r"(?:^|\s)S90(?:\s|$)",cmd):
                 if cleaner or flush:
                     raise WorkerError("Native INDX cleaner was already active.")
                 cleaner=True
-            elif re.search(r"(?:^|\\s)S91(?:\\s|$)",cmd):
+            elif re.search(r"(?:^|\s)S91(?:\s|$)",cmd):
                 if not cleaner or flush:
                     raise WorkerError("Native INDX cleaner did not close.")
                 cleaner=False
