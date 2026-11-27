@@ -168,7 +168,7 @@ def main(binary, vendor, official=None):
         payload["model"]=encode(extended_project)
         _decode_payload(payload)
         (folder/"input.3mf").write_bytes(extended_project)
-        (folder/"output.gcode").unlink()
+        (folder/"output.gcode").unlink(missing_ok=True)
         run_prusa(Path(binary),folder)
         changed=(folder/"output.gcode").read_bytes()
         changed_audit=audit_prusa_material_model_gcode(
