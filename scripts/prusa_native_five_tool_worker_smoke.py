@@ -194,9 +194,11 @@ def main(binary,vendor):
         from slicer_worker.runner import WorkerError
         from slicer_worker.prusa_material_validation import validate_prusa_material_candidate
         failures=[]
+        # Pinned 2.9.7 produces no output for MMU per-object variable-Z
+        # ranges. This is an observed engine incompatibility; verify the
+        # working native modifier mapping rather than admitting bad jobs.
         for label,with_modifier,with_layers in (
-            ("modifier",True,False),("layers",False,True),
-            ("both",True,True),
+            ("modifier",True,False),
         ):
             region_rows=[]
             for index,(model,source) in enumerate(rows):
