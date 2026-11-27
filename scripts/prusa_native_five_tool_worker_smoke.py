@@ -259,6 +259,7 @@ def main(binary,vendor):
             evidence=audit_prusa_material_model_gcode(
                 adhesion_gcode,project,printer_ini=printer,
                 tools=tools,tower=tower)
+            print("Native first-layer adhesion role audit",evidence,flush=True)
             assert evidence["incorrect_extrusion_moves"]==[0]*len(tools),evidence
             assert min(evidence["correct_extrusion_moves"])>=20,evidence
             assert sum(evidence["native_first_layer_adhesion_moves"].values())>=10,evidence
