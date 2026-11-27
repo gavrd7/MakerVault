@@ -55,6 +55,8 @@ def main(folder):
         ("mix-object", False, True, False),
         ("mix-both", True, True, False),
         ("mix-negative-object", False, True, True),
+        ("stack-object", False, False, False),
+        ("stack-both", True, False, False),
     ):
         left = {**base, "x_mm": first_x}
         right = {**base, "x_mm": second_x}
@@ -65,6 +67,8 @@ def main(folder):
                                         "settings": {}}]
         if with_object:
             right["process_overrides"] = {"sparse_infill_density": 80}
+        if label.startswith("stack-"):
+            left["process_overrides"] = {"sparse_infill_density": 10}
         archive = build_prusa_native_3mf(
             [(left, cube_stl()), (right, cube_stl())],
             bed_width=250, bed_depth=210)
