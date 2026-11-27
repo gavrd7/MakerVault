@@ -95,6 +95,9 @@ def main(binary, vendor):
     printer = get("printer", "Original Prusa i3 MK3S & MK3S+ MMU3")
     filament = get("filament", "Generic PLA")
     process = get("print", "0.20mm NORMAL")
+    from core.slicer_prusa_process_settings import apply_prusa_process_overrides
+    process = apply_prusa_process_overrides(process, {"layer_height": .16, "wall_loops": 3})
+    assert b"layer_height = 0.16\n" in process and b"perimeters = 3\n" in process
     filament_data = validate_flat_prusa_preset(filament,kind="filament")
     native_filaments = []
     for t in (205,210,215,220,225):
