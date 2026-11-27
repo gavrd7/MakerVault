@@ -294,6 +294,64 @@ class PrusaOfflineMmuPreflightTests(TestCase):
             _decode_payload({**payload,"prusa_offline_xl_colour":{
                 "tools":[1,2],"tower":[55,150,0,250,210]}})
 
+    def test_xl_four_complete_walls_are_owner_bound_and_worker_authenticated(self):
+        from core.slicer_prusa_material_preflight import (
+            prepare_prusa_offline_xl_colour_candidate)
+        from core.slicer_plate_3mf import _triangles
+        from core.slicer_native_support_paint import _fingerprint
+        from scripts.prusa_generate_mmu_paint import fixture
+        from slicer_worker.service import _decode_payload
+        import base64
+        raw,_,_,paint=fixture(include_paint=True)
+        faces=list(_triangles(raw))
+        lo=[min(p[i] for face in faces for p in face) for i in range(3)]
+        hi=[max(p[i] for face in faces for p in face) for i in range(3)]
+        pivot=((lo[0]+hi[0])/2,(lo[1]+hi[1])/2,lo[2])
+        local=[[tuple(p[i]-pivot[i] for i in range(3)) for p in face]
+               for face in faces]
+        selections=[]
+        for axis,coord,slot in ((0,-10,1),(0,10,2),
+                                (1,-10,3),(1,10,4)):
+            patches=[{"face":index,"polygon":[list(p) for p in face]}
+                     for index,face in enumerate(local)
+                     if all(abs(p[axis]-coord)<.00001 for p in face)]
+            self.assertEqual(len(patches),2)
+            selections.append({"slot":slot,"patches":patches})
+        painted={**paint,"signature":_fingerprint(local),
+                 "palette":[{"color":"#aaaaaa","label":"base"}]+[
+                     {"color":f"#{tool*0x202020:06X}","label":f"T{tool}"}
+                     for tool in range(1,5)],
+                 "regions":selections}
+        values,assets=self.parts()
+        assets[0]=ini("0.4,0.4,0.4,0.4,0.4","0")
+        row={"asset_id":"four-colour-xl","x_mm":0,"y_mm":0,"z_mm":0,
+             "rotation_deg":0,"scale_percent":100,"colour_paint":painted}
+        params={key:values[key] for key in (
+            "owner_id","printer_profile","process_profile",
+            "filament_profiles","bed_width","bed_depth")}
+        params.update(rows=[(row,raw)],tools=[1],
+                      colour_tool_indices={1:1,2:2,3:3,4:4})
+        with patch("core.slicer_prusa_material_preflight.resolved_prusa_profile",
+                   side_effect=assets):
+            candidate=prepare_prusa_offline_xl_colour_candidate(**params)
+        self.assertEqual(candidate["tools"],[1,2,3,4])
+        self.assertNotIn("tower",candidate)
+        encode=lambda value:base64.b64encode(value).decode("ascii")
+        request={"job_id":str(uuid.uuid4()),"engine":"prusaslicer",
+                 "engine_version":"2.9.7","model_format":"3mf",
+                 "model":encode(candidate["model"]),
+                 "printer_profile":encode(candidate["printer"]),
+                 "filament_profile":encode(candidate["filament"]),
+                 "process_profile":encode(candidate["process"]),
+                 "prusa_offline_xl_colour":{"tools":[1,2,3,4]}}
+        self.assertEqual(
+            _decode_payload(request)["prusa_offline_xl_colour"],
+            {"tools":[1,2,3,4]})
+        for bad in ([2,1,3,4],[1,2,3,3],[1,2,3]):
+            with self.subTest(bad=bad),self.assertRaises(WorkerError):
+                _decode_payload({**request,
+                                 "prusa_offline_xl_colour":{"tools":bad}})
+
     def test_single_front_painted_mmu_owns_tool_palette_tower_and_surface(self):
         from core.slicer_prusa_material_preflight import prepare_prusa_offline_colour_candidate
         from scripts.prusa_generate_mmu_paint import fixture
