@@ -101,9 +101,10 @@ test("MMU, XL and INDX map native modifier and variable layer regions",()=>{
   assert.match(editor,/Prusa XL/);
 });
 
-test("Prusa XL native one-swatch paint is separate from MMU and INDX",()=>{
-  assert.match(editor,/value\?\.mode==="xl" && paintedSlots\.length===1/);
-  assert.match(prepare,/prusaNativeTools\?\.mode==="xl" && prusaPaintedSlots\.length===1/);
+test("Prusa XL native painting uses the same one- or two-wall mapping as MMU without purging",()=>{
+  assert.match(editor,/\["mmu","xl"\]\.includes\(value\?\.mode\) && paintedSlots\.length<=2/);
+  assert.match(prepare,/\["mmu","xl"\]\.includes\(prusaNativeTools\?\.mode\)/);
+  assert.match(prepare,/prusaPaintedSlots\.length<=2/);
   assert.doesNotMatch(prepare,/!prusaIndependentTools/);
   assert.match(editor,/without\s+MMU purging/);
 });
