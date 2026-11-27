@@ -484,3 +484,31 @@ class PrusaVirtualToolDraftTests(TestCase):
         kind,result=prepare_prusa_workbench_material(job)
         self.assertEqual(kind,"xl")
         self.assertNotIn("purge_matrix",result)
+
+    def test_painted_xl_workbench_dispatch_uses_only_xl_candidate_arguments(self):
+        from scripts.prusa_generate_mmu_paint import fixture as painted_fixture
+        from inspect import signature
+        from core.slicer_prusa_material_preflight import prepare_prusa_offline_xl_colour_candidate
+        job, filaments, _ = self.config()
+        source, _mesh, _states, paint = painted_fixture(include_paint=True)
+        job.settings["plate_objects"] = job.settings["plate_objects"][:1]
+        job.settings["plate_objects"][0]["colour_paint"] = paint
+        config = job.settings["prusa_native_tools"]
+        config.update(mode="xl", purge_matrix=None,
+                      model_tools=config["model_tools"][:1],
+                      colour_tools=[{"slot": 1, "tool": 2}])
+        job.settings.pop("prime_tower")
+        PrusaWorkbenchMaterialTests.resolve(self, job, filaments, ini("0.4,0.4", "0"))
+        mode, plan = prepare_prusa_workbench_material(job)
+        self.assertEqual(mode, "xl_colour")
+        self.assertEqual(plan["colour_tool_indices"], {1: 1})
+        rows = [(dict(job.settings["plate_objects"][0]), source)]
+        with patch("core.slicer_prusa_job_material.slice_prusa_offline_xl_colour_candidate",
+                   return_value=b"audited-xl-paint") as worker:
+            self.assertEqual(slice_prusa_workbench_material(job, rows), b"audited-xl-paint")
+        # Bind the dispatched keywords against the real candidate signature,
+        # not merely the permissive mock accepting arbitrary keyword arguments.
+        signature(prepare_prusa_offline_xl_colour_candidate).bind(**worker.call_args.kwargs)
+        self.assertNotIn("colour_tool", worker.call_args.kwargs)
+        self.assertNotIn("colour_slot", worker.call_args.kwargs)
+        self.assertNotIn("tower_xy", worker.call_args.kwargs)
