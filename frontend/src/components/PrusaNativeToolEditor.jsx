@@ -156,8 +156,10 @@ export default function PrusaNativeToolEditor({
                 colour_tools:(value.colour_tools||[]).filter(row=>row.tool<=count),
                 purge_matrix:value.mode==="mmu"?matrixFor(count):null});
             }}>
-            {(profileToolCount ? [profileToolCount] :
-              value.mode==="indx"?[2,3,4,5,6,7,8]:[2,3,4,5]).map(count=><option key={count} value={count}>{count}</option>)}
+            {(profileToolCount ? [...new Set([value.tool_count, profileToolCount])] :
+              value.mode==="indx"?[2,3,4,5,6,7,8]:[2,3,4,5]).map(count=><option key={count} value={count}>
+                {count}{profileToolCount && count!==profileToolCount ? " (draft; profile mismatch)" : ""}
+              </option>)}
           </select>
         </label>
       </div>
