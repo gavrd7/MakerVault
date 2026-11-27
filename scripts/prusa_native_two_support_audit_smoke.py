@@ -89,6 +89,40 @@ def main(binary, vendor, folder):
         print("PASS: real Prusa three-model painted-support isolation",
               checked, flush=True)
 
+        # The same source/owner/worker spatial proof must scale beyond
+        # the historical twelve-model special-case cap. Use the shared
+        # MakerVault 200-instance plate budget and a genuine 15-object
+        # native PrusaSlicer run with one deliberately painted cantilever.
+        positions=[(x,y) for y in (-55,0,55)
+                          for x in (-88,-44,0,44,88)]
+        crowded=[]
+        for index,(x,y) in enumerate(positions):
+            obj={"asset_id":"support-scale-"+str(index),
+                 "x_mm":x,"y_mm":y,"z_mm":0,
+                 "rotation_deg":0,"scale_percent":100}
+            if index==7:
+                obj["support_paint"]=support_mask(raw_model,0)
+            crowded.append((obj,raw_model))
+        assert len(crowded)==15
+        from core.slicer_prusa_support_audit import validate_prusa_multi_support_plate
+        assert validate_prusa_multi_support_plate([obj for obj,_ in crowded])==7
+        native_project=build_prusa_native_3mf(
+            crowded,bed_width=250,bed_depth=210)
+        (root/"fifteen-model.3mf").write_bytes(native_project)
+        output=root/"fifteen-model.gcode"
+        subprocess.run(
+            [binary,*native,"--export-gcode","--dont-arrange",
+             "--output",str(output),str(root/"fifteen-model.3mf")],
+            cwd=root,check=True,timeout=300)
+        fifteen=audit_prusa_multi_object_support(
+            output.read_bytes(),crowded,bed_width=250,bed_depth=210)
+        assert fifteen["painted_model_index"]==7,fifteen
+        assert fifteen["painted_support_moves"]>=2,fifteen
+        assert fifteen["unpainted_support_moves"]==0,fifteen
+        print("PASS: genuine Prusa native 15-model selective support paint "
+              "matches shared model budget",fifteen,flush=True)
+
+
 
 if __name__ == "__main__":
     main(*sys.argv[1:])
