@@ -429,9 +429,8 @@ jobs:
         run: |
           echo "::warning title=Unqualified Prusa MMU painting::Native per-facet colour paint did not demonstrate real tool switching. MMU painting remains blocked in production."
 
-      - name: Research genuine five-tool Prusa MMU facet colours with native purge
+      - name: Require genuine five-tool MMU colour and dual-swatch purge acceptance
         id: prusa_five_colour_research
-        continue-on-error: true
         run: |
           set -euo pipefail
           docker run --rm --network none --user 10001:10001 \
@@ -444,11 +443,6 @@ jobs:
             /tmp/five_colour.py \
             /opt/engine-store/versions/prusaslicer/2.9.7/bin/prusa-slicer \
             /opt/engine-store/versions/prusaslicer/2.9.7/resources/profiles/PrusaResearch.ini
-
-      - name: Record unqualified full Prusa five-tool facet and wipe tower integration
-        if: ${{ steps.prusa_five_colour_research.outcome == 'failure' }}
-        run: |
-          echo "::warning title=Prusa facet paint integration::Five-tool colour/deposition/purge acceptance has not been qualified. Workbench paint admission remains blocked."
 
       - name: Generate native Prusa 3MF with distinct per-object settings
         run: |
