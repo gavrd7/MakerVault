@@ -133,7 +133,9 @@ class PrusaOfflineMmuPreflightTests(TestCase):
         values,assets=self.parts()
         assets[0]=ini("0.4,0.4,0.4,0.4,0.4","0")
         row={"asset_id":"native-xl-front","x_mm":0,"y_mm":0,"z_mm":0,
-             "rotation_deg":0,"scale_percent":100,"colour_paint":paint}
+             "rotation_deg":0,"scale_percent":100,"colour_paint":paint,
+             "process_overrides":{"wall_loops":5,
+                                  "sparse_infill_density":35}}
         params={key:values[key] for key in (
             "owner_id","printer_profile","process_profile",
             "filament_profiles","bed_width","bed_depth")}
@@ -146,6 +148,14 @@ class PrusaOfflineMmuPreflightTests(TestCase):
         self.assertIn(b"layer_height = 0.16\n", prepared["process"])
         self.assertNotIn("tower",prepared)
         self.assertNotIn("wipe_tower = 1",prepared["process"].decode())
+        from defusedxml import ElementTree as SafeET
+        with zipfile.ZipFile(io.BytesIO(prepared["model"])) as archive:
+            native=SafeET.fromstring(
+                archive.read("Metadata/Slic3r_PE_model.config"))
+        object_settings={node.get("key"):node.get("value")
+                         for node in native.findall("./object/metadata")}
+        self.assertEqual(object_settings["perimeters"],"5")
+        self.assertEqual(object_settings["fill_density"],"35%")
         encode=lambda data:base64.b64encode(data).decode("ascii")
         request={"job_id":str(uuid.uuid4()),"engine":"prusaslicer",
                  "engine_version":"2.9.7","model_format":"3mf",
