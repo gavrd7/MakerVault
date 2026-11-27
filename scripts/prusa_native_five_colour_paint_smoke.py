@@ -24,9 +24,9 @@ from slicer_worker.service import _decode_payload
 from slicer_worker.runner import run_prusa, WorkerError
 
 
-def painted_external_walls(data, *, center_x=125, center_y=105):
+def painted_external_walls(data, *, center_x=125, center_y=105, tool_count=5):
     """Count actual per-tool positive-E on target and opposite wall."""
-    counts = {i: {"front": 0, "back": 0} for i in range(5)}
+    counts = {i: {"front": 0, "back": 0} for i in range(tool_count)}
     role = ""
     current = None
     extrusion = 0.0
@@ -40,7 +40,7 @@ def painted_external_walls(data, *, center_x=125, center_y=105):
         if not cmd:
             continue
         op = cmd.split(None, 1)[0].upper()
-        if re.fullmatch(r"T[0-4]", op):
+        if op.startswith("T") and op[1:].isdigit() and int(op[1:]) < tool_count:
             current = int(op[1:])
             continue
         if op not in ("G0", "G00", "G1", "G01", "M82", "M83", "G90", "G91", "G92"):
