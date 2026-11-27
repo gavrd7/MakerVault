@@ -62,8 +62,11 @@ def native_capabilities(engine, version):
                        "genuine worker G-code audits, including three separated "
                        "single-material models with one painted support enforcer "
                        "and zero support deposited in unpainted neighbours. "
-                       "Combined multi-tool or other mixed-extension support "
-                       "painting is not yet qualified."),
+                       "One upright single-material model may combine a manual "
+                       "support enforcer with selective fuzzy paint on entirely "
+                       "different source faces: genuine native 2.9.7 G-code "
+                       "independently verified both effects. Combined multi-tool "
+                       "or arbitrary mixed-extension support remains unqualified."),
         }
         result["fuzzy_skin_paint"] = {
             "status": "verified",
@@ -71,7 +74,10 @@ def native_capabilities(engine, version):
                        "changing the unpainted neighbour in a genuine two-object "
                        "G-code comparison. Supports one or two upright unscaled "
                        "single-material models, exactly one painted in two-model "
-                       "jobs, and no unqualified mixed native extensions."),
+                       "jobs. A single upright model additionally supports "
+                       "non-overlapping manual support enforcers and selective "
+                       "fuzzy exterior facets under the audited native combination. "
+                       "Other overlapping or mixed-native edits remain unqualified."),
         }
         result["variable_layer_profile"] = {
             "status": "verified",
