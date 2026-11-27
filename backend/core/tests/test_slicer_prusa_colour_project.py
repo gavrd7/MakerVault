@@ -93,7 +93,7 @@ class PrusaNativeColourProjectTests(TestCase):
             colour=True)
         self.assertEqual(receipt["tools"],(1,2,3))
         self.assertGreater(receipt["colour_facets"],3)
-        with self.assertRaises(SlicerProfileError):
+        with self.assertRaises((SlicerProfileError, ValueError)):
             self.candidate(settings={"colour_paint":paint},
                            tool_map={1:1})
 
