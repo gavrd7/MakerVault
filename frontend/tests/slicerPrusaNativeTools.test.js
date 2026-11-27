@@ -148,3 +148,16 @@ test("Prusa multi-tool workbench exposes validated native speed and adhesion pro
   assert.match(prepare,/const prusaUnsupportedGlobalKeys/);
   assert.match(prepare,/Object\.keys\(processOverrides\|\|\{\}\)\.every/);
 });
+
+
+test("selecting every Prusa model to one filament switches to verified single-material path",()=>{
+  assert.match(prepare,/const entirePlateSelected = ids\.size === objects\.length/);
+  assert.match(prepare,/const hasPaintedColours = objects\.some/);
+  assert.match(prepare,/entirePlateSelected && !hasPaintedColours && onUsePrusaSingleMaterial/);
+  assert.match(prepare,/onUsePrusaSingleMaterial\(matchingProfile\.id\)/);
+  assert.match(workbench,/onUsePrusaSingleMaterial=\{profileId => \{/);
+  assert.match(workbench,/selectNativeProfile\("filament", profileId\)/);
+  assert.match(workbench,/setPrusaNativeTools\(null\)/);
+  assert.match(workbench,/setPrimeTower\(null\)/);
+  assert.match(prepare,/const existing = \(prusaNativeTools\.model_tools \|\| \[\]\)\.filter/);
+});
