@@ -1130,7 +1130,7 @@ export default function SlicerPrepareWorkspace({
   const prusaProfileMode = prusaProfileTopology?.kind==="single_nozzle_changer" ? "mmu"
     : prusaProfileTopology?.kind==="indx" ? "indx"
     : prusaProfileTopology?.kind==="independent_tools" ? "xl" : null;
-  const prusaTopologyMatches = !prusaProfileTopology || (
+  const prusaTopologyMatches = !!prusaProfileTopology && (
     prusaNativeTools?.tool_count===prusaProfileTopology.logical_tool_count &&
     !!prusaProfileMode && prusaNativeTools.mode===prusaProfileMode);
   const prusaNativeReady = activeEngine === "prusaslicer" && prusaNativeTools != null &&
