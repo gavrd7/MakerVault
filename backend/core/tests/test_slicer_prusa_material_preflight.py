@@ -52,15 +52,15 @@ class PrusaOfflineMmuPreflightTests(TestCase):
         }
         return data,[raw_printer,raw_process,*raw_filaments]
 
-    def test_ten_prusa_mmu_models_can_reuse_five_native_tools(self):
+    def test_fifteen_prusa_mmu_models_can_reuse_five_native_tools(self):
         from slicer_worker.prusa_material_validation import validate_prusa_material_candidate
         values, assets = self.parts()
         values["rows"] = [
             (item(x_mm=x_mm, y_mm=y_mm), cube(size=8))
-            for y_mm in (-43, 17)
+            for y_mm in (-73, -43, 17)
             for x_mm in (-90, -45, 0, 45, 90)
         ]
-        values["tools"] = list(range(1, 6)) * 2
+        values["tools"] = list(range(1, 6)) * 3
         with patch("core.slicer_prusa_material_preflight.resolved_prusa_profile",
                    side_effect=assets):
             prepared = prepare_prusa_offline_mmu_candidate(**values)
@@ -68,9 +68,9 @@ class PrusaOfflineMmuPreflightTests(TestCase):
         self.assertEqual(
             validate_prusa_material_candidate(
                 prepared["model"], printer_ini=prepared["printer"],
-                tools=values["tools"], tower=prepared["tower"])["objects"], 10)
-        values["rows"] = values["rows"] + values["rows"][:3]
-        values["tools"] = values["tools"] + [1, 2, 3]
+                tools=values["tools"], tower=prepared["tower"])["objects"], 15)
+        values["rows"] = [values["rows"][0]] * 201
+        values["tools"] = [1, 2] * 100 + [1]
         with self.assertRaisesRegex(SlicerProfileError, "models, tools"):
             prepare_prusa_offline_mmu_candidate(**values)
 
