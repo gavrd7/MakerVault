@@ -5,6 +5,7 @@ are used. No arbitrary network URL, user-selected ref or untrusted redirect.
 Source authenticity is not execution approval: every import stays candidate.
 """
 from functools import lru_cache
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import PurePosixPath
 
 from .slicer_official_filter import narrow_catalogue, models_from_machines, fuzzy_name_match, slot_filament_catalogue
@@ -124,6 +125,84 @@ def official_filament_brands(version=ENGINE_VERSION):
     entries = _entries(FILAMENT_LIBRARY, "filament", version)
     return sorted({path.split("/")[1] for _name, path in entries
                    if len(path.split("/")) == 3 and path.split("/")[1] != "base"}, key=str.casefold)
+
+
+
+def all_official_filament_manufacturers(version=ENGINE_VERSION):
+    """Unified native filament brands, including printer-maker catalogues.
+
+    The dedicated Orca filament library is not the entirety of upstream
+    filament presets: Creality, Elegoo, Prusa and other manufacturers also
+    publish filament_list entries under their own pinned vendor manifests.
+    Catalogue ids are never used as a substitute for native profile identity.
+    """
+    _ref(version)
+    library_brands = official_filament_brands(version)
+    return sorted(set(library_brands).union(
+        vendor for vendor in VENDORS if vendor != FILAMENT_LIBRARY
+    ), key=str.casefold)
+
+
+def search_all_official_filaments(query="", *, brand="", version=ENGINE_VERSION,
+                                 offset=0, printer_model=None):
+    """Browse native filament entries across official pinned Orca catalogues.
+
+    Return each entry with its *actual* source vendor for secure opt-in import
+    and parent-chain resolution. Do not assume printer-brand == filament-brand
+    and never download a preset from a user-supplied host or URL.
+    """
+    _ref(version)
+    if not isinstance(query, str) or len(query.strip()) > 80:
+        raise OfficialProfileError("Search must be 80 characters or fewer.")
+    if type(offset) is not int or offset < 0 or offset > 400000:
+        raise OfficialProfileError("Invalid official filament result offset.")
+    if brand and brand not in all_official_filament_manufacturers(version):
+        raise OfficialProfileError("Select a listed filament manufacturer.")
+    # Selected manufacturer: browse both its Orca library directory and,
+    # when available, the printer maker's own official filament catalogue.
+    # 'All manufacturers' requests the full bounded upstream manifest set.
+    catalogues = ([FILAMENT_LIBRARY] + [
+        vendor for vendor in VENDORS
+        if vendor != FILAMENT_LIBRARY and
+        (not brand or vendor.casefold() == brand.casefold() or
+         (brand.casefold() in ("bambu", "bambu lab") and vendor == "BBL"))
+    ])
+    def collect(vendor):
+        try:
+            entries = _entries(vendor, "filament", version)
+            return vendor, entries, None
+        except OfficialProfileError as exc:
+            return vendor, [], str(exc)
+    # Bounded parallel retrieval and per-release _manifest cache. A single
+    # temporarily unavailable manufacturer must not hide the other catalogues.
+    with ThreadPoolExecutor(max_workers=12) as pool:
+        collected = list(pool.map(collect, catalogues))
+    if collected and all(problem for _, _, problem in collected):
+        raise OfficialProfileError("Official filament catalogue sources are not currently available.")
+    matches = []
+    term = query.strip()
+    for vendor, entries, _problem in collected:
+        for name, subpath in entries:
+            if vendor == FILAMENT_LIBRARY and brand and not subpath.startswith(
+                    "filament/" + brand + "/"):
+                continue
+            if term and not fuzzy_name_match(name, term):
+                continue
+            if printer_model and not narrow_catalogue(
+                    [(name, subpath)], "filament", printer_model):
+                continue
+            matches.append({"name": name, "sub_path": subpath, "vendor": vendor})
+    matches.sort(key=lambda row: (row["name"].casefold(), row["vendor"].casefold(),
+                                  row["sub_path"].casefold()))
+    return {
+        "engine": ENGINE, "engine_version": version, "kind": "filament",
+        "vendor": "All filament manufacturers" if not brand else brand,
+        "source": SOURCE, "ref": _ref(version), "brand": brand,
+        "profiles": matches[offset:offset + 40],
+        "total_matches": len(matches),
+        "import_status": "candidate_only",
+        "partial_catalogues": sum(bool(problem) for _, _, problem in collected),
+    }
 
 
 def search_official_profiles(query, kind, vendor="Creality", printer_model=None,
