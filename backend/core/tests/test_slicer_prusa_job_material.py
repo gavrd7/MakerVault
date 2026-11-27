@@ -210,6 +210,30 @@ class PrusaWorkbenchMaterialTests(TestCase):
                 self.assertTrue(all("material_slot" not in r for r,_ in rows))
                 self.assertEqual(worker.call_args.kwargs["tools"],[1,2])
 
+    def test_mmu_xl_and_indx_shell_overrides_remain_object_local(self):
+        for mode, count in (("mmu", 2), ("xl", 2), ("xl", 8)):
+            with self.subTest(mode=mode, tools=count):
+                job, filaments, raw = fixture(mode, count)
+                self.resolve(job, filaments, raw)
+                left, right = job.settings["plate_objects"]
+                left["process_overrides"] = {
+                    "top_shell_layers": 0, "bottom_shell_layers": 1}
+                right["process_overrides"] = {
+                    "top_shell_layers": 8, "bottom_shell_layers": 7}
+                kind, prepared = prepare_prusa_workbench_material(job)
+                self.assertEqual(kind, "mmu" if mode == "mmu" else
+                                 "indx" if count > 5 else "xl")
+                self.assertEqual(prepared["tools"], [1, 2])
+                route = ("slice_prusa_offline_mmu_candidate" if mode == "mmu"
+                         else "slice_prusa_offline_xl_candidate")
+                with patch("core.slicer_prusa_job_material." + route,
+                           return_value=b"verified") as worker:
+                    slice_prusa_workbench_material(job, [
+                        (dict(row), b"stl") for row in job.settings["plate_objects"]])
+                rows = worker.call_args.kwargs["rows"]
+                self.assertEqual(rows[0][0]["process_overrides"]["top_shell_layers"], 0)
+                self.assertEqual(rows[1][0]["process_overrides"]["bottom_shell_layers"], 7)
+
     def test_multi_tool_object_edits_fail_closed_outside_native_qualified_keys(self):
         for overrides in (
             {"travel_speed":120}, {"brim_width":5},
