@@ -378,8 +378,10 @@ class PrusaVirtualToolDraftTests(TestCase):
             "prusa_native_tools"]["model_tools"][:1]
         job.settings["prusa_native_tools"]["colour_tools"]=[{"slot":1,"tool":2}]
         PrusaWorkbenchMaterialTests.resolve(self,job,filaments,raw)
+        job.settings["process_overrides"] = {"layer_height": .16, "wall_loops": 3}
         mode,plan=prepare_prusa_workbench_material(job)
         self.assertEqual(mode,"colour")
+        self.assertEqual(plan["process_overrides"], job.settings["process_overrides"])
         self.assertEqual(plan["tools"],[1])
         self.assertEqual(plan["colour_tool"],1)
         self.assertEqual(plan["colour_slot"],1)
@@ -390,6 +392,7 @@ class PrusaVirtualToolDraftTests(TestCase):
                 job,[(dict(job.settings["plate_objects"][0]),source)])
         self.assertEqual(output,b"audited-paint")
         self.assertEqual(worker.call_args.kwargs["colour_tool"],1)
+        self.assertEqual(worker.call_args.kwargs["process_overrides"], job.settings["process_overrides"])
         self.assertEqual(len(worker.call_args.kwargs["rows"]),1)
 
     def test_painted_mmu_rejects_unqualified_or_ambiguous_tool_assignments(self):
@@ -400,7 +403,7 @@ class PrusaVirtualToolDraftTests(TestCase):
             lambda j:j.settings["prusa_native_tools"].update(colour_tools=[{"slot":0,"tool":2}]),
             lambda j:j.settings["prusa_native_tools"].update(colour_tools=[{"slot":1,"tool":1}]),
             lambda j:j.settings["prusa_native_tools"]["model_tools"][0].update(tool=2),
-            lambda j:j.settings.update(process_overrides={"layer_height":0.16}),
+            lambda j:j.settings.update(process_overrides={"post_process":"G28"}),
             lambda j:j.settings["plate_objects"][0].update(support_paint={"regions":[{"slot":0}]}),
         ):
             with self.subTest(change=change):
@@ -499,8 +502,10 @@ class PrusaVirtualToolDraftTests(TestCase):
                       colour_tools=[{"slot": 1, "tool": 2}])
         job.settings.pop("prime_tower")
         PrusaWorkbenchMaterialTests.resolve(self, job, filaments, ini("0.4,0.4", "0"))
+        job.settings["process_overrides"] = {"layer_height": .16, "wall_loops": 3}
         mode, plan = prepare_prusa_workbench_material(job)
         self.assertEqual(mode, "xl_colour")
+        self.assertEqual(plan["process_overrides"], job.settings["process_overrides"])
         self.assertEqual(plan["colour_tool_indices"], {1: 1})
         rows = [(dict(job.settings["plate_objects"][0]), source)]
         with patch("core.slicer_prusa_job_material.slice_prusa_offline_xl_colour_candidate",
