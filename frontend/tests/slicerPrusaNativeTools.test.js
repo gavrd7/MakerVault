@@ -63,8 +63,10 @@ test("Prusa painted MMU draft binds swatches to explicit T1-T4 native tools",()=
   assert.match(editor,/Painted swatch/);
   assert.match(prepare,/prusaSinglePaint/);
   assert.match(prepare,/prusaPaintedSlots/);
-  assert.match(prepare,/prusaNativeTools\.colour_tools\[0\]\.tool/);
+  assert.match(prepare,/prusaNativeTools\.colour_tools\.map\(row=>row\.tool\)/);
   assert.match(prepare,/prusaSinglePaint && prusaNativeReady/);
+  assert.match(prepare,/prusaPaintedSlots\.length<=2/);
+  assert.match(editor,/new Set\(value\.colour_tools\.map\(row=>row\.tool\)\)\.size===paintedSlots\.length/);
   assert.match(workbench,/prusaNativeOffline = form\.engine==="prusaslicer"/);
 });
 
