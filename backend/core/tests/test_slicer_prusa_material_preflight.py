@@ -386,6 +386,40 @@ class PrusaOfflineMmuPreflightTests(TestCase):
             with self.assertRaises(WorkerError):
                 slice_prusa_offline_mmu_candidate(uuid.uuid4(),**values)
 
+    def test_independent_head_variable_layers_require_actual_object_z_audit(self):
+        values, assets = self.parts()
+        assets[0] = ini("0.4,0.4,0.4,0.4,0.4", "0")
+        kwargs = {key: values[key] for key in (
+            "owner_id", "printer_profile", "process_profile",
+            "filament_profiles", "rows", "tools", "bed_width", "bed_depth")}
+        kwargs["rows"] = list(values["rows"])
+        model = dict(kwargs["rows"][0][0])
+        model["variable_layer_profile"] = {"version": 1, "bands": [
+            {"from_mm": 2, "to_mm": 6, "layer_mm": .12}]}
+        kwargs["rows"][0] = (model, kwargs["rows"][0][1])
+        remote, scope = self.offline_worker_stub()
+        scope.start()
+        self.addCleanup(scope.stop)
+        remote.return_value = b"test audited toolpath"
+        with patch("core.slicer_prusa_material_preflight.resolved_prusa_profile",
+                   side_effect=assets), patch(
+                       "slicer_worker.prusa_material_gcode_audit.audit_prusa_material_model_gcode"
+                   ) as tools_audit, patch(
+                       "core.slicer_prusa_spatial_layers.audit_prusa_multi_object_layer_ranges",
+                       return_value=[{"object": 1, "verified_steps": 20}]
+                   ) as layer_audit:
+            result = slice_prusa_offline_xl_candidate(uuid.uuid4(), **kwargs)
+            self.assertEqual(result, remote.return_value)
+            tools_audit.assert_called_once()
+            layer_audit.assert_called_once()
+            self.assertEqual(layer_audit.call_args.kwargs["base_layer_mm"], .2)
+            self.assertEqual(layer_audit.call_args.kwargs["bed_width"], 250)
+
+            layer_audit.side_effect = ValueError("wrong layer schedule")
+            with self.assertRaisesRegex(SlicerProfileError,
+                                         "did not preserve each requested"):
+                slice_prusa_offline_xl_candidate(uuid.uuid4(), **kwargs)
+
     def test_ephemeral_xl_offline_executor_enforces_independent_topology(self):
         values,assets=self.parts()
         assets[0]=ini("0.4,0.4,0.4,0.4,0.4","0")
