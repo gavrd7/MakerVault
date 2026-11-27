@@ -244,6 +244,40 @@ def main(binary,vendor):
             except (WorkerError,ValueError,AssertionError) as exc:
                 failures.append((label,type(exc).__name__,str(exc)))
                 print("NATIVE MMU MAPPING BLOCKER",failures[-1],flush=True)
+        # Research the exact upstream adhesion mapping rather than assume
+        # that a generic material assignment proof also qualifies brim and
+        # skirt. A rejected native G-code is reported, not accepted or
+        # sanitised; this diagnostic never enables physical submission.
+        adhesion_settings={"brim_width":3,"skirt_loops":2}
+        adhesion=apply_prusa_process_overrides(process,adhesion_settings)
+        (work/"input.3mf").write_bytes(project)
+        (work/"process.ini").write_bytes(adhesion)
+        (work/"output.gcode").unlink(missing_ok=True)
+        try:
+            _adhesion_receipt,adhesion_gcode=run_prusa_mmu_with_numeric_recheck(
+                run_prusa,Path(binary),work,timeout_seconds=300,
+                max_bytes=64*1024*1024)
+            from collections import Counter
+            role_counts=Counter()
+            for line in adhesion_gcode.splitlines():
+                if line.startswith(b";TYPE:"):
+                    role_counts[line[6:].strip().decode("ascii","replace")]+=1
+            try:
+                evidence=audit_prusa_material_model_gcode(
+                    adhesion_gcode,project,printer_ini=printer,
+                    tools=tools,tower=tower)
+                print("NATIVE PRUSA ADHESION RESEARCH: model tool attribution accepted",
+                      evidence,"roles",dict(role_counts),flush=True)
+            except WorkerError as exc:
+                print("NATIVE PRUSA ADHESION RESEARCH: separate spatial audit needed",
+                      type(exc).__name__,str(exc),"roles",dict(role_counts),
+                      flush=True)
+        except WorkerError as exc:
+            print("NATIVE PRUSA ADHESION RESEARCH: CLI rejected requested settings",
+                  type(exc).__name__,str(exc),flush=True)
+        finally:
+            (work/"process.ini").write_bytes(process)
+
         if failures:
             raise AssertionError(
                 "Some Prusa MMU native mapping combinations need compatibility fixes: "
