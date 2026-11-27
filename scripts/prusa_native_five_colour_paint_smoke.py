@@ -24,7 +24,7 @@ from slicer_worker.service import _decode_payload
 from slicer_worker.runner import run_prusa, WorkerError
 
 
-def painted_external_walls(data):
+def painted_external_walls(data, *, center_x=125, center_y=105):
     """Count actual per-tool positive-E on target and opposite wall."""
     counts = {i: {"front": 0, "back": 0} for i in range(5)}
     role = ""
@@ -75,11 +75,14 @@ def painted_external_walls(data):
                     previous_x is None or previous_y is None or
                     x is None or y is None or
                     abs(x-previous_x)+abs(y-previous_y)<=1e-7 or
-                    not 114 <= x <= 136 or not 114 <= previous_x <= 136):
+                    not center_x-11 <= x <= center_x+11 or
+                    not center_x-11 <= previous_x <= center_x+11):
                 continue
-            if 93 <= y <= 97 and 93 <= previous_y <= 97:
+            if (center_y-12 <= y <= center_y-8 and
+                    center_y-12 <= previous_y <= center_y-8):
                 counts[current]["front"] += 1
-            elif 113 <= y <= 117 and 113 <= previous_y <= 117:
+            elif (center_y+8 <= y <= center_y+12 and
+                      center_y+8 <= previous_y <= center_y+12):
                 counts[current]["back"] += 1
     return counts
 
