@@ -303,3 +303,68 @@ def slice_prusa_offline_colour_candidate(job_id, **prepared):
             output,candidate["model"],printer_ini=candidate["printer"],
             tool=candidate["tool"],tower=candidate["tower"])
     return output
+
+
+def prepare_prusa_offline_xl_colour_candidate(
+    *, owner_id, printer_profile, process_profile, filament_profiles,
+    rows, tools, bed_width, bed_depth, colour_tool_indices,
+):
+    """Owner-scoped XL front facet paint, no MMU purge or printer dispatch."""
+    from .slicer_prusa_colour_project import build_prusa_colour_candidate
+    from slicer_worker.prusa_offline_contract import validate_prusa_offline_xl_colour_inputs
+    if (type(owner_id) is not int or owner_id<1 or
+            not isinstance(rows,(list,tuple)) or len(rows)!=1 or
+            not isinstance(tools,(list,tuple)) or list(tools)!=[1] or
+            not isinstance(colour_tool_indices,dict) or len(colour_tool_indices)!=1 or
+            any(type(slot) is not int or not 0<=slot<16 or
+                type(tool) is not int or not 1<=tool<=4
+                for slot,tool in colour_tool_indices.items())):
+        raise SlicerProfileError("Prusa XL colour requires one T0 model and one painted tool.")
+    if any(profile is None or profile.owner_id!=owner_id or
+           profile.engine!="prusaslicer" or profile.engine_version!="2.9.7" or
+           profile.kind!=kind for kind,profile in (
+               ("printer",printer_profile),("process",process_profile))):
+        raise SlicerProfileError("Prusa XL native profiles must be privately owned.")
+    if not isinstance(filament_profiles,(list,tuple)) or any(
+            profile.owner_id!=owner_id or profile.engine!="prusaslicer" or
+            profile.engine_version!="2.9.7" or profile.kind!="filament"
+            for profile in filament_profiles):
+        raise SlicerProfileError("Prusa XL requires privately owned native filaments.")
+    row,raw=rows[0]
+    if not isinstance(row,dict) or not isinstance(raw,bytes):
+        raise SlicerProfileError("Prusa XL painted model source is invalid.")
+    printer=resolved_prusa_profile(printer_profile)
+    topology=prusa_machine_topology(printer)
+    selected=next(iter(colour_tool_indices.values()))
+    if (topology["kind"]!="independent_tools" or
+            not 2<=topology["logical_tool_count"]<=5 or
+            selected>=topology["logical_tool_count"] or
+            len(filament_profiles)!=topology["logical_tool_count"]):
+        raise SlicerProfileError("Prusa XL needs a matching independent-head printer palette.")
+    process=resolved_prusa_profile(process_profile)
+    filaments=[resolved_prusa_profile(profile) for profile in filament_profiles]
+    palette=compile_prusa_filament_palette(printer,filaments)
+    project=build_prusa_colour_candidate(
+        row,raw,printer_ini=printer,colour_tool_indices=colour_tool_indices,
+        bed_width=bed_width,bed_depth=bed_depth)
+    validate_prusa_offline_xl_colour_inputs(
+        project=project,printer=printer,filament=palette,
+        process=process,tool=selected)
+    return {"model":project,"printer":printer,"filament":palette,
+            "process":process,"tool":selected}
+
+
+def slice_prusa_offline_xl_colour_candidate(job_id, **prepared):
+    """Return only independently audited XL native face-painted G-code."""
+    from .slicer_worker_client import run_remote_job
+    from slicer_worker.prusa_colour_gcode_audit import audit_prusa_xl_colour_gcode
+    candidate=prepare_prusa_offline_xl_colour_candidate(**prepared)
+    output=run_remote_job(
+        job_id,"prusaslicer","2.9.7",
+        candidate["model"],candidate["printer"],candidate["filament"],
+        candidate["process"],model_format="3mf",
+        prusa_offline_xl_colour={"tool":candidate["tool"]})
+    audit_prusa_xl_colour_gcode(
+        output,candidate["model"],printer_ini=candidate["printer"],
+        tool=candidate["tool"])
+    return output
