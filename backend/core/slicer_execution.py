@@ -307,8 +307,8 @@ def _validate_plate_execution(job):
                 "PrusaSlicer multi-material slicing is not yet verified.")
         prusa_objects = settings.get("plate_objects")
         if prusa_objects:
-            if not isinstance(prusa_objects, list) or not 1 <= len(prusa_objects) <= 12:
-                raise SlicerExecutionError("PrusaSlicer requires one to twelve single-material STL objects.")
+            if not isinstance(prusa_objects, list) or not 1 <= len(prusa_objects) <= 200:
+                raise SlicerExecutionError("PrusaSlicer requires 1–200 single-material STL objects within the shared placement budget.")
             for item in prusa_objects:
                 if not isinstance(item, dict) or (
                         (item.get("colour_paint") or {}).get("regions") or
