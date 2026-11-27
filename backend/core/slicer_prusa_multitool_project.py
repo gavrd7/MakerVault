@@ -35,7 +35,8 @@ def build_prusa_multitool_candidate(rows, *, printer_ini, tools,
             # Only unsupported painting and legacy region representations
             # remain gated here; the native worker validates exact volumes.
             "colour_paint", "support_paint", "seam_paint",
-            "fuzzy_skin_paint", "negative_volumes", "material_slot",
+            "fuzzy_skin_paint", "variable_layer_profile",
+            "negative_volumes", "material_slot",
         )
         if not isinstance(item, dict) or any(item.get(key) for key in forbidden):
             raise SlicerProfileError("Prusa multi-tool candidate cannot discard advanced edits.")
