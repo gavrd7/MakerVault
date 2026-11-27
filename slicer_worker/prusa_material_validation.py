@@ -74,10 +74,13 @@ def validate_prusa_material_candidate(data, *, printer_ini, tools=None, colour=F
         with zipfile.ZipFile(io.BytesIO(data)) as z:
             infos=z.infolist()
             allowed=PARTS | ({TOWER} if tower is not None else set())
-            # Prusa's native per-Object layer ranges use the same XML file
-            # for an MMU shared nozzle and for independent XL/INDX heads.
-            # Its contents remain strictly parsed by validate_prusa_native_3mf.
+            # The pinned 2.9.7 MMU CLI produces no G-code when a native
+            # per-object layer-range XML is present. Independent XL/INDX
+            # heads do support this same XML. Keep the actual observed
+            # compatibility distinction, not a generic region lock.
             if any(i.filename==LAYER_RANGES for i in infos):
+                if changer:
+                    _refuse()
                 allowed=allowed|{LAYER_RANGES}
             if (len(infos)!=len(allowed) or {i.filename for i in infos}!=allowed
                 or any(i.is_dir() or i.file_size < 1 or i.file_size >
