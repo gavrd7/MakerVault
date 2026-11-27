@@ -338,6 +338,36 @@ class PrusaDualColourResearchTests(TestCase):
         self.assertTrue(all(value>=10 for value
                             in stationary["tower_extrusion_moves"].values()))
 
+    def test_official_indx_cleaner_excludes_only_signed_bounded_flush_strokes(self):
+        from unittest.mock import patch
+        native=self.gcode()
+        insert=(b"T2\\n;TYPE:External perimeter\\nG0 X115 Y95\\n"
+                b"G12 S90\\nG91\\n;FLUSH_START\\n"
+                b"G1 X-0.2 E0\\nG1 X0.4 E1\\nG1 Y-1.2 E1\\n"
+                b"G1 X-0.4 E1\\nG1 Y1.2 E1\\nG1 X0.2 E.2\\n"
+                b";FLUSH_END\\nG90\\nG12 S91\\nG0 X115 Y115")
+        native=native.replace(
+            b"T2\\n;TYPE:External perimeter\\nG0 X115 Y115",insert)
+        self.assertIn(b";FLUSH_START",native)
+        with self.assertRaises(WorkerError):
+            self.audit(native)
+        with patch(
+            "slicer_worker.prusa_material_gcode_audit._trusted_indx_cleaner_profile",
+            return_value=True
+        ):
+            result=self.audit(native)
+            self.assertEqual(result["wall_moves"][1]["front"],25)
+            self.assertEqual(result["wall_moves"][2]["back"],25)
+            self.assertEqual(result["wall_moves"][2]["front"],0)
+            for malicious in (
+                native.replace(b"G1 X0.4 E1",b"G1 X40 E1"),
+                native.replace(b";FLUSH_END",b";UNTRUSTED_END"),
+                native.replace(b"G12 S91",b"G12 S90"),
+                native.replace(b"G1 Y1.2 E1",b"G1 Y1.2 E90"),
+            ):
+                with self.subTest(malicious=malicious[-70:]),self.assertRaises(WorkerError):
+                    self.audit(malicious)
+
     def test_independent_xl_reuses_dual_wall_audit_without_mmu_purge(self):
         from unittest.mock import patch
         from slicer_worker.prusa_colour_gcode_audit import audit_prusa_dual_colour_gcode
