@@ -80,6 +80,7 @@ test("independent XL and INDX heads enable local native modifiers and variable l
   assert.match(prepare,/const prusaIndependentTools = \["xl","indx"\]\.includes\(prusaNativeTools\?\.mode\)/);
   assert.match(prepare,/\(object\.modifier_volumes\?\.length \|\| object\.variable_layer_profile\?\.bands\?\.length\) &&/);
   assert.match(prepare,/!prusaIndependentTools/);
+  assert.match(prepare,/"top_shell_layers","bottom_shell_layers"\]\.includes\(key\)/);
   assert.match(prepare,/object\.negative_volumes\?\.length/);
   assert.match(prepare,/object\.support_paint\?\.regions\?\.length/);
   assert.match(prepare,/object\.seam_paint\?\.regions\?\.length/);
