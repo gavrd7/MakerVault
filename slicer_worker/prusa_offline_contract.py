@@ -169,10 +169,12 @@ def validate_prusa_offline_xl_colour_inputs(*, project, printer, filament, proce
     if same_nozzle or not 2 <= count <= 8:
         raise WorkerError("Prusa painted XL/INDX needs independent native heads.")
     if tools is not None:
-        if (tool is not None or not isinstance(tools, list) or len(tools) != 2
-                or any(type(t) is not int or not 1 <= t <= 7 or t >= count
-                       for t in tools) or len(set(tools)) != 2):
-            raise WorkerError("Prusa painted XL needs two distinct native wall tools.")
+        if (tool is not None or not isinstance(tools, list) or
+                len(tools) not in (2,4) or
+                any(type(t) is not int or not 1 <= t <= 7 or t >= count
+                    for t in tools) or len(set(tools)) != len(tools) or
+                (len(tools)==4 and count!=5)):
+            raise WorkerError("Prusa painted XL needs two or four distinct qualified native wall tools.")
         selected = tuple(tools)
     elif type(tool) is int and 1 <= tool <= 7 and tool < count:
         selected = (tool,)
@@ -196,12 +198,18 @@ def validate_prusa_offline_xl_colour_inputs(*, project, printer, filament, proce
     expected=tuple(sorted((1, *(t+1 for t in selected))))
     if receipt["objects"]!=1 or receipt["tools"]!=expected or receipt["wipe_tower"]:
         raise WorkerError("Prusa XL painted model tool mapping changed.")
-    if len(selected)==2:
+    if len(selected)==4:
+        from .prusa_four_wall_audit import four_painted_wall_regions
+        walls=four_painted_wall_regions(project)
+        if selected!=tuple(walls["tools"][side] for side in
+                           ("x_min","x_max","y_min","y_max")):
+            raise WorkerError("Native four-wall source tool order changed.")
+    elif len(selected)==2:
         from .prusa_colour_gcode_audit import _two_painted_wall_regions
         _two_painted_wall_regions(project,selected)
     else:
         from .prusa_colour_gcode_audit import _wall_regions
         _wall_regions(project,selected[0])
-    return {**({"tools":list(selected)} if len(selected)==2
+    return {**({"tools":list(selected)} if len(selected)>1
                else {"tool":selected[0]}),
             "offline_only":True,"wipe_tower":False}
