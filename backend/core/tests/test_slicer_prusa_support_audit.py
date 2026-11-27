@@ -149,6 +149,36 @@ class PrusaMultiObjectSupportTests(TestCase):
                         self.gcode(painted), rows,
                         bed_width=250, bed_depth=210)
 
+    def test_shared_plate_budget_accepts_fifteen_isolated_support_models(self):
+        from core.slicer_prusa_3mf import validate_prusa_project_admission
+        mask=sources(paint=0)[0][0]["support_paint"]
+        positions=[(x,y) for y in (-55,0,55)
+                          for x in (-88,-44,0,44,88)]
+        rows=[(item(x_mm=x,y_mm=y,
+                    **({"support_paint":mask} if index==7 else {})),cube())
+              for index,(x,y) in enumerate(positions)]
+        selected=validate_prusa_multi_support_plate([row for row,_ in rows])
+        self.assertEqual(selected,7)
+        self.assertFalse(validate_prusa_project_admission(
+            [row for row,_ in rows],{},"2.9.7"))
+        # Only moving deposited enforcer support inside model #7 is
+        # counted; stationary E recovery beside neighbours is excluded.
+        native=(b"G90\nM83\n;TYPE:Support material\nG0 X125 Y105\n"+
+                b"".join(f"G1 X{125+.03*i:.3f} Y105 E.03\n".encode()
+                         for i in range(1,61)))
+        check=audit_prusa_multi_object_support(
+            native,rows,bed_width=250,bed_depth=210)
+        self.assertEqual(check["painted_model_index"],7)
+        self.assertEqual(check["painted_support_moves"],60)
+        self.assertEqual(check["unpainted_support_moves"],0)
+        # The same 201-entry plate exceeds the shared 200 model budget,
+        # regardless of the native mesh size.
+        beyond=[rows[7][0]]+[rows[0][0]]*200
+        with self.assertRaises(ValueError):
+            validate_prusa_multi_support_plate(beyond)
+        with self.assertRaises(ValueError):
+            validate_prusa_project_admission(beyond,{},"2.9.7")
+
     def test_multi_object_support_scope_rejects_ambiguous_plates(self):
         plain = self.models()
         with self.assertRaises(ValueError):
