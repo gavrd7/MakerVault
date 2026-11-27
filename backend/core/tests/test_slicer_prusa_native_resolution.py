@@ -268,10 +268,13 @@ class PrusaSingleMaterialAdmissionTests(TestCase):
                               settings={"plate_objects": [left, right]},
                               owner=None, printer_profile_id="verified")
         self.assertTrue(_validate_plate_execution(job))
+        # Multiple independently fuzzy-painted objects are supported by
+        # the native 3MF and post-slice per-model extrusion audit.
+        job.settings["plate_objects"] = [
+            left,{**right, "fuzzy_skin_paint": paint}]
+        self.assertTrue(_validate_plate_execution(job))
         for edited in (
             [{**left, "support_paint": paint}, right],
-            [{**left, "fuzzy_skin_paint": paint},
-             {**right, "fuzzy_skin_paint": paint}],
             [left, {**right, "scale_percent": 150}],
         ):
             with self.subTest(edited=edited):
@@ -293,10 +296,15 @@ class PrusaSingleMaterialAdmissionTests(TestCase):
                               settings={"plate_objects": [left, right]},
                               owner=None, printer_profile_id="verified")
         self.assertTrue(_validate_plate_execution(job))
+        self.assertTrue(_validate_plate_execution(job))
+        # Additional independent objects no longer trip an artificial
+        # two-object gate; each is checked by the spatial layer auditor.
+        job.settings["plate_objects"] = [
+            left,right,{**right, "x_mm": 90}]
+        self.assertTrue(_validate_plate_execution(job))
         for invalid in (
             [{**left, "scale_percent": 150},right],
             [left,{**right, "rotation_xyz_deg": [90, 0]}],
-            [left,right,{**right, "x_mm": 90}],
         ):
             with self.subTest(invalid=invalid):
                 job.settings["plate_objects"] = invalid
