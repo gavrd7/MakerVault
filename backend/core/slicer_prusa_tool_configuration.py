@@ -51,7 +51,7 @@ def validate_prusa_native_tools(raw):
         seen.add(model_id)
         selected.append({"instance_id":model_id,"tool":tool})
     colour_rows=raw.get("colour_tools",[])
-    if not isinstance(colour_rows,list) or len(colour_rows)>min(count-1,4):
+    if not isinstance(colour_rows,list) or len(colour_rows)>min(count-1,7):
         raise SlicerProfileError("Invalid Prusa colour tool assignments.")
     colour_tools=[]
     paint_slots=set()
@@ -60,8 +60,8 @@ def validate_prusa_native_tools(raw):
             raise SlicerProfileError("Invalid Prusa painted colour assignment.")
         slot,tool=row["slot"],row["tool"]
         if (type(slot) is not int or not 0<=slot<16 or slot in paint_slots or
-                type(tool) is not int or not 2<=tool<=min(count,5)):
-            raise SlicerProfileError("Prusa 2.9.7 painted facets use native T1–T4 states; other heads remain available for model tools.")
+                type(tool) is not int or not 2<=tool<=min(count,8)):
+            raise SlicerProfileError("Prusa 2.9.7 painted facets require native T1–T7 within the inspected printer capacity.")
         paint_slots.add(slot)
         colour_tools.append({"slot":slot,"tool":tool})
     matrix = raw["purge_matrix"]
