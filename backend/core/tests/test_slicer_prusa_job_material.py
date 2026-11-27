@@ -140,6 +140,36 @@ class PrusaWorkbenchMaterialTests(TestCase):
                 self.assertEqual(run.call_args.kwargs["process_overrides"],
                                  job.settings["process_overrides"])
 
+    def test_xl_advanced_local_geometry_is_forwarded_only_to_independent_heads(self):
+        for mode, count in (("xl", 2), ("xl", 5), ("xl", 8)):
+            with self.subTest(mode=mode, count=count):
+                job, filaments, raw = fixture(mode, count)
+                self.resolve(job, filaments, raw)
+                job.settings["plate_objects"][0]["modifier_volumes"] = [{
+                    "id": "checked-native-region", "kind": "modifier"
+                }]
+                job.settings["plate_objects"][1]["variable_layer_profile"] = {
+                    "version": 1, "bands": [
+                        {"from_mm": 2, "to_mm": 6, "layer_mm": .12}]}
+                kind, plan = prepare_prusa_workbench_material(job)
+                self.assertEqual(kind, "indx" if count > 5 else "xl")
+                self.assertEqual(plan["tools"], [1, 2])
+                with patch("core.slicer_prusa_job_material.slice_prusa_offline_xl_candidate",
+                           return_value=b"audited") as worker:
+                    self.assertEqual(slice_prusa_workbench_material(
+                        job, [(dict(row), b"STL")
+                              for row in job.settings["plate_objects"]]),
+                        b"audited")
+                received = worker.call_args.kwargs["rows"]
+                self.assertIn("modifier_volumes", received[0][0])
+                self.assertIn("variable_layer_profile", received[1][0])
+        mmu, filaments, raw = fixture("mmu")
+        self.resolve(mmu, filaments, raw)
+        mmu.settings["plate_objects"][0]["modifier_volumes"] = [{
+            "id": "not-qualified", "kind": "modifier"}]
+        with self.assertRaises(SlicerProfileError):
+            prepare_prusa_workbench_material(mmu)
+
     def test_multi_tool_global_overrides_refuse_unqualified_controls(self):
         for value in (
             {"wipe_tower":1},{"travel_speed":120},{"prime_tower_width":40},
