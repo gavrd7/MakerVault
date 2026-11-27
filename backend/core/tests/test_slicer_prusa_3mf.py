@@ -219,15 +219,15 @@ class PrusaProjectDialectTests(TestCase):
         for index in range(20):
             clean.extend([f"G0 X{x:.3f} Y{y:.3f}",
                           f"G1 X{x+.02:.3f} Y{y:.3f} E.1"])
-        good=("\\n".join(clean)+"\\n").encode()
+        good=("\n".join(clean)+"\n").encode()
         proof=audit_modifier_positive_e(good,project,"prusaslicer")
         self.assertGreater(proof["modifier_region_paths"][0],0)
         self.assertEqual(proof["modifier_region_paths"][1],0)
         nx=(bounds[1][0][0]+bounds[1][0][1])/2
         ny=(bounds[1][1][0]+bounds[1][1][1])/2
         nz=(bounds[1][2][0]+bounds[1][2][1])/2
-        leaked=good+(f"G0 X{nx:.3f} Y{ny:.3f} Z{nz:.3f}\\n"
-                     f"G1 X{nx+.02:.3f} E.2\\n").encode()
+        leaked=good+(f"G0 X{nx:.3f} Y{ny:.3f} Z{nz:.3f}\n"
+                     f"G1 X{nx+.02:.3f} E.2\n").encode()
         with self.assertRaises(WorkerError):
             audit_modifier_positive_e(leaked,project,"prusaslicer")
         with self.assertRaises(WorkerError):
