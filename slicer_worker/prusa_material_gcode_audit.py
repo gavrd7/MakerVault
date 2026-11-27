@@ -180,9 +180,8 @@ def audit_prusa_material_model_gcode(data, project, *, printer_ini, tools, tower
                 y=params.get("Y",y)
             if "E" not in params:
                 if (flush and (op not in ("G1","G01") or not relative_xy
-                        or previous_x is None or previous_y is None or
-                        x is None or y is None or "Z" in params or
-                        abs(x-previous_x)+abs(y-previous_y)>2)):
+                        or "Z" in params or
+                        abs(params.get("X",0))+abs(params.get("Y",0))>2)):
                     raise WorkerError("Unexpected INDX purge travel.")
                 continue
             amount=params["E"] if relative else params["E"]-e
@@ -193,11 +192,13 @@ def audit_prusa_material_model_gcode(data, project, *, printer_ini, tools, tower
                 # extrusion outside the explicitly fenced cleaner window.
                 if op not in ("G1","G01") or not relative or not relative_xy:
                     raise WorkerError("Official INDX purge mode is inconsistent.")
-                if None in (previous_x,previous_y,x,y):
-                    raise WorkerError("Official INDX purge has no known XY origin.")
-                if not 0 <= amount <= 80:
+                # The native cleaner may run before any absolute XY movement.
+                # G91 defines exact physical relative strokes without needing
+                # the stale model-space position left by firmware G12 S90.
+                distance=abs(params.get("X",0))+abs(params.get("Y",0))
+                if "Z" in params or not 0 <= amount <= 80:
                     raise WorkerError("Official INDX purge exceeds extrusion bounds.")
-                if not 0 < abs(x-previous_x)+abs(y-previous_y) <= 2:
+                if not 0 < distance <= 2:
                     raise WorkerError("Official INDX purge exceeds XY movement bounds.")
                 flush_moves += 1
                 if flush_moves > 8:
