@@ -75,7 +75,9 @@ from .slicer_bambu_native_profiles import (
 )
 from .slicer_official_profiles import (
     OfficialProfileError, search_official_profiles, fetch_official_profile, available_official_vendors,
-    official_filament_brands, APPROVED_VERSIONS as ORCA_APPROVED_PROFILE_VERSIONS,
+    official_filament_brands, all_official_filament_manufacturers,
+    search_all_official_filaments,
+    APPROVED_VERSIONS as ORCA_APPROVED_PROFILE_VERSIONS,
     official_catalogue_models as orca_catalogue_models,
     ENGINE_VERSION as OFFICIAL_ORCA_VERSION, SOURCE as OFFICIAL_ORCA_SOURCE,
     REF as OFFICIAL_ORCA_REF,
@@ -1394,10 +1396,15 @@ def official_profiles(request):
         except OfficialProfileError as exc:
             return _error(str(exc))
         if request.GET.get("brands") == "1":
-            if selected != "orcaslicer" or request.GET.get("vendor") != "OrcaFilamentLibrary":
-                return _error("Filament brand browsing requires the official Orca library.")
+            if selected != "orcaslicer":
+                return _error("Unified filament manufacturer browsing requires OrcaSlicer.")
             try:
-                return JsonResponse({"brands": official_filament_brands(version), "engine_version": version})
+                unified = request.GET.get("unified_filaments") == "1"
+                return JsonResponse({
+                    "brands": (all_official_filament_manufacturers(version) if unified
+                               else official_filament_brands(version)),
+                    "engine_version": version,
+                })
             except OfficialProfileError as exc:
                 return _error(str(exc))
         if request.GET.get("catalogues") == "1":
@@ -1508,7 +1515,12 @@ def official_profiles(request):
             material_query = request.GET.get("material", "")[:32]
             manufacturer_query = request.GET.get("manufacturer", "")[:80]
             page_kwargs = {"offset": offset} if offset else {}
-            results = (search_official_profiles(*args, printer_model=printer_model, version=version,
+            results = (search_all_official_filaments(
+                           args[0], brand=request.GET.get("brand", ""),
+                           version=version, printer_model=printer_model, offset=offset)
+                       if selected == "orcaslicer" and args[1] == "filament"
+                          and request.GET.get("unified_filaments") == "1" else
+                       search_official_profiles(*args, printer_model=printer_model, version=version,
                            brand=request.GET.get("brand", ""),
                            slot_discovery=slot_discovery, material=material_query,
                            manufacturer=manufacturer_query, **page_kwargs)
