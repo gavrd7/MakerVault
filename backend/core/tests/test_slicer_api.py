@@ -92,6 +92,33 @@ class SliceJobApiTests(TestCase):
         self.assertIs(job.settings.get("multi_material_test"), True)
         self.assertEqual(len(job.settings["plate_objects"]), 1)
 
+    def test_prusa_native_profile_topology_is_owner_scoped_and_not_guessed(self):
+        from unittest.mock import patch
+        profile = SlicerProfile.objects.create(
+            owner=self.owner, file_asset=self.input_asset, engine="prusaslicer",
+            engine_version="2.9.7", kind="printer", name="Native eight-tool fixture",
+            content_sha256="0" * 64,
+        )
+        url = "/api/printing/slicer/profiles/?prusa_printer_topology_id=" + str(profile.pk)
+        self.client.force_login(self.other)
+        self.assertEqual(self.client.get(url).status_code, 404)
+        self.client.force_login(self.owner)
+        with (patch("core.slicer_prusa_native_resolution.resolved_prusa_profile",
+                    return_value=b"native-profile") as resolved,
+              patch("core.slicer_prusa_machine_topology.prusa_machine_topology",
+                    return_value={"kind": "indx", "logical_tool_count": 8,
+                                  "physical_nozzle_count": 8}) as inspected):
+            response = self.client.get(url)
+        self.assertEqual(response.status_code, 200, response.content)
+        self.assertEqual(response.json()["printer_profile_id"], str(profile.pk))
+        self.assertEqual(response.json()["topology"]["logical_tool_count"], 8)
+        self.assertEqual(response.json()["topology"]["kind"], "indx")
+        resolved.assert_called_once()
+        inspected.assert_called_once_with(b"native-profile")
+        self.assertEqual(self.client.get(
+            "/api/printing/slicer/profiles/?prusa_printer_topology_id=invalid"
+        ).status_code, 422)
+
     def test_prusa_native_tool_draft_roundtrips_without_live_printer_slots(self):
         """Saving virtual MMU/XL mappings never implies any printer connection."""
         from core.slicer_api import _draft_plate_settings
