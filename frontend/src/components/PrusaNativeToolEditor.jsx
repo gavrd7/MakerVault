@@ -205,8 +205,9 @@ export default function PrusaNativeToolEditor({
           selected printer profile and the same MakerVault paint brush as other
           engines. MMU supports one painted swatch on a vertical wall,
           including a split or partial mask, with independently audited
-          wipe-tower purging. XL5 independently supports a split vertical
-          wall without MMU purging. Complete opposing-wall colours and
+          wipe-tower purging. XL5 independently supports both split
+          vertical walls and partially painted horizontal top faces without
+          MMU purging. Complete opposing-wall colours and
           profile-qualified T1–T7 INDX/XL tools remain supported; XL5 also
           supports four complete exterior walls using T1–T4. Split paints on
           other INDX/XL tool counts, curved or angled faces, and multiple
