@@ -15,13 +15,12 @@ from .slicer_prusa_material_preflight import (
 )
 from .slicer_profiles import SlicerProfileError
 
-# High-confidence engine-native settings already supported on plain Prusa jobs.
-# Multi-tool acceptance is deliberately narrower until mixed-feature CLI
-# evidence qualifies the remaining settings independently.
-PRUSA_MULTITOOL_PROCESS_KEYS = frozenset({
-    "layer_height", "wall_loops", "top_shell_layers",
-    "bottom_shell_layers", "sparse_infill_density",
-})
+# Only the canonical, bounded Prusa native numeric process adapter's keys
+# are eligible for multi-tool projects. The same pinned runtime acceptance
+# exercises these settings with the native MMU worker; arbitrary user keys
+# and executable directives remain rejected.
+from .slicer_prusa_process_settings import FIELDS as PRUSA_NATIVE_PROCESS_FIELDS
+PRUSA_MULTITOOL_PROCESS_KEYS = frozenset(PRUSA_NATIVE_PROCESS_FIELDS)
 
 
 def _virtual_native_tools(job, settings, objects, kind, count, *, single_colour=False):
@@ -186,8 +185,7 @@ def prepare_prusa_workbench_material(job, *, settings=None):
     overrides = settings.get("process_overrides", {})
     if not isinstance(overrides, dict) or set(overrides) - PRUSA_MULTITOOL_PROCESS_KEYS:
         raise SlicerProfileError(
-            "This Prusa multi-tool slice supports only qualified global "
-            "layer height, walls, top/bottom shells and infill density settings.")
+            "Prusa multi-tool global settings must use validated native numeric process controls.")
     if (settings.get("plate_volumes") or
             settings.get("creality_auto_arrange_offline")):
         raise SlicerProfileError("Unqualified global settings or independent volumes cannot be dropped.")
