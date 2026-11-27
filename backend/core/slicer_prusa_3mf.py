@@ -20,8 +20,15 @@ from .slicer_profiles import SlicerProfileError
 from .slicer_prusa_layer_ranges import prusa_layer_config_ranges, PATH as LAYER_RANGES_PATH
 from .slicer_prusa_paint import native_prusa_painted_stl, HEADERS as PAINT_HEADERS
 
-OBJECT_KEYS = frozenset({"wall_loops", "sparse_infill_density",
-                         "top_shell_layers", "bottom_shell_layers"})
+# These canonical fields have native Prusa per-Object metadata equivalents.
+# Reuse the same numeric mapping and range checks as global Prusa settings.
+# Bed adhesion and global travel speed are not Object-scoped settings.
+OBJECT_KEYS = frozenset({
+    "wall_loops", "sparse_infill_density", "top_shell_layers",
+    "bottom_shell_layers", "outer_wall_speed", "inner_wall_speed",
+    "sparse_infill_speed", "top_surface_speed",
+})
+assert OBJECT_KEYS.issubset(FIELDS)
 CONFIG_PATH = "Metadata/Slic3r_PE_model.config"
 BASE = (b"layer_height = 0.2\nperimeters = 2\nfill_density = 15%\n"
         b"top_solid_layers = 3\nbottom_solid_layers = 3\n")
