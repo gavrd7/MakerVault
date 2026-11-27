@@ -139,3 +139,12 @@ test("new Prusa native-tool drafts inherit the chosen printer profile topology",
   assert.match(editor,/profileMode && profileToolCount \? profileToolCount : 2/);
   assert.match(editor,/const profileMode = printerTopology\?\.kind==="single_nozzle_changer"/);
 });
+
+
+test("Prusa multi-tool workbench exposes validated native speed and adhesion process controls",()=>{
+  for (const key of ["brim_width","skirt_loops","outer_wall_speed","inner_wall_speed",
+                     "sparse_infill_speed","travel_speed","top_surface_speed"])
+    assert.match(prepare,new RegExp('"' + key + '"'));
+  assert.match(prepare,/const prusaUnsupportedGlobalKeys/);
+  assert.match(prepare,/Object\.keys\(processOverrides\|\|\{\}\)\.every/);
+});
