@@ -58,7 +58,7 @@ def main(binary, vendor):
         (work/"prusa-offline-colour.marker").write_text("v1")
         run_prusa(Path(binary),work)
         output=(work/"output.gcode").read_bytes()
-        counts=painted_external_walls(output)
+        counts=painted_external_walls(output,center_x=180,center_y=180)
         assert counts[1]["front"]>=20,counts
         assert counts[0]["back"]>=20,counts
         assert counts[1]["back"]<=2,counts
