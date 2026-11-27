@@ -281,6 +281,16 @@ class PrusaDualColourResearchTests(TestCase):
         self.assertEqual(receipt["wall_moves"][0],{"front":0,"back":0})
         self.assertTrue(all(v>=10 for v in receipt["tower_extrusion_moves"].values()))
 
+    def test_native_base_t0_may_deposit_corner_perimeters_on_both_painted_walls(self):
+        material = self.gcode() + (
+            b"T0\n;TYPE:External perimeter\n"
+            b"G0 X115 Y95\nG1 X116 Y95 E.03\n"
+            b"G0 X115 Y115\nG1 X116 Y115 E.03\n")
+        result=self.audit(material)
+        self.assertEqual(result["wall_moves"][0],{"front":1,"back":1})
+        self.assertEqual(result["wall_moves"][1]["back"],0)
+        self.assertEqual(result["wall_moves"][2]["front"],0)
+
     def test_wrong_tool_or_cross_wall_paths_fail_closed(self):
         for variant in ({"crossing":True},{"wrong_tool":True},
                         {"stationary_tower":True}):
