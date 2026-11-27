@@ -47,10 +47,14 @@ def native_capabilities(engine, version):
         }
         result["seam_paint"] = {
             "status": "test_only",
-            "reason": ("Only one upright front-face native Prusa 2.9.7 seam "
-                       "enforcer has passed a spatial first-wall G-code audit. "
-                       "Back/side faces, seam blockers and mixed edits remain "
-                       "blocked; this is offline slicing only."),
+            "reason": ("Prusa 2.9.7 supports one fingerprinted upright vertical "
+                       "seam enforcer on the front, back, left or right face "
+                       "for offline native slicing. Non-front directions use "
+                       "a temporary random native seam process and require "
+                       "per-face moving-extrusion spatial G-code auditing. "
+                       "Multiple patches, seam blockers and unqualified "
+                       "mixed edits remain blocked; physical printer start "
+                       "is not established by a native CLI slice."),
         }
         result["support_paint"] = {
             "status": "verified",
