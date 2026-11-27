@@ -530,17 +530,20 @@ class PrusaVirtualToolDraftTests(TestCase):
         job.settings.pop("prime_tower")
         PrusaWorkbenchMaterialTests.resolve(
             self,job,filaments,ini(",".join(["0.4"]*8),"0"))
-        mode,plan=prepare_prusa_workbench_material(job)
-        self.assertEqual(mode,"xl_colour")
-        self.assertEqual(len(plan["filament_profiles"]),8)
-        self.assertEqual(plan["colour_tool_indices"],{1:1})
-        with patch("core.slicer_prusa_job_material.slice_prusa_offline_xl_colour_candidate",
-                   return_value=b"audited-indx-paint") as worker:
-            result=slice_prusa_workbench_material(
-                job,[(dict(job.settings["plate_objects"][0]),source)])
-        self.assertEqual(result,b"audited-indx-paint")
-        self.assertEqual(worker.call_args.kwargs["filament_profiles"],filaments)
-        self.assertNotIn("tower_xy",worker.call_args.kwargs)
+        for physical_tool in (2,6,7,8):
+            with self.subTest(native_tool=physical_tool-1):
+                config["colour_tools"]=[{"slot":1,"tool":physical_tool}]
+                mode,plan=prepare_prusa_workbench_material(job)
+                self.assertEqual(mode,"xl_colour")
+                self.assertEqual(len(plan["filament_profiles"]),8)
+                self.assertEqual(plan["colour_tool_indices"],{1:physical_tool-1})
+                with patch("core.slicer_prusa_job_material.slice_prusa_offline_xl_colour_candidate",
+                           return_value=b"audited-indx-paint") as worker:
+                    result=slice_prusa_workbench_material(
+                        job,[(dict(job.settings["plate_objects"][0]),source)])
+                self.assertEqual(result,b"audited-indx-paint")
+                self.assertEqual(worker.call_args.kwargs["filament_profiles"],filaments)
+                self.assertNotIn("tower_xy",worker.call_args.kwargs)
 
     def test_painted_xl_two_wall_workbench_dispatch(self):
         from scripts.prusa_generate_mmu_paint import fixture as painted_fixture
