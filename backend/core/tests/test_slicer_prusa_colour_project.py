@@ -321,3 +321,54 @@ class PrusaDualColourResearchTests(TestCase):
         for tools in ((1,1),(0,2),(1,5),(True,2),(1,2,3)):
             with self.subTest(tools=tools),self.assertRaises(WorkerError):
                 _two_painted_wall_regions(b"not-an-archive", tools)
+
+
+class PrusaXLNativeColourAuditTests(TestCase):
+    """Independent XL T0/Tn face painting never inherits MMU wipe semantics."""
+
+    def project(self):
+        stl,_mesh,_states,paint=fixture(include_paint=True)
+        project=build_prusa_colour_candidate(
+            {"asset_id":"xl-colour","x_mm":0,"y_mm":0,"z_mm":0,
+             "rotation_deg":0,"scale_percent":100,"colour_paint":paint},
+            stl,printer_ini=ini("0.4,0.4,0.4,0.4,0.4","0"),
+            colour_tool_indices={1:1},bed_width=250,bed_depth=210)
+        return project
+
+    def output(self, *, wrong_tool=False, stationary=False):
+        lines=["G90","M83","T1",";TYPE:External perimeter",
+               "G0 X115 Y95"]
+        for n in range(25):
+            lines.append(("G1 E.03" if stationary else
+                          f"G1 X{115+(n+1)*.5:.3f} Y95 E.03"))
+        lines.extend(["T0",";TYPE:External perimeter","G0 X115 Y115"])
+        for n in range(25):
+            lines.append(f"G1 X{115+(n+1)*.5:.3f} Y115 E.03")
+        if wrong_tool:
+            lines.extend(["T1",";TYPE:External perimeter",
+                          "G0 X115 Y115","G1 X115.5 Y115 E.03",
+                          "G1 X116 Y115 E.03","G1 X116.5 Y115 E.03"])
+        return ("\n".join(lines)+"\n").encode()
+
+    def test_worker_proves_t1_front_and_t0_back_without_tower(self):
+        from slicer_worker.prusa_colour_gcode_audit import audit_prusa_xl_colour_gcode
+        receipt=audit_prusa_xl_colour_gcode(
+            self.output(),self.project(),
+            printer_ini=ini("0.4,0.4,0.4,0.4,0.4","0"),tool=1)
+        self.assertEqual(receipt["painted_wall_moves"][1]["front"],25)
+        self.assertEqual(receipt["painted_wall_moves"][0]["back"],25)
+        self.assertIs(receipt["wipe_tower"],False)
+
+    def test_unassigned_tools_and_wrong_wall_deposition_fail_closed(self):
+        from slicer_worker.prusa_colour_gcode_audit import audit_prusa_xl_colour_gcode
+        for raw in (self.output(wrong_tool=True),
+                    self.output(stationary=True),
+                    self.output().replace(b"T1",b"T7")):
+            with self.subTest(raw=raw[-40:]),self.assertRaises(WorkerError):
+                audit_prusa_xl_colour_gcode(
+                    raw,self.project(),
+                    printer_ini=ini("0.4,0.4,0.4,0.4,0.4","0"),tool=1)
+        with self.assertRaises(WorkerError):
+            audit_prusa_xl_colour_gcode(
+                self.output(),self.project(),
+                printer_ini=ini("0.4,0.4,0.4,0.4,0.4","1"),tool=1)
