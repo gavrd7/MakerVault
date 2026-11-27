@@ -157,16 +157,27 @@ def validate_prusa_offline_colour_inputs(*, project, printer, filament, process,
             "tower":tower, "offline_only":True}
 
 
-def validate_prusa_offline_xl_colour_inputs(*, project, printer, filament, process, tool):
-    """Strict one-model T0/Tn front-face paint on independent XL toolheads.
+def validate_prusa_offline_xl_colour_inputs(*, project, printer, filament, process,
+                                           tool=None, tools=None):
+    """Independently audit native XL single- or opposing-dual-wall painting.
 
-    No MMU purge or wipe tower, no INDX profile without native qualification.
-    Worker-supplied bytes are validated independently of owner-side planning.
+    This is strictly offline. Physical tool pickup and printer start are not
+    authorised. The source-mesh and toolpath auditors enforce both wall/tool
+    attribution and no MMU purge or wipe tower.
     """
     count, same_nozzle = _qualified_topology(printer)
-    if (same_nozzle or not 2 <= count <= 5 or type(tool) is not int or
-            not 1 <= tool < count):
-        raise WorkerError("Prusa painted XL needs independently configured T0 and one alternate head.")
+    if same_nozzle or not 2 <= count <= 5:
+        raise WorkerError("Prusa painted XL needs independent native heads.")
+    if tools is not None:
+        if (tool is not None or not isinstance(tools, list) or len(tools) != 2
+                or any(type(t) is not int or not 1 <= t <= 4 or t >= count
+                       for t in tools) or len(set(tools)) != 2):
+            raise WorkerError("Prusa painted XL needs two distinct native wall tools.")
+        selected = tuple(tools)
+    elif type(tool) is int and 1 <= tool <= 4 and tool < count:
+        selected = (tool,)
+    else:
+        raise WorkerError("Prusa painted XL needs one valid alternate native head.")
     try:
         material = validate_flat_prusa_preset(filament, kind="filament")
         settings = validate_flat_prusa_preset(process, kind="print")
@@ -182,8 +193,15 @@ def validate_prusa_offline_xl_colour_inputs(*, project, printer, filament, proce
             raise WorkerError("Prusa XL filament temperature vector is invalid.")
     receipt=validate_prusa_material_candidate(
         project, printer_ini=printer, colour=True, independent_colour=True)
-    if receipt["objects"]!=1 or receipt["tools"]!=(1,tool+1) or receipt["wipe_tower"]:
+    expected=tuple(sorted((1, *(t+1 for t in selected))))
+    if receipt["objects"]!=1 or receipt["tools"]!=expected or receipt["wipe_tower"]:
         raise WorkerError("Prusa XL painted model tool mapping changed.")
-    from .prusa_colour_gcode_audit import _wall_regions
-    _wall_regions(project,tool)
-    return {"tool":tool,"offline_only":True,"wipe_tower":False}
+    if len(selected)==2:
+        from .prusa_colour_gcode_audit import _two_painted_wall_regions
+        _two_painted_wall_regions(project,selected)
+    else:
+        from .prusa_colour_gcode_audit import _wall_regions
+        _wall_regions(project,selected[0])
+    return {**({"tools":list(selected)} if len(selected)==2
+               else {"tool":selected[0]}),
+            "offline_only":True,"wipe_tower":False}
