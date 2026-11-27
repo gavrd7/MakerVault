@@ -94,3 +94,10 @@ test("independent XL and INDX heads enable local native modifiers and variable l
   assert.match(editor,/value\.mode==="indx"/);
   assert.match(editor,/Prusa XL/);
 });
+
+test("Prusa XL native one-swatch paint is separate from MMU and INDX",()=>{
+  assert.match(editor,/value\?\.mode==="xl" && paintedSlots\.length===1/);
+  assert.match(prepare,/prusaNativeTools\?\.mode==="xl" && prusaPaintedSlots\.length===1/);
+  assert.match(prepare,/!prusaIndependentTools \|\| prusaSinglePaint/);
+  assert.match(editor,/without\s+MMU purging/);
+});
