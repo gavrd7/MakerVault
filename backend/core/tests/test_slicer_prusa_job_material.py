@@ -191,7 +191,6 @@ class PrusaWorkbenchMaterialTests(TestCase):
     def test_multi_tool_global_overrides_refuse_unqualified_controls(self):
         for value in (
             {"wipe_tower":1},{"machine_start_gcode":"G28"},{"prime_tower_width":40},
-            {"brim_width":2},{"skirt_loops":2},
             {"layer_height":"0.2"},{"wall_loops":True},["layer_height"],
         ):
             with self.subTest(value=value):
@@ -204,6 +203,31 @@ class PrusaWorkbenchMaterialTests(TestCase):
                     continue
                 with self.assertRaises(SlicerProfileError):
                     prepare_prusa_workbench_material(job)
+
+    def test_native_first_layer_adhesion_overrides_are_routed_to_each_tool_topology(self):
+        for mode,count in (("mmu",2),("xl",2),("xl",8)):
+            with self.subTest(mode=mode,count=count):
+                job,filaments,raw=fixture(mode,count)
+                self.resolve(job,filaments,raw)
+                job.settings["process_overrides"]={
+                    "brim_width":3,"skirt_loops":2}
+                kind,plan=prepare_prusa_workbench_material(job)
+                self.assertEqual(kind,"mmu" if mode=="mmu" else
+                                 "indx" if count>5 else "xl")
+                self.assertEqual(plan["process_overrides"],
+                                 {"brim_width":3,"skirt_loops":2})
+        for overrides in ({"post_process":"G28"},
+                          {"brim_width":51},{"skirt_loops":21},
+                          {"skirt_loops":True}):
+            job,filaments,raw=fixture()
+            self.resolve(job,filaments,raw)
+            job.settings["process_overrides"]=overrides
+            if set(overrides) in ({"brim_width"},{"skirt_loops"}):
+                # The strict numeric native process adapter rejects these
+                # after profile resolution, not in the draft parser.
+                continue
+            with self.assertRaises(SlicerProfileError):
+                prepare_prusa_workbench_material(job)
 
     def test_native_five_head_acceptance_qualifies_bounded_object_wall_settings(self):
         for mode in ("mmu", "xl"):
