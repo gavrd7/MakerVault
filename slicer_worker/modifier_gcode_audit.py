@@ -35,7 +35,7 @@ def _prusa_modifier_bounds(project, *, include_kinds=False, include_meshes=False
         with zipfile.ZipFile(io.BytesIO(project)) as archive:
             model_xml = archive.read(MODEL)
             config_xml = archive.read(CONFIG)
-        if any(b"<!" in raw or b"\\x00" in raw
+        if any(b"<!" in raw or b"\x00" in raw
                for raw in (model_xml, config_xml)):
             raise WorkerError("Unsafe Prusa native volume XML.")
         root = SafeET.fromstring(model_xml)
