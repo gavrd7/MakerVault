@@ -131,16 +131,23 @@ class PrusaMultiToolCandidateTests(TestCase):
                 with self.assertRaises(WorkerError):
                     validate_prusa_native_3mf(project)
 
-        # MMU and independent heads use the same upstream typed native
-        # Object/Volume/layer-range project dialect. Its MMU-specific wipe
-        # tower and material routing are checked separately by the worker.
+        # Native MMU modifiers are the same typed parameter/negative
+        # volumes as XL. But the pinned MMU 2.9.7 CLI emits no output
+        # with per-Object variable-layer XML, so reject that exact format.
+        with self.assertRaises(SlicerProfileError):
+            build_prusa_multitool_candidate(
+                rows, printer_ini=printer(5, 1), tools=[1, 5],
+                bed_width=250, bed_depth=210)
+        mmu_rows = [({k: v for k, v in entry.items()
+                     if k != "variable_layer_profile"}, source)
+                    for entry, source in rows]
         mmu_project, mmu_topology = build_prusa_multitool_candidate(
-            rows, printer_ini=printer(5, 1), tools=[1, 5],
+            mmu_rows, printer_ini=printer(5, 1), tools=[1, 5],
             bed_width=250, bed_depth=210)
         self.assertEqual(mmu_topology["kind"], "single_nozzle_changer")
         with zipfile.ZipFile(io.BytesIO(mmu_project)) as archive:
-            self.assertIn("Metadata/Prusa_Slicer_layer_config_ranges.xml",
-                          archive.namelist())
+            self.assertNotIn("Metadata/Prusa_Slicer_layer_config_ranges.xml",
+                             archive.namelist())
             obj = SafeET.fromstring(
                 archive.read("Metadata/Slic3r_PE_model.config"))
         self.assertEqual([len(entry.findall("volume"))
