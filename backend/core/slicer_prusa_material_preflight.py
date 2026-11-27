@@ -252,8 +252,21 @@ def prepare_prusa_offline_colour_candidate(
     from slicer_worker.prusa_offline_contract import validate_prusa_offline_colour_inputs
     if len(colour_tool_indices)==2:
         from slicer_worker.prusa_colour_gcode_audit import _two_painted_wall_regions
+        from slicer_worker.runner import WorkerError
+        # Browser palette slots are not front/back directions. Derive and
+        # verify exact wall order from the *signed source-mesh 3MF* before
+        # submitting tool order. Never assume slot 1 means front.
         selected = tuple(colour_tool_indices.values())
-        _two_painted_wall_regions(project, selected)
+        try:
+            _two_painted_wall_regions(project, selected)
+        except WorkerError:
+            selected = tuple(reversed(selected))
+            try:
+                _two_painted_wall_regions(project, selected)
+            except WorkerError as exc:
+                raise SlicerProfileError(
+                    "Prusa two-swatch painting requires complete opposite front/back walls."
+                ) from exc
         receipt = validate_prusa_offline_colour_inputs(
             project=project,printer=printer,filament=palette,process=native_process,
             tools=list(selected),tower=list(tower))
