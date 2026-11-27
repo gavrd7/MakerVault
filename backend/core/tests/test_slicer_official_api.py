@@ -44,6 +44,53 @@ class OfficialProfileApiTests(TestCase):
         self.assertEqual(response.json()["engine_version"], "2.4.2")
         self.assertEqual(fetch.call_args.args, ("K2", "printer", "Creality"))
 
+    def test_unified_filament_manufacturers_include_printer_brands(self):
+        self.client.force_login(self.user)
+        with patch("core.slicer_api.all_official_filament_manufacturers",
+                   return_value=["3D-Fuel", "Creality", "Elegoo", "eSUN"]) as brands:
+            response = self.client.get(self.url, {
+                "engine": "orcaslicer", "version": "2.5.0",
+                "brands": "1", "unified_filaments": "1"})
+        self.assertEqual(response.status_code, 200, response.content)
+        self.assertIn("Creality", response.json()["brands"])
+        self.assertIn("Elegoo", response.json()["brands"])
+        brands.assert_called_once_with("2.5.0")
+
+    def test_unified_orca_filament_results_preserve_native_catalogue_vendor(self):
+        self.client.force_login(self.user)
+        def lookup(query, *, brand, version, printer_model=None, offset=0):
+            self.assertEqual((query, brand, version), ("PLA", "Creality", "2.5.0"))
+            self.assertIsNone(printer_model)
+            return {
+                "engine": "orcaslicer", "vendor": "Creality",
+                "kind": "filament", "ref": "v2.5.0",
+                "total_matches": 52, "profiles": [{
+                    "name": "Creality PLA", "sub_path": "filament/PLA.json",
+                    "vendor": "Creality",
+                }] if offset == 40 else [{
+                    "name": "Creality Library PLA",
+                    "sub_path": "filament/Creality/PLA.json",
+                    "vendor": "OrcaFilamentLibrary",
+                }]
+            }
+        with patch("core.slicer_api.search_all_official_filaments",
+                   side_effect=lookup) as search:
+            first = self.client.get(self.url, {
+                "engine": "orcaslicer", "version": "2.5.0",
+                "kind": "filament", "brand": "Creality",
+                "q": "PLA", "unified_filaments": "1"})
+            second = self.client.get(self.url, {
+                "engine": "orcaslicer", "version": "2.5.0",
+                "kind": "filament", "brand": "Creality",
+                "q": "PLA", "unified_filaments": "1", "page": 2})
+        self.assertEqual(first.status_code, 200, first.content)
+        self.assertEqual(second.status_code, 200, second.content)
+        self.assertEqual(first.json()["total_pages"], 2)
+        self.assertEqual(first.json()["profiles"][0]["vendor"], "OrcaFilamentLibrary")
+        self.assertEqual(second.json()["profiles"][0]["vendor"], "Creality")
+        self.assertEqual(search.call_count, 2)
+        self.assertEqual(search.call_args.kwargs["offset"], 40)
+
     def test_search_pages_preserve_all_filters_and_reject_invalid_page(self):
         self.client.force_login(self.user)
         matches = [{"name": f"Preset {i}", "sub_path": f"filament/preset-{i}.json"}
