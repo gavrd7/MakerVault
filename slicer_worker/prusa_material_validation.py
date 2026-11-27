@@ -153,14 +153,12 @@ def validate_prusa_material_candidate(data, *, printer_ini, tools=None, colour=F
         if colour and (receipt["objects"]!=1 or receipt["regions"]!=0
                        or receipt["paint_channels"] or receipt["layer_ranges"]):
             _refuse()
-        # Native INDX modifier/negative volumes retain their exact typed,
-        # independently validated 3MF mesh and per-model tool metadata.
-        # Other architectures still require unmodified model meshes.
-        independent_heads = not changer and logical_count>=2
+        # Typed 3MF volumes and object layer ranges are native Prusa
+        # constructs for MMU as well as independent toolheads. Keep the
+        # independently audited tool/deposition and wipe-tower gates;
+        # coloured facet candidates remain a separate constrained route.
         if not colour and (receipt["objects"]!=len(tools) or
-                           receipt["paint_channels"] or
-                           (receipt["regions"] and not independent_heads) or
-                           (receipt["layer_ranges"] and not independent_heads)):
+                           receipt["paint_channels"]):
             _refuse()
         return {"objects":receipt["objects"],"colour_facets":marked if colour else 0,
                 "tools":tuple(tools) if not colour else tuple(sorted(selected)),
