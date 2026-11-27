@@ -55,7 +55,8 @@ export default function PrusaNativeToolEditor({
   const paintedSlots=[...new Set(models.flatMap(model=>
     model.colour_paint?.regions?.map(region=>region.slot)||[]))];
   const singleColour=models.length===1 && paintedSlots.length>=1 &&
-    paintedSlots.length<=2 && value?.mode==="mmu";
+    ((value?.mode==="mmu" && paintedSlots.length<=2) ||
+     (value?.mode==="xl" && paintedSlots.length===1));
   const editMatrix=(source,target,raw)=>{
     const matrix=value.purge_matrix.map(row=>[...row]);
     matrix[source][target]=safeNumber(raw);
@@ -153,11 +154,11 @@ export default function PrusaNativeToolEditor({
         </label>)}
       </div>
       {paintedSlots.length>0 && <div style={{marginTop:10}}>
-        <p className="projectUploadHint">Native Prusa surface colour: the verified offline
-          MMU route accepts one upright model with base T0 and one front-wall
-          swatch, or two different tools painted on complete opposing front/back
-          walls. The worker checks real wall extrusion and isolated wipe-tower
-          purging before storing G-code; other painted geometry remains unsupported.</p>
+        <p className="projectUploadHint">Native Prusa surface colour: MMU accepts
+          one front-wall swatch or two distinct complete opposing wall colours
+          with an isolated wipe tower. Independent Prusa XL accepts one
+          front-wall swatch with T0 base and a different native head, without
+          MMU purging. Other painted geometry remains unsupported.</p>
         {paintedSlots.map(slot=><label key={slot} style={{display:"block",marginBottom:8}}>
           Painted swatch {slot} — native Prusa tool
           <select disabled={disabled} value={(value.colour_tools||[]).find(
