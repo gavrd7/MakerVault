@@ -867,3 +867,26 @@ test("mobile add model and independent volume editors flow beneath the plate rat
   assert.match(rules, /overflow:visible!important/);
   assert.match(rules, /slicerSolidInspectorCollapsed/);
 });
+
+
+test("shared model selection offers select all and atomic bulk filament mapping", () => {
+  const prepare = read("SlicerPrepareWorkspace.jsx");
+  assert.match(prepare, /const selectableRows = allPlateRows\.filter\(row => !row\.detached\)/);
+  assert.match(prepare, /const allSelected = selectableRows\.length > 0/);
+  assert.match(prepare, /node\.indeterminate = !allSelected/);
+  assert.match(prepare, /Select all/);
+  assert.match(prepare, /Change filament for selected/);
+  assert.match(prepare, /const changeModelsPreviewFilament = \(instanceIds, slot\)/);
+  assert.match(prepare, /const ids = new Set\(instanceIds\)/);
+  assert.match(prepare, /ids\.has\(item\.instance_id\)/);
+  assert.match(prepare, /changeModelsPreviewFilament\(selectedModels\.map\(model => model\.instance_id\), slot\)/);
+  assert.match(prepare, /Base filament only; painted colours and modifier volumes are unchanged/);
+});
+
+test("printer-supplied palette is not truncated by legacy 16 or 64 material UI limits", () => {
+  const prepare = read("SlicerPrepareWorkspace.jsx");
+  assert.match(prepare, /const loaded = \[\.\.\.liveMaterials\]\.sort/);
+  assert.doesNotMatch(prepare, /liveMaterials\]\.sort\([^\n]*\)\.slice\(0, 64\)/);
+  assert.doesNotMatch(prepare, /requiredMultiSlots\.length <= 16/);
+  assert.match(prepare, /requiredMultiSlots\.every\(slotId => liveMaterials\.some/);
+});
