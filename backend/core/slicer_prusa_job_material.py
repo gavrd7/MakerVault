@@ -162,7 +162,7 @@ def prepare_prusa_workbench_material(job, *, settings=None):
                   "negative_volumes")
                  if kind in ("indx", "independent_tools") else
                  ("support_paint", "seam_paint", "fuzzy_skin_paint",
-                  "negative_volumes"))
+                  "variable_layer_profile", "negative_volumes"))
     for row in objects:
         if not isinstance(row, dict) or any(row.get(key) for key in forbidden):
             raise SlicerProfileError("Prusa multi-material models cannot combine unqualified edits.")
