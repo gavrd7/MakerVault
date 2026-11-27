@@ -53,6 +53,11 @@ def main(destination):
         fifteen.append((obj,source))
     (folder/"fifteen.3mf").write_bytes(build_prusa_native_3mf(
         fifteen,bed_width=250,bed_depth=210))
+    dual=[({**item,**({"fuzzy_skin_paint":paint}
+                       if index==8 else {})},raw)
+          for index,(item,raw) in enumerate(fifteen)]
+    (folder/"fifteen-two.3mf").write_bytes(build_prusa_native_3mf(
+        dual,bed_width=250,bed_depth=210))
 
 
 
