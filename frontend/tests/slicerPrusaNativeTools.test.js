@@ -150,13 +150,14 @@ test("new Prusa native-tool drafts inherit the chosen printer profile topology",
 });
 
 
-test("Prusa multi-tool workbench exposes validated native speeds but keeps unqualified adhesion gated",()=>{
+test("Prusa multi-tool workbench maps native speeds and first-layer adhesion controls",()=>{
   const native = prepare.slice(prepare.indexOf("const prusaNativeReady"),
     prepare.indexOf("const prusaMaterialRoutingPending"));
   for (const key of ["outer_wall_speed","inner_wall_speed",
                      "sparse_infill_speed","travel_speed","top_surface_speed"])
     assert.match(native,new RegExp('"' + key + '"'));
-  assert.doesNotMatch(native,/"brim_width"|"skirt_loops"/);
+  for (const key of ["brim_width","skirt_loops"])
+    assert.match(native,new RegExp('"' + key + '"'));
   assert.match(prepare,/const prusaUnsupportedGlobalKeys/);
   assert.match(prepare,/Object\.keys\(processOverrides\|\|\{\}\)\.every/);
 });
