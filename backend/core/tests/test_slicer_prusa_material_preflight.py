@@ -199,6 +199,25 @@ class PrusaOfflineMmuPreflightTests(TestCase):
                  "prusa_offline_xl_colour":{"tool":1}}
         self.assertEqual(_decode_payload(payload)["prusa_offline_xl_colour"],
                          {"tool":1})
+        for alternate in (5,6,7):
+            with self.subTest(native_tool=alternate):
+                settings["colour_tool_indices"]={1:alternate}
+                with patch("core.slicer_prusa_material_preflight.resolved_prusa_profile",
+                           side_effect=assets):
+                    mapped=prepare_prusa_offline_xl_colour_candidate(**settings)
+                self.assertEqual(mapped["tool"],alternate)
+                request={**payload,
+                         "model":encode(mapped["model"]),
+                         "prusa_offline_xl_colour":{"tool":alternate}}
+                self.assertEqual(
+                    _decode_payload(request)["prusa_offline_xl_colour"],
+                    {"tool":alternate})
+        for invalid in (8,True,-1):
+            with self.subTest(invalid=invalid),self.assertRaises(SlicerProfileError):
+                settings["colour_tool_indices"]={1:invalid}
+                with patch("core.slicer_prusa_material_preflight.resolved_prusa_profile",
+                           side_effect=assets):
+                    prepare_prusa_offline_xl_colour_candidate(**settings)
 
     def test_xl_two_painted_walls_use_native_independent_head_contract(self):
         from core.slicer_prusa_material_preflight import prepare_prusa_offline_xl_colour_candidate
