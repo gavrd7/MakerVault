@@ -52,6 +52,28 @@ class PrusaOfflineMmuPreflightTests(TestCase):
         }
         return data,[raw_printer,raw_process,*raw_filaments]
 
+    def test_ten_prusa_mmu_models_can_reuse_five_native_tools(self):
+        from slicer_worker.prusa_material_validation import validate_prusa_material_candidate
+        values, assets = self.parts()
+        values["rows"] = [
+            (item(x_mm=x_mm, y_mm=y_mm), cube(size=8))
+            for y_mm in (-43, 17)
+            for x_mm in (-90, -45, 0, 45, 90)
+        ]
+        values["tools"] = list(range(1, 6)) * 2
+        with patch("core.slicer_prusa_material_preflight.resolved_prusa_profile",
+                   side_effect=assets):
+            prepared = prepare_prusa_offline_mmu_candidate(**values)
+        self.assertEqual(prepared["expected_tools"], (1, 2, 3, 4, 5))
+        self.assertEqual(
+            validate_prusa_material_candidate(
+                prepared["model"], printer_ini=prepared["printer"],
+                tools=values["tools"], tower=prepared["tower"])["objects"], 10)
+        values["rows"] = values["rows"] + values["rows"][:3]
+        values["tools"] = values["tools"] + [1, 2, 3]
+        with self.assertRaisesRegex(SlicerProfileError, "models, tools"):
+            prepare_prusa_offline_mmu_candidate(**values)
+
     def test_mmu_applies_only_bounded_owner_scoped_global_native_settings(self):
         values, assets = self.parts()
         assets[1] = (b"layer_height = 0.2\nperimeters = 2\n"
