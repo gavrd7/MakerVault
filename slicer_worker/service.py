@@ -302,7 +302,8 @@ def _decode_payload(payload):
             "tools":receipt["tools"]} if "tools" in receipt else {
                 "tool":receipt["tool"],
                 "partial_wall":receipt["partial_wall"],
-                "partial_top":receipt["partial_top"]}
+                "partial_top":receipt["partial_top"],
+                "partial_slanted":receipt["partial_slanted"]}
     if "prusa_offline_colour" in payload:
         from .prusa_offline_contract import validate_prusa_offline_colour_inputs
         details=payload["prusa_offline_colour"]
@@ -580,6 +581,10 @@ class Handler(BaseHTTPRequestHandler):
                     elif details.get("partial_top"):
                         from .prusa_top_surface import audit_prusa_partial_top_gcode
                         audit_prusa_partial_top_gcode(
+                            data, files["model"], tool=details["tool"])
+                    elif details.get("partial_slanted"):
+                        from .prusa_slanted_surface import audit_prusa_slanted_surface_gcode
+                        audit_prusa_slanted_surface_gcode(
                             data, files["model"], tool=details["tool"])
                     else:
                         from .prusa_colour_gcode_audit import audit_prusa_xl_colour_gcode
