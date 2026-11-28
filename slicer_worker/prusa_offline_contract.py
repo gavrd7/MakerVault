@@ -224,6 +224,7 @@ def validate_prusa_offline_xl_colour_inputs(*, project, printer, filament, proce
     expected=tuple(sorted((1, *(t+1 for t in selected))))
     if receipt["objects"]!=1 or receipt["tools"]!=expected or receipt["wipe_tower"]:
         raise WorkerError("Prusa XL painted model tool mapping changed: native="+repr(receipt["tools"])+" expected="+repr(expected))
+    dual_partial=False
     if len(selected)==4:
         from .prusa_four_wall_audit import four_painted_wall_regions
         walls=four_painted_wall_regions(project)
@@ -232,7 +233,15 @@ def validate_prusa_offline_xl_colour_inputs(*, project, printer, filament, proce
             raise WorkerError("Native four-wall source tool order changed.")
     elif len(selected)==2:
         from .prusa_colour_gcode_audit import _two_painted_wall_regions
-        _two_painted_wall_regions(project,selected)
+        try:
+            _two_painted_wall_regions(project,selected)
+        except WorkerError:
+            if count!=8 or selected!=(5,7):
+                raise WorkerError(
+                    "Prusa independent partial Tn masks require qualified INDX8 T5/T7.")
+            from .prusa_dual_partial import inspect_prusa_dual_partial
+            inspect_prusa_dual_partial(project,selected)
+            dual_partial=True
     else:
         from .prusa_partial_surface import qualified_prusa_single_colour_mode
         mode = qualified_prusa_single_colour_mode(project, selected[0])
@@ -251,6 +260,7 @@ def validate_prusa_offline_xl_colour_inputs(*, project, printer, filament, proce
             "partial_top": len(selected)==1 and mode=="split_top",
             "partial_slanted": len(selected)==1 and mode=="split_slanted",
             "partial_curved": len(selected)==1 and mode=="split_curved",
+            "dual_partial": dual_partial,
             "offline_only":True,"wipe_tower":False}
 
 
