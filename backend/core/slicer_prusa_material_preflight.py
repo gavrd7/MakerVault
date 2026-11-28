@@ -323,6 +323,7 @@ def prepare_prusa_offline_colour_candidate(
             "dual_partial":receipt["dual_partial"],
             "partial_wall":receipt.get("partial_wall", False),
             "partial_top":receipt["partial_top"],
+            "partial_curved":receipt["partial_curved"],
             **({"tool":selected[0]} if len(selected)==1 else {})}
 
 
@@ -358,6 +359,11 @@ def slice_prusa_offline_colour_candidate(job_id, **prepared):
     elif candidate["partial_top"]:
         from slicer_worker.prusa_top_surface import audit_prusa_partial_top_gcode
         audit_prusa_partial_top_gcode(
+            output, candidate["model"], tool=candidate["tool"],
+            tower=candidate["tower"])
+    elif candidate["partial_curved"]:
+        from slicer_worker.prusa_curved_surface import audit_prusa_curved_surface_gcode
+        audit_prusa_curved_surface_gcode(
             output, candidate["model"], tool=candidate["tool"],
             tower=candidate["tower"])
     else:
