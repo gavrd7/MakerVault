@@ -192,3 +192,14 @@ def audit_prusa_dual_partial_gcode(data, project, *, printer_ini, tools, tower):
         raise WorkerError("Prusa dual partial MMU output lacks tool-specific purge.")
     return {"tool_moves":counts,"tower_extrusion_moves":purges,
             "offline_only":True}
+
+
+def qualified_prusa_dual_colour_mode(project, tools):
+    """Use signed 3MF, never browser flags, to select a verified MMU audit."""
+    from .prusa_colour_gcode_audit import _two_painted_wall_regions
+    try:
+        _two_painted_wall_regions(project, tools)
+        return "complete_opposite"
+    except WorkerError:
+        inspect_prusa_dual_partial(project, tools)
+        return "split_opposite"
