@@ -216,7 +216,9 @@ export default function PrusaNativeToolEditor({
           one complete T1-painted wall can combine Object process settings,
           one box infill modifier and one disjoint negative box: native
           extrusion and cavity subtraction are checked before accepting
-          the slice. Split paints on other INDX/XL tool counts,
+          the slice. A complete MMU T1 front colour wall can alternatively
+          combine with selective fuzzy skin on the opposite T0 wall, with
+          both deposited effects audited. Split paints on other INDX/XL tool counts,
           curved or nonplanar surfaces, angled regions using other native
           heads, and multiple painted objects have not yet passed genuine
           G-code qualification.</p>
