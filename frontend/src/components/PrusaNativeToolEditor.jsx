@@ -212,8 +212,9 @@ export default function PrusaNativeToolEditor({
           XL5 independently supports both split
           vertical walls and partially painted horizontal top faces,
           plus a T1 brush region on a planar angled face and genuine
-          curved/nonplanar facets. Those XL5 T1 paths are checked against
-          the signed native 3D triangles without MMU purging.
+          curved/nonplanar facets. Independent eight-head INDX also
+          qualifies a T1 curved brush on a signed native 3D source. Those
+          independent T1 paths are spatially audited without MMU purging.
           Complete opposing-wall colours and
           profile-qualified T1–T7 INDX/XL tools remain supported; XL5 also
           supports four complete exterior walls using T1–T4. For MMU,
