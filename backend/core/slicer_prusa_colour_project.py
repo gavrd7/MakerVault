@@ -155,3 +155,86 @@ def build_prusa_colour_candidate(item, source, *, printer_ini, colour_tool_indic
     if len(output)>32*1024*1024:
         raise SlicerProfileError("Prusa colour candidate exceeds project limit.")
     return output
+
+
+def build_prusa_multi_colour_candidate(rows, *, printer_ini,
+                                       colour_tool_indices,
+                                       bed_width, bed_depth):
+    """Build independently painted native Prusa ModelParts on one shared bed.
+
+    Every object's paint is first encoded by the existing single-object
+    fingerprint-checked exporter. Merge *only* those five known 3MF parts,
+    rebind object identities and require isolated resource/volume ownership.
+    This exporter alone does not authorize slicing or printer submission:
+    the separate worker must verify every model/tool region in real G-code.
+    """
+    import copy
+    if (not isinstance(rows,(list,tuple)) or not 2<=len(rows)<=200 or
+            not isinstance(colour_tool_indices,dict) or
+            not 1<=len(colour_tool_indices)<=7):
+        raise SlicerProfileError("Prusa multiple painted models need two to 200 signed sources.")
+    for item, raw in rows:
+        if (not isinstance(item,dict) or not isinstance(raw,bytes) or
+                not (item.get("colour_paint") or {}).get("regions") or
+                any(item.get(key) for key in (
+                    "modifier_volumes","negative_volumes","support_paint",
+                    "seam_paint","fuzzy_skin_paint","variable_layer_profile",
+                    "material_slot"))):
+            raise SlicerProfileError(
+                "Prusa independent colour models require native colour-only source facets.")
+    projects=[build_prusa_colour_candidate(
+        item,raw,printer_ini=printer_ini,
+        colour_tool_indices=colour_tool_indices,
+        bed_width=bed_width,bed_depth=bed_depth) for item,raw in rows]
+    with zipfile.ZipFile(io.BytesIO(projects[0])) as source:
+        parts={name:source.read(name) for name in source.namelist()}
+    model=SafeET.fromstring(parts["3D/3dmodel.model"])
+    config=SafeET.fromstring(parts["Metadata/Slic3r_PE_model.config"])
+    ns="{"+NS+"}"
+    resources=model.find(ns+"resources")
+    build=model.find(ns+"build")
+    objects=config.findall("./object")
+    if (resources is None or build is None or len(objects)!=1 or
+            len(resources)!=1 or len(build)!=1):
+        raise SlicerProfileError("Unexpected native Prusa coloured parent structure.")
+    resources[0].set("id","1")
+    build[0].set("objectid","1")
+    objects[0].set("id","1")
+    for index,project in enumerate(projects[1:],2):
+        with zipfile.ZipFile(io.BytesIO(project)) as archive:
+            other_model=SafeET.fromstring(archive.read("3D/3dmodel.model"))
+            other_config=SafeET.fromstring(
+                archive.read("Metadata/Slic3r_PE_model.config"))
+        other_resources=other_model.find(ns+"resources")
+        other_build=other_model.find(ns+"build")
+        other_objects=other_config.findall("./object")
+        if (other_resources is None or other_build is None or
+                len(other_resources)!=1 or len(other_build)!=1 or
+                len(other_objects)!=1 or
+                other_build[0].get("objectid")!=other_resources[0].get("id")):
+            raise SlicerProfileError("Prusa coloured source lost independent ModelPart.")
+        resource=copy.deepcopy(other_resources[0])
+        resource.set("id",str(index))
+        resources.append(resource)
+        instance=copy.deepcopy(other_build[0])
+        instance.set("objectid",str(index))
+        build.append(instance)
+        setting=copy.deepcopy(other_objects[0])
+        setting.set("id",str(index))
+        config.append(setting)
+    if (len(resources)!=len(rows) or len(objects)!=1 or
+            len(config)!=len(rows) or len(build)!=len(rows)):
+        raise SlicerProfileError("Prusa painted model identity mismatch.")
+    parts["3D/3dmodel.model"]=ET.tostring(
+        model,encoding="utf-8",xml_declaration=True)
+    parts["Metadata/Slic3r_PE_model.config"]=ET.tostring(
+        config,encoding="utf-8",xml_declaration=True)
+    merged=io.BytesIO()
+    with zipfile.ZipFile(merged,"w",compression=zipfile.ZIP_DEFLATED,
+                         allowZip64=False) as archive:
+        for name,payload in parts.items():
+            archive.writestr(name,payload)
+    candidate=merged.getvalue()
+    if len(candidate)>32*1024*1024:
+        raise SlicerProfileError("Prusa multiple colour source exceeds project limit.")
+    return candidate
