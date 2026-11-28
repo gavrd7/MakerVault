@@ -29,7 +29,7 @@ tests; leave unsafe printer-start blocked until that is proven.
 | Install, uninstall, version and identity | Verified installer and pinned binary, shared worker | Native install/uninstall acceptance exists; ensure UI parity on staging |
 | Profile browse/import and global numeric settings | Native profiles, official catalogue, shared pagination | Import and native overrides covered; verify filament manufacturer search against UX requirement on both layouts |
 | Add/select/transform/disassemble multiple models | Native 3MF, STL bake, shared plate placement | Up to 200 instances under resource budget; manually inspect assembly tree and controls |
-| Primitive shapes, infill modifiers and negative volumes | Native 3MF modifiers and negative bodies | Independently proven effects. **Colour + Object settings + box infill modifier + separate negative box** generated genuine 2.9.7 G-code with retained T1 paint, inside-region E 90.89 -> 215.13 for modifier and 95.22 -> 0.00 in negative cavity (native run 46083553897). This exact MMU combination is now admitted through the shared workbench with both signed volume geometry and real positive-E/cavity audits on **every** slice; other shapes, overlapping volumes and mixed paint-channel combinations remain blocked |
+| Primitive shapes, infill modifiers and negative volumes | Native 3MF modifiers and negative bodies | Independently proven effects. **Colour + Object settings + six single-shape modifiers/cavities + separately proven modifier/negative box pair** generated genuine 2.9.7 G-code with retained T1 paint, inside-region E 90.89 -> 215.13 for modifier and 95.22 -> 0.00 in negative cavity (native run 46083553897). This exact MMU combination is now admitted through the shared workbench with both signed volume geometry and real positive-E/cavity audits on **every** slice; other shapes, overlapping volumes and mixed paint-channel combinations remain blocked |
 | Single-material slicing + G-code / thumbnail / preview | Common slice worker and Library | Binary and storage paths covered; confirm full shared UI navigation and preview on staging |
 | Global and per-object settings | Native numeric process + 3MF object config | Bounded speeds, walls, shells, infill, brim and skirt audited. **Painted native ModelPart now retains Object controls**; one versus five painted wall loops genuinely yielded 0 versus 6,434 internal-perimeter movements |
 | Colour paint, material mapping and tool selection | Native TriangleSelector, MMU/XL/INDX material adapter | **MMU one-/two-swatch partial vertical faces, MMU one-swatch partial top faces, and XL5 partial vertical/horizontal top faces** have source-derived offline admission and mandatory native 2.9.7 deposition audits. MMU two independently split opposite walls: T1=122, T2=126, neither alternate tool leaked into another painted/unpainted region; tower T0=3,624/T1=1,858/T2=1,808 (run 46086291996). One-colour vertical MMU T1=64 with zero unpainted leakage (run 46083933214); horizontal XL5 T1=67 with zero unpainted leakage (run 46084811769). Genuine MMU horizontal top T1 painted=67/unpainted=0, T0 plain=376 and MMU T0/T1 tower purges=2,171/172 (run 46099342292). Existing complete walls, INDX T1–T7 and XL5 four complete faces remain supported. Genuine XL5 T1 partial angled planar brush: 19 T1 painted, 0 T1 unpainted and 80 T0 unpainted positive-E paths (run 46087014378). Multiple disjoint brush regions can share one native colour slot. INDX curved or non-T1 angled paint, more than two painted models, split multi-model masks and INDX partial paint remain unqualified |
@@ -97,6 +97,18 @@ tests; leave unsafe printer-start blocked until that is proven.
   modifier region and **zero inside cavity** (run 46086097259). The
   combined real-binary test is mandatory in CI. No printer-start
   qualification is implied.
+- **Single native modifier or negative primitive on a T1-painted MMU
+  model:** genuine PrusaSlicer 2.9.7 completed all twelve combinations
+  of **box, cone, cylinder, disc, sphere and torus** with positive T1
+  front-wall deposition, positive-E presence in the signed density
+  modifier and **zero** moving positive-E paths inside each independently
+  subtracted cavity (run `46105771007`). All six native shapes can now
+  be authored through the shared MakerVault editing controls; the isolated
+  worker and owner independently rerun the actual native volumetric
+  G-code audit on every result. The original separately proven compound
+  one-box modifier plus disjoint one-box cavity remains supported;
+  multiple arbitrary modifiers/cavities stacked on one painted model
+  still need separate native composition tests.
 - **Native MMU colour plus selective fuzzy on the opposite wall:**
   genuine pinned PrusaSlicer 2.9.7 preserved T1 front coloured wall
   deposition (369 control/370 combined) while producing **3,091** moving
