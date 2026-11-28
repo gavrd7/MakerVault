@@ -1171,7 +1171,7 @@ export default function SlicerPrepareWorkspace({
              "outer_wall_speed","inner_wall_speed",
              "sparse_infill_speed","top_surface_speed"].includes(key)))) ||
       (prusaMultiPaint && (object.modifier_volumes?.length ||
-                            object.process_overrides)) ||
+                            Object.keys(object.process_overrides||{}).length)) ||
       object.negative_volumes?.length ||
       (object.variable_layer_profile?.bands?.length &&
         prusaNativeTools?.mode==="mmu") ||
