@@ -82,6 +82,11 @@ def main(binary, vendor):
     tools=validate_prusa_material_candidate(
         model,printer_ini=printer,colour=True,tower=(55,150,0,250,210))
     assert tools["tools"]==(1,2,3)
+    from slicer_worker.prusa_offline_contract import validate_prusa_offline_colour_inputs
+    signed = validate_prusa_offline_colour_inputs(
+        project=model, printer=printer, filament=palette, process=process,
+        tools=[1,2], tower=[55,150,0,250,210])
+    assert signed["dual_partial"] and not signed["compound_volume"], signed
     with TemporaryDirectory(prefix="prusa-dual-partial-") as folder:
         path=Path(folder)
         for name,content in (
