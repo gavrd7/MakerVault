@@ -159,9 +159,9 @@ def validate_prusa_offline_colour_inputs(*, project, printer, filament, process,
     else:
         from .prusa_partial_surface import qualified_prusa_single_colour_mode
         mode = qualified_prusa_single_colour_mode(project, tool)
-        if mode == "split_top":
+        if mode in ("split_top","split_slanted"):
             raise WorkerError(
-                "Prusa MMU horizontal painted faces lack independent "
+                "Prusa MMU horizontal/slanted painted faces lack independent "
                 "native purge and surface G-code qualification.")
     if compound and mode != "complete_wall":
         raise WorkerError(
@@ -226,11 +226,15 @@ def validate_prusa_offline_xl_colour_inputs(*, project, printer, filament, proce
     else:
         from .prusa_partial_surface import qualified_prusa_single_colour_mode
         mode = qualified_prusa_single_colour_mode(project, selected[0])
-        if mode in ("split_wall", "split_top") and count != 5:
+        if mode in ("split_wall","split_top","split_slanted") and count != 5:
             raise WorkerError(
                 "Prusa partial-surface painting is qualified on XL5 only.")
+        if mode=="split_slanted" and selected[0]!=1:
+            raise WorkerError(
+                "Native angled partial-wall painting is qualified for XL5 T1.")
     return {**({"tools":list(selected)} if len(selected)>1
                else {"tool":selected[0]}),
             "partial_wall": len(selected)==1 and mode=="split_wall",
             "partial_top": len(selected)==1 and mode=="split_top",
+            "partial_slanted": len(selected)==1 and mode=="split_slanted",
             "offline_only":True,"wipe_tower":False}
