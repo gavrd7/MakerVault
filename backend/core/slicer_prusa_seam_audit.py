@@ -81,7 +81,14 @@ def validate_prusa_front_seam_candidate(item):
     return selected
 
 
-def audit_prusa_seam_enforcer_gcode(data, item, *, bed_width, bed_depth):
+def audit_prusa_seam_enforcer_gcode(data, item, *, bed_width, bed_depth,
+                                    tool=None):
+    # Native MMU may emit T1's external wall *before* the selected T0
+    # region in the same layer. Qualify a source-specific first extrusion
+    # per material tool when explicitly requested, without changing the
+    # existing single-material global-first semantics.
+    if tool is not None and (type(tool) is not int or not 0<=tool<=7):
+        raise ValueError("Invalid selected Prusa seam audit material tool.")
     paint = item.get("seam_paint") or {}
     regions = paint.get("regions") or []
     if len(regions) != 1 or regions[0].get("slot") != 0:
@@ -121,6 +128,7 @@ def audit_prusa_seam_enforcer_gcode(data, item, *, bed_width, bed_depth):
         raise ValueError("Prusa seam enforcer geometry or text is invalid.") from None
     pos = {"X": None, "Y": None, "Z": None}
     e, relative, relative_xy, role, captured = 0., False, False, "", False
+    active_tool = None
     sampled = matching = 0
     for n, line in enumerate(text.splitlines()):
         if n > 2_000_000 or len(line) > 16384:
@@ -134,6 +142,11 @@ def audit_prusa_seam_enforcer_gcode(data, item, *, bed_width, bed_depth):
         if not instruction:
             continue
         op = instruction.split(None, 1)[0].upper()
+        if op.startswith("T") and op[1:].isdigit():
+            active_tool=int(op[1:])
+            if active_tool>7:
+                raise ValueError("Unqualified native Prusa seam toolchange.")
+            continue
         if op not in ("G0", "G00", "G1", "G01", "G90", "G91", "G92", "M82", "M83"):
             continue
         values = {k.upper():float(v) for k,v in WORD.findall(instruction)}
@@ -165,7 +178,8 @@ def audit_prusa_seam_enforcer_gcode(data, item, *, bed_width, bed_depth):
             moved_xy = (old_xy[0] is not None and old_xy[1] is not None
                         and pos["X"] is not None and pos["Y"] is not None
                         and abs(pos["X"] - old_xy[0]) + abs(pos["Y"] - old_xy[1]) > 1e-7)
-            if (not captured and op in ("G1", "G01") and moved_xy
+            if (not captured and (tool is None or active_tool==tool) and
+                    op in ("G1", "G01") and moved_xy
                     and extruded > 1e-6 and role.strip() == "external perimeter"
                     and all(v is not None for v in pos.values())):
                 captured = True
