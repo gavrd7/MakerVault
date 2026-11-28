@@ -224,7 +224,11 @@ export default function PrusaNativeToolEditor({
           one complete T1-painted wall can combine Object process settings,
           one box infill modifier and one disjoint negative box: native
           extrusion and cavity subtraction are checked before accepting
-          the slice. A complete MMU T1 front colour wall can alternatively
+          the slice. A T1-painted MMU model can also use any one native
+          box, cone, cylinder, disc, sphere or torus as a density modifier
+          or negative volume: the shared volumetric G-code auditor verifies
+          positive infill or a strictly empty cavity after native slicing.
+          A complete MMU T1 front colour wall can alternatively
           combine with selective fuzzy skin on the opposite T0 wall, with
           both deposited effects audited. MMU also accepts two distinct
           painted models, both based on T0, with their complete exterior
