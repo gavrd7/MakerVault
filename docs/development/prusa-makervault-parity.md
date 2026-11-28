@@ -32,7 +32,7 @@ tests; leave unsafe printer-start blocked until that is proven.
 | Primitive shapes, infill modifiers and negative volumes | Native 3MF modifiers and negative bodies | Independently proven effects. **Colour + Object settings + box infill modifier + separate negative box** generated genuine 2.9.7 G-code with retained T1 paint, inside-region E 90.89 -> 215.13 for modifier and 95.22 -> 0.00 in negative cavity (native run 46083553897). This exact MMU combination is now admitted through the shared workbench with both signed volume geometry and real positive-E/cavity audits on **every** slice; other shapes, overlapping volumes and mixed paint-channel combinations remain blocked |
 | Single-material slicing + G-code / thumbnail / preview | Common slice worker and Library | Binary and storage paths covered; confirm full shared UI navigation and preview on staging |
 | Global and per-object settings | Native numeric process + 3MF object config | Bounded speeds, walls, shells, infill, brim and skirt audited. **Painted native ModelPart now retains Object controls**; one versus five painted wall loops genuinely yielded 0 versus 6,434 internal-perimeter movements |
-| Colour paint, material mapping and tool selection | Native TriangleSelector, MMU/XL/INDX material adapter | **MMU one-/two-swatch partial vertical faces, MMU one-swatch partial top faces, and XL5 partial vertical/horizontal top faces** have source-derived offline admission and mandatory native 2.9.7 deposition audits. MMU two independently split opposite walls: T1=122, T2=126, neither alternate tool leaked into another painted/unpainted region; tower T0=3,624/T1=1,858/T2=1,808 (run 46086291996). One-colour vertical MMU T1=64 with zero unpainted leakage (run 46083933214); horizontal XL5 T1=67 with zero unpainted leakage (run 46084811769). Genuine MMU horizontal top T1 painted=67/unpainted=0, T0 plain=376 and MMU T0/T1 tower purges=2,171/172 (run 46099342292). Existing complete walls, INDX T1–T7 and XL5 four complete faces remain supported. Genuine XL5 T1 partial angled planar brush: 19 T1 painted, 0 T1 unpainted and 80 T0 unpainted positive-E paths (run 46087014378). Multiple disjoint brush regions can share one native colour slot. Curved/nonplanar surfaces and non-T1 angled paint, multiple independently painted models and INDX partial paint remain unqualified |
+| Colour paint, material mapping and tool selection | Native TriangleSelector, MMU/XL/INDX material adapter | **MMU one-/two-swatch partial vertical faces, MMU one-swatch partial top faces, and XL5 partial vertical/horizontal top faces** have source-derived offline admission and mandatory native 2.9.7 deposition audits. MMU two independently split opposite walls: T1=122, T2=126, neither alternate tool leaked into another painted/unpainted region; tower T0=3,624/T1=1,858/T2=1,808 (run 46086291996). One-colour vertical MMU T1=64 with zero unpainted leakage (run 46083933214); horizontal XL5 T1=67 with zero unpainted leakage (run 46084811769). Genuine MMU horizontal top T1 painted=67/unpainted=0, T0 plain=376 and MMU T0/T1 tower purges=2,171/172 (run 46099342292). Existing complete walls, INDX T1–T7 and XL5 four complete faces remain supported. Genuine XL5 T1 partial angled planar brush: 19 T1 painted, 0 T1 unpainted and 80 T0 unpainted positive-E paths (run 46087014378). Multiple disjoint brush regions can share one native colour slot. MMU/INDX curved or non-T1 angled paint, multiple independently painted models and INDX partial paint remain unqualified |
 | Printer filament list with >4 tools | Printer-derived native topology | MMU5 / XL5 and eight-head INDX proved in real CLI; verify saved and restored UI state and no extra fixed limit |
 | Support painting | Native painted support and spatial audit | One selected painted model among up to 200 objects qualifies; simultaneous multi-object paint variants remain unqualified |
 | Seam painting | Native facet seam states and G-code spatial audit | **15-model true per-object painted seams** proven with two different selected front/back faces: 95 independently correct seam starts on each; unpainted baseline rejected. Broader disjoint arbitrary seam masks still need native verification |
@@ -125,6 +125,19 @@ tests; leave unsafe printer-start blocked until that is proven.
   native toolchange commands. All Prusa native physical upload/start remains
   guarded until real firmware capability and print-start ACK qualification.
 
+- **Genuine XL5 T1 curved/nonplanar surface painting:** a 64-facet
+  cylindrical source including one *split* triangle retained 33 individually
+  signed painted facets and 225 plain facets in the native 3MF. The pinned
+  PrusaSlicer 2.9.7 run produced 985 T1 positive-E exterior movements in
+  the target curved angular sector and 2,656 T0 movements on the opposite
+  plain region, with no opposite-sector leakage. The independent 3D nearest-
+  facet BVH classified T1 painted=1,920, near-boundary plain=91
+  (within its explicit tolerance), T0 unpainted=6,213, and ambiguous
+  near-interface paths separately (run `46104222816`).
+  Source geometry is reconstructed by the isolated worker, not taken from
+  browser flags. Owner-side post-slice repeats the 3D positive-E spatial
+  audit. Only XL5 T1 has genuine evidence: MMU, INDX, other XL heads,
+  multi-model curved masks, and combined semantic paint remain gated.
 - **Native XL5 T1 partial angled planar paint:** a rotated 30-degree
   single-model test on pinned PrusaSlicer 2.9.7 produced 19 positive-E
   external-perimeter movements within the signed angled patch, **zero**
@@ -152,7 +165,7 @@ this checklist. No real-hardware sign-off is claimed by automation.
 
 ## High-priority remaining integration gaps
 
-1. Extend proven **one/two-swatch MMU partial vertical walls** and **XL5 vertical/top partial masks** to curved/nonplanar surfaces and other-tool angled masks, non-opposing multi-colour masks, multiple independently painted models and separately qualified INDX partial masks. Audit real G-code spatial tool deposition for each independent region; never substitute whole-wall rectangles for split masks.
+1. Extend proven **one/two-swatch MMU partial vertical walls** and **XL5 vertical/top/curved T1 partial masks** to MMU/INDX curved surfaces and other-tool angled masks, non-opposing multi-colour masks, multiple independently painted models and separately qualified INDX partial masks. Audit real G-code spatial tool deposition for each independent region; never substitute whole-wall rectangles for split masks.
 2. Expand the now-verified **MMU colour + Object + infill box + disjoint
    negative box** and separately qualified **MMU T1 front colour + opposite
    T0 selective fuzzy** to arbitrary native shapes and simultaneous support,
