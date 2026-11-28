@@ -204,8 +204,12 @@ def audit_prusa_multi_colour_gcode(data, project, *, printer_ini, tower):
         tool=source["tool"]
         if (counts[i][tool]["painted"]<20 or
                 counts[i][0]["plain"]<20 or
+                # Prusa 2.9.7 legitimately uses T0 for base/foundation
+                # perimeters on the *painted* face (200 T0 vs 300 Tn in
+                # genuine MMU two-model output). It must never deposit a
+                # different *painted* tool in that independently signed wall.
                 any(counts[i][other]["painted"]>2
-                    for other in (0,1,2) if other!=tool) or
+                    for other in (1,2) if other!=tool) or
                 any(counts[i][other]["plain"]>2
                     for other in (1,2))):
             raise WorkerError(
