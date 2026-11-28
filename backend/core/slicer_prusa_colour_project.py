@@ -36,17 +36,21 @@ def build_prusa_colour_candidate(item, source, *, printer_ini, colour_tool_indic
             apply_prusa_process_overrides(BASE,object_settings)
         except (ValueError,TypeError,OverflowError) as exc:
             raise SlicerProfileError("Invalid native Prusa painted Object setting.") from exc
-    from .slicer_modifier_volumes import validate_modifier_volumes
+    from .slicer_modifier_volumes import validate_modifier_volumes, PRIMITIVE_SHAPES
     try:
         typed=validate_modifier_volumes(
             item.get("modifier_volumes") if isinstance(item,dict) else None)
     except (ValueError,TypeError) as exc:
         raise SlicerProfileError("Invalid painted native modifier geometry.") from exc
-    if typed and not research_compound and (len(typed)!=1 or typed[0]["kind"]!="modifier" or
-                  typed[0]["shape"]!="box" or
-                  set(typed[0]["settings"])!={"sparse_infill_density"}):
+    if typed and not research_compound and (
+            len(typed)!=1 or typed[0]["shape"] not in PRIMITIVE_SHAPES or
+            (typed[0]["kind"]=="modifier" and
+             set(typed[0]["settings"])!={"sparse_infill_density"}) or
+            (typed[0]["kind"]=="negative" and typed[0]["settings"]) or
+            typed[0]["kind"] not in ("modifier","negative")):
         raise SlicerProfileError(
-            "This Prusa painted/modifier pairing requires one native box infill region.")
+            "Prusa colour with one primitive needs an independently audited native "
+            "infill modifier or negative volume.")
     if type(research_compound) is not bool:
         raise SlicerProfileError("Invalid Prusa native research mode.")
     channels = tuple(k for k in ("support_paint", "seam_paint", "fuzzy_skin_paint")
