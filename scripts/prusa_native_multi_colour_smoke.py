@@ -144,6 +144,12 @@ def main(binary,vendor):
     project=add_prusa_native_wipe_tower(
         project,x_mm=55,y_mm=150,rotation_deg=0,
         bed_width=250,bed_depth=210)
+    from slicer_worker.prusa_multi_colour import (
+        inspect_prusa_multi_colour,audit_prusa_multi_colour_gcode)
+    signed=inspect_prusa_multi_colour(
+        project,printer_ini=printer,tower=(55,150,0,250,210))
+    if tuple(obj["tool"] for obj in signed)!=(1,2):
+        raise AssertionError("Model-local T1/T2 paint identity was not retained.")
     with TemporaryDirectory(prefix="prusa-independent-painted-") as folder:
         work=Path(folder)
         for filename,data in (
@@ -155,8 +161,11 @@ def main(binary,vendor):
             run_prusa,Path(binary),work,timeout_seconds=300,
             max_bytes=64*1024*1024)
         audit_prusa_positive_e(gcode)
+        proof=audit_prusa_multi_colour_gcode(
+            gcode,project,printer_ini=printer,tower=(55,150,0,250,210))
         print("PASS: native independent T1/T2 painted ModelParts",
-              audit_regions(gcode),hashlib.sha256(gcode).hexdigest(),flush=True)
+              audit_regions(gcode),proof,
+              hashlib.sha256(gcode).hexdigest(),flush=True)
 
 
 if __name__=="__main__":
