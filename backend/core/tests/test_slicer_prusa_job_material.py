@@ -447,6 +447,34 @@ class PrusaVirtualToolDraftTests(TestCase):
         self.assertEqual(result,b"audited-disjoint-brushes")
         self.assertEqual(worker.call_args.kwargs["colour_tool_indices"],{1:1})
 
+    def test_painted_mmu_uses_existing_workbench_for_modifier_and_cavity(self):
+        from scripts.prusa_generate_mmu_paint import fixture as painted_fixture
+        from core.tests.test_slicer_prusa_3mf import volume
+        job,filaments,raw=self.config()
+        source,_,_,paint=painted_fixture(include_paint=True)
+        region={**volume("modifier",{"sparse_infill_density":85}),
+                "width_mm":6,"x_mm":-6}
+        cavity={**volume("negative"),"width_mm":6,"x_mm":6}
+        job.settings["plate_objects"]=job.settings["plate_objects"][:1]
+        job.settings["plate_objects"][0]["colour_paint"]=paint
+        job.settings["plate_objects"][0]["modifier_volumes"]=[region,cavity]
+        job.settings["plate_objects"][0]["process_overrides"]={"wall_loops":4}
+        job.settings["prusa_native_tools"]["model_tools"]=job.settings[
+            "prusa_native_tools"]["model_tools"][:1]
+        job.settings["prusa_native_tools"]["colour_tools"]=[{"slot":1,"tool":2}]
+        PrusaWorkbenchMaterialTests.resolve(self,job,filaments,raw)
+        route,settings=prepare_prusa_workbench_material(job)
+        self.assertEqual(route,"colour")
+        self.assertEqual(settings["colour_tool_indices"],{1:1})
+        with patch("core.slicer_prusa_job_material.slice_prusa_offline_colour_candidate",
+                   return_value=b"audited-colour-modifier-cavity") as worker:
+            result=slice_prusa_workbench_material(
+                job,[(dict(job.settings["plate_objects"][0]),source)])
+        self.assertEqual(result,b"audited-colour-modifier-cavity")
+        self.assertEqual(
+            [v["kind"] for v in worker.call_args.kwargs["rows"][0][0]["modifier_volumes"]],
+            ["modifier","negative"])
+
     def test_painted_mmu_rejects_unqualified_or_ambiguous_tool_assignments(self):
         from scripts.prusa_generate_mmu_paint import fixture as painted_fixture
         _source,_mesh,_states,paint=painted_fixture(include_paint=True)
