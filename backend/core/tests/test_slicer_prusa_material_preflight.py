@@ -802,6 +802,57 @@ class PrusaOfflineMmuPreflightTests(TestCase):
             output,prepared["model"],tool=1)
         self.assertEqual(output,b"audited-slanted")
 
+    def test_indx_eight_native_heads_can_qualify_signed_curved_t1_without_tower(self):
+        from core.slicer_prusa_material_preflight import (
+            prepare_prusa_offline_xl_colour_candidate,
+            slice_prusa_offline_xl_colour_candidate)
+        from scripts.prusa_native_curved_colour_research import (
+            cylinder_stl,mask_for)
+        from slicer_worker.service import _decode_payload
+        import base64
+        values,assets=self.parts()
+        assets[0]=ini(",".join(["0.4"]*8),"0")
+        assets.extend([
+            b"filament_diameter = 1.75\ntemperature = 220\n"
+            b"first_layer_temperature = 220\n"]*3)
+        values["filament_profiles"].extend(
+            [profile("filament",42) for _ in range(3)])
+        mesh=cylinder_stl()
+        row={"asset_id":"signed-indx8-curved","x_mm":0,"y_mm":0,
+             "z_mm":0,"rotation_deg":0,"scale_percent":100,
+             "colour_paint":mask_for(mesh)}
+        args={key:values[key] for key in (
+            "owner_id","printer_profile","process_profile",
+            "filament_profiles","bed_width","bed_depth")}
+        args.update(rows=[(row,mesh)],tools=[1],
+                    colour_tool_indices={1:1})
+        with patch("core.slicer_prusa_material_preflight.resolved_prusa_profile",
+                   side_effect=assets):
+            prepared=prepare_prusa_offline_xl_colour_candidate(**args)
+        self.assertTrue(prepared["partial_curved"])
+        self.assertNotIn(b"wipe_tower = 1",prepared["process"])
+        encode=lambda payload:base64.b64encode(payload).decode("ascii")
+        request={"job_id":str(uuid.uuid4()),"engine":"prusaslicer",
+                 "engine_version":"2.9.7","model_format":"3mf",
+                 "model":encode(prepared["model"]),
+                 "printer_profile":encode(prepared["printer"]),
+                 "filament_profile":encode(prepared["filament"]),
+                 "process_profile":encode(prepared["process"]),
+                 "prusa_offline_xl_colour":{"tool":1}}
+        self.assertTrue(
+            _decode_payload(request)["prusa_offline_xl_colour"]["partial_curved"])
+        remote,context=self.offline_worker_stub()
+        remote.return_value=b"audited-indx8-curved"
+        with context,patch(
+            "core.slicer_prusa_material_preflight.prepare_prusa_offline_xl_colour_candidate",
+            return_value=prepared),patch(
+            "slicer_worker.prusa_curved_surface.audit_prusa_curved_surface_gcode"
+        ) as audit:
+            output=slice_prusa_offline_xl_colour_candidate(
+                str(uuid.uuid4()),**args)
+        self.assertEqual(output,b"audited-indx8-curved")
+        audit.assert_called_once_with(output,prepared["model"],tool=1)
+
     def test_curved_mmu5_t1_brush_needs_both_spatial_and_purge_audits(self):
         from core.slicer_prusa_material_preflight import (
             prepare_prusa_offline_colour_candidate,
