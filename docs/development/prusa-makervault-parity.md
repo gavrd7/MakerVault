@@ -139,6 +139,19 @@ tests; leave unsafe printer-start blocked until that is proven.
   from XL5's no-tower mode; MMU alternate tools, INDX,
   overlapping semantic channels and multi-model curved masks
   remain separately guarded.
+- **Independent INDX8 T1 curved/nonplanar painting:** the existing
+  native eight-head synthetic printer profile (reviewed official XL5
+  baseline expanded to eight toolheads, no invented pickup scripts) passed
+  a genuine pinned Prusa 2.9.7 test with the same source-signed 33 painted
+  and 225 plain cylindrical triangles. Actual deposited exterior paths:
+  T1=985 painted and T0=2,656 unpainted, zero T1 opposite-sector leakage.
+  The independent finite 3D BVH assigned T1 painted=1,920 and
+  T0 plain=6,213, no native wipe tower (run `46105525694`).
+  The normal isolated worker and owner post-slice now admit this precisely
+  qualified eight-head T1 curved mode, retaining signed source and actual
+  positive-E checks. No claim of real INDX tool pickup/firmware ACK;
+  alternative-head curved paint and separate multi-colour split masks
+  remain unqualified.
 - **Genuine XL5 T1 curved/nonplanar surface painting:** a 64-facet
   cylindrical source including one *split* triangle retained 33 individually
   signed painted facets and 225 plain facets in the native 3MF. The pinned
