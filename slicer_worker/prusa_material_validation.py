@@ -46,7 +46,9 @@ def _qualified_topology(printer_ini):
 
 
 def validate_prusa_material_candidate(data, *, printer_ini, tools=None, colour=False, tower=None,
-                                      independent_colour=False):
+                                      independent_colour=False, compound_colour=False):
+    if type(compound_colour) is not bool or (compound_colour and not colour):
+        _refuse()
     if not isinstance(data, bytes) or not 0 < len(data) <= 32*1024*1024:
         _refuse()
     logical_count, changer = _qualified_topology(printer_ini)
@@ -133,8 +135,12 @@ def validate_prusa_material_candidate(data, *, printer_ini, tools=None, colour=F
             if marked<1 or len(selected)<2:
                 _refuse()
             volumes=objects[0].findall("volume")
-            if not 1<=len(volumes)<=2:
+            if not 1<=len(volumes)<=(3 if compound_colour else 2):
                 _refuse()
+            if compound_colour:
+                from .prusa_colour_compound import qualified_prusa_colour_compound
+                if not qualified_prusa_colour_compound(data):
+                    _refuse()
             if len(volumes)==2:
                 # The only qualified same-object paint + native parameter
                 # modifier uses a single box infill region. The authoring
@@ -173,7 +179,7 @@ def validate_prusa_material_candidate(data, *, printer_ini, tools=None, colour=F
                 dest.writestr(part,parts[part])
         receipt=validate_prusa_native_3mf(out.getvalue())
         if colour and (receipt["objects"]!=1 or
-                       receipt["regions"] not in (0,1) or
+                       receipt["regions"] not in ((2,) if compound_colour else (0,1)) or
                        receipt["paint_channels"] or receipt["layer_ranges"]):
             _refuse()
         # Typed 3MF volumes and object layer ranges are native Prusa
