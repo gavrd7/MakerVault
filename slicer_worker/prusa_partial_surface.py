@@ -298,5 +298,14 @@ def qualified_prusa_single_colour_mode(project, tool):
     except WorkerError:
         pass
     from .prusa_slanted_surface import inspect_prusa_slanted_surface
-    inspect_prusa_slanted_surface(project, tool)
-    return "split_slanted"
+    try:
+        inspect_prusa_slanted_surface(project, tool)
+        return "split_slanted"
+    except WorkerError:
+        pass
+    # Curved/nonplanar regions require a genuine signed 3D facet index and
+    # independent positive-E classification; a planar bounding rectangle
+    # would silently approve wrong-tool deposition on the other facets.
+    from .prusa_curved_surface import inspect_prusa_curved_surface
+    inspect_prusa_curved_surface(project, tool)
+    return "split_curved"
