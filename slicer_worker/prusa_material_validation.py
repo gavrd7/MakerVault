@@ -46,8 +46,12 @@ def _qualified_topology(printer_ini):
 
 
 def validate_prusa_material_candidate(data, *, printer_ini, tools=None, colour=False, tower=None,
-                                      independent_colour=False, compound_colour=False):
-    if type(compound_colour) is not bool or (compound_colour and not colour):
+                                      independent_colour=False, compound_colour=False,
+                                      fuzzy_colour=False):
+    if (type(compound_colour) is not bool or type(fuzzy_colour) is not bool or
+            ((compound_colour or fuzzy_colour) and not colour) or
+            (compound_colour and fuzzy_colour) or
+            (fuzzy_colour and (tower is None or independent_colour))):
         _refuse()
     if not isinstance(data, bytes) or not 0 < len(data) <= 32*1024*1024:
         _refuse()
@@ -116,6 +120,17 @@ def validate_prusa_material_candidate(data, *, printer_ini, tools=None, colour=F
             if len(metadata)!=1 or metadata[0].attrib!={"name":"slic3rpe:MmPaintingVersion"} or metadata[0].text!="2":
                 _refuse()
             model.remove(metadata[0])
+            if fuzzy_colour:
+                from .prusa_colour_fuzzy import (
+                    qualified_prusa_colour_fuzzy, FUZZ, FUZZ_HEADER)
+                if not qualified_prusa_colour_fuzzy(data):
+                    _refuse()
+                headers=[n for n in model.findall(NS+"metadata")
+                         if n.get("name")==FUZZ_HEADER]
+                if (len(headers)!=1 or headers[0].attrib!={"name":FUZZ_HEADER}
+                        or headers[0].text!="2"):
+                    _refuse()
+                model.remove(headers[0])
             facets=model.findall("./"+NS+"resources/"+NS+"object/"+NS+"mesh/"+NS+"triangles/"+NS+"triangle")
             marked=0
             selected={1}
@@ -134,8 +149,16 @@ def validate_prusa_material_candidate(data, *, printer_ini, tools=None, colour=F
                     marked+=1
             if marked<1 or len(selected)<2:
                 _refuse()
+            if fuzzy_colour:
+                # Exact opposite-surface geometry and state 4 were proven
+                # above from signed native 3MF. The base 3MF validator must
+                # still reject any other unrecognised paint attributes.
+                for face in facets:
+                    face.attrib.pop(FUZZ,None)
             volumes=objects[0].findall("volume")
             if not 1<=len(volumes)<=(3 if compound_colour else 2):
+                _refuse()
+            if fuzzy_colour and len(volumes)!=1:
                 _refuse()
             if compound_colour:
                 from .prusa_colour_compound import qualified_prusa_colour_compound
