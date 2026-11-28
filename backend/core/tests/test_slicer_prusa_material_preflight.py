@@ -714,6 +714,77 @@ class PrusaOfflineMmuPreflightTests(TestCase):
                 _decode_payload({**payload,"prusa_offline_colour":{
                     "tools":wrong,"tower":list(candidate["tower"])}})
 
+    def test_signed_two_partial_mmu_colours_keep_independent_worker_audit(self):
+        from core.slicer_prusa_material_preflight import (
+            prepare_prusa_offline_colour_candidate,
+            slice_prusa_offline_colour_candidate)
+        from core.slicer_plate_3mf import _triangles
+        from core.slicer_native_support_paint import _fingerprint
+        from scripts.prusa_generate_mmu_paint import fixture
+        from slicer_worker.service import _decode_payload
+        import base64
+        source,_,_,paint=fixture(include_paint=True)
+        faces=list(_triangles(source))
+        lo=[min(p[i] for face in faces for p in face) for i in range(3)]
+        hi=[max(p[i] for face in faces for p in face) for i in range(3)]
+        origin=((lo[0]+hi[0])/2,(lo[1]+hi[1])/2,lo[2])
+        local=[[tuple(p[i]-origin[i] for i in range(3)) for p in face]
+               for face in faces]
+        regions=[]
+        for slot,side in ((1,-10),(2,10)):
+            index=next(i for i,face in enumerate(local)
+                       if all(abs(p[1]-side)<.00001 for p in face))
+            a,b,c=local[index]
+            regions.append({"slot":slot,"patches":[{
+                "face":index,"polygon":[list(a),
+                    [(a[i]+b[i])/2 for i in range(3)],
+                    [(a[i]+c[i])/2 for i in range(3)]]}]})
+        painted={**paint,"signature":_fingerprint(local),
+                 "palette":[*paint["palette"],
+                            {"color":"#fadd4d","label":"native T2"}],
+                 "regions":regions}
+        values,assets=self.parts()
+        plan={key:values[key] for key in (
+            "owner_id","printer_profile","process_profile","filament_profiles",
+            "purge_matrix","tower_xy","bed_width","bed_depth")}
+        row={"asset_id":"two-partial","x_mm":0,"y_mm":0,"z_mm":0,
+             "rotation_deg":0,"scale_percent":100,"colour_paint":painted}
+        plan.update(rows=[(row,source)],tools=[1],
+                    colour_tool_indices={2:2,1:1})
+        with patch("core.slicer_prusa_material_preflight.resolved_prusa_profile",
+                   side_effect=assets):
+            prepared=prepare_prusa_offline_colour_candidate(**plan)
+        self.assertEqual(prepared["tools"],(1,2))
+        self.assertTrue(prepared["dual_partial"])
+        encode=lambda data:base64.b64encode(data).decode("ascii")
+        request={"job_id":str(uuid.uuid4()),"engine":"prusaslicer",
+                 "engine_version":"2.9.7","model_format":"3mf",
+                 "model":encode(prepared["model"]),
+                 "printer_profile":encode(prepared["printer"]),
+                 "filament_profile":encode(prepared["filament"]),
+                 "process_profile":encode(prepared["process"]),
+                 "prusa_offline_colour":{
+                     "tools":[1,2],"tower":list(prepared["tower"])}}
+        decoded=_decode_payload(request)
+        self.assertTrue(decoded["prusa_offline_colour"]["dual_partial"])
+        with self.assertRaises(WorkerError):
+            _decode_payload({**request,"prusa_offline_colour":{
+                "tools":[1,2],"tower":list(prepared["tower"]),
+                "dual_partial":True}})
+        remote,context=self.offline_worker_stub()
+        remote.return_value=b"verified-two-partial"
+        with context,patch(
+            "core.slicer_prusa_material_preflight.prepare_prusa_offline_colour_candidate",
+            return_value=prepared),patch(
+            "slicer_worker.prusa_dual_partial.audit_prusa_dual_partial_gcode"
+        ) as audit:
+            result=slice_prusa_offline_colour_candidate(
+                str(uuid.uuid4()),**plan)
+        self.assertEqual(result,b"verified-two-partial")
+        audit.assert_called_once_with(
+            result,prepared["model"],printer_ini=prepared["printer"],
+            tools=prepared["tools"],tower=prepared["tower"])
+
     def test_painted_mmu_refuses_foreign_preset_before_reading_any_file(self):
         from core.slicer_prusa_material_preflight import prepare_prusa_offline_colour_candidate
         from scripts.prusa_generate_mmu_paint import fixture
