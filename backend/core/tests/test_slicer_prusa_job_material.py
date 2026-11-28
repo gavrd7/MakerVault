@@ -475,6 +475,48 @@ class PrusaVirtualToolDraftTests(TestCase):
             [v["kind"] for v in worker.call_args.kwargs["rows"][0][0]["modifier_volumes"]],
             ["modifier","negative"])
 
+    def test_painted_mmu_colour_and_opposite_fuzzy_reach_native_owner(self):
+        from core.slicer_plate_3mf import _triangles
+        from core.slicer_native_support_paint import _fingerprint
+        from scripts.prusa_generate_mmu_paint import fixture as painted_fixture
+        job,filaments,raw=self.config()
+        source,_,_,paint=painted_fixture(include_paint=True)
+        faces=list(_triangles(source))
+        low=[min(p[i] for face in faces for p in face) for i in range(3)]
+        high=[max(p[i] for face in faces for p in face) for i in range(3)]
+        center=((low[0]+high[0])/2,(low[1]+high[1])/2,low[2])
+        local=[[tuple(p[i]-center[i] for i in range(3)) for p in face]
+               for face in faces]
+        back=[{"face":i,"polygon":[list(p) for p in face]}
+              for i,face in enumerate(local)
+              if all(abs(p[1]-10)<.00001 for p in face)]
+        fuzzy={"version":2,"signature":_fingerprint(local),
+               "regions":[{"slot":0,"patches":back}]}
+        job.settings["plate_objects"]=job.settings["plate_objects"][:1]
+        row=job.settings["plate_objects"][0]
+        row["colour_paint"]=paint
+        row["fuzzy_skin_paint"]=fuzzy
+        job.settings["prusa_native_tools"]["model_tools"]=job.settings[
+            "prusa_native_tools"]["model_tools"][:1]
+        job.settings["prusa_native_tools"]["colour_tools"]=[
+            {"slot":1,"tool":2}]
+        PrusaWorkbenchMaterialTests.resolve(self,job,filaments,raw)
+        route,params=prepare_prusa_workbench_material(job)
+        self.assertEqual(route,"colour")
+        self.assertEqual(params["colour_tool_indices"],{1:1})
+        with patch("core.slicer_prusa_job_material.slice_prusa_offline_colour_candidate",
+                   return_value=b"audited-colour-and-fuzzy") as worker:
+            result=slice_prusa_workbench_material(
+                job,[(dict(row),source)])
+        self.assertEqual(result,b"audited-colour-and-fuzzy")
+        self.assertEqual(
+            worker.call_args.kwargs["rows"][0][0]["fuzzy_skin_paint"],fuzzy)
+        # The same effect is deliberately not admitted on independent XL or
+        # INDX without separate native source and G-code verification.
+        job.settings["plate_objects"][0]["support_paint"]={"regions":[{"slot":0}]}
+        with self.assertRaises(SlicerProfileError):
+            prepare_prusa_workbench_material(job)
+
     def test_painted_mmu_rejects_unqualified_or_ambiguous_tool_assignments(self):
         from scripts.prusa_generate_mmu_paint import fixture as painted_fixture
         _source,_mesh,_states,paint=painted_fixture(include_paint=True)
