@@ -549,6 +549,60 @@ class PrusaNativeColourProjectTests(TestCase):
             with self.assertRaises(WorkerError):
                 audit_prusa_painted_volume_effects(b"no modifier extrusion",project)
 
+    def test_mmu_colour_and_opposite_fuzzy_require_signed_facet_and_real_extrusion(self):
+        from core.slicer_plate_3mf import _triangles
+        from core.slicer_native_support_paint import _fingerprint
+        from slicer_worker.prusa_colour_fuzzy import (
+            qualified_prusa_colour_fuzzy, audit_prusa_colour_fuzzy_gcode)
+        stl,_,_,paint=fixture(include_paint=True)
+        faces=list(_triangles(stl))
+        low=[min(p[i] for face in faces for p in face) for i in range(3)]
+        high=[max(p[i] for face in faces for p in face) for i in range(3)]
+        centre=((low[0]+high[0])/2,(low[1]+high[1])/2,low[2])
+        local=[[tuple(p[i]-centre[i] for i in range(3)) for p in face]
+               for face in faces]
+        back=[{"face":index,"polygon":[list(v) for v in face]}
+              for index,face in enumerate(local)
+              if all(abs(v[1]-10)<.00001 for v in face)]
+        self.assertEqual(len(back),2)
+        fuzzy={"version":2,"signature":_fingerprint(local),
+               "regions":[{"slot":0,"patches":back}]}
+        row={"asset_id":"mixed-fuzzy","x_mm":0,"y_mm":0,"z_mm":0,
+             "rotation_deg":0,"scale_percent":100,
+             "colour_paint":paint,"fuzzy_skin_paint":fuzzy}
+        printer=ini("0.4,0.4,0.4,0.4,0.4","1")
+        with self.assertRaises(SlicerProfileError):
+            self.candidate(settings={"fuzzy_skin_paint":fuzzy})
+        project=build_prusa_colour_candidate(
+            row,stl,printer_ini=printer,colour_tool_indices={1:1},
+            bed_width=250,bed_depth=210,research_compound=True)
+        self.assertTrue(qualified_prusa_colour_fuzzy(project))
+        with self.assertRaises(WorkerError):
+            validate_prusa_material_candidate(
+                project,printer_ini=printer,colour=True)
+        receipt=validate_prusa_material_candidate(
+            project,printer_ini=printer,colour=True,
+            fuzzy_colour=True)
+        self.assertEqual(receipt["tools"],(1,2))
+        self.assertFalse(qualified_prusa_colour_fuzzy(self.candidate()))
+        commands=["G90","M83","T0",";TYPE:External perimeter",
+                  "G0 X115 Y115 Z6"]
+        for index in range(150):
+            commands.append(f"G1 X{115+(index+1)*.05:.4f} Y115 E.02")
+        example=("\n".join(commands)+"\n").encode()
+        proof=audit_prusa_colour_fuzzy_gcode(example,project)
+        self.assertEqual(proof["fuzzy_back_short_moves"],150)
+        with self.assertRaises(WorkerError):
+            audit_prusa_colour_fuzzy_gcode(b"G90\nM83\nT0\n",project)
+        wrong={**fuzzy,"regions":[{"slot":0,
+                    "patches":paint["regions"][0]["patches"]}]}
+        invalid=build_prusa_colour_candidate(
+            {**row,"fuzzy_skin_paint":wrong},stl,
+            printer_ini=printer,colour_tool_indices={1:1},
+            bed_width=250,bed_depth=210,research_compound=True)
+        with self.assertRaises(WorkerError):
+            qualified_prusa_colour_fuzzy(invalid)
+
     def test_native_colour_and_single_infill_modifier_share_one_validated_modelpart(self):
         from core.tests.test_slicer_prusa_3mf import volume, rewrite
         from slicer_worker.prusa_material_validation import PAINT
