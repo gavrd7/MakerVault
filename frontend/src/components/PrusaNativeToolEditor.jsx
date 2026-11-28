@@ -203,8 +203,9 @@ export default function PrusaNativeToolEditor({
       {paintedSlots.length>0 && <div style={{marginTop:10}}>
         <p className="projectUploadHint">Native Prusa surface colour uses the
           selected printer profile and the same MakerVault paint brush as other
-          engines. MMU supports one painted swatch on a vertical wall,
-          including a split or partial mask, with independently audited
+          engines. MMU supports one painted vertical wall or two
+          independently coloured opposite vertical walls, including
+          split or partial brush masks, with independently audited
           wipe-tower purging. XL5 independently supports both split
           vertical walls and partially painted horizontal top faces without
           MMU purging. Complete opposing-wall colours and
