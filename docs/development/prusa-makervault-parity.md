@@ -139,6 +139,16 @@ tests; leave unsafe printer-start blocked until that is proven.
   from XL5's no-tower mode; MMU alternate tools, INDX,
   overlapping semantic channels and multi-model curved masks
   remain separately guarded.
+- **Native INDX8 split-colour T5/T7 opposite walls:** pinned 2.9.7
+  sliced true partial triangles in two different signed exterior faces,
+  retaining T5=122 deposited paths exclusively on its selected front wall
+  and T7=126 exclusively on the opposing rear wall, with zero T5/T7
+  other-wall and unpainted-region leakage. Genuine native T0 plain paths
+  were 233/263; native independent heads require no MMU purge
+  (run `46105645806`). Both owner and isolated worker now recognise
+  this exact source-derived eight-head tool pairing, with independent
+  positive-E checks mandatory in the pinned CI. Other combinations of
+  partially painted INDX heads are not inferred from this one result.
 - **Independent INDX8 T1 curved/nonplanar painting:** the existing
   native eight-head synthetic printer profile (reviewed official XL5
   baseline expanded to eight toolheads, no invented pickup scripts) passed
