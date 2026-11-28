@@ -508,12 +508,10 @@ jobs:
             /opt/engine-store/versions/prusaslicer/2.9.7/resources/profiles/PrusaResearch.ini \
             /tmp/mmu-colour/baseline.3mf /tmp/mmu-colour/colour.3mf
 
-      - name: Research genuine XL5 curved partial-facet colour deposition
+      - name: Require genuine XL5 signed 3D curved partial-facet colour deposition
         id: prusa_curved_native_research
-        # A cylindrical mesh has noncoplanar facets; whole-wall planar
-        # auditors cannot authorize this route. Real CLI G-code is necessary
-        # but not yet enough without the general signed 3D surface auditor.
-        continue-on-error: true
+        # Mandatory genuine 2.9.7 positive-E + independent native nearest-
+        # triangle BVH proof for the now admitted XL5 T1 curved brush.
         run: |
           set -euo pipefail
           docker run --rm --network none --user 10001:10001 \
