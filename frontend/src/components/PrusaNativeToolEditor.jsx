@@ -209,8 +209,10 @@ export default function PrusaNativeToolEditor({
           painted horizontal top face, with T0/T1 wipe-tower purging
           independently audited. XL5 independently supports both split
           vertical walls and partially painted horizontal top faces,
-          plus a T1 brush region on a planar angled face, without MMU
-          purging. Complete opposing-wall colours and
+          plus a T1 brush region on a planar angled face and genuine
+          curved/nonplanar facets. Those XL5 T1 paths are checked against
+          the signed native 3D triangles without MMU purging.
+          Complete opposing-wall colours and
           profile-qualified T1–T7 INDX/XL tools remain supported; XL5 also
           supports four complete exterior walls using T1–T4. For MMU,
           one complete T1-painted wall can combine Object process settings,
@@ -218,10 +220,10 @@ export default function PrusaNativeToolEditor({
           extrusion and cavity subtraction are checked before accepting
           the slice. A complete MMU T1 front colour wall can alternatively
           combine with selective fuzzy skin on the opposite T0 wall, with
-          both deposited effects audited. Split paints on other INDX/XL tool counts,
-          curved or nonplanar surfaces, angled regions using other native
-          heads, and multiple painted objects have not yet passed genuine
-          G-code qualification.</p>
+          both deposited effects audited. Split paints on other INDX/XL
+          tool counts, curved MMU surfaces, angled or curved regions using
+          alternate heads, and multiple painted objects still need
+          separately qualified G-code attribution.</p>
         {paintedSlots.map(slot=><label key={slot} style={{display:"block",marginBottom:8}}>
           Painted swatch {slot} — native Prusa tool
           <select disabled={disabled} value={(value.colour_tools||[]).find(
