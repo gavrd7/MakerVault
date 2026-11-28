@@ -587,6 +587,74 @@ class PrusaOfflineMmuPreflightTests(TestCase):
         xl_audit.assert_called_once_with(
             output, selected_xl["model"], tool=1)
 
+    def test_rotated_partial_face_xl5_follows_signed_3d_worker_audit(self):
+        from core.slicer_prusa_material_preflight import (
+            prepare_prusa_offline_xl_colour_candidate,
+            slice_prusa_offline_xl_colour_candidate)
+        from core.slicer_plate_3mf import _triangles
+        from core.slicer_native_support_paint import _fingerprint
+        from scripts.prusa_generate_mmu_paint import fixture
+        from slicer_worker.service import _decode_payload
+        from slicer_worker.prusa_slanted_surface import inspect_prusa_slanted_surface
+        import base64
+        values,assets=self.parts()
+        assets[0]=ini("0.4,0.4,0.4,0.4,0.4","0")
+        stl,_,_,paint=fixture(include_paint=True)
+        faces=list(_triangles(stl))
+        lo=[min(p[a] for f in faces for p in f) for a in range(3)]
+        hi=[max(p[a] for f in faces for p in f) for a in range(3)]
+        origin=((lo[0]+hi[0])/2,(lo[1]+hi[1])/2,lo[2])
+        local=[[tuple(p[a]-origin[a] for a in range(3)) for p in f]
+               for f in faces]
+        index=paint["regions"][0]["patches"][0]["face"]
+        a,b,c=local[index]
+        split={**paint,"signature":_fingerprint(local),
+               "regions":[{"slot":1,"patches":[{"face":index,
+                   "polygon":[list(a),
+                       [(a[i]+b[i])/2 for i in range(3)],
+                       [(a[i]+c[i])/2 for i in range(3)]]}]}]}
+        row={"asset_id":"slanted-native","x_mm":0,"y_mm":0,"z_mm":0,
+             "rotation_deg":0,"rotation_xyz_deg":[30,0],
+             "scale_percent":100,"colour_paint":split}
+        params={key:values[key] for key in (
+            "owner_id","printer_profile","process_profile",
+            "filament_profiles","bed_width","bed_depth")}
+        params.update(rows=[(row,stl)],tools=[1],colour_tool_indices={1:1})
+        with patch("core.slicer_prusa_material_preflight.resolved_prusa_profile",
+                   side_effect=assets):
+            prepared=prepare_prusa_offline_xl_colour_candidate(**params)
+        self.assertTrue(prepared["partial_slanted"])
+        self.assertFalse(prepared["partial_top"])
+        self.assertFalse(prepared["partial_wall"])
+        self.assertGreater(
+            abs(inspect_prusa_slanted_surface(
+                prepared["model"],1)["normal"][2]), .1)
+        encode=lambda body:base64.b64encode(body).decode("ascii")
+        request={"job_id":str(uuid.uuid4()),"engine":"prusaslicer",
+                 "engine_version":"2.9.7","model_format":"3mf",
+                 "model":encode(prepared["model"]),
+                 "printer_profile":encode(prepared["printer"]),
+                 "filament_profile":encode(prepared["filament"]),
+                 "process_profile":encode(prepared["process"]),
+                 "prusa_offline_xl_colour":{"tool":1}}
+        receipt=_decode_payload(request)
+        self.assertTrue(receipt["prusa_offline_xl_colour"]["partial_slanted"])
+        with self.assertRaises(WorkerError):
+            _decode_payload({**request,"prusa_offline_xl_colour":{
+                "tool":1,"partial_slanted":True}})
+        remote,context=self.offline_worker_stub()
+        remote.return_value=b"audited-slanted"
+        with context,patch(
+            "core.slicer_prusa_material_preflight.prepare_prusa_offline_xl_colour_candidate",
+            return_value=prepared),patch(
+            "slicer_worker.prusa_slanted_surface.audit_prusa_slanted_surface_gcode"
+        ) as audit:
+            output=slice_prusa_offline_xl_colour_candidate(
+                str(uuid.uuid4()),**params)
+        audit.assert_called_once_with(
+            output,prepared["model"],tool=1)
+        self.assertEqual(output,b"audited-slanted")
+
     def test_horizontal_top_brush_uses_only_qualified_xl5_worker_audit(self):
         from core.slicer_prusa_material_preflight import (
             prepare_prusa_offline_xl_colour_candidate,
