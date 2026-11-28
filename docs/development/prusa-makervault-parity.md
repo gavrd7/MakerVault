@@ -97,6 +97,18 @@ tests; leave unsafe printer-start blocked until that is proven.
   modifier region and **zero inside cavity** (run 46086097259). The
   combined real-binary test is mandatory in CI. No printer-start
   qualification is implied.
+- **Native MMU colour plus selective fuzzy on the opposite wall:**
+  genuine pinned PrusaSlicer 2.9.7 preserved T1 front coloured wall
+  deposition (369 control/370 combined) while producing **3,091** moving
+  short T0 perimeter paths on the independently fuzzy-painted back wall
+  versus **zero** in the colour-only control; the front's short-wall paths
+  remained 376 in both cases (native run `46099472545`). The normal
+  MakerVault colour job now retains native fuzzy facet attributes, and both
+  isolated worker and owner post-slice paths require the signed complete
+  opposite wall plus moving positive-E texture checks. Support, seam,
+  variable Z, extra native regions and other toolhead topologies remain
+  gated for this precise combination; genuine binary verification is
+  mandatory in CI.
 - A research-only native project now preserves **four overlapping paint
   channels** (colour/support/seam/fuzzy) and both modifier and negative
   volume meshes, plus Object process controls, without colour states on
@@ -142,9 +154,11 @@ this checklist. No real-hardware sign-off is claimed by automation.
 
 1. Extend proven **one/two-swatch MMU partial vertical walls** and **XL5 vertical/top partial masks** to curved/nonplanar surfaces and other-tool angled masks, non-opposing multi-colour masks, multiple independently painted models and separately qualified INDX partial masks. Audit real G-code spatial tool deposition for each independent region; never substitute whole-wall rectangles for split masks.
 2. Expand the now-verified **MMU colour + Object + infill box + disjoint
-   negative box** to arbitrary native shapes and combined support, seam,
-   fuzzy and variable-layer features without dropping requested edits; qualify
-   each native combination against genuine spatial G-code and worker audits.
+   negative box** and separately qualified **MMU T1 front colour + opposite
+   T0 selective fuzzy** to arbitrary native shapes and simultaneous support,
+   seam, variable-layer and other paint edits without dropping requested
+   operations; qualify each native combination against genuine spatial G-code
+   and worker audits.
 3. Reconcile the per-object and global MakerVault settings schemas and
    model limits, then verify the existing mobile/desktop editor and
    imported profile selection rather than adding a separate Prusa UI.
