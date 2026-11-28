@@ -225,6 +225,13 @@ def build_prusa_multi_colour_candidate(rows, *, printer_ini,
     if (len(resources)!=len(rows) or len(objects)!=1 or
             len(config)!=len(rows) or len(build)!=len(rows)):
         raise SlicerProfileError("Prusa painted model identity mismatch.")
+    # Prusa's 2.9.7 3MF importer recognises the slic3rpe painting
+    # dialect, not arbitrary XML namespace aliases. Parsing a correct
+    # single-object project otherwise renames mmu_segmentation to ns1 and
+    # silently discards every colour when the models are merged.
+    ET.register_namespace("slic3rpe",
+                          "http://schemas.slic3r.org/3mf/2017/06")
+    ET.register_namespace("",NS)
     parts["3D/3dmodel.model"]=ET.tostring(
         model,encoding="utf-8",xml_declaration=True)
     parts["Metadata/Slic3r_PE_model.config"]=ET.tostring(
