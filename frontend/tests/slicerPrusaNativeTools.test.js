@@ -193,6 +193,12 @@ test("Prusa painted MMU workbench checks one disjoint box infill modifier and on
   assert.match(prepare,/Object\.keys\(object\.modifier_volumes\[1\]\?\.settings\|\|\{\}\)\.length===0/);
 });
 
+test("Shared Prusa tool selector explains independently audited native MMU compound regions",()=>{
+  assert.match(editor,/one complete T1-painted wall can combine Object process settings/);
+  assert.match(editor,/one box infill modifier and one disjoint negative box/);
+  assert.match(editor,/native\s+extrusion and cavity subtraction are checked/);
+});
+
 test("Shared Prusa colour help differentiates native split walls from unqualified geometries",()=>{
   assert.match(editor,/MMU supports one painted swatch on a vertical wall/);
   assert.match(editor,/independently audited/);
