@@ -345,14 +345,8 @@ def slice_prusa_offline_colour_candidate(job_id, **prepared):
         audit_prusa_offline_colour_gcode(
             output,candidate["model"],printer_ini=candidate["printer"],
             tool=candidate["tool"],tower=candidate["tower"])
-    if candidate["compound_volume"]:
-        from slicer_worker.modifier_gcode_audit import audit_modifier_positive_e
-        region=audit_modifier_positive_e(output,candidate["model"],"prusaslicer")
-        if (region["modifier_count"]!=2 or region["negative_volume_count"]!=1 or
-                region["modifier_region_paths"][0]<=0 or
-                region["modifier_region_paths"][1]!=0):
-            raise SlicerProfileError(
-                "Prusa painted modifier/cavity output did not retain all edits.")
+    from slicer_worker.prusa_colour_compound import audit_prusa_painted_volume_effects
+    audit_prusa_painted_volume_effects(output, candidate["model"])
     return output
 
 
@@ -493,4 +487,6 @@ def slice_prusa_offline_xl_colour_candidate(job_id, **prepared):
         audit_prusa_xl_colour_gcode(
             output,candidate["model"],printer_ini=candidate["printer"],
             tool=candidate["tool"])
+    from slicer_worker.prusa_colour_compound import audit_prusa_painted_volume_effects
+    audit_prusa_painted_volume_effects(output, candidate["model"])
     return output
