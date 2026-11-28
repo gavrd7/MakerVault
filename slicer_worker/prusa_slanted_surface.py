@@ -102,9 +102,11 @@ def inspect_prusa_slanted_surface(project,tool):
         if len(volumes)!=1:
             raise ValueError(
                 "Slanted painting with typed volumes lacks combined native proof.")
-        metadata={node.get("key"):node.get("value")
-                  for node in volumes[0].findall("./metadata")}
-        if metadata!={"volume_type":"ModelPart","extruder":"1"}:
+        entries=volumes[0].findall("./metadata")
+        metadata={node.get("key"):node.get("value") for node in entries}
+        if (len(entries)!=len(metadata) or
+                metadata!={"volume_type":"ModelPart","extruder":"1"} or
+                volumes[0].get("firstid")!="0"):
             raise ValueError("Native slanted source is not one printable ModelPart.")
         objects=model.findall("./"+NS+"resources/"+NS+"object")
         if len(objects)!=1:
@@ -114,7 +116,8 @@ def inspect_prusa_slanted_surface(project,tool):
                     "./"+NS+"mesh/"+NS+"vertices/"+NS+"vertex")]
         faces=objects[0].findall(
             "./"+NS+"mesh/"+NS+"triangles/"+NS+"triangle")
-        if (not 4<=len(faces)<=500000 or
+        if (volumes[0].get("lastid")!=str(len(faces)-1) or
+                not 4<=len(faces)<=500000 or
                 not 4<=len(points)<=1_500_000 or
                 any(not all(math.isfinite(v) and abs(v)<2000 for v in p)
                     for p in points)):
