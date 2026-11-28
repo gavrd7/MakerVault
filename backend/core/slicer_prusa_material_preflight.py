@@ -517,3 +517,111 @@ def slice_prusa_offline_xl_colour_candidate(job_id, **prepared):
     from slicer_worker.prusa_colour_compound import audit_prusa_painted_volume_effects
     audit_prusa_painted_volume_effects(output, candidate["model"])
     return output
+
+
+def prepare_prusa_offline_multi_colour_candidate(
+    *, owner_id,printer_profile,process_profile,filament_profiles,
+    rows,tools,purge_matrix,tower_xy,bed_width,bed_depth,
+    colour_tool_indices,process_overrides=None
+):
+    """Compile two independently painted private ModelParts on a native MMU.
+
+    Every selected source is independently fingerprinted and imported via
+    MakerVault's existing Prusa colour encoder; the worker verifies the
+    signed T1/T2 source objects, their separated footprints and final
+    positive-E G-code before the owner may store the resulting slice.
+    """
+    if (type(owner_id) is not int or owner_id<1 or
+            not isinstance(rows,(tuple,list)) or len(rows)!=2 or
+            not isinstance(tools,(tuple,list)) or list(tools)!=[1,1] or
+            not isinstance(tower_xy,(tuple,list)) or len(tower_xy)!=2 or
+            not isinstance(colour_tool_indices,dict) or
+            len(colour_tool_indices)!=2 or
+            set(colour_tool_indices.values())!={1,2} or
+            any(type(k) is not int or not 0<=k<16 or type(v) is not int
+                for k,v in colour_tool_indices.items())):
+        raise SlicerProfileError(
+            "Prusa separate MMU colour models require T0 bases and distinct T1/T2 swatches.")
+    for kind,profile in (("printer",printer_profile),("process",process_profile)):
+        if (profile.owner_id!=owner_id or profile.kind!=kind or
+                profile.engine!="prusaslicer" or
+                profile.engine_version!="2.9.7"):
+            raise SlicerProfileError("Prusa native coloured model profile is not owned.")
+    if (not isinstance(filament_profiles,(tuple,list)) or
+            any(profile.owner_id!=owner_id or profile.kind!="filament" or
+                profile.engine!="prusaslicer" or
+                profile.engine_version!="2.9.7" for profile in filament_profiles)):
+        raise SlicerProfileError("Prusa independent colour filament profile is unowned.")
+    source_slots=[]
+    for pair in rows:
+        if (not isinstance(pair,(tuple,list)) or len(pair)!=2 or
+                not isinstance(pair[0],dict) or
+                not isinstance(pair[1],bytes)):
+            raise SlicerProfileError("Prusa independent native painted source is invalid.")
+        item,_mesh=pair
+        paint=item.get("colour_paint") or {}
+        regions=paint.get("regions") if isinstance(paint,dict) else None
+        if (not isinstance(regions,list) or len(regions)!=1 or
+                type(regions[0].get("slot")) is not int or
+                any(item.get(k) for k in (
+                    "modifier_volumes","negative_volumes","support_paint",
+                    "seam_paint","fuzzy_skin_paint","variable_layer_profile",
+                    "material_slot","process_overrides"))):
+            raise SlicerProfileError(
+                "Each independent native Prusa colour model needs one signed paint swatch.")
+        source_slots.append(regions[0]["slot"])
+    if (len(set(source_slots))!=2 or
+            {colour_tool_indices.get(slot) for slot in source_slots}!={1,2} or
+            colour_tool_indices[source_slots[0]]!=1 or
+            colour_tool_indices[source_slots[1]]!=2):
+        raise SlicerProfileError(
+            "The two independently painted Prusa models require T1 then T2.")
+    printer=resolved_prusa_profile(printer_profile)
+    topology=prusa_machine_topology(printer)
+    if (topology["kind"]!="single_nozzle_changer" or
+            not 3<=topology["logical_tool_count"]<=5 or
+            len(filament_profiles)!=topology["logical_tool_count"]):
+        raise SlicerProfileError("Native Prusa independently painted models need a qualified MMU.")
+    native_process=apply_prusa_process_overrides(
+        resolved_prusa_profile(process_profile),
+        {} if process_overrides is None else process_overrides)
+    filament=compile_prusa_filament_palette(
+        printer,[resolved_prusa_profile(profile)
+                 for profile in filament_profiles])
+    native_process=compile_prusa_purge_matrix(
+        printer,native_process,purge_matrix)
+    from .slicer_prusa_colour_project import build_prusa_multi_colour_candidate
+    project=build_prusa_multi_colour_candidate(
+        rows,printer_ini=printer,colour_tool_indices=colour_tool_indices,
+        bed_width=bed_width,bed_depth=bed_depth)
+    project=add_prusa_native_wipe_tower(
+        project,x_mm=tower_xy[0],y_mm=tower_xy[1],rotation_deg=0,
+        bed_width=bed_width,bed_depth=bed_depth)
+    tower=(tower_xy[0],tower_xy[1],0,bed_width,bed_depth)
+    from slicer_worker.prusa_offline_contract import (
+        validate_prusa_offline_multi_colour_inputs)
+    receipt=validate_prusa_offline_multi_colour_inputs(
+        project=project,printer=printer,filament=filament,
+        process=native_process,tools=[1,2],tower=list(tower))
+    if receipt["tools"]!=[1,2]:
+        raise SlicerProfileError("Prusa independent native swatches changed after export.")
+    return {"model":project,"printer":printer,"filament":filament,
+            "process":native_process,"tower":tower,"tools":[1,1],
+            "colour_tools":[1,2]}
+
+
+def slice_prusa_offline_multi_colour_candidate(job_id, **prepared):
+    """Only return two separately painted ModelParts with audited T1/T2 G-code."""
+    from .slicer_worker_client import run_remote_job
+    from slicer_worker.prusa_multi_colour import audit_prusa_multi_colour_gcode
+    candidate=prepare_prusa_offline_multi_colour_candidate(**prepared)
+    output=run_remote_job(
+        job_id,"prusaslicer","2.9.7",
+        candidate["model"],candidate["printer"],candidate["filament"],
+        candidate["process"],model_format="3mf",
+        prusa_offline_multi_colour={"tools":[1,2],
+                                    "tower":list(candidate["tower"])})
+    audit_prusa_multi_colour_gcode(
+        output,candidate["model"],printer_ini=candidate["printer"],
+        tower=candidate["tower"])
+    return output
