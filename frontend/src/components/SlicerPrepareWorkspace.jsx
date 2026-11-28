@@ -1184,6 +1184,18 @@ export default function SlicerPrepareWorkspace({
             Object.hasOwn(object.modifier_volumes[0]?.settings||{},
                           "sparse_infill_density")) ||
           (prusaNativeTools?.mode==="mmu" &&
+            prusaNativeTools?.colour_tools?.length===1 &&
+            prusaNativeTools.colour_tools[0]?.tool===2 &&
+            object.modifier_volumes.length===1 &&
+            ["box","cone","cylinder","disc","sphere","torus"]
+              .includes(object.modifier_volumes[0]?.shape) &&
+            ((object.modifier_volumes[0]?.kind==="modifier" &&
+              Object.keys(object.modifier_volumes[0]?.settings||{}).length===1 &&
+              Object.hasOwn(object.modifier_volumes[0]?.settings||{},
+                            "sparse_infill_density")) ||
+             (object.modifier_volumes[0]?.kind==="negative" &&
+              Object.keys(object.modifier_volumes[0]?.settings||{}).length===0))) ||
+          (prusaNativeTools?.mode==="mmu" &&
             object.modifier_volumes.length===2 &&
             object.modifier_volumes[0]?.kind==="modifier" &&
             object.modifier_volumes[0]?.shape==="box" &&
