@@ -598,6 +598,29 @@ jobs:
         run: |
           echo "::warning title=Prusa combined colour and volume research::Native painted modifier plus cavity regional effects remain unqualified; production mixed-editing gate stays in place."
 
+      - name: Research combined MMU colour and selective fuzzy on disjoint facets
+        id: prusa_colour_fuzzy_research
+        # Native colour and fuzzy state surviving the same XML import is not
+        # enough: require deposited T1 plus independent back-facet texture.
+        continue-on-error: true
+        run: |
+          set -euo pipefail
+          docker run --rm --network none --user 10001:10001 \
+            -v "$TEST_VOLUME:/opt/engine-store:ro" \
+            -v "$GITHUB_WORKSPACE/backend:/tmp/mv-backend:ro" \
+            -v "$GITHUB_WORKSPACE/scripts:/tmp/scripts:ro" \
+            -v "$GITHUB_WORKSPACE/scripts/prusa_native_colour_fuzzy_combined_smoke.py:/tmp/colour_fuzzy.py:ro" \
+            -e PYTHONPATH=/tmp:/tmp/mv-backend:/opt/makervault-slicer \
+            --entrypoint python3 prusa-integration:smoke \
+            /tmp/colour_fuzzy.py \
+            /opt/engine-store/versions/prusaslicer/2.9.7/bin/prusa-slicer \
+            /opt/engine-store/versions/prusaslicer/2.9.7/resources/profiles/PrusaResearch.ini
+
+      - name: Report unresolved native Prusa colour/fuzzy mixed painting
+        if: ${{ steps.prusa_colour_fuzzy_research.outcome == 'failure' }}
+        run: |
+          echo "::warning title=Prusa mixed colour/fuzzy paint::Native simultaneous source facet effects remain unqualified; retain existing production admission gate."
+
       - name: Record Prusa MMU painting research limitation
         if: ${{ steps.prusa_mmu_colour_research.outcome == 'failure' }}
         run: |
