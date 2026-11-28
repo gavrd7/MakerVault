@@ -701,11 +701,10 @@ jobs:
         run: |
           echo "::warning title=Prusa split-surface painting::Genuine native partial-mask deposition remains unqualified; keep whole-wall-only admission."
 
-      - name: Research MMU T1 colour with all six native modifier/cavity shapes
+      - name: Require MMU T1 colour with all six native modifier/cavity shapes
         id: prusa_colour_primitive_matrix_research
-        # A successful 3MF merge cannot prove modifiers still deposit and
-        # cavities remain empty. Require genuine positive-E regional effects.
-        continue-on-error: true
+        # Mandatory on the qualified painted-model route: all six native
+        # shapes must retain T1 colour and real modified or empty regional E.
         run: |
           set -euo pipefail
           docker run --rm --network none --user 10001:10001 \
