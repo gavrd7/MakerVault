@@ -597,11 +597,10 @@ jobs:
         run: |
           echo "::warning title=Prusa combined colour and volume research::Native painted modifier plus cavity regional effects remain unqualified; production mixed-editing gate stays in place."
 
-      - name: Research combined MMU colour and selective fuzzy on disjoint facets
+      - name: Require combined MMU colour and selective fuzzy on disjoint facets
         id: prusa_colour_fuzzy_research
-        # Native colour and fuzzy state surviving the same XML import is not
-        # enough: require deposited T1 plus independent back-facet texture.
-        continue-on-error: true
+        # Mandatory on authenticated MMU offline path: signed independent
+        # T1 colour and back-face T0 fuzzy source+deposition proof.
         run: |
           set -euo pipefail
           docker run --rm --network none --user 10001:10001 \
