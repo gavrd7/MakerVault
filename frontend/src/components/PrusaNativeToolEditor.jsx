@@ -216,8 +216,11 @@ export default function PrusaNativeToolEditor({
           qualifies a T1 curved brush on a signed native 3D source. Those
           independent T1 paths are spatially audited without MMU purging.
           Complete opposing-wall colours and
-          profile-qualified T1–T7 INDX/XL tools remain supported; XL5 also
-          supports four complete exterior walls using T1–T4. For MMU,
+          profile-qualified T1–T7 INDX/XL tools remain supported. On the
+          eight-head INDX profile, two independently partial painted
+          opposite exterior walls also qualify with native T5 and T7,
+          without an MMU wipe tower. XL5 supports four complete exterior
+          walls using T1–T4. For MMU,
           one complete T1-painted wall can combine Object process settings,
           one box infill modifier and one disjoint negative box: native
           extrusion and cavity subtraction are checked before accepting
