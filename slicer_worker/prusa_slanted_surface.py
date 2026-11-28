@@ -39,14 +39,73 @@ def _inside(point,tri):
     return min(u,v,1-u-v)>.02
 
 
+
+def _surface_tree(painted, plain):
+    """Balanced 2-D BVH; query only nearby projected native facets.
+
+    Prusa's source can have hundreds of thousands of triangles. Comparing
+    every exterior G-code move to all triangles would scale quadratically.
+    """
+    entries=[]
+    for label, triangles in (("painted", painted), ("unpainted",plain)):
+        for tri in triangles:
+            xs=[point[0] for point in tri]
+            ys=[point[1] for point in tri]
+            entries.append((label,tri,(min(xs),max(xs),min(ys),max(ys))))
+    def build(rows):
+        bbox=(min(row[2][0] for row in rows),
+              max(row[2][1] for row in rows),
+              min(row[2][2] for row in rows),
+              max(row[2][3] for row in rows))
+        if len(rows)<=12:
+            return (bbox,None,None,tuple(rows))
+        axis=0 if bbox[1]-bbox[0]>=bbox[3]-bbox[2] else 2
+        rows.sort(key=lambda row:(row[2][axis]+row[2][axis+1])/2)
+        mid=len(rows)//2
+        return (bbox,build(rows[:mid]),build(rows[mid:]),None)
+    return build(entries)
+
+
+def _surface_labels(root, point):
+    labels=set()
+    def search(node):
+        bbox,left,right,leaf=node
+        if not (bbox[0]<=point[0]<=bbox[1] and
+                bbox[2]<=point[1]<=bbox[3]):
+            return
+        if leaf is not None:
+            for label,tri,bounds in leaf:
+                if (bounds[0]<=point[0]<=bounds[1] and
+                        bounds[2]<=point[1]<=bounds[3] and
+                        _inside(point,tri)):
+                    labels.add(label)
+        else:
+            search(left)
+            search(right)
+    search(root)
+    return labels
+
 def inspect_prusa_slanted_surface(project,tool):
     if type(tool) is not int or tool not in PAINTED_STATES.values():
         raise WorkerError("Invalid native sloped paint tool.")
     if not isinstance(project,bytes) or not 0<len(project)<=32*1024*1024:
         raise WorkerError("Invalid native Prusa sloped colour project.")
     try:
+        from .prusa_3mf_validation import CONFIG
         with zipfile.ZipFile(io.BytesIO(project)) as z:
             model=SafeET.fromstring(z.read(MODEL))
+            config=SafeET.fromstring(z.read(CONFIG))
+        records=config.findall("./object")
+        if len(records)!=1:
+            raise ValueError("Slanted painting requires one native object.")
+        volumes=records[0].findall("./volume")
+        if len(volumes)!=1:
+            raise ValueError(
+                "Slanted painting with typed volumes lacks combined native proof.")
+        metadata={node.get("key"):node.get("value")
+                  for node in volumes[0].findall("./metadata")}
+        if metadata!={"volume_type":"ModelPart","extruder":"1"}:
+            raise ValueError("Native slanted source is not one printable ModelPart.")
         objects=model.findall("./"+NS+"resources/"+NS+"object")
         if len(objects)!=1:
             raise ValueError("Native slanted paint needs one source object.")
@@ -120,6 +179,7 @@ def audit_prusa_slanted_surface_gcode(data, project, *,tool):
         raise WorkerError("Invalid native sloped colour G-code.")
     counts={0:{"painted":0,"unpainted":0},
             tool:{"painted":0,"unpainted":0}}
+    spatial=_surface_tree(signed["painted"],signed["unpainted"])
     x=y=z=None
     e=0.
     relative_e=relative_xyz=False
@@ -176,8 +236,7 @@ def audit_prusa_slanted_surface_gcode(data, project, *,tool):
             if abs(_dot(vector,signed["normal"]))>.95:
                 continue
             xy=(_dot(vector,signed["u"]),_dot(vector,signed["v"]))
-            matched=[label for label in ("painted","unpainted")
-                     if any(_inside(xy,tri) for tri in signed[label])]
+            matched=_surface_labels(spatial,xy)
             if len(matched)==1:
                 counts[active][matched[0]]+=1
     if (counts[tool]["painted"]<8 or counts[0]["unpainted"]<8 or
