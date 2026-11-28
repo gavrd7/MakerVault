@@ -508,6 +508,29 @@ jobs:
             /opt/engine-store/versions/prusaslicer/2.9.7/resources/profiles/PrusaResearch.ini \
             /tmp/mmu-colour/baseline.3mf /tmp/mmu-colour/colour.3mf
 
+      - name: Research independently painted native MMU models and purge
+        id: prusa_multi_model_colour_research
+        # Do not admit multiple independently coloured models in normal
+        # MakerVault until both native G-code deposition and isolated worker
+        # source/tool identity audits qualify all selected paint regions.
+        continue-on-error: true
+        run: |
+          set -euo pipefail
+          docker run --rm --network none --user 10001:10001 \
+            -v "$TEST_VOLUME:/opt/engine-store:ro" \
+            -v "$GITHUB_WORKSPACE/backend:/tmp/mv-backend:ro" \
+            -v "$GITHUB_WORKSPACE/scripts:/tmp/scripts:ro" \
+            -e PYTHONPATH=/tmp:/tmp/mv-backend:/opt/makervault-slicer \
+            --entrypoint python3 prusa-integration:smoke \
+            /tmp/scripts/prusa_native_multi_colour_smoke.py \
+            /opt/engine-store/versions/prusaslicer/2.9.7/bin/prusa-slicer \
+            /opt/engine-store/versions/prusaslicer/2.9.7/resources/profiles/PrusaResearch.ini
+
+      - name: Report unqualified multi-model native Prusa colour
+        if: ${{ steps.prusa_multi_model_colour_research.outcome == 'failure' }}
+        run: |
+          echo "::warning title=Prusa multi-model colour::Multiple independently painted models are not yet native qualified; existing workbench admission must remain strict."
+
       - name: Require genuine MMU partial top-surface T1 and wipe tower
         id: prusa_mmu_partial_top_research
         # Mandatory native 2.9.7 evidence for the newly admitted signed
