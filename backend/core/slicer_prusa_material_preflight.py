@@ -468,7 +468,8 @@ def prepare_prusa_offline_xl_colour_candidate(
     return {"model":project,"printer":printer,"filament":palette,
             "process":process, "partial_wall":receipt["partial_wall"],
             "partial_top":receipt["partial_top"],
-            "partial_slanted":receipt["partial_slanted"], **selection}
+            "partial_slanted":receipt["partial_slanted"],
+            "partial_curved":receipt["partial_curved"], **selection}
 
 
 def slice_prusa_offline_xl_colour_candidate(job_id, **prepared):
@@ -503,6 +504,10 @@ def slice_prusa_offline_xl_colour_candidate(job_id, **prepared):
     elif candidate["partial_slanted"]:
         from slicer_worker.prusa_slanted_surface import audit_prusa_slanted_surface_gcode
         audit_prusa_slanted_surface_gcode(
+            output, candidate["model"], tool=candidate["tool"])
+    elif candidate["partial_curved"]:
+        from slicer_worker.prusa_curved_surface import audit_prusa_curved_surface_gcode
+        audit_prusa_curved_surface_gcode(
             output, candidate["model"], tool=candidate["tool"])
     else:
         from slicer_worker.prusa_colour_gcode_audit import audit_prusa_xl_colour_gcode
