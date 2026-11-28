@@ -440,14 +440,19 @@ def prepare_prusa_offline_xl_colour_candidate(
     receipt=validate_prusa_offline_xl_colour_inputs(
         project=project,printer=printer,filament=palette,process=process,
         **selection)
-    if (receipt["partial_wall"] or receipt["partial_top"]) and (
+    if (receipt["partial_wall"] or receipt["partial_top"] or
+            receipt["partial_slanted"]) and (
             topology["kind"] != "independent_tools" or
             topology["logical_tool_count"] != 5):
         raise SlicerProfileError(
             "Prusa split-surface painting has native proof for XL5 only.")
+    if receipt["partial_slanted"] and selection.get("tool")!=1:
+        raise SlicerProfileError(
+            "Prusa angled painting has native proof for XL5 T1 only.")
     return {"model":project,"printer":printer,"filament":palette,
             "process":process, "partial_wall":receipt["partial_wall"],
-            "partial_top":receipt["partial_top"], **selection}
+            "partial_top":receipt["partial_top"],
+            "partial_slanted":receipt["partial_slanted"], **selection}
 
 
 def slice_prusa_offline_xl_colour_candidate(job_id, **prepared):
@@ -478,6 +483,10 @@ def slice_prusa_offline_xl_colour_candidate(job_id, **prepared):
     elif candidate["partial_top"]:
         from slicer_worker.prusa_top_surface import audit_prusa_partial_top_gcode
         audit_prusa_partial_top_gcode(
+            output, candidate["model"], tool=candidate["tool"])
+    elif candidate["partial_slanted"]:
+        from slicer_worker.prusa_slanted_surface import audit_prusa_slanted_surface_gcode
+        audit_prusa_slanted_surface_gcode(
             output, candidate["model"], tool=candidate["tool"])
     else:
         from slicer_worker.prusa_colour_gcode_audit import audit_prusa_xl_colour_gcode
