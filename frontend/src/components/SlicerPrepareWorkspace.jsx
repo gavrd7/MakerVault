@@ -1179,7 +1179,14 @@ export default function SlicerPrepareWorkspace({
             object.modifier_volumes[1]?.coordinate_space==="world" &&
             Object.keys(object.modifier_volumes[1]?.settings||{}).length===0))) ||
       object.support_paint?.regions?.length || object.seam_paint?.regions?.length ||
-      object.fuzzy_skin_paint?.regions?.length ||
+      (object.fuzzy_skin_paint?.regions?.length &&
+        !(prusaSinglePaint && prusaNativeTools?.mode==="mmu" &&
+          prusaPaintedSlots.length===1 &&
+          prusaNativeTools?.colour_tools?.[0]?.tool===2 &&
+          !object.modifier_volumes?.length &&
+          !object.support_paint?.regions?.length &&
+          !object.seam_paint?.regions?.length &&
+          !object.variable_layer_profile?.bands?.length)) ||
       (object.colour_paint?.regions?.length && !prusaSinglePaint)) &&
     Object.keys(processOverrides||{}).every(key=>[
       "layer_height","wall_loops","top_shell_layers",
