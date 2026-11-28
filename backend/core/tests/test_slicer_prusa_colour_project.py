@@ -524,6 +524,31 @@ class PrusaNativeColourProjectTests(TestCase):
             with self.subTest(bad=bad),self.assertRaises(SlicerProfileError):
                 self.candidate(settings={"process_overrides":bad})
 
+    def test_single_painted_infill_modifier_requires_positive_e_per_job(self):
+        from unittest.mock import patch
+        from core.tests.test_slicer_prusa_3mf import volume
+        from slicer_worker.prusa_colour_compound import (
+            audit_prusa_painted_volume_effects)
+        project=self.candidate(settings={"modifier_volumes":[
+            volume("modifier",{"sparse_infill_density":85})]})
+        self.assertIsNone(audit_prusa_painted_volume_effects(
+            b"irrelevant",self.candidate()))
+        with patch("slicer_worker.modifier_gcode_audit.audit_modifier_positive_e",
+                   return_value={"modifier_count":1,
+                                 "negative_volume_count":0,
+                                 "modifier_region_paths":[42]}) as spatial:
+            proof=audit_prusa_painted_volume_effects(
+                b"positive-E G-code",project)
+        self.assertEqual(proof["modifier_region_paths"],[42])
+        spatial.assert_called_once_with(
+            b"positive-E G-code",project,"prusaslicer")
+        with patch("slicer_worker.modifier_gcode_audit.audit_modifier_positive_e",
+                   return_value={"modifier_count":1,
+                                 "negative_volume_count":0,
+                                 "modifier_region_paths":[0]}):
+            with self.assertRaises(WorkerError):
+                audit_prusa_painted_volume_effects(b"no modifier extrusion",project)
+
     def test_native_colour_and_single_infill_modifier_share_one_validated_modelpart(self):
         from core.tests.test_slicer_prusa_3mf import volume, rewrite
         from slicer_worker.prusa_material_validation import PAINT
