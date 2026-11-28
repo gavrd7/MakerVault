@@ -236,12 +236,15 @@ def validate_prusa_offline_xl_colour_inputs(*, project, printer, filament, proce
     else:
         from .prusa_partial_surface import qualified_prusa_single_colour_mode
         mode = qualified_prusa_single_colour_mode(project, selected[0])
-        if mode in ("split_wall","split_top","split_slanted","split_curved") and count != 5:
+        if mode in ("split_wall","split_top","split_slanted") and count!=5:
             raise WorkerError(
-                "Prusa partial-surface painting is qualified on XL5 only.")
+                "Prusa planar partial-surface paint is qualified on XL5 only.")
+        if mode=="split_curved" and count not in (5,8):
+            raise WorkerError(
+                "Prusa curved partial-surface paint requires native five- or eight-head topology.")
         if mode in ("split_slanted","split_curved") and selected[0]!=1:
             raise WorkerError(
-                "Native angled/curved painted facets require genuine XL5 T1 qualification.")
+                "Prusa native angled/curved painted facets require a qualified T1 head.")
     return {**({"tools":list(selected)} if len(selected)>1
                else {"tool":selected[0]}),
             "partial_wall": len(selected)==1 and mode=="split_wall",
