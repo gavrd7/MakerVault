@@ -379,6 +379,29 @@ jobs:
         run: |
           echo "::warning title=Prusa horizontal paint::Nonvertical partial colour deposition has no native qualification; do not widen the signed wall audit."
 
+      - name: Research genuine XL5 tilted partial-surface native painting
+        id: prusa_slanted_partial_research
+        # Do not widen independent-head production admission without signed
+        # 3D polygon attribution and actual deposited toolpath evidence.
+        continue-on-error: true
+        run: |
+          set -euo pipefail
+          docker run --rm --network none --user 10001:10001 \
+            -v "$TEST_VOLUME:/opt/engine-store:ro" \
+            -v "$GITHUB_WORKSPACE/backend:/tmp/mv-backend:ro" \
+            -v "$GITHUB_WORKSPACE/scripts:/tmp/scripts:ro" \
+            -v "$GITHUB_WORKSPACE/scripts/prusa_native_slanted_colour_research.py:/tmp/slanted_paint.py:ro" \
+            -e PYTHONPATH=/tmp:/tmp/mv-backend:/opt/makervault-slicer \
+            --entrypoint python3 prusa-integration:smoke \
+            /tmp/slanted_paint.py \
+            /opt/engine-store/versions/prusaslicer/2.9.7/bin/prusa-slicer \
+            /opt/engine-store/versions/prusaslicer/2.9.7/resources/profiles/PrusaResearch.ini
+
+      - name: Report unqualified Prusa tilted paint deposition
+        if: ${{ steps.prusa_slanted_partial_research.outcome == 'failure' }}
+        run: |
+          echo "::warning title=Sloped Prusa colour::Native slanted surface source/deposition still unqualified; do not bypass workbench admission."
+
       - name: Fetch and inspect Prusa's official INDX 2.5.16 profile bundle
         run: |
           set -euo pipefail
