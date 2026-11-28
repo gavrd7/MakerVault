@@ -120,11 +120,16 @@ def audit_prusa_painted_volume_effects(data, project):
     if count == 2 and not qualified_prusa_colour_compound(project):
         raise WorkerError("Prusa painted cavity and modifier geometry is not qualified.")
     receipt = audit_modifier_positive_e(data, project, "prusaslicer")
+    # A solo native negative volume must remove all interior E; it does
+    # not need positive extrusion within its subtracted footprint.
+    single_negative=(count==1 and receipt["negative_volume_count"]==1)
     if (receipt["modifier_count"] != count or
-            receipt["modifier_region_paths"][0] <= 0 or
-            receipt["negative_volume_count"] != (1 if count == 2 else 0) or
-            any(receipt["modifier_region_paths"][i] != 0
-                for i in range(1, count) if count == 2)):
+            len(receipt["modifier_region_paths"])!=count or
+            receipt["negative_volume_count"] != (
+                1 if count==2 or single_negative else 0) or
+            (single_negative and receipt["modifier_region_paths"][0]!=0) or
+            (not single_negative and receipt["modifier_region_paths"][0]<=0) or
+            (count==2 and receipt["modifier_region_paths"][1]!=0)):
         raise WorkerError(
             "Prusa coloured native modifier/cavity did not retain regional deposition.")
     return receipt
