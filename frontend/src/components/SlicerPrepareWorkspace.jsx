@@ -1129,6 +1129,20 @@ export default function SlicerPrepareWorkspace({
       row.slot===slot && row.tool>=2 && row.tool<=Math.min(prusaNativeTools.tool_count,8))) &&
     new Set(prusaNativeTools.colour_tools.map(row=>row.tool)).size===
       prusaPaintedSlots.length;
+  const prusaMultiPaint=activeEngine==="prusaslicer" &&
+    objects.length===2 && prusaNativeTools?.mode==="mmu" &&
+    objects.every(object=>object.colour_paint?.regions?.length===1) &&
+    prusaPaintedSlots.length===2 &&
+    prusaNativeTools?.model_tools?.length===2 &&
+    objects.every(object=>prusaNativeTools.model_tools.some(row=>
+      row.instance_id===object.instance_id && row.tool===1)) &&
+    prusaNativeTools?.colour_tools?.length===2 &&
+    objects.every((object,index)=>{
+      const slot=object.colour_paint.regions[0].slot;
+      return Number.isInteger(slot) &&
+        prusaNativeTools.colour_tools.some(row=>row.slot===slot &&
+          row.tool===index+2);
+    });
   const prusaProfileMode = prusaProfileTopology?.kind==="single_nozzle_changer" ? "mmu"
     : prusaProfileTopology?.kind==="indx" ? "indx"
     : prusaProfileTopology?.kind==="independent_tools" ? "xl" : null;
@@ -1145,7 +1159,8 @@ export default function SlicerPrepareWorkspace({
     ((objects.length>=2 && objects.length<=200) || prusaSinglePaint) &&
     prusaNativeTools.model_tools?.length===objects.length &&
     objects.every(object=>prusaNativeTools.model_tools?.some(row=>row.instance_id===object.instance_id)) &&
-    (prusaSinglePaint || new Set(prusaNativeTools.model_tools.map(row=>row.tool)).size>=2) &&
+    (prusaSinglePaint || prusaMultiPaint ||
+      new Set(prusaNativeTools.model_tools.map(row=>row.tool)).size>=2) &&
     !objects.some(object=>object.material_slot ||
       (object.process_overrides != null &&
         (typeof object.process_overrides !== "object" ||
@@ -1155,6 +1170,8 @@ export default function SlicerPrepareWorkspace({
              "top_shell_layers","bottom_shell_layers",
              "outer_wall_speed","inner_wall_speed",
              "sparse_infill_speed","top_surface_speed"].includes(key)))) ||
+      (prusaMultiPaint && (object.modifier_volumes?.length ||
+                            object.process_overrides)) ||
       object.negative_volumes?.length ||
       (object.variable_layer_profile?.bands?.length &&
         prusaNativeTools?.mode==="mmu") ||
@@ -1187,7 +1204,8 @@ export default function SlicerPrepareWorkspace({
           !object.support_paint?.regions?.length &&
           !object.seam_paint?.regions?.length &&
           !object.variable_layer_profile?.bands?.length)) ||
-      (object.colour_paint?.regions?.length && !prusaSinglePaint)) &&
+      (object.colour_paint?.regions?.length &&
+        !(prusaSinglePaint || prusaMultiPaint))) &&
     Object.keys(processOverrides||{}).every(key=>[
       "layer_height","wall_loops","top_shell_layers",
       "bottom_shell_layers","sparse_infill_density",
@@ -1218,7 +1236,8 @@ export default function SlicerPrepareWorkspace({
     ? "Creality experimental painting currently requires one colour-painted model with two assigned native CFS filament profiles; single-colour and two-model projects can save these edits but cannot slice them yet."
     : "";
   const paintedNativeReady = multiMaterialReadyForExport || crealityPaintReady ||
-    (activeEngine==="prusaslicer" && prusaSinglePaint && prusaNativeReady);
+    (activeEngine==="prusaslicer" &&
+      (prusaSinglePaint || prusaMultiPaint) && prusaNativeReady);
   const hasPaintedColours = usedNativeFeatures([{objects}]).includes("colour_paint");
   const paintingRoutingNotice = hasPaintedColours && !paintedNativeReady
     ? activeEngine === "prusaslicer"
