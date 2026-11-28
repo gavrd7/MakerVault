@@ -318,7 +318,8 @@ def _decode_payload(payload):
             "partial_wall":receipt["partial_wall"],
             "partial_top":receipt["partial_top"],
             "dual_partial":receipt["dual_partial"],
-            "compound_volume":receipt["compound_volume"]}
+            "compound_volume":receipt["compound_volume"],
+            "colour_fuzzy":receipt["colour_fuzzy"]}
     if "creality_model_stls" in payload:
         if (payload["engine"] != "crealityprint" or model_format != "stl" or
                 "filament_profiles" not in files):
@@ -563,6 +564,9 @@ class Handler(BaseHTTPRequestHandler):
                     # two-volume compound path.
                     from .prusa_colour_compound import audit_prusa_painted_volume_effects
                     audit_prusa_painted_volume_effects(data, files["model"])
+                    if details.get("colour_fuzzy"):
+                        from .prusa_colour_fuzzy import audit_prusa_colour_fuzzy_gcode
+                        audit_prusa_colour_fuzzy_gcode(data,files["model"])
                 if files.get("prusa_offline_xl_colour"):
                     details=files["prusa_offline_xl_colour"]
                     if "tools" in details and len(details["tools"])==4:
