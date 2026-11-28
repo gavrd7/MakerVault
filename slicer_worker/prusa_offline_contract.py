@@ -162,10 +162,13 @@ def validate_prusa_offline_colour_inputs(*, project, printer, filament, process,
     else:
         from .prusa_partial_surface import qualified_prusa_single_colour_mode
         mode = qualified_prusa_single_colour_mode(project, tool)
-        if mode in ("split_slanted","split_curved"):
+        if mode=="split_slanted":
             raise WorkerError(
-                "Prusa MMU angled or curved painted faces lack independent "
-                "native surface and wipe-tower qualification.")
+                "Prusa MMU angled painted faces still lack independent native "
+                "surface and wipe-tower qualification.")
+        if mode=="split_curved" and tool!=1:
+            raise WorkerError(
+                "Native Prusa MMU curved painting is qualified for T1 only.")
     if (compound or fuzzy) and mode != "complete_wall":
         raise WorkerError(
             "Prusa colour with typed volumes or selective fuzzy needs "
@@ -176,7 +179,8 @@ def validate_prusa_offline_colour_inputs(*, project, printer, filament, process,
             "colour_fuzzy": fuzzy,
             "dual_partial": (dual and dual_mode == "split_opposite"),
             "partial_wall": (not dual and mode == "split_wall"),
-            "partial_top": (not dual and mode == "split_top")}
+            "partial_top": (not dual and mode == "split_top"),
+            "partial_curved": (not dual and mode == "split_curved")}
 
 
 def validate_prusa_offline_xl_colour_inputs(*, project, printer, filament, process,
