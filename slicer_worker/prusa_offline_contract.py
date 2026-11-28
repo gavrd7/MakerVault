@@ -144,13 +144,16 @@ def validate_prusa_offline_colour_inputs(*, project, printer, filament, process,
                 (same and value!=0) or (not same and value<1)):
             raise WorkerError("Prusa offline painted purge entry is invalid.")
     from .prusa_colour_compound import qualified_prusa_colour_compound
+    from .prusa_colour_fuzzy import qualified_prusa_colour_fuzzy
     compound = qualified_prusa_colour_compound(project)
-    if compound and (dual or tuple(selected) != (1,)):
+    fuzzy = qualified_prusa_colour_fuzzy(project)
+    if (compound and (dual or tuple(selected)!=(1,))) or (
+            fuzzy and (dual or compound or tuple(selected)!=(1,))):
         raise WorkerError(
-            "Native Prusa painted modifier/cavity requires one T1 wall swatch.")
+            "Mixed Prusa paint needs exactly one signed T1 native effect.")
     receipt=validate_prusa_material_candidate(
         project,printer_ini=printer,colour=True,tower=tower,
-        compound_colour=compound)
+        compound_colour=compound,fuzzy_colour=fuzzy)
     if receipt["objects"]!=1 or receipt["tools"]!=tuple(sorted((1, *(v+1 for v in selected)))):
         raise WorkerError("Prusa offline painted native tool selection changed.")
     if dual:
@@ -163,12 +166,14 @@ def validate_prusa_offline_colour_inputs(*, project, printer, filament, process,
             raise WorkerError(
                 "Prusa MMU angled painted faces lack independent native "
                 "surface and purge qualification.")
-    if compound and mode != "complete_wall":
+    if (compound or fuzzy) and mode != "complete_wall":
         raise WorkerError(
-            "Prusa painted modifier/cavity needs the genuine full-wall proof.")
+            "Prusa colour with typed volumes or selective fuzzy needs "
+            "the genuinely qualified complete T1 exterior wall.")
     return {**({"tools":list(selected)} if dual else {"tool":tool}),
             "tower":tower, "offline_only":True,
             "compound_volume": compound,
+            "colour_fuzzy": fuzzy,
             "dual_partial": (dual and dual_mode == "split_opposite"),
             "partial_wall": (not dual and mode == "split_wall"),
             "partial_top": (not dual and mode == "split_top")}
