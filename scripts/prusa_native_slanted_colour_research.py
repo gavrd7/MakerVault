@@ -70,6 +70,11 @@ def main(binary, vendor):
     receipt = validate_prusa_material_candidate(
         project, printer_ini=printer, colour=True, independent_colour=True)
     assert receipt["tools"] == (1, 2)
+    from slicer_worker.prusa_offline_contract import validate_prusa_offline_xl_colour_inputs
+    signed = validate_prusa_offline_xl_colour_inputs(
+        project=project,printer=printer,filament=filament,
+        process=process,tool=1)
+    assert signed["partial_slanted"] and not signed["partial_top"], signed
     with TemporaryDirectory(prefix="prusa-xl-slanted-brush-") as dirname:
         folder = Path(dirname)
         for name, value in (
