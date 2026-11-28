@@ -128,6 +128,37 @@ class PrusaSeamAuditTests(unittest.TestCase):
                     gcode(relative=relative), project(), bed_width=250, bed_depth=210)
                 self.assertEqual(result["matching_layers"], 12)
 
+    def test_mmu_seam_can_select_first_deposited_perimeter_per_native_tool(self):
+        # A T1 coloured perimeter may be deposited first on every layer
+        # even when a signed T0 seam enforcer belongs on another face.
+        # The legacy global-first test must not accidentally certify this
+        # tool-specific material flow; the per-tool check must still reject
+        # actual incorrect T0 starts.
+        lines=["G90","M83","G92 E0"]
+        for layer in range(1,13):
+            z=2+layer*.2
+            lines.extend([
+                ";LAYER_CHANGE",f"G0 Z{z:.3f}",
+                "T1",";TYPE:External perimeter",
+                "G0 X115.0 Y95.22",
+                "G1 X116.0 Y95.22 E.03",
+                "T0",";TYPE:External perimeter",
+                "G0 X134.53 Y114.78",
+                "G1 X134.78 Y114.78 E.03"])
+        sample=("\n".join(lines)+"\n").encode()
+        with self.assertRaises(ValueError):
+            audit_prusa_seam_enforcer_gcode(
+                sample,project(),bed_width=250,bed_depth=210)
+        verified=audit_prusa_seam_enforcer_gcode(
+            sample,project(),bed_width=250,bed_depth=210,tool=0)
+        self.assertEqual(verified["matching_layers"],12)
+        with self.assertRaises(ValueError):
+            audit_prusa_seam_enforcer_gcode(
+                sample,project(),bed_width=250,bed_depth=210,tool=1)
+        with self.assertRaises(ValueError):
+            audit_prusa_seam_enforcer_gcode(
+                sample,project(),bed_width=250,bed_depth=210,tool=9)
+
     def test_unpainted_opposite_wall_and_non_extruding_comments_rejected(self):
         for raw in (gcode(right=False), gcode().replace(b"Y114.78 E", b"Y114.78 F"),
                     b";TYPE:External perimeter\n;LAYER_CHANGE\n"*10):
