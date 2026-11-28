@@ -260,6 +260,10 @@ def prepare_prusa_offline_colour_candidate(
     if row.get("fuzzy_skin_paint") and not fuzzy:
         raise SlicerProfileError("Prusa selective fuzzy requires native painted facets.")
     compound=bool(volumes) and len(volumes)==2
+    if volumes and (len(colour_tool_indices)!=1 or
+                    next(iter(colour_tool_indices.values()))!=1):
+        raise SlicerProfileError(
+            "The native Prusa painted primitive combination is qualified on T1.")
     if fuzzy and (volumes or len(colour_tool_indices)!=1 or
                   next(iter(colour_tool_indices.values()))!=1 or
                   row.get("support_paint") or row.get("seam_paint") or
