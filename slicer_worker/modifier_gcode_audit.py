@@ -21,9 +21,112 @@ CMD = re.compile(r"^(G0?[01]|G92|M82|M83|G90|G91)\b", re.I)
 WORDS = re.compile(r"\b([XYZE])([-+]?(?:\d+(?:\.\d*)?|\.\d+))", re.I)
 
 
+def _prusa_modifier_bounds(project, *, include_kinds=False, include_meshes=False):
+    """Read Prusa's native *contiguous triangle ranges* as typed volumes.
+
+    Unlike the BBS/Creality 3MF dialect, a Prusa object owns all of its
+    modifier and cavity mesh faces. This branch is isolated to the Prusa
+    engine and leaves the three established engines' existing reader intact.
+    """
+    from .prusa_3mf_validation import CONFIG
+    from .prusa_material_validation import MODEL
+
+    try:
+        with zipfile.ZipFile(io.BytesIO(project)) as archive:
+            model_xml = archive.read(MODEL)
+            config_xml = archive.read(CONFIG)
+        if any(b"<!" in raw or b"\x00" in raw
+               for raw in (model_xml, config_xml)):
+            raise WorkerError("Unsafe Prusa native volume XML.")
+        root = SafeET.fromstring(model_xml)
+        config = SafeET.fromstring(config_xml)
+        objects = root.findall(NS + "resources/" + NS + "object")
+        settings = config.findall("object")
+        if len(objects) != 1 or len(settings) != 1:
+            raise WorkerError("Prusa modifier audit requires one printable parent.")
+        vertices = objects[0].findall(
+            NS + "mesh/" + NS + "vertices/" + NS + "vertex")
+        faces = objects[0].findall(
+            NS + "mesh/" + NS + "triangles/" + NS + "triangle")
+        volumes = settings[0].findall("volume")
+        if (not 4 <= len(vertices) <= 1_500_000 or
+                not 4 <= len(faces) <= 500_000 or
+                not 2 <= len(volumes) <= 49):
+            raise WorkerError("Prusa native volume geometry exceeds audited bounds.")
+        source_points = []
+        for vertex in vertices:
+            point = tuple(float(vertex.get(axis)) for axis in ("x", "y", "z"))
+            if any(not math.isfinite(value) or abs(value) > 2000
+                   for value in point):
+                raise WorkerError("Invalid Prusa volume vertex.")
+            source_points.append(point)
+        kinds, bounds, meshes = [], [], []
+        previous = -1
+        for index, volume in enumerate(volumes):
+            first = int(volume.get("firstid", "-1"))
+            last = int(volume.get("lastid", "-1"))
+            if first != previous + 1 or not first <= last < len(faces):
+                raise WorkerError("Prusa native volume face ranges overlap or have gaps.")
+            previous = last
+            metadata = {node.get("key"): node.get("value")
+                        for node in volume.findall("metadata")}
+            if len(metadata) != len(volume.findall("metadata")):
+                raise WorkerError("Duplicate Prusa volume metadata.")
+            role = metadata.get("volume_type")
+            if index == 0:
+                if role != "ModelPart":
+                    raise WorkerError("Missing primary Prusa printable volume.")
+                continue
+            if role == "ParameterModifier":
+                if (len(metadata) < 2 or
+                        not set(metadata) <= {
+                            "volume_type", "perimeters", "fill_density",
+                            "top_solid_layers", "bottom_solid_layers"}):
+                    raise WorkerError("Unqualified Prusa regional process metadata.")
+                kinds.append("modifier_part")
+            elif role == "NegativeVolume":
+                if set(metadata) != {"volume_type"}:
+                    raise WorkerError("Negative Prusa volume has process overrides.")
+                kinds.append("negative_part")
+            else:
+                raise WorkerError("Unrecognised Prusa native volume role.")
+            triangles = []
+            used = set()
+            for face in faces[first:last+1]:
+                indices = tuple(int(face.get(key))
+                                for key in ("v1", "v2", "v3"))
+                if any(not 0 <= vertex < len(source_points) for vertex in indices):
+                    raise WorkerError("Invalid Prusa native volume triangle index.")
+                used.update(indices)
+                if include_meshes:
+                    triangles.append(tuple(source_points[j] for j in indices))
+            if len(used) < 4:
+                raise WorkerError("Prusa native modifier has no closed mesh.")
+            points = [source_points[j] for j in used]
+            bounds.append(tuple(
+                (min(p[a] for p in points), max(p[a] for p in points))
+                for a in range(3)))
+            if include_meshes:
+                meshes.append(tuple(triangles))
+        if previous != len(faces) - 1 or not bounds:
+            raise WorkerError("Prusa native volume coverage is incomplete.")
+        if include_meshes:
+            return bounds, kinds, meshes
+        return (bounds, kinds) if include_kinds else bounds
+    except WorkerError:
+        raise
+    except (ValueError, TypeError, OverflowError, AttributeError, KeyError,
+            IndexError, zipfile.BadZipFile, SafeET.ParseError, OSError):
+        raise WorkerError("Cannot verify Prusa typed native volume geometry.") from None
+
+
 def modifier_bounds(project, engine, *, include_kinds=False, include_meshes=False):
     if not isinstance(project, bytes) or len(project) > 32 * 1024 * 1024:
         raise WorkerError("Invalid modifier geometry for G-code audit.")
+    if engine == "prusaslicer":
+        return _prusa_modifier_bounds(
+            project, include_kinds=include_kinds,
+            include_meshes=include_meshes)
     try:
         with zipfile.ZipFile(io.BytesIO(project)) as archive:
             if engine == "crealityprint":

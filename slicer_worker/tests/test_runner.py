@@ -6,6 +6,7 @@ from unittest.mock import patch
 import os
 
 from slicer_worker.runner import WorkerError, prusa_command, run_prusa
+from scripts.prusa_real_binary_smoke import cube_stl
 
 
 class WorkerContractTests(TestCase):
@@ -16,8 +17,14 @@ class WorkerContractTests(TestCase):
         self.executable = self.root / "prusa-slicer"
         self.executable.write_text("#!/bin/sh\nexit 0\n")
         self.executable.chmod(0o700)
-        for name in ("input.stl", "printer.ini", "filament.ini", "process.ini"):
-            (self.root / name).write_bytes(b"fixture")
+        (self.root / "input.stl").write_bytes(cube_stl())
+        (self.root / "printer.ini").write_text(
+            "printer_technology = FFF\nnozzle_diameter = 0.4\n"
+            "bed_shape = 0x0,200x0,200x200,0x200\n")
+        (self.root / "filament.ini").write_text(
+            "filament_diameter = 1.75\ntemperature = 210\n")
+        (self.root / "process.ini").write_text(
+            "layer_height = 0.2\nfill_density = 15%\n")
         self.output = self.root / "output.gcode"
 
     def test_fixed_command_never_takes_user_command_parameters(self):
@@ -27,13 +34,31 @@ class WorkerContractTests(TestCase):
         self.assertIn("--export-gcode", args)
         self.assertEqual(args.count("--load"), 3)
 
+    def test_positioned_prusa_stl_uses_fixed_no_arrange_flag(self):
+        base = prusa_command(self.executable, self.root)
+        self.assertNotIn("--dont-arrange", base)
+        (self.root / "prusa-placed-stl.marker").write_text("v1")
+        placed = prusa_command(self.executable, self.root)
+        self.assertIn("--dont-arrange", placed)
+        self.assertEqual(placed.count("--dont-arrange"), 1)
+        self.assertEqual(placed[-1], str(self.root / "input.stl"))
+        (self.root / "prusa-placed-stl.marker").write_text("--delete-all")
+        with self.assertRaisesRegex(WorkerError, "marker"):
+            prusa_command(self.executable, self.root)
+        (self.root / "prusa-placed-stl.marker").unlink()
+        (self.root / "prusa-placed-stl.marker").symlink_to(self.root / "filament.ini")
+        with self.assertRaisesRegex(WorkerError, "marker"):
+            prusa_command(self.executable, self.root)
+
     def test_symlink_input_and_existing_output_are_rejected(self):
         (self.root / "printer.ini").unlink()
         (self.root / "printer.ini").symlink_to(self.root / "filament.ini")
         with self.assertRaises(WorkerError):
             prusa_command(self.executable, self.root)
         (self.root / "printer.ini").unlink()
-        (self.root / "printer.ini").write_text("fixture")
+        (self.root / "printer.ini").write_text(
+            "printer_technology = FFF\nnozzle_diameter = 0.4\n"
+            "bed_shape = 0x0,200x0,200x200,0x200\n")
         self.output.write_text("old output")
         with self.assertRaises(WorkerError):
             prusa_command(self.executable, self.root)
@@ -72,6 +97,23 @@ class WorkerContractTests(TestCase):
     def test_post_processing_scripts_are_rejected(self):
         (self.root / "printer.ini").write_text("post_process = /tmp/untrusted.sh\\n")
         with self.assertRaisesRegex(WorkerError, "Post-processing"):
+            prusa_command(self.executable, self.root)
+
+    def test_actual_nul_in_native_profile_is_rejected(self):
+        # A literal backslash-x-zero-zero sequence is not a binary NUL.
+        (self.root / "printer.ini").write_bytes(b"layer_height = 0.2\n\x00")
+        with self.assertRaisesRegex(WorkerError, "binary"):
+            prusa_command(self.executable, self.root)
+
+    def test_plain_escaped_text_is_not_a_binary_nul(self):
+        (self.root / "printer.ini").write_bytes(
+            b"; a literal \\x00 sequence\nprinter_technology = FFF\n"
+            b"nozzle_diameter = 0.4\nbed_shape = 0x0,200x0,200x200,0x200\n")
+        self.assertIn("--export-gcode", prusa_command(self.executable, self.root))
+
+    def test_malformed_stl_is_rejected_before_engine_launch(self):
+        (self.root / "input.stl").write_bytes(b"not an STL")
+        with self.assertRaisesRegex(WorkerError, "STL"):
             prusa_command(self.executable, self.root)
 
     def test_invalid_timeout_and_oversize_models_fail_without_execution(self):

@@ -1,0 +1,253 @@
+# MakerVault PrusaSlicer feature-parity acceptance matrix
+
+**Status:** development only; draft PR #213. This is the completion
+contract for Prusa integration. It is **not** a requirement to implement
+all upstream PrusaSlicer capabilities. Every row describes an existing
+MakerVault workflow that must work through the same desktop/mobile UI as
+the three established engines.
+
+## Completion policy
+
+A row is **done** only when the existing MakerVault control is wired to a
+real Prusa setting/project operation, authenticated worker slices genuine
+2.9.7 G-code, and a targeted audit confirms the requested geometric or
+material effect. No source facet, modifier, tool or setting may be silently
+discarded. Basic GUI availability or a zero-exit native slicer call is not
+sufficient evidence. Keep all feature additions inside the Prusa adapter
+and shared engine contract; regression-test Creality, Orca and Bambu.
+
+Do not translate the absence of owned Prusa hardware into arbitrary
+maximum tool count or disabling offline slicer functions. The printer's
+actual native extruder/MMU topology determines permissible assignments.
+Physical submission requires separate verified firmware and start ACK
+tests; leave unsafe printer-start blocked until that is proven.
+
+## MakerVault workflow checklist
+
+| MakerVault feature | Existing Prusa route | Current acceptance / outstanding gap |
+| --- | --- | --- |
+| Install, uninstall, version and identity | Verified installer and pinned binary, shared worker | Native install/uninstall acceptance exists; ensure UI parity on staging |
+| Profile browse/import and global numeric settings | Native profiles, official catalogue, shared pagination | Import and native overrides covered; verify filament manufacturer search against UX requirement on both layouts |
+| Add/select/transform/disassemble multiple models | Native 3MF, STL bake, shared plate placement | Up to 200 instances under resource budget; manually inspect assembly tree and controls |
+| Primitive shapes, infill modifiers and negative volumes | Native 3MF modifiers and negative bodies | Independently proven effects. **Colour + Object settings + six single-shape modifiers/cavities + separately proven modifier/negative box pair** generated genuine 2.9.7 G-code with retained T1 paint, inside-region E 90.89 -> 215.13 for modifier and 95.22 -> 0.00 in negative cavity (native run 46083553897). This exact MMU combination is now admitted through the shared workbench with both signed volume geometry and real positive-E/cavity audits on **every** slice; other shapes, overlapping volumes and mixed paint-channel combinations remain blocked |
+| Single-material slicing + G-code / thumbnail / preview | Common slice worker and Library | Binary and storage paths covered; confirm full shared UI navigation and preview on staging |
+| Global and per-object settings | Native numeric process + 3MF object config | Bounded speeds, walls, shells, infill, brim and skirt audited. **Painted native ModelPart now retains Object controls**; one versus five painted wall loops genuinely yielded 0 versus 6,434 internal-perimeter movements |
+| Colour paint, material mapping and tool selection | Native TriangleSelector, MMU/XL/INDX material adapter | **MMU one-/two-swatch partial vertical faces, MMU one-swatch partial top faces, and XL5 partial vertical/horizontal top faces** have source-derived offline admission and mandatory native 2.9.7 deposition audits. MMU two independently split opposite walls: T1=122, T2=126, neither alternate tool leaked into another painted/unpainted region; tower T0=3,624/T1=1,858/T2=1,808 (run 46086291996). One-colour vertical MMU T1=64 with zero unpainted leakage (run 46083933214); horizontal XL5 T1=67 with zero unpainted leakage (run 46084811769). Genuine MMU horizontal top T1 painted=67/unpainted=0, T0 plain=376 and MMU T0/T1 tower purges=2,171/172 (run 46099342292). Existing complete walls, INDX T1–T7 and XL5 four complete faces remain supported. Genuine XL5 T1 partial angled planar brush: 19 T1 painted, 0 T1 unpainted and 80 T0 unpainted positive-E paths (run 46087014378). Multiple disjoint brush regions can share one native colour slot. INDX curved or non-T1 angled paint, more than two painted models, split multi-model masks and INDX partial paint remain unqualified |
+| Printer filament list with >4 tools | Printer-derived native topology | MMU5 / XL5 and eight-head INDX proved in real CLI; verify saved and restored UI state and no extra fixed limit |
+| Support painting | Native painted support and spatial audit | One selected painted model among up to 200 objects qualifies; simultaneous multi-object paint variants remain unqualified |
+| Seam painting | Native facet seam states and G-code spatial audit | **15-model true per-object painted seams** proven with two different selected front/back faces: 95 independently correct seam starts on each; unpainted baseline rejected. Broader disjoint arbitrary seam masks still need native verification |
+| Fuzzy skin painting | Native facet fuzz, owner geometry and G-code audit | **2–200 model plate, multiple independently painted models**; genuine fifteen-object native output deposited 2,603/2,625 short external moves on selected models, zero on thirteen plain neighbours |
+| Variable layer height | Native layer range 3MF + object-local toolpath audit | **2–200 single-material objects**: genuine 15-model binary test proves a 0.12mm schedule on the selected model and 0.20mm on fourteen unaffected neighbours. MMU variable-Z native incompatibility remains unqualified |
+| Prime tower, purge and independent heads | MMU directional purge; no tower on XL/INDX | Genuine binary tests for MMU, XL and official INDX exist |
+| Print from slicer and printer start confirmation | Shared submission adapter; PrusaLink API | Offline G-code valid; native Prusa physical toolchange upload/start currently intentionally guarded. Do not present upload as print start confirmation |
+| Mobile and desktop | Shared React components | Required manual visual/interaction pass on actual staging before ready-for-review |
+
+## Native painting and composition qualification — 27 November 2026
+
+- Native 2.9.7 **MMU split-vertical-wall painting** has completed genuine
+  source-mask-to-G-code toolpath qualification: 64 positive-E T1 movements
+  within painted facets, **zero T1 in unpainted facets**, 172 T0 in unpainted
+  facets and 7 T0 foundation movements on painted facets. The same pinned
+  run proved 1,836 T0 and 1,748 T1 positive-E wipe-tower movements. Source
+  polygons are fingerprinted and checked again in the worker; G-code is
+  independently audited before saving a private slice.
+- Genuine native **XL5 split-vertical-wall painting** yielded the same
+  independently counted T1/T0 surface isolation without MMU purging.
+  Its separate offline route retains a no-tower worker audit. Other XL
+  tool counts and INDX are **not automatically certified** for partial masks.
+- Genuine pinned **XL5 partial horizontal top-face painting** has now
+  passed the independent signed top-plane / positive-E auditor: 67 T1
+  movements inside the selected brush region, zero T1 in the unpainted
+  model top, 376 T0 in unpainted top geometry and only three T0 foundation
+  movements inside paint. Authenticated worker and owner-side post-slice
+  checks apply to this source-derived mode. Other independent
+  head counts, angled and curved surfaces remain guarded.
+- **Native MMU partial horizontal top-face painting:** pinned Prusa 2.9.7
+  independently qualified the same signed top brush using its actual
+  single-nozzle/MMU path: T1 painted=67/unpainted=0, T0 on unpainted
+  top=376, and positive-E wipe tower moves T0=2,171/T1=172
+  (run `46099342292`). The normal owner-scoped offline job and isolated
+  worker now both require this spatial mask and *both* purge audits; the
+  genuine-binary native test is mandatory. XL5 remains separately audited
+  without MMU purging.
+- **Single painted native infill modifiers** are no longer validated only by
+  successful colour G-code. Every MMU and XL5 painted native project
+  containing a modifier now also runs MakerVault's existing volumetric
+  positive-E region auditor in both the isolated worker and owner post-slice
+  acceptance. A requested modifier with no deposition is rejected, and
+  subtraction inside qualified negative cavities remains strictly empty.
+- MakerVault v2 paint may represent many independent regions with the same
+  palette slot. Prusa workbench binding now uses the **distinct slots**
+  rather than treating each brush stroke as a separate tool. Overlapping
+  facets remain rejected by the native polygon splitter.
+- **Two independently split MMU colour walls:** pinned 2.9.7 genuine
+  three-tool deposition proved 122 correct T1 painted-wall movements, 126
+  T2 painted-wall movements, no T1/T2 cross-wall or unpainted-region
+  deposition, and T0/T1/T2 wipe tower paths 3,624/1,858/1,808
+  respectively (run 46086291996). Signed native 3MF determines tool order;
+  both backend and isolated worker audit every actual G-code result. The
+  desktop/mobile workbench uses its existing swatch-tool selector.
+- **Scoped colour + Object settings + infill box + disjoint cavity is
+  now live for authenticated MMU offline slicing.** On each job the worker
+  derives exact typed box geometry from native 3MF, verifies one full T1
+  wall swatch, rejects overlapping/unknown shapes, audits T0/T1 wipe-tower
+  + painted deposition and uses MakerVault's shared native volumetric
+  positive-E auditor. Owner-side post-slice repeats those audits before
+  storing the private G-code. Genuine 2.9.7 evidence: 6,333 paths in
+  modifier region and **zero inside cavity** (run 46086097259). The
+  combined real-binary test is mandatory in CI. No printer-start
+  qualification is implied.
+- **Single native modifier or negative primitive on a T1-painted MMU
+  model:** genuine PrusaSlicer 2.9.7 completed all twelve combinations
+  of **box, cone, cylinder, disc, sphere and torus** with positive T1
+  front-wall deposition, positive-E presence in the signed density
+  modifier and **zero** moving positive-E paths inside each independently
+  subtracted cavity (run `46105771007`). All six native shapes can now
+  be authored through the shared MakerVault editing controls; the isolated
+  worker and owner independently rerun the actual native volumetric
+  G-code audit on every result. The original separately proven compound
+  one-box modifier plus disjoint one-box cavity remains supported;
+  multiple arbitrary modifiers/cavities stacked on one painted model
+  still need separate native composition tests.
+- **Native MMU colour plus selective fuzzy on the opposite wall:**
+  genuine pinned PrusaSlicer 2.9.7 preserved T1 front coloured wall
+  deposition (369 control/370 combined) while producing **3,091** moving
+  short T0 perimeter paths on the independently fuzzy-painted back wall
+  versus **zero** in the colour-only control; the front's short-wall paths
+  remained 376 in both cases (native run `46099472545`). The normal
+  MakerVault colour job now retains native fuzzy facet attributes, and both
+  isolated worker and owner post-slice paths require the signed complete
+  opposite wall plus moving positive-E texture checks. Support, seam,
+  variable Z, extra native regions and other toolhead topologies remain
+  gated for this precise combination; genuine binary verification is
+  mandatory in CI.
+- A research-only native project now preserves **four overlapping paint
+  channels** (colour/support/seam/fuzzy) and both modifier and negative
+  volume meshes, plus Object process controls, without colour states on
+  nonprinting modifier geometry. The independent strict validator accepts
+  only explicitly flagged research files, never production colour admission.
+- Genuine G-code proves the narrower combination **colour + Object + one
+  box infill modifier + one disjoint negative box**: inside positive-E in
+  the modifier footprint increased about 90.89 -> 215.13; in the cavity
+  it dropped from about 95.22 to zero; T1 coloured front-wall deposition
+  persisted. This **does not yet lift ordinary mixed-edit admission** for
+  arbitrary geometries or overlapping facets. Inspect recorded CI run
+  `46083553897` and required current-head run for source proof.
+- Even fully audited offline G-code is not evidence of a printer accepting
+  native toolchange commands. All Prusa native physical upload/start remains
+  guarded until real firmware capability and print-start ACK qualification.
+
+- **Genuine MMU5 T1 curved/nonplanar colour painting:** pinned 2.9.7
+  retained the same 33 signed painted and 225 unpainted cylindrical
+  source facets on a true single-nozzle/MMU profile. Real exterior
+  positive-E deposition: T1=985 in the painted angular sector,
+  T0=2,652 in the plain sector, *zero* opposite-sector wrong-colour
+  extrusion. Independent strict 3-D BVH audit: T1 painted=1,920,
+  unpainted near boundary=90 (under bounded tolerance), T0
+  unpainted=6,212, plus genuine MMU wipe-tower deposition
+  T0=3,692 and T1=3,604 (run `46104952977`).
+  Both isolated worker and owner side require the signed source
+  attribution and two-tool purge proof on each job. It is distinct
+  from XL5's no-tower mode; MMU alternate tools, INDX,
+  overlapping semantic channels and multi-model curved masks
+  remain separately guarded.
+- **Native INDX8 split-colour T5/T7 opposite walls:** pinned 2.9.7
+  sliced true partial triangles in two different signed exterior faces,
+  retaining T5=122 deposited paths exclusively on its selected front wall
+  and T7=126 exclusively on the opposing rear wall, with zero T5/T7
+  other-wall and unpainted-region leakage. Genuine native T0 plain paths
+  were 233/263; native independent heads require no MMU purge
+  (run `46105645806`). Both owner and isolated worker now recognise
+  this exact source-derived eight-head tool pairing, with independent
+  positive-E checks mandatory in the pinned CI. Other combinations of
+  partially painted INDX heads are not inferred from this one result.
+- **Independent INDX8 T1 curved/nonplanar painting:** the existing
+  native eight-head synthetic printer profile (reviewed official XL5
+  baseline expanded to eight toolheads, no invented pickup scripts) passed
+  a genuine pinned Prusa 2.9.7 test with the same source-signed 33 painted
+  and 225 plain cylindrical triangles. Actual deposited exterior paths:
+  T1=985 painted and T0=2,656 unpainted, zero T1 opposite-sector leakage.
+  The independent finite 3D BVH assigned T1 painted=1,920 and
+  T0 plain=6,213, no native wipe tower (run `46105525694`).
+  The normal isolated worker and owner post-slice now admit this precisely
+  qualified eight-head T1 curved mode, retaining signed source and actual
+  positive-E checks. No claim of real INDX tool pickup/firmware ACK;
+  alternative-head curved paint and separate multi-colour split masks
+  remain unqualified.
+- **Genuine XL5 T1 curved/nonplanar surface painting:** a 64-facet
+  cylindrical source including one *split* triangle retained 33 individually
+  signed painted facets and 225 plain facets in the native 3MF. The pinned
+  PrusaSlicer 2.9.7 run produced 985 T1 positive-E exterior movements in
+  the target curved angular sector and 2,656 T0 movements on the opposite
+  plain region, with no opposite-sector leakage. The independent 3D nearest-
+  facet BVH classified T1 painted=1,920, near-boundary plain=91
+  (within its explicit tolerance), T0 unpainted=6,213, and ambiguous
+  near-interface paths separately (run `46104222816`).
+  Source geometry is reconstructed by the isolated worker, not taken from
+  browser flags. Owner-side post-slice repeats the 3D positive-E spatial
+  audit. Only XL5 T1 has genuine evidence: MMU, INDX, other XL heads,
+  multi-model curved masks, and combined semantic paint remain gated.
+- **Two independently painted MMU models:** the native multi-ModelPart 3MF
+  now preserves one independently signed T1 full exterior-wall mask on the
+  first model and one T2 mask on the second. Genuine pinned PrusaSlicer
+  2.9.7 extrusion at two separate plate positions: T1=300 left painted,
+  T2=300 right painted, and *zero* T1/T2 cross-model or unpainted-wall
+  deposition; native MMU purge counts were T0=7,276, T1=3,718 and
+  T2=3,727 (run `46104337424`). Genuine output additionally used T0
+  foundation paths on the selected painted walls; the spatial audit
+  correctly allows legitimate T0 base material while rejecting any
+  wrong alternate colour. Each object is independently revalidated through
+  the strict single-model Prusa source validator; the isolated worker and
+  owner post-slice both audit each native painted region. The shared
+  workbench now allows two T0-base objects with distinct T1/T2 swatches.
+  Three or more independently painted models, partially split multi-model
+  masks, mixed modifiers and non-MMU topologies remain unqualified.
+- **Native XL5 T1 partial angled planar paint:** a rotated 30-degree
+  single-model test on pinned PrusaSlicer 2.9.7 produced 19 positive-E
+  external-perimeter movements within the signed angled patch, **zero**
+  T1 deposition on its unpainted portion, and 80 T0 movements outside
+  the patch (run 46087014378). The authenticated worker independently
+  reconstructs the 3-D source plane, indexes its triangular surface in a
+  balanced spatial tree, and checks deposited paths against painted and
+  unpainted source facets. Only XL5 T1 single-model planar angled masks
+  are admitted; curved/nonplanar masks, other tool counts and multi-model
+  paint remain guarded. The genuine binary test is mandatory.
+
+### Staging desktop/mobile and printer workflow sign-off
+
+Use the **existing** MakerVault interface on both viewport sizes, no Prusa-only
+UI: choose printer and process/filament catalogue profile; verify filament
+manufacturer list and profile pagination; add, transform and assemble models;
+select native tools beyond four; save/reload a painted draft and visually
+compare regions, object tree and modifiers; complete a qualified offline
+slice and open its full-quality G-code preview; add to Library and confirm
+that the preview remains visible after submission modal closure. Verify that
+a dispatched but unacknowledged print is labelled pending, never "started".
+Exercise a real PrusaLink printer for physical start confirmation **only**
+after native toolchange firmware qualification; do not bypass the guard for
+this checklist. No real-hardware sign-off is claimed by automation.
+
+## High-priority remaining integration gaps
+
+1. Extend proven **one/two-swatch MMU partial vertical walls** and **XL5 vertical/top/curved T1 partial masks** to INDX curved surfaces and other-tool angled masks, non-opposing multi-colour masks, more than two or independently split multi-model colour masks and separately qualified INDX partial masks. Audit real G-code spatial tool deposition for each independent region; never substitute whole-wall rectangles for split masks.
+2. Expand the now-verified **MMU colour + Object + infill box + disjoint
+   negative box** and separately qualified **MMU T1 front colour + opposite
+   T0 selective fuzzy** to arbitrary native shapes and simultaneous support,
+   seam, variable-layer and other paint edits without dropping requested
+   operations; qualify each native combination against genuine spatial G-code
+   and worker audits.
+3. Reconcile the per-object and global MakerVault settings schemas and
+   model limits, then verify the existing mobile/desktop editor and
+   imported profile selection rather than adding a separate Prusa UI.
+4. Finish the common slicer-to-printer UX (modal close, preview, actual
+   printer start acknowledgement) in a manner that does not bypass
+   native firmware/toolchange qualification. The lack of physical Prusa
+   hardware must remain an explicit final physical validation criterion.
+5. Pass all exact-head Prusa, Orca, shared worker, frontend and Django
+   workflows, plus a staging UI pass. Merge **only after** every MakerVault
+   feature row is supported, or the user explicitly approves a tightly
+   documented, genuine upstream incompatibility.
+
+Older PR #199 native experiments and their historical notes are kept in
+`docs/development/prusaslicer-engine.md`. The exact restored production
+branch remains untouched by this draft.

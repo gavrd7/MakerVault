@@ -166,6 +166,31 @@ def submission_status(request, printer_id, connection_id, request_id):
     ).first()
     if not row:
         return JsonResponse({"error": "Submission not found."}, status=404)
+    # While one explicitly sent start awaits confirmation, obtain fresh
+    # read-only telemetry on demand. A G-code receipt GET never sends another
+    # upload/start. Throttle against the connection's last poll so multiple
+    # browser tabs and normal monitoring do not hammer the device.
+    from django.utils import timezone
+    from datetime import timedelta
+    from .printer_gcode_submission import (
+        START_ACCEPTED_PENDING, START_UNACKNOWLEDGED_PENDING,
+        CREALITY_START_CONFIRMATION,
+    )
+    pending = (row.action == "print" and row.status in {"unknown", "started"}
+               and str(row.message or "").startswith((
+                   START_ACCEPTED_PENDING, START_UNACKNOWLEDGED_PENDING,
+                   CREALITY_START_CONFIRMATION))
+               and row.created_at >= timezone.now() - timedelta(minutes=10))
+    if pending and (not connection.last_checked_at or
+                    connection.last_checked_at < timezone.now() - timedelta(seconds=5)):
+        try:
+            from .printer_connectivity import poll_connection
+            poll_connection(connection)
+        except Exception:
+            # A failed telemetry read is not proof of failure or acceptance.
+            # Preserve the pending journal; the user may inspect the printer.
+            pass
+        row.refresh_from_db(fields=["status", "message", "updated_at"])
     return JsonResponse({"submission": {
         "request_id": str(row.pk), "source": row.source, "action": row.action,
         "remote_path": row.remote_path, "status": row.status,

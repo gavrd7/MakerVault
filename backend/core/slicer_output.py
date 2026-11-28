@@ -102,7 +102,22 @@ def store_generated_gcode(job_id, raw: bytes):
                 raise SlicerOutputError("Slice job ownership changed.")
             # The validated engine output remains authoritative. Thumbnail
             # fallback changes comment-only metadata, never toolpath commands.
-            report = inspect_generated_gcode(raw, job.printer)
+            prusa_offline = (job.engine == "prusaslicer" and (
+                (job.settings or {}).get("multi_material_test") is True or
+                any(settings_use_paint_field(job.owner, job.settings or {}, field)
+                    for field in ("colour_paint", "support_paint", "seam_paint",
+                                  "fuzzy_skin_paint", "variable_layer_profile"))
+            ))
+            # An offline Prusa native-printer research slice is not a claim
+            # that the user's registered physical device can run that G-code.
+            # Still validate text, motion, size and forbidden firmware control.
+            report = inspect_generated_gcode(
+                raw, None if prusa_offline else job.printer)
+            if prusa_offline:
+                report["target_review"] = {
+                    "status": "offline_native_only",
+                    "reason": "No physical Prusa printer/firmware compatibility approval.",
+                }
             # Thumbnail generation is best-effort presentation metadata:
             # renderer failures or oversized PNG blocks must never invalidate a
             # previously validated, working printer toolpath.
@@ -145,6 +160,8 @@ def store_generated_gcode(job_id, raw: bytes):
                     "input_asset_id": str(job.input_asset_id),
                     "printer_id": str(job.printer_id),
                     "source_review": report.get("target_review", {}),
+                    **({"prusa_offline_native": True, "printer_submission_verified": False}
+                       if prusa_offline else {}),
                     "embedded_thumbnail_sizes": [
                         f"{size}x{size}" for size in thumbnail_sizes
                     ],

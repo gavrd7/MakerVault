@@ -267,23 +267,30 @@ class GcodePrinterContractTests(SimpleTestCase):
         from core.printer_gcode_submission import (
             reconcile_print_start_receipts, _pending_start_message,
         )
-        printer = connection("moonraker")
-        row = SimpleNamespace(
-            pk="receipt-1", status="started", remote_path="folder/part.gcode",
-            message=_pending_start_message("folder/part.gcode", acknowledged=True),
-        )
-        candidates = MagicMock()
-        candidates.order_by.return_value.__getitem__.return_value = [row]
-        updated = Mock()
-        updated.update.return_value = 1
-        filtered.side_effect = [candidates, updated]
         snapshot = {
             "online": True, "state": "printing", "job": {"file_name": "folder/part.gcode"},
             "captured_at": timezone.now().isoformat(),
         }
-        self.assertEqual(reconcile_print_start_receipts(printer, snapshot), 1)
-        self.assertEqual(updated.update.call_args.kwargs["status"], "started")
-        self.assertIn("verified", updated.update.call_args.kwargs["message"])
+        for adapter in ("moonraker", "prusa"):
+            with self.subTest(adapter=adapter):
+                printer = connection(adapter)
+                row = SimpleNamespace(
+                    pk="receipt-" + adapter, status="started",
+                    remote_path="folder/part.gcode",
+                    message=_pending_start_message(
+                        "folder/part.gcode", acknowledged=True),
+                )
+                candidates = MagicMock()
+                candidates.order_by.return_value.__getitem__.return_value = [row]
+                updated = Mock()
+                updated.update.return_value = 1
+                filtered.reset_mock(side_effect=True)
+                filtered.side_effect = [candidates, updated]
+                self.assertEqual(
+                    reconcile_print_start_receipts(printer, snapshot), 1)
+                self.assertEqual(updated.update.call_args.kwargs["status"], "started")
+                self.assertIn("verified", updated.update.call_args.kwargs["message"])
+                self.assertEqual(filtered.call_count, 2)
 
     @patch("core.printer_gcode_submission.PrinterGcodeSubmission.objects.filter")
     def test_generic_unacknowledged_receipt_requires_exact_job(self, filtered):
@@ -1316,3 +1323,106 @@ class NativeGcodeAdapterTests(SimpleTestCase):
         printer.endpoint_url = "ws://user:secret@k2.local:9999"
         with self.assertRaises(Exception):
             _http_root(printer)
+
+
+class PendingPrinterSubmissionStatusTests(SimpleTestCase):
+    """Receipt reads can verify a print without resubmitting any command."""
+
+    @patch("core.printer_connectivity.poll_connection")
+    @patch("core.printer_gcode_api.PrinterGcodeSubmission.objects.filter")
+    @patch("core.printer_gcode_api._connection")
+    def test_pending_print_polls_and_returns_reconciled_receipt(
+            self, get_connection, get_submissions, poll):
+        from django.test import RequestFactory
+        from core.printer_gcode_api import submission_status
+        from core.printer_gcode_submission import START_UNACKNOWLEDGED_PENDING
+        from uuid import uuid4
+
+        request_id = uuid4()
+        printer_id, connection_id = uuid4(), uuid4()
+        connection = SimpleNamespace(adapter="creality_local", last_checked_at=None)
+        get_connection.return_value = connection
+        row = SimpleNamespace(
+            pk=request_id, source="makervault", action="print",
+            remote_path="cube.gcode", status="unknown",
+            message=START_UNACKNOWLEDGED_PENDING + ": cube.gcode",
+            created_at=timezone.now(), cfs_mapping_audit={},
+            updated_at=timezone.now(), refresh_from_db=Mock(),
+        )
+        get_submissions.return_value.first.return_value = row
+        def observe(_connection):
+            row.status = "started"
+            row.message = "Print started — verified by live printer telemetry for cube.gcode."
+        poll.side_effect = observe
+        request = RequestFactory().get("/api/printing/submissions/")
+        request.user = SimpleNamespace(is_authenticated=True)
+        response = submission_status(request, printer_id, connection_id, request_id)
+        self.assertEqual(response.status_code, 200)
+        import json
+        body = json.loads(response.content)
+        self.assertEqual(body["submission"]["status"], "started")
+        poll.assert_called_once_with(connection)
+        row.refresh_from_db.assert_called_once()
+
+    @patch("core.printer_connectivity.poll_connection")
+    @patch("core.printer_gcode_api.PrinterGcodeSubmission.objects.filter")
+    @patch("core.printer_gcode_api._connection")
+    def test_recent_or_finished_receipts_do_not_issue_extra_poll(
+            self, get_connection, get_submissions, poll):
+        from django.test import RequestFactory
+        from core.printer_gcode_api import submission_status
+        from core.printer_gcode_submission import START_UNACKNOWLEDGED_PENDING
+        from uuid import uuid4
+
+        request_id = uuid4()
+        printer_id, connection_id = uuid4(), uuid4()
+        connection = SimpleNamespace(
+            adapter="creality_local", last_checked_at=timezone.now())
+        get_connection.return_value = connection
+        row = SimpleNamespace(
+            pk=request_id, source="makervault", action="print",
+            remote_path="cube.gcode", status="unknown",
+            message=START_UNACKNOWLEDGED_PENDING + ": cube.gcode",
+            created_at=timezone.now(), cfs_mapping_audit={},
+            updated_at=timezone.now(), refresh_from_db=Mock(),
+        )
+        get_submissions.return_value.first.return_value = row
+        request = RequestFactory().get("/api/printing/submissions/")
+        request.user = SimpleNamespace(is_authenticated=True)
+        for status in ("unknown", "started"):
+            row.status = status
+            if status == "started":
+                row.message = "Print started — verified by live printer telemetry"
+            response = submission_status(request, printer_id, connection_id, request_id)
+            self.assertEqual(response.status_code, 200)
+        poll.assert_not_called()
+        row.refresh_from_db.assert_not_called()
+
+    @patch("core.printer_connectivity.poll_connection", side_effect=RuntimeError("offline"))
+    @patch("core.printer_gcode_api.PrinterGcodeSubmission.objects.filter")
+    @patch("core.printer_gcode_api._connection")
+    def test_failed_poll_preserves_uncertain_receipt(
+            self, get_connection, get_submissions, poll):
+        from django.test import RequestFactory
+        from core.printer_gcode_api import submission_status
+        from core.printer_gcode_submission import CREALITY_START_CONFIRMATION
+        from uuid import uuid4
+        import json
+
+        request_id = uuid4()
+        printer_id, connection_id = uuid4(), uuid4()
+        connection = SimpleNamespace(adapter="creality_local", last_checked_at=None)
+        get_connection.return_value = connection
+        row = SimpleNamespace(
+            pk=request_id, source="makervault", action="print",
+            remote_path="cube.gcode", status="unknown",
+            message=CREALITY_START_CONFIRMATION + ": cube.gcode",
+            created_at=timezone.now(), cfs_mapping_audit={},
+            updated_at=timezone.now(), refresh_from_db=Mock(),
+        )
+        get_submissions.return_value.first.return_value = row
+        request = RequestFactory().get("/api/printing/submissions/")
+        request.user = SimpleNamespace(is_authenticated=True)
+        response = submission_status(request, printer_id, connection_id, request_id)
+        self.assertEqual(json.loads(response.content)["submission"]["status"], "unknown")
+        poll.assert_called_once_with(connection)

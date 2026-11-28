@@ -116,8 +116,9 @@ test("advanced tools are visibly gated pending safe native transformations", () 
   assert.match(scene, /name: "Auto-orient", target: "auto_orient", icon: "orient"/);
   for (const group of ["Quality", "Strength", "Speed", "Supports", "Multifilament", "Others"])
     assert.match(scene, new RegExp('"' + group + '"'));
-  assert.match(scene, /Wall loops and sparse infill density have passed native Orca/);
-  assert.match(scene, /verifiedObjectSettings = new Set\(\["wall_loops", "sparse_infill_density"\]\)/);
+  assert.match(scene, /PrusaSlicer supports per-object wall loops, top\/bottom shell layers and infill density/);
+  assert.match(scene, /"top_shell_layers",\s*"bottom_shell_layers"/);
+  assert.match(scene, /verifiedObjectSettings = new Set\(/);
   assert.match(scene, /Object settings are not yet verified for slicing|Some Object settings are not yet verified for slicing/);
   assert.match(scene, /process_overrides: changed/);
   assert.match(scene, /Clear object overrides/);
@@ -415,23 +416,43 @@ test("first slicer navigation is queued while engine status is checking", () => 
 });
 
 
-test("confirmed completed slice actions return to slicer without hiding uncertain submissions", () => {
+test("printer submissions from every slicer engine return to the existing G-code preview", () => {
   const workbench = read("SlicerWorkbench.jsx");
   const printer = read("PrinterStartGcodeModal.jsx");
   const saved = workbench.slice(workbench.indexOf("async function saveOutputToLibrary"),
     workbench.indexOf("async function startSlice"));
-  assert.match(saved, /await apiFetch\(/);
+  // Explicit Add to Library remains a different operation from printer transfer.
   assert.match(saved, /setPreviewJobId\(null\)/);
   assert.match(saved, /setShowDrafts\(false\)/);
-  assert.match(workbench, /onSubmissionConfirmed=\{receipt =>/);
-  assert.match(workbench, /setPrintSelection\(null\)/);
+
+  const printerHandler = workbench.slice(workbench.indexOf("onSubmissionConfirmed={receipt =>"),
+    workbench.indexOf("onClose={() => setPrintSelection(null)}", workbench.indexOf("onSubmissionConfirmed={receipt =>")));
+  assert.match(printerHandler, /setPrintSelection\(null\)/);
+  assert.doesNotMatch(printerHandler, /setPreviewJobId\(null\)/);
+  assert.doesNotMatch(printerHandler, /setShowDrafts\(false\)/);
+  assert.match(printerHandler, /onSubmissionDispatched=\{receipt =>/);
+  assert.match(printerHandler, /live start is not yet verified/);
+  assert.match(printerHandler, /receipt\.request_id/);
+  assert.match(printerHandler, /setPendingPrintStart\(\{/);
+  assert.match(printerHandler, /connectionId: printSelection\.connectionId/);
+  assert.match(workbench, /const \[pendingPrintStart, setPendingPrintStart\] = useState\(null\)/);
+  assert.match(workbench, /encodeURIComponent\(requestId\)/);
+  assert.match(workbench, /const response = await apiFetch/);
+  assert.match(workbench, /setNotice\("Print start verified against the printer's live job/);
+  assert.match(workbench, /The start command was not resent/);
+  assert.match(workbench, /<PrinterStartGcodeModal/);
   assert.match(printer, /isConfirmedSubmission\(result\.submission, operation\)/);
   assert.match(printer, /onSubmissionConfirmed\?\.\(updated\)/);
+  assert.match(printer, /onSubmissionDispatched\?\.\(result\.submission\)/);
+  // An uncertain command is not treated as a confirmed printer start.
   assert.match(printer, /submission\?\.status !== "started"/);
   assert.match(printer, /submittedAction === "upload"/);
   assert.match(printer, /submission\?\.status === "uploaded"/);
+  assert.match(printer, /result\.submission\?\.request_id/);
+  assert.match(printer, /"mapping and print-start commands dispatched"/);
+  assert.match(printer, /"Print-start sent without acknowledgement; awaiting live job verification"/);
+  assert.doesNotMatch(printer, /onSubmissionConfirmed\?\.\(result\.submission\);\s*onSubmissionDispatched/);
 });
-
 
 test("slicer Device action opens selected printer live monitoring without navigation", () => {
   const app = fs.readFileSync(path.resolve(root, "../App.jsx"), "utf8");
@@ -845,4 +866,45 @@ test("mobile add model and independent volume editors flow beneath the plate rat
   assert.match(rules, /max-height:none!important/);
   assert.match(rules, /overflow:visible!important/);
   assert.match(rules, /slicerSolidInspectorCollapsed/);
+});
+
+
+test("shared model selection offers select all and atomic bulk filament mapping", () => {
+  const prepare = read("SlicerPrepareWorkspace.jsx");
+  assert.match(prepare, /const selectableRows = allPlateRows\.filter\(row => !row\.detached\)/);
+  assert.match(prepare, /const allSelected = selectableRows\.length > 0/);
+  assert.match(prepare, /node\.indeterminate = !allSelected/);
+  assert.match(prepare, /Select all/);
+  assert.match(prepare, /Change filament for selected/);
+  assert.match(prepare, /const changeModelsPreviewFilament = \(instanceIds, slot\)/);
+  assert.match(prepare, /const ids = new Set\(instanceIds\)/);
+  assert.match(prepare, /ids\.has\(item\.instance_id\)/);
+  assert.match(prepare, /changeModelsPreviewFilament\(selectedModels\.map\(model => model\.instance_id\), slot\)/);
+  assert.match(prepare, /Base material only; painted colours and modifier volumes remain unchanged/);
+});
+
+test("printer-supplied palette is not truncated by legacy 16 or 64 material UI limits", () => {
+  const prepare = read("SlicerPrepareWorkspace.jsx");
+  assert.match(prepare, /const loaded = \[\.\.\.liveMaterials\]\.sort/);
+  assert.doesNotMatch(prepare, /liveMaterials\]\.sort\([^\n]*\)\.slice\(0, 64\)/);
+  assert.doesNotMatch(prepare, /requiredMultiSlots\.length <= 16/);
+  assert.match(prepare, /requiredMultiSlots\.every\(slotId => liveMaterials\.some/);
+});
+
+test("the shared bulk filament picker routes Prusa through native tools rather than feeder slots", () => {
+  const prepare = read("SlicerPrepareWorkspace.jsx");
+  assert.match(prepare, /const bulkPrusaNative = String\(engine \|\| ""\)/);
+  assert.match(prepare, /const changeSelectedPrusaNativeTool = tool =>/);
+  assert.match(prepare, /onPrusaNativeToolsChange\(\{/);
+  assert.match(prepare, /model_tools: \[\.\.\.existing, \.\.\.selectedModels\.map/);
+  assert.match(prepare, /bulkPrusaNative \? Array\.from/);
+  assert.match(prepare, /Native T\{index\}/);
+  assert.match(prepare, /!profile\}/);
+});
+
+test("filament pickers scroll for larger reported palettes on desktop and mobile", () => {
+  const css = fs.readFileSync(path.resolve(root, "../styles.css"), "utf8");
+  assert.match(css, /\.slicerModelFilamentChoices\s*\{[^}]*max-height:min\(48vh,440px\)/s);
+  assert.match(css, /\.slicerModelFilamentChoices\s*\{[^}]*overflow-y:auto/s);
+  assert.match(css, /\.slicerModelFilamentChoices>button\s*\{[^}]*flex-shrink:0/s);
 });
