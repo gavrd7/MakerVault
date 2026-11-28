@@ -503,11 +503,10 @@ jobs:
             /opt/engine-store/versions/prusaslicer/2.9.7/bin/prusa-slicer \
             /opt/engine-store/versions/prusaslicer/2.9.7/resources/profiles/PrusaResearch.ini
 
-      - name: Research genuine Prusa MMU two independently split colour walls
+      - name: Require genuine MMU two-colour independently split wall deposition
         id: prusa_dual_partial_research
-        # Existing signed opposing-wall route only certifies complete faces.
-        # This exploratory test must measure tool-specific positive-E paths.
-        continue-on-error: true
+        # Mandatory: signed T1/T2 partial opposite masks, independent
+        # external-perimeter isolation, T0 base and all three MMU purges.
         run: |
           set -euo pipefail
           docker run --rm --network none --user 10001:10001 \
