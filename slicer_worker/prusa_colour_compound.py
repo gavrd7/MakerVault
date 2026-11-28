@@ -92,6 +92,9 @@ def audit_prusa_painted_volume_effects(data, project):
     one disjoint negative cavity. An absent region needs no extra scan.
     This audit runs independently in the worker and in owner-side preflight.
     """
+    import io
+    import zipfile
+    from defusedxml import ElementTree as SafeET
     from .prusa_3mf_validation import CONFIG
     from .modifier_gcode_audit import audit_modifier_positive_e
 
