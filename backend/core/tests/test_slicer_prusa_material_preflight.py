@@ -413,6 +413,67 @@ class PrusaOfflineMmuPreflightTests(TestCase):
         with self.assertRaises(WorkerError):
             _decode_payload({**payload,"prusa_offline_xl":{"tools":[1,2]}})
 
+    def test_owner_prusa_colour_compound_requires_both_spatial_audits(self):
+        from core.slicer_prusa_material_preflight import (
+            prepare_prusa_offline_colour_candidate,
+            slice_prusa_offline_colour_candidate)
+        from scripts.prusa_generate_mmu_paint import fixture
+        from core.tests.test_slicer_prusa_3mf import volume
+        values,assets=self.parts()
+        source,_,_,paint=fixture(include_paint=True)
+        modifier={**volume("modifier",{"sparse_infill_density":85}),
+                  "width_mm":6,"x_mm":-6}
+        cavity={**volume("negative"),"width_mm":6,"x_mm":6}
+        row={"asset_id":"compound-owner","x_mm":0,"y_mm":0,
+             "z_mm":0,"rotation_deg":0,"scale_percent":100,
+             "colour_paint":paint,"process_overrides":{"wall_loops":4},
+             "modifier_volumes":[modifier,cavity]}
+        data={key:values[key] for key in (
+            "owner_id","printer_profile","process_profile","filament_profiles",
+            "purge_matrix","tower_xy","bed_width","bed_depth")}
+        data.update(rows=[(row,source)],tools=[1],
+                    colour_slot=1,colour_tool=1)
+        with patch("core.slicer_prusa_material_preflight.resolved_prusa_profile",
+                   side_effect=assets):
+            prepared=prepare_prusa_offline_colour_candidate(**data)
+        self.assertEqual(prepared["tools"],(1,))
+        self.assertTrue(prepared["compound_volume"])
+        self.assertFalse(prepared["partial_wall"])
+        from slicer_worker.prusa_offline_contract import validate_prusa_offline_colour_inputs
+        receipt=validate_prusa_offline_colour_inputs(
+            project=prepared["model"],printer=prepared["printer"],
+            filament=prepared["filament"],process=prepared["process"],
+            tool=1,tower=list(prepared["tower"]))
+        self.assertTrue(receipt["compound_volume"])
+        remote,context=self.offline_worker_stub()
+        remote.return_value=b"fake-G-code"
+        with context,patch(
+            "core.slicer_prusa_material_preflight.prepare_prusa_offline_colour_candidate",
+            return_value=prepared),patch(
+            "slicer_worker.prusa_colour_gcode_audit.audit_prusa_offline_colour_gcode"
+        ) as colour,patch(
+            "slicer_worker.modifier_gcode_audit.audit_modifier_positive_e",
+            return_value={"modifier_count":2,"negative_volume_count":1,
+                          "modifier_region_paths":[10,0]}
+        ) as cavities:
+            output=slice_prusa_offline_colour_candidate(
+                str(uuid.uuid4()),**data)
+        colour.assert_called_once()
+        cavities.assert_called_once_with(
+            output,prepared["model"],"prusaslicer")
+        self.assertEqual(output,b"fake-G-code")
+        bad=dict(row)
+        bad["modifier_volumes"]=[
+            modifier,{**cavity,"shape":"sphere"}]
+        data["rows"]=[(bad,source)]
+        with patch("core.slicer_prusa_material_preflight.resolved_prusa_profile",
+                   side_effect=assets),self.assertRaises(SlicerProfileError):
+            prepare_prusa_offline_colour_candidate(**data)
+        bad["modifier_volumes"]=[modifier,{**cavity,"x_mm":-6}]
+        with patch("core.slicer_prusa_material_preflight.resolved_prusa_profile",
+                   side_effect=assets),self.assertRaises(WorkerError):
+            prepare_prusa_offline_colour_candidate(**data)
+
     def test_partial_wall_mmu_is_authentically_admitted_and_full_wall_gate_stays_strict(self):
         from core.slicer_prusa_material_preflight import (
             prepare_prusa_offline_colour_candidate,
