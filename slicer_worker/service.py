@@ -317,7 +317,8 @@ def _decode_payload(payload):
                else {"tool":details["tool"]}))
         files["prusa_offline_xl_colour"]={
             "tools":receipt["tools"],
-            "dual_partial":receipt["dual_partial"]} if "tools" in receipt else {
+            **({"dual_partial":True} if receipt["dual_partial"] else {})
+        } if "tools" in receipt else {
                 "tool":receipt["tool"],
                 "partial_wall":receipt["partial_wall"],
                 "partial_top":receipt["partial_top"],
