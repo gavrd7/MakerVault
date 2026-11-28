@@ -245,3 +245,55 @@ def validate_prusa_offline_xl_colour_inputs(*, project, printer, filament, proce
             "partial_slanted": len(selected)==1 and mode=="split_slanted",
             "partial_curved": len(selected)==1 and mode=="split_curved",
             "offline_only":True,"wipe_tower":False}
+
+
+def validate_prusa_offline_multi_colour_inputs(*, project, printer, filament,
+                                               process, tools, tower):
+    """Authenticate independently signed T1/T2 painted MMU ModelParts.
+
+    A successful multi-object 3MF import is not proof of print-ready material
+    separation: this admission requires source-derived disjoint complete
+    walls, exact native MMU profile/colour topology and all three directional
+    material purges in actual G-code after the CLI completes.
+    """
+    if tools != [1,2]:
+        raise WorkerError("Qualified two-object native MMU painting requires T1 and T2.")
+    count,changer=_qualified_topology(printer)
+    if (not changer or not 3<=count<=5 or
+            not isinstance(tower,list) or len(tower)!=5 or
+            any(type(n) not in (int,float) or not math.isfinite(n)
+                for n in tower)):
+        raise WorkerError("Prusa painted two-model native MMU topology is invalid.")
+    try:
+        material=validate_flat_prusa_preset(filament,kind="filament")
+        settings=validate_flat_prusa_preset(process,kind="print")
+    except PrusaPresetError:
+        raise WorkerError("Prusa multi-model colour native profiles are invalid.") from None
+    if (settings.get("wipe_tower")!="1" or
+            settings.get("wipe_into_infill")!="0" or
+            settings.get("wipe_into_objects")!="0"):
+        raise WorkerError("Prusa multi-model paint requires isolated native purge tower.")
+    for key in ("temperature","first_layer_temperature"):
+        values=material.get(key,"").split(",")
+        if (len(values)!=count or any(not value.isascii() or
+                not value.isdecimal() or not 0<=int(value)<=350
+                for value in values)):
+            raise WorkerError("Prusa multi-model painted filament vector is invalid.")
+    matrix=settings.get("wiping_volumes_matrix","").split(",")
+    if len(matrix)!=count*count:
+        raise WorkerError("Prusa multi-model paint requires complete purge matrix.")
+    for index,text in enumerate(matrix):
+        try:
+            value=float(text)
+        except ValueError:
+            raise WorkerError("Prusa multi-model purge volume is invalid.") from None
+        diagonal=index//count==index%count
+        if (not math.isfinite(value) or not 0<=value<=1000 or
+                (diagonal and value!=0) or (not diagonal and value<1)):
+            raise WorkerError("Prusa multi-model purge volume is unqualified.")
+    from .prusa_multi_colour import inspect_prusa_multi_colour
+    signed=inspect_prusa_multi_colour(
+        project,printer_ini=printer,tower=tower)
+    if len(signed)!=2 or tuple(row["tool"] for row in signed)!=(1,2):
+        raise WorkerError("Prusa independently painted source tool order changed.")
+    return {"tools":[1,2],"tower":tower,"offline_only":True}
