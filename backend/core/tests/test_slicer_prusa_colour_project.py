@@ -1101,6 +1101,75 @@ class PrusaDualColourResearchTests(TestCase):
                 _two_painted_wall_regions(b"not-an-archive", tools)
 
 
+class PrusaIndependentColourModelProjectTests(TestCase):
+    """Multiple models must preserve distinct signed native paint resources."""
+
+    def two_sources(self):
+        from core.slicer_plate_3mf import _triangles
+        from core.slicer_native_support_paint import _fingerprint
+        stl,_,_,paint=fixture(include_paint=True)
+        faces=list(_triangles(stl))
+        low=[min(p[i] for face in faces for p in face) for i in range(3)]
+        high=[max(p[i] for face in faces for p in face) for i in range(3)]
+        centre=((low[0]+high[0])/2,(low[1]+high[1])/2,low[2])
+        local=[[tuple(p[i]-centre[i] for i in range(3)) for p in face]
+               for face in faces]
+        back=[{"face":i,"polygon":[list(p) for p in face]}
+              for i,face in enumerate(local)
+              if all(abs(p[1]-10)<1e-5 for p in face)]
+        right={**paint,"signature":_fingerprint(local),
+               "palette":[*paint["palette"],{"color":"#fadd4d","label":"T2"}],
+               "regions":[{"slot":2,"patches":back}]}
+        left={"asset_id":"left","x_mm":-35,"y_mm":0,"z_mm":0,
+              "rotation_deg":0,"scale_percent":100,"colour_paint":paint}
+        second={"asset_id":"right","x_mm":35,"y_mm":0,"z_mm":0,
+                "rotation_deg":0,"scale_percent":100,"colour_paint":right}
+        return [(left,stl),(second,stl)]
+
+    def test_merged_native_3mf_keeps_per_object_tool_state_and_no_facet_leak(self):
+        from core.slicer_prusa_colour_project import (
+            build_prusa_multi_colour_candidate)
+        from slicer_worker.prusa_material_validation import PAINT
+        rows=self.two_sources()
+        project=build_prusa_multi_colour_candidate(
+            rows,printer_ini=ini("0.4,0.4,0.4,0.4,0.4","1"),
+            colour_tool_indices={1:1,2:2},bed_width=250,bed_depth=210)
+        with zipfile.ZipFile(io.BytesIO(project)) as archive:
+            model=SafeET.fromstring(archive.read("3D/3dmodel.model"))
+            config=SafeET.fromstring(
+                archive.read("Metadata/Slic3r_PE_model.config"))
+        objects=model.findall("./"+NS+"resources/"+NS+"object")
+        instances=model.findall("./"+NS+"build/"+NS+"item")
+        self.assertEqual([x.get("id") for x in objects],["1","2"])
+        self.assertEqual([x.get("objectid") for x in instances],["1","2"])
+        self.assertEqual([x.get("id") for x in config.findall("./object")],["1","2"])
+        states=[]
+        bounds=[]
+        for element in objects:
+            faces=element.findall(
+                "./"+NS+"mesh/"+NS+"triangles/"+NS+"triangle")
+            points=element.findall(
+                "./"+NS+"mesh/"+NS+"vertices/"+NS+"vertex")
+            states.append({face.get(PAINT) for face in faces if face.get(PAINT)})
+            bounds.append((min(float(p.get("x")) for p in points),
+                           max(float(p.get("x")) for p in points)))
+        self.assertEqual(states,[{"8"},{"0C"}])
+        self.assertLess(bounds[0][1],bounds[1][0])
+        self.assertEqual(len(config.findall("./object/volume")),2)
+
+    def test_missing_second_painted_model_cannot_be_silently_encoded(self):
+        from core.slicer_prusa_colour_project import (
+            build_prusa_multi_colour_candidate)
+        rows=self.two_sources()
+        with self.assertRaises(SlicerProfileError):
+            build_prusa_multi_colour_candidate(
+                [(rows[0][0],rows[0][1]),
+                 ({**rows[1][0],"colour_paint":None},rows[1][1])],
+                printer_ini=ini("0.4,0.4,0.4,0.4,0.4","1"),
+                colour_tool_indices={1:1,2:2},
+                bed_width=250,bed_depth=210)
+
+
 class PrusaSlantedFacetIndexTests(TestCase):
     """Spatial hit-testing must match the signed triangular source region."""
 
