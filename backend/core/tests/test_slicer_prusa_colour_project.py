@@ -205,6 +205,45 @@ class PrusaNativeColourProjectTests(TestCase):
             audit_prusa_partial_wall_gcode(
                 synthetic.replace(b"G1 ", b"G0 "), project, tool=1)
 
+    def test_two_disjoint_split_wall_colour_masks_keep_native_tool_identity(self):
+        from core.slicer_plate_3mf import _triangles
+        from core.slicer_native_support_paint import _fingerprint
+        from slicer_worker.prusa_dual_partial import inspect_prusa_dual_partial
+        stl,_,_,base=fixture(include_paint=True)
+        triangles=list(_triangles(stl))
+        low=[min(p[i] for f in triangles for p in f) for i in range(3)]
+        high=[max(p[i] for f in triangles for p in f) for i in range(3)]
+        origin=((low[0]+high[0])/2,(low[1]+high[1])/2,low[2])
+        local=[[tuple(p[i]-origin[i] for i in range(3)) for p in f]
+               for f in triangles]
+        regions=[]
+        for slot,side in ((1,-10),(2,10)):
+            index=next(i for i,f in enumerate(local)
+                       if all(abs(p[1]-side)<1e-5 for p in f))
+            a,b,c=local[index]
+            regions.append({"slot":slot,"patches":[{
+                "face":index,"polygon":[list(a),
+                                       [(a[i]+b[i])/2 for i in range(3)],
+                                       [(a[i]+c[i])/2 for i in range(3)]]}]})
+        paint={**base,"signature":_fingerprint(local),
+               "palette":[*base["palette"],
+                          {"color":"#fadd4d","label":"native T2"}],
+               "regions":regions}
+        project=self.candidate(settings={"colour_paint":paint},
+                               source=stl,tool_map={1:1,2:2})
+        proof=inspect_prusa_dual_partial(project,(1,2))
+        self.assertEqual(proof["axis"],1)
+        self.assertEqual(tuple(w["tool"] for w in proof["walls"]),(1,2))
+        self.assertTrue(all(w["painted"] and w["unpainted"]
+                            for w in proof["walls"]))
+        self.assertEqual(validate_prusa_material_candidate(
+            project,printer_ini=ini("0.4,0.4,0.4,0.4,0.4","1"),
+            colour=True)["tools"],(1,2,3))
+        with self.assertRaises(WorkerError):
+            inspect_prusa_dual_partial(project,(2,1))
+        with self.assertRaises(WorkerError):
+            inspect_prusa_dual_partial(self.candidate(),(1,2))
+
     def test_two_distinct_wall_colours_retain_three_independent_native_tools(self):
         from core.slicer_plate_3mf import _triangles
         from core.slicer_native_support_paint import _fingerprint
