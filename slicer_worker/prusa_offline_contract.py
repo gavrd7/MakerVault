@@ -154,8 +154,8 @@ def validate_prusa_offline_colour_inputs(*, project, printer, filament, process,
     if receipt["objects"]!=1 or receipt["tools"]!=tuple(sorted((1, *(v+1 for v in selected)))):
         raise WorkerError("Prusa offline painted native tool selection changed.")
     if dual:
-        from .prusa_colour_gcode_audit import _two_painted_wall_regions
-        _two_painted_wall_regions(project,selected)
+        from .prusa_dual_partial import qualified_prusa_dual_colour_mode
+        dual_mode = qualified_prusa_dual_colour_mode(project,selected)
     else:
         from .prusa_partial_surface import qualified_prusa_single_colour_mode
         mode = qualified_prusa_single_colour_mode(project, tool)
@@ -169,6 +169,7 @@ def validate_prusa_offline_colour_inputs(*, project, printer, filament, process,
     return {**({"tools":list(selected)} if dual else {"tool":tool}),
             "tower":tower, "offline_only":True,
             "compound_volume": compound,
+            "dual_partial": (dual and dual_mode == "split_opposite"),
             "partial_wall": (not dual and mode == "split_wall")}
 
 
