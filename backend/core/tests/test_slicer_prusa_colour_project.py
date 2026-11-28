@@ -580,9 +580,13 @@ class PrusaNativeColourProjectTests(TestCase):
         with self.assertRaises(WorkerError):
             validate_prusa_material_candidate(
                 project,printer_ini=printer,colour=True)
+        from core.slicer_prusa_wipe_tower import add_prusa_native_wipe_tower
+        with_tower=add_prusa_native_wipe_tower(
+            project,x_mm=55,y_mm=150,rotation_deg=0,
+            bed_width=250,bed_depth=210)
         receipt=validate_prusa_material_candidate(
-            project,printer_ini=printer,colour=True,
-            fuzzy_colour=True)
+            with_tower,printer_ini=printer,colour=True,
+            fuzzy_colour=True,tower=(55,150,0,250,210))
         self.assertEqual(receipt["tools"],(1,2))
         self.assertFalse(qualified_prusa_colour_fuzzy(self.candidate()))
         commands=["G90","M83","T0",";TYPE:External perimeter",
