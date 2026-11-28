@@ -316,7 +316,8 @@ def _decode_payload(payload):
             **({"tools":details["tools"]} if "tools" in details
                else {"tool":details["tool"]}))
         files["prusa_offline_xl_colour"]={
-            "tools":receipt["tools"]} if "tools" in receipt else {
+            "tools":receipt["tools"],
+            "dual_partial":receipt["dual_partial"]} if "tools" in receipt else {
                 "tool":receipt["tool"],
                 "partial_wall":receipt["partial_wall"],
                 "partial_top":receipt["partial_top"],
@@ -616,10 +617,16 @@ class Handler(BaseHTTPRequestHandler):
                             data,files["model"],printer_ini=files["printer_profile"],
                             tools=details["tools"])
                     elif "tools" in details:
-                        from .prusa_colour_gcode_audit import audit_prusa_dual_colour_gcode
-                        audit_prusa_dual_colour_gcode(
-                            data,files["model"],printer_ini=files["printer_profile"],
-                            tools=details["tools"],tower=None)
+                        if details.get("dual_partial"):
+                            from .prusa_dual_partial import audit_prusa_dual_partial_gcode
+                            audit_prusa_dual_partial_gcode(
+                                data,files["model"],printer_ini=files["printer_profile"],
+                                tools=details["tools"],tower=None)
+                        else:
+                            from .prusa_colour_gcode_audit import audit_prusa_dual_colour_gcode
+                            audit_prusa_dual_colour_gcode(
+                                data,files["model"],printer_ini=files["printer_profile"],
+                                tools=details["tools"],tower=None)
                     elif details.get("partial_wall"):
                         from .prusa_partial_surface import audit_prusa_partial_wall_gcode
                         audit_prusa_partial_wall_gcode(
