@@ -80,7 +80,7 @@ def _decode_payload(payload):
         "model", "printer_profile", "filament_profile", "process_profile",
     }
     if not isinstance(payload, dict) or not expected.issubset(payload) or (
-            set(payload) - expected - {"model_format", "filament_profiles", "creality_model_stls", "creality_tool_ids", "creality_native_project", "native_modifier_project", "prusa_placed_stl", "creality_placed_stl", "creality_model_raw_sha256", "prusa_offline_mmu", "prusa_offline_xl", "prusa_offline_colour", "prusa_offline_xl_colour",
+            set(payload) - expected - {"model_format", "filament_profiles", "creality_model_stls", "creality_tool_ids", "creality_native_project", "native_modifier_project", "prusa_placed_stl", "creality_placed_stl", "creality_model_raw_sha256", "prusa_offline_mmu", "prusa_offline_xl", "prusa_offline_colour", "prusa_offline_xl_colour", "prusa_offline_multi_colour",
                 "orca_streamed_plate", "orca_streamed_sha256", "slice_timeout_seconds"}):
         raise WorkerError("Invalid slicing job payload.")
     try:
@@ -97,6 +97,23 @@ def _decode_payload(payload):
                 "filament_profiles", "creality_model_stls", "creality_tool_ids",
                 "creality_native_project", "native_modifier_project", "prusa_placed_stl"))):
         raise WorkerError("Invalid native Prusa project execution contract.")
+    native_prusa_keys=("prusa_offline_mmu","prusa_offline_xl",
+                       "prusa_offline_colour","prusa_offline_xl_colour",
+                       "prusa_offline_multi_colour")
+    if sum(key in payload for key in native_prusa_keys)>1:
+        raise WorkerError("Conflicting isolated native Prusa material contracts.")
+    if "prusa_offline_multi_colour" in payload:
+        details=payload["prusa_offline_multi_colour"]
+        if (payload["engine"]!="prusaslicer" or
+                payload["engine_version"]!="2.9.7" or model_format!="3mf" or
+                not isinstance(details,dict) or
+                set(details)!={"tools","tower"} or
+                details.get("tools")!=[1,2] or
+                any(key in payload for key in (
+                    "filament_profiles","creality_model_stls",
+                    "creality_tool_ids","creality_native_project",
+                    "native_modifier_project","prusa_placed_stl"))):
+            raise WorkerError("Invalid Prusa independently painted worker contract.")
     if "prusa_offline_xl" in payload:
         metadata = payload["prusa_offline_xl"]
         if (payload["engine"] != "prusaslicer" or
@@ -321,6 +338,15 @@ def _decode_payload(payload):
             "dual_partial":receipt["dual_partial"],
             "compound_volume":receipt["compound_volume"],
             "colour_fuzzy":receipt["colour_fuzzy"]}
+    if "prusa_offline_multi_colour" in payload:
+        from .prusa_offline_contract import validate_prusa_offline_multi_colour_inputs
+        details=payload["prusa_offline_multi_colour"]
+        receipt=validate_prusa_offline_multi_colour_inputs(
+            project=files["model"],printer=files["printer_profile"],
+            filament=files["filament_profile"],process=files["process_profile"],
+            tools=details["tools"],tower=details["tower"])
+        files["prusa_offline_multi_colour"]={
+            "tools":receipt["tools"],"tower":receipt["tower"]}
     if "creality_model_stls" in payload:
         if (payload["engine"] != "crealityprint" or model_format != "stl" or
                 "filament_profiles" not in files):
@@ -380,7 +406,8 @@ def _decode_payload(payload):
         files["creality_native_project"] = True
     elif model_format == "3mf" and payload["engine"] == "prusaslicer":
         if not (files.get("prusa_offline_mmu") or files.get("prusa_offline_xl") or files.get("prusa_offline_colour") or
-                files.get("prusa_offline_xl_colour")):
+                files.get("prusa_offline_xl_colour") or
+                files.get("prusa_offline_multi_colour")):
             from .prusa_3mf_validation import validate_prusa_native_3mf
             validate_prusa_native_3mf(files["model"])
     elif model_format == "3mf" and not files.get("native_modifier_project") and not streamed:
@@ -488,7 +515,7 @@ class Handler(BaseHTTPRequestHandler):
                     (workdir / "prusa-offline-mmu.marker").write_text("v1")
                 if files.get("prusa_offline_xl"):
                     (workdir / "prusa-offline-xl.marker").write_text("v1")
-                if files.get("prusa_offline_colour"):
+                if files.get("prusa_offline_colour") or files.get("prusa_offline_multi_colour"):
                     (workdir / "prusa-offline-colour.marker").write_text("v1")
                 if files.get("prusa_offline_xl_colour"):
                     (workdir / "prusa-offline-xl-colour.marker").write_text("v1")
@@ -507,7 +534,8 @@ class Handler(BaseHTTPRequestHandler):
                           "bambustudio": run_bambu}[current["engine"]]
                 if (current["engine"] == "prusaslicer" and
                         (files.get("prusa_offline_mmu") or
-                         files.get("prusa_offline_colour"))):
+                         files.get("prusa_offline_colour") or
+                         files.get("prusa_offline_multi_colour"))):
                     from .prusa_gcode_audit import run_prusa_mmu_with_numeric_recheck
                     receipt, data = run_prusa_mmu_with_numeric_recheck(
                         runner, current["binary"], workdir,
@@ -568,6 +596,12 @@ class Handler(BaseHTTPRequestHandler):
                     if details.get("colour_fuzzy"):
                         from .prusa_colour_fuzzy import audit_prusa_colour_fuzzy_gcode
                         audit_prusa_colour_fuzzy_gcode(data,files["model"])
+                if files.get("prusa_offline_multi_colour"):
+                    from .prusa_multi_colour import audit_prusa_multi_colour_gcode
+                    details=files["prusa_offline_multi_colour"]
+                    audit_prusa_multi_colour_gcode(
+                        data,files["model"],printer_ini=files["printer_profile"],
+                        tower=details["tower"])
                 if files.get("prusa_offline_xl_colour"):
                     details=files["prusa_offline_xl_colour"]
                     if "tools" in details and len(details["tools"])==4:
