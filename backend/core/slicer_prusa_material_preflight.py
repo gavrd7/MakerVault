@@ -442,19 +442,38 @@ def prepare_prusa_offline_xl_colour_candidate(
     elif len(colour_tool_indices)==2:
         from slicer_worker.prusa_colour_gcode_audit import _two_painted_wall_regions
         from slicer_worker.runner import WorkerError
-        # Browser palette order is not native wall order; resolve from the
-        # actual serialised source mesh and confirm the opposite arrangement.
+        from slicer_worker.prusa_dual_partial import inspect_prusa_dual_partial
+        # Browser palette order is not wall order. Resolve from exact signed
+        # source; only the genuine eight-head T5/T7 split topology is
+        # additionally qualified, never a generic partial-mask opt-in.
         selected=tuple(colour_tool_indices.values())
-        try:
-            _two_painted_wall_regions(project,selected)
-        except WorkerError:
-            selected=tuple(reversed(selected))
+        if (topology["logical_tool_count"]==8 and
+                set(selected)=={5,7}):
+            try:
+                inspect_prusa_dual_partial(project,(5,7))
+                selected=(5,7)
+            except WorkerError:
+                for choice in (selected,tuple(reversed(selected))):
+                    try:
+                        _two_painted_wall_regions(project,choice)
+                        selected=choice
+                        break
+                    except WorkerError:
+                        continue
+                else:
+                    raise SlicerProfileError(
+                        "Prusa INDX8 T5/T7 split masks lack signed native source proof.")
+        else:
             try:
                 _two_painted_wall_regions(project,selected)
-            except WorkerError as exc:
-                raise SlicerProfileError(
-                    "Prusa XL dual painting requires complete opposite vertical walls."
-                ) from exc
+            except WorkerError:
+                selected=tuple(reversed(selected))
+                try:
+                    _two_painted_wall_regions(project,selected)
+                except WorkerError as exc:
+                    raise SlicerProfileError(
+                        "Prusa XL dual painting needs complete opposite exterior walls."
+                    ) from exc
         selection={"tools":list(selected)}
     else:
         selected=(next(iter(colour_tool_indices.values())),)
@@ -475,7 +494,8 @@ def prepare_prusa_offline_xl_colour_candidate(
             "process":process, "partial_wall":receipt["partial_wall"],
             "partial_top":receipt["partial_top"],
             "partial_slanted":receipt["partial_slanted"],
-            "partial_curved":receipt["partial_curved"], **selection}
+            "partial_curved":receipt["partial_curved"],
+            "dual_partial":receipt["dual_partial"], **selection}
 
 
 def slice_prusa_offline_xl_colour_candidate(job_id, **prepared):
@@ -495,10 +515,16 @@ def slice_prusa_offline_xl_colour_candidate(job_id, **prepared):
             output,candidate["model"],printer_ini=candidate["printer"],
             tools=candidate["tools"])
     elif "tools" in candidate:
-        from slicer_worker.prusa_colour_gcode_audit import audit_prusa_dual_colour_gcode
-        audit_prusa_dual_colour_gcode(
-            output,candidate["model"],printer_ini=candidate["printer"],
-            tools=candidate["tools"],tower=None)
+        if candidate["dual_partial"]:
+            from slicer_worker.prusa_dual_partial import audit_prusa_dual_partial_gcode
+            audit_prusa_dual_partial_gcode(
+                output,candidate["model"],printer_ini=candidate["printer"],
+                tools=candidate["tools"],tower=None)
+        else:
+            from slicer_worker.prusa_colour_gcode_audit import audit_prusa_dual_colour_gcode
+            audit_prusa_dual_colour_gcode(
+                output,candidate["model"],printer_ini=candidate["printer"],
+                tools=candidate["tools"],tower=None)
     elif candidate["partial_wall"]:
         from slicer_worker.prusa_partial_surface import audit_prusa_partial_wall_gcode
         audit_prusa_partial_wall_gcode(
