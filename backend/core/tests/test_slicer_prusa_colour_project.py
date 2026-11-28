@@ -1135,9 +1135,13 @@ class PrusaIndependentColourModelProjectTests(TestCase):
             rows,printer_ini=ini("0.4,0.4,0.4,0.4,0.4","1"),
             colour_tool_indices={1:1,2:2},bed_width=250,bed_depth=210)
         with zipfile.ZipFile(io.BytesIO(project)) as archive:
-            model=SafeET.fromstring(archive.read("3D/3dmodel.model"))
+            native_xml=archive.read("3D/3dmodel.model")
+            model=SafeET.fromstring(native_xml)
             config=SafeET.fromstring(
                 archive.read("Metadata/Slic3r_PE_model.config"))
+        self.assertIn(b'slic3rpe:mmu_segmentation="8"',native_xml)
+        self.assertIn(b'slic3rpe:mmu_segmentation="0C"',native_xml)
+        self.assertNotIn(b'ns1:mmu_segmentation',native_xml)
         objects=model.findall("./"+NS+"resources/"+NS+"object")
         instances=model.findall("./"+NS+"build/"+NS+"item")
         self.assertEqual([x.get("id") for x in objects],["1","2"])
