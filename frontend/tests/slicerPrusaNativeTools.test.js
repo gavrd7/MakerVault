@@ -205,7 +205,7 @@ test("Shared Prusa colour help differentiates native split walls from unqualifie
   assert.match(editor,/independently audited/);
   assert.match(editor,/XL5 independently supports both split/);
   assert.match(editor,/partially painted horizontal top faces/);
-  assert.match(editor,/curved or angled faces/);
+  assert.match(editor,/curved\s+or angled faces/);
   assert.match(editor,/multiple\s+painted objects/);
 });
 
