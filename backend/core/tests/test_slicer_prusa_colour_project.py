@@ -737,6 +737,24 @@ class PrusaNativeColourProjectTests(TestCase):
         actual=audit_prusa_partial_top_gcode(simulated,project,tool=1)
         self.assertEqual(actual["top_deposition_moves"][1]["painted"],30)
         self.assertEqual(actual["top_deposition_moves"][0]["unpainted"],30)
+        self.assertFalse(actual["wipe_tower"])
+        with self.assertRaisesRegex(WorkerError,"wipe purging"):
+            audit_prusa_partial_top_gcode(
+                simulated,project,tool=1,tower=(55,150,0,250,210))
+        # Native MMU stationary positive-E purge is valid. Count both
+        # selected tools only inside the trusted, signed tower footprint.
+        purged=commands+[";TYPE:Wipe tower",
+                         "T0","G0 X55 Y150 Z5"]+["G1 E.02"]*12+[
+                         "T1","G0 X55 Y150 Z5"]+["G1 E.02"]*12
+        native=("\n".join(purged)+"\n").encode()
+        receipt=audit_prusa_partial_top_gcode(
+            native,project,tool=1,tower=(55,150,0,250,210))
+        self.assertTrue(receipt["wipe_tower"])
+        self.assertEqual(receipt["tower_extrusion_moves"],{0:12,1:12})
+        with self.assertRaises(WorkerError):
+            audit_prusa_partial_top_gcode(
+                native.replace(b"T1","T0"),project,tool=1,
+                tower=(55,150,0,250,210))
         with self.assertRaises(WorkerError):
             audit_prusa_partial_top_gcode(
                 simulated.replace(b"T1",b"T0"),project,tool=1)
