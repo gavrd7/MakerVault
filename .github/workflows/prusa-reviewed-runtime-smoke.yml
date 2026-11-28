@@ -529,12 +529,10 @@ jobs:
         run: |
           echo "::warning title=Prusa curved paint::Curved native colour lacks sufficient actual deposition evidence; ordinary slicer admission remains blocked."
 
-      - name: Research independently painted native MMU models and purge
+      - name: Require genuine independently painted native MMU models and purge
         id: prusa_multi_model_colour_research
-        # Do not admit multiple independently coloured models in normal
-        # MakerVault until both native G-code deposition and isolated worker
-        # source/tool identity audits qualify all selected paint regions.
-        continue-on-error: true
+        # Mandatory for admitted separate T1/T2 model regions: genuine
+        # Prusa 2.9.7 + signed per-ModelPart worker auditor + T0/T1/T2 purges.
         run: |
           set -euo pipefail
           docker run --rm --network none --user 10001:10001 \
