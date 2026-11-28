@@ -143,8 +143,14 @@ def validate_prusa_offline_colour_inputs(*, project, printer, filament, process,
         if (not math.isfinite(value) or not 0<=value<=1000 or
                 (same and value!=0) or (not same and value<1)):
             raise WorkerError("Prusa offline painted purge entry is invalid.")
+    from .prusa_colour_compound import qualified_prusa_colour_compound
+    compound = qualified_prusa_colour_compound(project)
+    if compound and (dual or tuple(selected) != (1,)):
+        raise WorkerError(
+            "Native Prusa painted modifier/cavity requires one T1 wall swatch.")
     receipt=validate_prusa_material_candidate(
-        project,printer_ini=printer,colour=True,tower=tower)
+        project,printer_ini=printer,colour=True,tower=tower,
+        compound_colour=compound)
     if receipt["objects"]!=1 or receipt["tools"]!=tuple(sorted((1, *(v+1 for v in selected)))):
         raise WorkerError("Prusa offline painted native tool selection changed.")
     if dual:
@@ -157,8 +163,12 @@ def validate_prusa_offline_colour_inputs(*, project, printer, filament, process,
             raise WorkerError(
                 "Prusa MMU horizontal painted faces lack independent "
                 "native purge and surface G-code qualification.")
+    if compound and mode != "complete_wall":
+        raise WorkerError(
+            "Prusa painted modifier/cavity needs the genuine full-wall proof.")
     return {**({"tools":list(selected)} if dual else {"tool":tool}),
             "tower":tower, "offline_only":True,
+            "compound_volume": compound,
             "partial_wall": (not dual and mode == "split_wall")}
 
 
