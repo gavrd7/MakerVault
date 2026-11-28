@@ -292,5 +292,11 @@ def qualified_prusa_single_colour_mode(project, tool):
     except WorkerError:
         pass
     from .prusa_top_surface import inspect_prusa_partial_top
-    inspect_prusa_partial_top(project, tool)
-    return "split_top"
+    try:
+        inspect_prusa_partial_top(project, tool)
+        return "split_top"
+    except WorkerError:
+        pass
+    from .prusa_slanted_surface import inspect_prusa_slanted_surface
+    inspect_prusa_slanted_surface(project, tool)
+    return "split_slanted"
