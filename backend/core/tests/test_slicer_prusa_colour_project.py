@@ -702,6 +702,55 @@ class PrusaNativeColourProjectTests(TestCase):
             audit_prusa_partial_top_gcode(
                 simulated.replace(b"T1",b"T0"),project,tool=1)
 
+    def test_painted_mmu_modifier_and_cavity_require_exact_signed_box_layout(self):
+        from core.tests.test_slicer_prusa_3mf import volume, rewrite
+        from slicer_worker.prusa_colour_compound import qualified_prusa_colour_compound
+        from slicer_worker.modifier_gcode_audit import modifier_bounds
+        modifier = {**volume("modifier", {"sparse_infill_density": 85}),
+                    "width_mm": 6, "x_mm": -6}
+        cavity = {**volume("negative"), "width_mm": 6, "x_mm": 6}
+        row = {"modifier_volumes": [modifier, cavity],
+               "process_overrides": {"wall_loops": 4}}
+        with self.assertRaises(SlicerProfileError):
+            self.candidate(settings=row)
+        stl, _, _, paint = fixture(include_paint=True)
+        project = build_prusa_colour_candidate(
+            {"asset_id": "signed-composition", "x_mm": 0, "y_mm": 0,
+             "z_mm": 0, "rotation_deg": 0, "scale_percent": 100,
+             "colour_paint": paint, **row},
+            stl, printer_ini=ini("0.4,0.4,0.4,0.4,0.4", "1"),
+            colour_tool_indices={1:1}, bed_width=250, bed_depth=210,
+            research_compound=True)
+        printer=ini("0.4,0.4,0.4,0.4,0.4", "1")
+        self.assertTrue(qualified_prusa_colour_compound(project))
+        with self.assertRaises(WorkerError):
+            validate_prusa_material_candidate(
+                project, printer_ini=printer, colour=True)
+        receipt = validate_prusa_material_candidate(
+            project, printer_ini=printer, colour=True, compound_colour=True)
+        self.assertEqual(receipt["tools"], (1,2))
+        bounds,kinds,meshes=modifier_bounds(
+            project, "prusaslicer", include_meshes=True)
+        self.assertEqual(kinds, ["modifier_part", "negative_part"])
+        self.assertEqual(len(meshes), 2)
+        self.assertEqual(len(bounds), 2)
+        def forge(config):
+            config.find("./object/volume[3]/metadata[@key='volume_type']").set(
+                "value", "ParameterModifier")
+        with self.assertRaises(WorkerError):
+            qualified_prusa_colour_compound(
+                rewrite(project, "Metadata/Slic3r_PE_model.config", forge))
+        overlapping = {**cavity, "x_mm": -6}
+        unsafe = build_prusa_colour_candidate(
+            {"asset_id": "overlap", "x_mm": 0, "y_mm": 0,
+             "z_mm": 0, "rotation_deg": 0, "scale_percent": 100,
+             "colour_paint": paint,
+             "modifier_volumes": [modifier, overlapping]},
+            stl, printer_ini=printer, colour_tool_indices={1:1},
+            bed_width=250, bed_depth=210, research_compound=True)
+        with self.assertRaises(WorkerError):
+            qualified_prusa_colour_compound(unsafe)
+
     def test_source_fingerprint_must_match(self):
         stl, *_ = fixture()
         # Change actual facet vertex geometry, not the unused STL normal.
