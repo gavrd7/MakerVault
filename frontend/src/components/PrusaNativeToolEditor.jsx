@@ -206,8 +206,10 @@ export default function PrusaNativeToolEditor({
           engines. MMU supports one painted vertical wall or two
           independently coloured opposite vertical walls, including
           split or partial brush masks. MMU also supports a partially
-          painted horizontal top face, with T0/T1 wipe-tower purging
-          independently audited. XL5 independently supports both split
+          painted horizontal top face and a genuinely curved T1 brush
+          across source-signed nonplanar triangles, with both paint
+          extrusion and T0/T1 wipe-tower purging independently audited.
+          XL5 independently supports both split
           vertical walls and partially painted horizontal top faces,
           plus a T1 brush region on a planar angled face and genuine
           curved/nonplanar facets. Those XL5 T1 paths are checked against
@@ -224,9 +226,9 @@ export default function PrusaNativeToolEditor({
           painted models, both based on T0, with their complete exterior
           colour walls independently bound to T1 and T2 and each tool's
           native wipe-tower purge checked. More than two painted models,
-          curved MMU surfaces, split multi-model masks, alternate head
-          combinations and overlapping mixed edits still require native
-          toolpath qualification.</p>
+          curved surfaces with other MMU/INDX/XL tools, split multi-model
+          masks, alternate head combinations and overlapping mixed edits
+          still require native toolpath qualification.</p>
         {paintedSlots.map(slot=><label key={slot} style={{display:"block",marginBottom:8}}>
           Painted swatch {slot} — native Prusa tool
           <select disabled={disabled} value={(value.colour_tools||[]).find(
