@@ -94,18 +94,25 @@ def audit_prusa_dual_partial_gcode(data, project, *, printer_ini, tools, tower):
     signed=inspect_prusa_dual_partial(project,tools)
     selected={0,*tools}
     receipt=validate_prusa_material_candidate(
-        project,printer_ini=printer_ini,colour=True,tower=tower)
+        project,printer_ini=printer_ini,colour=True,tower=tower,
+        independent_colour=tower is None)
     if receipt["tools"]!=tuple(sorted({1,*(t+1 for t in tools)})):
         raise WorkerError("Prusa partial swatch tool vector changed.")
-    if (not isinstance(tower,(tuple,list)) or len(tower)!=5 or
-            not isinstance(data,bytes) or not 0<len(data)<=90*1024*1024):
+    if not isinstance(data,bytes) or not 0<len(data)<=90*1024*1024:
         raise WorkerError("Invalid Prusa dual partial output.")
-    tx,ty=tower[:2]
-    box=(tx-6,tx+65,ty-12,ty+45)
+    if tower is not None:
+        if (not isinstance(tower,(tuple,list)) or len(tower)!=5 or
+                any(type(v) not in (int,float) or not math.isfinite(v)
+                    for v in tower)):
+            raise WorkerError("Invalid native MMU dual partial tower.")
+        tx,ty=tower[:2]
+        box=(tx-6,tx+65,ty-12,ty+45)
+    else:
+        box=None
     counts={t:{(side,region):0
                for side in (0,1) for region in ("painted","unpainted")}
             for t in selected}
-    purges={t:0 for t in selected}
+    purges={t:0 for t in selected} if box is not None else {}
     x=y=z=None
     extrusion=0.
     relative_e=relative_xyz=False
@@ -161,7 +168,8 @@ def audit_prusa_dual_partial_gcode(data, project, *, printer_ini, tools, tower):
                     tool not in selected or None in old or
                     x is None or y is None or z is None):
                 continue
-            if (box[0]<=old[0]<=box[1] and
+            if (box is not None and
+                    box[0]<=old[0]<=box[1] and
                     box[2]<=old[1]<=box[3] and
                     box[0]<=x<=box[1] and box[2]<=y<=box[3]):
                 purges[tool]+=1
@@ -188,10 +196,10 @@ def audit_prusa_dual_partial_gcode(data, project, *, printer_ini, tools, tower):
                 max(2,counts[assigned][(i,"painted")]//8)):
             raise WorkerError(
                 "Prusa dual partial faces failed isolated deposited-tool audit.")
-    if any(n<10 for n in purges.values()):
+    if box is not None and any(n<10 for n in purges.values()):
         raise WorkerError("Prusa dual partial MMU output lacks tool-specific purge.")
     return {"tool_moves":counts,"tower_extrusion_moves":purges,
-            "offline_only":True}
+            "wipe_tower":box is not None,"offline_only":True}
 
 
 def qualified_prusa_dual_colour_mode(project, tools):
