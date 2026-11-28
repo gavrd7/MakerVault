@@ -1101,6 +1101,60 @@ class PrusaDualColourResearchTests(TestCase):
                 _two_painted_wall_regions(b"not-an-archive", tools)
 
 
+class PrusaCurvedPaintSpatialAcceptanceTests(TestCase):
+    """True 3-D source triangles, not projected 2-D painted-wall rectangles."""
+
+    def test_3d_triangle_distance_stays_finite_for_faces_edges_and_corners(self):
+        from slicer_worker.prusa_curved_surface import _point_triangle_dist2
+        triangle=((0.,0.,0.),(4.,0.,0.),(0.,4.,0.))
+        self.assertAlmostEqual(
+            _point_triangle_dist2((1.,1.,.2),triangle),.04,places=7)
+        self.assertAlmostEqual(
+            _point_triangle_dist2((5.,0.,0.),triangle),1.,places=7)
+        self.assertAlmostEqual(
+            _point_triangle_dist2((-1.,-1.,0.),triangle),2.,places=7)
+
+    def test_curved_paint_keeps_nonplanar_source_and_qualifies_toolpaths(self):
+        import math
+        from scripts.prusa_native_curved_colour_research import (
+            cylinder_stl,mask_for)
+        from slicer_worker.prusa_curved_surface import (
+            inspect_prusa_curved_surface,audit_prusa_curved_surface_gcode)
+        stl=cylinder_stl()
+        paint=mask_for(stl)
+        project=build_prusa_colour_candidate(
+            {"asset_id":"native-curved","x_mm":0,"y_mm":0,"z_mm":0,
+             "rotation_deg":0,"scale_percent":100,
+             "colour_paint":paint},stl,
+            printer_ini=ini("0.4,0.4,0.4,0.4,0.4","0"),
+            colour_tool_indices={1:1},bed_width=360,bed_depth=360)
+        signed=inspect_prusa_curved_surface(project,1)
+        self.assertGreater(signed["painted_facets"],20)
+        self.assertGreater(signed["unpainted_facets"],80)
+        commands=["G90","M83","G92 E0"]
+        for tool,start,stop in ((1,-.35,.35),(0,2.4,3.1)):
+            commands.extend([f"T{tool}",";TYPE:External perimeter"])
+            for n in range(42):
+                a=start+(stop-start)*n/42
+                b=start+(stop-start)*(n+1)/42
+                # FDM nozzle path is 0.2mm inside the signed cylinder face.
+                ax=180+9.8*math.cos(a)
+                ay=180+9.8*math.sin(a)
+                bx=180+9.8*math.cos(b)
+                by=180+9.8*math.sin(b)
+                commands.extend([f"G0 X{ax:.6f} Y{ay:.6f} Z8",
+                                 f"G1 X{bx:.6f} Y{by:.6f} E.03"])
+        data=("\n".join(commands)+"\n").encode()
+        proof=audit_prusa_curved_surface_gcode(data,project,tool=1)
+        self.assertGreaterEqual(proof["curved_surface_moves"][1]["painted"],35)
+        self.assertGreaterEqual(proof["curved_surface_moves"][0]["unpainted"],35)
+        with self.assertRaises(WorkerError):
+            audit_prusa_curved_surface_gcode(
+                data.replace(b"T0",b"T1"),project,tool=1)
+        with self.assertRaises(WorkerError):
+            inspect_prusa_curved_surface(project,2)
+
+
 class PrusaIndependentColourModelProjectTests(TestCase):
     """Multiple models must preserve distinct signed native paint resources."""
 
