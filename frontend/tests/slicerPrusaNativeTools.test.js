@@ -211,6 +211,17 @@ test("Prusa MMU admits only qualified T1 colour with disjoint fuzzy skin",()=>{
   assert.match(editor,/selective fuzzy skin on the opposite T0 wall/);
 });
 
+test("Two independent MMU painted objects bind native T0 bases to signed T1/T2 swatches",()=>{
+  assert.match(prepare,/const prusaMultiPaint=activeEngine==="prusaslicer"/);
+  assert.match(prepare,/objects\.length===2 && prusaNativeTools\?\.mode==="mmu"/);
+  assert.match(prepare,/row\.instance_id===object\.instance_id && row\.tool===1/);
+  assert.match(prepare,/row\.tool===index\+2/);
+  assert.match(prepare,/prusaSinglePaint \|\| prusaMultiPaint/);
+  assert.match(prepare,/Object\.keys\(object\.process_overrides\|\|\{\}\)\.length/);
+  assert.match(editor,/MMU also accepts two distinct/);
+  assert.match(editor,/native wipe-tower purge checked/);
+});
+
 test("Shared Prusa colour help differentiates native split walls from unqualified geometries",()=>{
   assert.match(editor,/MMU supports one painted vertical wall or two/);
   assert.match(editor,/independently coloured opposite vertical walls/);
@@ -219,7 +230,7 @@ test("Shared Prusa colour help differentiates native split walls from unqualifie
   assert.match(editor,/partially painted horizontal top faces/);
   assert.match(editor,/curved\\/nonplanar facets/);\n  assert.match(editor,/curved MMU surfaces/);
   assert.match(editor,/T1 brush region on a planar angled face/);
-  assert.match(editor,/multiple\s+painted objects/);
+  assert.match(editor,/More than two painted models/);
 });
 
 test("Prusa colour-paint guidance names the native MMU/XL route and profile-derived tools",()=>{
