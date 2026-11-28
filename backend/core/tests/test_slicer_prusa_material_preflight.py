@@ -655,11 +655,12 @@ class PrusaOfflineMmuPreflightTests(TestCase):
             output,prepared["model"],tool=1)
         self.assertEqual(output,b"audited-slanted")
 
-    def test_horizontal_top_brush_uses_only_qualified_xl5_worker_audit(self):
+    def test_horizontal_top_brush_uses_separate_xl5_and_mmu_audits(self):
         from core.slicer_prusa_material_preflight import (
             prepare_prusa_offline_xl_colour_candidate,
             slice_prusa_offline_xl_colour_candidate,
-            prepare_prusa_offline_colour_candidate)
+            prepare_prusa_offline_colour_candidate,
+            slice_prusa_offline_colour_candidate)
         from core.slicer_plate_3mf import _triangles
         from core.slicer_native_support_paint import _fingerprint
         from scripts.prusa_generate_mmu_paint import fixture
@@ -719,8 +720,8 @@ class PrusaOfflineMmuPreflightTests(TestCase):
                 str(uuid.uuid4()),**params)
         self.assertEqual(result,b"audited-top")
         audit.assert_called_once_with(result,prepared["model"],tool=1)
-        # MMU has no native top-surface purge/deposition proof; never inherit
-        # the independent-head clearance from an otherwise valid mask.
+        # The same mask independently qualifies MMU only when its native
+        # single-nozzle tower metadata and two-tool purges are present.
         assets[0]=ini("0.4,0.4,0.4,0.4,0.4","1")
         mmu={key:values[key] for key in (
             "owner_id","printer_profile","process_profile","filament_profiles",
@@ -728,8 +729,34 @@ class PrusaOfflineMmuPreflightTests(TestCase):
         mmu.update(rows=[(row,source)],tools=[1],
                    colour_slot=1,colour_tool=1)
         with patch("core.slicer_prusa_material_preflight.resolved_prusa_profile",
-                   side_effect=assets),self.assertRaises(WorkerError):
-            prepare_prusa_offline_colour_candidate(**mmu)
+                   side_effect=assets):
+            prepared_mmu=prepare_prusa_offline_colour_candidate(**mmu)
+        self.assertTrue(prepared_mmu["partial_top"])
+        self.assertFalse(prepared_mmu["partial_wall"])
+        mmu_request={**request,"model":encode(prepared_mmu["model"]),
+                     "printer_profile":encode(prepared_mmu["printer"]),
+                     "filament_profile":encode(prepared_mmu["filament"]),
+                     "process_profile":encode(prepared_mmu["process"])}
+        mmu_request.pop("prusa_offline_xl_colour")
+        mmu_request["prusa_offline_colour"]={
+            "tool":1,"tower":list(prepared_mmu["tower"])}
+        decoded=_decode_payload(mmu_request)
+        self.assertTrue(decoded["prusa_offline_colour"]["partial_top"])
+        with self.assertRaises(WorkerError):
+            _decode_payload({**mmu_request,"prusa_offline_colour":{
+                **mmu_request["prusa_offline_colour"],"partial_top":True}})
+        remote,context=self.offline_worker_stub()
+        remote.return_value=b"audited-MMU-top"
+        with context,patch(
+            "core.slicer_prusa_material_preflight.prepare_prusa_offline_colour_candidate",
+            return_value=prepared_mmu),patch(
+            "slicer_worker.prusa_top_surface.audit_prusa_partial_top_gcode"
+        ) as mmu_audit:
+            result=slice_prusa_offline_colour_candidate(
+                str(uuid.uuid4()),**mmu)
+        self.assertEqual(result,b"audited-MMU-top")
+        mmu_audit.assert_called_once_with(
+            result,prepared_mmu["model"],tool=1,tower=prepared_mmu["tower"])
 
     def test_two_painted_mmu_walls_bind_explicit_tools_and_worker_bytes(self):
         from core.slicer_prusa_material_preflight import prepare_prusa_offline_colour_candidate
