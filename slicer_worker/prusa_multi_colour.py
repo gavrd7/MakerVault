@@ -34,8 +34,12 @@ def inspect_prusa_multi_colour(project, *, printer_ini, tower):
     try:
         with zipfile.ZipFile(io.BytesIO(project)) as archive:
             infos=archive.infolist()
-            if len(infos)!=len(PARTS) or {part.filename for part in infos}!=PARTS:
-                raise ValueError("Unexpected Prusa multi-colour archive parts.")
+            if (len(infos)!=len(PARTS) or
+                    {part.filename for part in infos}!=PARTS or
+                    any(part.is_dir() or part.file_size<=0 or
+                        part.file_size>(80*1024*1024 if part.filename==MODEL else 65536)
+                        for part in infos)):
+                raise ValueError("Unexpected or oversized Prusa multi-colour archive parts.")
             parts={name:archive.read(name) for name in PARTS}
         for name in (MODEL,CONFIG):
             if b"<!" in parts[name] or b"\0" in parts[name]:
