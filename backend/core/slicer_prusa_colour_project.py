@@ -225,15 +225,26 @@ def build_prusa_multi_colour_candidate(rows, *, printer_ini,
     if (len(resources)!=len(rows) or len(objects)!=1 or
             len(config)!=len(rows) or len(build)!=len(rows)):
         raise SlicerProfileError("Prusa painted model identity mismatch.")
-    # Prusa's 2.9.7 3MF importer recognises the slic3rpe painting
-    # dialect, not arbitrary XML namespace aliases. Parsing a correct
-    # single-object project otherwise renames mmu_segmentation to ns1 and
-    # silently discards every colour when the models are merged.
-    ET.register_namespace("slic3rpe",
-                          "http://schemas.slic3r.org/3mf/2017/06")
-    ET.register_namespace("",NS)
-    parts["3D/3dmodel.model"]=ET.tostring(
-        model,encoding="utf-8",xml_declaration=True)
+    # Genuine Prusa 2.9.7 silently ignores nn:mmu_segmentation
+    # when the original slic3rpe prefix is rewritten by ElementTree.
+    # Normalize only this *exported* XML's prefix; ET.register_namespace
+    # mutates global process state and can corrupt unrelated validation.
+    import re
+    native_xml=ET.tostring(model,encoding="utf-8",xml_declaration=True)
+    url=b"http://schemas.slic3r.org/3mf/2017/06"
+    names=re.findall(rb'xmlns:(ns[0-9]+)="'+url+b'"',native_xml)
+    if len(names)!=1:
+        raise SlicerProfileError("Prusa multi-object paint namespace is ambiguous.")
+    namespace=names[0]
+    native_xml=native_xml.replace(
+        b'xmlns:'+namespace+b'="'+url+b'"',
+        b'xmlns:slic3rpe="'+url+b'"')
+    native_xml=native_xml.replace(
+        b' '+namespace+b':mmu_segmentation=',
+        b' slic3rpe:mmu_segmentation=')
+    if native_xml.count(b'slic3rpe:mmu_segmentation=')<len(rows):
+        raise SlicerProfileError("Prusa source paint metadata lost during merge.")
+    parts["3D/3dmodel.model"]=native_xml
     parts["Metadata/Slic3r_PE_model.config"]=ET.tostring(
         config,encoding="utf-8",xml_declaration=True)
     merged=io.BytesIO()
