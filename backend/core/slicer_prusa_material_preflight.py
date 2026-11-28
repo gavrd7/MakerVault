@@ -250,10 +250,28 @@ def prepare_prusa_offline_colour_candidate(
     palette=compile_prusa_filament_palette(printer,filaments)
     native_process=compile_prusa_purge_matrix(printer,process,purge_matrix)
     from .slicer_prusa_colour_project import build_prusa_colour_candidate
+    from .slicer_modifier_volumes import validate_modifier_volumes
+    try:
+        volumes=validate_modifier_volumes(row.get("modifier_volumes"))
+    except (TypeError,ValueError) as exc:
+        raise SlicerProfileError("Invalid painted native volumes.") from exc
+    compound=bool(volumes) and len(volumes)==2
+    if compound:
+        # Native proof covers only one T1-painted full wall with exactly
+        # one box density modifier and one independent, disjoint box cavity.
+        if (colour_tool_indices != {next(iter(colour_tool_indices)):1} or
+                [v["kind"] for v in volumes] != ["modifier","negative"] or
+                any(v["shape"]!="box" or
+                    v.get("coordinate_space")!="world" for v in volumes) or
+                set(volumes[0]["settings"])!={"sparse_infill_density"} or
+                volumes[1]["settings"]):
+            raise SlicerProfileError(
+                "Prusa painted modifier/cavity requires T1, one infill box and one disjoint negative box.")
     project=build_prusa_colour_candidate(
         row,model,printer_ini=printer,
         colour_tool_indices=colour_tool_indices,
-        bed_width=bed_width,bed_depth=bed_depth)
+        bed_width=bed_width,bed_depth=bed_depth,
+        research_compound=compound)
     project=add_prusa_native_wipe_tower(
         project,x_mm=tower_xy[0],y_mm=tower_xy[1],rotation_deg=0,
         bed_width=bed_width,bed_depth=bed_depth)
@@ -284,8 +302,11 @@ def prepare_prusa_offline_colour_candidate(
         receipt = validate_prusa_offline_colour_inputs(
             project=project,printer=printer,filament=palette,process=native_process,
             tool=selected[0],tower=list(tower))
+    if receipt["compound_volume"] != compound:
+        raise SlicerProfileError("Prusa painted compound project lost a native region.")
     return {"model":project,"printer":printer,"filament":palette,
             "process":native_process,"tower":tower,"tools":selected,
+            "compound_volume":compound,
             "partial_wall":receipt.get("partial_wall", False),
             **({"tool":selected[0]} if len(selected)==1 else {})}
 
@@ -317,6 +338,14 @@ def slice_prusa_offline_colour_candidate(job_id, **prepared):
         audit_prusa_offline_colour_gcode(
             output,candidate["model"],printer_ini=candidate["printer"],
             tool=candidate["tool"],tower=candidate["tower"])
+    if candidate["compound_volume"]:
+        from slicer_worker.modifier_gcode_audit import audit_modifier_positive_e
+        region=audit_modifier_positive_e(output,candidate["model"],"prusaslicer")
+        if (region["modifier_count"]!=2 or region["negative_volume_count"]!=1 or
+                region["modifier_region_paths"][0]<=0 or
+                region["modifier_region_paths"][1]!=0):
+            raise SlicerProfileError(
+                "Prusa painted modifier/cavity output did not retain all edits.")
     return output
 
 
