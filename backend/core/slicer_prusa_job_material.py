@@ -165,7 +165,18 @@ def prepare_prusa_workbench_material(job, *, settings=None):
                  ("support_paint", "seam_paint", "fuzzy_skin_paint",
                   "variable_layer_profile", "negative_volumes"))
     for row in objects:
-        if not isinstance(row, dict) or any(row.get(key) for key in forbidden):
+        if not isinstance(row, dict):
+            raise SlicerProfileError("Prusa native material model is invalid.")
+        rejected = [key for key in forbidden if row.get(key)]
+        if ("fuzzy_skin_paint" in rejected and single_colour and
+                kind=="single_nozzle_changer" and
+                isinstance(row.get("fuzzy_skin_paint"),dict) and
+                row["fuzzy_skin_paint"].get("regions")):
+            # Only this narrow signed full-T1/opposite-T0 paint pairing
+            # has pinned native proof. The owner and isolated worker
+            # independently revalidate its exact face geometry and G-code.
+            rejected.remove("fuzzy_skin_paint")
+        if rejected:
             raise SlicerProfileError("Prusa multi-material models cannot combine unqualified edits.")
         if row.get("colour_paint") and not single_colour:
             raise SlicerProfileError("Prusa multi-object facet colour painting is not yet verified.")
