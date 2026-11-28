@@ -278,21 +278,21 @@ def prepare_prusa_offline_colour_candidate(
     tower=(tower_xy[0],tower_xy[1],0,bed_width,bed_depth)
     from slicer_worker.prusa_offline_contract import validate_prusa_offline_colour_inputs
     if len(colour_tool_indices)==2:
-        from slicer_worker.prusa_colour_gcode_audit import _two_painted_wall_regions
+        from slicer_worker.prusa_dual_partial import qualified_prusa_dual_colour_mode
         from slicer_worker.runner import WorkerError
-        # Browser palette slots are not front/back directions. Derive and
-        # verify exact wall order from the *signed source-mesh 3MF* before
-        # submitting tool order. Never assume slot 1 means front.
+        # Palette slot order does not encode source-wall direction. Derive
+        # the physical T1/T2 positions from authenticated native facets.
         selected = tuple(colour_tool_indices.values())
         try:
-            _two_painted_wall_regions(project, selected)
+            qualified_prusa_dual_colour_mode(project, selected)
         except WorkerError:
             selected = tuple(reversed(selected))
             try:
-                _two_painted_wall_regions(project, selected)
+                qualified_prusa_dual_colour_mode(project, selected)
             except WorkerError as exc:
                 raise SlicerProfileError(
-                    "Prusa two-swatch painting requires complete opposite front/back walls."
+                    "Prusa two-swatch painting requires qualified opposing "
+                    "complete or independently split native exterior walls."
                 ) from exc
         receipt = validate_prusa_offline_colour_inputs(
             project=project,printer=printer,filament=palette,process=native_process,
@@ -307,6 +307,7 @@ def prepare_prusa_offline_colour_candidate(
     return {"model":project,"printer":printer,"filament":palette,
             "process":native_process,"tower":tower,"tools":selected,
             "compound_volume":compound,
+            "dual_partial":receipt["dual_partial"],
             "partial_wall":receipt.get("partial_wall", False),
             **({"tool":selected[0]} if len(selected)==1 else {})}
 
@@ -325,10 +326,16 @@ def slice_prusa_offline_colour_candidate(job_id, **prepared):
         candidate["process"],model_format="3mf",
         prusa_offline_colour={**selection,"tower":list(candidate["tower"])})
     if multi:
-        from slicer_worker.prusa_colour_gcode_audit import audit_prusa_dual_colour_gcode
-        audit_prusa_dual_colour_gcode(
-            output,candidate["model"],printer_ini=candidate["printer"],
-            tools=candidate["tools"],tower=candidate["tower"])
+        if candidate["dual_partial"]:
+            from slicer_worker.prusa_dual_partial import audit_prusa_dual_partial_gcode
+            audit_prusa_dual_partial_gcode(
+                output,candidate["model"],printer_ini=candidate["printer"],
+                tools=candidate["tools"],tower=candidate["tower"])
+        else:
+            from slicer_worker.prusa_colour_gcode_audit import audit_prusa_dual_colour_gcode
+            audit_prusa_dual_colour_gcode(
+                output,candidate["model"],printer_ini=candidate["printer"],
+                tools=candidate["tools"],tower=candidate["tower"])
     elif candidate["partial_wall"]:
         from slicer_worker.prusa_partial_surface import audit_prusa_partial_wall_gcode
         audit_prusa_partial_wall_gcode(
