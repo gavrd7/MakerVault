@@ -118,13 +118,24 @@ def inspect_prusa_partial_top(project, tool):
             "Prusa native colour has an unqualified horizontal top surface.") from None
 
 
-def audit_prusa_partial_top_gcode(data, project, *, tool):
-    """Require actual XL5 positive-E top-skin paths to follow signed mask."""
+def audit_prusa_partial_top_gcode(data, project, *, tool, tower=None):
+    """Audit native top-skin painting and, for MMU, source-bound tool purges."""
     source=inspect_prusa_partial_top(project,tool)
     if not isinstance(data, bytes) or not 0<len(data)<=90*1024*1024:
         raise WorkerError("Invalid Prusa partial top G-code.")
     selected={0,tool}
     counts={t:{"painted":0,"unpainted":0} for t in selected}
+    if tower is not None:
+        if (not isinstance(tower,(tuple,list)) or len(tower)!=5 or
+                any(type(n) not in (int,float) or not math.isfinite(n)
+                    for n in tower)):
+            raise WorkerError("Invalid Prusa MMU top-surface tower geometry.")
+        tx,ty=tower[:2]
+        tower_box=(tx-6,tx+65,ty-12,ty+45)
+        purge={t:0 for t in selected}
+    else:
+        tower_box=None
+        purge=None
     role=""
     active=None
     position=[None,None,None]
@@ -173,6 +184,17 @@ def audit_prusa_partial_top_gcode(data, project, *, tool):
                 continue
             delta=words["E"] if relative_e else words["E"]-e
             e=e+words["E"] if relative_e else words["E"]
+            if (tower_box is not None and active in selected and
+                    op in ("G1","G01") and delta>1e-6 and
+                    all(point is not None for point in
+                        (before[0],before[1],position[0],position[1])) and
+                    tower_box[0]<=before[0]<=tower_box[1] and
+                    tower_box[2]<=before[1]<=tower_box[3] and
+                    tower_box[0]<=position[0]<=tower_box[1] and
+                    tower_box[2]<=position[1]<=tower_box[3]):
+                # A native MMU may purge by stationary E moves at the
+                # authenticated tower XY, not only moving wipe paths.
+                purge[active]+=1
             if (op not in ("G1","G01") or delta<=1e-6 or
                     active not in selected or
                     not ("solid infill" in role or role=="external perimeter")
@@ -200,5 +222,9 @@ def audit_prusa_partial_top_gcode(data, project, *, tool):
             "base other=%d)." % (
                 counts[tool]["painted"], counts[tool]["unpainted"],
                 counts[0]["painted"], counts[0]["unpainted"]))
+    if purge is not None and any(n<10 for n in purge.values()):
+        raise WorkerError(
+            "Prusa MMU partial top G-code lacks independently verified T0/T1 wipe purging.")
     return {"tool":tool,"top_deposition_moves":counts,
-            "offline_only":True,"wipe_tower":False}
+            "tower_extrusion_moves":purge,
+            "offline_only":True,"wipe_tower":tower is not None}
