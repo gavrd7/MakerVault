@@ -174,6 +174,12 @@ def main(binary,vendor):
          "colour_paint":paint},
         mesh,printer_ini=printer,colour_tool_indices={1:1},
         bed_width=360,bed_depth=360)
+    from slicer_worker.prusa_curved_surface import (
+        inspect_prusa_curved_surface,audit_prusa_curved_surface_gcode)
+    source=inspect_prusa_curved_surface(project,1)
+    print("Signed curved native facets",{
+        "painted":source["painted_facets"],
+        "unpainted":source["unpainted_facets"]},flush=True)
     with TemporaryDirectory(prefix="prusa-curved-paint-") as folder:
         root=Path(folder)
         for name,data in (("input.3mf",project),("printer.ini",printer),
@@ -184,8 +190,10 @@ def main(binary,vendor):
         gcode=(root/"output.gcode").read_bytes()
         audit_prusa_positive_e(gcode)
         proof=deposited_sectors(gcode)
+        signed_proof=audit_prusa_curved_surface_gcode(
+            gcode,project,tool=1)
         print("PASS: native Prusa nonplanar multi-facet and partial-triangle "
-              "curved paint deposition",proof,
+              "curved paint deposition",proof,signed_proof,
               hashlib.sha256(gcode).hexdigest(),flush=True)
 
 
