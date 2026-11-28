@@ -81,3 +81,47 @@ def qualified_prusa_colour_compound(project):
     except (OSError, ValueError, TypeError, KeyError, IndexError, OverflowError,
             AttributeError, zipfile.BadZipFile, SafeET.ParseError):
         raise WorkerError("Cannot verify signed Prusa compound volume layout.") from None
+
+
+def audit_prusa_painted_volume_effects(data, project):
+    """Audit EVERY present Prusa painted modifier/negative volume after slicing.
+
+    The base ModelPart is not a typed modifier. A single native infill
+    modifier has genuine native colour+modifier proof; the separately
+    qualified two-volume route requires exactly one infill modifier plus
+    one disjoint negative cavity. An absent region needs no extra scan.
+    This audit runs independently in the worker and in owner-side preflight.
+    """
+    from .prusa_3mf_validation import CONFIG
+    from .modifier_gcode_audit import audit_modifier_positive_e
+
+    if not isinstance(project, bytes) or not 0 < len(project) <= 32 * 1024 * 1024:
+        raise WorkerError("Invalid Prusa painted native region project.")
+    try:
+        with zipfile.ZipFile(io.BytesIO(project)) as archive:
+            metadata = SafeET.fromstring(archive.read(CONFIG))
+        objects = metadata.findall("./object")
+        if len(objects) != 1:
+            raise WorkerError("Prusa painted region audit expects one parent.")
+        count = len(objects[0].findall("./volume")) - 1
+    except WorkerError:
+        raise
+    except (OSError, ValueError, KeyError, AttributeError,
+            zipfile.BadZipFile, SafeET.ParseError):
+        raise WorkerError("Cannot inspect native Prusa coloured region count.") from None
+
+    if count == 0:
+        return None
+    if count not in (1, 2):
+        raise WorkerError("Unqualified count of Prusa painted native modifiers.")
+    if count == 2 and not qualified_prusa_colour_compound(project):
+        raise WorkerError("Prusa painted cavity and modifier geometry is not qualified.")
+    receipt = audit_modifier_positive_e(data, project, "prusaslicer")
+    if (receipt["modifier_count"] != count or
+            receipt["modifier_region_paths"][0] <= 0 or
+            receipt["negative_volume_count"] != (1 if count == 2 else 0) or
+            any(receipt["modifier_region_paths"][i] != 0
+                for i in range(1, count) if count == 2)):
+        raise WorkerError(
+            "Prusa coloured native modifier/cavity did not retain regional deposition.")
+    return receipt
