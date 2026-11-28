@@ -314,7 +314,8 @@ def _decode_payload(payload):
         files["prusa_offline_colour"]={
             **({"tools":receipt["tools"]} if "tools" in receipt
                else {"tool":receipt["tool"]}),"tower":receipt["tower"],
-            "partial_wall":receipt["partial_wall"]}
+            "partial_wall":receipt["partial_wall"],
+            "compound_volume":receipt["compound_volume"]}
     if "creality_model_stls" in payload:
         if (payload["engine"] != "crealityprint" or model_format != "stl" or
                 "filament_profiles" not in files):
@@ -541,6 +542,16 @@ class Handler(BaseHTTPRequestHandler):
                         audit_prusa_offline_colour_gcode(
                             data,files["model"],printer_ini=files["printer_profile"],
                             tool=details["tool"],tower=details["tower"])
+                    if details.get("compound_volume"):
+                        from .modifier_gcode_audit import audit_modifier_positive_e
+                        region = audit_modifier_positive_e(
+                            data, files["model"], "prusaslicer")
+                        if (region["modifier_count"] != 2 or
+                                region["negative_volume_count"] != 1 or
+                                region["modifier_region_paths"][0] <= 0 or
+                                region["modifier_region_paths"][1] != 0):
+                            raise WorkerError(
+                                "Prusa painted modifier/cavity output is not qualified.")
                 if files.get("prusa_offline_xl_colour"):
                     details=files["prusa_offline_xl_colour"]
                     if "tools" in details and len(details["tools"])==4:
