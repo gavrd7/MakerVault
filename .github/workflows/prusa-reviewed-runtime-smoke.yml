@@ -508,6 +508,28 @@ jobs:
             /opt/engine-store/versions/prusaslicer/2.9.7/resources/profiles/PrusaResearch.ini \
             /tmp/mmu-colour/baseline.3mf /tmp/mmu-colour/colour.3mf
 
+      - name: Research MMU colour with independent selected seam face
+        id: prusa_colour_seam_research
+        # Native 3MF import alone cannot certify seam placement; verify
+        # first positive-E exterior starts across real sliced layers.
+        continue-on-error: true
+        run: |
+          set -euo pipefail
+          docker run --rm --network none --user 10001:10001 \
+            -v "$TEST_VOLUME:/opt/engine-store:ro" \
+            -v "$GITHUB_WORKSPACE/backend:/tmp/mv-backend:ro" \
+            -v "$GITHUB_WORKSPACE/scripts:/tmp/scripts:ro" \
+            -e PYTHONPATH=/tmp:/tmp/mv-backend:/opt/makervault-slicer \
+            --entrypoint python3 prusa-integration:smoke \
+            /tmp/scripts/prusa_native_colour_seam_research.py \
+            /opt/engine-store/versions/prusaslicer/2.9.7/bin/prusa-slicer \
+            /opt/engine-store/versions/prusaslicer/2.9.7/resources/profiles/PrusaResearch.ini
+
+      - name: Report unqualified simultaneous native MMU colour and seam
+        if: ${{ steps.prusa_colour_seam_research.outcome == 'failure' }}
+        run: |
+          echo "::warning title=Prusa colour/seam::Combined native T1 colour and seam start still lack real deposition proof. Keep mixed-edit production admission blocked."
+
       - name: Research signed MMU5 curved T1 partial paint and native purges
         id: prusa_mmu_curved_research
         # Keep MMU curved paint guarded until genuine native 2.9.7 produces
