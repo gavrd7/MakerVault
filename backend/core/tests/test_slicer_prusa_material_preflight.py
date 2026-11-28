@@ -474,6 +474,78 @@ class PrusaOfflineMmuPreflightTests(TestCase):
                    side_effect=assets),self.assertRaises(WorkerError):
             prepare_prusa_offline_colour_candidate(**data)
 
+    def test_mmu_colour_and_opposite_fuzzy_owner_worker_both_require_deposition(self):
+        from core.slicer_prusa_material_preflight import (
+            prepare_prusa_offline_colour_candidate,
+            slice_prusa_offline_colour_candidate)
+        from core.slicer_plate_3mf import _triangles
+        from core.slicer_native_support_paint import _fingerprint
+        from scripts.prusa_generate_mmu_paint import fixture
+        from slicer_worker.service import _decode_payload
+        import base64
+        values,assets=self.parts()
+        source,_,_,paint=fixture(include_paint=True)
+        faces=list(_triangles(source))
+        low=[min(p[i] for face in faces for p in face) for i in range(3)]
+        high=[max(p[i] for face in faces for p in face) for i in range(3)]
+        center=((low[0]+high[0])/2,(low[1]+high[1])/2,low[2])
+        local=[[tuple(p[i]-center[i] for i in range(3)) for p in face]
+               for face in faces]
+        back=[{"face":i,"polygon":[list(p) for p in face]}
+              for i,face in enumerate(local)
+              if all(abs(p[1]-10)<.00001 for p in face)]
+        fuzzy={"version":2,"signature":_fingerprint(local),
+               "regions":[{"slot":0,"patches":back}]}
+        row={"asset_id":"native-colour-and-fuzzy",
+             "x_mm":0,"y_mm":0,"z_mm":0,
+             "rotation_deg":0,"scale_percent":100,
+             "colour_paint":paint,"fuzzy_skin_paint":fuzzy}
+        data={key:values[key] for key in (
+            "owner_id","printer_profile","process_profile","filament_profiles",
+            "purge_matrix","tower_xy","bed_width","bed_depth")}
+        data.update(rows=[(row,source)],tools=[1],
+                    colour_slot=1,colour_tool=1)
+        with patch("core.slicer_prusa_material_preflight.resolved_prusa_profile",
+                   side_effect=assets):
+            prepared=prepare_prusa_offline_colour_candidate(**data)
+        self.assertTrue(prepared["colour_fuzzy"])
+        self.assertFalse(prepared["partial_wall"])
+        self.assertFalse(prepared["compound_volume"])
+        encode=lambda body:base64.b64encode(body).decode("ascii")
+        request={"job_id":str(uuid.uuid4()),"engine":"prusaslicer",
+                 "engine_version":"2.9.7","model_format":"3mf",
+                 "model":encode(prepared["model"]),
+                 "printer_profile":encode(prepared["printer"]),
+                 "filament_profile":encode(prepared["filament"]),
+                 "process_profile":encode(prepared["process"]),
+                 "prusa_offline_colour":{
+                     "tool":1,"tower":list(prepared["tower"])}}
+        receipt=_decode_payload(request)["prusa_offline_colour"]
+        self.assertTrue(receipt["colour_fuzzy"])
+        with self.assertRaises(WorkerError):
+            _decode_payload({**request,"prusa_offline_colour":{
+                **request["prusa_offline_colour"],"colour_fuzzy":True}})
+        remote,context=self.offline_worker_stub()
+        remote.return_value=b"native-mixed-colour-fuzzy"
+        with context,patch(
+            "core.slicer_prusa_material_preflight.prepare_prusa_offline_colour_candidate",
+            return_value=prepared),patch(
+            "slicer_worker.prusa_colour_gcode_audit.audit_prusa_offline_colour_gcode"
+        ) as colour,patch(
+            "slicer_worker.prusa_colour_fuzzy.audit_prusa_colour_fuzzy_gcode"
+        ) as textured:
+            output=slice_prusa_offline_colour_candidate(
+                str(uuid.uuid4()),**data)
+        colour.assert_called_once()
+        textured.assert_called_once_with(output,prepared["model"])
+        # A support channel on the same painted source must not be silently
+        # dropped or accepted merely because the qualified fuzzy exists.
+        invalid={**row,"support_paint":{"regions":[{"slot":0}]}}
+        data["rows"]=[(invalid,source)]
+        with patch("core.slicer_prusa_material_preflight.resolved_prusa_profile",
+                   side_effect=assets),self.assertRaises(SlicerProfileError):
+            prepare_prusa_offline_colour_candidate(**data)
+
     def test_partial_wall_mmu_is_authentically_admitted_and_full_wall_gate_stays_strict(self):
         from core.slicer_prusa_material_preflight import (
             prepare_prusa_offline_colour_candidate,
