@@ -220,10 +220,13 @@ export default function PrusaNativeToolEditor({
           extrusion and cavity subtraction are checked before accepting
           the slice. A complete MMU T1 front colour wall can alternatively
           combine with selective fuzzy skin on the opposite T0 wall, with
-          both deposited effects audited. Split paints on other INDX/XL
-          tool counts, curved MMU surfaces, angled or curved regions using
-          alternate heads, and multiple painted objects still need
-          separately qualified G-code attribution.</p>
+          both deposited effects audited. MMU also accepts two distinct
+          painted models, both based on T0, with their complete exterior
+          colour walls independently bound to T1 and T2 and each tool's
+          native wipe-tower purge checked. More than two painted models,
+          curved MMU surfaces, split multi-model masks, alternate head
+          combinations and overlapping mixed edits still require native
+          toolpath qualification.</p>
         {paintedSlots.map(slot=><label key={slot} style={{display:"block",marginBottom:8}}>
           Painted swatch {slot} — native Prusa tool
           <select disabled={disabled} value={(value.colour_tools||[]).find(
