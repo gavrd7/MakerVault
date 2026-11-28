@@ -200,7 +200,8 @@ test("Shared Prusa tool selector explains independently audited native MMU compo
 });
 
 test("Shared Prusa colour help differentiates native split walls from unqualified geometries",()=>{
-  assert.match(editor,/MMU supports one painted swatch on a vertical wall/);
+  assert.match(editor,/MMU supports one painted vertical wall or two/);
+  assert.match(editor,/independently coloured opposite vertical walls/);
   assert.match(editor,/independently audited/);
   assert.match(editor,/XL5 independently supports both split/);
   assert.match(editor,/partially painted horizontal top faces/);
