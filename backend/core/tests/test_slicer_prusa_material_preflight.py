@@ -802,6 +802,82 @@ class PrusaOfflineMmuPreflightTests(TestCase):
             output,prepared["model"],tool=1)
         self.assertEqual(output,b"audited-slanted")
 
+    def test_indx8_t5_t7_split_mmu_independent_source_and_owner_output(self):
+        from core.slicer_prusa_material_preflight import (
+            prepare_prusa_offline_xl_colour_candidate,
+            slice_prusa_offline_xl_colour_candidate)
+        from core.slicer_plate_3mf import _triangles
+        from core.slicer_native_support_paint import _fingerprint
+        from scripts.prusa_generate_mmu_paint import fixture
+        from slicer_worker.service import _decode_payload
+        import base64
+        values,assets=self.parts()
+        assets[0]=ini(",".join(["0.4"]*8),"0")
+        assets.extend([
+            b"filament_diameter = 1.75\ntemperature = 220\n"
+            b"first_layer_temperature = 220\n"]*3)
+        values["filament_profiles"].extend([
+            profile("filament",42) for _ in range(3)])
+        stl,_,_,base=fixture(include_paint=True)
+        triangles=list(_triangles(stl))
+        lo=[min(p[i] for tri in triangles for p in tri) for i in range(3)]
+        hi=[max(p[i] for tri in triangles for p in tri) for i in range(3)]
+        centre=((lo[0]+hi[0])/2,(lo[1]+hi[1])/2,lo[2])
+        local=[[tuple(p[i]-centre[i] for i in range(3)) for p in face]
+               for face in triangles]
+        regions=[]
+        for slot,side in ((1,-10),(2,10)):
+            index=next(i for i,face in enumerate(local)
+                       if all(abs(p[1]-side)<1e-5 for p in face))
+            a,b,c=local[index]
+            regions.append({"slot":slot,"patches":[{"face":index,
+                "polygon":[list(a),
+                           [(a[j]+b[j])/2 for j in range(3)],
+                           [(a[j]+c[j])/2 for j in range(3)]]}]})
+        paint={**base,"signature":_fingerprint(local),
+               "palette":[*base["palette"],
+                          {"color":"#fadd4d","label":"T7"}],
+               "regions":regions}
+        row={"asset_id":"indx8-two-split","x_mm":0,"y_mm":0,"z_mm":0,
+             "rotation_deg":0,"scale_percent":100,"colour_paint":paint}
+        params={key:values[key] for key in (
+            "owner_id","printer_profile","process_profile",
+            "filament_profiles","bed_width","bed_depth")}
+        params.update(rows=[(row,stl)],tools=[1],
+                      colour_tool_indices={1:5,2:7})
+        with patch("core.slicer_prusa_material_preflight.resolved_prusa_profile",
+                   side_effect=assets):
+            prepared=prepare_prusa_offline_xl_colour_candidate(**params)
+        self.assertEqual(prepared["tools"],[5,7])
+        self.assertTrue(prepared["dual_partial"])
+        self.assertFalse(prepared["partial_curved"])
+        encode=lambda payload:base64.b64encode(payload).decode("ascii")
+        request={"job_id":str(uuid.uuid4()),"engine":"prusaslicer",
+                 "engine_version":"2.9.7","model_format":"3mf",
+                 "model":encode(prepared["model"]),
+                 "printer_profile":encode(prepared["printer"]),
+                 "filament_profile":encode(prepared["filament"]),
+                 "process_profile":encode(prepared["process"]),
+                 "prusa_offline_xl_colour":{"tools":[5,7]}}
+        decoded=_decode_payload(request)
+        self.assertTrue(decoded["prusa_offline_xl_colour"]["dual_partial"])
+        with self.assertRaises(WorkerError):
+            _decode_payload({**request,"prusa_offline_xl_colour":{
+                "tools":[5,7],"dual_partial":True}})
+        remote,context=self.offline_worker_stub()
+        remote.return_value=b"audited-indx8-dual-partial"
+        with context,patch(
+            "core.slicer_prusa_material_preflight.prepare_prusa_offline_xl_colour_candidate",
+            return_value=prepared),patch(
+            "slicer_worker.prusa_dual_partial.audit_prusa_dual_partial_gcode"
+        ) as audit:
+            output=slice_prusa_offline_xl_colour_candidate(
+                str(uuid.uuid4()),**params)
+        self.assertEqual(output,b"audited-indx8-dual-partial")
+        audit.assert_called_once_with(
+            output,prepared["model"],printer_ini=prepared["printer"],
+            tools=[5,7],tower=None)
+
     def test_indx_eight_native_heads_can_qualify_signed_curved_t1_without_tower(self):
         from core.slicer_prusa_material_preflight import (
             prepare_prusa_offline_xl_colour_candidate,
