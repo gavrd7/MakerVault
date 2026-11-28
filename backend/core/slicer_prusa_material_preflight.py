@@ -255,7 +255,17 @@ def prepare_prusa_offline_colour_candidate(
         volumes=validate_modifier_volumes(row.get("modifier_volumes"))
     except (TypeError,ValueError) as exc:
         raise SlicerProfileError("Invalid painted native volumes.") from exc
+    fuzz_source=row.get("fuzzy_skin_paint") or {}
+    fuzzy=(isinstance(fuzz_source,dict) and bool(fuzz_source.get("regions")))
+    if row.get("fuzzy_skin_paint") and not fuzzy:
+        raise SlicerProfileError("Prusa selective fuzzy requires native painted facets.")
     compound=bool(volumes) and len(volumes)==2
+    if fuzzy and (volumes or len(colour_tool_indices)!=1 or
+                  next(iter(colour_tool_indices.values()))!=1 or
+                  row.get("support_paint") or row.get("seam_paint") or
+                  row.get("variable_layer_profile")):
+        raise SlicerProfileError(
+            "Prusa MMU coloured fuzzy paint needs one T1 wall and no other combined edits.")
     if compound:
         # Native proof covers only one T1-painted full wall with exactly
         # one box density modifier and one independent, disjoint box cavity.
@@ -271,7 +281,7 @@ def prepare_prusa_offline_colour_candidate(
         row,model,printer_ini=printer,
         colour_tool_indices=colour_tool_indices,
         bed_width=bed_width,bed_depth=bed_depth,
-        research_compound=compound)
+        research_compound=compound or fuzzy)
     project=add_prusa_native_wipe_tower(
         project,x_mm=tower_xy[0],y_mm=tower_xy[1],rotation_deg=0,
         bed_width=bed_width,bed_depth=bed_depth)
@@ -302,11 +312,14 @@ def prepare_prusa_offline_colour_candidate(
         receipt = validate_prusa_offline_colour_inputs(
             project=project,printer=printer,filament=palette,process=native_process,
             tool=selected[0],tower=list(tower))
-    if receipt["compound_volume"] != compound:
-        raise SlicerProfileError("Prusa painted compound project lost a native region.")
+    if (receipt["compound_volume"] != compound or
+            receipt["colour_fuzzy"] != fuzzy):
+        raise SlicerProfileError(
+            "Prusa native project lost a requested modifier or fuzzy-painted facet.")
     return {"model":project,"printer":printer,"filament":palette,
             "process":native_process,"tower":tower,"tools":selected,
             "compound_volume":compound,
+            "colour_fuzzy":fuzzy,
             "dual_partial":receipt["dual_partial"],
             "partial_wall":receipt.get("partial_wall", False),
             "partial_top":receipt["partial_top"],
@@ -353,6 +366,9 @@ def slice_prusa_offline_colour_candidate(job_id, **prepared):
             tool=candidate["tool"],tower=candidate["tower"])
     from slicer_worker.prusa_colour_compound import audit_prusa_painted_volume_effects
     audit_prusa_painted_volume_effects(output, candidate["model"])
+    if candidate["colour_fuzzy"]:
+        from slicer_worker.prusa_colour_fuzzy import audit_prusa_colour_fuzzy_gcode
+        audit_prusa_colour_fuzzy_gcode(output,candidate["model"])
     return output
 
 
