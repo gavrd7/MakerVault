@@ -1157,6 +1157,50 @@ class PrusaIndependentColourModelProjectTests(TestCase):
         self.assertLess(bounds[0][1],bounds[1][0])
         self.assertEqual(len(config.findall("./object/volume")),2)
 
+    def test_native_multi_colour_worker_rejects_wrong_tool_and_missing_purge(self):
+        from core.slicer_prusa_colour_project import (
+            build_prusa_multi_colour_candidate)
+        from core.slicer_prusa_wipe_tower import add_prusa_native_wipe_tower
+        from slicer_worker.prusa_multi_colour import (
+            inspect_prusa_multi_colour,audit_prusa_multi_colour_gcode)
+        printer=ini("0.4,0.4,0.4,0.4,0.4","1")
+        project=build_prusa_multi_colour_candidate(
+            self.two_sources(),printer_ini=printer,
+            colour_tool_indices={1:1,2:2},bed_width=250,bed_depth=210)
+        project=add_prusa_native_wipe_tower(
+            project,x_mm=55,y_mm=150,rotation_deg=0,
+            bed_width=250,bed_depth=210)
+        signed=inspect_prusa_multi_colour(
+            project,printer_ini=printer,tower=(55,150,0,250,210))
+        self.assertEqual(tuple(row["tool"] for row in signed),(1,2))
+        commands=["G90","M83","G92 E0"]
+        for tool, x, y in ((1,90,95),(2,160,115),
+                           (0,90,115),(0,160,95)):
+            commands.extend([f"T{tool}",";TYPE:External perimeter",
+                             f"G0 X{x-8} Y{y} Z6"])
+            for n in range(32):
+                commands.append(
+                    f"G1 X{x-8+(n+1)*.45:.4f} Y{y} E.02")
+        for tool in (0,1,2):
+            commands.extend([f"T{tool}",";TYPE:Wipe tower",
+                             "G0 X55 Y150 Z8"])
+            commands.extend(["G1 E.03"]*15)
+        payload=("\n".join(commands)+"\n").encode()
+        proof=audit_prusa_multi_colour_gcode(
+            payload,project,printer_ini=printer,
+            tower=(55,150,0,250,210))
+        self.assertEqual(proof["per_model_wall_moves"][0][1]["painted"],32)
+        self.assertEqual(proof["per_model_wall_moves"][1][2]["painted"],32)
+        self.assertEqual(proof["tower_extrusion_moves"],{0:15,1:15,2:15})
+        with self.assertRaises(WorkerError):
+            audit_prusa_multi_colour_gcode(
+                payload.replace(b"T2",b"T1"),project,printer_ini=printer,
+                tower=(55,150,0,250,210))
+        with self.assertRaises(WorkerError):
+            audit_prusa_multi_colour_gcode(
+                ("\n".join(commands[:commands.index("T2")])+"\n").encode(),
+                project,printer_ini=printer,tower=(55,150,0,250,210))
+
     def test_missing_second_painted_model_cannot_be_silently_encoded(self):
         from core.slicer_prusa_colour_project import (
             build_prusa_multi_colour_candidate)
