@@ -551,6 +551,28 @@ jobs:
         run: |
           echo "::warning title=Prusa MMU curved paint::Native curved T1 material or T0/T1 purging remains unqualified. Keep normal MMU curved paint disabled."
 
+      - name: Research genuine independent INDX8 curved T1 colour deposition
+        id: prusa_indx_curved_research
+        # Review official eight-tool topology separately from XL5:
+        # a curved brush must retain true T1 painted facets in native G-code.
+        continue-on-error: true
+        run: |
+          set -euo pipefail
+          docker run --rm --network none --user 10001:10001 \
+            -v "$TEST_VOLUME:/opt/engine-store:ro" \
+            -v "$GITHUB_WORKSPACE/backend:/tmp/mv-backend:ro" \
+            -v "$GITHUB_WORKSPACE/scripts:/tmp/scripts:ro" \
+            -e PYTHONPATH=/tmp:/tmp/mv-backend:/opt/makervault-slicer \
+            --entrypoint python3 prusa-integration:smoke \
+            /tmp/scripts/prusa_native_indx_curved_smoke.py \
+            /opt/engine-store/versions/prusaslicer/2.9.7/bin/prusa-slicer \
+            /opt/engine-store/versions/prusaslicer/2.9.7/resources/profiles/PrusaResearch.ini
+
+      - name: Report unqualified independent INDX8 curved colour
+        if: ${{ steps.prusa_indx_curved_research.outcome == 'failure' }}
+        run: |
+          echo "::warning title=Prusa INDX curved paint::Eight-head nonplanar T1 colour remains unqualified; retain production offline admission guard."
+
       - name: Require genuine XL5 signed 3D curved partial-facet colour deposition
         id: prusa_curved_native_research
         # Mandatory genuine 2.9.7 positive-E + independent native nearest-
