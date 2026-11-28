@@ -335,6 +335,7 @@ def _decode_payload(payload):
                else {"tool":receipt["tool"]}),"tower":receipt["tower"],
             "partial_wall":receipt["partial_wall"],
             "partial_top":receipt["partial_top"],
+            "partial_curved":receipt["partial_curved"],
             "dual_partial":receipt["dual_partial"],
             "compound_volume":receipt["compound_volume"],
             "colour_fuzzy":receipt["colour_fuzzy"]}
@@ -582,6 +583,11 @@ class Handler(BaseHTTPRequestHandler):
                     elif details.get("partial_top"):
                         from .prusa_top_surface import audit_prusa_partial_top_gcode
                         audit_prusa_partial_top_gcode(
+                            data, files["model"], tool=details["tool"],
+                            tower=details["tower"])
+                    elif details.get("partial_curved"):
+                        from .prusa_curved_surface import audit_prusa_curved_surface_gcode
+                        audit_prusa_curved_surface_gcode(
                             data, files["model"], tool=details["tool"],
                             tower=details["tower"])
                     else:
