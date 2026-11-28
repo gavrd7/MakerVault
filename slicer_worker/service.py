@@ -316,6 +316,7 @@ def _decode_payload(payload):
             **({"tools":receipt["tools"]} if "tools" in receipt
                else {"tool":receipt["tool"]}),"tower":receipt["tower"],
             "partial_wall":receipt["partial_wall"],
+            "partial_top":receipt["partial_top"],
             "dual_partial":receipt["dual_partial"],
             "compound_volume":receipt["compound_volume"]}
     if "creality_model_stls" in payload:
@@ -546,6 +547,11 @@ class Handler(BaseHTTPRequestHandler):
                     elif details.get("partial_wall"):
                         from .prusa_partial_surface import audit_prusa_partial_wall_gcode
                         audit_prusa_partial_wall_gcode(
+                            data, files["model"], tool=details["tool"],
+                            tower=details["tower"])
+                    elif details.get("partial_top"):
+                        from .prusa_top_surface import audit_prusa_partial_top_gcode
+                        audit_prusa_partial_top_gcode(
                             data, files["model"], tool=details["tool"],
                             tower=details["tower"])
                     else:
