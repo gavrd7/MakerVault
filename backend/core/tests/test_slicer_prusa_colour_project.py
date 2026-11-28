@@ -1000,6 +1000,38 @@ class PrusaDualColourResearchTests(TestCase):
                 _two_painted_wall_regions(b"not-an-archive", tools)
 
 
+class PrusaSlantedFacetIndexTests(TestCase):
+    """Spatial hit-testing must match the signed triangular source region."""
+
+    def test_spatial_index_returns_label_set_for_painted_and_plain_facets(self):
+        from slicer_worker.prusa_slanted_surface import (
+            _surface_tree, _surface_labels)
+        painted=[((0.,0.),(10.,0.),(0.,10.))]
+        plain=[((10.,10.),(20.,10.),(10.,20.))]
+        root=_surface_tree(painted,plain)
+        self.assertEqual(_surface_labels(root,(2.,2.)),{"painted"})
+        self.assertEqual(_surface_labels(root,(12.,12.)),{"unpainted"})
+        self.assertEqual(_surface_labels(root,(50.,50.)),set())
+        self.assertEqual(_surface_labels(root,(9.,9.)),set())
+
+    def test_spatial_index_subdivides_large_disjoint_facets(self):
+        from slicer_worker.prusa_slanted_surface import (
+            _surface_tree, _surface_labels)
+        painted=[]
+        plain=[]
+        for n in range(80):
+            x=n*2.0
+            triangle=((x,0.),(x+1.,0.),(x,.9))
+            (painted if n%2==0 else plain).append(triangle)
+        root=_surface_tree(painted,plain)
+        self.assertIsNotNone(root[1])
+        self.assertIsNotNone(root[2])
+        for n in range(80):
+            expected={"painted"} if n%2==0 else {"unpainted"}
+            self.assertEqual(_surface_labels(root,(n*2.+.1,.1)),expected)
+        self.assertEqual(_surface_labels(root,(-3.,.3)),set())
+
+
 class PrusaXLNativeColourAuditTests(TestCase):
     """Independent XL T0/Tn face painting never inherits MMU wipe semantics."""
 
