@@ -573,11 +573,10 @@ jobs:
         run: |
           echo "::warning title=Prusa INDX partial colours::Eight-head T5/T7 partial masks are not yet verified on real 2.9.7 G-code. Keep signed admission guard."
 
-      - name: Research genuine independent INDX8 curved T1 colour deposition
+      - name: Require genuine independent INDX8 curved T1 colour deposition
         id: prusa_indx_curved_research
-        # Review official eight-tool topology separately from XL5:
-        # a curved brush must retain true T1 painted facets in native G-code.
-        continue-on-error: true
+        # Mandatory native eight-head colour proof: source-signed curved
+        # T1 positive-E extrusion and zero cross-sector wrong-tool paths.
         run: |
           set -euo pipefail
           docker run --rm --network none --user 10001:10001 \
