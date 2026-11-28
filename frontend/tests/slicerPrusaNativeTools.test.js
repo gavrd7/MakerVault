@@ -199,6 +199,18 @@ test("Shared Prusa tool selector explains independently audited native MMU compo
   assert.match(editor,/native\s+extrusion and cavity subtraction are checked/);
 });
 
+test("Prusa MMU admits only qualified T1 colour with disjoint fuzzy skin",()=>{
+  assert.match(prepare,/object\.fuzzy_skin_paint\?\.regions\?\.length &&/);
+  assert.match(prepare,/prusaNativeTools\?\.mode==="mmu"/);
+  assert.match(prepare,/prusaPaintedSlots\.length===1/);
+  assert.match(prepare,/prusaNativeTools\?\.colour_tools\?\.\[0\]\?\.tool===2/);
+  assert.match(prepare,/!object\.modifier_volumes\?\.length/);
+  assert.match(prepare,/!object\.support_paint\?\.regions\?\.length/);
+  assert.match(prepare,/!object\.seam_paint\?\.regions\?\.length/);
+  assert.match(editor,/complete MMU T1 front colour wall can alternatively/);
+  assert.match(editor,/selective fuzzy skin on the opposite T0 wall/);
+});
+
 test("Shared Prusa colour help differentiates native split walls from unqualified geometries",()=>{
   assert.match(editor,/MMU supports one painted vertical wall or two/);
   assert.match(editor,/independently coloured opposite vertical walls/);
