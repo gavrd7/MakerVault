@@ -84,7 +84,7 @@ def main(binary, vendor):
         (folder / "prusa-offline-xl-colour.marker").write_text("v1")
         run_prusa(Path(binary), folder)
         output = (folder / "output.gcode").read_bytes()
-        proof = audit_prusa_partial_wall_gcode(
+        proof = audit_prusa_slanted_surface_gcode(
             output, project, tool=1)
         print("PASS: genuine XL5 slanted surface partial T1 deposition",
               proof, hashlib.sha256(output).hexdigest(), flush=True)
