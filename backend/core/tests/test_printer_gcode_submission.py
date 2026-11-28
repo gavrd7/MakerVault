@@ -267,23 +267,30 @@ class GcodePrinterContractTests(SimpleTestCase):
         from core.printer_gcode_submission import (
             reconcile_print_start_receipts, _pending_start_message,
         )
-        printer = connection("moonraker")
-        row = SimpleNamespace(
-            pk="receipt-1", status="started", remote_path="folder/part.gcode",
-            message=_pending_start_message("folder/part.gcode", acknowledged=True),
-        )
-        candidates = MagicMock()
-        candidates.order_by.return_value.__getitem__.return_value = [row]
-        updated = Mock()
-        updated.update.return_value = 1
-        filtered.side_effect = [candidates, updated]
         snapshot = {
             "online": True, "state": "printing", "job": {"file_name": "folder/part.gcode"},
             "captured_at": timezone.now().isoformat(),
         }
-        self.assertEqual(reconcile_print_start_receipts(printer, snapshot), 1)
-        self.assertEqual(updated.update.call_args.kwargs["status"], "started")
-        self.assertIn("verified", updated.update.call_args.kwargs["message"])
+        for adapter in ("moonraker", "prusa"):
+            with self.subTest(adapter=adapter):
+                printer = connection(adapter)
+                row = SimpleNamespace(
+                    pk="receipt-" + adapter, status="started",
+                    remote_path="folder/part.gcode",
+                    message=_pending_start_message(
+                        "folder/part.gcode", acknowledged=True),
+                )
+                candidates = MagicMock()
+                candidates.order_by.return_value.__getitem__.return_value = [row]
+                updated = Mock()
+                updated.update.return_value = 1
+                filtered.reset_mock(side_effect=True)
+                filtered.side_effect = [candidates, updated]
+                self.assertEqual(
+                    reconcile_print_start_receipts(printer, snapshot), 1)
+                self.assertEqual(updated.update.call_args.kwargs["status"], "started")
+                self.assertIn("verified", updated.update.call_args.kwargs["message"])
+                self.assertEqual(filtered.call_count, 2)
 
     @patch("core.printer_gcode_submission.PrinterGcodeSubmission.objects.filter")
     def test_generic_unacknowledged_receipt_requires_exact_job(self, filtered):
