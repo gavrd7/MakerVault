@@ -488,6 +488,58 @@ class PrusaOfflineMmuPreflightTests(TestCase):
             remote.call_args.kwargs["prusa_offline_multi_colour"]["tools"],
             [1,2])
 
+    def test_owner_painted_sphere_cavity_uses_native_worker_and_empty_E_audit(self):
+        from core.slicer_prusa_material_preflight import (
+            prepare_prusa_offline_colour_candidate,
+            slice_prusa_offline_colour_candidate)
+        from core.tests.test_slicer_prusa_3mf import volume
+        from scripts.prusa_generate_mmu_paint import fixture
+        from slicer_worker.service import _decode_payload
+        import base64
+        values,assets=self.parts()
+        stl,_,_,paint=fixture(include_paint=True)
+        cavity={**volume("negative"),"shape":"sphere"}
+        row={"asset_id":"painted-sphere-cavity","x_mm":0,"y_mm":0,
+             "z_mm":0,"rotation_deg":0,"scale_percent":100,
+             "colour_paint":paint,"modifier_volumes":[cavity]}
+        params={key:values[key] for key in (
+            "owner_id","printer_profile","process_profile",
+            "filament_profiles","purge_matrix","tower_xy",
+            "bed_width","bed_depth")}
+        params.update(rows=[(row,stl)],tools=[1],
+                      colour_slot=1,colour_tool=1)
+        with patch("core.slicer_prusa_material_preflight.resolved_prusa_profile",
+                   side_effect=assets):
+            prepared=prepare_prusa_offline_colour_candidate(**params)
+        self.assertFalse(prepared["compound_volume"])
+        encode=lambda payload:base64.b64encode(payload).decode("ascii")
+        request={"job_id":str(uuid.uuid4()),"engine":"prusaslicer",
+                 "engine_version":"2.9.7","model_format":"3mf",
+                 "model":encode(prepared["model"]),
+                 "printer_profile":encode(prepared["printer"]),
+                 "filament_profile":encode(prepared["filament"]),
+                 "process_profile":encode(prepared["process"]),
+                 "prusa_offline_colour":{"tool":1,
+                     "tower":list(prepared["tower"])}}
+        receipt=_decode_payload(request)
+        self.assertFalse(receipt["prusa_offline_colour"]["compound_volume"])
+        remote,context=self.offline_worker_stub()
+        remote.return_value=b"audited-painted-sphere-cavity"
+        with context,patch(
+            "core.slicer_prusa_material_preflight.prepare_prusa_offline_colour_candidate",
+            return_value=prepared),patch(
+            "slicer_worker.prusa_colour_gcode_audit.audit_prusa_offline_colour_gcode"
+        ),patch(
+            "slicer_worker.modifier_gcode_audit.audit_modifier_positive_e",
+            return_value={"modifier_count":1,"negative_volume_count":1,
+                          "modifier_region_paths":[0]}
+        ) as negative:
+            output=slice_prusa_offline_colour_candidate(
+                str(uuid.uuid4()),**params)
+        self.assertEqual(output,b"audited-painted-sphere-cavity")
+        negative.assert_called_once_with(
+            output,prepared["model"],"prusaslicer")
+
     def test_owner_prusa_colour_compound_requires_both_spatial_audits(self):
         from core.slicer_prusa_material_preflight import (
             prepare_prusa_offline_colour_candidate,
