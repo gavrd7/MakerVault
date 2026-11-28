@@ -165,17 +165,27 @@ def validate_prusa_material_candidate(data, *, printer_ini, tools=None, colour=F
                 if not qualified_prusa_colour_compound(data):
                     _refuse()
             if len(volumes)==2:
-                # The only qualified same-object paint + native parameter
-                # modifier uses a single box infill region. The authoring
-                # adapter additionally validates shape and location; the
-                # isolated worker independently restricts type and setting
-                # rather than trusting a caller-supplied feature flag.
-                meta={node.get("key"):node.get("value")
-                      for node in volumes[1].findall("metadata")}
-                if (len(meta)!=2 or
-                        meta.get("volume_type")!="ParameterModifier" or
-                        "fill_density" not in meta):
+                # Genuine pinned 2.9.7 proves one painted ModelPart with
+                # all six native primitive density modifiers or subtractive
+                # volumes. The worker rechecks the exact signed 3MF role and
+                # subsequently audits actual regional positive-E/cavity
+                # deposition; unknown metadata is never silently dropped.
+                entries=volumes[1].findall("metadata")
+                meta={node.get("key"):node.get("value") for node in entries}
+                if len(entries)!=len(meta):
                     _refuse()
+                modifier=(meta.get("volume_type")=="ParameterModifier" and
+                          set(meta)=={"volume_type","fill_density"})
+                negative=meta=={"volume_type":"NegativeVolume"}
+                if not (modifier or negative):
+                    _refuse()
+                if modifier:
+                    try:
+                        density=float(meta["fill_density"].removesuffix("%"))
+                    except (ValueError,TypeError):
+                        _refuse()
+                    if not math.isfinite(density) or not 0<=density<=100:
+                        _refuse()
             model_part_end=int(volumes[0].get("lastid","-1"))
             if (not 0<=model_part_end<len(facets) or
                     any(PAINT in face.attrib
