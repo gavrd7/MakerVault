@@ -503,6 +503,29 @@ jobs:
             /opt/engine-store/versions/prusaslicer/2.9.7/bin/prusa-slicer \
             /opt/engine-store/versions/prusaslicer/2.9.7/resources/profiles/PrusaResearch.ini
 
+      - name: Research genuine Prusa MMU two independently split colour walls
+        id: prusa_dual_partial_research
+        # Existing signed opposing-wall route only certifies complete faces.
+        # This exploratory test must measure tool-specific positive-E paths.
+        continue-on-error: true
+        run: |
+          set -euo pipefail
+          docker run --rm --network none --user 10001:10001 \
+            -v "$TEST_VOLUME:/opt/engine-store:ro" \
+            -v "$GITHUB_WORKSPACE/backend:/tmp/mv-backend:ro" \
+            -v "$GITHUB_WORKSPACE/scripts:/tmp/scripts:ro" \
+            -v "$GITHUB_WORKSPACE/scripts/prusa_native_dual_partial_smoke.py:/tmp/dual_partial.py:ro" \
+            -e PYTHONPATH=/tmp:/tmp/mv-backend:/opt/makervault-slicer \
+            --entrypoint python3 prusa-integration:smoke \
+            /tmp/dual_partial.py \
+            /opt/engine-store/versions/prusaslicer/2.9.7/bin/prusa-slicer \
+            /opt/engine-store/versions/prusaslicer/2.9.7/resources/profiles/PrusaResearch.ini
+
+      - name: Record unresolved dual Prusa split-colour qualification
+        if: ${{ steps.prusa_dual_partial_research.outcome == 'failure' }}
+        run: |
+          echo "::warning title=Prusa dual split surface::Two separately painted partial MMU walls remain unqualified; do not enable them from the browser."
+
       - name: Report unresolved Prusa split-surface colour qualification
         if: ${{ steps.prusa_partial_surface_research.outcome == 'failure' }}
         run: |
