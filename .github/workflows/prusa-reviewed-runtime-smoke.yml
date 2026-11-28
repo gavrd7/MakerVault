@@ -531,11 +531,11 @@ jobs:
         run: |
           echo "::warning title=Prusa split-surface painting::Genuine native partial-mask deposition remains unqualified; keep whole-wall-only admission."
 
-      - name: Research genuine Prusa painted modifier and negative-volume composition
+      - name: Require genuine painted Prusa MMU modifier and cavity composition
         id: prusa_colour_compound_research
-        # Output must prove isolated tool selection plus both regional effects.
-        # This never authorises mixed editing or physical printer submission.
-        continue-on-error: true
+        # Mandatory: signed owner/worker admission, isolated T1 paint, local
+        # modifier positive-E, zero cavity deposition and genuine CLI output.
+        # Never authorises physical printer submission.
         run: |
           set -euo pipefail
           docker run --rm --network none --user 10001:10001 \
