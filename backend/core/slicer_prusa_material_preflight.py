@@ -562,6 +562,7 @@ def prepare_prusa_offline_multi_colour_candidate(
         paint=item.get("colour_paint") or {}
         regions=paint.get("regions") if isinstance(paint,dict) else None
         if (not isinstance(regions,list) or len(regions)!=1 or
+                not isinstance(regions[0],dict) or
                 type(regions[0].get("slot")) is not int or
                 any(item.get(k) for k in (
                     "modifier_volumes","negative_volumes","support_paint",
