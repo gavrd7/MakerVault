@@ -753,7 +753,7 @@ class PrusaNativeColourProjectTests(TestCase):
         self.assertEqual(receipt["tower_extrusion_moves"],{0:12,1:12})
         with self.assertRaises(WorkerError):
             audit_prusa_partial_top_gcode(
-                native.replace(b"T1","T0"),project,tool=1,
+                native.replace(b"T1",b"T0"),project,tool=1,
                 tower=(55,150,0,250,210))
         with self.assertRaises(WorkerError):
             audit_prusa_partial_top_gcode(
