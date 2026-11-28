@@ -1148,6 +1148,18 @@ class PrusaCurvedPaintSpatialAcceptanceTests(TestCase):
         proof=audit_prusa_curved_surface_gcode(data,project,tool=1)
         self.assertGreaterEqual(proof["curved_surface_moves"][1]["painted"],35)
         self.assertGreaterEqual(proof["curved_surface_moves"][0]["unpainted"],35)
+        self.assertFalse(proof["wipe_tower"])
+        with self.assertRaisesRegex(WorkerError,"purging"):
+            audit_prusa_curved_surface_gcode(
+                data,project,tool=1,tower=(55,150,0,360,360))
+        purged=commands+[";TYPE:Wipe tower",
+                         "T0","G0 X55 Y150 Z8"]+["G1 E.02"]*12+[
+                         "T1","G0 X55 Y150 Z8"]+["G1 E.02"]*12
+        with_tower=("\n".join(purged)+"\n").encode()
+        proof_mmu=audit_prusa_curved_surface_gcode(
+            with_tower,project,tool=1,tower=(55,150,0,360,360))
+        self.assertEqual(proof_mmu["tower_extrusion_moves"],{0:12,1:12})
+        self.assertTrue(proof_mmu["wipe_tower"])
         with self.assertRaises(WorkerError):
             audit_prusa_curved_surface_gcode(
                 data.replace(b"T0",b"T1"),project,tool=1)
