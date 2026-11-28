@@ -315,6 +315,7 @@ def _decode_payload(payload):
             **({"tools":receipt["tools"]} if "tools" in receipt
                else {"tool":receipt["tool"]}),"tower":receipt["tower"],
             "partial_wall":receipt["partial_wall"],
+            "dual_partial":receipt["dual_partial"],
             "compound_volume":receipt["compound_volume"]}
     if "creality_model_stls" in payload:
         if (payload["engine"] != "crealityprint" or model_format != "stl" or
@@ -529,10 +530,18 @@ class Handler(BaseHTTPRequestHandler):
                     from .prusa_colour_gcode_audit import audit_prusa_offline_colour_gcode
                     details=files["prusa_offline_colour"]
                     if "tools" in details:
-                        from .prusa_colour_gcode_audit import audit_prusa_dual_colour_gcode
-                        audit_prusa_dual_colour_gcode(
-                            data,files["model"],printer_ini=files["printer_profile"],
-                            tools=details["tools"],tower=details["tower"])
+                        if details.get("dual_partial"):
+                            from .prusa_dual_partial import audit_prusa_dual_partial_gcode
+                            audit_prusa_dual_partial_gcode(
+                                data,files["model"],
+                                printer_ini=files["printer_profile"],
+                                tools=details["tools"],tower=details["tower"])
+                        else:
+                            from .prusa_colour_gcode_audit import audit_prusa_dual_colour_gcode
+                            audit_prusa_dual_colour_gcode(
+                                data,files["model"],
+                                printer_ini=files["printer_profile"],
+                                tools=details["tools"],tower=details["tower"])
                     elif details.get("partial_wall"):
                         from .prusa_partial_surface import audit_prusa_partial_wall_gcode
                         audit_prusa_partial_wall_gcode(
