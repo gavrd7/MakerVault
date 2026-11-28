@@ -91,8 +91,10 @@ def _wall_regions(project, tool):
 def audit_prusa_offline_colour_gcode(data, project, *, printer_ini, tool, tower):
     if type(tool) is not int or not 1<=tool<=4:
         raise WorkerError("Prusa painted tool must be T1-T4.")
+    from .prusa_colour_compound import qualified_prusa_colour_compound
     receipt=validate_prusa_material_candidate(
-        project,printer_ini=printer_ini,colour=True,tower=tower)
+        project,printer_ini=printer_ini,colour=True,tower=tower,
+        compound_colour=qualified_prusa_colour_compound(project))
     if receipt["tools"]!=(1,tool+1):
         raise WorkerError("Prusa painted project tool does not match selected native material.")
     front,back=_wall_regions(project,tool)
