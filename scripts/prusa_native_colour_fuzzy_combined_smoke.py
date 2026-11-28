@@ -132,6 +132,12 @@ def main(binary,vendor):
             project=add_prusa_native_wipe_tower(
                 project,x_mm=55,y_mm=150,rotation_deg=0,
                 bed_width=250,bed_depth=210)
+            from slicer_worker.prusa_offline_contract import (
+                validate_prusa_offline_colour_inputs)
+            signed=validate_prusa_offline_colour_inputs(
+                project=project,printer=printer,filament=palette,
+                process=process,tool=1,tower=[55,150,0,250,210])
+            assert signed["colour_fuzzy"]==bool(extra),signed
             work=Path(folder)/name
             work.mkdir()
             for filename,raw in (
@@ -144,6 +150,12 @@ def main(binary,vendor):
                 timeout_seconds=300,max_bytes=64*1024*1024)
             assert audit_prusa_positive_e(gcode)["positive_e_moves"]>100
             walls=painted_external_walls(gcode)
+            if extra:
+                from slicer_worker.prusa_colour_fuzzy import audit_prusa_colour_fuzzy_gcode
+                proof=audit_prusa_colour_fuzzy_gcode(gcode,project)
+                assert proof["fuzzy_back_short_moves"]>100
+                print("Prusa signed native mixed colour/fuzzy worker audit",
+                      proof,flush=True)
             if walls[1]["front"]<20 or walls[1]["back"]>2:
                 raise AssertionError((name,"Native T1 painting changed",walls))
             results[name]=back_wall_short_external(gcode)
