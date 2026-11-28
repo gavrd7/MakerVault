@@ -84,6 +84,17 @@ def main(binary, vendor):
             project = add_prusa_native_wipe_tower(
                 project, x_mm=55, y_mm=150, rotation_deg=0,
                 bed_width=250, bed_depth=210)
+            if label in ("baseline", "modifier", "combined"):
+                from slicer_worker.prusa_offline_contract import (
+                    validate_prusa_offline_colour_inputs)
+                worker = validate_prusa_offline_colour_inputs(
+                    project=project, printer=printer, filament=palette,
+                    process=process, tool=1,
+                    tower=[55,150,0,250,210])
+                assert worker["compound_volume"] == (label == "combined")
+                assert not worker["partial_wall"], worker
+                print("PASS: signed MMU owner/worker compound admission",
+                      label, worker["compound_volume"], flush=True)
             folder = Path(dirname) / label
             folder.mkdir()
             for filename, payload in (
