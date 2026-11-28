@@ -162,10 +162,10 @@ def validate_prusa_offline_colour_inputs(*, project, printer, filament, process,
     else:
         from .prusa_partial_surface import qualified_prusa_single_colour_mode
         mode = qualified_prusa_single_colour_mode(project, tool)
-        if mode == "split_slanted":
+        if mode in ("split_slanted","split_curved"):
             raise WorkerError(
-                "Prusa MMU angled painted faces lack independent native "
-                "surface and purge qualification.")
+                "Prusa MMU angled or curved painted faces lack independent "
+                "native surface and wipe-tower qualification.")
     if (compound or fuzzy) and mode != "complete_wall":
         raise WorkerError(
             "Prusa colour with typed volumes or selective fuzzy needs "
@@ -232,15 +232,16 @@ def validate_prusa_offline_xl_colour_inputs(*, project, printer, filament, proce
     else:
         from .prusa_partial_surface import qualified_prusa_single_colour_mode
         mode = qualified_prusa_single_colour_mode(project, selected[0])
-        if mode in ("split_wall","split_top","split_slanted") and count != 5:
+        if mode in ("split_wall","split_top","split_slanted","split_curved") and count != 5:
             raise WorkerError(
                 "Prusa partial-surface painting is qualified on XL5 only.")
-        if mode=="split_slanted" and selected[0]!=1:
+        if mode in ("split_slanted","split_curved") and selected[0]!=1:
             raise WorkerError(
-                "Native angled partial-wall painting is qualified for XL5 T1.")
+                "Native angled/curved painted facets require genuine XL5 T1 qualification.")
     return {**({"tools":list(selected)} if len(selected)>1
                else {"tool":selected[0]}),
             "partial_wall": len(selected)==1 and mode=="split_wall",
             "partial_top": len(selected)==1 and mode=="split_top",
             "partial_slanted": len(selected)==1 and mode=="split_slanted",
+            "partial_curved": len(selected)==1 and mode=="split_curved",
             "offline_only":True,"wipe_tower":False}
