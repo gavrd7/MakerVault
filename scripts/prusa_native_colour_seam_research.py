@@ -101,7 +101,7 @@ def main(binary,vendor):
             try:
                 seam_receipt=audit_prusa_seam_enforcer_gcode(
                     data,{**base,"seam_paint":seam},
-                    bed_width=250,bed_depth=210)
+                    bed_width=250,bed_depth=210,tool=0)
             except ValueError as exc:
                 seam_receipt={"unqualified":str(exc)}
             results[label]=(wall[1],seam_receipt)
