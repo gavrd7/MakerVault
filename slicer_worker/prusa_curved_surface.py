@@ -190,7 +190,7 @@ def inspect_prusa_curved_surface(project,tool):
             "Native Prusa curved painting has an unqualified signed 3-D source.") from None
 
 
-def audit_prusa_curved_surface_gcode(data,project,*,tool):
+def audit_prusa_curved_surface_gcode(data,project,*,tool,tower=None):
     """Reject colour leakage using true finite 3D source facets and G1 extrusion."""
     source=inspect_prusa_curved_surface(project,tool)
     if not isinstance(data,bytes) or not 0<len(data)<=90*1024*1024:
@@ -198,6 +198,17 @@ def audit_prusa_curved_surface_gcode(data,project,*,tool):
     allowed=(0,tool)
     counts={t:{"painted":0,"unpainted":0,"ambiguous":0}
             for t in allowed}
+    if tower is not None:
+        if (not isinstance(tower,(tuple,list)) or len(tower)!=5 or
+                any(type(n) not in (int,float) or not math.isfinite(n)
+                    for n in tower)):
+            raise WorkerError("Invalid native curved MMU wipe tower.")
+        tx,ty=tower[:2]
+        tower_box=(tx-6,tx+65,ty-12,ty+45)
+        purges={t:0 for t in allowed}
+    else:
+        tower_box=None
+        purges=None
     tool_active=None
     pos=[None,None,None]
     e=0.
@@ -245,6 +256,14 @@ def audit_prusa_curved_surface_gcode(data,project,*,tool):
                 continue
             delta=words["E"] if rel_e else words["E"]-e
             e=e+words["E"] if rel_e else words["E"]
+            if (purges is not None and tool_active in counts and
+                    op in ("G1","G01") and delta>1e-6 and
+                    all(n is not None for n in (before[0],before[1],pos[0],pos[1])) and
+                    tower_box[0]<=before[0]<=tower_box[1] and
+                    tower_box[2]<=before[1]<=tower_box[3] and
+                    tower_box[0]<=pos[0]<=tower_box[1] and
+                    tower_box[2]<=pos[1]<=tower_box[3]):
+                purges[tool_active]+=1
             if (tool_active not in counts or delta<=1e-6 or
                     op not in ("G1","G01") or role!="external perimeter" or
                     any(n is None for n in before+tuple(pos))):
@@ -264,6 +283,9 @@ def audit_prusa_curved_surface_gcode(data,project,*,tool):
         raise WorkerError(
             "Native Prusa curved positive-E toolpaths contradict the "
             "source-derived painted/unpainted 3D surface.")
+    if purges is not None and any(value<10 for value in purges.values()):
+        raise WorkerError("Prusa curved MMU colour output lacked T0/T1 native purging.")
     return {"tool":tool,"curved_surface_moves":counts,
             "painted_facets":source["painted_facets"],
-            "offline_only":True}
+            "tower_extrusion_moves":purges,
+            "wipe_tower":tower is not None,"offline_only":True}
