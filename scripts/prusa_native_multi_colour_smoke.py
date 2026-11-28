@@ -78,7 +78,8 @@ def audit_regions(raw):
                 continue
             middle=tuple((a+b)/2 for a,b in zip(before,position))
             distance=math.hypot(position[0]-before[0],position[1]-before[1])
-            if 49<=middle[0]<=120 and 135<=middle[1]<=195:
+            if (distance>1e-6 and role=="wipe tower" and
+                    49<=middle[0]<=120 and 135<=middle[1]<=195):
                 counts[active]["tower"]+=1
             if distance<=1e-6 or role!="external perimeter" or not 2<middle[2]<18:
                 continue

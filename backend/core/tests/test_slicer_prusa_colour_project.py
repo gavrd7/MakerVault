@@ -1300,7 +1300,8 @@ class PrusaIndependentColourModelProjectTests(TestCase):
         for tool in (0,1,2):
             commands.extend([f"T{tool}",";TYPE:Wipe tower",
                              "G0 X55 Y150 Z8"])
-            commands.extend(["G1 E.03"]*15)
+            commands.extend([f"G1 X{55+(n+1)*.3:.4f} Y150 E.03"
+                             for n in range(15)])
         payload=("\n".join(commands)+"\n").encode()
         proof=audit_prusa_multi_colour_gcode(
             payload,project,printer_ini=printer,
@@ -1308,6 +1309,15 @@ class PrusaIndependentColourModelProjectTests(TestCase):
         self.assertEqual(proof["per_model_wall_moves"][0][1]["painted"],32)
         self.assertEqual(proof["per_model_wall_moves"][1][2]["painted"],32)
         self.assertEqual(proof["tower_extrusion_moves"],{0:15,1:15,2:15})
+        # Stationary extrusion (unretraction/priming) is not tower deposition.
+        stationary=[("G1 E.03" if cmd.startswith("G1 X") and
+                     cmd.endswith("Y150 E.03") else cmd) for cmd in commands]
+        for invalid in (("\n".join(stationary)+"\n").encode(),
+                        payload.replace(b";TYPE:Wipe tower", b";TYPE:Custom")):
+            with self.assertRaises(WorkerError):
+                audit_prusa_multi_colour_gcode(
+                    invalid,project,printer_ini=printer,
+                    tower=(55,150,0,250,210))
         with self.assertRaises(WorkerError):
             audit_prusa_multi_colour_gcode(
                 payload.replace(b"T2",b"T1"),project,printer_ini=printer,

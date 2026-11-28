@@ -185,12 +185,12 @@ def audit_prusa_multi_colour_gcode(data, project, *, printer_ini, tower):
                 continue
             if None in (x,y,old_x,old_y):
                 continue
-            mid=((x+old_x)/2,(y+old_y)/2)
-            if (area[0]<=x<=area[1] and area[2]<=y<=area[3] and
+            moving=abs(x-old_x)+abs(y-old_y)>1e-7
+            if (moving and role=="wipe tower" and
+                    area[0]<=x<=area[1] and area[2]<=y<=area[3] and
                     area[0]<=old_x<=area[1] and area[2]<=old_y<=area[3]):
                 purge[active]+=1
-            if (abs(x-old_x)+abs(y-old_y)<=1e-7 or
-                    role!="external perimeter"):
+            if not moving or role!="external perimeter":
                 continue
             for index,source in enumerate(sources):
                 for kind,region in (("painted",source["painted"]),
