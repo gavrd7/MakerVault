@@ -796,6 +796,9 @@ class PrusaPaintedWallMotionTests(TestCase):
             "slicer_worker.prusa_colour_gcode_audit.validate_prusa_material_candidate",
             return_value={"tools": (1, 2)}
         ), patch(
+            "slicer_worker.prusa_colour_compound.qualified_prusa_colour_compound",
+            return_value=False
+        ), patch(
             "slicer_worker.prusa_colour_gcode_audit._wall_regions",
             return_value=((114, 136, 93, 97), (114, 136, 113, 117))
         ):
