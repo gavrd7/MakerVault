@@ -159,10 +159,10 @@ def validate_prusa_offline_colour_inputs(*, project, printer, filament, process,
     else:
         from .prusa_partial_surface import qualified_prusa_single_colour_mode
         mode = qualified_prusa_single_colour_mode(project, tool)
-        if mode in ("split_top","split_slanted"):
+        if mode == "split_slanted":
             raise WorkerError(
-                "Prusa MMU horizontal/slanted painted faces lack independent "
-                "native purge and surface G-code qualification.")
+                "Prusa MMU angled painted faces lack independent native "
+                "surface and purge qualification.")
     if compound and mode != "complete_wall":
         raise WorkerError(
             "Prusa painted modifier/cavity needs the genuine full-wall proof.")
@@ -170,7 +170,8 @@ def validate_prusa_offline_colour_inputs(*, project, printer, filament, process,
             "tower":tower, "offline_only":True,
             "compound_volume": compound,
             "dual_partial": (dual and dual_mode == "split_opposite"),
-            "partial_wall": (not dual and mode == "split_wall")}
+            "partial_wall": (not dual and mode == "split_wall"),
+            "partial_top": (not dual and mode == "split_top")}
 
 
 def validate_prusa_offline_xl_colour_inputs(*, project, printer, filament, process,
