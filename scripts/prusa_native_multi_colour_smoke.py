@@ -161,10 +161,16 @@ def main(binary,vendor):
             run_prusa,Path(binary),work,timeout_seconds=300,
             max_bytes=64*1024*1024)
         audit_prusa_positive_e(gcode)
+        # The fixed public synthetic plate may log its expected regions.
+        # Qualify the true native tool separation before any softer
+        # source-driven fallback could mask an upstream paint failure.
+        direct=audit_regions(gcode)
+        print("Native Prusa synthetic two-object colour movements",
+              direct,flush=True)
         proof=audit_prusa_multi_colour_gcode(
             gcode,project,printer_ini=printer,tower=(55,150,0,250,210))
         print("PASS: native independent T1/T2 painted ModelParts",
-              audit_regions(gcode),proof,
+              direct,proof,
               hashlib.sha256(gcode).hexdigest(),flush=True)
 
 
