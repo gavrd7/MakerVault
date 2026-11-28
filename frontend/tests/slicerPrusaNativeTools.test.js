@@ -184,6 +184,15 @@ test("selecting every Prusa model to one filament switches to verified single-ma
 });
 
 
+test("Prusa painted MMU workbench checks one disjoint box infill modifier and one cavity",()=>{
+  assert.match(prepare,/prusaNativeTools\?\.mode==="mmu"/);
+  assert.match(prepare,/object\.modifier_volumes\.length===2/);
+  assert.match(prepare,/object\.modifier_volumes\[0\]\?\.kind==="modifier"/);
+  assert.match(prepare,/object\.modifier_volumes\[1\]\?\.kind==="negative"/);
+  assert.match(prepare,/object\.modifier_volumes\[1\]\?\.coordinate_space==="world"/);
+  assert.match(prepare,/Object\.keys\(object\.modifier_volumes\[1\]\?\.settings\|\|\{\}\)\.length===0/);
+});
+
 test("Shared Prusa colour help differentiates native split walls from unqualified geometries",()=>{
   assert.match(editor,/MMU supports one painted swatch on a vertical wall/);
   assert.match(editor,/independently audited/);
