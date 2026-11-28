@@ -413,6 +413,81 @@ class PrusaOfflineMmuPreflightTests(TestCase):
         with self.assertRaises(WorkerError):
             _decode_payload({**payload,"prusa_offline_xl":{"tools":[1,2]}})
 
+    def test_owner_two_independent_painted_mmu_models_and_worker_protocol(self):
+        from core.slicer_prusa_material_preflight import (
+            prepare_prusa_offline_multi_colour_candidate,
+            slice_prusa_offline_multi_colour_candidate)
+        from core.slicer_plate_3mf import _triangles
+        from core.slicer_native_support_paint import _fingerprint
+        from scripts.prusa_generate_mmu_paint import fixture
+        from slicer_worker.service import _decode_payload
+        import base64
+        values,assets=self.parts()
+        source,_,_,front=fixture(include_paint=True)
+        faces=list(_triangles(source))
+        low=[min(p[i] for f in faces for p in f) for i in range(3)]
+        high=[max(p[i] for f in faces for p in f) for i in range(3)]
+        centre=((low[0]+high[0])/2,(low[1]+high[1])/2,low[2])
+        local=[[tuple(p[i]-centre[i] for i in range(3)) for p in f]
+               for f in faces]
+        back_patches=[{"face":i,"polygon":[list(p) for p in face]}
+                      for i,face in enumerate(local)
+                      if all(abs(p[1]-10)<.00001 for p in face)]
+        back={**front,"signature":_fingerprint(local),
+              "palette":[*front["palette"],
+                         {"color":"#fadd4d","label":"T2"}],
+              "regions":[{"slot":2,"patches":back_patches}]}
+        left={"asset_id":"left-native","x_mm":-35,"y_mm":0,"z_mm":0,
+              "rotation_deg":0,"scale_percent":100,"colour_paint":front}
+        right={"asset_id":"right-native","x_mm":35,"y_mm":0,"z_mm":0,
+               "rotation_deg":0,"scale_percent":100,"colour_paint":back}
+        params={key:values[key] for key in (
+            "owner_id","printer_profile","process_profile","filament_profiles",
+            "purge_matrix","tower_xy","bed_width","bed_depth")}
+        params.update(rows=[(left,source),(right,source)],
+                      tools=[1,1],colour_tool_indices={1:1,2:2})
+        with patch("core.slicer_prusa_material_preflight.resolved_prusa_profile",
+                   side_effect=assets):
+            prepared=prepare_prusa_offline_multi_colour_candidate(**params)
+        self.assertEqual(prepared["colour_tools"],[1,2])
+        from slicer_worker.prusa_multi_colour import inspect_prusa_multi_colour
+        self.assertEqual(tuple(row["tool"] for row in inspect_prusa_multi_colour(
+            prepared["model"],printer_ini=prepared["printer"],
+            tower=prepared["tower"])),(1,2))
+        encode=lambda payload:base64.b64encode(payload).decode("ascii")
+        request={"job_id":str(uuid.uuid4()),"engine":"prusaslicer",
+                 "engine_version":"2.9.7","model_format":"3mf",
+                 "model":encode(prepared["model"]),
+                 "printer_profile":encode(prepared["printer"]),
+                 "filament_profile":encode(prepared["filament"]),
+                 "process_profile":encode(prepared["process"]),
+                 "prusa_offline_multi_colour":{
+                     "tools":[1,2],"tower":list(prepared["tower"])}}
+        receipt=_decode_payload(request)
+        self.assertEqual(receipt["prusa_offline_multi_colour"]["tools"],[1,2])
+        with self.assertRaises(WorkerError):
+            _decode_payload({**request,"prusa_offline_multi_colour":{
+                **request["prusa_offline_multi_colour"],"tools":[1,3]}})
+        with self.assertRaises(WorkerError):
+            _decode_payload({**request,"prusa_offline_colour":{
+                "tool":1,"tower":list(prepared["tower"])}})
+        remote,context=self.offline_worker_stub()
+        remote.return_value=b"authenticated-dual-painted-gcode"
+        with context,patch(
+            "core.slicer_prusa_material_preflight.prepare_prusa_offline_multi_colour_candidate",
+            return_value=prepared),patch(
+            "slicer_worker.prusa_multi_colour.audit_prusa_multi_colour_gcode"
+        ) as audit:
+            result=slice_prusa_offline_multi_colour_candidate(
+                str(uuid.uuid4()),**params)
+        self.assertEqual(result,b"authenticated-dual-painted-gcode")
+        audit.assert_called_once_with(
+            result,prepared["model"],printer_ini=prepared["printer"],
+            tower=prepared["tower"])
+        self.assertEqual(
+            remote.call_args.kwargs["prusa_offline_multi_colour"]["tools"],
+            [1,2])
+
     def test_owner_prusa_colour_compound_requires_both_spatial_audits(self):
         from core.slicer_prusa_material_preflight import (
             prepare_prusa_offline_colour_candidate,
