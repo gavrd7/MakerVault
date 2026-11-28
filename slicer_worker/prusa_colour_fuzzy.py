@@ -38,13 +38,16 @@ def qualified_prusa_colour_fuzzy(project):
         vertices=resources[0].findall(
             "./"+NS+"mesh/"+NS+"vertices/"+NS+"vertex")
         records=objects[0].findall("./volume")
-        if len(records)!=1:
-            raise ValueError("Native mixed colour+fuzzy with volumes is unqualified.")
         version=[meta for meta in root.findall("./"+NS+"metadata")
                  if meta.get("name")==FUZZ_HEADER]
         fuzzy_count=sum(FUZZ in face.attrib for face in faces)
         if not version and not fuzzy_count:
+            # An ordinary signed colour+modifier/cavity project remains
+            # valid; only a *requested* fuzzy channel imposes one-volume
+            # constraints. Do not reject unrelated qualified operations.
             return False
+        if len(records)!=1:
+            raise ValueError("Native mixed colour+fuzzy with volumes is unqualified.")
         if (len(version)!=1 or version[0].text!="2" or
                 version[0].attrib!={"name":FUZZ_HEADER} or
                 not fuzzy_count or len(faces)<4 or
