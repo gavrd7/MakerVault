@@ -238,7 +238,7 @@ def audit_prusa_slanted_surface_gcode(data, project, *,tool):
             xy=(_dot(vector,signed["u"]),_dot(vector,signed["v"]))
             matched=_surface_labels(spatial,xy)
             if len(matched)==1:
-                counts[active][matched[0]]+=1
+                counts[active][next(iter(matched))]+=1
     if (counts[tool]["painted"]<8 or counts[0]["unpainted"]<8 or
             counts[tool]["unpainted"]>max(2,counts[tool]["painted"]//25) or
             counts[0]["painted"]>max(2,counts[tool]["painted"]//8)):
