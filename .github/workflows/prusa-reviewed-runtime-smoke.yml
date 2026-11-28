@@ -508,11 +508,10 @@ jobs:
             /opt/engine-store/versions/prusaslicer/2.9.7/resources/profiles/PrusaResearch.ini \
             /tmp/mmu-colour/baseline.3mf /tmp/mmu-colour/colour.3mf
 
-      - name: Research genuine MMU partial top-surface T1 and wipe tower
+      - name: Require genuine MMU partial top-surface T1 and wipe tower
         id: prusa_mmu_partial_top_research
-        # XL5 top-brush proof must not be reused for MMU without genuine
-        # three-dimensional source-mask and both tool-specific purge checks.
-        continue-on-error: true
+        # Mandatory native 2.9.7 evidence for the newly admitted signed
+        # MMU top brush: both independent T0/T1 tower purges are required.
         run: |
           set -euo pipefail
           docker run --rm --network none --user 10001:10001 \
