@@ -193,6 +193,15 @@ test("Prusa painted MMU workbench checks one disjoint box infill modifier and on
   assert.match(prepare,/Object\.keys\(object\.modifier_volumes\[1\]\?\.settings\|\|\{\}\)\.length===0/);
 });
 
+test("Prusa native MMU colour can combine one of all six primitive modifiers or cavities",()=>{
+  assert.match(editor,/box, cone, cylinder, disc, sphere or torus/);
+  assert.match(editor,/density modifier/);
+  assert.match(editor,/strictly empty cavity/);
+  assert.match(prepare,/\["box","cone","cylinder","disc","sphere","torus"\]/);
+  assert.match(prepare,/object\.modifier_volumes\[0\]\?\.kind==="negative"/);
+  assert.match(prepare,/prusaNativeTools\.colour_tools\[0\]\?\.tool===2/);
+});
+
 test("Shared Prusa tool selector explains independently audited native MMU compound regions",()=>{
   assert.match(editor,/one complete T1-painted wall can combine Object process settings/);
   assert.match(editor,/one box infill modifier and one disjoint negative box/);
