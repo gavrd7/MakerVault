@@ -639,10 +639,56 @@ class PrusaNativeColourProjectTests(TestCase):
             validate_prusa_material_candidate(
                 rewrite(source,"3D/3dmodel.model",forge),
                 printer_ini=printer,colour=True)
-        for bad in (volume("negative"),volume("modifier",{"wall_loops":5})):
-            with self.subTest(kind=bad["kind"],settings=bad["settings"]):
-                with self.assertRaises(SlicerProfileError):
-                    self.candidate(settings={"modifier_volumes":[bad]})
+        native_negative=self.candidate(
+            settings={"modifier_volumes":[volume("negative")]})
+        self.assertEqual(validate_prusa_material_candidate(
+            native_negative,printer_ini=printer,colour=True)["tools"],(1,2))
+        with self.assertRaises(SlicerProfileError):
+            self.candidate(settings={"modifier_volumes":[
+                volume("modifier",{"wall_loops":5})]})
+
+    def test_every_proven_native_primitive_shape_retains_colour_and_signed_region(self):
+        from core.tests.test_slicer_prusa_3mf import volume
+        from core.slicer_modifier_volumes import PRIMITIVE_SHAPES
+        from slicer_worker.modifier_gcode_audit import modifier_bounds
+        from slicer_worker.prusa_colour_compound import audit_prusa_painted_volume_effects
+        from unittest.mock import patch
+        printer=ini("0.4,0.4,0.4,0.4,0.4","1")
+        for shape in sorted(PRIMITIVE_SHAPES):
+            for kind in ("modifier","negative"):
+                with self.subTest(shape=shape,kind=kind):
+                    primitive=volume(
+                        kind,{"sparse_infill_density":85}
+                        if kind=="modifier" else {})
+                    primitive["shape"]=shape
+                    project=self.candidate(
+                        settings={"modifier_volumes":[primitive]})
+                    receipt=validate_prusa_material_candidate(
+                        project,printer_ini=printer,colour=True)
+                    self.assertEqual(receipt["tools"],(1,2))
+                    boxes,kinds,meshes=modifier_bounds(
+                        project,"prusaslicer",include_meshes=True)
+                    self.assertEqual(len(boxes),1)
+                    self.assertEqual(len(meshes),1)
+                    self.assertEqual(kinds,[
+                        "modifier_part" if kind=="modifier" else "negative_part"])
+                    proof={"modifier_count":1,
+                           "negative_volume_count":0 if kind=="modifier" else 1,
+                           "modifier_region_paths":[32 if kind=="modifier" else 0]}
+                    with patch(
+                        "slicer_worker.modifier_gcode_audit.audit_modifier_positive_e",
+                        return_value=proof):
+                        result=audit_prusa_painted_volume_effects(
+                            b"genuine regional G-code sample",project)
+                    self.assertEqual(result,proof)
+                    wrong={**proof,"modifier_region_paths":[
+                        0 if kind=="modifier" else 25]}
+                    with patch(
+                        "slicer_worker.modifier_gcode_audit.audit_modifier_positive_e",
+                        return_value=wrong):
+                        with self.assertRaises(WorkerError):
+                            audit_prusa_painted_volume_effects(
+                                b"wrong regional G-code sample",project)
 
     def test_painted_object_settings_and_typed_modifier_preserve_both_native_scopes(self):
         """Combining existing MakerVault Object and region controls must not drop either."""
