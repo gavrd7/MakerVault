@@ -447,6 +447,59 @@ class PrusaVirtualToolDraftTests(TestCase):
         self.assertEqual(result,b"audited-disjoint-brushes")
         self.assertEqual(worker.call_args.kwargs["colour_tool_indices"],{1:1})
 
+    def test_two_separately_painted_mmu_models_use_shared_native_workbench(self):
+        from uuid import UUID
+        from scripts.prusa_generate_mmu_paint import fixture as painted_fixture
+        from core.slicer_plate_3mf import _triangles
+        from core.slicer_native_support_paint import _fingerprint
+        job,filaments,_profile=self.config()
+        third="33333333-3333-4333-8333-333333333333"
+        filaments.append(profile("filament",UUID(third)))
+        raw=ini("0.4,0.4,0.4","1")
+        native=job.settings["prusa_native_tools"]
+        native["tool_count"]=3
+        native["filament_profile_ids"].append(third)
+        native["purge_matrix"]=[[0,80,80],[90,0,80],[90,80,0]]
+        for model in native["model_tools"]:
+            model["tool"]=1
+        source,_,_,front=painted_fixture(include_paint=True)
+        faces=list(_triangles(source))
+        lo=[min(p[i] for face in faces for p in face) for i in range(3)]
+        hi=[max(p[i] for face in faces for p in face) for i in range(3)]
+        center=((lo[0]+hi[0])/2,(lo[1]+hi[1])/2,lo[2])
+        local=[[tuple(p[i]-center[i] for i in range(3)) for p in face]
+               for face in faces]
+        back_patches=[{"face":i,"polygon":[list(p) for p in face]}
+                      for i,face in enumerate(local)
+                      if all(abs(p[1]-10)<.00001 for p in face)]
+        back={**front,"signature":_fingerprint(local),
+              "palette":[*front["palette"],
+                         {"color":"#fadd4d","label":"T2"}],
+              "regions":[{"slot":2,"patches":back_patches}]}
+        objects=job.settings["plate_objects"]
+        objects[0]["colour_paint"]=front
+        objects[1]["colour_paint"]=back
+        native["colour_tools"]=[{"slot":1,"tool":2},{"slot":2,"tool":3}]
+        PrusaWorkbenchMaterialTests.resolve(self,job,filaments,raw)
+        kind,prepared=prepare_prusa_workbench_material(job)
+        self.assertEqual(kind,"multi_colour")
+        self.assertEqual(prepared["tools"],[1,1])
+        self.assertEqual(prepared["colour_tool_indices"],{1:1,2:2})
+        with patch("core.slicer_prusa_job_material.slice_prusa_offline_multi_colour_candidate",
+                   return_value=b"audited-two-native-colour-models") as worker:
+            self.assertEqual(slice_prusa_workbench_material(
+                job,[(dict(item),source) for item in objects]),
+                b"audited-two-native-colour-models")
+        self.assertEqual(worker.call_args.kwargs["colour_tool_indices"],{1:1,2:2})
+        self.assertEqual(len(worker.call_args.kwargs["rows"]),2)
+        native["colour_tools"][1]["tool"]=2
+        with self.assertRaises(SlicerProfileError):
+            prepare_prusa_workbench_material(job)
+        native["colour_tools"][1]["tool"]=3
+        objects[1]["support_paint"]={"regions":[{"slot":0}]}
+        with self.assertRaises(SlicerProfileError):
+            prepare_prusa_workbench_material(job)
+
     def test_painted_mmu_uses_existing_workbench_for_modifier_and_cavity(self):
         from scripts.prusa_generate_mmu_paint import fixture as painted_fixture
         from core.tests.test_slicer_prusa_3mf import volume
