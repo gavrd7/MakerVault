@@ -1160,12 +1160,24 @@ export default function SlicerPrepareWorkspace({
         prusaNativeTools?.mode==="mmu") ||
       (prusaSinglePaint && object.variable_layer_profile?.bands?.length) ||
       (prusaSinglePaint && object.modifier_volumes?.length &&
-        !(object.modifier_volumes.length===1 &&
-          object.modifier_volumes[0]?.shape==="box" &&
-          object.modifier_volumes[0]?.kind==="modifier" &&
-          Object.keys(object.modifier_volumes[0]?.settings||{}).length===1 &&
-          Object.hasOwn(object.modifier_volumes[0]?.settings||{},
-                        "sparse_infill_density"))) ||
+        !((object.modifier_volumes.length===1 &&
+            object.modifier_volumes[0]?.shape==="box" &&
+            object.modifier_volumes[0]?.kind==="modifier" &&
+            Object.keys(object.modifier_volumes[0]?.settings||{}).length===1 &&
+            Object.hasOwn(object.modifier_volumes[0]?.settings||{},
+                          "sparse_infill_density")) ||
+          (prusaNativeTools?.mode==="mmu" &&
+            object.modifier_volumes.length===2 &&
+            object.modifier_volumes[0]?.kind==="modifier" &&
+            object.modifier_volumes[0]?.shape==="box" &&
+            object.modifier_volumes[0]?.coordinate_space==="world" &&
+            Object.keys(object.modifier_volumes[0]?.settings||{}).length===1 &&
+            Object.hasOwn(object.modifier_volumes[0]?.settings||{},
+                          "sparse_infill_density") &&
+            object.modifier_volumes[1]?.kind==="negative" &&
+            object.modifier_volumes[1]?.shape==="box" &&
+            object.modifier_volumes[1]?.coordinate_space==="world" &&
+            Object.keys(object.modifier_volumes[1]?.settings||{}).length===0))) ||
       object.support_paint?.regions?.length || object.seam_paint?.regions?.length ||
       object.fuzzy_skin_paint?.regions?.length ||
       (object.colour_paint?.regions?.length && !prusaSinglePaint)) &&
